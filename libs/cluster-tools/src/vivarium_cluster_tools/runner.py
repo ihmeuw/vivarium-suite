@@ -1,29 +1,11 @@
-import math
 import os
-import shutil
-import socket
-import subprocess
-import tempfile
 from time import time, sleep
 
 import numpy as np
-import pandas as pd
-import redis
-from rq import Queue, get_failed_queue
-from rq.registry import StartedJobRegistry, FinishedJobRegistry
 
-try:
-    import drmaa
-except RuntimeError:
-    sge_cluster_name = os.environ['SGE_CLUSTER_NAME']
-    os.environ['DRMAA_LIBRARY_PATH'] = f'/usr/local/UGE-{sge_cluster_name}/lib/lx-amd64/libdrmaa.so'
-    import drmaa
-
-from vivarium.framework.results_writer import ResultsWriter
-
-from .utils import get_random_free_port, job_already_run, get_cluster_name
-from .worker import ResilientWorker
-
+from .utils import job_already_run
+from .brokers import RedisBroker, ClusterBroker
+from .monitor import ResultsManager, QueueManager
 
 import logging
 _log = logging.getLogger(__name__)
@@ -36,11 +18,11 @@ RETRY_HANDLER = 'vivarium_cluster_tools.worker.retry_handler'
 
 
 def parallel_run(workload_configuration, worker_configuration, output_configuration):
-    pass
+    _log.info(f'Jobs completed. Results written to: {output_configuration["results_root"]}')
 
 
 def parallel_relaunch(results_root):
-    pass
+    _log.info(f'Jobs completed. Results written to: {output_configuration["results_root"]}')
 
 
 def configure_logging(results_root, master_log_path, quiet):
@@ -53,188 +35,6 @@ def configure_logging(results_root, master_log_path, quiet):
     os.makedirs(worker_log_directory, exist_ok=True)
 
     return worker_log_directory
-
-
-class QueueManager:
-
-    def __init__(self, hostname, port):
-        self.queue = Queue(JOB_NAME, connection=redis.Redis(hostname, port))
-        self.finished_registry = FinishedJobRegistry(self.queue.name,
-                                                     connection=self.queue.connection,
-                                                     job_class=self.queue.job_class)
-        self.wip_registry = StartedJobRegistry(self.queue.name,
-                                               connection=self.queue.connection,
-                                               job_class=self.queue.job_class)
-        self._start_length = 0
-
-    def launch_jobs(self, job_configs):
-        self._start_length = len(job_configs)
-        return {self.queue.enqueue(JOB,
-                                   parameters=job_config[0],
-                                   logging_directory=job_config[1],
-                                   with_state_table=job_config[2],
-                                   ttl=60*60*24*2,
-                                   result_ttl=60*60,
-                                   timeout='7d').id: job_config for job_config in job_configs}
-
-    @property
-    def jobs_in_progress(self):
-        return len(self.queue) + len(self.wip_registry) > 0
-
-    @property
-    def finished_jobs(self):
-        finished_jobs = self.finished_registry.get_job_ids()
-        out = []
-        for job_id in finished_jobs:
-            job = self.queue.fetch_job(job_id)
-            result = [pd.read_json(r) for r in job.result]
-            out.append((job_id, result))
-            self.finished_registry.remove(job)
-        return out
-
-    def get_status(self):
-        waiting = len(set(self.queue.job_ids))
-        running = len(self.wip_registry)
-        failed = len(get_failed_queue(self.queue.connection))
-        finished = self._start_length - (running + waiting + failed)
-        workers = len(ResilientWorker.all(queue=self.queue))
-        return waiting, running, failed, finished, workers
-
-
-class ResultsManager:
-
-    def __init__(self, simulation_configuration, keyspace, results_root, output_state_table, existing_results):
-        self.simulation_configuration = simulation_configuration
-        self.keyspace = keyspace
-        self.results_writer = ResultsWriter(results_root)
-        if output_state_table:
-            self.results_writer.add_sub_directory('final_states', 'final_states')
-        self._output_state_table = output_state_table
-        self.metrics = existing_results if existing_results is not None else pd.DataFrame()
-        self.final_states = []
-
-    def process_jobs(self, job_configs, finished_jobs):
-        dirty = False
-        for job_id, result in finished_jobs:
-            if self._output_state_table:
-                metrics, state_table = result
-                self.final_states.append((job_configs[job_id], state_table))
-            else:
-                metrics = result
-            self.metrics.append(metrics)
-            dirty = True
-
-        if dirty:
-            self.write_results(self.metrics, self.final_states)
-
-    def write_results(self, metrics, final_states):
-        self.results_writer.write_output(metrics, 'output.hdf')
-
-        for config, state_table in final_states:
-            run_config = config[0]
-            branch_number = self.keyspace.get_branch_number(run_config['config'])
-            input_draw = run_config['input_draw']
-            random_seed = run_config['random_seed']
-            self.results_writer.write_output(
-                state_table, f"branch_{branch_number}_idraw_{input_draw}_seed_{random_seed}_.hdf",
-                key='final_states'
-            )
-
-    def dump_initialization_information(self):
-        self.results_writer.dump_simulation_configuration(self.simulation_configuration)
-        self.keyspace.persist(self.results_writer)
-
-
-class RedisBroker:
-    def __init__(self):
-        self.hostname = None
-        self.port = None
-        self._process = None
-
-    def initialize(self):
-        self.hostname = socket.gethostname()
-        self.port = get_random_free_port()
-        _log.info('Starting Redis Broker at %s:%s', self.hostname, self.port)
-
-        try:
-            self._process = subprocess.Popen(
-                [f"echo -e 'timeout 2\nprotected-mode no\nport {self.port}' | redis-server -"],
-                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except FileNotFoundError or ImportError:
-            raise OSError("Redis server not found. Try `conda install redis`")
-
-    @property
-    def url(self):
-        if self.hostname is None or self.port is None:
-            raise AttributeError('No url available.')
-
-        return f'redis://{self.hostname}:{self.port}'
-
-    def cleanup(self):
-        self._process.kill()
-
-
-class ClusterBroker:
-
-    def __init__(self, project, peak_memory, max_retries):
-        self._drmaa_session = drmaa.Session()
-        project_flag = f' -P {project}' if get_cluster_name() == 'prod' else ''
-        num_slots = int(math.ceil(peak_memory/MEMORY_PER_CLUSTER_SLOT))
-        self._preamble = (f'-w n -q all.q -l m_mem_free={peak_memory}G '
-                          + f'-N {JOB_NAME} -pe multislot {num_slots}{project_flag}')
-
-        self._max_retries = max_retries
-        self._template = None
-        self._launcher_name = None
-        self._array_job_id = None
-
-    def initialize(self, worker_log_directory, database_broker_url):
-        self._drmaa_session.initialize()
-        self._launcher_name = self._create_launcher_script(worker_log_directory, database_broker_url)
-
-        self._template = self._drmaa_session.createJobTemplate()
-        self._template.workingDirectory = os.getcwd()
-        self._template.remoteCommand = shutil.which('sh')
-        self._template.args = [self._launcher_name]
-        self._template.jobEnvironment = {
-            'LC_ALL': 'en_US.UTF-8',
-            'LANG': 'en_US.UTF-8',
-            'SGE_CLUSTER_NAME': os.environ['SGE_CLUSTER_NAME'],
-        }
-        self._template.joinFiles = True
-        self._template.nativeSpecification = self._preamble
-        self._template.outputPath = ':/dev/null'
-
-    def launch_array_job(self, number_of_jobs):
-        job_ids = self._drmaa_session.runBulkJobs(self._template, 1, number_of_jobs, 1)
-        self._array_job_id = job_ids[0].split('.')[0]
-
-    @staticmethod
-    def _create_launcher_script(worker_log_directory, database_broker_url):
-        launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='distributed_worker_launcher_',
-                                               suffix='.sh', delete=False)
-        launcher.write(
-            f'''
-            export CEAM_LOGGING_DIRECTORY={worker_log_directory}
-            {shutil.which('rq')} worker --url {database_broker_url} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "{WORKER}" --exception-handler "{RETRY_HANDLER}" ceam
-
-            ''')
-        launcher.close()
-        return launcher.name
-
-    def cleanup(self):
-        self._template.delete()
-        os.remove(self._launcher_name)
-        self._kill_jobs()
-        self._drmaa_session.exit()
-
-    def _kill_jobs(self):
-        try:
-            self._drmaa_session.control(self._array_job_id, drmaa.JobControlAction.TERMINATE)
-        except drmaa.errors.InvalidJobException:
-            # This is the case where all our workers have already shut down
-            # on their own, which isn't actually an error.
-            pass
 
 
 class RunContext:
@@ -285,7 +85,7 @@ class RunContext:
             self.report_status(qm.get_status(), start_time, heartbeat)
 
     def cleanup(self):
-        
+        pass
 
     def report_status(self, queue_status, start_time, heartbeat):
         waiting, running, failed, finished, workers = queue_status

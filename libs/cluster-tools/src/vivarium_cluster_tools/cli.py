@@ -61,40 +61,4 @@ def run(simulation_configuration, branch_configuration, num_input_draws, num_ran
 @click.command()
 @click.argument('results_root', type=click.Path(exists=True, file_okay=False, writable=True))
 def relaunch(results_root):
-    Keyspace.from_previous_run(self.results_writer.results_root)
-    pass
-    # parallel_relaunch(workload_configuration,)
-
-
-def main():
-    parser = argparse.ArgumentParser()
-
-    ctx = RunContext(args)
-
-    jobs = build_job_list(ctx)
-
-    if len(jobs) == 0:
-        _log.info("Nothing to do")
-        return
-
-    _log.info('Starting jobs. Results will be written to: {}'.format(ctx.results_writer.results_root))
-
-    num_workers = len(jobs)
-    drmaa_session = drmaa.Session()
-    drmaa_session.initialize()
-
-    queue = start_cluster(drmaa_session, num_workers, ctx.peak_memory, ctx.worker_log_directory, ctx.cluster_project)
-
-    # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
-    # will take from model to model and the entire system is short lived anyway
-    job_arguments = {queue.enqueue('ceam_experiments.distributed_worker.worker',
-                                   parameters=job[0],
-                                   logging_directory=job[1],
-                                   with_state_table=job[2],
-                                   ttl=60*60*24*2,
-                                   result_ttl=60*60,
-                                   timeout='7d').id: job for job in jobs}
-
-    process_job_results(job_arguments, queue, ctx)
-
-    _log.info('Jobs completed. Results written to: {}'.format(ctx.results_writer.results_root))
+    parallel_relaunch(results_root)
