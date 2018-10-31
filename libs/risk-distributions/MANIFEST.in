@@ -8,5 +8,5 @@ include README.rst
 recursive-include docs *
 prune docs/_build
 
-recursive-include src/distributions *.py *.yaml
+recursive-include src/risk_distributions *.py *.yaml
 recursive-include tests *.py *txt *.yaml *.hdf
