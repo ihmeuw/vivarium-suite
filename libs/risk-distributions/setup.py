@@ -27,12 +27,6 @@ if __name__ == "__main__":
         'pytest-mock',
     ]
 
-    doc_requirements = [
-        'sphinx',
-        'sphinx-autodoc-typehints',
-        'sphinx-rtd-theme',
-    ]
-
     setup(
         name=about['__title__'],
         version=about['__version__'],
@@ -47,7 +41,6 @@ if __name__ == "__main__":
 
         classifiers=[
             "Intended Audience :: Developers",
-            "Intended Audience :: Education",
             "Intended Audience :: Science/Research",
             "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
             "Natural Language :: English",
@@ -61,10 +54,6 @@ if __name__ == "__main__":
             "Programming Language :: Python :: Implementation :: CPython",
             "Topic :: Education",
             "Topic :: Scientific/Engineering",
-            "Topic :: Scientific/Engineering :: Artificial Life",
-            "Topic :: Scientific/Engineering :: Mathematics",
-            "Topic :: Scientific/Engineering :: Medical Science Apps.",
-            "Topic :: Scientific/Engineering :: Physics",
             "Topic :: Software Development :: Libraries",
         ],
 
@@ -75,9 +64,8 @@ if __name__ == "__main__":
         install_requires=install_requirements,
         tests_require=test_requirements,
         extras_require={
-            'docs': doc_requirements,
             'test': test_requirements,
-            'dev': doc_requirements + test_requirements,
+            'dev': test_requirements,
         },
 
         zip_safe=False,

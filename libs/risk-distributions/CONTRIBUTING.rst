@@ -14,5 +14,5 @@ Submitting Changes
   PRs to land a single large feature.
 - Larger changes should be discussed in the project's GitHub issues page.
 - New features and significant bug fixes should be documented in the changelog.
-- You must have legal permission to distribute any code you contribute to ``distributions``, and it
+- You must have legal permission to distribute any code you contribute to ``risk_distributions``, and it
   must be available under both the GNU GPLv3 license.
