@@ -66,8 +66,7 @@ class BaseDistribution:
         validate_parameters(params, mean, std_dev)
 
         if mean and std_dev:
-            data = pd.DataFrame({'mean': mean, 'standard_deviation': std_dev})
-            self._parameter_data = self.get_params(data)
+            self._parameter_data = self.get_params(mean, std_dev)
         else:
             self._parameter_data = params
 
@@ -84,7 +83,7 @@ class BaseDistribution:
         return pd.DataFrame({'x_min': x_min, 'x_max': x_max}, index=data.index)
 
     @classmethod
-    def get_params(cls, data: pd.DataFrame) -> pd.DataFrame:
+    def get_params(cls, mean: Union[pd.Series, float, int], std_dev: Union[pd.Series, float, int]) -> pd.DataFrame:
         """ Precalculates the parameters needed for distributions, which can then be passed to
         distributions.
 
@@ -97,6 +96,7 @@ class BaseDistribution:
         --------
             A dictionary containing the parameters, as well as the min and max range data.
         """
+        data = pd.DataFrame({'mean': mean, 'standard_deviation': std_dev})
         return cls._get_params(data)
 
     @classmethod
