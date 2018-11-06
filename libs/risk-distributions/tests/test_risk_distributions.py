@@ -5,6 +5,17 @@ import pytest
 from risk_distributions import risk_distributions
 
 
+def test_mismatched_mean_sd():
+    mean = [5, 4, 2]
+    sd = 1.1
+    with pytest.raises(ValueError) as error:
+        risk_distributions.Normal(mean=mean, sd=sd)
+
+    message = error.value.args[0]
+
+    assert "must be sequences" in message
+
+
 def test_get_min_max():
     test_mean = pd.Series([5, 10, 20, 50, 100], index=range(5))
     test_sd = pd.Series([1, 3, 5, 10, 15], index=range(5))

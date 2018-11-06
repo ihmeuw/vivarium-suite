@@ -1,9 +1,10 @@
-from typing import Dict, Callable, Tuple, Union
+from typing import Dict, Callable, Tuple, Union, List, TypeVar
 
 import numpy as np
 import pandas as pd
 from scipy import stats, optimize, special
 
+DistParamValue = TypeVar('DistParamValue', pd.Series, List, Tuple, int, float)
 
 class NonConvergenceError(Exception):
     """ Raised when the optimization fails to converge """
@@ -47,16 +48,20 @@ def _get_optimization_result(mean: pd.Series, sd: pd.Series, func: Callable,
 
 
 def validate_parameters(params, mean, sd):
-    if (params is not None and (mean is not None or sd is not None)):
+    if params is not None and (mean is not None or sd is not None):
         raise ValueError("You may supply either pre-calculated parameters or"
                          " mean and standard deviation but not both.")
     if params is not None and (not isinstance(params, pd.DataFrame) or params.empty):
         raise TypeError("If you specify pre-constructed parameters, they must be in the form of a non-empty dataframe.")
     if mean is not None and sd is None or mean is None and sd is not None:
         raise ValueError("You must specify both mean and standard deviation.")
-    if mean is not None and len(mean) != len(sd):
-        raise ValueError(f"You must specify mean and standard deviation for the same number of distributions. You "
-                         f"specified {len(mean)} mean values and {len(sd)} standard deviation values.")
+    if (isinstance(mean, (pd.Series, list, tuple)) and not isinstance(sd, (pd.Series, list, tuple)) or
+            isinstance(sd, (pd.Series, list, tuple)) and not isinstance(mean, (pd.Series, list, tuple))):
+            raise ValueError(f"If you specify a sequence for mean or standard deviation, both mean and standard"
+                             f"deviation must be sequences.")
+    if isinstance(mean, (pd.Series, list, tuple)) and len(mean) != len(sd):
+            raise ValueError(f"You must specify mean and standard deviation for the same number of distributions. You "
+                             f"specified {len(mean)} mean values and {len(sd)} standard deviation values.")
 
 
 class BaseDistribution:
@@ -64,8 +69,7 @@ class BaseDistribution:
 
     distribution = None
 
-    def __init__(self, params: pd.DataFrame=None, mean: Union[pd.Series, float, int]=None,
-                 sd: Union[pd.Series, float, int]=None):
+    def __init__(self, params: pd.DataFrame=None, mean: DistParamValue=None, sd: DistParamValue=None):
 
         validate_parameters(params, mean, sd)
 
@@ -75,33 +79,17 @@ class BaseDistribution:
             self._parameter_data = params
 
     @staticmethod
-    def _get_min_max(mean: pd.Series, sd: pd.Series) -> pd.DataFrame:
+    def _get_min_max(mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         """Gets the upper and lower bounds of the distribution support."""
         alpha = 1 + sd ** 2 / mean ** 2
         scale = mean / np.sqrt(alpha)
         s = np.sqrt(np.log(alpha))
         x_min = stats.lognorm(s=s, scale=scale).ppf(.001)
         x_max = stats.lognorm(s=s, scale=scale).ppf(.999)
-        return pd.DataFrame({'x_min': x_min, 'x_max': x_max}, index=mean.index)
+        return pd.DataFrame({'x_min': x_min, 'x_max': x_max}, index=pd.Series(mean).index)
 
     @classmethod
-    def get_params(cls, mean: Union[pd.Series, float, int], sd: Union[pd.Series, float, int]) -> pd.DataFrame:
-        """ Precalculates the parameters needed for distributions, which can then be passed to
-        distributions.
-
-        Parameters
-        ---------
-        data :
-            Table where each row has a `mean` and `standard_deviation` for a single distribution.
-
-        Returns
-        --------
-            A dictionary containing the parameters, as well as the min and max range data.
-        """
-        return cls._get_params(pd.Series(mean), pd.Series(sd))
-
-    @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         raise NotImplementedError()
 
     def process(self, data: Union[np.ndarray, pd.Series], process_type: str,
@@ -148,7 +136,7 @@ class Beta(BaseDistribution):
     distribution = stats.beta
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         scale = params['x_max'] - params['x_min']
         a = 1 / scale * (mean - params['x_min'])
@@ -174,7 +162,7 @@ class Exponential(BaseDistribution):
     distribution = stats.expon
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         params['scale'] = mean
         return params
@@ -185,7 +173,7 @@ class Gamma(BaseDistribution):
     distribution = stats.gamma
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         params['a'] = (mean / sd) ** 2
         params['scale'] = sd ** 2 / mean
@@ -197,7 +185,7 @@ class Gumbel(BaseDistribution):
     distribution = stats.gumbel_r
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         params['loc'] = mean - (np.euler_gamma * np.sqrt(6) / np.pi * sd)
         params['scale'] = np.sqrt(6) / np.pi * sd
@@ -209,7 +197,7 @@ class InverseGamma(BaseDistribution):
     distribution = stats.invgamma
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         def f(guess, mean, sd):
             alpha, beta = np.abs(guess)
@@ -217,8 +205,8 @@ class InverseGamma(BaseDistribution):
             var_guess = beta ** 2 / ((alpha - 1) ** 2 * (alpha - 2))
             return (mean - mean_guess) ** 2 + (sd ** 2 - var_guess) ** 2
 
-        opt_results = _get_optimization_result(mean, sd, f, lambda m, s: np.array((m, m * s)))
-        data_size = len(mean)
+        opt_results = _get_optimization_result(pd.Series(mean), pd.Series(sd), f, lambda m, s: np.array((m, m * s)))
+        data_size = len(pd.Series(mean))
 
         if not np.all([opt_results[k].success for k in range(data_size)]):
             raise NonConvergenceError('InverseGamma did not converge!!', 'invgamma')
@@ -233,7 +221,7 @@ class InverseWeibull(BaseDistribution):
     distribution = stats.invweibull
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         # moments from  Stat Papers (2011) 52: 591. https://doi.org/10.1007/s00362-009-0271-3
         # it is much faster than using stats.invweibull.mean/var
         params = cls._get_min_max(mean, sd)
@@ -243,8 +231,8 @@ class InverseWeibull(BaseDistribution):
             var_guess = scale ** 2 * special.gamma(1 - 2 / shape) - mean_guess ** 2
             return (mean - mean_guess) ** 2 + (sd ** 2 - var_guess) ** 2
 
-        opt_results = _get_optimization_result(mean, sd, f, lambda m, s: np.array((max(2.2, s / m), m)))
-        data_size = len(mean)
+        opt_results = _get_optimization_result(pd.Series(mean), pd.Series(sd), f, lambda m, s: np.array((max(2.2, s / m), m)))
+        data_size = len(pd.Series(mean))
 
         if not np.all([opt_results[k].success for k in range(data_size)]):
             raise NonConvergenceError('InverseWeibull did not converge!!', 'invweibull')
@@ -259,7 +247,7 @@ class LogLogistic(BaseDistribution):
     distribution = stats.burr12
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         def f(guess, mean, sd):
             shape, scale = np.abs(guess)
@@ -268,8 +256,8 @@ class LogLogistic(BaseDistribution):
             var_guess = scale ** 2 * 2 * b / np.sin(2 * b) - mean_guess ** 2
             return (mean - mean_guess) ** 2 + (sd ** 2 - var_guess) ** 2
 
-        opt_results = _get_optimization_result(mean, sd, f, lambda m, s: np.array((max(2, m), m)))
-        data_size = len(mean)
+        opt_results = _get_optimization_result(pd.Series(mean), pd.Series(sd), f, lambda m, s: np.array((max(2, m), m)))
+        data_size = len(pd.Series(mean))
 
         if not np.all([opt_results[k].success for k in range(data_size)]):
             raise NonConvergenceError('LogLogistic did not converge!!', 'llogis')
@@ -285,7 +273,7 @@ class LogNormal(BaseDistribution):
     distribution = stats.lognorm
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         alpha = 1 + sd ** 2 / mean ** 2
         params['s'] = np.sqrt(np.log(alpha))
@@ -298,7 +286,7 @@ class MirroredGumbel(BaseDistribution):
     distribution = stats.gumbel_r
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         params['loc'] = params['x_max'] - mean - (
                     np.euler_gamma * np.sqrt(6) / np.pi * sd)
@@ -323,7 +311,7 @@ class MirroredGamma(BaseDistribution):
     distribution = stats.gamma
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         params['a'] = ((params['x_max'] - mean) / sd) ** 2
         params['scale'] = sd ** 2 / (params['x_max'] - mean)
@@ -347,7 +335,7 @@ class Normal(BaseDistribution):
     distribution = stats.norm
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         params['loc'] = mean
         params['scale'] = sd
@@ -359,7 +347,7 @@ class Weibull(BaseDistribution):
     distribution = stats.weibull_min
 
     @classmethod
-    def _get_params(cls, mean: pd.Series, sd: pd.Series()) -> pd.DataFrame:
+    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
         params = cls._get_min_max(mean, sd)
         def f(guess, mean, sd):
             shape, scale = np.abs(guess)
@@ -367,8 +355,8 @@ class Weibull(BaseDistribution):
             var_guess = scale ** 2 * special.gamma(1 + 2 / shape) - mean_guess ** 2
             return (mean - mean_guess) ** 2 + (sd ** 2 - var_guess) ** 2
 
-        opt_results = _get_optimization_result(mean, sd, f, lambda m, s: np.array((m, m / s)))
-        data_size = len(mean)
+        opt_results = _get_optimization_result(pd.Series(mean), pd.Series(sd), f, lambda m, s: np.array((m, m / s)))
+        data_size = len(pd.Series(mean))
 
         if not np.all([opt_results[k].success is True for k in range(data_size)]):
             raise NonConvergenceError('Weibull did not converge!!', 'weibull')
@@ -381,7 +369,7 @@ class Weibull(BaseDistribution):
 class EnsembleDistribution:
     """Represents an arbitrary distribution as a weighted sum of several concrete distribution types."""
 
-    def __init__(self, weights, mean: Union[pd.Series, float, int], sd: Union[pd.Series, float, int]):
+    def __init__(self, weights, mean: DistParamValue, sd: DistParamValue):
         self.weights, self._distributions = self.get_valid_distributions(weights, mean, sd)
 
     @classmethod
@@ -400,8 +388,8 @@ class EnsembleDistribution:
                 'weibull': Weibull}
 
     @classmethod
-    def get_valid_distributions(cls, weights: pd.DataFrame, mean: Union[pd.Series, float, int],
-                                sd: Union[pd.Series, float, int]) -> Tuple[np.ndarray, Dict]:
+    def get_valid_distributions(cls, weights: pd.DataFrame, mean: DistParamValue,
+                                sd: DistParamValue) -> Tuple[np.ndarray, Dict]:
         """Produces a distribution that filters out non convergence errors and rescales weights appropriately.
         Can specify either data, params, or (mean and standard deviation), but not multiple.
 
