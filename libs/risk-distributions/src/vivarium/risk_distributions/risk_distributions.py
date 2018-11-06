@@ -153,11 +153,9 @@ class Beta(BaseDistribution):
         scale = params['x_max'] - params['x_min']
         a = 1 / scale * (mean - params['x_min'])
         b = (1 / scale * sd) ** 2
-        shape_1 = a ** 2 / b * (1 - a) - a
-        shape_2 = a / b * (1 - a) ** 2 + (a - 1)
+        params['a'] = a ** 2 / b * (1 - a) - a
+        params['b'] = a / b * (1 - a) ** 2 + (a - 1)
         params['scale'] = scale
-        params['a'] = shape_1
-        params['b'] = shape_2
         return params
 
     def process(self, data: Union[np.ndarray, pd.Series], process_type: str,
