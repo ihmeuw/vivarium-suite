@@ -372,8 +372,7 @@ class EnsembleDistribution:
     def __init__(self, weights, mean: DistParamValue, sd: DistParamValue):
         self.weights, self._distributions = self.get_valid_distributions(weights, mean, sd)
 
-    @classmethod
-    def get_distribution_map(cls):
+    def get_distribution_map(self):
         return {'betasr': Beta,
                 'exp': Exponential,
                 'gamma': Gamma,
@@ -387,8 +386,7 @@ class EnsembleDistribution:
                 'norm': Normal,
                 'weibull': Weibull}
 
-    @classmethod
-    def get_valid_distributions(cls, weights: pd.DataFrame, mean: DistParamValue,
+    def get_valid_distributions(self, weights: pd.DataFrame, mean: DistParamValue,
                                 sd: DistParamValue) -> Tuple[np.ndarray, Dict]:
         """Produces a distribution that filters out non convergence errors and rescales weights appropriately.
         Can specify either data, params, or (mean and standard deviation), but not multiple.
@@ -409,7 +407,7 @@ class EnsembleDistribution:
         """
 
         distributions = dict()
-        distribution_map = cls.get_distribution_map()
+        distribution_map = self.get_distribution_map()
         distribution_types = list(set(distribution_map.keys()) & set(weights.columns))
         weights = weights[distribution_types].iloc[0]
         weights = weights/np.sum(weights)
