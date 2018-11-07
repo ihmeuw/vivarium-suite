@@ -417,7 +417,7 @@ class EnsembleDistribution:
             try:
                 distributions[name] = distribution_map[name](mean=mean, sd=sd)
             except NonConvergenceError as e:
-                if weights[e.dist] > 0.05:
+                if weights[e.dist] < 0.05:
                     weights = weights.drop(e.dist)
                 else:
                     raise NonConvergenceError(f'Divergent {key} distribution has weights: {100*weights[name]}%', name)
@@ -425,8 +425,13 @@ class EnsembleDistribution:
         return weights/np.sum(weights), distributions
 
     def pdf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
-        return np.sum([self.weights[name] * dist.pdf(x)
-                       for name, dist in self._distributions.items()], axis=0)
+        if not x.empty:
+            datas = []
+            for name, dist in self._distributions.items():
+                datas.append(self.weights[name] * dist.pdf(x))
+            return np.sum(datas, axis=0)
+        else:
+            return np.array([])
 
     def ppf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
         if not x.empty:
