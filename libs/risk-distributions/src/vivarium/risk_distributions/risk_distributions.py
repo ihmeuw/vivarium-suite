@@ -394,8 +394,8 @@ class EnsembleDistribution:
         Parameters
         ----------
         weights :
-            A single-row dataframe of normalized distribution weights, each column representing
-            a different distribution type.
+            A dataframe of normalized distribution weights, each column representing
+            a different distribution type and each row representing weights for each row of mean/sd.
         mean :
             Mean value for a single distribution or series of values, each for a single distribution.
         sd :
@@ -409,18 +409,18 @@ class EnsembleDistribution:
         distributions = dict()
         distribution_map = self.get_distribution_map()
         distribution_types = list(set(distribution_map.keys()) & set(weights.columns))
-        weights = weights[distribution_types].iloc[0]
-        weights = weights/np.sum(weights)
+        weights = weights[distribution_types]
+        weights = weights.divide(weights.sum(axis=1), axis=0)
         for name in distribution_types:
             try:
                 distributions[name] = distribution_map[name](mean=mean, sd=sd)
             except NonConvergenceError as e:
-                if weights[e.dist] < 0.05:
-                    weights = weights.drop(e.dist)
+                if weights[e.dist].max() < 0.05:
+                    weights = weights.drop(e.dist, axis=1)
                 else:
-                    raise NonConvergenceError(f'Divergent {key} distribution has weights: {100*weights[name]}%', name)
+                    raise NonConvergenceError(f'Divergent {name} distribution has weights: {100*weights[name]}%', name)
 
-        return weights/np.sum(weights), distributions
+        return weights.divide(weights.sum(axis=1), axis=0), distributions
 
     def pdf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
         if not x.empty:
@@ -435,7 +435,7 @@ class EnsembleDistribution:
         if not x.empty:
             datas = []
             for name, dist in self._distributions.items():
-                datas.append(self.weights[name] * dist.ppf(x))
+                datas.append(self.weights[name].multiply(dist.ppf(x)))
             return np.sum(datas, axis=0)
         else:
             return np.array([])
