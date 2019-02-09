@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats, optimize, special
 
-DistParamValue = TypeVar('DistParamValue', pd.Series, List, Tuple, int, float)
+DistParamValue = TypeVar('DistParamValue', pd.Series, pd.DataFrame, List, Tuple, int, float)
 
 class NonConvergenceError(Exception):
     """ Raised when the optimization fails to converge """
@@ -74,9 +74,9 @@ class BaseDistribution:
         validate_parameters(params, mean, sd)
 
         if mean is not None:
-            self._parameter_data = self.get_params(mean, sd)
+            self.parameter_data = self.get_params(mean, sd)
         else:
-            self._parameter_data = params
+            self.parameter_data = params
 
     @staticmethod
     def _get_min_max(mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
@@ -86,7 +86,8 @@ class BaseDistribution:
         s = np.sqrt(np.log(alpha))
         x_min = stats.lognorm(s=s, scale=scale).ppf(.001)
         x_max = stats.lognorm(s=s, scale=scale).ppf(.999)
-        return pd.DataFrame({'x_min': x_min, 'x_max': x_max}, index=pd.Series(mean).index)
+        new_index = mean.index if isinstance(mean, (pd.Series, pd.DataFrame)) else pd.Series(mean).index
+        return pd.DataFrame({'x_min': x_min, 'x_max': x_max}, index=new_index)
 
     @classmethod
     def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
@@ -115,15 +116,15 @@ class BaseDistribution:
         return data
 
     def pdf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
-        ranges = self._parameter_data[['x_min', 'x_max']]
-        dist_params = self._parameter_data[self._parameter_data.columns.difference(['x_min', 'x_max'])].to_dict('series')
+        ranges = self.parameter_data[['x_min', 'x_max']]
+        dist_params = self.parameter_data[self.parameter_data.columns.difference(['x_min', 'x_max'])].to_dict('series')
         x = self.process(x, "pdf_preprocess", ranges)
         pdf = self.distribution(**dist_params).pdf(x)
         return self.process(pdf, "pdf_postprocess", ranges)
 
     def ppf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
-        ranges = self._parameter_data[['x_min', 'x_max']]
-        dist_params = (self._parameter_data[self._parameter_data.columns.difference(['x_min', 'x_max'])]
+        ranges = self.parameter_data[['x_min', 'x_max']]
+        dist_params = (self.parameter_data[self.parameter_data.columns.difference(['x_min', 'x_max'])]
                        .reset_index(drop=True)
                        .to_dict('series'))
         x = self.process(x, "ppf_preprocess", ranges)
@@ -368,23 +369,22 @@ class Weibull(BaseDistribution):
 
 class EnsembleDistribution:
     """Represents an arbitrary distribution as a weighted sum of several concrete distribution types."""
+    distribution_map = {'betasr': Beta,
+                        'exp': Exponential,
+                        'gamma': Gamma,
+                        'gumbel': Gumbel,
+                        'invgamma': InverseGamma,
+                        'invweibull': InverseWeibull,
+                        'llogis': LogLogistic,
+                        'lnorm': LogNormal,
+                        'mgamma': MirroredGamma,
+                        'mgumbel': MirroredGumbel,
+                        'norm': Normal,
+                        'weibull': Weibull}
 
     def __init__(self, weights, mean: DistParamValue, sd: DistParamValue):
-        self.weights, self._distributions = self.get_valid_distributions(weights, mean, sd)
+        self.weights, self.distributions = self.get_valid_distributions(weights, mean, sd)
 
-    def get_distribution_map(self):
-        return {'betasr': Beta,
-                'exp': Exponential,
-                'gamma': Gamma,
-                'gumbel': Gumbel,
-                'invgamma': InverseGamma,
-                'invweibull': InverseWeibull,
-                'llogis': LogLogistic,
-                'lnorm': LogNormal,
-                'mgamma': MirroredGamma,
-                'mgumbel': MirroredGumbel,
-                'norm': Normal,
-                'weibull': Weibull}
 
     def get_valid_distributions(self, weights: pd.DataFrame, mean: DistParamValue,
                                 sd: DistParamValue) -> Tuple[np.ndarray, Dict]:
@@ -407,25 +407,36 @@ class EnsembleDistribution:
         """
 
         distributions = dict()
-        distribution_map = self.get_distribution_map()
+        distribution_map = self.distribution_map
         distribution_types = list(set(distribution_map.keys()) & set(weights.columns))
         weights = weights[distribution_types]
-        weights = weights.divide(weights.sum(axis=1), axis=0)
+        zero_weights = weights[weights.eq(0).all(axis=1)]
+        non_zero_weights = weights.loc[weights.index.difference(zero_weights.index)]
+        non_zero_mean = mean.loc[non_zero_weights.index]
+        non_zero_sd = sd.loc[non_zero_weights.index]
+
+        non_zero_weights = non_zero_weights.divide(non_zero_weights.sum(axis=1), axis=0)
         for name in distribution_types:
             try:
-                distributions[name] = distribution_map[name](mean=mean, sd=sd)
-            except NonConvergenceError as e:
-                if weights[e.dist].max() < 0.05:
-                    weights = weights.drop(e.dist, axis=1)
-                else:
-                    raise NonConvergenceError(f'Divergent {name} distribution has weights: {100*weights[name]}%', name)
 
-        return weights.divide(weights.sum(axis=1), axis=0), distributions
+                distribution = distribution_map[name](mean=non_zero_mean, sd=non_zero_sd)
+                params = distribution.parameter_data
+                missing_params = pd.DataFrame(1, columns=params.columns, index=zero_weights.index)
+                distribution.parameter_data = pd.concat([params, missing_params]).sort_index()
+                distributions[name] = distribution
+
+            except NonConvergenceError as e:
+                if non_zero_weights[e.dist].max() < 0.05:
+                    non_zero_weights = non_zero_weights.drop(e.dist, axis=1)
+                else:
+                    raise NonConvergenceError(f'Divergent {name} distribution has weights: {100 * non_zero_weights[name]}%', name)
+
+        return non_zero_weights.divide(non_zero_weights.sum(axis=1), axis=0), distributions
 
     def pdf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
         if not x.empty:
             datas = []
-            for name, dist in self._distributions.items():
+            for name, dist in self.distributions.items():
                 datas.append(self.weights[name] * dist.pdf(x))
             return np.sum(datas, axis=0)
         else:
@@ -434,7 +445,7 @@ class EnsembleDistribution:
     def ppf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
         if not x.empty:
             datas = []
-            for name, dist in self._distributions.items():
+            for name, dist in self.distributions.items():
                 datas.append(self.weights[name].multiply(dist.ppf(x)))
             return np.sum(datas, axis=0)
         else:
