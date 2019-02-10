@@ -88,7 +88,7 @@ class BaseDistribution:
                                                                                  sd.loc[computable])
             parameters.loc[computable, cls.expected_parameters] = cls._get_parameters(
                 mean.loc[computable], sd.loc[computable],
-                parameters.loc[computable, 'x_min'], parameters.loc[computable, 'x_min']
+                parameters.loc[computable, 'x_min'], parameters.loc[computable, 'x_max']
             )
 
         return parameters
