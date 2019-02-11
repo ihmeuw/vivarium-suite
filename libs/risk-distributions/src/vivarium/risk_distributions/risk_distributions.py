@@ -1,10 +1,10 @@
-from typing import List, Tuple, TypeVar, Union, Callable, Dict
+from typing import Tuple, Union, Callable, Dict
 
 import numpy as np
 import pandas as pd
 from scipy import stats, optimize, special
 
-DistParamValue = TypeVar('DistParamValue', pd.Series, pd.DataFrame, List, Tuple, int, float)
+from risk_distributions.formatting import cast_to_series, format_data, Parameter, Parameters
 
 
 class BaseDistribution:
@@ -13,80 +13,32 @@ class BaseDistribution:
     distribution = None
     expected_parameters = ()
 
-    def __init__(self, parameters: DistParamValue = None, mean: DistParamValue = None, sd: DistParamValue = None):
+    def __init__(self, parameters: Parameters = None, mean: Parameter = None, sd: Parameter = None):
         self.parameters = self.get_parameters(parameters, mean, sd)
 
     @classmethod
-    def get_parameters(cls, parameters: DistParamValue = None, mean: DistParamValue = None,
-                       sd: DistParamValue = None) -> pd.DataFrame:
+    def get_parameters(cls, parameters: Parameters = None, mean: Parameter = None,
+                       sd: Parameter = None) -> pd.DataFrame:
+        required_parameters = list(cls.expected_parameters + ('x_min', 'x_max'))
         if parameters is not None:
             if not (mean is None and sd is None):
                 raise ValueError("You may supply either pre-calculated parameters or"
                                  " mean and standard deviation but not both.")
-            if not len(parameters):
-                raise ValueError("No parameter data provided.")
-
-            if isinstance(parameters, pd.DataFrame):
-                required_cols = cls.expected_parameters + ('x_min', 'x_max')
-                if not np.all(parameters.columns.isin(required_cols)):
-                    raise ValueError(f"No data for distribution parameters "
-                                     f"{set(required_cols).difference(parameters.columns)}.")
-                extra_cols = parameters.columns.difference(required_cols)
-                if np.any(extra_cols):
-                    raise ValueError(f"Extra data columns provided: {extra_cols}")
-
-            elif isinstance(parameters, np.ndarray):
-                try:
-                    parameters = pd.DataFrame(parameters, columns=cls.expected_parameters)
-                except ValueError as e:
-                    if 'Shape of passed values' in e:
-                        raise ValueError("If using a numpy array for your values, it must have a column for each "
-                                         "expected parameter.")
-                    else:
-                        raise
-
-            elif isinstance(parameters, (tuple, list)):
-                parameters = [[p] for p in parameters]
-                try:
-                    parameters = pd.DataFrame(parameters, columns=cls.expected_parameters)
-                except ValueError as e:
-                    if 'Shape of passed values' in e:
-                        raise ValueError("If passing parameters as a list or tuple, one value must "
-                                         "be provided for each parameter.")
-                    else:
-                        raise
-
-            elif isinstance(parameters, dict):
-                if set(parameters.keys()) != set(cls.expected_parameters):
-                    raise ValueError(f"If passing parameters as a dictionary, you "
-                                     f"must supply only keys {cls.expected_parameters}")
-                parameters = {key: list(val) for key, val in parameters.items()}
-                if len(set(len(val) for val in parameters.values())) != 1:
-                    raise ValueError("If passing parameters as a dictionary, you "
-                                     "must specify the same number of values for each parameter.")
-                parameters = pd.DataFrame(parameters)
-
-            elif isinstance(parameters, (int, float)):
-                if len(cls.expected_parameters) != 1:
-                    raise ValueError("You provided a single parameter to a multi parameter distribution.")
-                parameters = pd.DataFrame([parameters], columns=cls.expected_parameters)
+            parameters = format_data(parameters, required_parameters, 'Parameters')
 
         else:
             if mean is None or sd is None:
                 raise ValueError("You may supply either pre-calculated parameters or"
                                  " mean and standard deviation but not both.")
 
-            mean, sd = pd.Series(mean), pd.Series(sd)
+            mean, sd = cast_to_series(mean, sd)
 
-            if len(mean) != len(sd):
-                raise ValueError("You must provide the same number of values for mean and standard deviation.")
-
-            parameters = pd.DataFrame(0, columns=cls.expected_parameters + ('x_min', 'x_max'), index=mean.index)
+            parameters = pd.DataFrame(0, columns=required_parameters, index=mean.index)
 
             computable = cls.computable_parameter_index(mean, sd)
             parameters.loc[computable, ['x_min', 'x_max']] = cls.compute_min_max(mean.loc[computable],
                                                                                  sd.loc[computable])
-            parameters.loc[computable, cls.expected_parameters] = cls._get_parameters(
+            parameters.loc[computable, list(cls.expected_parameters)] = cls._get_parameters(
                 mean.loc[computable], sd.loc[computable],
                 parameters.loc[computable, 'x_min'], parameters.loc[computable, 'x_max']
             )
@@ -135,17 +87,19 @@ class BaseDistribution:
     def pdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
+        if isinstance(x, pd.Series) and x.index != self.parameters.index:
+            raise ValueError("If providing x as a series it must be indexed consistently with the parameter data.")
 
-        params = self.parameters.loc[:, list(self.expected_parameters)]
-        x = pd.Series(x, index=params.index)
+        x = pd.Series(x, index=self.parameters.index)
 
-        computable = params[(params.sum(axis=1) != 0)
-                            & ~np.isnan(x)
-                            & (params['xmin'] <= x) & (x <= params['x_max'])].index
+        computable = self.parameters[(self.parameters.sum(axis=1) != 0)
+                                     & ~np.isnan(x)
+                                     & (self.parameters['x_min'] <= x) & (x <= self.parameters['x_max'])].index
 
         x.loc[computable] = self.process(x.loc[computable], "pdf_preprocess")
         p = pd.Series(np.nan, x.index)
-        p.loc[computable] = self.distribution(**params.loc[computable].to_dict('series')).pdf(x.loc[computable])
+        params = self.parameters.loc[computable, list(self.expected_parameters)]
+        p.loc[computable] = self.distribution(**params.to_dict('series')).pdf(x.loc[computable])
         p.loc[computable] = self.process(p.loc[computable], "pdf_postprocess")
 
         if single_val:
@@ -157,17 +111,19 @@ class BaseDistribution:
     def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
+        if isinstance(q, pd.Series) and q.index != self.parameters.index:
+            raise ValueError("If providing q as a series it must be indexed consistently with the parameter data.")
 
-        params = self.parameters.loc[:, list(self.expected_parameters)]
-        q = pd.Series(q, index=params.index)
+        q = pd.Series(q, index=self.parameters.index)
 
-        computable = params[(params.sum(axis=1) != 0)
-                            & ~np.isnan(q)
-                            & (0.001 <= q) & (q <= 0.999)].index
+        computable = self.parameters[(self.parameters.sum(axis=1) != 0)
+                                     & ~np.isnan(q)
+                                     & (0.001 <= q.values) & (q.values <= 0.999)].index
 
         q.loc[computable] = self.process(q.loc[computable], "ppf_preprocess")
         x = pd.Series(np.nan, q.index)
-        x.loc[computable] = self.distribution(**params.loc[computable].to_dict('series')).ppf(q.loc[computable])
+        params = self.parameters.loc[computable, list(self.expected_parameters)]
+        x.loc[computable] = self.distribution(**params.to_dict('series')).ppf(q.loc[computable])
         x.loc[computable] = self.process(x.loc[computable], "ppf_postprocess")
 
         if single_val:
@@ -450,15 +406,23 @@ class EnsembleDistribution:
                         'norm': Normal,
                         'weibull': Weibull}
 
-    def __init__(self, weights: Union[pd.DataFrame, dict], parameters: Dict[str, DistParamValue] = None,
-                 mean: DistParamValue = None, sd: DistParamValue = None):
+    def __init__(self, weights: Parameters, parameters: Dict[str, Parameters] = None,
+                 mean: Parameter = None, sd: Parameter = None):
         self.weights, self.parameters = self.get_parameters(weights, parameters, mean, sd)
 
     @classmethod
-    def get_parameters(cls, weights: Union[pd.DataFrame, dict],
-                       parameters: DistParamValue = None,
-                       mean: DistParamValue = None,
-                       sd: DistParamValue = None) -> (pd.DataFrame, Dict[str, pd.DataFrame]):
+    def get_parameters(cls, weights: Parameters,
+                       parameters: Parameters = None,
+                       mean: Parameter = None,
+                       sd: Parameter = None) -> (pd.DataFrame, Dict[str, pd.DataFrame]):
+        if isinstance(weights, np.ndarray):
+            if len(weights.shape) == 1:  # Column vector
+                if weights.shape[0] != len(cls.distribution_map):
+                    raise ValueError(f'If providing weights as a numpy array, you must provide a value for '
+                                     f'each of {cls.distribution_map.keys()}')
+                weights = pd.DataFrame(n)
+
+
         if isinstance(weights, pd.DataFrame):
             if not np.all(weights.columns.isin(cls.distribution_map.keys())):
                 raise ValueError(f"Missing weight data for distributions: "
