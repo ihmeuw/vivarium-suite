@@ -43,7 +43,7 @@ def format_array(data: np.ndarray, required_columns: List[any], measure: str) ->
     """Transforms 1d and 2d arrays into dataframes with columns for the
     parameters and (possibly) rows for each parameter variation."""
     if not data.size:
-        raise ValueError(f"No data provided for {measure}")
+        raise ValueError(f"No data provided for {measure}.")
 
     if len(required_columns) == 1:
         # We can accept row or column vectors
@@ -88,7 +88,7 @@ def format_series(data: pd.Series, required_columns: List[Any], measure: str) ->
     """Transforms series data into dataframes with columns for the
     parameters and (possibly) rows for each parameter variation."""
     if data.empty:
-        raise ValueError(f"No data provided for {measure}")
+        raise ValueError(f"No data provided for {measure}.")
 
     if len(required_columns) == 1:  # Interpret the series as parameter variations
         data = pd.DataFrame(data, columns=required_columns)
