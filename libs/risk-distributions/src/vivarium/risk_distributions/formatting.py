@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 Parameter = TypeVar('Parameter', np.ndarray, pd.Series, List, Tuple, int, float)
-Parameters = TypeVar('Parameters', np.ndarray, pd.Series, pd.DataFrame, List, Tuple, Dict[str: Parameter])
+Parameters = TypeVar('Parameters', np.ndarray, pd.Series, pd.DataFrame, List, Tuple, Dict[str, Parameter])
 
 
 def cast_to_series(mean: Parameter, sd: Parameter) -> (pd.Series, pd.Series):
