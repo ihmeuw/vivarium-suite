@@ -1,10 +1,486 @@
-from typing import Dict, Callable, Tuple, Union, List, TypeVar
+from typing import Tuple, Union, Callable, Dict
 
 import numpy as np
 import pandas as pd
 from scipy import stats, optimize, special
 
-DistParamValue = TypeVar('DistParamValue', pd.Series, List, Tuple, int, float)
+from risk_distributions.formatting import cast_to_series, format_data, Parameter, Parameters
+
+
+class BaseDistribution:
+    """Generic vectorized wrapper around scipy distributions."""
+
+    distribution = None
+    expected_parameters = ()
+
+    def __init__(self, parameters: Parameters = None, mean: Parameter = None, sd: Parameter = None):
+        self.parameters = self.get_parameters(parameters, mean, sd)
+
+    @classmethod
+    def get_parameters(cls, parameters: Parameters = None, mean: Parameter = None,
+                       sd: Parameter = None) -> pd.DataFrame:
+        required_parameters = list(cls.expected_parameters + ('x_min', 'x_max'))
+        if parameters is not None:
+            if not (mean is None and sd is None):
+                raise ValueError("You may supply either pre-calculated parameters or"
+                                 " mean and standard deviation but not both.")
+            parameters = format_data(parameters, required_parameters, 'parameters')
+
+        else:
+            if mean is None or sd is None:
+                raise ValueError("You may supply either pre-calculated parameters or"
+                                 " mean and standard deviation but not both.")
+
+            mean, sd = cast_to_series(mean, sd)
+
+            parameters = pd.DataFrame(0, columns=required_parameters, index=mean.index)
+
+            computable = cls.computable_parameter_index(mean, sd)
+            parameters.loc[computable, ['x_min', 'x_max']] = cls.compute_min_max(mean.loc[computable],
+                                                                                 sd.loc[computable])
+            parameters.loc[computable, list(cls.expected_parameters)] = cls._get_parameters(
+                mean.loc[computable], sd.loc[computable],
+                parameters.loc[computable, 'x_min'], parameters.loc[computable, 'x_max']
+            )
+
+        return parameters
+
+    @staticmethod
+    def computable_parameter_index(mean: pd.Series, sd: pd.Series) -> pd.Index:
+        return mean[(mean != 0) & ~np.isnan(mean) & (sd != 0) & ~np.isnan(sd)].index
+
+    @staticmethod
+    def compute_min_max(mean: pd.Series, sd: pd.Series) -> pd.DataFrame:
+        """Gets the upper and lower bounds of the distribution support."""
+        alpha = 1 + sd ** 2 / mean ** 2
+        scale = mean / np.sqrt(alpha)
+        s = np.sqrt(np.log(alpha))
+        x_min = stats.lognorm(s=s, scale=scale).ppf(.001)
+        x_max = stats.lognorm(s=s, scale=scale).ppf(.999)
+        return pd.DataFrame({'x_min': x_min, 'x_max': x_max}, index=mean.index)
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        raise NotImplementedError()
+
+    def process(self, data: pd.Series, process_type: str) -> pd.Series:
+        """Function called before and after distribution looks to handle pre- and post-processing.
+
+        This function should look like an if sieve on the `process_type` and fall back with a call to
+        this method if no processing needs to be done.
+
+        Parameters
+        ----------
+        data :
+            The data to be processed.
+        process_type :
+            One of `pdf_preprocess`, `pdf_postprocess`, `ppf_preprocess`, `ppf_post_process`.
+        ranges :
+            Upper and lower bounds of the distribution support.
+
+        Returns
+        -------
+            The processed data.
+        """
+        return data
+
+    def pdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
+        single_val = isinstance(x, (float, int))
+        values_only = isinstance(x, np.ndarray)
+        if isinstance(x, pd.Series) and x.index != self.parameters.index:
+            raise ValueError("If providing x as a series it must be indexed consistently with the parameter data.")
+
+        x = pd.Series(x, index=self.parameters.index)
+
+        computable = self.parameters[(self.parameters.sum(axis=1) != 0)
+                                     & ~np.isnan(x)
+                                     & (self.parameters['x_min'] <= x) & (x <= self.parameters['x_max'])].index
+
+        x.loc[computable] = self.process(x.loc[computable], "pdf_preprocess")
+        p = pd.Series(np.nan, x.index)
+        params = self.parameters.loc[computable, list(self.expected_parameters)]
+        p.loc[computable] = self.distribution(**params.to_dict('series')).pdf(x.loc[computable])
+        p.loc[computable] = self.process(p.loc[computable], "pdf_postprocess")
+
+        if single_val:
+            p = p.iloc[0]
+        if values_only:
+            p = p.values
+        return p
+
+    def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
+        single_val = isinstance(q, (float, int))
+        values_only = isinstance(q, np.ndarray)
+        if isinstance(q, pd.Series) and q.index != self.parameters.index:
+            raise ValueError("If providing q as a series it must be indexed consistently with the parameter data.")
+
+        q = pd.Series(q, index=self.parameters.index)
+
+        computable = self.parameters[(self.parameters.sum(axis=1) != 0)
+                                     & ~np.isnan(q)
+                                     & (0.001 <= q.values) & (q.values <= 0.999)].index
+
+        q.loc[computable] = self.process(q.loc[computable], "ppf_preprocess")
+        x = pd.Series(np.nan, q.index)
+        params = self.parameters.loc[computable, list(self.expected_parameters)]
+        x.loc[computable] = self.distribution(**params.to_dict('series')).ppf(q.loc[computable])
+        x.loc[computable] = self.process(x.loc[computable], "ppf_postprocess")
+
+        if single_val:
+            x = x.iloc[0]
+        if values_only:
+            x = x.values
+        return x
+
+
+class Beta(BaseDistribution):
+
+    distribution = stats.beta
+    expected_parameters = ('a', 'b', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        scale = x_max - x_min
+        a = 1 / scale * (mean - x_min)
+        b = (1 / scale * sd) ** 2
+        params = pd.DataFrame({
+            'a': a ** 2 / b * (1 - a) - a,
+            'b': a / b * (1 - a) ** 2 + (a - 1),
+            'scale': scale
+        }, index=mean.index)
+        return params
+
+    def process(self, data: pd.Series, process_type: str) -> pd.Series:
+        x_min, x_max = self.parameters.loc[data.index, 'x_min'], self.parameters.loc[data.index, 'x_max']
+        if process_type == 'pdf_preprocess':
+            value = data - x_min
+        elif process_type == 'ppf_postprocess':
+            value = data + x_max - x_min
+        else:
+            value = super().process(data, process_type)
+        return value
+
+
+class Exponential(BaseDistribution):
+
+    distribution = stats.expon
+    expected_parameters = ('scale',)
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        return pd.DataFrame({'scale': mean}, index=mean.index)
+
+
+class Gamma(BaseDistribution):
+
+    distribution = stats.gamma
+    expected_parameters = ('a', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        params = pd.DataFrame({
+            'a': (mean / sd) ** 2,
+            'scale':  sd ** 2 / mean,
+        }, index=mean.index)
+        return params
+
+
+class Gumbel(BaseDistribution):
+
+    distribution = stats.gumbel_r
+    expected_parameters = ('loc', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        params = pd.DataFrame({
+            'loc': mean - (np.euler_gamma * np.sqrt(6) / np.pi * sd),
+            'scale': np.sqrt(6) / np.pi * sd
+        }, index=mean.index)
+        return params
+
+
+class InverseGamma(BaseDistribution):
+
+    distribution = stats.invgamma
+    expected_parameters = ('a', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+
+        def target_function(guess, m, s):
+            alpha, beta = np.abs(guess)
+            mean_guess = beta / (alpha - 1)
+            var_guess = beta ** 2 / ((alpha - 1) ** 2 * (alpha - 2))
+            return (m - mean_guess) ** 2 + (s ** 2 - var_guess) ** 2
+
+        opt_results = _get_optimization_result(mean, sd, target_function, lambda m, s: np.array((m, m * s)))
+
+        result_indices = range(len(mean))
+        if not np.all([opt_results[k].success for k in result_indices]):
+            raise NonConvergenceError('InverseGamma did not converge!!', 'invgamma')
+
+        params = pd.DataFrame({
+            'a': np.abs([opt_results[k].x[0] for k in result_indices]),
+            'scale': np.abs([opt_results[k].x[1] for k in result_indices]),
+        }, index=mean.index)
+        return params
+
+
+class InverseWeibull(BaseDistribution):
+
+    distribution = stats.invweibull
+    expected_parameters = ('c', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        # moments from  Stat Papers (2011) 52: 591. https://doi.org/10.1007/s00362-009-0271-3
+        # it is much faster than using stats.invweibull.mean/var
+        def target_function(guess, m, s):
+            shape, scale = np.abs(guess)
+            mean_guess = scale * special.gamma(1 - 1 / shape)
+            var_guess = scale ** 2 * special.gamma(1 - 2 / shape) - mean_guess ** 2
+            return (m - mean_guess) ** 2 + (s ** 2 - var_guess) ** 2
+
+        opt_results = _get_optimization_result(mean, sd, target_function, lambda m, s: np.array((max(2.2, s / m), m)))
+
+        result_indices = range(len(mean))
+        if not np.all([opt_results[k].success for k in result_indices]):
+            raise NonConvergenceError('InverseWeibull did not converge!!', 'invweibull')
+
+        params = pd.DataFrame({
+            'c': np.abs([opt_results[k].x[0] for k in result_indices]),
+            'scale': np.abs([opt_results[k].x[1] for k in result_indices]),
+        }, index=mean.index)
+        return params
+
+
+class LogLogistic(BaseDistribution):
+
+    distribution = stats.burr12
+    expected_parameters = ('c', 'd', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+
+        def target_function(guess, m, s):
+            shape, scale = np.abs(guess)
+            b = np.pi / shape
+            mean_guess = scale * b / np.sin(b)
+            var_guess = scale ** 2 * 2 * b / np.sin(2 * b) - mean_guess ** 2
+            return (m - mean_guess) ** 2 + (s ** 2 - var_guess) ** 2
+
+        opt_results = _get_optimization_result(mean, sd, target_function, lambda m, s: np.array((max(2, m), m)))
+
+        result_indices = range(len(mean))
+        if not np.all([opt_results[k].success for k in result_indices]):
+            raise NonConvergenceError('LogLogistic did not converge!!', 'llogis')
+
+        params = pd.DataFrame({
+            'c': np.abs([opt_results[k].x[0] for k in result_indices]),
+            'd': 1,
+            'scale': np.abs([opt_results[k].x[1] for k in result_indices])
+        }, index=mean.index)
+        return params
+
+
+class LogNormal(BaseDistribution):
+
+    distribution = stats.lognorm
+    expected_parameters = ('s', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        alpha = 1 + sd ** 2 / mean ** 2
+        params = pd.DataFrame({
+            's': np.sqrt(np.log(alpha)),
+            'scale': mean / np.sqrt(alpha),
+        }, index=mean.index)
+        return params
+
+
+class MirroredGumbel(BaseDistribution):
+
+    distribution = stats.gumbel_r
+    expected_parameters = ('loc', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        params = pd.DataFrame({
+            'loc': x_max - mean - (np.euler_gamma * np.sqrt(6) / np.pi * sd),
+            'scale': np.sqrt(6) / np.pi * sd,
+        }, index=mean.index)
+        return params
+
+    def process(self, data: Union[np.ndarray, pd.Series], process_type: str) -> pd.Series:
+        x_min, x_max = self.parameters.loc[data.index, 'x_min'], self.parameters.loc[data.index, 'x_max']
+        if process_type == 'pdf_preprocess':
+            value = x_max - data
+        elif process_type == 'ppf_preprocess':
+            value = 1 - data
+        elif process_type == 'ppf_postprocess':
+            value = x_max - data
+        else:
+            value = super().process(data, process_type)
+        return value
+
+
+class MirroredGamma(BaseDistribution):
+
+    distribution = stats.gamma
+    expected_parameters = ('a', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        params = pd.DataFrame({
+            'a': ((x_max - mean) / sd) ** 2,
+            'scale': sd ** 2 / (x_max - mean)
+        }, index=mean.index)
+        return params
+
+    def process(self, data: Union[np.ndarray, pd.Series], process_type: str) -> pd.Series:
+        x_min, x_max = self.parameters.loc[data.index, 'x_min'], self.parameters.loc[data.index, 'x_max']
+        if process_type == 'pdf_preprocess':
+            value = x_max - data
+        elif process_type == 'ppf_preprocess':
+            value = 1 - data
+        elif process_type == 'ppf_postprocess':
+            value = x_max - data
+        else:
+            value = super().process(data, process_type)
+        return value
+
+
+class Normal(BaseDistribution):
+
+    distribution = stats.norm
+    expected_parameters = ('loc', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        params = pd.DataFrame({
+            'loc': mean,
+            'scale': sd,
+        }, mean.index)
+        return params
+
+
+class Weibull(BaseDistribution):
+
+    distribution = stats.weibull_min
+    expected_parameters = ('c', 'scale')
+
+    @staticmethod
+    def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+
+        def target_function(guess, m, s):
+            shape, scale = np.abs(guess)
+            mean_guess = scale * special.gamma(1 + 1 / shape)
+            var_guess = scale ** 2 * special.gamma(1 + 2 / shape) - mean_guess ** 2
+            return (m - mean_guess) ** 2 + (s ** 2 - var_guess) ** 2
+
+        opt_results = _get_optimization_result(mean, sd, target_function, lambda m, s: np.array((m, m / s)))
+
+        result_indices = range(len(mean))
+        if not np.all([opt_results[k].success is True for k in result_indices]):
+            raise NonConvergenceError('Weibull did not converge!!', 'weibull')
+
+        params = pd.DataFrame({
+            'c': np.abs([opt_results[k].x[0] for k in result_indices]),
+            'scale': np.abs([opt_results[k].x[1] for k in result_indices])
+        }, index=mean.index)
+        return params
+
+
+class EnsembleDistribution:
+    """Represents an arbitrary distribution as a weighted sum of several concrete distribution types."""
+    distribution_map = {'betasr': Beta,
+                        'exp': Exponential,
+                        'gamma': Gamma,
+                        'gumbel': Gumbel,
+                        'invgamma': InverseGamma,
+                        'invweibull': InverseWeibull,
+                        'llogis': LogLogistic,
+                        'lnorm': LogNormal,
+                        'mgamma': MirroredGamma,
+                        'mgumbel': MirroredGumbel,
+                        'norm': Normal,
+                        'weibull': Weibull}
+
+    def __init__(self, weights: Parameters, parameters: Dict[str, Parameters] = None,
+                 mean: Parameter = None, sd: Parameter = None):
+        self.weights, self.parameters = self.get_parameters(weights, parameters, mean, sd)
+
+    @classmethod
+    def get_parameters(cls, weights: Parameters,
+                       parameters: Parameters = None,
+                       mean: Parameter = None,
+                       sd: Parameter = None) -> (pd.DataFrame, Dict[str, pd.DataFrame]):
+        weights = format_data(weights, list(cls.distribution_map.keys()), 'weights')
+
+        params = {}
+        for name, dist in cls.distribution_map.items():
+            try:
+                param = parameters[name] if parameters else None
+                params[name] = dist.get_parameters(param, mean, sd)
+            except NonConvergenceError:
+                if weights[name].max() < 0.05:
+                    weights.loc[name, :] = 0
+                else:
+                    raise NonConvergenceError(f'Divergent {name} distribution has '
+                                              f'weights: {100 * weights[name]}%', name)
+
+        # Rescale weights in case we floored any of them:
+        non_zero_rows = weights[weights.sum(axis=1) != 0]
+        weights.loc[non_zero_rows.index] = non_zero_rows.divide(non_zero_rows.sum(axis=1), axis=0)
+
+        return weights, params
+
+    def pdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
+        single_val = isinstance(x, (float, int))
+        values_only = isinstance(x, np.ndarray)
+        if isinstance(x, pd.Series) and x.index != self.weights.index:
+            raise ValueError("If providing x as a series, it must be indexed consistently with the weight data.")
+
+        x = pd.Series(x, index=self.weights.index)
+        computable = self.weights[(self.weights.sum(axis=1) != 0)
+                                  & ~np.isnan(x)].index
+
+        p = pd.Series(np.nan, index=x.index)
+
+        p.loc[computable] = 0
+        for name, parameters in self.parameters.items():
+            w = self.weights.loc[computable, name]
+            p += w * self.distribution_map[name](parameters=parameters.loc[computable]).pdf(x.loc[computable])
+
+        if single_val:
+            p = p.iloc[0]
+        if values_only:
+            p = p.values
+        return p
+
+    def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
+        single_val = isinstance(q, (float, int))
+        values_only = isinstance(q, np.ndarray)
+        if isinstance(q, pd.Series) and q.index != self.weights.index:
+            raise ValueError("If providing q as a series, it must be indexed consistently with the weight data.")
+
+        q = pd.Series(q, index=self.weights.index)
+        computable = self.weights[(self.weights.sum(axis=1) != 0)
+                                  & ~np.isnan(q)].index
+
+        x = pd.Series(np.nan, index=q.index)
+
+        x.loc[computable] = 0
+        for name, parameters in self.parameters.items():
+            w = self.weights.loc[computable, name]
+            x += w * self.distribution_map[name](parameters=parameters.loc[computable]).ppf(q.loc[computable])
+
+        if single_val:
+            x = x.iloc[0]
+        if values_only:
+            x = x.values
+        return x
+
 
 class NonConvergenceError(Exception):
     """ Raised when the optimization fails to converge """
@@ -13,12 +489,7 @@ class NonConvergenceError(Exception):
         self.dist = dist
 
 
-class MissingDataError(Exception):
-    pass
-
-
-def _get_optimization_result(mean: pd.Series, sd: pd.Series, func: Callable,
-                             initial_func: Callable) -> Tuple:
+def _get_optimization_result(mean: pd.Series, sd: pd.Series, func: Callable, initial_func: Callable) -> Tuple:
     """Finds the shape parameters of distributions which generates mean/sd close to actual mean/sd.
 
     Parameters
@@ -45,397 +516,3 @@ def _get_optimization_result(mean: pd.Series, sd: pd.Series, func: Callable,
                                        options={'maxiter': 10000})
             results.append(result)
     return tuple(results)
-
-
-def validate_parameters(params, mean, sd):
-    if params is not None and (mean is not None or sd is not None):
-        raise ValueError("You may supply either pre-calculated parameters or"
-                         " mean and standard deviation but not both.")
-    if params is not None and (not isinstance(params, pd.DataFrame) or params.empty):
-        raise TypeError("If you specify pre-constructed parameters, they must be in the form of a non-empty dataframe.")
-    if mean is not None and sd is None or mean is None and sd is not None:
-        raise ValueError("You must specify both mean and standard deviation.")
-    if (isinstance(mean, (pd.Series, list, tuple)) and not isinstance(sd, (pd.Series, list, tuple)) or
-            isinstance(sd, (pd.Series, list, tuple)) and not isinstance(mean, (pd.Series, list, tuple))):
-            raise ValueError(f"If you specify a sequence for mean or standard deviation, both mean and standard"
-                             f"deviation must be sequences.")
-    if isinstance(mean, (pd.Series, list, tuple)) and len(mean) != len(sd):
-            raise ValueError(f"You must specify mean and standard deviation for the same number of distributions. You "
-                             f"specified {len(mean)} mean values and {len(sd)} standard deviation values.")
-
-
-class BaseDistribution:
-    """Generic vectorized wrapper around scipy distributions."""
-
-    distribution = None
-
-    def __init__(self, params: pd.DataFrame=None, mean: DistParamValue=None, sd: DistParamValue=None):
-
-        validate_parameters(params, mean, sd)
-
-        if mean is not None:
-            self._parameter_data = self.get_params(mean, sd)
-        else:
-            self._parameter_data = params
-
-    @staticmethod
-    def _get_min_max(mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        """Gets the upper and lower bounds of the distribution support."""
-        alpha = 1 + sd ** 2 / mean ** 2
-        scale = mean / np.sqrt(alpha)
-        s = np.sqrt(np.log(alpha))
-        x_min = stats.lognorm(s=s, scale=scale).ppf(.001)
-        x_max = stats.lognorm(s=s, scale=scale).ppf(.999)
-        return pd.DataFrame({'x_min': x_min, 'x_max': x_max}, index=pd.Series(mean).index)
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        raise NotImplementedError()
-
-    def process(self, data: Union[np.ndarray, pd.Series], process_type: str,
-                ranges: pd.DataFrame) -> Union[np.ndarray, pd.Series]:
-        """Function called before and after distribution looks to handle pre- and post-processing.
-
-        This function should look like an if sieve on the `process_type` and fall back with a call to
-        this method if no processing needs to be done.
-
-        Parameters
-        ----------
-        data :
-            The data to be processed.
-        process_type :
-            One of `pdf_preprocess`, `pdf_postprocess`, `ppf_preprocess`, `ppf_post_process`.
-        ranges :
-            Upper and lower bounds of the distribution support.
-
-        Returns
-        -------
-            The processed data.
-        """
-        return data
-
-    def pdf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
-        ranges = self._parameter_data[['x_min', 'x_max']]
-        dist_params = self._parameter_data[self._parameter_data.columns.difference(['x_min', 'x_max'])].to_dict('series')
-        x = self.process(x, "pdf_preprocess", ranges)
-        pdf = self.distribution(**dist_params).pdf(x)
-        return self.process(pdf, "pdf_postprocess", ranges)
-
-    def ppf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
-        ranges = self._parameter_data[['x_min', 'x_max']]
-        dist_params = (self._parameter_data[self._parameter_data.columns.difference(['x_min', 'x_max'])]
-                       .reset_index(drop=True)
-                       .to_dict('series'))
-        x = self.process(x, "ppf_preprocess", ranges)
-        ppf = self.distribution(**dist_params).ppf(x)
-        return self.process(ppf, "ppf_postprocess", ranges)
-
-
-class Beta(BaseDistribution):
-
-    distribution = stats.beta
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        scale = params['x_max'] - params['x_min']
-        a = 1 / scale * (mean - params['x_min'])
-        b = (1 / scale * sd) ** 2
-        params['a'] = a ** 2 / b * (1 - a) - a
-        params['b'] = a / b * (1 - a) ** 2 + (a - 1)
-        params['scale'] = scale
-        return params
-
-    def process(self, data: Union[np.ndarray, pd.Series], process_type: str,
-                ranges: pd.DataFrame) -> np.array:
-        if process_type == 'pdf_preprocess':
-            value = data - ranges['x_min']
-        elif process_type == 'ppf_postprocess':
-            value = data + ranges['x_max'] - ranges['x_min']
-        else:
-            value = super().process(data, process_type, ranges)
-        return np.array(value)
-
-
-class Exponential(BaseDistribution):
-
-    distribution = stats.expon
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        params['scale'] = mean
-        return params
-
-
-class Gamma(BaseDistribution):
-
-    distribution = stats.gamma
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        params['a'] = (mean / sd) ** 2
-        params['scale'] = sd ** 2 / mean
-        return params
-
-
-class Gumbel(BaseDistribution):
-
-    distribution = stats.gumbel_r
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        params['loc'] = mean - (np.euler_gamma * np.sqrt(6) / np.pi * sd)
-        params['scale'] = np.sqrt(6) / np.pi * sd
-        return params
-
-
-class InverseGamma(BaseDistribution):
-
-    distribution = stats.invgamma
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        def f(guess, mean, sd):
-            alpha, beta = np.abs(guess)
-            mean_guess = beta / (alpha - 1)
-            var_guess = beta ** 2 / ((alpha - 1) ** 2 * (alpha - 2))
-            return (mean - mean_guess) ** 2 + (sd ** 2 - var_guess) ** 2
-
-        opt_results = _get_optimization_result(pd.Series(mean), pd.Series(sd), f, lambda m, s: np.array((m, m * s)))
-        data_size = len(pd.Series(mean))
-
-        if not np.all([opt_results[k].success for k in range(data_size)]):
-            raise NonConvergenceError('InverseGamma did not converge!!', 'invgamma')
-
-        params['a'] = np.abs([opt_results[k].x[0] for k in range(data_size)])
-        params['scale'] = np.abs([opt_results[k].x[1] for k in range(data_size)])
-        return params
-
-
-class InverseWeibull(BaseDistribution):
-
-    distribution = stats.invweibull
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        # moments from  Stat Papers (2011) 52: 591. https://doi.org/10.1007/s00362-009-0271-3
-        # it is much faster than using stats.invweibull.mean/var
-        params = cls._get_min_max(mean, sd)
-        def f(guess, mean, sd):
-            shape, scale = np.abs(guess)
-            mean_guess = scale * special.gamma(1 - 1 / shape)
-            var_guess = scale ** 2 * special.gamma(1 - 2 / shape) - mean_guess ** 2
-            return (mean - mean_guess) ** 2 + (sd ** 2 - var_guess) ** 2
-
-        opt_results = _get_optimization_result(pd.Series(mean), pd.Series(sd), f, lambda m, s: np.array((max(2.2, s / m), m)))
-        data_size = len(pd.Series(mean))
-
-        if not np.all([opt_results[k].success for k in range(data_size)]):
-            raise NonConvergenceError('InverseWeibull did not converge!!', 'invweibull')
-
-        params['c'] = np.abs([opt_results[k].x[0] for k in range(data_size)])
-        params['scale'] = np.abs([opt_results[k].x[1] for k in range(data_size)])
-        return params
-
-
-class LogLogistic(BaseDistribution):
-
-    distribution = stats.burr12
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        def f(guess, mean, sd):
-            shape, scale = np.abs(guess)
-            b = np.pi / shape
-            mean_guess = scale * b / np.sin(b)
-            var_guess = scale ** 2 * 2 * b / np.sin(2 * b) - mean_guess ** 2
-            return (mean - mean_guess) ** 2 + (sd ** 2 - var_guess) ** 2
-
-        opt_results = _get_optimization_result(pd.Series(mean), pd.Series(sd), f, lambda m, s: np.array((max(2, m), m)))
-        data_size = len(pd.Series(mean))
-
-        if not np.all([opt_results[k].success for k in range(data_size)]):
-            raise NonConvergenceError('LogLogistic did not converge!!', 'llogis')
-
-        params['c'] = np.abs([opt_results[k].x[0] for k in range(data_size)])
-        params['d'] = [1] * data_size
-        params['scale'] = np.abs([opt_results[k].x[1] for k in range(data_size)])
-        return params
-
-
-class LogNormal(BaseDistribution):
-
-    distribution = stats.lognorm
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        alpha = 1 + sd ** 2 / mean ** 2
-        params['s'] = np.sqrt(np.log(alpha))
-        params['scale'] = mean / np.sqrt(alpha)
-        return params
-
-
-class MirroredGumbel(BaseDistribution):
-
-    distribution = stats.gumbel_r
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        params['loc'] = params['x_max'] - mean - (
-                    np.euler_gamma * np.sqrt(6) / np.pi * sd)
-        params['scale'] = np.sqrt(6) / np.pi * sd
-        return params
-
-    def process(self, data: Union[np.ndarray, pd.Series], process_type: str,
-                ranges: pd.DataFrame) -> np.ndarray:
-        if process_type == 'pdf_preprocess':
-            value = ranges['x_max'] - data
-        elif process_type == 'ppf_preprocess':
-            value = 1 - data
-        elif process_type == 'ppf_postprocess':
-            value = ranges['x_max'] - data
-        else:
-            value = super().process(data, process_type, ranges)
-        return np.array(value)
-
-
-class MirroredGamma(BaseDistribution):
-
-    distribution = stats.gamma
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        params['a'] = ((params['x_max'] - mean) / sd) ** 2
-        params['scale'] = sd ** 2 / (params['x_max'] - mean)
-        return params
-
-    def process(self, data: Union[np.ndarray, pd.Series], process_type: str,
-                ranges: pd.DataFrame) -> np.ndarray:
-        if process_type == 'pdf_preprocess':
-            value = ranges['x_max'] - data
-        elif process_type == 'ppf_preprocess':
-            value = 1 - data
-        elif process_type == 'ppf_postprocess':
-            value = ranges['x_max'] - data
-        else:
-            value = super().process(data, process_type, ranges)
-        return np.array(value)
-
-
-class Normal(BaseDistribution):
-
-    distribution = stats.norm
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        params['loc'] = mean
-        params['scale'] = sd
-        return params
-
-
-class Weibull(BaseDistribution):
-
-    distribution = stats.weibull_min
-
-    @classmethod
-    def get_params(cls, mean: DistParamValue, sd: DistParamValue) -> pd.DataFrame:
-        params = cls._get_min_max(mean, sd)
-        def f(guess, mean, sd):
-            shape, scale = np.abs(guess)
-            mean_guess = scale * special.gamma(1 + 1 / shape)
-            var_guess = scale ** 2 * special.gamma(1 + 2 / shape) - mean_guess ** 2
-            return (mean - mean_guess) ** 2 + (sd ** 2 - var_guess) ** 2
-
-        opt_results = _get_optimization_result(pd.Series(mean), pd.Series(sd), f, lambda m, s: np.array((m, m / s)))
-        data_size = len(pd.Series(mean))
-
-        if not np.all([opt_results[k].success is True for k in range(data_size)]):
-            raise NonConvergenceError('Weibull did not converge!!', 'weibull')
-
-        params['c'] = np.abs([opt_results[k].x[0] for k in range(data_size)])
-        params['scale'] = np.abs([opt_results[k].x[1] for k in range(data_size)])
-        return params
-
-
-class EnsembleDistribution:
-    """Represents an arbitrary distribution as a weighted sum of several concrete distribution types."""
-
-    def __init__(self, weights, mean: DistParamValue, sd: DistParamValue):
-        self.weights, self._distributions = self.get_valid_distributions(weights, mean, sd)
-
-    def get_distribution_map(self):
-        return {'betasr': Beta,
-                'exp': Exponential,
-                'gamma': Gamma,
-                'gumbel': Gumbel,
-                'invgamma': InverseGamma,
-                'invweibull': InverseWeibull,
-                'llogis': LogLogistic,
-                'lnorm': LogNormal,
-                'mgamma': MirroredGamma,
-                'mgumbel': MirroredGumbel,
-                'norm': Normal,
-                'weibull': Weibull}
-
-    def get_valid_distributions(self, weights: pd.DataFrame, mean: DistParamValue,
-                                sd: DistParamValue) -> Tuple[np.ndarray, Dict]:
-        """Produces a distribution that filters out non convergence errors and rescales weights appropriately.
-        Can specify either data, params, or (mean and standard deviation), but not multiple.
-
-        Parameters
-        ----------
-        weights :
-            A single-row dataframe of normalized distribution weights, each column representing
-            a different distribution type.
-        mean :
-            Mean value for a single distribution or series of values, each for a single distribution.
-        sd :
-            Standard deviation value for a single distribution or series of values, each for a single distribution.
-
-        Returns
-        -------
-            Rescaled weights and the subset of the distribution map corresponding to convergent distributions.
-        """
-
-        distributions = dict()
-        distribution_map = self.get_distribution_map()
-        distribution_types = list(set(distribution_map.keys()) & set(weights.columns))
-        weights = weights[distribution_types].iloc[0]
-        weights = weights/np.sum(weights)
-        for name in distribution_types:
-            try:
-                distributions[name] = distribution_map[name](mean=mean, sd=sd)
-            except NonConvergenceError as e:
-                if weights[e.dist] < 0.05:
-                    weights = weights.drop(e.dist)
-                else:
-                    raise NonConvergenceError(f'Divergent {key} distribution has weights: {100*weights[name]}%', name)
-
-        return weights/np.sum(weights), distributions
-
-    def pdf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
-        if not x.empty:
-            datas = []
-            for name, dist in self._distributions.items():
-                datas.append(self.weights[name] * dist.pdf(x))
-            return np.sum(datas, axis=0)
-        else:
-            return np.array([])
-
-    def ppf(self, x: pd.Series) -> Union[np.ndarray, pd.Series]:
-        if not x.empty:
-            datas = []
-            for name, dist in self._distributions.items():
-                datas.append(self.weights[name] * dist.ppf(x))
-            return np.sum(datas, axis=0)
-        else:
-            return np.array([])
