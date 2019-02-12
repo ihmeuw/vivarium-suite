@@ -9,6 +9,9 @@ Parameters = TypeVar('Parameters', np.ndarray, pd.Series, pd.DataFrame, List, Tu
 
 def cast_to_series(mean: Parameter, sd: Parameter) -> (pd.Series, pd.Series):
     """Casts mean and standard deviation data to identically indexed series."""
+    if not isinstance(mean, (int, float)) and len(mean) == 0 or not isinstance(sd, (int, float)) and len(sd) == 0:
+        raise ValueError("Empty data structure provided for mean or sd.")
+
     if isinstance(mean, pd.Series) and isinstance(sd, pd.Series):
         if np.any(mean.index != sd.index):
             raise ValueError("If providing mean and sd as pandas series, they must be identically indexed.")
