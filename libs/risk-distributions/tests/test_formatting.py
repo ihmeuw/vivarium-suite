@@ -7,17 +7,6 @@ import pytest
 from risk_distributions.formatting import cast_to_series
 
 
-null_inputs = (np.array([]), pd.Series([]), [], ())
-
-
-@pytest.mark.parametrize('mean, sd', product(null_inputs, null_inputs))
-def test_cast_to_series_nulls(mean, sd):
-    expected_mean, expected_sd = pd.Series([]), pd.Series([])
-    out_mean, out_sd = cast_to_series(mean, sd)
-    assert expected_mean.equals(out_mean)
-    assert expected_sd.equals(out_sd)
-
-
 valid_inputs = (np.array([1]), pd.Series([1]), [1], (1,), 1)
 
 
@@ -65,3 +54,39 @@ def test_cast_to_series_indexed(reference, other):
     assert reference.equals(out_mean)
     assert reference.equals(out_sd)
 
+
+null_inputs = (np.array([]), pd.Series([]), [], ())
+
+
+@pytest.mark.parametrize('val, null', product([1], null_inputs))
+def test_cast_to_series_nulls(val, null):
+    with pytest.raises(ValueError, match='Empty data structure'):
+        cast_to_series(val, null)
+
+    with pytest.raises(ValueError, match='Empty data structure'):
+        cast_to_series(null, val)
+
+
+def test_cast_to_series_mismatched_index():
+    reference = pd.Series([1, 2, 3], index=['a', 'b', 'c'])
+    other = pd.Series([1, 2, 3])
+
+    with pytest.raises(ValueError, match='identically indexed'):
+        cast_to_series(reference, other)
+
+    with pytest.raises(ValueError, match='identically indexed'):
+        cast_to_series(other, reference)
+
+
+reference = (np.array([1, 2, 3]), pd.Series([1, 2, 3]), [1, 2, 3], (1, 2, 3))
+invalid = (np.array([1]), pd.Series([1]), [1], (1,), 1, 1.,
+           np.arange(5), pd.Series(np.arange(5)), list(range(5)), tuple(range(5)))
+
+
+@pytest.mark.parametrize('reference, other', product(reference, invalid))
+def test_cast_to_series_mismatched_length(reference, other):
+    with pytest.raises(ValueError, match='same number of values'):
+        cast_to_series(reference, other)
+
+    with pytest.raises(ValueError, match='same number of values'):
+        cast_to_series(other, reference)

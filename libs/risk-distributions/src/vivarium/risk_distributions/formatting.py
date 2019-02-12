@@ -9,6 +9,15 @@ Parameters = TypeVar('Parameters', np.ndarray, pd.Series, pd.DataFrame, List, Tu
 
 def cast_to_series(mean: Parameter, sd: Parameter) -> (pd.Series, pd.Series):
     """Casts mean and standard deviation data to identically indexed series."""
+
+    if not isinstance(mean, (int, float)) and len(mean) == 0 or not isinstance(sd, (int, float)) and len(sd) == 0:
+        raise ValueError("Empty data structure provided for mean or sd.")
+
+    mean_length = 1 if isinstance(mean, (int, float)) else len(mean)
+    sd_length = 1 if isinstance(sd, (int, float)) else len(sd)
+    if mean_length != sd_length:
+        raise ValueError("You must provide the same number of values for mean and standard deviation.")
+
     if isinstance(mean, pd.Series) and isinstance(sd, pd.Series):
         if np.any(mean.index != sd.index):
             raise ValueError("If providing mean and sd as pandas series, they must be identically indexed.")
@@ -18,8 +27,7 @@ def cast_to_series(mean: Parameter, sd: Parameter) -> (pd.Series, pd.Series):
         mean = pd.Series(mean, index=sd.index)
     else:
         mean, sd = pd.Series(mean), pd.Series(sd)
-        if len(mean) != len(sd):
-            raise ValueError("You must provide the same number of values for mean and standard deviation.")
+
     return mean, sd
 
 
