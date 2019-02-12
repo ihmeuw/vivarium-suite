@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats, optimize, special
 
-from risk_distributions.formatting import cast_to_series, format_data, Parameter, Parameters
+from risk_distributions.formatting import cast_to_series, format_data, format_call_data, Parameter, Parameters
 
 
 class BaseDistribution:
@@ -52,6 +52,7 @@ class BaseDistribution:
     @staticmethod
     def compute_min_max(mean: pd.Series, sd: pd.Series) -> pd.DataFrame:
         """Gets the upper and lower bounds of the distribution support."""
+        # noinspection PyTypeChecker
         alpha = 1 + sd ** 2 / mean ** 2
         scale = mean / np.sqrt(alpha)
         s = np.sqrt(np.log(alpha))
@@ -63,7 +64,7 @@ class BaseDistribution:
     def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
         raise NotImplementedError()
 
-    def process(self, data: pd.Series, process_type: str) -> pd.Series:
+    def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
         """Function called before and after distribution looks to handle pre- and post-processing.
 
         This function should look like an if sieve on the `process_type` and fall back with a call to
@@ -71,12 +72,12 @@ class BaseDistribution:
 
         Parameters
         ----------
-        data :
+        data
             The data to be processed.
-        process_type :
+        parameters
+            Parameter data to be used in the processing.
+        process_type
             One of `pdf_preprocess`, `pdf_postprocess`, `ppf_preprocess`, `ppf_post_process`.
-        ranges :
-            Upper and lower bounds of the distribution support.
 
         Returns
         -------
@@ -87,20 +88,20 @@ class BaseDistribution:
     def pdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
-        if isinstance(x, pd.Series) and np.any(x.index != self.parameters.index):
-            raise ValueError("If providing x as a series it must be indexed consistently with the parameter data.")
 
-        x = pd.Series(x, index=self.parameters.index)
+        x, parameters = format_call_data(x, self.parameters)
 
-        computable = self.parameters[(self.parameters.sum(axis=1) != 0)
-                                     & ~np.isnan(x)
-                                     & (self.parameters['x_min'] <= x) & (x <= self.parameters['x_max'])].index
+        computable = parameters[(parameters.sum(axis=1) != 0)
+                                & ~np.isnan(x)
+                                & (parameters['x_min'] <= x) & (x <= parameters['x_max'])].index
 
-        x.loc[computable] = self.process(x.loc[computable], "pdf_preprocess")
+        x.loc[computable] = self.process(x.loc[computable], parameters.loc[computable], "pdf_preprocess")
+
         p = pd.Series(np.nan, x.index)
-        params = self.parameters.loc[computable, list(self.expected_parameters)]
+        params = parameters.loc[computable, list(self.expected_parameters)]
         p.loc[computable] = self.distribution(**params.to_dict('series')).pdf(x.loc[computable])
-        p.loc[computable] = self.process(p.loc[computable], "pdf_postprocess")
+
+        p.loc[computable] = self.process(p.loc[computable], parameters.loc[computable], "pdf_postprocess")
 
         if single_val:
             p = p.iloc[0]
@@ -111,20 +112,20 @@ class BaseDistribution:
     def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
-        if isinstance(q, pd.Series) and np.any(q.index != self.parameters.index):
-            raise ValueError("If providing q as a series it must be indexed consistently with the parameter data.")
 
-        q = pd.Series(q, index=self.parameters.index)
+        q, parameters = format_call_data(q, self.parameters)
 
-        computable = self.parameters[(self.parameters.sum(axis=1) != 0)
-                                     & ~np.isnan(q)
-                                     & (0.001 <= q.values) & (q.values <= 0.999)].index
+        computable = parameters[(parameters.sum(axis=1) != 0)
+                                & ~np.isnan(q)
+                                & (0.001 <= q.values) & (q.values <= 0.999)].index
 
-        q.loc[computable] = self.process(q.loc[computable], "ppf_preprocess")
+        q.loc[computable] = self.process(q.loc[computable], parameters.loc[computable], "ppf_preprocess")
+
         x = pd.Series(np.nan, q.index)
-        params = self.parameters.loc[computable, list(self.expected_parameters)]
+        params = parameters.loc[computable, list(self.expected_parameters)]
         x.loc[computable] = self.distribution(**params.to_dict('series')).ppf(q.loc[computable])
-        x.loc[computable] = self.process(x.loc[computable], "ppf_postprocess")
+
+        x.loc[computable] = self.process(x.loc[computable], parameters.loc[computable], "ppf_postprocess")
 
         if single_val:
             x = x.iloc[0]
@@ -142,6 +143,7 @@ class Beta(BaseDistribution):
     def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
         scale = x_max - x_min
         a = 1 / scale * (mean - x_min)
+        # noinspection PyTypeChecker
         b = (1 / scale * sd) ** 2
         params = pd.DataFrame({
             'a': a ** 2 / b * (1 - a) - a,
@@ -150,14 +152,14 @@ class Beta(BaseDistribution):
         }, index=mean.index)
         return params
 
-    def process(self, data: pd.Series, process_type: str) -> pd.Series:
-        x_min, x_max = self.parameters.loc[data.index, 'x_min'], self.parameters.loc[data.index, 'x_max']
+    def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
+        x_min, x_max = parameters.loc[data.index, 'x_min'], parameters.loc[data.index, 'x_max']
         if process_type == 'pdf_preprocess':
             value = data - x_min
         elif process_type == 'ppf_postprocess':
             value = data + x_max - x_min
         else:
-            value = super().process(data, process_type)
+            value = super().process(data, parameters, process_type)
         return value
 
 
@@ -178,6 +180,7 @@ class Gamma(BaseDistribution):
 
     @staticmethod
     def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        # noinspection PyTypeChecker
         params = pd.DataFrame({
             'a': (mean / sd) ** 2,
             'scale':  sd ** 2 / mean,
@@ -290,6 +293,7 @@ class LogNormal(BaseDistribution):
 
     @staticmethod
     def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        # noinspection PyTypeChecker
         alpha = 1 + sd ** 2 / mean ** 2
         params = pd.DataFrame({
             's': np.sqrt(np.log(alpha)),
@@ -311,16 +315,17 @@ class MirroredGumbel(BaseDistribution):
         }, index=mean.index)
         return params
 
-    def process(self, data: Union[np.ndarray, pd.Series], process_type: str) -> pd.Series:
-        x_min, x_max = self.parameters.loc[data.index, 'x_min'], self.parameters.loc[data.index, 'x_max']
+    def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
+        x_min, x_max = parameters.loc[data.index, 'x_min'], parameters.loc[data.index, 'x_max']
         if process_type == 'pdf_preprocess':
             value = x_max - data
         elif process_type == 'ppf_preprocess':
+            # noinspection PyTypeChecker
             value = 1 - data
         elif process_type == 'ppf_postprocess':
             value = x_max - data
         else:
-            value = super().process(data, process_type)
+            value = super().process(data, parameters, process_type)
         return value
 
 
@@ -331,22 +336,24 @@ class MirroredGamma(BaseDistribution):
 
     @staticmethod
     def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
+        # noinspection PyTypeChecker
         params = pd.DataFrame({
             'a': ((x_max - mean) / sd) ** 2,
             'scale': sd ** 2 / (x_max - mean)
         }, index=mean.index)
         return params
 
-    def process(self, data: Union[np.ndarray, pd.Series], process_type: str) -> pd.Series:
-        x_min, x_max = self.parameters.loc[data.index, 'x_min'], self.parameters.loc[data.index, 'x_max']
+    def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
+        x_min, x_max = parameters.loc[data.index, 'x_min'], parameters.loc[data.index, 'x_max']
         if process_type == 'pdf_preprocess':
             value = x_max - data
         elif process_type == 'ppf_preprocess':
+            # noinspection PyTypeChecker
             value = 1 - data
         elif process_type == 'ppf_postprocess':
             value = x_max - data
         else:
-            value = super().process(data, process_type)
+            value = super().process(data, parameters, process_type)
         return value
 
 
@@ -438,19 +445,17 @@ class EnsembleDistribution:
     def pdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
-        if isinstance(x, pd.Series) and np.any(x.index != self.weights.index):
-            raise ValueError("If providing x as a series, it must be indexed consistently with the weight data.")
 
-        x = pd.Series(x, index=self.weights.index)
-        computable = self.weights[(self.weights.sum(axis=1) != 0)
-                                  & ~np.isnan(x)].index
+        x, weights = format_call_data(x, self.weights)
+
+        computable = weights[(weights.sum(axis=1) != 0) & ~np.isnan(x)].index
 
         p = pd.Series(np.nan, index=x.index)
 
         p.loc[computable] = 0
         for name, parameters in self.parameters.items():
-            w = self.weights.loc[computable, name]
-            p += w * self.distribution_map[name](parameters=parameters.loc[computable]).pdf(x.loc[computable])
+            w = weights.loc[computable, name]
+            p += w * self.distribution_map[name](parameters=parameters).pdf(x.loc[computable])
 
         if single_val:
             p = p.iloc[0]
@@ -461,19 +466,17 @@ class EnsembleDistribution:
     def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
-        if isinstance(q, pd.Series) and np.any(q.index != self.weights.index):
-            raise ValueError("If providing q as a series, it must be indexed consistently with the weight data.")
 
-        q = pd.Series(q, index=self.weights.index)
-        computable = self.weights[(self.weights.sum(axis=1) != 0)
-                                  & ~np.isnan(q)].index
+        q, weights = format_call_data(q, self.weights)
+
+        computable = weights[(weights.sum(axis=1) != 0) & ~np.isnan(q)].index
 
         x = pd.Series(np.nan, index=q.index)
 
         x.loc[computable] = 0
         for name, parameters in self.parameters.items():
-            w = self.weights.loc[computable, name]
-            x += w * self.distribution_map[name](parameters=parameters.loc[computable]).ppf(q.loc[computable])
+            w = weights.loc[computable, name]
+            x += w * self.distribution_map[name](parameters=parameters).ppf(q.loc[computable])
 
         if single_val:
             x = x.iloc[0]
