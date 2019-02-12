@@ -85,7 +85,23 @@ def format_array(data: np.ndarray, required_columns: List[any], measure: str) ->
 
 
 def format_series(data: pd.Series, required_columns: List[Any], measure: str) -> pd.DataFrame:
-    raise NotImplementedError()
+    """Transforms series data into dataframes with columns for the
+    parameters and (possibly) rows for each parameter variation."""
+    if data.empty:
+        raise ValueError(f"No data provided for {measure}")
+
+    if len(required_columns) == 1:  # Interpret the series as parameter variations
+        data = pd.DataFrame(data, columns=required_columns)
+    else:  # Interpret the series as a dict or array of single parameter entries
+        if len(data) != len(required_columns):
+            raise ValueError(f"{len(data)} values provided for {measure} when "
+                             f"{len(required_columns)} were expected.")
+        if set(data.index) == set(required_columns):
+            data = pd.DataFrame([data.values], columns=data.index)
+        else:  # Interpret by order
+            data = pd.DataFrame([data.values], columns=required_columns)
+
+    return data
 
 
 def format_data_frame(data: pd.DataFrame, required_columns: List[Any], measure: str) -> pd.DataFrame:
