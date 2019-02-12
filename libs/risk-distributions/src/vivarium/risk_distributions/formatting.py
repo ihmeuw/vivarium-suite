@@ -106,16 +106,10 @@ def format_data_frame(data: pd.DataFrame, required_columns: List[Any], measure: 
 
 
 def format_list_like(data: Union[List, Tuple], required_columns: List[Any], measure: str) -> pd.DataFrame:
-    # parameters = [[p] for p in parameters]
-    # try:
-    #     parameters = pd.DataFrame(parameters, columns=required_parameters)
-    # except ValueError as e:
-    #     if 'Shape of passed values' in e:
-    #         raise ValueError("If passing parameters as a list or tuple, one value must "
-    #                          "be provided for each parameter.")
-    #     else:
-    #         raise
-    raise NotImplementedError()
+    """Transforms 1d and 2d lists or tuples into dataframes with columns for
+    the parameters and (possibly) rows for each parameter variation."""
+    data = np.array(data)
+    return format_array(data, required_columns, measure)
 
 
 def format_dict(data: Dict[str, Parameter], required_columns: List[Any], measure: str) -> pd.DataFrame:
