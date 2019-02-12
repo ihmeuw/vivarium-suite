@@ -65,3 +65,28 @@ def test_cast_to_series_nulls(val, null):
 
     with pytest.raises(ValueError, match='Empty data structure'):
         cast_to_series(null, val)
+
+
+def test_cast_to_series_mismatched_index():
+    reference = pd.Series([1, 2, 3], index=['a', 'b', 'c'])
+    other = pd.Series([1, 2, 3])
+
+    with pytest.raises(ValueError, match='identically indexed'):
+        cast_to_series(reference, other)
+
+    with pytest.raises(ValueError, match='identically indexed'):
+        cast_to_series(other, reference)
+
+
+reference = (np.array([1, 2, 3]), pd.Series([1, 2, 3]), [1, 2, 3], (1, 2, 3))
+invalid = (np.array([1]), pd.Series([1]), [1], (1,), 1, 1.,
+           np.arange(5), pd.Series(np.arange(5)), list(range(5)), tuple(range(5)))
+
+
+@pytest.mark.parametrize('reference, other', product(reference, invalid))
+def test_cast_to_series_mismatched_length(reference, other):
+    with pytest.raises(ValueError, match='same number of values'):
+        cast_to_series(reference, other)
+
+    with pytest.raises(ValueError, match='same number of values'):
+        cast_to_series(other, reference)
