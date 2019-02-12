@@ -24,7 +24,7 @@ class BaseDistribution:
             if not (mean is None and sd is None):
                 raise ValueError("You may supply either pre-calculated parameters or"
                                  " mean and standard deviation but not both.")
-            parameters = format_data(parameters, required_parameters, 'Parameters')
+            parameters = format_data(parameters, required_parameters, 'parameters')
 
         else:
             if mean is None or sd is None:
@@ -415,30 +415,7 @@ class EnsembleDistribution:
                        parameters: Parameters = None,
                        mean: Parameter = None,
                        sd: Parameter = None) -> (pd.DataFrame, Dict[str, pd.DataFrame]):
-        if isinstance(weights, np.ndarray):
-            if len(weights.shape) == 1:  # Column vector
-                if weights.shape[0] != len(cls.distribution_map):
-                    raise ValueError(f'If providing weights as a numpy array, you must provide a value for '
-                                     f'each of {cls.distribution_map.keys()}')
-                weights = pd.DataFrame(n)
-
-
-        if isinstance(weights, pd.DataFrame):
-            if not np.all(weights.columns.isin(cls.distribution_map.keys())):
-                raise ValueError(f"Missing weight data for distributions: "
-                                 f"{set(cls.distribution_map.keys()).difference(weights.columns)}.")
-            extra_cols = weights.columns.difference(cls.distribution_map.keys())
-            if np.any(extra_cols):
-                raise ValueError(f"Weight data contains extra columns: {extra_cols}.")
-        elif isinstance(weights, dict):
-            if weights.keys() != cls.distribution_map.keys():
-                raise ValueError(f"If passing weights as a dictionary, you "
-                                 f"must supply only keys {cls.distribution_map.keys()}.")
-            weights = {key: list(val) for key, val in weights.items()}
-            if len(set(len(val) for val in weights.values())) != 1:
-                raise ValueError("If passing weights as a dictionary, you "
-                                 "must specify the same number of weights for each distribution.")
-            weights = pd.DataFrame(weights)
+        weights = format_data(weights, list(cls.distribution_map.keys()), 'weights')
 
         params = {}
         for name, dist in cls.distribution_map.items():
@@ -461,9 +438,12 @@ class EnsembleDistribution:
     def pdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
+        if isinstance(x, pd.Series) and x.index != self.weights.index:
+            raise ValueError("If providing x as a series, it must be indexed consistently with the weight data.")
 
         x = pd.Series(x, index=self.weights.index)
-        computable = self.weights[self.weights.sum(axis=1) != 0].index
+        computable = self.weights[(self.weights.sum(axis=1) != 0)
+                                  & ~np.isnan(x)].index
 
         p = pd.Series(np.nan, index=x.index)
 
@@ -481,9 +461,12 @@ class EnsembleDistribution:
     def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
+        if isinstance(q, pd.Series) and q.index != self.weights.index:
+            raise ValueError("If providing q as a series, it must be indexed consistently with the weight data.")
 
         q = pd.Series(q, index=self.weights.index)
-        computable = self.weights[self.weights.sum(axis=1) != 0].index
+        computable = self.weights[(self.weights.sum(axis=1) != 0)
+                                  & ~np.isnan(q)].index
 
         x = pd.Series(np.nan, index=q.index)
 
