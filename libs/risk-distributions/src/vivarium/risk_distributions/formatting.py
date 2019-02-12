@@ -135,12 +135,15 @@ def format_list_like(data: Union[List, Tuple], required_columns: List[Any], meas
 
 
 def format_dict(data: Dict[str, Parameter], required_columns: List[Any], measure: str) -> pd.DataFrame:
-    # if set(parameters.keys()) != set(required_parameters):
-    #     raise ValueError(f"If passing parameters as a dictionary, you "
-    #                      f"must supply only keys {required_parameters}")
-    # parameters = {key: list(val) for key, val in parameters.items()}
-    # if len(set(len(val) for val in parameters.values())) != 1:
-    #     raise ValueError("If passing parameters as a dictionary, you "
-    #                      "must specify the same number of values for each parameter.")
-    # parameters = pd.DataFrame(parameters)
-    raise NotImplementedError()
+    """Transform dictionaries with scalar or list-like values into dataframes
+    with columns for the parameters and (possibly) rows for each parameter
+    variation."""
+    if set(data.keys()) != set(required_columns):
+        raise ValueError(f"If passing values for {measure} as a dictionary, you "
+                         f"must supply only keys {required_columns}.")
+    data = {key: list(val) for key, val in data.items()}
+    if len(set(len(val) for val in data.values())) != 1:
+        raise ValueError(f"If passing values for {measure} as a dictionary, you "
+                         "must specify the same number of values for each parameter.")
+    data = pd.DataFrame(data)
+    return data
