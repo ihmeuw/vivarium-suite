@@ -87,7 +87,7 @@ class BaseDistribution:
     def pdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
-        if isinstance(x, pd.Series) and x.index != self.parameters.index:
+        if isinstance(x, pd.Series) and np.any(x.index != self.parameters.index):
             raise ValueError("If providing x as a series it must be indexed consistently with the parameter data.")
 
         x = pd.Series(x, index=self.parameters.index)
@@ -111,7 +111,7 @@ class BaseDistribution:
     def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
-        if isinstance(q, pd.Series) and q.index != self.parameters.index:
+        if isinstance(q, pd.Series) and np.any(q.index != self.parameters.index):
             raise ValueError("If providing q as a series it must be indexed consistently with the parameter data.")
 
         q = pd.Series(q, index=self.parameters.index)
@@ -438,7 +438,7 @@ class EnsembleDistribution:
     def pdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
-        if isinstance(x, pd.Series) and x.index != self.weights.index:
+        if isinstance(x, pd.Series) and np.any(x.index != self.weights.index):
             raise ValueError("If providing x as a series, it must be indexed consistently with the weight data.")
 
         x = pd.Series(x, index=self.weights.index)
@@ -461,7 +461,7 @@ class EnsembleDistribution:
     def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
-        if isinstance(q, pd.Series) and q.index != self.weights.index:
+        if isinstance(q, pd.Series) and np.any(q.index != self.weights.index):
             raise ValueError("If providing q as a series, it must be indexed consistently with the weight data.")
 
         q = pd.Series(q, index=self.weights.index)
