@@ -148,3 +148,16 @@ def format_dict(data: Dict[str, Parameter], required_columns: List[Any], measure
                          "must specify the same number of values for each parameter.")
     data = pd.DataFrame(data)
     return data
+
+
+def format_call_data(call_data, parameters):
+    if len(parameters) != 1:
+        if isinstance(call_data, pd.Series) and np.any(call_data.index != parameters.index):
+            raise ValueError("If providing call_data as a series it must "
+                             "be indexed consistently with the parameter data.")
+        call_data = pd.Series(call_data, index=parameters.index)
+    else:
+        call_data = pd.Series(call_data)
+        parameters = parameters.reindex(call_data.index, method='nearest')
+
+    return call_data, parameters
