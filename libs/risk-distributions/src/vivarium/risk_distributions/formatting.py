@@ -90,19 +90,18 @@ def format_series(data: pd.Series, required_columns: List[Any], measure: str) ->
 
 def format_data_frame(data: pd.DataFrame, required_columns: List[Any], measure: str) -> pd.DataFrame:
     """Checks that input data provided as a dataframe is properly formatted."""
-    # if data.empty:
-    #     raise ValueError(f"No data provided for {measure.lower()}")
-    #
-    # if not np.all(data.columns.isin(required_columns)):
-    #     raise ValueError(f"{measure} data provided is missing "
-    #                      f"columns {set(required_columns).difference(data.columns)}.")
-    #
-    # extra_cols = data.columns.difference(required_columns)
-    # if np.any(extra_cols):
-    #     raise ValueError(f"{measure} data has extra columns: {extra_cols}")
-    #
-    # return data
-    raise NotImplementedError()
+    if data.empty:
+        raise ValueError(f"No data provided for {measure.lower()}")
+
+    if not np.all(data.columns.isin(required_columns)):
+        raise ValueError(f"{measure} data provided is missing "
+                         f"columns {set(required_columns).difference(data.columns)}.")
+
+    extra_cols = data.columns.difference(required_columns)
+    if np.any(extra_cols):
+        raise ValueError(f"{measure} data has extra columns: {extra_cols}")
+
+    return data
 
 
 def format_list_like(data: Union[List, Tuple], required_columns: List[Any], measure: str) -> pd.DataFrame:
