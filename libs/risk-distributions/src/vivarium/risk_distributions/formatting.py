@@ -40,6 +40,8 @@ def format_data(data: Parameters, required_columns: List[Any], measure: str) -> 
 
 
 def format_array(data: np.ndarray, required_columns: List[any], measure: str) -> pd.DataFrame:
+    """Transforms 1d and 2d arrays into dataframes with columns for the
+    parameters and (possibly) rows for each parameter variation."""
     if not data.size:
         raise ValueError(f"No data provided for {measure}")
 
