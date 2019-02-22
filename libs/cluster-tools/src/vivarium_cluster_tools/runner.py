@@ -9,6 +9,7 @@ from typing import Dict
 from pathlib import Path
 from time import sleep, time
 from getpass import getuser
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -198,47 +199,38 @@ def get_default_output_directory(run_type):
         raise ValueError(f'Run type must be either "validation" or "final".  You specified {run_type}')
 
 
-def validate_arguments(args: Dict, restart=False) -> Dict:
-    if not restart and not args['model_specification_file']:
+def validate_arguments(arguments: Dict) -> Dict:
+    if arguments.restart and not arguments.result_directory:
+        raise ValueError(f"'result_directory' Must be specified with 'restart'")
+    if not arguments.restart and not arguments.model_specification_file:
         raise ValueError(f"simulation configuration file must be supplied to run distrbuted runner")
-    if restart:
-        for name in ['num_input_draws', 'num_random_seeds', 'run_type', 'model_specification_file',
-                     'branch_configuration_file']:
-            if getattr(args, name) is not None and getattr(args, name) != parser.get_default(name):
-                raise ValueError(f"'{name}' Must not be specified with 'restart'")
-        if args.result_directory is None:
-            raise ValueError(f"'result_directory' Must be specified with 'restart'")
-    else:
-        if args.model_specification_file is None:
-            raise ValueError(f"'component_configuration_file' must be supplied unless restarting a previous run (-r)")
-    return args
+    return arguments
 
 
 class RunContext:
-    def __init__(self, args):
+    def __init__(self, arguments):
         # TODO This constructor has side effects (it creates directories under some circumstances) which is weird.
         # It should probably be split into two phases with the side effects in the second phase.
 
-        self.cluster_project = args.project
-        self.peak_memory = args.peak_memory
+        self.cluster_project = arguments.project
+        self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
-
-        if args.result_directory is None:
-            results_directory = get_default_output_directory(args.run_type)
+      
+        if arguments.result_directory is None:
+            results_directory = get_default_output_directory(arguments.run_type)
         else:
-            results_directory = args.result_directory
+            results_directory = arguments.result_directory
 
-        if args.restart:
+        if arguments.restart:
             self.results_writer = ResultsWriter(results_directory)
             self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
             self.existing_outputs = pd.read_hdf(os.path.join(self.results_writer.results_root, 'output.hdf'))
         else:
-            self.results_writer = get_results_writer(results_directory, args.model_specification_file)
+            self.results_writer = get_results_writer(results_directory, arguments.model_specification_file)
+            model_specification = build_model_specification(arguments.model_specification_file)
 
-            model_specification = build_model_specification(args.model_specification_file)
-
-            self.keyspace = Keyspace.from_branch_configuration(args.num_input_draws, args.num_random_seeds,
-                                                               args.branch_configuration_file)
+            self.keyspace = Keyspace.from_branch_configuration(arguments.num_input_draws, arguments.num_random_seeds,
+                                                               arguments.branch_configuration_file)
 
             if "input_data.artifact_path" in self.keyspace.get_data():
                 raise ValueError("An artifact path can only be supplied in the model specification file, "
@@ -246,7 +238,7 @@ class RunContext:
 
             if "artifact_path" in model_specification.configuration.input_data:
                 artifact_path = parse_artifact_path_config(model_specification.configuration)
-                if args.copy_data:
+                if arguments.copy_data:
                     self.copy_artifact(artifact_path, self.keyspace.get_data().get('input_data.location'))
                     artifact_path = os.path.join(self.results_writer.results_root, "data_artifact.hdf")
                 model_specification.configuration.input_data.update(
@@ -254,25 +246,24 @@ class RunContext:
                     source=__file__)
 
             model_specification_path = os.path.join(self.results_writer.results_root, 'model_specification.yaml')
-            shutil.copy(args.model_specification_file, model_specification_path)
+            shutil.copy(arguments.model_specification_file, model_specification_path)
 
             self.existing_outputs = None
 
             # Log some basic stuff about the simulation to be run.
             self.keyspace.persist(self.results_writer)
         self.model_specification = os.path.join(self.results_writer.results_root, 'model_specification.yaml')
-
-        self.sge_log_directory = configure_sge_logging(self.results_writer.results_root, args.quiet)
-        self.worker_log_directory = configure_worker_logging(self.results_writer.results_root, args.log, args.quiet)
+        self.sge_log_directory = configure_sge_logging(self.results_writer.results_root, arguments.quiet)
+        self.worker_log_directory = configure_worker_logging(self.results_writer.results_root, arguments.log, arguments.quiet)
 
         # Each state table is 50-200 MB, so we only write the final state table for small jobs.
         max_jobs = 100
-        if args.run_type == 'validation' and len(self.keyspace) <= max_jobs:
+        if arguments.run_type == 'validation' and len(self.keyspace) <= max_jobs:
             self.with_state_table = True
             self.results_writer.add_sub_directory('final_states', 'final_states')
         else:
             self.with_state_table = False
-            if args.run_type == 'validation':
+            if arguments.run_type == 'validation':
                 _log.warning(f"You're launching {len(self.keyspace)} jobs.  This is too many to write final "
                              f"state tables. If you need information from the state table, reduce the "
                              f"number of draws or branches.")
@@ -421,13 +412,13 @@ def check_user_sge_config():
                               "with the worker logs.")
 
 
-def main(simulation_configuration, branch_configuration, result_directory, project, copy_data=False,
+def main(model_specification_file, branch_configuration_file, result_directory, project, copy_data=False,
          num_input_draws=None, num_random_seeds=None, num_workers=None, max_retries=1, peak_memory=3.0,
-         run_type='validation', quiet=False, log='{result_root}/master.log', restart=False):
-
-    args = locals()
-    args = validate_arguments(args)
-    ctx = RunContext(args)
+         run_type='validation', quiet=False, log='{results_root}/master.log', restart=False):
+    
+    arguments = SimpleNamespace(**locals())
+    arguments = validate_arguments(arguments)
+    ctx = RunContext(arguments)
     check_user_sge_config()
     jobs = build_job_list(ctx)
 
