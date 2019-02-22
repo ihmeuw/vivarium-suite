@@ -1,20 +1,18 @@
-import os
-from time import time, sleep
 import datetime
-from traceback import format_exc
-import random
 import logging
+import os
+import random
+from time import time, sleep
+from traceback import format_exc
 from typing import Mapping
 
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 import redis
-
-from rq import get_current_job
 from rq import Queue
-from rq.job import JobStatus
+from rq import get_current_job
 from rq.connections import get_current_connection
+from rq.job import JobStatus
 from rq.queue import get_failed_queue
 from rq.worker import Worker, StopRequested
 
@@ -101,47 +99,63 @@ class ResilientWorker(Worker):
                 raise StopRequested()
 
 
-def job(parameters: Mapping, logging_directory: str, with_state_table: bool):
+def worker(parameters: Mapping):
     input_draw = parameters['input_draw']
     random_seed = parameters['random_seed']
-    component_config = parameters['simulation_configuration']
-    branch_config = parameters['config']
+    model_specification_file = parameters['model_specification_file']
+    branch_config = parameters['branch_configuration']
+    with_state_table = parameters['with_state_table']
     try:
         np.random.seed([input_draw, random_seed])
-        logging.info('Starting job: {}'.format((input_draw, random_seed, component_config, branch_config)))
+        logging.info('Starting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
         worker_ = get_current_job().id
 
-        from vivarium.framework.engine import build_simulation_configuration, run, setup_simulation
-        from vivarium.framework.components import load_component_manager
-        from vivarium.framework.util import collapse_nested_dict
+        from vivarium.framework.engine import setup_simulation, run
+        from vivarium.framework.configuration import build_model_specification
+        from vivarium.framework.utilities import collapse_nested_dict
 
-        config = build_simulation_configuration(parameters)
-        config.configuration.update(branch_config)
-        config.configuration.run_configuration.update({'input_draw_number': input_draw,
-                                                       'run_id': str(worker_) + '_' + str(time())})
+        model_specification = build_model_specification(model_specification_file)
+        run_key = {'input_draw': input_draw, 'random_seed': random_seed}
+
         if branch_config is not None:
-            run_key = dict(branch_config)
-            run_key.update({'input_draw': input_draw, 'random_seed': random_seed})
-            config.configuration.run_configuration.update({'run_key': run_key,
-                                                           'results_directory': parameters['results_path']},
-                                                          layer='override', source=str(worker_))
-        logging.info('Simulation input config:')
-        logging.info(str(config))
+            model_specification.configuration.update(branch_config)
+            run_key.update(dict(branch_config))
 
-        component_manager = load_component_manager(config)
-        simulation = setup_simulation(component_manager, config)
+        model_specification.configuration.update({
+            'run_configuration': {
+                'input_draw_number': input_draw,
+                'run_id': str(worker_) + '_' + str(time()),
+                'results_directory': parameters['results_path'],
+                'run_key': run_key,
+            },
+            'randomness': {
+                'random_seed': random_seed,
+                'additional_seed': input_draw,
+            },
+            'input_data': {
+                'input_draw_number': input_draw,
+            }
+        }, layer='override', source=str(worker_))
+
+        logging.info('Simulation model specification:')
+        logging.info(str(model_specification))
+
+        simulation = setup_simulation(model_specification)
         metrics, final_state = run(simulation)
-        idx = pd.MultiIndex.from_tuples([(input_draw, random_seed)],
-                                        names=['input_draw_number', 'random_seed'])
-        output = [pd.DataFrame(metrics, index=idx).to_json()]
+
+        idx = pd.MultiIndex.from_tuples([(input_draw, random_seed)], names=['input_draw_number', 'random_seed'])
+        output_metrics = pd.DataFrame(metrics, index=idx)
+        for k, v in collapse_nested_dict(run_key):
+            output_metrics[k] = v
+        output = [output_metrics.to_json()]
         if with_state_table:
             final_state['input_draw_number'] = input_draw
             final_state['random_seed'] = random_seed
-            if branch_config:
-                for k, v in collapse_nested_dict(branch_config):
+            for k, v in collapse_nested_dict(run_key):
                     final_state[k] = v
             output.append(final_state.to_json())
         return output
+
     except Exception as e:
         logging.exception('Unhandled exception in worker')
         job = get_current_job()
@@ -149,4 +163,4 @@ def job(parameters: Mapping, logging_directory: str, with_state_table: bool):
         job.save_meta()
         raise
     finally:
-        logging.info('Exiting job: {}'.format((input_draw, random_seed, component_config, branch_config)))
+        logging.info('Exiting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))

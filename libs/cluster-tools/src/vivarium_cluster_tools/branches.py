@@ -4,7 +4,7 @@ from itertools import product
 import yaml
 import numpy as np
 
-from vivarium.framework.util import collapse_nested_dict
+from vivarium.framework.utilities import collapse_nested_dict
 
 
 class Keyspace:
@@ -119,7 +119,7 @@ def load_branches(num_input_draws, num_random_seeds, branch_configuration_file):
         random_seed_count = num_random_seeds if num_random_seeds is not None else 1
         branches = [None]
     else:
-        raise ValueError('Must supply one of branch_configuration_file or --num_draws but not both')
+        raise ValueError('Must supply one of branch_configuration_file or --num_input_draws but not both')
 
     return branches, input_draw_count, random_seed_count
 
