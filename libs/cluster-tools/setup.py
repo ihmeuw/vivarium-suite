@@ -16,7 +16,7 @@ setup(
         'numpy',
         'pyyaml',
         'drmaa',
-        'redis',
+        'redis<=3.0.1',
         'rq',
         'vivarium',
         'click',
