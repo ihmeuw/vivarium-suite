@@ -1,7 +1,4 @@
 import click
-import yaml
-
-from .branches import Keyspace
 from .runner import main
 
 MAX_JOBS_WITH_STATE_TABLE = 100
@@ -18,7 +15,7 @@ def psimulate():
 @click.argument('simulation_configuration', type=click.Path(exists=True, dir_okay=False))
 @click.argument('branch_configuration', type=click.Path(exists=True, dir_okay=False))
 def run(simulation_configuration, branch_configuration, result_directory, project):
-	main(simulation_configuration, branch_configuration, result_directory, project)
+    main(simulation_configuration, branch_configuration, result_directory, project)
 
 
 @psimulate.command()
