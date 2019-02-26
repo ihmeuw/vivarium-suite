@@ -10,16 +10,18 @@ def psimulate():
 
 
 @psimulate.command()
-@click.option('--project', '-P', type=click.Choice(['proj_cost_effect', 'proj_csu']), default='proj_cost_effect')
-@click.option('--result_directory', '-o', default=None)
 @click.argument('simulation_configuration', type=click.Path(exists=True, dir_okay=False))
 @click.argument('branch_configuration', type=click.Path(exists=True, dir_okay=False))
-def run(simulation_configuration, branch_configuration, result_directory, project):
-    main(simulation_configuration, branch_configuration, result_directory, project)
+@click.option('--project', '-P', type=click.Choice(['proj_cost_effect', 'proj_csu']), default='proj_cost_effect')
+@click.option('--peak-memory', '-m', type=int, default=3)
+@click.option('--result_directory', '-o', default=None)
+def run(simulation_configuration, branch_configuration, result_directory, project, peak_memory):
+    main(simulation_configuration, branch_configuration, result_directory, project, peak_memory)
 
 
 @psimulate.command()
-@click.option('--project', '-P', type=click.Choice(['proj_cost_effect', 'proj_csu']), default='proj_cost_effect')
 @click.argument('results_root', type=click.Path(exists=True, file_okay=False, writable=True))
-def restart(results_root, project):
-    main(None, None, results_root, project, restart=True)
+@click.option('--project', '-P', type=click.Choice(['proj_cost_effect', 'proj_csu']), default='proj_cost_effect')
+@click.option('--peak-memory', '-m', type=int, default=3)
+def restart(results_root, project, peak_memory):
+    main(None, None, results_root, project, peak_memory, restart=True)
