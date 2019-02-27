@@ -350,10 +350,10 @@ def process_job_results(job_arguments, queue, ctx):
                 _log.info(f'fetched job in {end - start}')
                 start = end
                 if ctx.with_state_table:
-                    result, final_state = [pd.read_json(r) for r in job.result]
+                    result, final_state = [pd.read_msgpack(r) for r in job.result]
                     final_states[job.id] = final_state
                 else:
-                    result = pd.read_json(job.result[0])
+                    result = pd.read_msgpack(job.result[0])
                     end = time()
                     _log.info(f'read from msgpack in {end - start}')
                 results = results.append(result)
