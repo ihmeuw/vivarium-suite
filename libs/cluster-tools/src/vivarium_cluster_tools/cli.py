@@ -31,9 +31,7 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
     named after the start time of the simulation run.
 
     If a results directory is not provided the base results_directory is taken to be
-    /share/scratch/users/{$USER}/vivarium_results
-
-    """
+    /share/scratch/users/{$USER}/vivarium_results."""
     main(simulation_configuration, branch_configuration, result_directory, project, peak_memory)
 
 
