@@ -336,23 +336,33 @@ def process_job_results(job_arguments, queue, ctx):
 
     heartbeat = 0
     while (len(queue) + len(wip_registry)) > 0:
-        final_states = {}
-        dirty = False
-
         sleep(5)
         finished_jobs = finished_registry.get_job_ids()
-        for job_id in finished_jobs:
-            job = queue.fetch_job(job_id)
-            if ctx.with_state_table:
-                result, final_state = [pd.read_json(r) for r in job.result]
-                final_states[job.id] = final_state
-            else:
-                result = pd.read_json(job.result[0])
-            results = results.append(result)
-            dirty = True
-            finished_registry.remove(job)
+
+        chunk_size=10
+        for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
+            final_states = {}
+            dirty = False
+            for job_id in finished_jobs_chunk:
+                start = time()
+                job = queue.fetch_job(job_id)
+                end = time()
+                _log.info(f'fetched job in {end - start}')
+                start = end
+                if ctx.with_state_table:
+                    result, final_state = [pd.read_json(r) for r in job.result]
+                    final_states[job.id] = final_state
+                else:
+                    result = pd.read_json(job.result[0])
+                    end = time()
+                    _log.info(f'read from msgpack in {end - start}')
+                results = results.append(result)
+                dirty = True
+                finished_registry.remove(job)
 
         if dirty:
+            _log.info(f"Writing {len(finished_jobs)} jobs to output.hdf. "
+                      f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100}% done.")
             ctx.results_writer.write_output(results, 'output.hdf')
             for job_id, f in final_states.items():
                 run_config = job_arguments[job_id]
@@ -392,6 +402,12 @@ def process_job_results(job_arguments, queue, ctx):
                   '.' * heartbeat + ' ' * (4 - heartbeat) +
                   f'    {worker_count} Workers' +
                   '           ')
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
 
 
 def check_user_sge_config():
