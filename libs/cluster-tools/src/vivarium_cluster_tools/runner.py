@@ -360,19 +360,19 @@ def process_job_results(job_arguments, queue, ctx):
                 dirty = True
                 finished_registry.remove(job)
 
-        if dirty:
-            _log.info(f"Writing {len(finished_jobs)} jobs to output.hdf. "
-                      f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100}% done.")
-            ctx.results_writer.write_output(results, 'output.hdf')
-            for job_id, f in final_states.items():
-                run_config = job_arguments[job_id]
-                branch_number = ctx.keyspace.get_branch_number(run_config['branch_configuration'])
-                input_draw = run_config['input_draw']
-                random_seed = run_config['random_seed']
-                ctx.results_writer.write_output(
-                    f, f"branch_{branch_number}_idraw_{input_draw}_seed_{random_seed}_.hdf",
-                    key='final_states'
-                )
+            if dirty:
+                _log.info(f"Writing {len(finished_jobs)} jobs to output.hdf. "
+                          f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100}% done.")
+                ctx.results_writer.write_output(results, 'output.hdf')
+                for job_id, f in final_states.items():
+                    run_config = job_arguments[job_id]
+                    branch_number = ctx.keyspace.get_branch_number(run_config['branch_configuration'])
+                    input_draw = run_config['input_draw']
+                    random_seed = run_config['random_seed']
+                    ctx.results_writer.write_output(
+                        f, f"branch_{branch_number}_idraw_{input_draw}_seed_{random_seed}_.hdf",
+                        key='final_states'
+                    )
 
         fail_queue = get_failed_queue(queue.connection)
 
