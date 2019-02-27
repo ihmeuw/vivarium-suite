@@ -412,8 +412,8 @@ def check_user_sge_config():
                               "with the worker logs.")
 
 
-def main(model_specification_file, branch_configuration_file, result_directory, project, copy_data=False,
-         num_input_draws=None, num_random_seeds=None, num_workers=None, max_retries=1, peak_memory=3.0,
+def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory,
+         copy_data=False, num_input_draws=None, num_random_seeds=None, num_workers=None, max_retries=1,
          run_type='validation', quiet=False, log='{results_root}/master.log', restart=False):
     
     arguments = SimpleNamespace(**locals())
