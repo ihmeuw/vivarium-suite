@@ -46,6 +46,7 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
                    'with this as a limit.')
 def restart(results_root, project, peak_memory):
     """Restart a simulation defined by a results directory RESULTS_ROOT. Restarting will not erase existing results,
-    but will start workers and perform the remaining simulations."""
+    but will start workers to perform the remaining simulations.  RESULTS_ROOT is expected to be an output directory
+    from a previous `psimulate run`."""
 
     main(None, None, results_root, project, peak_memory, restart=True)
