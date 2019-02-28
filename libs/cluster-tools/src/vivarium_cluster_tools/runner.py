@@ -336,33 +336,45 @@ def process_job_results(job_arguments, queue, ctx):
 
     heartbeat = 0
     while (len(queue) + len(wip_registry)) > 0:
-        final_states = {}
-        dirty = False
-
         sleep(5)
         finished_jobs = finished_registry.get_job_ids()
-        for job_id in finished_jobs:
-            job = queue.fetch_job(job_id)
-            if ctx.with_state_table:
-                result, final_state = [pd.read_json(r) for r in job.result]
-                final_states[job.id] = final_state
-            else:
-                result = pd.read_json(job.result[0])
-            results = results.append(result)
-            dirty = True
-            finished_registry.remove(job)
 
-        if dirty:
-            ctx.results_writer.write_output(results, 'output.hdf')
-            for job_id, f in final_states.items():
-                run_config = job_arguments[job_id]
-                branch_number = ctx.keyspace.get_branch_number(run_config['branch_configuration'])
-                input_draw = run_config['input_draw']
-                random_seed = run_config['random_seed']
-                ctx.results_writer.write_output(
-                    f, f"branch_{branch_number}_idraw_{input_draw}_seed_{random_seed}_.hdf",
-                    key='final_states'
-                )
+        chunk_size = 10
+        # We batch, enumerate and log progress below to prevent broken pipes from long periods of
+        # inactivity while things are processed.
+        for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
+            final_states = {}
+            dirty = False
+            for job_id in finished_jobs_chunk:
+                start = time()
+                job = queue.fetch_job(job_id)
+                end = time()
+                _log.info(f'\tfetched job in {end - start:.4f}')
+                start = end
+                if ctx.with_state_table:
+                    result, final_state = [pd.read_msgpack(r) for r in job.result]
+                    final_states[job.id] = final_state
+                else:
+                    result = pd.read_msgpack(job.result[0])
+                    end = time()
+                    _log.info(f'\tread from msgpack in {end - start:.4f}')
+                results = results.append(result)
+                dirty = True
+                finished_registry.remove(job)
+
+            if dirty:
+                _log.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
+                        f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
+                ctx.results_writer.write_output(results, 'output.hdf')
+                for job_id, f in final_states.items():
+                    run_config = job_arguments[job_id]
+                    branch_number = ctx.keyspace.get_branch_number(run_config['branch_configuration'])
+                    input_draw = run_config['input_draw']
+                    random_seed = run_config['random_seed']
+                    ctx.results_writer.write_output(
+                        f, f"branch_{branch_number}_idraw_{input_draw}_seed_{random_seed}_.hdf",
+                        key='final_states'
+                    )
 
         fail_queue = get_failed_queue(queue.connection)
 
@@ -392,6 +404,12 @@ def process_job_results(job_arguments, queue, ctx):
                   '.' * heartbeat + ' ' * (4 - heartbeat) +
                   f'    {worker_count} Workers' +
                   '           ')
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
 
 
 def check_user_sge_config():

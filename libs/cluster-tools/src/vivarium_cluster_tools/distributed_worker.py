@@ -147,13 +147,13 @@ def worker(parameters: Mapping):
         output_metrics = pd.DataFrame(metrics, index=idx)
         for k, v in collapse_nested_dict(run_key):
             output_metrics[k] = v
-        output = [output_metrics.to_json()]
+        output = [output_metrics.to_msgpack()]
         if with_state_table:
             final_state['input_draw_number'] = input_draw
             final_state['random_seed'] = random_seed
             for k, v in collapse_nested_dict(run_key):
                     final_state[k] = v
-            output.append(final_state.to_json())
+            output.append(final_state.to_msgpack())
         return output
 
     except Exception as e:
