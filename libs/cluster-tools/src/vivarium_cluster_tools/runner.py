@@ -341,6 +341,7 @@ def process_job_results(job_arguments, queue, ctx):
 
         chunk_size = 10
         for finished_jobs_chunk in chunks(finished_jobs, chunk_size):
+            chunk_results = []
             final_states = {}
             dirty = False
             for job_id in finished_jobs_chunk:
@@ -350,11 +351,12 @@ def process_job_results(job_arguments, queue, ctx):
                     final_states[job.id] = final_state
                 else:
                     result = pd.read_msgpack(job.result[0])
-                results = results.append(result)
+                chunk_results.append(result)
                 dirty = True
                 finished_registry.remove(job)
 
             if dirty:
+                results = pd.concat([results] + chunk_results, axis=0)
                 ctx.results_writer.write_output(results, 'output.hdf')
                 for job_id, f in final_states.items():
                     run_config = job_arguments[job_id]
