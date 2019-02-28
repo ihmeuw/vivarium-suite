@@ -339,22 +339,30 @@ def process_job_results(job_arguments, queue, ctx):
         sleep(5)
         finished_jobs = finished_registry.get_job_ids()
 
-        chunk_size = 10
+        chunk_size=10
         for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
             final_states = {}
             dirty = False
             for job_id in finished_jobs_chunk:
+                start = time()
                 job = queue.fetch_job(job_id)
+                end = time()
+                _log.info(f'fetched job in {end - start}')
+                start = end
                 if ctx.with_state_table:
                     result, final_state = [pd.read_msgpack(r) for r in job.result]
                     final_states[job.id] = final_state
                 else:
                     result = pd.read_msgpack(job.result[0])
+                    end = time()
+                    _log.info(f'read from msgpack in {end - start}')
                 results = results.append(result)
                 dirty = True
                 finished_registry.remove(job)
 
             if dirty:
+                _log.info(f"Writing {len(finished_jobs)} jobs to output.hdf. "
+                          f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100}% done.")
                 ctx.results_writer.write_output(results, 'output.hdf')
                 for job_id, f in final_states.items():
                     run_config = job_arguments[job_id]
