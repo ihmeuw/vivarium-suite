@@ -339,7 +339,9 @@ def process_job_results(job_arguments, queue, ctx):
         sleep(5)
         finished_jobs = finished_registry.get_job_ids()
 
-        chunk_size=10
+        chunk_size = 10
+        # We batch, enumerate and log progress below to prevent broken pipes from long periods of
+        # inactivity while things are processed.
         for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
             final_states = {}
             dirty = False
