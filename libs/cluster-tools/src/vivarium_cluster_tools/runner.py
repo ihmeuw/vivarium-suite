@@ -340,7 +340,7 @@ def process_job_results(job_arguments, queue, ctx):
         finished_jobs = finished_registry.get_job_ids()
 
         chunk_size = 10
-        for finished_jobs_chunk in chunks(finished_jobs, chunk_size):
+        for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
             final_states = {}
             dirty = False
             for job_id in finished_jobs_chunk:
