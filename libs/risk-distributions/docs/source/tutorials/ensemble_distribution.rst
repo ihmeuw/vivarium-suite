@@ -1,6 +1,6 @@
-=============
-Disease Model
-=============
+===========================
+Ensemble Risk Distributions
+===========================
 
 .. todo::
    Motivate the development of the disease model.  We're trying to understand
