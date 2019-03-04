@@ -400,7 +400,8 @@ class Weibull(BaseDistribution):
 
 class EnsembleDistribution:
     """Represents an arbitrary distribution as a weighted sum of several concrete distribution types."""
-    distribution_map = {'betasr': Beta,
+
+    _distribution_map = {'betasr': Beta,
                         'exp': Exponential,
                         'gamma': Gamma,
                         'gumbel': Gumbel,
@@ -411,7 +412,7 @@ class EnsembleDistribution:
                         'mgamma': MirroredGamma,
                         'mgumbel': MirroredGumbel,
                         'norm': Normal,
-                        'weibull': Weibull}
+                         'weibull': Weibull}
 
     def __init__(self, weights: Parameters, parameters: Dict[str, Parameters] = None,
                  mean: Parameter = None, sd: Parameter = None):
@@ -422,10 +423,10 @@ class EnsembleDistribution:
                        parameters: Parameters = None,
                        mean: Parameter = None,
                        sd: Parameter = None) -> (pd.DataFrame, Dict[str, pd.DataFrame]):
-        weights = format_data(weights, list(cls.distribution_map.keys()), 'weights')
+        weights = format_data(weights, list(cls._distribution_map.keys()), 'weights')
 
         params = {}
-        for name, dist in cls.distribution_map.items():
+        for name, dist in cls._distribution_map.items():
             try:
                 param = parameters[name] if parameters else None
                 params[name] = dist.get_parameters(param, mean, sd)
@@ -456,7 +457,7 @@ class EnsembleDistribution:
         for name, parameters in self.parameters.items():
             w = weights.loc[computable, name]
             params = parameters.loc[computable] if len(parameters) > 1 else parameters
-            p += w * self.distribution_map[name](parameters=params).pdf(x.loc[computable])
+            p += w * self._distribution_map[name](parameters=params).pdf(x.loc[computable])
 
         if single_val:
             p = p.iloc[0]
@@ -478,7 +479,7 @@ class EnsembleDistribution:
         for name, parameters in self.parameters.items():
             w = weights.loc[computable, name]
             params = parameters.loc[computable] if len(parameters) > 1 else parameters
-            x += w * self.distribution_map[name](parameters=params).ppf(q.loc[computable])
+            x += w * self._distribution_map[name](parameters=params).ppf(q.loc[computable])
 
         if single_val:
             x = x.iloc[0]
