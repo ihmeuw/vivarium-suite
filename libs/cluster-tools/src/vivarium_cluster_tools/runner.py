@@ -340,16 +340,18 @@ def process_job_results(job_arguments, queue, ctx):
         finished_jobs = finished_registry.get_job_ids()
 
         chunk_size = 10
+
         # We batch, enumerate and log progress below to prevent broken pipes from long periods of
         # inactivity while things are processed.
         for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
             final_states = {}
+            chunk_results = []
             dirty = False
             for job_id in finished_jobs_chunk:
                 start = time()
                 job = queue.fetch_job(job_id)
                 end = time()
-                _log.info(f'\tfetched job in {end - start:.4f}')
+                _log.info(f'\t\tfetched job in {end - start:.4f}')
                 start = end
                 if ctx.with_state_table:
                     result, final_state = [pd.read_msgpack(r) for r in job.result]
@@ -357,15 +359,25 @@ def process_job_results(job_arguments, queue, ctx):
                 else:
                     result = pd.read_msgpack(job.result[0])
                     end = time()
-                    _log.info(f'\tread from msgpack in {end - start:.4f}')
-                results = results.append(result)
+                    _log.info(f'\t\tread from msgpack in {end - start:.4f}')
+                chunk_results.append(result)
                 dirty = True
                 finished_registry.remove(job)
 
             if dirty:
+                start = time()
+                results = pd.concat([results] + chunk_results, axis=0)
+                end = time()
+                _log.info(f"\t\tConcatenated batch in {end - start:.4f}")
+
+                start = end
+                ctx.results_writer.write_output(results, 'output.hdf')
+                end = time()
+                _log.info(f"\t\tWrote chunk to output.hdf in {end - start:.4f}")
                 _log.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
                         f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
-                ctx.results_writer.write_output(results, 'output.hdf')
+
+                end = time()
                 for job_id, f in final_states.items():
                     run_config = job_arguments[job_id]
                     branch_number = ctx.keyspace.get_branch_number(run_config['branch_configuration'])
