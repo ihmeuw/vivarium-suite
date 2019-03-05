@@ -31,7 +31,8 @@ if __name__ == "__main__":
         'sphinx',
         'sphinx-autodoc-typehints',
         'sphinx-rtd-theme',
-        'IPython'
+        'IPython',
+        'matplotlib'
     ]
 
     setup(
