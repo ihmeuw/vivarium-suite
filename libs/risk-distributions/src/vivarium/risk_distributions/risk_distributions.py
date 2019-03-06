@@ -412,7 +412,7 @@ class EnsembleDistribution:
                         'mgamma': MirroredGamma,
                         'mgumbel': MirroredGumbel,
                         'norm': Normal,
-                         'weibull': Weibull}
+                        'weibull': Weibull}
 
     def __init__(self, weights: Parameters, parameters: Dict[str, Parameters] = None,
                  mean: Parameter = None, sd: Parameter = None):
