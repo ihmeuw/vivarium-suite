@@ -27,6 +27,14 @@ if __name__ == "__main__":
         'pytest-mock',
     ]
 
+    doc_requirements = [
+        'sphinx',
+        'sphinx-autodoc-typehints',
+        'sphinx-rtd-theme',
+        'IPython',
+        'matplotlib'
+    ]
+
     setup(
         name=about['__title__'],
         version=about['__version__'],
@@ -66,6 +74,7 @@ if __name__ == "__main__":
         extras_require={
             'test': test_requirements,
             'dev': test_requirements,
+            'docs': doc_requirements
         },
 
         zip_safe=False,

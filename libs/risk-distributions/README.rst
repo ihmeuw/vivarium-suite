@@ -8,7 +8,11 @@ Risk Distributions
     :target: https://travis-ci.org/ihmeuw/risk_distributions
     :alt: Latest Version
 
-This library contains various distributions, compatible for use with ``Vivarium``.
+.. image:: https://readthedocs.org/projects/risk-distributions/badge/?version=latest
+    :target: https://risk-distributions.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
+
+This library contains various probability distributions, compatible for use with the ``Vivarium`` framework
 
 You can install ``risk_distributions`` from PyPI with pip:
 
