@@ -98,10 +98,12 @@ class BaseDistribution:
         x.loc[computable] = self.process(x.loc[computable], parameters.loc[computable], "pdf_preprocess")
 
         p = pd.Series(np.nan, x.index)
-        params = parameters.loc[computable, list(self.expected_parameters)]
-        p.loc[computable] = self.distribution(**params.to_dict('series')).pdf(x.loc[computable])
 
-        p.loc[computable] = self.process(p.loc[computable], parameters.loc[computable], "pdf_postprocess")
+        if not computable.empty:
+            params = parameters.loc[computable, list(self.expected_parameters)]
+            p.loc[computable] = self.distribution(**params.to_dict('series')).pdf(x.loc[computable])
+
+            p.loc[computable] = self.process(p.loc[computable], parameters.loc[computable], "pdf_postprocess")
 
         if single_val:
             p = p.iloc[0]
@@ -122,10 +124,12 @@ class BaseDistribution:
         q.loc[computable] = self.process(q.loc[computable], parameters.loc[computable], "ppf_preprocess")
 
         x = pd.Series(np.nan, q.index)
-        params = parameters.loc[computable, list(self.expected_parameters)]
-        x.loc[computable] = self.distribution(**params.to_dict('series')).ppf(q.loc[computable])
 
-        x.loc[computable] = self.process(x.loc[computable], parameters.loc[computable], "ppf_postprocess")
+        if not computable.empty:
+            params = parameters.loc[computable, list(self.expected_parameters)]
+            x.loc[computable] = self.distribution(**params.to_dict('series')).ppf(q.loc[computable])
+
+            x.loc[computable] = self.process(x.loc[computable], parameters.loc[computable], "ppf_postprocess")
 
         if single_val:
             x = x.iloc[0]
@@ -453,11 +457,12 @@ class EnsembleDistribution:
 
         p = pd.Series(np.nan, index=x.index)
 
-        p.loc[computable] = 0
-        for name, parameters in self.parameters.items():
-            w = weights.loc[computable, name]
-            params = parameters.loc[computable] if len(parameters) > 1 else parameters
-            p += w * self._distribution_map[name](parameters=params).pdf(x.loc[computable])
+        if not computable.empty:
+            p.loc[computable] = 0
+            for name, parameters in self.parameters.items():
+                w = weights.loc[computable, name]
+                params = parameters.loc[computable] if len(parameters) > 1 else parameters
+                p += w * self._distribution_map[name](parameters=params).pdf(x.loc[computable])
 
         if single_val:
             p = p.iloc[0]
@@ -475,11 +480,12 @@ class EnsembleDistribution:
 
         x = pd.Series(np.nan, index=q.index)
 
-        x.loc[computable] = 0
-        for name, parameters in self.parameters.items():
-            w = weights.loc[computable, name]
-            params = parameters.loc[computable] if len(parameters) > 1 else parameters
-            x += w * self._distribution_map[name](parameters=params).ppf(q.loc[computable])
+        if not computable.empty:
+            x.loc[computable] = 0
+            for name, parameters in self.parameters.items():
+                w = weights.loc[computable, name]
+                params = parameters.loc[computable] if len(parameters) > 1 else parameters
+                x += w * self._distribution_map[name](parameters=params).ppf(q.loc[computable])
 
         if single_val:
             x = x.iloc[0]
