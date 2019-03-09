@@ -371,7 +371,7 @@ class MirroredGamma(BaseDistribution):
 
     def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
         x_min, x_max = parameters.loc[data.index, 'x_min'], parameters.loc[data.index, 'x_max']
-        if process_type == 'pdf_preprocess':
+        if process_type in ['pdf_preprocess', 'cdf_preprocess']:
             value = x_max - data
         elif process_type == 'ppf_preprocess':
             # noinspection PyTypeChecker
