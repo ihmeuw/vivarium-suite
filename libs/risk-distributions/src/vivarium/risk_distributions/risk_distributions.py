@@ -137,6 +137,32 @@ class BaseDistribution:
             x = x.values
         return x
 
+    def cdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
+        single_val = isinstance(x, (float, int))
+        values_only = isinstance(x, np.ndarray)
+
+        x, parameters = format_call_data(x, self.parameters)
+
+        computable = parameters[(parameters.sum(axis=1) != 0)
+                                & ~np.isnan(x)
+                                & (parameters['x_min'] <= x) & (x <= parameters['x_max'])].index
+
+        x.loc[computable] = self.process(x.loc[computable], parameters.loc[computable], 'cdf_preprocess')
+
+        c = pd.Series(np.nan, x.index)
+
+        if not computable.empty:
+            params = parameters.loc[computable, list(self.expected_parameters)]
+            c.loc[computable] = self.distribution(**params.to_dict('series')).cdf(x.loc[computable])
+
+            c.loc[computable] = self.process(c.loc[computable], parameters.loc[computable], 'cdf_postprocess')
+
+        if single_val:
+            c = c.iloc[0]
+        if values_only:
+            c = c.values
+        return c
+
 
 class Beta(BaseDistribution):
 
@@ -158,7 +184,7 @@ class Beta(BaseDistribution):
 
     def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
         x_min, x_max = parameters.loc[data.index, 'x_min'], parameters.loc[data.index, 'x_max']
-        if process_type == 'pdf_preprocess':
+        if process_type in ['pdf_preprocess', 'cdf_preprocess']:
             value = data - x_min
         elif process_type == 'ppf_postprocess':
             value = data + x_max - x_min
@@ -321,7 +347,7 @@ class MirroredGumbel(BaseDistribution):
 
     def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
         x_min, x_max = parameters.loc[data.index, 'x_min'], parameters.loc[data.index, 'x_max']
-        if process_type == 'pdf_preprocess':
+        if process_type in ['pdf_preprocess', 'cdf_preprocess']:
             value = x_max - data
         elif process_type == 'ppf_preprocess':
             # noinspection PyTypeChecker
@@ -349,7 +375,7 @@ class MirroredGamma(BaseDistribution):
 
     def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
         x_min, x_max = parameters.loc[data.index, 'x_min'], parameters.loc[data.index, 'x_max']
-        if process_type == 'pdf_preprocess':
+        if process_type in ['pdf_preprocess', 'cdf_preprocess']:
             value = x_max - data
         elif process_type == 'ppf_preprocess':
             # noinspection PyTypeChecker
@@ -493,6 +519,29 @@ class EnsembleDistribution:
             x = x.values
         return x
 
+    def cdf(self, x: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
+        single_val = isinstance(x, (float, int))
+        values_only = isinstance(x, np.ndarray)
+
+        x, weights = format_call_data(x, self.weights)
+
+        computable = weights[(weights.sum(axis=1) != 0) & ~np.isnan(q)].index
+
+        c = pd.Series(np.nan, index=x.index)
+
+        c.loc[computable] = 0
+
+        if not computable.empty:
+            for name, parameters in self.parameters.items():
+                w = weights.loc[computable, name]
+                params = parameters.loc[computable] if len(parameters) > 1 else parameters
+                c += w * self._distribution_map[name](parameters=params).cdf(x.loc[computable])
+
+        if single_val:
+            c = c.iloc[0]
+        if values_only:
+            c = c.values
+        return c
 
 class NonConvergenceError(Exception):
     """ Raised when the optimization fails to converge """
