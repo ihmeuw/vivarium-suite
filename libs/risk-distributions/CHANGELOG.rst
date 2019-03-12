@@ -1,3 +1,9 @@
+**2.0.1 - 03/12/19**
+
+ - Add API documentation.
+ - Add cdf to all distributions.
+ - Bugfix to handle case where computable is empty for ppf, pdf, and cdf.
+
 **2.0.0 - 02/13/19**
 
  - Full rewrite of risk distributions.
