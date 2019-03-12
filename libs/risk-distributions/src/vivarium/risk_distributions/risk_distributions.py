@@ -525,7 +525,7 @@ class EnsembleDistribution:
 
         x, weights = format_call_data(x, self.weights)
 
-        computable = weights[(weights.sum(axis=1) != 0) & ~np.isnan(q)].index
+        computable = weights[(weights.sum(axis=1) != 0) & ~np.isnan(x)].index
 
         c = pd.Series(np.nan, index=x.index)
 
@@ -542,6 +542,7 @@ class EnsembleDistribution:
         if values_only:
             c = c.values
         return c
+
 
 class NonConvergenceError(Exception):
     """ Raised when the optimization fails to converge """
