@@ -138,13 +138,21 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
 
         def kill_jobs():
             if "drmaa" not in dir():
+                # FIXME: The global drmaa should be available here.
+                # This is maybe a holdover from old code?
+                # Maybe something to do with atexit?
                 import drmaa
             try:
                 s.control(array_job_id, drmaa.JobControlAction.TERMINATE)
-            except drmaa.errors.InvalidJobException:
-                # This is the case where all our workers have already shut down
-                # on their own, which isn't actually an error.
-                pass
+            # FIXME: Hack around issue where drmaa.errors sometimes doesn't
+            # exist.
+            except Exception as e:
+                if 'There are no jobs registered' in str(e):
+                    # This is the case where all our workers have already shut down
+                    # on their own, which isn't actually an error.
+                    pass
+                else:
+                    raise
 
         atexit.register(kill_jobs)
 
@@ -215,7 +223,7 @@ class RunContext:
         self.cluster_project = arguments.project
         self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
-      
+
         if arguments.result_directory is None:
             results_directory = get_default_output_directory(arguments.run_type)
         else:
@@ -445,7 +453,7 @@ def check_user_sge_config():
 def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory,
          copy_data=False, num_input_draws=None, num_random_seeds=None, num_workers=None, max_retries=1,
          run_type='validation', quiet=False, log='{results_root}/master.log', restart=False):
-    
+
     arguments = SimpleNamespace(**locals())
     arguments = validate_arguments(arguments)
     ctx = RunContext(arguments)
