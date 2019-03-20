@@ -54,8 +54,7 @@ def uge_specification(peak_memory, project, job_name):
     preamble = '-w n -q all.q -l m_mem_free={}G -N {}'.format(peak_memory, job_name)
 
     if os.environ['SGE_CLUSTER_NAME'] == "cluster":
-        preamble += " -l fthread=2"
-        preamble += " -l archive=TRUE"
+        preamble += " -l fthread=1"
     else:
         # Calculate slot count based on expected peak memory usage and 2g per slot
         num_slots = int(math.ceil(peak_memory / 2.5))
