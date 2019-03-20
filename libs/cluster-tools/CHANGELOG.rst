@@ -1,3 +1,7 @@
+**1.0.3 - 03/20/19**
+
+ - Reduce requirements for simulation jobs.
+
 **1.0.2 - 03/19/19**
 
  - Hack around hard to reproduce drmaa error.
