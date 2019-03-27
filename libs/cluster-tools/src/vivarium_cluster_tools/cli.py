@@ -1,4 +1,8 @@
+from bdb import BdbQuit
+
 import click
+from loguru import logger
+
 from .runner import main
 
 MAX_JOBS_WITH_STATE_TABLE = 100
@@ -22,7 +26,8 @@ def psimulate():
 @click.option('--peak-memory', '-m', type=int, default=3,
               help='The estimated maximum memory usage in GB of an individual simulate job. The simulations will be '
                    'run with this as a limit.')
-def run(simulation_configuration, branch_configuration, result_directory, project, peak_memory):
+@click.option('--pdb', 'with_debugger', is_flag=True, help='Drop into python debugger if an error occurs.')
+def run(simulation_configuration, branch_configuration, result_directory, project, peak_memory, with_debugger):
     """Run a parallel simulation. The simulation itself is defined by a SIMULATION_CONFIGURATION yaml file
     and the parameter changes across runs are defined by a BRANCH_CONFIGURATION yaml file.
 
@@ -32,7 +37,19 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
 
     If a results directory is not provided the base results_directory is taken to be
     /share/scratch/users/{$USER}/vivarium_results."""
-    main(simulation_configuration, branch_configuration, result_directory, project, peak_memory)
+    try:
+        main(simulation_configuration, branch_configuration, result_directory, project, peak_memory)
+    except (BdbQuit, KeyboardInterrupt):
+        raise
+    except Exception as e:
+        if with_debugger:
+            import pdb
+            import traceback
+            traceback.print_exc()
+            pdb.post_mortem()
+        else:
+            logger.exception("Uncaught exception {}".format(e))
+            raise
 
 
 @psimulate.command()
@@ -42,9 +59,21 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
 @click.option('--peak-memory', '-m', type=int, default=3,
               help='The estimated maximum memory usage of an individual simulate job. The simulations will be run '
                    'with this as a limit.')
-def restart(results_root, project, peak_memory):
+@click.option('--pdb', 'with_debugger', is_flag=True, help='Drop into python debugger if an error occurs.')
+def restart(results_root, project, peak_memory, with_debugger):
     """Restart a parallel simulation defined by a results directory RESULTS_ROOT. Restarting will not erase existing
     results, but will start workers to perform the remaining simulations.  RESULTS_ROOT is expected to be an output
     directory from a previous `psimulate run`."""
-
-    main(None, None, results_root, project, peak_memory, restart=True)
+    try:
+        main(None, None, results_root, project, peak_memory, restart=True)
+    except (BdbQuit, KeyboardInterrupt):
+        raise
+    except Exception as e:
+        if with_debugger:
+            import pdb
+            import traceback
+            traceback.print_exc()
+            pdb.post_mortem()
+        else:
+            logger.exception("Uncaught exception {}".format(e))
+            raise

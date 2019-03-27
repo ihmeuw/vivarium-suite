@@ -16,6 +16,7 @@ if __name__ == "__main__":
     install_requires = [
         'pandas',
         'numpy',
+        'loguru',
         'pyyaml',
         'drmaa',
         'redis<=3.0.1',
