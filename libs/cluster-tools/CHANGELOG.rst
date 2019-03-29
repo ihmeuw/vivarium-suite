@@ -1,3 +1,7 @@
+**1.0.4 - 03/28/19**
+
+ - Add debugger to cli.
+
 **1.0.3 - 03/20/19**
 
  - Reduce requirements for simulation jobs.
