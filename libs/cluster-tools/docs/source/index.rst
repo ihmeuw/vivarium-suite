@@ -14,4 +14,4 @@ distributed runs on a Univa Grid Engine cluster.
 
    installation
    distributed_runner
-
+   config
