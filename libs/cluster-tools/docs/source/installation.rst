@@ -22,7 +22,7 @@ You can then install this package with
     > source activate <your-env-name>
     > pip install vivarium-cluster-tools
 
-In addition, this tool needs the redis client and cython. These must be installed using conda.
+In addition, this tool needs the redis client. These must be installed using conda.
 ::
 
-   > conda install redis cython
+   > conda install redis
