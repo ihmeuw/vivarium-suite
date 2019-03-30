@@ -1,6 +1,17 @@
 Vivarium Cluster Tools
 =======================
 
+.. image:: https://badge.fury.io/py/vivarium_cluster_tools.svg
+    :target: https://badge.fury.io/py/vivarium_cluster_tools
+
+.. image:: https://travis-ci.org/ihmeuw/vivarium_cluster_tools.svg?branch=master
+    :target: https://travis-ci.org/ihmeuw/vivarium_cluster_tools
+    :alt: Latest Version
+
+.. image:: https://readthedocs.org/projects/vivarium_cluster_tools/badge/?version=latest
+    :target: https://vivarium_cluster_tools.readthedocs.io/en/latest/?badge=latest
+    :alt: Latest Docs
+
 This package includes a tool that allows vivarium users to run simulations based on multiple scenarios conveniently.
 It requires an access to IHME cluster. To install this package, create or edit a file called ~/.pip/pip.conf which looks like this:
 
@@ -60,5 +71,3 @@ which output directory includes the partially completed jobs by,
 ::
 
     psimulate restart /path/to/the/previous/results/
-
-
