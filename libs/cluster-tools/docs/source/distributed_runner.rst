@@ -5,8 +5,9 @@
 Running simulations in parallel
 ===============================
 
-Once you successfully create a simulation specification and branch file it is time to use the distributed runner.
-Recall, we ran a single simulation with the model specification file in this way
+Once you successfully create a simulation specification and branch file it is
+time to use the distributed runner. Recall, we ran a single simulation with
+a model specification file in this way
 
 .. code-block:: console
 
