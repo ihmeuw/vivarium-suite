@@ -1,4 +1,4 @@
-from vivarium.framework.util import collapse_nested_dict
+from vivarium.framework.utilities import collapse_nested_dict
 
 from ceam_experiments.branches import expand_branch_templates
 
