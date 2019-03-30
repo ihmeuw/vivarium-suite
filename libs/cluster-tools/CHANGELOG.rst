@@ -1,3 +1,7 @@
+**1.0.5 - 03/29/19**
+
+ - Migrate to github.
+ 
 **1.0.4 - 03/28/19**
 
  - Add debugger to cli.
