@@ -31,7 +31,7 @@ Comments
 --------
 
 YAML comments are denoted with the pound symbol ``#``, and can be placed anywhere, but must be separated from the
-preceding token by a space. For example, adding a comment to the configuration from above:
+preceding token by a space. For example, adding a comment to the configuration from above looks like this:
 
 .. code-block:: yaml
 
@@ -48,7 +48,8 @@ A mapping, or key-value pairing, is formed using a colon `:`. This corresponds t
 data structure from python, and there is no notion of ordering. Mappings can be specified in block format or inline,
 however we recommend block format so that is what we will show an example of here. In block format, mappings are
 separated onto new lines, and indentation forms a parent-child relationship. For example, below is a snippet from a
-configuration that specifies some configuration parameters for a simulation population. Each colon begins a mapping.
+configuration that specifies configuration parameters for a simulation population as mappings. Each colon below begins
+a mapping.
 
 .. code-block:: yaml
 
@@ -58,8 +59,9 @@ configuration that specifies some configuration parameters for a simulation popu
             age_start: 0
             age_end: 30
 
-This will interpreted as below. In other words, whitespace indentation is interpreted as nested while a colon is used to
-map a key and a value. Also, the inner most block (population_size, age_start, age_end) are unordered.
+This will interpreted as below.
+You may have noticed that the above example contains nested mappings, this is valid YAML syntax. The nesting relies on
+whitespace indentation. Also, the inner most block (population_size, age_start, age_end) is unordered.
 
 .. code-block:: yaml
 
@@ -71,8 +73,6 @@ map a key and a value. Also, the inner most block (population_size, age_start, a
             }
         }
     }
-
-You may have noticed that the above example contains nested mappings. This is valid YAML syntax.
 
 Lists
 -----
@@ -92,7 +92,7 @@ snippet that specifies a list of components to be used from the ``population`` m
 
 This will be interpreted as
 
-.. code-block:: yaml
+.. code-block:: python
 
     {components: {
             vivarium_public_health: {
@@ -100,6 +100,20 @@ This will be interpreted as
                     }
             }
     }
+
+Sometimes, you will see lists specified inline in a format that looks just like a ``python`` list. A common place for
+these is in branches configuration files when specifying varying parameters. For more information, see the branches
+section of this documentation. An example here is the value of the proportion key below:
+
+.. code-block:: yaml
+
+    input_draw_count: 100
+    random_seed_count: 1
+
+    branches:
+      - egg_intervention:
+            recruitment:
+                proportion: [0.0, 0.8]
 
 Composite Data
 --------------
