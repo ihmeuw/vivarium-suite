@@ -32,6 +32,7 @@ from vivarium.framework.results_writer import get_results_writer, ResultsWriter
 from vivarium.framework.utilities import collapse_nested_dict
 from vivarium_cluster_tools.branches import Keyspace
 from vivarium_cluster_tools.distributed_worker import ResilientWorker
+from vivarium_cluster_tools.globals import CLUSTER_PROJECTS
 from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path_config
 
 import logging
@@ -44,9 +45,8 @@ def uge_specification(peak_memory, project, job_name):
         if os.environ['SGE_CLUSTER_NAME'] == "dev":
             project = None
         else:  # prod or new cluster
-            assert project in ['proj_cost_effect', 'proj_cost_effect_diarrhea',
-                               'proj_cost_effect_dcpn', 'proj_cost_effect_conic',
-                               'proj_csu'], 'Script only for use by sanofi and cost effectiveness teams.'
+            assert project in CLUSTER_PROJECTS, ("Script only for use with Simulation Science cluster projects: "
+                                                 f"{CLUSTER_PROJECTS}")
             project = project
     except KeyError:
         raise Exception('This script must be run on the IHME cluster')

@@ -3,26 +3,16 @@
    :caption: Contents:
 
 Installation
-=================
+============
 
+You can install this package with
 
-This tool requires access to the IHME cluster and internal PyPI server. To install this package, first create or edit a
-file called ~/.pip/pip.conf to contain this entry:
-::
+.. code-block:: console
 
-   [global]
-   extra-index-url = http://dev-tomflem.ihme.washington.edu/simple
-   trusted-host = dev-tomflem.ihme.washington.edu
+    pip install vivarium-cluster-tools
 
-This file tells the pip package management system to include IHME's internal PyPI server when searching for packages.
+In addition, this tool needs the redis client. This must be installed using conda.
 
-You can then install this package with
-::
+.. code-block:: console
 
-    > source activate <your-env-name>
-    > pip install vivarium-cluster-tools
-
-In addition, this tool needs the redis client and cython. These must be installed using conda.
-::
-
-   > conda install redis cython
+    conda install redis
