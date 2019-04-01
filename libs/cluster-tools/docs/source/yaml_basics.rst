@@ -59,11 +59,11 @@ a mapping.
             age_start: 0
             age_end: 30
 
-This will interpreted as below.
-You may have noticed that the above example contains nested mappings, this is valid YAML syntax. The nesting relies on
-whitespace indentation. Also, the inner most block (population_size, age_start, age_end) is unordered.
+The interpretation of this configuration into python is shown below . You may have noticed that the above example
+contains nested mappings, this is valid YAML syntax and it relies on whitespace indentation. Also, the inner most block
+(population_size, age_start, age_end) is unordered.
 
-.. code-block:: yaml
+.. code-block:: python
 
     {configuration: {
         population: {
