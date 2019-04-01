@@ -4,6 +4,7 @@ import click
 from loguru import logger
 
 from .runner import main
+from .globals import CLUSTER_PROJECTS, DEFAULT_CLUSTER_PROJECT
 
 MAX_JOBS_WITH_STATE_TABLE = 100
 
@@ -21,7 +22,8 @@ def psimulate():
 @click.option('--result-directory', '-o', default=None,
               help='The directory to write results to. A folder will be created in this directory with the same name '
                    'as the configuration file.')
-@click.option('--project', '-P', type=click.Choice(['proj_cost_effect', 'proj_csu', 'proj_cost_effect_diarrhea']), default='proj_cost_effect',
+@click.option('--project', '-P', type=click.Choice(CLUSTER_PROJECTS),
+              default=DEFAULT_CLUSTER_PROJECT,
               help='The cluster project under which to run the simulation.')
 @click.option('--peak-memory', '-m', type=int, default=3,
               help='The estimated maximum memory usage in GB of an individual simulate job. The simulations will be '
@@ -54,7 +56,8 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
 
 @psimulate.command()
 @click.argument('results-root', type=click.Path(exists=True, file_okay=False, writable=True))
-@click.option('--project', '-P', type=click.Choice(['proj_cost_effect', 'proj_csu', 'proj_cost_effect_diarrhea']), default='proj_cost_effect',
+@click.option('--project', '-P', type=click.Choice(CLUSTER_PROJECTS),
+              default=DEFAULT_CLUSTER_PROJECT,
               help='The cluster project under which to run the simulation.')
 @click.option('--peak-memory', '-m', type=int, default=3,
               help='The estimated maximum memory usage of an individual simulate job. The simulations will be run '

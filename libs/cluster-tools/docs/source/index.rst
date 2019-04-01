@@ -6,8 +6,8 @@
 
 Vivarium Cluster Tools Documentation
 ====================================
-Vivarium cluster tools is a python package that makes running ``Vivarium`` simulations easy, including large-scale
-distributed runs on a Univa Grid Engine cluster.
+Vivarium cluster tools is a python package that makes running ``vivarium``
+simulations at scale on a Univa Grid Engine cluster easy.
 
 .. toctree::
    :maxdepth: 2
@@ -15,4 +15,3 @@ distributed runs on a Univa Grid Engine cluster.
    installation
    distributed_runner
    branch
-

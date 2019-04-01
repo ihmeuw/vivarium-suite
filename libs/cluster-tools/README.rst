@@ -1,64 +1,108 @@
 Vivarium Cluster Tools
 =======================
 
-This package includes a tool that allows vivarium users to run simulations based on multiple scenarios conveniently.
-It requires an access to IHME cluster. To install this package, create or edit a file called ~/.pip/pip.conf which looks like this:
+.. image:: https://badge.fury.io/py/vivarium_cluster_tools.svg
+    :target: https://badge.fury.io/py/vivarium_cluster_tools
 
-    | [global]
-    | extra-index-url = http://dev-tomflem.ihme.washington.edu/simple
-    | trusted-host = dev-tomflem.ihme.washington.edu
+.. image:: https://travis-ci.org/ihmeuw/vivarium_cluster_tools.svg?branch=master
+    :target: https://travis-ci.org/ihmeuw/vivarium_cluster_tools
+    :alt: Latest Version
+
+.. image:: https://readthedocs.org/projects/vivarium_cluster_tools/badge/?version=latest
+    :target: https://vivarium_cluster_tools.readthedocs.io/en/latest/?badge=latest
+    :alt: Latest Docs
+
+Vivarium cluster tools is a python package that makes running ``vivarium``
+simulations at scale on a Univa Grid Engine cluster easy.
+
+Installation
+------------
+
+You can install this package with
+
+.. code-block:: console
+
+    pip install vivarium-cluster-tools
+
+In addition, this tool needs the redis client. This must be installed using conda.
+
+.. code-block:: console
+
+    conda install redis
+
+A simple example
+----------------
+
+If you have a ``vivarium`` model specifcation file defining a particular model,
+you can use that along side a **branches file** to launch a run of many
+simulations at once with variations in the input data, random seed, or with
+different parameter settings.
+
+.. code-block:: console
+
+    psimulate run /path/to/model_specification.yaml /path/to/branches_file.yaml
+
+The simplest branches file defines a count of input data draws and random seeds
+to launch.
+
+.. code-block:: yaml
+
+    input_draw_count: 25
+    random_seed_count: 10
 
 
-This file tells the pip package management system to check with IHME's internal
-pypi server for packages.
+This branches file defines a set of simulations for all combinations of 25
+input draws and 10 random seeds and so would run, in total, 250 simulations.
 
-You can then install this package with
+You can also define a set of parameter variations to run your model over. Say
+your original model specification looked something like
 
-    | > source activate <env-name>
-    | > pip install vivarium-cluster-tools
+.. code-block:: yaml
 
-In addition, this tool needs redis client and cython.
+    plugins:
+      optional: ...
 
-    | > conda install redis cython
+    components:
+      vivarium_public_health:
+        population:
+          - BasePopulation()
+          - Mortality()
+        disease.models:
+          - SIS('lower_respiratory_infections')
+      my_lri_intervention:
+        components:
+          - GiveKidsVaccines()
 
-How to use
--------------
+    configuration:
+      population:
+        population_size: 1000
+        age_start: 0
+        age_end: 5
+      lri_vaccine:
+        coverage: 0.2
+        efficacy: 0.8
 
-The Vivarium ecosystem uses YAML configuration files throughout, including vivarium-cluster-tools.
-To run the multiple scenarios, you need to make a separate branch file (YAML) in addition to a usual
-vivarium model specification YAML file. You can specify how to vary a certain parameter in this branch file.
-For example,
+Defining a simple model of lower respiratory infections and a vaccine
+intervention. You could then write a branches file that varied over both
+input data draws and random seeds, but also over different levels of coverage
+and efficacy for the vaccine.  That file would look like
 
-::
+.. code-block:: yaml
 
     input_draw_count: 25
     random_seed_count: 10
 
     branches:
-      - intervention_name:
-           intervention_coverage: [0, 1]
-           efficacy: [0, .5, 1]
+      lri_vaccine:
+        coverage: [0.0, 0.2, 0.4, 0.8, 1.0]
+        efficacy: [0.4, 0.6, 0.8]
 
-This branch shows that you want to have 25 different input draws, 10 different random seeds and 2 different
-intervention coverages and 3 different intervention efficacy. This implies 25*10*2*3=1500 different simulation
-scenarios. You can run all 1500 simulations by
+The branches file would overwrite your original ``lri_vaccine`` configuration
+with each combination of coverage and efficacy in the branches file and launch
+a simulation. More, it would run each coverage-efficacy pair in the branches
+for each combination of input draw and random seed to produce 25 * 10 * 5 * 3 =
+3750 unique simulations.
 
-::
-
-    psimulate run /path/to/your/model_configuration /path/to/your/branch_file
-
-As an optional parameter, you can specify the name of project as well as result directory to save the outputs
-and logs. To specify those optional arguments,
-
-::
-
-    psimulate run /path/to/your/model_configuration /path/to/your/branch_file -p project_name -o /path/to/output/
-
-If your psimulate run has any failed jobs from the previous runs, you can restart failed jobs by specifying
-which output directory includes the partially completed jobs by,
-
-::
-
-    psimulate restart /path/to/the/previous/results/
-
-
+To read about more of the available features and get a better understanding
+of how to correctly write your own branches files, check out the
+`vivarium cluster tools documentation <https://vivarium_cluster_tools.readthedocs.io/en/latest/>`_.
