@@ -45,7 +45,8 @@ def uge_specification(peak_memory, project, job_name):
         if os.environ['SGE_CLUSTER_NAME'] == "dev":
             project = None
         else:  # prod or new cluster
-            assert project in CLUSTER_PROJECTS, 'Script only for use by sanofi and cost effectiveness teams.'
+            assert project in CLUSTER_PROJECTS, ("Script only for use with Simulation Science cluster projects: "
+                                                 f"{CLUSTER_PROJECTS}")
             project = project
     except KeyError:
         raise Exception('This script must be run on the IHME cluster')
