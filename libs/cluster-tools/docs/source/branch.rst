@@ -12,6 +12,7 @@ proportions like like full recruitment or no recruitment, or try a range of star
 the following branches file
 
 .. code-block:: yaml
+
     branches:
             - egg_intervention:
                     recruitment:
@@ -33,6 +34,7 @@ from the GBD to run the simulation on, drawn uniformly from the total number of 
 considered in the cartesian product of simulations as well.
 
 .. code-block:: yaml
+
     input_draw_count: 10
     random_seed_count: 5
 
