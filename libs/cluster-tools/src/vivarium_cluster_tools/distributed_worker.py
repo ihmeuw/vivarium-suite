@@ -104,7 +104,6 @@ def worker(parameters: Mapping):
     random_seed = parameters['random_seed']
     model_specification_file = parameters['model_specification_file']
     branch_config = parameters['branch_configuration']
-    with_state_table = parameters['with_state_table']
     try:
         np.random.seed([input_draw, random_seed])
         logging.info('Starting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
@@ -148,12 +147,6 @@ def worker(parameters: Mapping):
         for k, v in collapse_nested_dict(run_key):
             output_metrics[k] = v
         output = [output_metrics.to_msgpack()]
-        if with_state_table:
-            final_state['input_draw_number'] = input_draw
-            final_state['random_seed'] = random_seed
-            for k, v in collapse_nested_dict(run_key):
-                    final_state[k] = v
-            output.append(final_state.to_msgpack())
         return output
 
     except Exception as e:

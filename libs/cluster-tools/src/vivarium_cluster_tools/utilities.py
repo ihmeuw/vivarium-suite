@@ -9,16 +9,12 @@ from vivarium_cluster_tools import globals as vct_globals
 
 def configure_master_process_logging_to_terminal():
     logger.add(sys.stdout, colorize=True, level="INFO")
-    logger.add(sys.stdout, colorize=True, level="DEBUG")
-    logger.add(sys.stderr, colorize=True, level="WARNING")
     logger.add(sys.stderr, colorize=True, level="ERROR")
 
 
 def configure_master_process_logging_to_file(output_directory):
     master_log = output_directory / 'master.log'
     logger.add(master_log, colorize=True, level="INFO", serialize=True)
-    logger.add(master_log, colorize=True, level="DEBUG", serialize=True)
-    logger.add(master_log, colorize=True, level="WARNING", serialize=True)
     logger.add(master_log, colorize=True, level="ERROR", serialize=True)
 
 
