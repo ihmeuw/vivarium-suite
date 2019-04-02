@@ -89,42 +89,41 @@ Lists
 -----
 
 A list is formed using a hyphen ``-`` in block format, with each entry appearing on a new line with the same indentation
-level.  As with mappings, lists can be nested, and mappings and lists can be intermixed. Below is a configuration
-snippet that specifies a list of components to be used from the ``population`` module in Vivarium Public Health. The
-parent keys are interpreted as a python module import path:
+level. For example, below is a configuration snippet that defines a list of years in which a hypothetical drug treatment
+is available in a simulation.
 
 .. code-block:: yaml
 
-    components:
-        vivarium_public_health:
-            population:
-                - BasePopulation()
-                - Mortality()
-                - FertilityCrudeBirthRate()
+    configuration:
+        drug_treatment:
+            available_years:
+                - 2015
+                - 2016
+                - 2017
 
-This will be interpreted as
+This will be interpreted in python as
 
 .. code-block:: python
 
-    [vivarium_public_health.population.BasePopulation(), vivarium_public_health.population.Mortality(),
-     vivarium_public_health.population.FertilityCrudeBirthRate()]
+    {configuration:
+        drug_treatment: {
+            available_years: [2015, 2016, 2017]
+        }
+    }
 
-Sometimes, you will see lists specified inline in a format that looks just like a ``python`` list. A common place for
-these is in branches configuration files when specifying varying parameters. For more information, see the branches
-section of this documentation. An example here is the value of the proportion key below:
+Lists can also be specified inline in a format that looks just like a ``python`` list. The YAML example below is
+interpreted equivalently in python to the previous YAML example.
 
 .. code-block:: yaml
 
-    input_draw_count: 100
-    random_seed_count: 1
-
-    branches:
-      - egg_intervention:
-            recruitment:
-                proportion: [0.0, 0.8]
+    configuration:
+        drug_treatment:
+            available_years: [2015, 2016, 2017]
 
 Composite Data
 --------------
+
+As with mappings, lists can be nested, and mappings and lists can be intermixed.
 
 Lists and Mappings can be nested together to make more complicated structures. In fact, A Vivarium model specification
 generally takes the form of a set of nested mappings, where some values are lists.
