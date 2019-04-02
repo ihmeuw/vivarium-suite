@@ -47,7 +47,7 @@ class ResilientWorker(Worker):
     def work(self, *args, **kwargs):
         worker_ = self.name
         logger.remove()
-        logging_directory = Path(os.environ['CEAM_LOGGING_DIRECTORY'])
+        logging_directory = Path(os.environ['VIVARIUM_LOGGING_DIRECTORY'])
         logger.add(logging_directory / (str(worker_) + '.log'), level='DEBUG', serialize=True)
 
         retries = 0
