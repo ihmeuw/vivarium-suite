@@ -123,7 +123,5 @@ interpreted equivalently in python to the previous YAML example.
 Composite Data
 --------------
 
-As with mappings, lists can be nested, and mappings and lists can be intermixed.
-
 Lists and Mappings can be nested together to make more complicated structures. In fact, A Vivarium model specification
 generally takes the form of a set of nested mappings, where some values are lists.
