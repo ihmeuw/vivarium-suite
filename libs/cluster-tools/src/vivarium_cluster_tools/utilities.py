@@ -1,4 +1,6 @@
 from datetime import datetime
+import math
+import os
 from pathlib import Path
 import sys
 
@@ -27,3 +29,41 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
         output_directory = root / model_specification_name / launch_time
     return output_directory
 
+
+def get_cluster_name():
+    try:
+        cluster_name = {'prod': 'cluster-prod',
+                        'dev': 'cluster-dev',
+                        'cluster': 'cluster-fair'}[os.environ['SGE_CLUSTER_NAME']]
+    except KeyError:
+        raise RuntimeError('This tool must be run from the IHME cluster.')
+    return cluster_name
+
+
+def get_valid_project(project, cluster):
+    if cluster == 'cluster-dev':
+        project = None
+    else:
+        if project not in vct_globals.CLUSTER_PROJECTS:
+            raise RuntimeError(f"Script only for use with Simulation Science "
+                               f"cluster projects: {vct_globals.CLUSTER_PROJECTS}.")
+    return project
+
+
+def get_uge_specification(peak_memory, project, job_name):
+    cluster_name = get_cluster_name()
+    project = get_valid_project(project, cluster_name)
+
+    preamble = f'-w n -q all.q -l m_mem_free={peak_memory}G -N {job_name}'
+
+    if cluster_name == "cluster-fair":
+        preamble += " -l fthread=1"
+    else:
+        # Calculate slot count based on expected peak memory usage and 2g per slot
+        num_slots = int(math.ceil(peak_memory / 2.5))
+        preamble += f' -pe multi_slot {num_slots}'
+
+    if project:
+        preamble += f' -P {project}'
+
+    return preamble
