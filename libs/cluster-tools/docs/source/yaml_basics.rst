@@ -17,15 +17,21 @@ Structure
 ---------
 
 YAML files are structured by lines and space indentations. Indentation levels should be either 2 or 4 spaces, and
-**tabs are not valid**.  For example, a configuration file that includes a ``BasePopulation()`` component would look
-like the following:
+**tabs are not valid**.  For example, a configuration file that sets parameters for a BMI drug treatment component
+looks like the following:
 
 .. code-block:: yaml
 
-    components:
-        vivarium_public_health:
-            population:
-                - BasePopulation()
+    configuration:
+        bmi_treatment:
+            age_cutoff: 20
+            bmi_cutoff: 30
+            adherence_proportion: 0.92
+            treatment_proportion: 1.0
+            treatment_available:
+                year: 2019
+                month: 7
+                day: 15
 
 Comments
 --------
@@ -35,11 +41,16 @@ preceding token by a space. For example, adding a comment to the configuration f
 
 .. code-block:: yaml
 
-    components:
-        vivarium_public_health:
-            population:
-                - BasePopulation()  # Produces and ages simulants, no death
-
+    configuration:
+        bmi_treatment:
+            age_cutoff: 20
+            bmi_cutoff: 30
+            adherence_proportion: 0.92  #  Proportion of population selected who continue treatment
+            treatment_proportion: 1.0  # Proportion of population selected to be treated
+            treatment_available:
+                year: 2019
+                month: 7
+                day: 15
 
 Mappings
 --------
@@ -94,12 +105,8 @@ This will be interpreted as
 
 .. code-block:: python
 
-    {components: {
-            vivarium_public_health: {
-                    population : [BasePopulation(), Mortality(), FertilityCrudeBirthRate()]
-                    }
-            }
-    }
+    [vivarium_public_health.population.BasePopulation(), vivarium_public_health.population.Mortality(),
+     vivarium_public_health.population.FertilityCrudeBirthRate()]
 
 Sometimes, you will see lists specified inline in a format that looks just like a ``python`` list. A common place for
 these is in branches configuration files when specifying varying parameters. For more information, see the branches
