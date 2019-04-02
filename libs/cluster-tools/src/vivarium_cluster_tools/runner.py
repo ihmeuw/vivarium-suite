@@ -6,6 +6,7 @@ import socket
 import subprocess
 import math
 from pathlib import Path
+import random
 from time import sleep, time
 from types import SimpleNamespace
 
@@ -280,7 +281,15 @@ def process_job_results(job_arguments, queue, ctx):
             dirty = False
             for job_id in finished_jobs_chunk:
                 start = time()
-                job = queue.fetch_job(job_id)
+                retries = 0
+                while retries < 10:
+                    try:
+                        job = queue.fetch_job(job_id)
+                    except redis.exceptions.ConnectionError:
+                        backoff = random.random()*60
+                        logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
+                        retries += 1
+                        sleep(backoff)
                 end = time()
                 logger.info(f'\t\tfetched job in {end - start:.4f}')
                 start = end
