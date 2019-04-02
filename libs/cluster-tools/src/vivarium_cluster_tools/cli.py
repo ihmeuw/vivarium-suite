@@ -61,7 +61,6 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
               help='The estimated maximum memory usage of an individual simulate job. The simulations will be run '
                    'with this as a limit.')
 @click.option('--pdb', 'with_debugger', is_flag=True, help='Drop into python debugger if an error occurs.')
-@click.option('-v', 'with_debugger', is_flag=True, help='Drop into python debugger if an error occurs.')
 def restart(results_root, project, peak_memory, with_debugger):
     """Restart a parallel simulation defined by a results directory RESULTS_ROOT. Restarting will not erase existing
     results, but will start workers to perform the remaining simulations.  RESULTS_ROOT is expected to be an output
