@@ -90,7 +90,8 @@ Lists
 
 A list is formed using a hyphen ``-`` in block format, with each entry appearing on a new line with the same indentation
 level.  As with mappings, lists can be nested, and mappings and lists can be intermixed. Below is a configuration
-snippet that specifies a list of components to be used from the ``population`` module in Vivarium Public Health.
+snippet that specifies a list of components to be used from the ``population`` module in Vivarium Public Health. The
+parent keys are interpreted as a python module import path:
 
 .. code-block:: yaml
 
