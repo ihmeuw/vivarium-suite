@@ -22,6 +22,7 @@ if __name__ == "__main__":
         'redis<=3.0.1',
         'rq',
         'vivarium',
+        'vivarium_public_health',
         'click',
     ]
 
