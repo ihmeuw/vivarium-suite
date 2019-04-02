@@ -1,4 +1,5 @@
 import datetime
+import math
 import os
 from pathlib import Path
 import random
@@ -102,13 +103,18 @@ class ResilientWorker(Worker):
 
 
 def worker(parameters: Mapping):
+    node = f"{os.environ['SGE_CLUSTER_NAME']}:{os.environ['HOSTNAME']}"
+    job = f"{os.environ['JOB_NAME']: {os.environ['JOB_ID']}:{os.environ['SGE_TASK_ID']}}"
+
     input_draw = parameters['input_draw']
     random_seed = parameters['random_seed']
     model_specification_file = parameters['model_specification_file']
     branch_config = parameters['branch_configuration']
+    logger.info(f'Launching new job {job} on {node}')
+    logger.info('Starting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
+
     try:
         np.random.seed([input_draw, random_seed])
-        logger.info('Starting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
         worker_ = get_current_job().id
 
         from vivarium.framework.engine import setup_simulation, run
@@ -116,6 +122,12 @@ def worker(parameters: Mapping):
         from vivarium.framework.utilities import collapse_nested_dict
 
         model_specification = build_model_specification(model_specification_file)
+
+        start_time = pd.Timestamp(**model_specification.configuration.time.start.to_dict())
+        end_time = pd.Timestamp(**model_specification.configuration.time.end.to_dict())
+        step_size = pd.Timedelta(days=model_specification.configuration.time.step_size)
+        num_steps = int(math.ceil((end_time - start_time)/step_size))
+
         run_key = {'input_draw': input_draw, 'random_seed': random_seed}
 
         if branch_config is not None:
@@ -141,8 +153,17 @@ def worker(parameters: Mapping):
         logger.info('Simulation model specification:')
         logger.info(str(model_specification))
 
+        start = time()
+        logger.info('Beginning simulation setup.')
         simulation = setup_simulation(model_specification)
+        logger.info(f'Simulation setup complete in {(time() - start)/60} minutes.')
+        sim_start = time()
+        logger.info('Starting main simulation loop.')
         metrics, final_state = run(simulation)
+        end = time()
+        logger.info(f'Simulation main loop completed in {(end - sim_start)/60} minutes.')
+        logger.info(f'Average step length was {(end - sim_start)/num_steps} seconds.')
+        logger.info(f'Total simulation run time {(end - start) / 60} minutes.')
 
         idx = pd.MultiIndex.from_tuples([(input_draw, random_seed)], names=['input_draw_number', 'random_seed'])
         output_metrics = pd.DataFrame(metrics, index=idx)
@@ -151,7 +172,7 @@ def worker(parameters: Mapping):
         output = [output_metrics.to_msgpack()]
         return output
 
-    except Exception as e:
+    except Exception:
         logger.exception('Unhandled exception in worker')
         job = get_current_job()
         job.meta['root_exception'] = format_exc()

@@ -4,7 +4,6 @@ import tempfile
 import shutil
 import socket
 import subprocess
-import math
 from pathlib import Path
 from time import sleep, time
 from types import SimpleNamespace
@@ -33,44 +32,17 @@ from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path
 
 from vivarium_cluster_tools.branches import Keyspace
 from vivarium_cluster_tools.distributed_worker import ResilientWorker
-from vivarium_cluster_tools.globals import CLUSTER_PROJECTS
 from vivarium_cluster_tools import utilities
 
 
-def uge_specification(peak_memory, project, job_name):
-    try:
-        if os.environ['SGE_CLUSTER_NAME'] == "dev":
-            project = None
-        else:  # prod or new cluster
-            assert project in CLUSTER_PROJECTS, ("Script only for use with Simulation Science cluster projects: "
-                                                 f"{CLUSTER_PROJECTS}")
-            project = project
-    except KeyError:
-        raise Exception('This script must be run on the IHME cluster')
-
-    preamble = '-w n -q all.q -l m_mem_free={}G -N {}'.format(peak_memory, job_name)
-
-    if os.environ['SGE_CLUSTER_NAME'] == "cluster":
-        preamble += " -l fthread=1"
-    else:
-        # Calculate slot count based on expected peak memory usage and 2g per slot
-        num_slots = int(math.ceil(peak_memory / 2.5))
-        preamble += ' -pe multi_slot {}'.format(num_slots)
-
-    if project:
-        preamble += ' -P {}'.format(project)
-
-    return preamble
-
-
 def init_job_template(jt, peak_memory, broker_url, sge_log_directory, worker_log_directory, project, job_name):
-    launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='celery_worker_launcher_',
+    launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
                                            suffix='.sh', delete=False)
     atexit.register(lambda: os.remove(launcher.name))
     launcher.write(f'''
-    export CEAM_LOGGING_DIRECTORY={worker_log_directory}
+    export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
     {shutil.which(
-        'rq')} worker --url {broker_url} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" ceam
+        'rq')} worker --url {broker_url} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
 
     ''')
     launcher.close()
@@ -80,14 +52,14 @@ def init_job_template(jt, peak_memory, broker_url, sge_log_directory, worker_log
     jt.args = [launcher.name]
     jt.outputPath = f":{sge_log_directory}"
     jt.errorPath = f":{sge_log_directory}"
-    sge_cluster = os.environ['SGE_CLUSTER_NAME']
+    sge_cluster = utilities.get_cluster_name()
     jt.jobEnvironment = {
         'LC_ALL': 'en_US.UTF-8',
         'LANG': 'en_US.UTF-8',
         'SGE_CLUSTER_NAME': sge_cluster,
     }
     jt.joinFiles = True
-    jt.nativeSpecification = uge_specification(peak_memory, project, job_name)
+    jt.nativeSpecification = utilities.get_uge_specification(peak_memory, project, job_name)
     return jt
 
 
@@ -152,7 +124,7 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
 
         atexit.register(kill_jobs)
 
-    queue = Queue('ceam', connection=redis.Redis(hostname, port))
+    queue = Queue('vivarium', connection=redis.Redis(hostname, port))
     return queue
 
 
@@ -164,6 +136,7 @@ class RunContext:
         self.cluster_project = arguments.project
         self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
+        self.job_name = Path(arguments.model_specification_file).stem
         self.results_writer = ResultsWriter(arguments.result_directory)
 
         if arguments.restart:
@@ -387,7 +360,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
     drmaa_session.initialize()
 
     queue = start_cluster(drmaa_session, num_workers, ctx.peak_memory, ctx.sge_log_directory,
-                          ctx.worker_log_directory, ctx.cluster_project)
+                          ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name)
 
     # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
     # will take from model to model and the entire system is short lived anyway
