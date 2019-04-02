@@ -1,11 +1,12 @@
 import datetime
-import logging
 import os
+from pathlib import Path
 import random
 from time import time, sleep
 from traceback import format_exc
 from typing import Mapping
 
+from loguru import logger
 import numpy as np
 import pandas as pd
 import redis
@@ -28,9 +29,9 @@ def retry_handler(job, *exc_info):
         job.save()
         q = Queue(name=job.origin, connection=job.connection)
         q.enqueue_job(job)
-        logging.info(f'Retrying job {job.id}')
+        logger.info(f'Retrying job {job.id}')
     else:
-        logging.error(f'Failing job {job.id}')
+        logger.error(f'Failing job {job.id}')
         # exc_string = Worker._get_safe_exception_string(traceback.format_exception(*exc_info))
         failed_queue = get_failed_queue(get_current_connection(), job.__class__)
         failed_queue.quarantine(job, exc_info=exc_info)
@@ -44,9 +45,10 @@ class ResilientWorker(Worker):
 
     def work(self, *args, **kwargs):
         worker_ = self.name
-        logging_directory = os.environ['CEAM_LOGGING_DIRECTORY']
-        logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                            filename=os.path.join(logging_directory, str(worker_)+'.log'), level=logging.DEBUG)
+        logger.remove()
+        logging_directory = Path(os.environ['CEAM_LOGGING_DIRECTORY'])
+        logger.add(logging_directory / (str(worker_) + '.log'), level='DEBUG', serialize=True)
+
         retries = 0
         while retries < 10:
             try:
@@ -54,10 +56,10 @@ class ResilientWorker(Worker):
                 return
             except redis.exceptions.ConnectionError:
                 backoff = random.random()*60
-                logging.error(f"Couldn't connect to redis. Retrying in {backoff}...")
+                logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
                 retries += 1
                 sleep(backoff)
-        logging.error(f"Ran out of retries. Killing worker")
+        logger.error(f"Ran out of retries. Killing worker")
 
     def main_work_horse(self, job, queue):
         retries = 0
@@ -67,10 +69,10 @@ class ResilientWorker(Worker):
                 return
             except redis.exceptions.ConnectionError:
                 backoff = random.random()*60
-                logging.error(f"Couldn't connect to redis. Retrying in {backoff}...")
+                logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
                 retries += 1
                 sleep(backoff)
-        logging.error(f"Ran out of retries. Killing work horse")
+        logger.error(f"Ran out of retries. Killing work horse")
 
     def _monitor_work_horse_tick(self, job):
         _, ret_val = os.waitpid(self._horse_pid, 0)
@@ -87,15 +89,15 @@ class ResilientWorker(Worker):
             self.handle_job_failure(job=job)
 
             # Unhandled failure
-            logging.error(f'(work-horse terminated unexpectedly; waitpid returned {ret_val})')
+            logger.error(f'(work-horse terminated unexpectedly; waitpid returned {ret_val})')
 
             retry_handler(job, f"Work-horse process was terminated unexpectedly (waitpid returned {ret_val})",
                           None, None)
 
             self.acceptable_failure_count -= 1
             if self.acceptable_failure_count < 0:
-                logging.error("This worker has had multiple jobs fail. That may mean the host is sick. Terminating "
-                              "the worker to try and shift load onto other hosts.")
+                logger.error("This worker has had multiple jobs fail. That may mean the host is sick. Terminating "
+                             "the worker to try and shift load onto other hosts.")
                 raise StopRequested()
 
 
@@ -106,7 +108,7 @@ def worker(parameters: Mapping):
     branch_config = parameters['branch_configuration']
     try:
         np.random.seed([input_draw, random_seed])
-        logging.info('Starting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
+        logger.info('Starting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
         worker_ = get_current_job().id
 
         from vivarium.framework.engine import setup_simulation, run
@@ -136,8 +138,8 @@ def worker(parameters: Mapping):
             }
         }, layer='override', source=str(worker_))
 
-        logging.info('Simulation model specification:')
-        logging.info(str(model_specification))
+        logger.info('Simulation model specification:')
+        logger.info(str(model_specification))
 
         simulation = setup_simulation(model_specification)
         metrics, final_state = run(simulation)
@@ -150,10 +152,10 @@ def worker(parameters: Mapping):
         return output
 
     except Exception as e:
-        logging.exception('Unhandled exception in worker')
+        logger.exception('Unhandled exception in worker')
         job = get_current_job()
         job.meta['root_exception'] = format_exc()
         job.save_meta()
         raise
     finally:
-        logging.info('Exiting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
+        logger.info('Exiting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))

@@ -15,8 +15,8 @@ def configure_master_process_logging_to_terminal():
 
 def configure_master_process_logging_to_file(output_directory):
     master_log = output_directory / 'master.log'
-    logger.add(master_log, colorize=True, level="INFO", serialize=True)
-    logger.add(master_log, colorize=True, level="ERROR", serialize=True)
+    logger.add(master_log, level="INFO", serialize=True)
+    logger.add(master_log, level="ERROR", serialize=True)
 
 
 def get_output_directory(model_specification_file=None, output_directory=None, restart=False):

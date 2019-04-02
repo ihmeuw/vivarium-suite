@@ -121,7 +121,7 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
                   job_name="ceam"):
     hostname = socket.getfqdn()
     port = get_random_free_port()
-    logger.info('Starting Redis Broker at %s:%s', hostname, port)
+    logger.info(f'Starting Redis Broker at {hostname}:{port}')
     broker_process = launch_redis(port)
     broker_url = 'redis://{}:{}'.format(hostname, port)
 
