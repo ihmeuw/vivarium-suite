@@ -8,6 +8,7 @@ from vivarium_cluster_tools import globals as vct_globals
 
 
 def configure_master_process_logging_to_terminal():
+    logger.remove()  # Clear default configuration
     logger.add(sys.stdout, colorize=True, level="INFO")
     logger.add(sys.stderr, colorize=True, level="ERROR")
 
