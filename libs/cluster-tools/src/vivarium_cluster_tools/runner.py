@@ -5,13 +5,12 @@ import shutil
 import socket
 import subprocess
 import math
-import random
-from typing import Dict
 from pathlib import Path
+import random
 from time import sleep, time
-from getpass import getuser
 from types import SimpleNamespace
 
+from loguru import logger
 import numpy as np
 import pandas as pd
 import redis
@@ -29,16 +28,14 @@ except (RuntimeError, OSError):
     import drmaa
 
 from vivarium.framework.configuration import build_model_specification
-from vivarium.framework.results_writer import get_results_writer, ResultsWriter
+from vivarium.framework.results_writer import ResultsWriter
 from vivarium.framework.utilities import collapse_nested_dict
+from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path_config
+
 from vivarium_cluster_tools.branches import Keyspace
 from vivarium_cluster_tools.distributed_worker import ResilientWorker
 from vivarium_cluster_tools.globals import CLUSTER_PROJECTS
-from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path_config
-
-import logging
-
-_log = logging.getLogger(__name__)
+from vivarium_cluster_tools import utilities
 
 
 def uge_specification(peak_memory, project, job_name):
@@ -125,7 +122,7 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
                   job_name="ceam"):
     hostname = socket.getfqdn()
     port = get_random_free_port()
-    _log.info('Starting Redis Broker at %s:%s', hostname, port)
+    logger.info(f'Starting Redis Broker at {hostname}:{port}')
     broker_process = launch_redis(port)
     broker_url = 'redis://{}:{}'.format(hostname, port)
 
@@ -160,61 +157,6 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
     return queue
 
 
-def configure_sge_logging(results_root, quiet):
-    if quiet:
-        sge_log_directory = "/dev/null"
-    else:
-        sge_log_directory = os.path.join(results_root, "sge_logs")
-        os.makedirs(sge_log_directory, exist_ok=True)
-
-    return sge_log_directory
-
-
-def configure_worker_logging(results_root, log_path, quiet):
-    if '{results_root}' in log_path:
-        master_log_file = log_path.format(results_root=results_root)
-    else:
-        master_log_file = log_path  # Could be more defensive
-    log_level = logging.ERROR if quiet else logging.DEBUG
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                        filename=master_log_file, level=log_level)
-    logging.getLogger().addHandler(logging.StreamHandler())
-
-    worker_log_directory = os.path.join(results_root, 'worker_logs')
-    os.makedirs(worker_log_directory, exist_ok=True)
-
-    return worker_log_directory
-
-
-def get_default_output_directory(run_type):
-    """Returns the default output directory for the run type specified.
-
-    Parameters
-    ----------
-    run_type : {'validation', 'final'}
-
-    Returns
-    -------
-    str
-        The default output directory.
-    """
-    if run_type == 'validation':
-        username = getuser()
-        return f'/share/scratch/users/{username}/vivarium_results'
-    elif run_type == 'final':
-        return '/home/j/Project/Cost_Effectiveness/CEAM/Results'
-    else:
-        raise ValueError(f'Run type must be either "validation" or "final".  You specified {run_type}')
-
-
-def validate_arguments(arguments: Dict) -> Dict:
-    if arguments.restart and not arguments.result_directory:
-        raise ValueError(f"'result_directory' Must be specified with 'restart'")
-    if not arguments.restart and not arguments.model_specification_file:
-        raise ValueError(f"simulation configuration file must be supplied to run distrbuted runner")
-    return arguments
-
-
 class RunContext:
     def __init__(self, arguments):
         # TODO This constructor has side effects (it creates directories under some circumstances) which is weird.
@@ -223,18 +165,12 @@ class RunContext:
         self.cluster_project = arguments.project
         self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
-
-        if arguments.result_directory is None:
-            results_directory = get_default_output_directory(arguments.run_type)
-        else:
-            results_directory = arguments.result_directory
+        self.results_writer = ResultsWriter(arguments.result_directory)
 
         if arguments.restart:
-            self.results_writer = ResultsWriter(results_directory)
             self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
             self.existing_outputs = pd.read_hdf(os.path.join(self.results_writer.results_root, 'output.hdf'))
         else:
-            self.results_writer = get_results_writer(results_directory, arguments.model_specification_file)
             model_specification = build_model_specification(arguments.model_specification_file)
 
             self.keyspace = Keyspace.from_branch_configuration(arguments.num_input_draws, arguments.num_random_seeds,
@@ -261,20 +197,11 @@ class RunContext:
             # Log some basic stuff about the simulation to be run.
             self.keyspace.persist(self.results_writer)
         self.model_specification = os.path.join(self.results_writer.results_root, 'model_specification.yaml')
-        self.sge_log_directory = configure_sge_logging(self.results_writer.results_root, arguments.quiet)
-        self.worker_log_directory = configure_worker_logging(self.results_writer.results_root, arguments.log, arguments.quiet)
 
-        # Each state table is 50-200 MB, so we only write the final state table for small jobs.
-        max_jobs = 100
-        if arguments.run_type == 'validation' and len(self.keyspace) <= max_jobs:
-            self.with_state_table = True
-            self.results_writer.add_sub_directory('final_states', 'final_states')
-        else:
-            self.with_state_table = False
-            if arguments.run_type == 'validation':
-                _log.warning(f"You're launching {len(self.keyspace)} jobs.  This is too many to write final "
-                             f"state tables. If you need information from the state table, reduce the "
-                             f"number of draws or branches.")
+        self.sge_log_directory = os.path.join(self.results_writer.results_root, "sge_logs")
+        os.makedirs(self.sge_log_directory, exist_ok=True)
+        self.worker_log_directory = os.path.join(self.results_writer.results_root, 'worker_logs')
+        os.makedirs(self.worker_log_directory, exist_ok=True)
 
     def copy_artifact(self, artifact_path, locations):
         full_art = Artifact(artifact_path)
@@ -298,7 +225,6 @@ def build_job_list(ctx):
                       'input_draw': int(input_draw),
                       'random_seed': int(random_seed),
                       'results_path': ctx.results_writer.results_root,
-                      'with_state_table': ctx.with_state_table,
                       }
 
         do_schedule = True
@@ -318,12 +244,12 @@ def build_job_list(ctx):
             number_already_completed += 1
 
     if number_already_completed:
-        _log.info(f"{number_already_completed} of {len(ctx.keyspace)} jobs completed in previous run.")
+        logger.info(f"{number_already_completed} of {len(ctx.keyspace)} jobs completed in previous run.")
         if number_already_completed != len(ctx.existing_outputs):
-            _log.warning("There are jobs from the previous run which would not have been created "
-                         "with the configuration saved with the run. That either means that code "
-                         "has changed between then and now or that the outputs or configuration data "
-                         "have been modified. This may represent a serious error so give it some thought.")
+            logger.warning("There are jobs from the previous run which would not have been created "
+                           "with the configuration saved with the run. That either means that code "
+                           "has changed between then and now or that the outputs or configuration data "
+                           "have been modified. This may represent a serious error so give it some thought.")
 
     ctx.number_already_completed = number_already_completed
     np.random.shuffle(jobs)
@@ -332,7 +258,6 @@ def build_job_list(ctx):
 
 def process_job_results(job_arguments, queue, ctx):
     start_time = time()
-    collected = set()
 
     if ctx.existing_outputs is not None:
         results = ctx.existing_outputs
@@ -352,7 +277,6 @@ def process_job_results(job_arguments, queue, ctx):
         # We batch, enumerate and log progress below to prevent broken pipes from long periods of
         # inactivity while things are processed.
         for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
-            final_states = {}
             chunk_results = []
             dirty = False
             for job_id in finished_jobs_chunk:
@@ -363,19 +287,15 @@ def process_job_results(job_arguments, queue, ctx):
                         job = queue.fetch_job(job_id)
                     except redis.exceptions.ConnectionError:
                         backoff = random.random()*60
-                        logging.error(f"Couldn't connect to redis. Retrying in {backoff}...")
+                        logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
                         retries += 1
                         sleep(backoff)
                 end = time()
-                _log.info(f'\t\tfetched job in {end - start:.4f}')
+                logger.info(f'\t\tfetched job in {end - start:.4f}')
                 start = end
-                if ctx.with_state_table:
-                    result, final_state = [pd.read_msgpack(r) for r in job.result]
-                    final_states[job.id] = final_state
-                else:
-                    result = pd.read_msgpack(job.result[0])
-                    end = time()
-                    _log.info(f'\t\tread from msgpack in {end - start:.4f}')
+                result = pd.read_msgpack(job.result[0])
+                end = time()
+                logger.info(f'\t\tread from msgpack in {end - start:.4f}')
                 chunk_results.append(result)
                 dirty = True
                 finished_registry.remove(job)
@@ -384,32 +304,20 @@ def process_job_results(job_arguments, queue, ctx):
                 start = time()
                 results = pd.concat([results] + chunk_results, axis=0)
                 end = time()
-                _log.info(f"\t\tConcatenated batch in {end - start:.4f}")
+                logger.info(f"\t\tConcatenated batch in {end - start:.4f}")
 
                 start = end
                 ctx.results_writer.write_output(results, 'output.hdf')
                 end = time()
-                _log.info(f"\t\tWrote chunk to output.hdf in {end - start:.4f}")
-                _log.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
-                        f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
-
-                end = time()
-                for job_id, f in final_states.items():
-                    run_config = job_arguments[job_id]
-                    branch_number = ctx.keyspace.get_branch_number(run_config['branch_configuration'])
-                    input_draw = run_config['input_draw']
-                    random_seed = run_config['random_seed']
-                    ctx.results_writer.write_output(
-                        f, f"branch_{branch_number}_idraw_{input_draw}_seed_{random_seed}_.hdf",
-                        key='final_states'
-                    )
+                logger.info(f"\t\tWrote chunk to output.hdf in {end - start:.4f}")
+                logger.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
+                            f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
 
         fail_queue = get_failed_queue(queue.connection)
 
         # TODO: Sometimes there are duplicate job_ids, why?
         waiting_jobs = len(set(queue.job_ids))
         running_jobs = len(wip_registry)
-        rjs = wip_registry.get_job_ids()
         finished_jobs = len(finished_registry) + len(results) - ctx.number_already_completed
         failed_jobs = len(fail_queue)
 
@@ -425,13 +333,13 @@ def process_job_results(job_arguments, queue, ctx):
         # display run info, and a "heartbeat"
         heartbeat = (heartbeat + 1) % 4
         worker_count = len(ResilientWorker.all(queue=queue))
-        _log.info(f'{finished_jobs + ctx.number_already_completed} completed and {failed_jobs} '
-                  f'failed of {waiting_jobs + running_jobs + finished_jobs + failed_jobs + ctx.number_already_completed} '
-                  f'({percent_complete:.1f}% completed)' +
-                  f'/ Remaining time: {remaining_time} ' +
-                  '.' * heartbeat + ' ' * (4 - heartbeat) +
-                  f'    {worker_count} Workers' +
-                  '           ')
+        logger.info(f'{finished_jobs + ctx.number_already_completed} completed and {failed_jobs} '
+                    f'failed of {waiting_jobs + running_jobs + finished_jobs + failed_jobs + ctx.number_already_completed} '
+                    f'({percent_complete:.1f}% completed)' +
+                    f'/ Remaining time: {remaining_time} ' +
+                    '.' * heartbeat + ' ' * (4 - heartbeat) +
+                    f'    {worker_count} Workers' +
+                    '           ')
 
 
 def chunks(l, n):
@@ -447,32 +355,41 @@ def check_user_sge_config():
     sge_config = Path().home() / ".sge_request"
 
     if sge_config.exists():
-        with open(sge_config, "r") as f:
+        with sge_config.open('r') as f:
             for line in f:
                 line = line.strip()
                 if (('-o ' in line) or ('-e' in line)) and not line.startswith("#"):
-                    _log.warn("You may have settings in your .sge_request file "
-                              "that could overwrite the log location set by this script. "
-                              f"Your .sge_request file is here: {sge_config}.  Look for "
-                              "-o and -e and comment those lines to recieve logs side-by-side"
-                              "with the worker logs.")
+                    logger.warning("You may have settings in your .sge_request file "
+                                   "that could overwrite the log location set by this script. "
+                                   f"Your .sge_request file is here: {sge_config}.  Look for "
+                                   "-o and -e and comment those lines to recieve logs side-by-side"
+                                   "with the worker logs.")
 
 
 def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory,
-         copy_data=False, num_input_draws=None, num_random_seeds=None, num_workers=None, max_retries=1,
-         run_type='validation', quiet=False, log='{results_root}/master.log', restart=False):
+         copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False):
 
-    arguments = SimpleNamespace(**locals())
-    arguments = validate_arguments(arguments)
+    output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
+    utilities.configure_master_process_logging_to_file(output_directory)
+
+    arguments = SimpleNamespace(model_specification_file=model_specification_file,
+                                branch_configuration_file=branch_configuration_file,
+                                result_directory=output_directory,
+                                project=project,
+                                peak_memory=peak_memory,
+                                copy_data=copy_data,
+                                num_input_draws=num_input_draws,
+                                num_random_seeds=num_random_seeds,
+                                restart=restart)
     ctx = RunContext(arguments)
     check_user_sge_config()
     jobs = build_job_list(ctx)
 
     if len(jobs) == 0:
-        _log.info("Nothing to do")
+        logger.info("Nothing to do")
         return
 
-    _log.info('Starting jobs. Results will be written to: {}'.format(ctx.results_writer.results_root))
+    logger.info('Starting jobs. Results will be written to: {}'.format(ctx.results_writer.results_root))
 
     num_workers = len(jobs)
     drmaa_session = drmaa.Session()
@@ -491,6 +408,4 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
 
     process_job_results(job_arguments, queue, ctx)
 
-    _log.info('Jobs completed. Results written to: {}'.format(ctx.results_writer.results_root))
-
-
+    logger.info('Jobs completed. Results written to: {}'.format(ctx.results_writer.results_root))

@@ -3,10 +3,7 @@ from bdb import BdbQuit
 import click
 from loguru import logger
 
-from .runner import main
-from .globals import CLUSTER_PROJECTS, DEFAULT_CLUSTER_PROJECT
-
-MAX_JOBS_WITH_STATE_TABLE = 100
+from vivarium_cluster_tools import runner, utilities, globals as vct_globals
 
 
 @click.group()
@@ -22,8 +19,8 @@ def psimulate():
 @click.option('--result-directory', '-o', default=None,
               help='The directory to write results to. A folder will be created in this directory with the same name '
                    'as the configuration file.')
-@click.option('--project', '-P', type=click.Choice(CLUSTER_PROJECTS),
-              default=DEFAULT_CLUSTER_PROJECT,
+@click.option('--project', '-P', type=click.Choice(vct_globals.CLUSTER_PROJECTS),
+              default=vct_globals.DEFAULT_CLUSTER_PROJECT,
               help='The cluster project under which to run the simulation.')
 @click.option('--peak-memory', '-m', type=int, default=3,
               help='The estimated maximum memory usage in GB of an individual simulate job. The simulations will be '
@@ -40,24 +37,25 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
     If a results directory is not provided the base results_directory is taken to be
     /share/scratch/users/{$USER}/vivarium_results."""
     try:
-        main(simulation_configuration, branch_configuration, result_directory, project, peak_memory)
+        utilities.configure_master_process_logging_to_terminal()
+        runner.main(simulation_configuration, branch_configuration, result_directory, project, peak_memory)
     except (BdbQuit, KeyboardInterrupt):
         raise
     except Exception as e:
+        logger.exception("Uncaught exception {}".format(e))
         if with_debugger:
             import pdb
             import traceback
             traceback.print_exc()
             pdb.post_mortem()
         else:
-            logger.exception("Uncaught exception {}".format(e))
             raise
 
 
 @psimulate.command()
 @click.argument('results-root', type=click.Path(exists=True, file_okay=False, writable=True))
-@click.option('--project', '-P', type=click.Choice(CLUSTER_PROJECTS),
-              default=DEFAULT_CLUSTER_PROJECT,
+@click.option('--project', '-P', type=click.Choice(vct_globals.CLUSTER_PROJECTS),
+              default=vct_globals.DEFAULT_CLUSTER_PROJECT,
               help='The cluster project under which to run the simulation.')
 @click.option('--peak-memory', '-m', type=int, default=3,
               help='The estimated maximum memory usage of an individual simulate job. The simulations will be run '
@@ -68,15 +66,16 @@ def restart(results_root, project, peak_memory, with_debugger):
     results, but will start workers to perform the remaining simulations.  RESULTS_ROOT is expected to be an output
     directory from a previous `psimulate run`."""
     try:
-        main(None, None, results_root, project, peak_memory, restart=True)
+        utilities.configure_master_process_logging_to_terminal()
+        runner.main(None, None, results_root, project, peak_memory, restart=True)
     except (BdbQuit, KeyboardInterrupt):
         raise
     except Exception as e:
+        logger.exception("Uncaught exception {}".format(e))
         if with_debugger:
             import pdb
             import traceback
             traceback.print_exc()
             pdb.post_mortem()
         else:
-            logger.exception("Uncaught exception {}".format(e))
             raise
