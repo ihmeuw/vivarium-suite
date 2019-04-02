@@ -1,7 +1,11 @@
+**1.0.7 - 04/02/19**
+
+ - Be defensive about retrieving jobs.
+
 **1.0.6 - 03/29/19**
 
  - Bugfix in tests.
- 
+
 **1.0.5 - 03/29/19**
 
  - Migrate to github.
