@@ -265,7 +265,8 @@ class RegistryManager:
         return status['pending'] + status['running'] > 0
 
     def __iter__(self):
-        for key in self._queues:
+        keys = list(self._queues.keys())
+        for key in keys:
             yield key
 
     def get_finished_jobs(self, registry_key):
