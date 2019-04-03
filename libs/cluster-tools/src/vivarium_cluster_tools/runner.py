@@ -320,10 +320,7 @@ def process_job_results(queues, ctx):
             q_running = len(wip_registry)
             q_failed = len(get_failed_queue(queue.connection))
             q_finished = len(finished_registry)
-            logger.info(f'Pending in queue {j}: {q_pending}')
-            logger.info(f'Running in queue {j}: {q_running}')
-            logger.info(f'Failed in queue {j}: {q_failed}')
-            logger.info(f'Finished in queue {j}: {q_finished}')
+            logger.info(f'Queue {j} - Pending: {q_pending}, Running: {q_running}, Failed: {q_failed}, Finished: {q_finished}')
 
             waiting_jobs += q_pending
             running_jobs += q_running
