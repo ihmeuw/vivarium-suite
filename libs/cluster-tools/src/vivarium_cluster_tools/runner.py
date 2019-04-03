@@ -139,6 +139,7 @@ class RunContext:
         self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
         self.results_writer = ResultsWriter(arguments.result_directory)
+        self.job_name = Path(arguments.result_directory).parts[-2]  # The model specification name.
 
         if arguments.restart:
             self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
@@ -170,7 +171,7 @@ class RunContext:
             # Log some basic stuff about the simulation to be run.
             self.keyspace.persist(self.results_writer)
         self.model_specification = os.path.join(self.results_writer.results_root, 'model_specification.yaml')
-        self.job_name = Path(self.model_specification).stem
+
         self.sge_log_directory = os.path.join(self.results_writer.results_root, "sge_logs")
         os.makedirs(self.sge_log_directory, exist_ok=True)
         self.worker_log_directory = os.path.join(self.results_writer.results_root, 'worker_logs')
