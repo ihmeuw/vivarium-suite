@@ -279,6 +279,7 @@ class RegistryManager:
                 self.sleep_on_it(registry_key)
             except KeyError:
                 logger.exception(f'Queue {registry_key} already complete or failed.')
+                break
 
         if finished_jobs is None:
             self.abandon_queue(registry_key)
@@ -310,6 +311,7 @@ class RegistryManager:
                 self.sleep_on_it(registry_key)
             except KeyError:
                 logger.exception(f'Queue {registry_key} already complete or failed.')
+                break
 
         if job is None:
             self.abandon_queue(registry_key)
