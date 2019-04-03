@@ -318,7 +318,7 @@ def process_job_results(queues, ctx):
             # TODO: Sometimes there are duplicate job_ids, why?
             q_pending = len(set(queue.job_ids))
             q_running = len(wip_registry)
-            q_failed = len(get_failed_queue(queue))
+            q_failed = len(get_failed_queue(queue.connection))
             q_finished = len(finished_registry)
             logger.info(f'Pending in queue {j}: {q_pending}')
             logger.info(f'Running in queue {j}: {q_running}')
