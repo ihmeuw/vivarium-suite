@@ -261,7 +261,8 @@ class RegistryManager:
             self._retries[key] = RegistryManager.retries_before_fail
 
     def jobs_to_finish(self):
-        return sum([len(q.job_ids) for q in self._queues.values()]) + sum([len(wip) for wip in self._wip.values()])
+        status = self.get_status()
+        return status['pending'] + status['running'] > 0
 
     def __iter__(self):
         for key in self._queues:
@@ -273,6 +274,7 @@ class RegistryManager:
         while self._retries[registry_key] > 0:
             try:
                 finished_jobs = self._finished[registry_key].get_job_ids()
+                break
             except redis.exceptions.ConnectionError:
                 self.sleep_on_it(registry_key)
 
@@ -301,6 +303,7 @@ class RegistryManager:
                 job = self._queues[registry_key].fetch_job(job_id)
                 end = time()
                 logger.info(f'Fetched job {job_id} from queue {registry_key} in {end - start:.2f}s')
+                break
             except redis.exceptions.ConnectionError:
                 self.sleep_on_it(registry_key)
 
