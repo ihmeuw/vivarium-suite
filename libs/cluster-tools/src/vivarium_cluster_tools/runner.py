@@ -389,7 +389,7 @@ class RegistryManager:
                 self.update(registry_key)
 
     def get_status(self):
-        status = dict(**sum(Counter(queue_status) for queue_status in self._status.values()))
+        status = dict(**sum([Counter(queue_status) for queue_status in self._status.values()]))
         status['finished'] += self._previously_completed
         return status
 
