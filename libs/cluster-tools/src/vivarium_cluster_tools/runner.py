@@ -1,4 +1,5 @@
 import os
+from collections import Counter
 import atexit
 import math
 import tempfile
@@ -229,37 +230,165 @@ def build_job_list(ctx):
     return jobs
 
 
-def get_job(queue, job_id):
-    start = time()
-    retries = 0
-    while retries < 10:
-        try:
-            job = queue.fetch_job(job_id)
-            end = time()
-            logger.info(f'\t\tfetched job in {end - start:.4f}')
-            return job
-        except redis.exceptions.ConnectionError:
-            backoff = random.random() * 60
-            logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
-            retries += 1
-            sleep(backoff)
-    return None
+class RegistryManager:
 
+    retries_before_fail = 10
+    backoff = 30
 
-def get_result(job_id, job):
-    if job is None:
-        logger.error(f'Redis dropped job {job_id}')
+    def __init__(self, queues, already_completed):
+        logger.info('Building registries.')
+
+        self._queues = {}
+        self._wip = {}
+        self._finished = {}
+
+        self._status = {}
+        self._retries = {}
+
+        self._failed = []
+        self._completed = []
+
+        self._previously_completed = already_completed
+
+        for key, queue in enumerate(queues):
+            self._queues[key] = queue
+            self._wip[key] = StartedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class)
+            self._finished[key] = FinishedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class)
+            self._status[key] = {'total': 0, 'pending': 0, 'running': 0, 'failed': 0, 'finished': 0, 'workers': 0}
+            self.update_and_report(key)
+            self._retries[key] = RegistryManager.retries_before_fail
+
+    def jobs_to_finish(self):
+        return sum([len(q.job_ids) for q in self._queues.values()]) + sum([len(wip) for wip in self._wip.values()])
+
+    def __iter__(self):
+        for key in self._queues:
+            yield key
+
+    def get_finished_jobs(self, registry_key):
+        logger.info(f'Retrieving finished jobs for queue {registry_key}')
+        finished_jobs = None
+        while self._retries[registry_key] > 0:
+            try:
+                finished_jobs = self._finished[registry_key].get_job_ids()
+            except redis.exceptions.ConnectionError:
+                self.sleep_on_it(registry_key)
+
+        if finished_jobs is None:
+            self.abandon_queue(registry_key)
+            finished_jobs = []
+
+        return finished_jobs
+
+    def get_batch_results(self, registry_key, finished_jobs, batch_size=10):
+        for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, batch_size)):
+            chunk_results = []
+            for job_id in finished_jobs_chunk:
+                result = self.get_result(registry_key, job_id)
+                if result is not None:
+                    chunk_results.append(result)
+            yield chunk_results
+
+    def get_job(self, registry_key, job_id):
+        logger.info(f'Fetching job {job_id} from queue {registry_key}.')
+
+        job = None
+        while self._retries[registry_key] > 0:
+            try:
+                start = time()
+                job = self._queues[registry_key].fetch_job(job_id)
+                end = time()
+                logger.info(f'Fetched job {job_id} from queue {registry_key} in {end - start:.2f}s')
+            except redis.exceptions.ConnectionError:
+                self.sleep_on_it(registry_key)
+
+        if job is None:
+            self.abandon_queue(registry_key)
+
+        return job
+
+    def get_result(self, registry_key, job_id):
+        job = self.get_job(registry_key, job_id)
         result = None
-    else:
-        start = time()
-        result = pd.read_msgpack(job.result[0])
-        end = time()
-        logger.info(f'\t\tread from msgpack in {end - start:.4f}')
-    return result
+        if job is not None:
+            start = time()
+            result = pd.read_msgpack(job.result[0])
+            end = time()
+            logger.info(f'Read {job_id} from msgpack from queue {registry_key} in {end - start:.2f}s.')
+            self._finished[registry_key].remove(job)
+            self._status[registry_key]['finished'] += 1
+        return result
+
+    def sleep_on_it(self, registry_key):
+        backoff = RegistryManager.backoff * random.random()
+        logger.warning(f'Failed to connect to redis for queue {registry_key}.  Retrying in {backoff}s.')
+        self._retries[registry_key] -= 1
+        sleep(backoff)
+
+    def abandon_queue(self, registry_key):
+        logger.error(f'Lost connection to redis for queue {registry_key}.  Abandoning redis instance.')
+        self._status[registry_key]['failed'] += self._status[registry_key]['pending'] + self._status[registry_key]['running']
+        self._status[registry_key]['pending'] = 0
+        self._status[registry_key]['running'] = 0
+        # TODO: Probably should cleanup, but not sure how yet.
+        self._failed.append(
+            (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
+        )
+
+    def complete_queue(self, registry_key):
+        logger.info(f'All jobs on queue {registry_key} complete.')
+        # TODO: Probably should cleanup, but not sure how yet.
+        self._completed.append(
+            (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
+        )
+
+    def update_and_report(self, registry_key=None):
+        if registry_key is not None:
+            queue_name = registry_key
+            status = self._status[registry_key]
+        else:
+            queue_name = 'all'
+            status = self.get_status()
+
+        template = (f"Queue {queue_name} - Total jobs: {{total}}, % Done: {{finished/total * 100:.1f}}%\n"
+                    f"Pending: {{pending}}, Running: {{running}}, Failed: {{failed}}, Finished: {{finished}}\n"
+                    f"Workers: {{workers}}.")
+
+        self.update(registry_key)
+        logger.info(template.format(**status))
+
+    def update(self, registry_key=None):
+        # FIXME: This is slightly unsafe, but I've never seen errors here and I'm sleepy.
+        if registry_key is not None:
+            # TODO: Sometimes there are duplicate job_ids, why?
+            q_pending = len(set(self._queues[registry_key].job_ids))
+            q_running = len(self._wip[registry_key])
+            q_to_write = len(self._finished[registry_key])
+            q_failed = len(get_failed_queue(self._queues[registry_key].connection))
+            q_finished = self._status[registry_key]['finished']
+            q_total = q_pending + q_running + q_failed + q_to_write + q_finished
+            q_workers = len(ResilientWorker.all(queue=self._queues[registry_key]))
+
+            self._status[registry_key]['pending'] = q_pending
+            self._status[registry_key]['running'] = q_running + q_to_write
+            self._status[registry_key]['failed'] = q_failed
+            self._status[registry_key]['finished'] = q_finished
+            self._status[registry_key]['total'] = q_total
+            self._status[registry_key]['workers'] = q_workers
+
+            if sum([q_pending, q_running, q_to_write]) == 0:
+                self.complete_queue(registry_key)
+        else:
+            for registry_key in self._queues:
+                self.update(registry_key)
+
+    def get_status(self):
+        status = dict(**sum(Counter(queue_status) for queue_status in self._status.values()))
+        status['finished'] += self._previously_completed
+        return status
 
 
 def process_job_results(queues, ctx):
-
     start_time = time()
 
     if ctx.existing_outputs is not None:
@@ -267,85 +396,36 @@ def process_job_results(queues, ctx):
     else:
         results = pd.DataFrame()
 
-    registries = []
-    logger.info('Building registries.')
-    for queue in queues:
-        registries.append(
-            (queue,
-             StartedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class),
-             FinishedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class))
-        )
+    registry_manager = RegistryManager(queues, len(results))
 
-    heartbeat = 0
     logger.info('Entering main processing loop.')
-    while sum([len(registry[0]) + len(registry[1]) for registry in registries]) > 0:
+    while registry_manager.jobs_to_finish():
         sleep(5)
-        waiting_jobs = 0
-        running_jobs = 0
-        failed_jobs = 0
-        done_jobs = 0
-        for j, (queue, wip_registry, finished_registry) in enumerate(registries):
-            logger.info(f'Checking queue {j}')
-            finished_jobs = finished_registry.get_job_ids()
+        for registry_key in registry_manager:
+            logger.info(f'Checking queue {registry_key}')
+            finished_jobs = registry_manager.get_finished_jobs(registry_key)
 
-            chunk_size = 10
-            # We batch, enumerate and log progress below to prevent broken pipes from long periods of
-            # inactivity while things are processed.
-            for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
-                chunk_results = []
-                dirty = False
-                for job_id in finished_jobs_chunk:
-                    job = get_job(queue, job_id)
-                    result = get_result(job_id, job)
-                    if result is not None:
-                        chunk_results.append(result)
-                        dirty = True
-                        finished_registry.remove(job)
-
-                if dirty:
+            written_count = 0
+            for result_batch in registry_manager.get_batch_results(registry_key, finished_jobs):
+                if result_batch:  # Redis might have fallen over, in which case this is empty.
                     start = time()
-                    results = pd.concat([results] + chunk_results, axis=0)
+                    results = pd.concat([results] + result_batch, axis=0)
                     end = time()
-                    logger.info(f"\t\tConcatenated batch in {end - start:.4f}")
+                    logger.info(f"Concatenated {len(result_batch)} results in {end - start:.2f}s.")
 
                     start = end
                     ctx.results_writer.write_output(results, 'output.hdf')
                     end = time()
-                    logger.info(f"\t\tWrote chunk to output.hdf in {end - start:.4f}")
-                    logger.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
-                                f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
+                    logger.info(f"Updated output.hdf in {end - start:.4f}s.")
 
-            # TODO: Sometimes there are duplicate job_ids, why?
-            q_pending = len(set(queue.job_ids))
-            q_running = len(wip_registry)
-            q_failed = len(get_failed_queue(queue.connection))
-            q_finished = len(finished_registry)
-            logger.info(f'Queue {j} - Pending: {q_pending}, Running: {q_running}, Failed: {q_failed}, Finished: {q_finished}')
+                    written_count += len(result_batch)
+                    logger.info(f"Writing {len(finished_jobs)} jobs to output.hdf. "
+                                f"{written_count / len(finished_jobs) * 100:.1f}% done.")
 
-            waiting_jobs += q_pending
-            running_jobs += q_running
-            failed_jobs += q_failed
-            done_jobs += q_finished
+            registry_manager.update_and_report(registry_key)
 
-        percent_complete = 100 * done_jobs / (waiting_jobs + running_jobs + done_jobs + failed_jobs)
-        elapsed_time = time() - start_time
-
-        if done_jobs <= 100:
-            remaining_time = '---'
-        else:
-            remaining_time = elapsed_time / (done_jobs + failed_jobs) * (waiting_jobs + running_jobs)
-            remaining_time = '{:.1f} minutes'.format(remaining_time / 60)
-
-        # display run info, and a "heartbeat"
-        heartbeat = (heartbeat + 1) % 4
-        worker_count = sum([len(ResilientWorker.all(queue=queue)) for queue, _, __ in registries])
-        logger.info(f'{done_jobs + ctx.number_already_completed} completed and {failed_jobs} '
-                    f'failed of {waiting_jobs + running_jobs + done_jobs + failed_jobs + ctx.number_already_completed} '
-                    f'({percent_complete:.1f}% completed)' +
-                    f'/ Remaining time: {remaining_time} ' +
-                    '.' * heartbeat + ' ' * (4 - heartbeat) +
-                    f'    {worker_count} Workers' +
-                    '           ')
+        registry_manager.update_and_report()
+        logger.info(f'Elapsed time: {(time() - start_time)/60:.1f} minutes.')
 
 
 def chunks(l, n):
@@ -414,11 +494,11 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
         for job in queue_jobs:
             # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
             # will take from model to model and the entire system is short lived anyway
-            key = queue.enqueue('vivarium_cluster_tools.distributed_worker.worker',
-                                parameters=job,
-                                ttl=60 * 60 * 24 * 2,
-                                result_ttl=60 * 60,
-                                timeout='7d').id
+            queue.enqueue('vivarium_cluster_tools.distributed_worker.worker',
+                          parameters=job,
+                          ttl=60 * 60 * 24 * 2,
+                          result_ttl=60 * 60,
+                          timeout='7d').id
         queues.append(queue)
 
     process_job_results(queues, ctx)
