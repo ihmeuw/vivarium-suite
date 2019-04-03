@@ -283,7 +283,7 @@ def process_job_results(queues, ctx):
         waiting_jobs = 0
         running_jobs = 0
         failed_jobs = 0
-        finished_jobs = 0
+        done_jobs = 0
         for j, (queue, wip_registry, finished_registry) in enumerate(registries):
             logger.info(f'Checking queue {j}')
             finished_jobs = finished_registry.get_job_ids()
@@ -328,22 +328,22 @@ def process_job_results(queues, ctx):
             waiting_jobs += q_pending
             running_jobs += q_running
             failed_jobs += q_failed
-            finished_jobs += q_finished
+            done_jobs += q_finished
 
-        percent_complete = 100 * finished_jobs / (waiting_jobs + running_jobs + finished_jobs + failed_jobs)
+        percent_complete = 100 * done_jobs / (waiting_jobs + running_jobs + done_jobs + failed_jobs)
         elapsed_time = time() - start_time
 
-        if finished_jobs <= 100:
+        if done_jobs <= 100:
             remaining_time = '---'
         else:
-            remaining_time = elapsed_time / (finished_jobs + failed_jobs) * (waiting_jobs + running_jobs)
+            remaining_time = elapsed_time / (done_jobs + failed_jobs) * (waiting_jobs + running_jobs)
             remaining_time = '{:.1f} minutes'.format(remaining_time / 60)
 
         # display run info, and a "heartbeat"
         heartbeat = (heartbeat + 1) % 4
         worker_count = sum([len(ResilientWorker.all(queue=queue)) for queue, _, __ in registries])
-        logger.info(f'{finished_jobs + ctx.number_already_completed} completed and {failed_jobs} '
-                    f'failed of {waiting_jobs + running_jobs + finished_jobs + failed_jobs + ctx.number_already_completed} '
+        logger.info(f'{done_jobs + ctx.number_already_completed} completed and {failed_jobs} '
+                    f'failed of {waiting_jobs + running_jobs + done_jobs + failed_jobs + ctx.number_already_completed} '
                     f'({percent_complete:.1f}% completed)' +
                     f'/ Remaining time: {remaining_time} ' +
                     '.' * heartbeat + ' ' * (4 - heartbeat) +
