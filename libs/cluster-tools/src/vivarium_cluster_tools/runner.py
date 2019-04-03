@@ -1,5 +1,5 @@
 import os
-from collections import Counter
+from collections import defaultdict
 import atexit
 import math
 import tempfile
@@ -389,7 +389,11 @@ class RegistryManager:
                 self.update(registry_key)
 
     def get_status(self):
-        status = dict(**sum([Counter(queue_status) for queue_status in self._status.values()]))
+        status = defaultdict(int)
+        for queue_status in self._status.values():
+            for k, v in queue_status.items():
+                status[k] += v
+        status['done'] = status['finished'] / status['total'] * 100
         status['finished'] += self._previously_completed
         return status
 
