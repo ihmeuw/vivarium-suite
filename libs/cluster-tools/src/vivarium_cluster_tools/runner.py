@@ -43,8 +43,7 @@ def init_job_template(jt, peak_memory, broker_url, sge_log_directory, worker_log
     atexit.register(lambda: os.remove(launcher.name))
     launcher.write(f'''
     export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
-    {shutil.which(
-        'rq')} worker --url {broker_url} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
+    {shutil.which('rq')} worker --url {broker_url} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
 
     ''')
     launcher.close()
@@ -259,7 +258,6 @@ def get_result(job_id, job):
     return result
 
 
-
 def process_job_results(queues, ctx):
     start_time = time()
 
@@ -386,16 +384,16 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
 
     logger.info('Starting jobs. Results will be written to: {}'.format(ctx.results_writer.results_root))
 
-    num_workers = len(jobs)
+    if redis_processes == -1:
+        redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
+    workers_per_queue = int(math.ceil(len(jobs) / redis_processes))
 
     drmaa_session = drmaa.Session()
     drmaa_session.initialize()
 
-    if redis_processes == -1:
-        redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
     queues = []
     for i in range(redis_processes):
-        queues.append(start_cluster(drmaa_session, num_workers, ctx.peak_memory, ctx.sge_log_directory,
+        queues.append(start_cluster(drmaa_session, workers_per_queue, ctx.peak_memory, ctx.sge_log_directory,
                                     ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name))
 
     job_arguments = {}
