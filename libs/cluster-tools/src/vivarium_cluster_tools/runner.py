@@ -336,16 +336,22 @@ class RegistryManager:
         self._status[registry_key]['pending'] = 0
         self._status[registry_key]['running'] = 0
         # TODO: Probably should cleanup, but not sure how yet.
-        self._failed.append(
-            (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
-        )
+        try:
+            self._failed.append(
+                (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
+            )
+        except IndexError:
+            logger.warning("Guess redis cleans up after itself?")
 
     def complete_queue(self, registry_key):
         logger.info(f'All jobs on queue {registry_key} complete.')
         # TODO: Probably should cleanup, but not sure how yet.
-        self._completed.append(
-            (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
-        )
+        try:
+            self._completed.append(
+                (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
+            )
+        except IndexError:
+            logger.warning("Guess redis cleans up after itself?")
 
     def update_and_report(self, registry_key=None):
         if registry_key is not None:
