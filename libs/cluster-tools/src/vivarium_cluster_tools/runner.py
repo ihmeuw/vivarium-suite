@@ -284,7 +284,7 @@ def process_job_results(queues, ctx):
         running_jobs = 0
         failed_jobs = 0
         finished_jobs = 0
-        for j, (queue, wip_registry, finished_registry) in registries:
+        for j, (queue, wip_registry, finished_registry) in enumerate(registries):
             logger.info(f'Checking queue {j}')
             finished_jobs = finished_registry.get_job_ids()
 
