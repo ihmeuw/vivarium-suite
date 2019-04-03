@@ -104,7 +104,7 @@ class ResilientWorker(Worker):
 
 def worker(parameters: Mapping):
     node = f"{os.environ['SGE_CLUSTER_NAME']}:{os.environ['HOSTNAME']}"
-    job = f"{os.environ['JOB_NAME']: {os.environ['JOB_ID']}:{os.environ['SGE_TASK_ID']}}"
+    job = f"{os.environ['JOB_NAME']}: {os.environ['JOB_ID']}:{os.environ['SGE_TASK_ID']}"
 
     input_draw = parameters['input_draw']
     random_seed = parameters['random_seed']
