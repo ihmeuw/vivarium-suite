@@ -138,7 +138,6 @@ class RunContext:
         self.cluster_project = arguments.project
         self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
-        self.job_name = Path(arguments.model_specification_file).stem
         self.results_writer = ResultsWriter(arguments.result_directory)
 
         if arguments.restart:
@@ -171,7 +170,7 @@ class RunContext:
             # Log some basic stuff about the simulation to be run.
             self.keyspace.persist(self.results_writer)
         self.model_specification = os.path.join(self.results_writer.results_root, 'model_specification.yaml')
-
+        self.job_name = Path(self.model_specification).stem
         self.sge_log_directory = os.path.join(self.results_writer.results_root, "sge_logs")
         os.makedirs(self.sge_log_directory, exist_ok=True)
         self.worker_log_directory = os.path.join(self.results_writer.results_root, 'worker_logs')
@@ -519,7 +518,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
                           parameters=job,
                           ttl=60 * 60 * 24 * 2,
                           result_ttl=60 * 60,
-                          timeout='7d').id
+                          timeout='7d')
         queues.append(queue)
 
     process_job_results(queues, ctx)
