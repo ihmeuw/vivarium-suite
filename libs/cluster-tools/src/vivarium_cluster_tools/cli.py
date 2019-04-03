@@ -40,7 +40,7 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
     try:
         utilities.configure_master_process_logging_to_terminal()
         runner.main(simulation_configuration, branch_configuration, result_directory, project, peak_memory,
-                    redis_processes=reds)
+                    redis_processes=redis)
     except (BdbQuit, KeyboardInterrupt):
         raise
     except Exception as e:
