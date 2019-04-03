@@ -253,8 +253,10 @@ class RegistryManager:
         for key, queue in enumerate(queues):
             self._queues[key] = queue
             self._wip[key] = StartedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class)
-            self._finished[key] = FinishedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class)
-            self._status[key] = {'total': 0, 'pending': 0, 'running': 0, 'failed': 0, 'finished': 0, 'workers': 0}
+            self._finished[key] = FinishedJobRegistry(queue.name, connection=queue.connection,
+                                                      job_class=queue.job_class)
+            self._status[key] = {'total': 0, 'pending': 0, 'running': 0,
+                                 'failed': 0, 'finished': 0, 'done': 0., 'workers': 0}
             self.update_and_report(key)
             self._retries[key] = RegistryManager.retries_before_fail
 
@@ -350,7 +352,7 @@ class RegistryManager:
             queue_name = 'all'
             status = self.get_status()
 
-        template = (f"Queue {queue_name} - Total jobs: {{total}}, % Done: {{finished/total * 100:.1f}}%\n"
+        template = (f"Queue {queue_name} - Total jobs: {{total}}, % Done: {{done}}%\n"
                     f"Pending: {{pending}}, Running: {{running}}, Failed: {{failed}}, Finished: {{finished}}\n"
                     f"Workers: {{workers}}.")
 
@@ -375,6 +377,7 @@ class RegistryManager:
             self._status[registry_key]['finished'] = q_finished
             self._status[registry_key]['total'] = q_total
             self._status[registry_key]['workers'] = q_workers
+            self._status[registry_key]['done'] = q_finished / q_total * 100
 
             if sum([q_pending, q_running, q_to_write]) == 0:
                 self.complete_queue(registry_key)
