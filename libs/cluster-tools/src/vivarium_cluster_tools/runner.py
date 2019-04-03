@@ -278,6 +278,8 @@ class RegistryManager:
                 break
             except redis.exceptions.ConnectionError:
                 self.sleep_on_it(registry_key)
+            except KeyError:
+                logger.exception(f'Queue {registry_key} already complete or failed.')
 
         if finished_jobs is None:
             self.abandon_queue(registry_key)
@@ -307,6 +309,8 @@ class RegistryManager:
                 break
             except redis.exceptions.ConnectionError:
                 self.sleep_on_it(registry_key)
+            except KeyError:
+                logger.exception(f'Queue {registry_key} already complete or failed.')
 
         if job is None:
             self.abandon_queue(registry_key)
@@ -342,7 +346,7 @@ class RegistryManager:
                 (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
             )
         except IndexError:
-            logger.warning("Guess redis cleans up after itself?")
+            logger.exception("Guess redis cleans up after itself?")
 
     def complete_queue(self, registry_key):
         logger.info(f'All jobs on queue {registry_key} complete.')
@@ -352,7 +356,7 @@ class RegistryManager:
                 (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
             )
         except IndexError:
-            logger.warning("Guess redis cleans up after itself?")
+            logger.exception("Guess redis cleans up after itself?")
 
     def update_and_report(self, registry_key=None):
         if registry_key is not None:
