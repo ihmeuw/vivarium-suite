@@ -78,7 +78,7 @@ contains nested mappings, this is valid YAML syntax and it relies on whitespace 
 
     {configuration: {
         population: {
-            population_size : 1000,
+            population_size: 1000,
             age_start: 0,
             age_end: 30
             }
@@ -88,18 +88,15 @@ contains nested mappings, this is valid YAML syntax and it relies on whitespace 
 Lists
 -----
 
-A list is formed using a hyphen ``-`` in block format, with each entry appearing on a new line with the same indentation
-level. For example, below is a configuration snippet that defines a list of years in which a hypothetical drug treatment
+An in-line list in YAML is formed by a comma-separated set of items inside square brackets, similar to a python list.
+For example, below is a YAML configuration snippet that defines a list of years in which a hypothetical drug treatment
 is available in a simulation.
 
 .. code-block:: yaml
 
     configuration:
         drug_treatment:
-            available_years:
-                - 2015
-                - 2016
-                - 2017
+            available_years: [2015, 2016, 2017]
 
 This will be interpreted in python as
 
@@ -111,17 +108,23 @@ This will be interpreted in python as
         }
     }
 
-Lists can also be specified inline in a format that looks just like a ``python`` list. The YAML example below is
+
+You may sometimes see a list in block format, which is also valid YAML syntax. Such a list is formed using a
+hyphen ``-`` and with each entry appearing on a new line with the same indentation level. The YAML example below is
 interpreted equivalently in python to the previous YAML example.
 
 .. code-block:: yaml
 
     configuration:
         drug_treatment:
-            available_years: [2015, 2016, 2017]
+            available_years:
+                - 2015
+                - 2016
+                - 2017
 
 Composite Data
 --------------
 
-Lists and Mappings can be nested together to make more complicated structures. In fact, A Vivarium model specification
-generally takes the form of a set of nested mappings, where some values are lists.
+Lists and Mappings can be nested together to make more complicated structures. In fact, the previous mapping and list
+examples were taken from Vivarium model specifications and included nested mappings and lists. Vivarium model
+specifications will generally always take the form of these nested mappings, where some values are lists.
