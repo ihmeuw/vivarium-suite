@@ -403,19 +403,18 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
     if redis_processes == -1:
         redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
     workers_per_queue = int(math.ceil(len(jobs) / redis_processes))
+    chunked_jobs = chunks(jobs, workers_per_queue)
 
     drmaa_session = drmaa.Session()
     drmaa_session.initialize()
 
     queues = []
     for i in range(redis_processes):
-        queues.append(start_cluster(drmaa_session, workers_per_queue, ctx.peak_memory, ctx.sge_log_directory,
-                                    ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name))
-
-    logger.info('Enqueuing jobs.')
-    job_arguments = {}
-    for job in jobs:
-        for queue in queues:
+        logger.info(f'Enqueuing jobs in queue {i}')
+        queue = start_cluster(drmaa_session, workers_per_queue, ctx.peak_memory, ctx.sge_log_directory,
+                              ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name)
+        queue_jobs = next(chunked_jobs)
+        for job in queue_jobs:
             # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
             # will take from model to model and the entire system is short lived anyway
             key = queue.enqueue('vivarium_cluster_tools.distributed_worker.worker',
@@ -423,7 +422,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
                                 ttl=60 * 60 * 24 * 2,
                                 result_ttl=60 * 60,
                                 timeout='7d').id
-            job_arguments[key] = job
+        queues.append(queue)
 
     process_job_results(queues, ctx)
 
