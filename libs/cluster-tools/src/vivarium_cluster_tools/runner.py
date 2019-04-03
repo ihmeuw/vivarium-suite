@@ -259,6 +259,7 @@ def get_result(job_id, job):
 
 
 def process_job_results(queues, ctx):
+
     start_time = time()
 
     if ctx.existing_outputs is not None:
@@ -267,6 +268,7 @@ def process_job_results(queues, ctx):
         results = pd.DataFrame()
 
     registries = []
+    logger.info('Building registries.')
     for queue in queues:
         registries.append(
             (queue,
@@ -275,44 +277,58 @@ def process_job_results(queues, ctx):
         )
 
     heartbeat = 0
+    logger.info('Entering main processing loop.')
     while sum([len(registry[0]) + len(registry[1]) for registry in registries]) > 0:
         sleep(5)
-        finished_jobs = [(queue, finished_registry, job_id) for queue, __, finished_registry in registries
-                         for job_id in finished_registry.get_job_ids()]
+        waiting_jobs = 0
+        running_jobs = 0
+        failed_jobs = 0
+        finished_jobs = 0
+        for j, (queue, wip_registry, finished_registry) in registries:
+            logger.info(f'Checking queue {j}')
+            finished_jobs = finished_registry.get_job_ids()
 
-        chunk_size = 10
-        # We batch, enumerate and log progress below to prevent broken pipes from long periods of
-        # inactivity while things are processed.
-        for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
-            chunk_results = []
-            dirty = False
-            for queue, finished_registry, job_id in finished_jobs_chunk:
-                job = get_job(queue, job_id)
-                result = get_result(job_id, job)
-                if result is not None:
-                    chunk_results.append(result)
-                    dirty = True
-                    finished_registry.remove(job)
+            chunk_size = 10
+            # We batch, enumerate and log progress below to prevent broken pipes from long periods of
+            # inactivity while things are processed.
+            for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
+                chunk_results = []
+                dirty = False
+                for job_id in finished_jobs_chunk:
+                    job = get_job(queue, job_id)
+                    result = get_result(job_id, job)
+                    if result is not None:
+                        chunk_results.append(result)
+                        dirty = True
+                        finished_registry.remove(job)
 
-            if dirty:
-                start = time()
-                results = pd.concat([results] + chunk_results, axis=0)
-                end = time()
-                logger.info(f"\t\tConcatenated batch in {end - start:.4f}")
+                if dirty:
+                    start = time()
+                    results = pd.concat([results] + chunk_results, axis=0)
+                    end = time()
+                    logger.info(f"\t\tConcatenated batch in {end - start:.4f}")
 
-                start = end
-                ctx.results_writer.write_output(results, 'output.hdf')
-                end = time()
-                logger.info(f"\t\tWrote chunk to output.hdf in {end - start:.4f}")
-                logger.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
-                            f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
+                    start = end
+                    ctx.results_writer.write_output(results, 'output.hdf')
+                    end = time()
+                    logger.info(f"\t\tWrote chunk to output.hdf in {end - start:.4f}")
+                    logger.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
+                                f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
 
-        # TODO: Sometimes there are duplicate job_ids, why?
-        waiting_jobs = sum([len(set(queue.job_ids)) for queue, _, __ in registries])
-        running_jobs = sum([len(wip_registry) for _, wip_registry, __ in registries])
-        failed_jobs = sum([len(get_failed_queue(queue)) for queue, _, __ in registries])
-        finished_jobs = (len(results) - ctx.number_already_completed
-                         + sum([len(finished_registry) for _, __, finished_registry in registries]))
+            # TODO: Sometimes there are duplicate job_ids, why?
+            q_pending = len(set(queue.job_ids))
+            q_running = len(wip_registry)
+            q_failed = len(get_failed_queue(queue))
+            q_finished = len(finished_registry)
+            logger.info(f'Pending in queue {j}: {q_pending}')
+            logger.info(f'Running in queue {j}: {q_running}')
+            logger.info(f'Failed in queue {j}: {q_failed}')
+            logger.info(f'Finished in queue {j}: {q_finished}')
+
+            waiting_jobs += q_pending
+            running_jobs += q_running
+            failed_jobs += q_failed
+            finished_jobs += q_finished
 
         percent_complete = 100 * finished_jobs / (waiting_jobs + running_jobs + finished_jobs + failed_jobs)
         elapsed_time = time() - start_time
@@ -396,6 +412,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
         queues.append(start_cluster(drmaa_session, workers_per_queue, ctx.peak_memory, ctx.sge_log_directory,
                                     ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name))
 
+    logger.info('Enqueuing jobs.')
     job_arguments = {}
     for job in jobs:
         for queue in queues:
