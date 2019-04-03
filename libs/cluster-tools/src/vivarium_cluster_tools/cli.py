@@ -26,7 +26,8 @@ def psimulate():
               help='The estimated maximum memory usage in GB of an individual simulate job. The simulations will be '
                    'run with this as a limit.')
 @click.option('--pdb', 'with_debugger', is_flag=True, help='Drop into python debugger if an error occurs.')
-def run(simulation_configuration, branch_configuration, result_directory, project, peak_memory, with_debugger):
+@click.option('--redis', type=int, default=-1)
+def run(simulation_configuration, branch_configuration, result_directory, project, peak_memory, with_debugger, redis):
     """Run a parallel simulation. The simulation itself is defined by a SIMULATION_CONFIGURATION yaml file
     and the parameter changes across runs are defined by a BRANCH_CONFIGURATION yaml file.
 
@@ -38,7 +39,8 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
     /share/scratch/users/{$USER}/vivarium_results."""
     try:
         utilities.configure_master_process_logging_to_terminal()
-        runner.main(simulation_configuration, branch_configuration, result_directory, project, peak_memory)
+        runner.main(simulation_configuration, branch_configuration, result_directory, project, peak_memory,
+                    redis_processes=reds)
     except (BdbQuit, KeyboardInterrupt):
         raise
     except Exception as e:
@@ -61,13 +63,14 @@ def run(simulation_configuration, branch_configuration, result_directory, projec
               help='The estimated maximum memory usage of an individual simulate job. The simulations will be run '
                    'with this as a limit.')
 @click.option('--pdb', 'with_debugger', is_flag=True, help='Drop into python debugger if an error occurs.')
-def restart(results_root, project, peak_memory, with_debugger):
+@click.option('--redis', type=int, default=-1)
+def restart(results_root, project, peak_memory, with_debugger, redis):
     """Restart a parallel simulation defined by a results directory RESULTS_ROOT. Restarting will not erase existing
     results, but will start workers to perform the remaining simulations.  RESULTS_ROOT is expected to be an output
     directory from a previous `psimulate run`."""
     try:
         utilities.configure_master_process_logging_to_terminal()
-        runner.main(None, None, results_root, project, peak_memory, restart=True)
+        runner.main(None, None, results_root, project, peak_memory, redis_processes=redis, restart=True)
     except (BdbQuit, KeyboardInterrupt):
         raise
     except Exception as e:

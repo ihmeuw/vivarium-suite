@@ -1,5 +1,6 @@
 import os
 import atexit
+import math
 import tempfile
 import shutil
 import socket
@@ -33,7 +34,7 @@ from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path
 
 from vivarium_cluster_tools.branches import Keyspace
 from vivarium_cluster_tools.distributed_worker import ResilientWorker
-from vivarium_cluster_tools import utilities
+from vivarium_cluster_tools import utilities, globals as vtc_globals
 
 
 def init_job_template(jt, peak_memory, broker_url, sge_log_directory, worker_log_directory, project, job_name):
@@ -229,7 +230,37 @@ def build_job_list(ctx):
     return jobs
 
 
-def process_job_results(job_arguments, queue, ctx):
+def get_job(queue, job_id):
+    start = time()
+    retries = 0
+    while retries < 10:
+        try:
+            job = queue.fetch_job(job_id)
+            end = time()
+            logger.info(f'\t\tfetched job in {end - start:.4f}')
+            return job
+        except redis.exceptions.ConnectionError:
+            backoff = random.random() * 60
+            logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
+            retries += 1
+            sleep(backoff)
+    return None
+
+
+def get_result(job_id, job):
+    if job is None:
+        logger.error(f'Redis dropped job {job_id}')
+        result = None
+    else:
+        start = time()
+        result = pd.read_msgpack(job.result[0])
+        end = time()
+        logger.info(f'\t\tread from msgpack in {end - start:.4f}')
+    return result
+
+
+
+def process_job_results(queues, ctx):
     start_time = time()
 
     if ctx.existing_outputs is not None:
@@ -237,41 +268,33 @@ def process_job_results(job_arguments, queue, ctx):
     else:
         results = pd.DataFrame()
 
-    finished_registry = FinishedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class)
-    wip_registry = StartedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class)
+    registries = []
+    for queue in queues:
+        registries.append(
+            (queue,
+             StartedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class),
+             FinishedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class))
+        )
 
     heartbeat = 0
-    while (len(queue) + len(wip_registry)) > 0:
+    while sum([len(registry[0]) + len(registry[1]) for registry in registries]) > 0:
         sleep(5)
-        finished_jobs = finished_registry.get_job_ids()
+        finished_jobs = [(queue, finished_registry, job_id) for queue, __, finished_registry in registries
+                         for job_id in finished_registry.get_job_ids()]
 
         chunk_size = 10
-
         # We batch, enumerate and log progress below to prevent broken pipes from long periods of
         # inactivity while things are processed.
         for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
             chunk_results = []
             dirty = False
-            for job_id in finished_jobs_chunk:
-                start = time()
-                retries = 0
-                while retries < 10:
-                    try:
-                        job = queue.fetch_job(job_id)
-                    except redis.exceptions.ConnectionError:
-                        backoff = random.random()*60
-                        logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
-                        retries += 1
-                        sleep(backoff)
-                end = time()
-                logger.info(f'\t\tfetched job in {end - start:.4f}')
-                start = end
-                result = pd.read_msgpack(job.result[0])
-                end = time()
-                logger.info(f'\t\tread from msgpack in {end - start:.4f}')
-                chunk_results.append(result)
-                dirty = True
-                finished_registry.remove(job)
+            for queue, finished_registry, job_id in finished_jobs_chunk:
+                job = get_job(queue, job_id)
+                result = get_result(job_id, job)
+                if result is not None:
+                    chunk_results.append(result)
+                    dirty = True
+                    finished_registry.remove(job)
 
             if dirty:
                 start = time()
@@ -286,13 +309,12 @@ def process_job_results(job_arguments, queue, ctx):
                 logger.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
                             f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
 
-        fail_queue = get_failed_queue(queue.connection)
-
         # TODO: Sometimes there are duplicate job_ids, why?
-        waiting_jobs = len(set(queue.job_ids))
-        running_jobs = len(wip_registry)
-        finished_jobs = len(finished_registry) + len(results) - ctx.number_already_completed
-        failed_jobs = len(fail_queue)
+        waiting_jobs = sum([len(set(queue.job_ids)) for queue, _, __ in registries])
+        running_jobs = sum([len(wip_registry) for _, wip_registry, __ in registries])
+        failed_jobs = sum([len(get_failed_queue(queue)) for queue, _, __ in registries])
+        finished_jobs = (len(results) - ctx.number_already_completed
+                         + sum([len(finished_registry) for _, __, finished_registry in registries]))
 
         percent_complete = 100 * finished_jobs / (waiting_jobs + running_jobs + finished_jobs + failed_jobs)
         elapsed_time = time() - start_time
@@ -305,7 +327,7 @@ def process_job_results(job_arguments, queue, ctx):
 
         # display run info, and a "heartbeat"
         heartbeat = (heartbeat + 1) % 4
-        worker_count = len(ResilientWorker.all(queue=queue))
+        worker_count = sum([len(ResilientWorker.all(queue=queue)) for queue, _, __ in registries])
         logger.info(f'{finished_jobs + ctx.number_already_completed} completed and {failed_jobs} '
                     f'failed of {waiting_jobs + running_jobs + finished_jobs + failed_jobs + ctx.number_already_completed} '
                     f'({percent_complete:.1f}% completed)' +
@@ -339,7 +361,7 @@ def check_user_sge_config():
                                    "with the worker logs.")
 
 
-def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory,
+def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, redis_processes,
          copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False):
 
     output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
@@ -365,20 +387,29 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
     logger.info('Starting jobs. Results will be written to: {}'.format(ctx.results_writer.results_root))
 
     num_workers = len(jobs)
+
     drmaa_session = drmaa.Session()
     drmaa_session.initialize()
 
-    queue = start_cluster(drmaa_session, num_workers, ctx.peak_memory, ctx.sge_log_directory,
-                          ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name)
+    if redis_processes == -1:
+        redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
+    queues = []
+    for i in range(redis_processes):
+        queues.append(start_cluster(drmaa_session, num_workers, ctx.peak_memory, ctx.sge_log_directory,
+                                    ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name))
 
-    # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
-    # will take from model to model and the entire system is short lived anyway
-    job_arguments = {queue.enqueue('vivarium_cluster_tools.distributed_worker.worker',
-                                   parameters=job,
-                                   ttl=60 * 60 * 24 * 2,
-                                   result_ttl=60 * 60,
-                                   timeout='7d').id: job for job in jobs}
+    job_arguments = {}
+    for job in jobs:
+        for queue in queues:
+            # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
+            # will take from model to model and the entire system is short lived anyway
+            key = queue.enqueue('vivarium_cluster_tools.distributed_worker.worker',
+                                parameters=job,
+                                ttl=60 * 60 * 24 * 2,
+                                result_ttl=60 * 60,
+                                timeout='7d').id
+            job_arguments[key] = job
 
-    process_job_results(job_arguments, queue, ctx)
+    process_job_results(queues, ctx)
 
     logger.info('Jobs completed. Results written to: {}'.format(ctx.results_writer.results_root))
