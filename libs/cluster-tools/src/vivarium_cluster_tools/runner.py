@@ -347,7 +347,7 @@ class RegistryManager:
             self._failed.append(
                 (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
             )
-        except IndexError:
+        except (IndexError, KeyError):
             logger.exception("Guess redis cleans up after itself?")
 
     def complete_queue(self, registry_key):
@@ -357,7 +357,7 @@ class RegistryManager:
             self._completed.append(
                 (self._queues.pop(registry_key), self._finished.pop(registry_key), self._failed.pop(registry_key))
             )
-        except IndexError:
+        except (IndexError, KeyError:)
             logger.exception("Guess redis cleans up after itself?")
 
     def update_and_report(self, registry_key=None):
