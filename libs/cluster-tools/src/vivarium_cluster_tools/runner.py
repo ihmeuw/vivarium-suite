@@ -121,6 +121,9 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
                     # This is the case where all our workers have already shut down
                     # on their own, which isn't actually an error.
                     pass
+                elif 'Discontinued delete' in str(e):
+                    # sge has already cleaned up some of the jobs.
+                    pass
                 else:
                     raise
 
@@ -139,7 +142,7 @@ class RunContext:
         self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
         self.results_writer = ResultsWriter(arguments.result_directory)
-        self.job_name = Path(arguments.result_directory).parts[-2]  # The model specification name.
+        self.job_name = Path(arguments.result_directory).resolve().parts[-2]  # The model specification name.
 
         if arguments.restart:
             self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
