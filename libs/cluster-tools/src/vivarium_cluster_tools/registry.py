@@ -22,7 +22,7 @@ class QueueManager:
         self._name = name
         self._logger = logger.bind(queue=name)
 
-        self._queue = rq.Queue(name, connection)
+        self._queue = rq.Queue(name, connection=connection)
         self._wip = StartedJobRegistry(name, connection=connection, job_class=self._queue.job_class)
         self._finished = FinishedJobRegistry(name, connection=connection, job_class=self._queue.job_class)
 
