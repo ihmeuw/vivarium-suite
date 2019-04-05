@@ -256,7 +256,15 @@ def process_job_results(registry_manager, ctx):
                 logger.info(f"Concatenated {len(result_batch)} results in {end - start:.2f}s.")
 
                 start = end
-                ctx.results_writer.write_output(results, 'output.hdf')
+                retries = 3
+                while retries:
+                    try:
+                        ctx.results_writer.write_output(results, 'output.hdf')
+                        break
+                    except Exception as e:
+                        logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
+                        sleep(30)
+                        retries -= 1
                 end = time()
                 logger.info(f"Updated output.hdf in {end - start:.4f}s.")
 
@@ -312,7 +320,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
 
     worker_template, redis_ports = launch_redis_processes(redis_processes)
     worker_file = output_directory / 'settings.py'
-    with worker_file.open('r') as f:
+    with worker_file.open('w') as f:
         f.write(worker_template)
 
     registry_manager = RegistryManager(redis_ports, ctx.number_already_completed)
