@@ -3,6 +3,7 @@ import math
 import os
 from pathlib import Path
 import sys
+import time
 
 from loguru import logger
 
@@ -69,3 +70,9 @@ def get_uge_specification(peak_memory, project, job_name):
         preamble += f' -P {project}'
 
     return preamble
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
