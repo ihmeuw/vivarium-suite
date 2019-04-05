@@ -246,7 +246,7 @@ def process_job_results(registry_manager, ctx):
         results = pd.DataFrame()
 
     logger.info('Entering main processing loop.')
-    while registry_manager.jobs_to_finish():
+    while registry_manager.jobs_to_finish:
         sleep(5)
         for result_batch in registry_manager.get_batch_results():
             if result_batch:  # Redis might have fallen over, in which case this is empty.
