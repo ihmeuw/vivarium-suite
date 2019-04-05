@@ -81,6 +81,7 @@ class QueueManager:
 
     def _update_status(self):
         if self.jobs_to_finish and self._retries > 0:
+            self._logger.info(f'Updating status for queue {self.name}')
             # TODO: Sometimes there are duplicate job_ids, why?
             try:
                 q_pending = len(set(self._queue.job_ids)) if self._queue else 0
