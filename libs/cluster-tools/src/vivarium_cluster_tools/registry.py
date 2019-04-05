@@ -22,9 +22,9 @@ class QueueManager:
         self._name = name
         self._logger = logger.bind(queue=name)
 
-        self._queue = rq.Queue(name, connection=connection)
-        self._wip = StartedJobRegistry(name, connection=connection, job_class=self._queue.job_class)
-        self._finished = FinishedJobRegistry(name, connection=connection, job_class=self._queue.job_class)
+        self._queue = rq.Queue('vivarium', connection=connection)
+        self._wip = StartedJobRegistry('vivarium', connection=connection, job_class=self._queue.job_class)
+        self._finished = FinishedJobRegistry('vivarium', connection=connection, job_class=self._queue.job_class)
 
         self._status = {'total': 0, 'pending': 0, 'running': 0, 'failed': 0, 'finished': 0, 'done': 0., 'workers': 0}
         self._failed = False
