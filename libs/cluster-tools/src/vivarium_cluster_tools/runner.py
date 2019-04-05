@@ -38,13 +38,14 @@ from vivarium_cluster_tools.distributed_worker import ResilientWorker
 from vivarium_cluster_tools import utilities, globals as vtc_globals
 
 
-def init_job_template(jt, peak_memory, broker_url, sge_log_directory, worker_log_directory, project, job_name):
+def init_job_template(jt, peak_memory, sge_log_directory, worker_log_directory,
+                      project, job_name, worker_settings_file):
     launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
                                            suffix='.sh', delete=False)
     atexit.register(lambda: os.remove(launcher.name))
     launcher.write(f'''
     export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
-    {shutil.which('rq')} worker --url {broker_url} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
+    {shutil.which('rq')} worker -c {worker_settings_file.resolve()} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
 
     ''')
     launcher.close()
@@ -91,17 +92,31 @@ def launch_redis(port):
     return redis_process
 
 
-def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, worker_log_directory, project,
-                  job_name="ceam"):
+def launch_redis_processes(num_processes):
     hostname = socket.getfqdn()
-    port = get_random_free_port()
-    logger.info(f'Starting Redis Broker at {hostname}:{port}')
-    broker_process = launch_redis(port)
-    broker_url = 'redis://{}:{}'.format(hostname, port)
+    redis_ports = []
+    for i in range(num_processes):
+        port = get_random_free_port()
+        logger.info(f'Starting Redis Broker at {hostname}:{port}')
+        launch_redis(port)
+        redis_ports.append((hostname, port))
 
+    redis_urls = [f'redis://{hostname}:{port}' for hostname, port in redis_ports]
+    worker_config = f"""
+    import random
+
+    redis_urls = {redis_urls}
+
+    REDIS_URL = random.choice(redis_urls)
+    """
+    return worker_config, redis_ports
+
+
+def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, worker_log_directory,
+                  project, worker_settings_file, redis_ports, job_name="ceam"):
     s = drmaa_session
-    jt = init_job_template(s.createJobTemplate(), peak_memory, broker_url, sge_log_directory,
-                           worker_log_directory, project, job_name)
+    jt = init_job_template(s.createJobTemplate(), peak_memory, sge_log_directory,
+                           worker_log_directory, project, job_name, worker_settings_file)
     if num_workers:
         job_ids = s.runBulkJobs(jt, 1, num_workers, 1)
         array_job_id = job_ids[0].split('.')[0]
@@ -129,8 +144,7 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
 
         atexit.register(kill_jobs)
 
-    queue = Queue('vivarium', connection=redis.Redis(hostname, port))
-    return queue
+    return [Queue('vivarium', connection=redis.Redis(hostname, port)) for hostname, port in redis_ports]
 
 
 class RunContext:
@@ -505,17 +519,23 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
 
     if redis_processes == -1:
         redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
+
+    worker_template, redis_ports = launch_redis_processes(redis_processes)
+    worker_file = output_directory / 'settings.py'
+    with worker_file.open('r') as f:
+        f.write(worker_template)
+
     workers_per_queue = int(math.ceil(len(jobs) / redis_processes))
     chunked_jobs = chunks(jobs, workers_per_queue)
 
     drmaa_session = drmaa.Session()
     drmaa_session.initialize()
 
-    queues = []
-    for i in range(redis_processes):
+    queues = start_cluster(drmaa_session, len(jobs), ctx.peak_memory, ctx.sge_log_directory, ctx.worker_log_directory,
+                           project, worker_file, redis_ports, ctx.job_name)
+
+    for i, queue in enumerate(queues):
         logger.info(f'Enqueuing jobs in queue {i}')
-        queue = start_cluster(drmaa_session, workers_per_queue, ctx.peak_memory, ctx.sge_log_directory,
-                              ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name)
         queue_jobs = next(chunked_jobs)
         for job in queue_jobs:
             # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
@@ -525,7 +545,6 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
                           ttl=60 * 60 * 24 * 2,
                           result_ttl=60 * 60,
                           timeout='7d')
-        queues.append(queue)
 
     process_job_results(queues, ctx)
 
