@@ -105,13 +105,7 @@ def launch_redis_processes(num_processes):
         redis_ports.append((hostname, port))
 
     redis_urls = [f'redis://{hostname}:{port}' for hostname, port in redis_ports]
-    worker_config = f"""
-    import random
-
-    redis_urls = {redis_urls}
-
-    REDIS_URL = random.choice(redis_urls)
-    """
+    worker_config = f"import random\nredis_urls = {redis_urls}\nREDIS_URL = random.choice(redis_urls)\n\n"
     return worker_config, redis_ports
 
 
