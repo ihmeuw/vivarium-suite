@@ -183,7 +183,7 @@ class RegistryManager:
     def __init__(self, redis_processes, already_completed):
         self._logger = logger.bind(queue='all')
         self._logger.info('Building registries.')
-        self._queues = [QueueManager(f'vivarium_queue_{i}', connection=redis.Redis(hostname, port))
+        self._queues = [QueueManager(i, connection=redis.Redis(hostname, port))
                         for i, (hostname, port) in enumerate(redis_processes)]
         self._previously_completed = already_completed
 
