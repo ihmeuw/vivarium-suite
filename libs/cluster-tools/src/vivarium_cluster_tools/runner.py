@@ -248,7 +248,7 @@ def concat_results(old_results, new_results):
         columns = new_results[0].columns
         results = pd.DataFrame(data=np.concatenate([d.reset_index(drop=True).values for d in new_results]),
                                columns=columns)
-    results = results.set_index(['input_draw', 'random_seed'])
+    results = results.set_index(['input_draw', 'random_seed'], drop=False)
     results.index.names = ['input_draw_number', 'random_seed']
     return results
 
