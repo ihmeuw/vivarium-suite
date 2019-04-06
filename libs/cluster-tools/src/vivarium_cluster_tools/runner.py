@@ -255,6 +255,27 @@ def concat_results(old_results, new_results):
     return results
 
 
+def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
+    new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
+    results_to_write = concat_results(written_results, new_results_to_write)
+    start = time()
+    retries = 3
+    while retries:
+        try:
+            ctx.results_writer.write_output(results_to_write, 'output.hdf')
+            break
+        except Exception as e:
+            logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
+            sleep(30)
+            retries -= 1
+    end = time()
+    logger.info(f"Updated output.hdf in {end - start:.4f}s.")
+    return results_to_write, unwritten_results
+
+
+
+
+
 def process_job_results(registry_manager, ctx):
     start_time = time()
 
@@ -262,35 +283,25 @@ def process_job_results(registry_manager, ctx):
         written_results = ctx.existing_outputs
     else:
         written_results = pd.DataFrame()
-
-    batch_write_size = 50
     unwritten_results = []
+
     logger.info('Entering main processing loop.')
-    while registry_manager.jobs_to_finish or unwritten_results:
+    while registry_manager.jobs_to_finish:
         sleep(5)
         unwritten_results.extend(registry_manager.get_results())
         if unwritten_results:
-            results_to_write, unwritten_results = (unwritten_results[:batch_write_size],
-                                                   unwritten_results[batch_write_size:])
-
-            written_results = concat_results(written_results, results_to_write)
-
-            start = time()
-            retries = 3
-            while retries:
-                try:
-                    ctx.results_writer.write_output(written_results, 'output.hdf')
-                    break
-                except Exception as e:
-                    logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
-                    sleep(30)
-                    retries -= 1
-            end = time()
-            logger.info(f"Updated output.hdf in {end - start:.4f}s.")
+            written_results, unwritten_results = write_results_batch(ctx, written_results, unwritten_results)
 
         registry_manager.update_and_report()
         logger.info(f'Unwritten results: {len(unwritten_results)}')
         logger.info(f'Elapsed time: {(time() - start_time)/60:.1f} minutes.')
+
+    while unwritten_results:
+        written_results, unwritten_results = write_results_batch(ctx, written_results, unwritten_results,
+                                                                 batch_size=100)
+        logger.info(f'Unwritten results: {len(unwritten_results)}')
+        logger.info(f'Elapsed time: {(time() - start_time) / 60:.1f} minutes.')
+
 
 
 def check_user_sge_config():

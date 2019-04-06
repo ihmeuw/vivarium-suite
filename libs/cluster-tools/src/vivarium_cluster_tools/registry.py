@@ -77,7 +77,8 @@ class QueueManager:
         template = (f"Queue {self.name} - Total jobs: {{total}}, % Done: {{done:.2f}}% "
                     f"Pending: {{pending}}, Running: {{running}}, Failed: {{failed}}, Finished: {{finished}} "
                     f"Workers: {{workers}}.")
-        self._logger.info(template.format(**self._status))
+        if not (self.completed or self.failed):
+            self._logger.info(template.format(**self._status))
         return self._status
 
     def _update_status(self):
