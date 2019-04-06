@@ -242,14 +242,13 @@ def concat_results(old_results, new_results):
 
     if not old_results.empty:
         old_results = old_results.reset_index()
-        results = pd.DataFrame(data=np.concatenate([d.reset_index().values for d in new_results]
-                                                   + [old_results.values]),
-                               columns=old_results.columns).set_index(['input_draw_number', 'random_seed'])
+        results = pd.DataFrame(data=np.concatenate([d.values for d in new_results] + [old_results.values]),
+                               columns=old_results.columns)
     else:
-        columns = new_results[0].reset_index().columns
+        columns = new_results[0].columns
         results = pd.DataFrame(data=np.concatenate([d.reset_index().values for d in new_results]), columns=columns)
 
-    return results
+    return results.set_index(['input_draw_number', 'random_seed'])
 
 
 def process_job_results(registry_manager, ctx):
