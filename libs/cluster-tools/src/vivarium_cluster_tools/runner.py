@@ -266,7 +266,7 @@ def process_job_results(registry_manager, ctx):
     batch_write_size = 50
     unwritten_results = []
     logger.info('Entering main processing loop.')
-    while registry_manager.jobs_to_finish:
+    while registry_manager.jobs_to_finish or unwritten_results:
         sleep(5)
         unwritten_results.extend(registry_manager.get_results())
         if unwritten_results:
@@ -289,6 +289,7 @@ def process_job_results(registry_manager, ctx):
             logger.info(f"Updated output.hdf in {end - start:.4f}s.")
 
         registry_manager.update_and_report()
+        logger.info(f'Unwritten results: {len(unwritten_results)}')
         logger.info(f'Elapsed time: {(time() - start_time)/60:.1f} minutes.')
 
 
