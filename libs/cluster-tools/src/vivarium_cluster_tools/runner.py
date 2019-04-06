@@ -239,7 +239,7 @@ def build_job_list(ctx):
 
 def concat_results(old_results, new_results):
     # Skips all the pandas index checking because columns are in the same order.
-
+    start = time()
     if not old_results.empty:
         old_results = old_results.reset_index(drop=True)
         results = pd.DataFrame(data=np.concatenate([d.values for d in new_results] + [old_results.values]),
@@ -250,6 +250,8 @@ def concat_results(old_results, new_results):
                                columns=columns)
     results = results.set_index(['input_draw', 'random_seed'], drop=False)
     results.index.names = ['input_draw_number', 'random_seed']
+    end = time()
+    logger.info(f"Concatenated {len(new_results)} results in {end - start:.2f}s.")
     return results
 
 
@@ -257,25 +259,27 @@ def process_job_results(registry_manager, ctx):
     start_time = time()
 
     if ctx.existing_outputs is not None:
-        results = ctx.existing_outputs
+        written_results = ctx.existing_outputs
     else:
-        results = pd.DataFrame()
+        written_results = pd.DataFrame()
 
+    batch_write_size = 50
+    unwritten_results = []
     logger.info('Entering main processing loop.')
     while registry_manager.jobs_to_finish:
         sleep(5)
-        new_results = registry_manager.get_results()
-        if new_results:
-            start = time()
-            results = concat_results(results, new_results)
-            end = time()
-            logger.info(f"Concatenated {len(new_results)} results in {end - start:.2f}s.")
+        unwritten_results.extend(registry_manager.get_results())
+        if unwritten_results:
+            results_to_write, unwritten_results = (unwritten_results[:batch_write_size],
+                                                   unwritten_results[batch_write_size:])
 
-            start = end
+            written_results = concat_results(written_results, results_to_write)
+
+            start = time()
             retries = 3
             while retries:
                 try:
-                    ctx.results_writer.write_output(results, 'output.hdf')
+                    ctx.results_writer.write_output(written_results, 'output.hdf')
                     break
                 except Exception as e:
                     logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
