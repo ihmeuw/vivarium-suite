@@ -215,7 +215,7 @@ class RegistryManager:
         status['done'] = status['finished'] / status['total'] * 100
         status['finished'] += self._previously_completed
 
-        template = ("Queue all - Total jobs: {total}, % Done: {done}% "
+        template = ("Queue all - Total jobs: {total}, % Done: {done:.2f}% "
                     "Pending: {pending}, Running: {running}, Failed: {failed}, Finished: {finished} "
                     "Workers: {workers}.")
 
