@@ -60,16 +60,15 @@ class QueueManager:
                                 result_ttl=60 * 60,
                                 timeout='7d')
 
-    def get_batch_results(self, batch_size):
+    def get_results(self):
         self._logger.info(f'Checking queue {self.name}')
         finished_jobs = self._get_finished_jobs()
-        for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, batch_size)):
-            chunk_results = []
-            for job_id in finished_jobs_chunk:
-                result = self._get_result(job_id)
-                if result is not None:
-                    chunk_results.append(result)
-            yield chunk_results
+        results = []
+        for job_id in finished_jobs:
+            result = self._get_result(job_id)
+            if result is not None:
+                results.append(result)
+        return results
 
     def update_and_report(self):
         self._update_status()
@@ -124,7 +123,7 @@ class QueueManager:
             start = time.time()
             result = pd.read_msgpack(job.result[0])
             end = time.time()
-            self._logger.info(f'Read {job_id} from msgpack from queue {self.name} in {end - start:.2f}s.')
+            self._logger.debug(f'Read {job_id} from msgpack from queue {self.name} in {end - start:.2f}s.')
             self._status['finished'] += 1
             self._remove_finished_job(job)
         return result
@@ -135,7 +134,7 @@ class QueueManager:
                 start = time.time()
                 job = self._queue.fetch_job(job_id)
                 end = time.time()
-                self._logger.info(f'Fetched job {job_id} from queue {self.name} in {end - start:.2f}s')
+                self._logger.debug(f'Fetched job {job_id} from queue {self.name} in {end - start:.2f}s')
                 return job
             except redis.exceptions.ConnectionError:
                 self._sleep_on_it()
@@ -167,6 +166,7 @@ class QueueManager:
             self._status['failed'] += self._status['pending'] + self._status['running']
             self._status['pending'] = 0
             self._status['running'] = 0
+            self._status['workers'] = 0
             self._failed = True
 
     def _mark_complete(self):
@@ -175,6 +175,7 @@ class QueueManager:
             self._status['finished'] += self._status['pending'] + self._status['running']
             self._status['pending'] = 0
             self._status['running'] = 0
+            self._status['workers'] = 0
             self._completed = True
 
 
@@ -196,11 +197,12 @@ class RegistryManager:
         for queue, jobs_chunk in zip(self._queues, chunks(jobs, workers_per_queue)):
             queue.enqueue(jobs_chunk)
 
-    def get_batch_results(self, batch_size=10):
+    def get_results(self):
         to_check = [q for q in self._queues if q.jobs_to_finish]
+        results = []
         for queue in to_check:
-            for batch in queue.get_batch_results(batch_size):
-                yield batch
+            results.extend(queue.get_results())
+        return results
 
     def update_and_report(self):
         status = defaultdict(int)

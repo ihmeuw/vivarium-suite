@@ -237,6 +237,21 @@ def build_job_list(ctx):
     return jobs
 
 
+def concat_results(old_results, new_results):
+    # Skips all the pandas index checking because columns are in the same order.
+
+    if not old_results.empty:
+        old_results = old_results.reset_index()
+        results = pd.DataFrame(data=np.concatenate([d.reset_index().values for d in new_results]
+                                                   + [old_results.values]),
+                               columns=old_results.columns).set_index(['input_draw_number', 'random_seed'])
+    else:
+        columns = new_results[0].reset_index().columns
+        results = pd.DataFrame(data=np.concatenate([d.reset_index().values for d in new_results]), columns=columns)
+
+    return results
+
+
 def process_job_results(registry_manager, ctx):
     start_time = time()
 
@@ -248,25 +263,25 @@ def process_job_results(registry_manager, ctx):
     logger.info('Entering main processing loop.')
     while registry_manager.jobs_to_finish:
         sleep(5)
-        for result_batch in registry_manager.get_batch_results():
-            if result_batch:  # Redis might have fallen over, in which case this is empty.
-                start = time()
-                results = pd.concat([results] + result_batch, axis=0)
-                end = time()
-                logger.info(f"Concatenated {len(result_batch)} results in {end - start:.2f}s.")
+        new_results = registry_manager.get_results()
+        if new_results:
+            start = time()
+            results = concat_results(results, new_results)
+            end = time()
+            logger.info(f"Concatenated {len(new_results)} results in {end - start:.2f}s.")
 
-                start = end
-                retries = 3
-                while retries:
-                    try:
-                        ctx.results_writer.write_output(results, 'output.hdf')
-                        break
-                    except Exception as e:
-                        logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
-                        sleep(30)
-                        retries -= 1
-                end = time()
-                logger.info(f"Updated output.hdf in {end - start:.4f}s.")
+            start = end
+            retries = 3
+            while retries:
+                try:
+                    ctx.results_writer.write_output(results, 'output.hdf')
+                    break
+                except Exception as e:
+                    logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
+                    sleep(30)
+                    retries -= 1
+            end = time()
+            logger.info(f"Updated output.hdf in {end - start:.4f}s.")
 
         registry_manager.update_and_report()
         logger.info(f'Elapsed time: {(time() - start_time)/60:.1f} minutes.')
