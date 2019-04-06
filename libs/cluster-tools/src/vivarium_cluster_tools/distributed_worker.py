@@ -128,7 +128,7 @@ def worker(parameters: Mapping):
         step_size = pd.Timedelta(days=model_specification.configuration.time.step_size)
         num_steps = int(math.ceil((end_time - start_time)/step_size))
 
-        run_key = {'input_draw_number': input_draw, 'random_seed': random_seed}
+        run_key = {'input_draw': input_draw, 'random_seed': random_seed}
 
         if branch_config is not None:
             model_specification.configuration.update(branch_config)
@@ -165,9 +165,11 @@ def worker(parameters: Mapping):
         logger.info(f'Average step length was {(end - sim_start)/num_steps} seconds.')
         logger.info(f'Total simulation run time {(end - start) / 60} minutes.')
 
+        idx = pd.MultiIndex.from_tuples([(input_draw, random_seed)], names=['input_draw_number', 'random_seed'])
+        output_metrics = pd.DataFrame(metrics, index=idx)
         for k, v in collapse_nested_dict(run_key):
-            metrics[k] = v
-        output = [metrics.to_msgpack()]
+            output_metrics[k] = v
+        output = [output_metrics.to_msgpack()]
         return output
 
     except Exception:

@@ -63,16 +63,18 @@ class QueueManager:
     def get_results(self):
         self._logger.info(f'Checking queue {self.name}')
         finished_jobs = self._get_finished_jobs()
+        start = time.time()
         results = []
         for job_id in finished_jobs:
             result = self._get_result(job_id)
             if result is not None:
                 results.append(result)
+        self._logger.info(f'Retrieved {len(results)} results form queue {self.name} in {time.time() - start:.2f}s')
         return results
 
     def update_and_report(self):
         self._update_status()
-        template = (f"Queue {self.name} - Total jobs: {{total}}, % Done: {{done}}% "
+        template = (f"Queue {self.name} - Total jobs: {{total}}, % Done: {{done:.2f}}% "
                     f"Pending: {{pending}}, Running: {{running}}, Failed: {{failed}}, Finished: {{finished}} "
                     f"Workers: {{workers}}.")
         self._logger.info(template.format(**self._status))
