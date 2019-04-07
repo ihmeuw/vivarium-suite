@@ -107,6 +107,8 @@ class QueueManager:
             except redis.connection.ConnectionError:
                 self._sleep_on_it()
                 self._update_status()
+        else:
+            self._mark_failed()
 
     def _get_finished_jobs(self):
         if self._retries:
