@@ -273,9 +273,6 @@ def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
     return results_to_write, unwritten_results
 
 
-
-
-
 def process_job_results(registry_manager, ctx):
     start_time = time()
 
@@ -286,22 +283,24 @@ def process_job_results(registry_manager, ctx):
     unwritten_results = []
 
     logger.info('Entering main processing loop.')
+    batch_size = 50
     while registry_manager.jobs_to_finish:
         sleep(5)
         unwritten_results.extend(registry_manager.get_results())
-        if unwritten_results:
-            written_results, unwritten_results = write_results_batch(ctx, written_results, unwritten_results)
+        if len(unwritten_results) > batch_size:
+            written_results, unwritten_results = write_results_batch(ctx, written_results,
+                                                                     unwritten_results, batch_size)
 
         registry_manager.update_and_report()
         logger.info(f'Unwritten results: {len(unwritten_results)}')
         logger.info(f'Elapsed time: {(time() - start_time)/60:.1f} minutes.')
 
+    batch_size = 200
     while unwritten_results:
         written_results, unwritten_results = write_results_batch(ctx, written_results, unwritten_results,
-                                                                 batch_size=100)
+                                                                 batch_size=batch_size)
         logger.info(f'Unwritten results: {len(unwritten_results)}')
         logger.info(f'Elapsed time: {(time() - start_time) / 60:.1f} minutes.')
-
 
 
 def check_user_sge_config():
