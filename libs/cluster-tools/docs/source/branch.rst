@@ -15,9 +15,9 @@ this in a convenient way. This section will detail the common ways simulations a
 Uncertainty
 -----------
 
-Generating uncertainty for results is a core tenant of IHME and this is no different for simulation science. We are primarily concerned with two types
-in our models -- uncertainty surrounding the data that goes in to a model and uncertainty due to stochasticity. The branches file can help us
-explore these uncertainties easily by allowing us to vary the input draws from the Global Burden of Disease (GBD) used as well as the random seeds
+Generating uncertainty for results is a core tenant of IHME and this is no different for simulation science. We are primarily concerned with uncertainty
+from two sources in our models -- uncertainty surrounding the data that goes in to a model and uncertainty due to stochasticity. The branches file can help
+us explore these uncertainties easily by allowing us to vary the input draws from the Global Burden of Disease (GBD) used as well as the random seeds
 used by the simulation.
 
 Data Uncertainty
