@@ -1,6 +1,67 @@
-
+=================
 The Branches File
 =================
+
+.. contents::
+    :depth: 2
+    :local:
+    :backlinks: none
+
+When investigating a research question with the Vivarium framework, it usually becomes necessary to vary aspects of a model configuration in order to
+evaluate the uncertainty of model outputs or to explore different scenarios based on model parameters. Without any extra tooling this would require
+manually manipulating the configuration file and re-running for each desired change which would quickly get out of hand. The branches file helps us do
+this in a convenient way. This section will detail the common ways simulations are varied and the different aspects of a branches file that help us do this.
+
+Uncertainty
+-----------
+
+Generating uncertainty for results is a core tenant of IHME and this is no different for simulation science. We are primarily concerned with two types
+of uncertainty in our models -- uncertainty surrounding the parametrization of a model and uncertainty due to stochasticity. The branches file can help us
+explore these uncertainties easily by allowing us to vary the GBD input draws used for a simulation as well as the random seeds used by numpy.
+
+Parameter Uncertainty
+^^^^^^^^^^^^^^^^^^^^^
+Subsection on varying parameter uncertainty with an example branches file with just the input draw count
+
+it is often useful to vary random seeds, draws of input data used from the Global Burden of Disease,
+
+.. note::
+    A draw is a statistical term related to bootstrapping that has a specific meaning in the context of the GBD: for some quantity or measure of interest, a
+    draw is a member of a set a full set of results such that, when taken together, the set of draws describes at least some of the uncertainty surrounding the quantity as a
+    result of the modeling process, data uncertainty, etc. Generally, GBD results are produced in sets of 1000 draws.
+
+Stochastic Uncertainty
+^^^^^^^^^^^^^^^^^^^^^^
+Subsection on varying stochastic uncertainty with an example branches file with just the random seed count
+
+    Note about how varying stochastic uncertainty allows aggregations, effectively letting us increase
+    the sample size for a given input draw. (e.g. 1 sim with 1M people == 100 sims with 10k people).
+    Subsection on varying both at the same time with description on how we arrive at the number of runs and example
+    model spec w/ both input_draw_number and random_seed_count args.
+
+running a simulation with 1M people is conceptually the same as running 100 sims with 10k people. However,  because simulations specified with different
+seeds can be run in parallel this is often preferable.
+
+
+Parameter Variations
+--------------------
+
+Intro: "the branches section defines a set of scenarios. We'll describe a number of ways you might want to construct
+simple or complex scenario specifications..."
+
+Single Parameters variation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Subsection with single parameter variation and example model spec with just the branches key.
+
+Interaction with Uncertainty
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Subsection about how this combines with the input_draw_number/random_seed_count.
+
+Varying Two Scenarios
+^^^^^^^^^^^^^^^^^^^^^
+Subsection with variation of two parameters. Explanation of how this turns into multiple scenarios.
+
+########################################################################################################################
 
 When trying to answer the research questions that drove the construction of a model and a configuration, it is often
 useful to vary parameters of the configuration to simulate different scenarios.  Without any extra tooling, this would
