@@ -22,8 +22,6 @@ used by the simulation.
 
 Data Uncertainty
 ^^^^^^^^^^^^^^^^
-Subsection on varying parameter uncertainty with an example branches file with just the input draw count
-
 Our simulations primarily rely on GBD results which are produced in draws to estimate uncertainty. In order to reflect the GBD's uncertainty surrounding their
 results in our simulations, we generally run simulations with a variety of output draws.
 
@@ -41,8 +39,6 @@ only a mapping that dictates the number of draws to run.
 
 Stochastic Uncertainty
 ^^^^^^^^^^^^^^^^^^^^^^
-Subsection on varying stochastic uncertainty with an example branches file with just the random seed count
-
 Vivarium simulations are probabilistic in nature. They tend to contain distributions that describe quantities rather than singular values. Because of this,
 our models are subject to stochastic uncertainty. To attempt to capture this uncertainty we can run the simulation with a different random seed, which will
 result in different numbers drawn from the underlying pseudo-random number generator, and a different candidate output space. This can be specified in the
