@@ -16,31 +16,59 @@ Uncertainty
 -----------
 
 Generating uncertainty for results is a core tenant of IHME and this is no different for simulation science. We are primarily concerned with two types
-of uncertainty in our models -- uncertainty surrounding the parametrization of a model and uncertainty due to stochasticity. The branches file can help us
-explore these uncertainties easily by allowing us to vary the GBD input draws used for a simulation as well as the random seeds used by numpy.
+in our models -- uncertainty surrounding the data that goes in to a model and uncertainty due to stochasticity. The branches file can help us
+explore these uncertainties easily by allowing us to vary the input draws from the Global Burden of Disease (GBD) used as well as the random seeds
+used by the simulation.
 
-Parameter Uncertainty
-^^^^^^^^^^^^^^^^^^^^^
+Data Uncertainty
+^^^^^^^^^^^^^^^^
 Subsection on varying parameter uncertainty with an example branches file with just the input draw count
 
-it is often useful to vary random seeds, draws of input data used from the Global Burden of Disease,
+Our simulations primarily rely on GBD results which are produced in draws to estimate uncertainty. In order to reflect the GBD's uncertainty surrounding their
+results in our simulations, we generally run simulations with a variety of output draws.
 
 .. note::
     A draw is a statistical term related to bootstrapping that has a specific meaning in the context of the GBD: for some quantity or measure of interest, a
-    draw is a member of a set a full set of results such that, when taken together, the set of draws describes at least some of the uncertainty surrounding the quantity as a
-    result of the modeling process, data uncertainty, etc. Generally, GBD results are produced in sets of 1000 draws.
+    draw is a member of a set a full set of results such that, when taken together, the set of draws describes at least some of the uncertainty surrounding
+    the quantity as a result of the modeling process, data uncertainty, etc. Generally, GBD results are produced in sets of 1000 draws.
+
+To do this, we can use the ``input_draw_count`` key in a branches file. This key specifies an integer that represents the number of different simulations that
+will be run in parallel, each with a different draw of GBD results drawn uniformly from the number available. Below is a very simple branches file, containing
+only a mapping that dictates the number of draws to run.
+
+.. code-block:: yaml
+    input_draw_count: 10
 
 Stochastic Uncertainty
 ^^^^^^^^^^^^^^^^^^^^^^
 Subsection on varying stochastic uncertainty with an example branches file with just the random seed count
+
+Vivarium simulations are probabilistic in nature. They tend to contain distributions that describe quantities rather than singular values. Because of this,
+our models are subject to stochastic uncertainty. To attempt to capture this uncertainty we can run the simulation with a different random seed, which will
+result in different numbers drawn from the underlying pseudo-random number generator, and a different candidate output space. This can be specified in the
+branches file with the ``random_seed_count`` key. This key specifies an integer that represents the number of different random seeds to use, each generated
+randomly and run in a separate simulation.
 
     Note about how varying stochastic uncertainty allows aggregations, effectively letting us increase
     the sample size for a given input draw. (e.g. 1 sim with 1M people == 100 sims with 10k people).
     Subsection on varying both at the same time with description on how we arrive at the number of runs and example
     model spec w/ both input_draw_number and random_seed_count args.
 
-running a simulation with 1M people is conceptually the same as running 100 sims with 10k people. However,  because simulations specified with different
-seeds can be run in parallel this is often preferable.
+.. note::
+    Random seeds are a convenient way to scale up a simulation's population in parallel. For example, running a simulation with one million simulants and a
+    single random seed is equivalent to running the same simulation with ten thousand people and 100 random seeds. However, because simulations specified
+    with different seeds will be run in parallel (link psimulate), this is often prefereable.
+    conceptually the same as
+
+An example of specifying ``random_seed_count`` is below.
+
+.. code-block:: yaml
+    random_seed_count: 100
+
+Combining Draws and Seeds
+^^^^^^^^^^^^^^^^^^^^^^^^^
+Since specifying either draws or seeds will result in multiple simulations being run, it is important to understand how simulation parameters are determined
+when both are specified.
 
 
 Parameter Variations
@@ -48,6 +76,9 @@ Parameter Variations
 
 Intro: "the branches section defines a set of scenarios. We'll describe a number of ways you might want to construct
 simple or complex scenario specifications..."
+
+Varying parameters can be useful both for exploring different scenarios and for evaluating the uncertainty around , or the sensitivity of the simulation to changes
+in parameter values.
 
 Single Parameters variation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -60,6 +91,9 @@ Subsection about how this combines with the input_draw_number/random_seed_count.
 Varying Two Scenarios
 ^^^^^^^^^^^^^^^^^^^^^
 Subsection with variation of two parameters. Explanation of how this turns into multiple scenarios.
+
+Complex Configurations
+^^^^^^^^^^^^^^^^^^^^^^
 
 ########################################################################################################################
 
