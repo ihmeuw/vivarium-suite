@@ -87,38 +87,21 @@ of the 100 GBD draws.
 
 Parameter Variations
 --------------------
+A major function of branches files is to enable easy manipulation of the configuration parameters of a model
+specification to generate different scenarios or examine the sensitivity of a model to changes in a specific parameter.
+In the following sections we will describe a number of ways you can construct different scenarios and the effect on
+the number of simulations these will have.
 
-Intro: "the branches section defines a set of scenarios. We'll describe a number of ways you might want to construct
-simple or complex scenario specifications..."
+.. note::
+    The following examples that alter configuration parameters all lie under a ``branches`` key
 
-Varying parameters can be useful both for exploring different scenarios and for evaluating the uncertainty around , or the sensitivity of the simulation to changes
-in parameter values.
-
-Single Parameters variation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Subsection with single parameter variation and example model spec with just the branches key.
-
-Interaction with Uncertainty
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Subsection about how this combines with the input_draw_number/random_seed_count.
-
-Varying Two Scenarios
-^^^^^^^^^^^^^^^^^^^^^
-Subsection with variation of two parameters. Explanation of how this turns into multiple scenarios.
-
-Complex Configurations
-^^^^^^^^^^^^^^^^^^^^^^
-
-########################################################################################################################
-
-When trying to answer the research questions that drove the construction of a model and a configuration, it is often
-useful to vary parameters of the configuration to simulate different scenarios.  Without any extra tooling, this would
-require manually changing the configuration and re-running, which would quickly get out of hand. The branches file helps
-us do this in a convenient way. For example, let's assume you have defined a model specification that includes a
-dietary intervention of egg supplementation and that this intervention is parameterized by the proportion of the
-population that is recruited and the starting age of recruitment. We may want to run simulations on several different
-proportions like like full recruitment or no recruitment, or try a range of starting ages. We can do that easily with
-the following branches file
+Single Parameter Variation
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+In order to illustrate the variation of a single parameter, let's assume you have defined a model specification file
+that includes a dietary intervention of egg supplementation and that this intervention is parameterized by the
+proportion of the population that is recruited into the intervention program. We may want to run simulations on several
+different proportions including full recruitment and no recruitment, which would function as a baseline. We can easily
+do this with the following branches file.
 
 .. code-block:: yaml
 
@@ -126,36 +109,50 @@ the following branches file
             - egg_intervention:
                     recruitment:
                         proportion: [0.0, 0.4, 0.8, 1.0]
-                    recruitment:
-                        age_start: [0.0, 1.0, 10.0, 20.0, 45.0]
 
-The ``branches`` block specifies changes to values found in the model specification, exactly matching the blocks from
-the specification (underneath the branches block).  Here, the YAML list [0.0, 0.4, 0.8, 1.0] specifies values of
-recruitment proportions we wish to simulate while the list [0.0, 1.0, 10.0, 20.0, 45.0] specifies starting recruitment
-ages. The cartesian product of these parameters is used to define simulations, so this will result in 20 separate
-simulations of the model configuration, one for every combination of recruitment proportion and recruitment age start.
-This is a very convenient way to simulate multiple scenarios with different values.
+The ``branches`` block specifies changes to values found in the model specification YAML, exactly matching the blocks
+from that specification underneath.  Here, the YAML list [0.0, 0.4, 0.8, 1.0] dictates specific recruitment proportions
+to be simulated. Thus, you can expect four separate simulations to be run, one for each.
 
-Additionally, there are two other useful top-level blocks: ``input_draw_count`` and ``random_seed_count``, shown in the
-example below. Note that they lie outside the branches block. ``input_draw_count`` specifies the number of input draws
-from the GBD to run the simulation on, drawn uniformly from the total number of draws GBD produces, 1000.
-``random_seed_count`` specifies the number of different random seeds to run simulations with. Each of these is
-considered in the cartesian product of simulations as well.
+.. warning::
+    Keep in mind when writing your branches file that varying the time step, start or end time, or the population size
+    will make profiling jobs very difficult and runs the risk of breaking our output writing tools.
+
+
+Interaction with Uncertainty
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+As touched upon in the section on :ref:`combining draws and seeds<Combining Draws and Seeds>`, when multiple branch
+configurations would result in multiple simulations, the result is a simulation for every combination, or the cartesian
+product, of the parameters. Let's add draws to our previous branches file and figure out how many simulations it will
+result in.
 
 .. code-block:: yaml
-
-    input_draw_count: 10
-    random_seed_count: 5
+    input_draw_count: 100
 
     branches:
             - egg_intervention:
                     recruitment:
-                        proportion: [0.2, 0.8]
+                        proportion: [0.0, 0.4, 0.8, 1.0]
 
-To make this concrete, let's explicitly calculate how many simulations the above branches file will result in. This is
-given by input_draw_count * random_seed_count * proportions: 10 * 5 * 2 = 100 simulations.
 
-It is important to note that any configuration option that is natively specified as a list can **NOT**
-be used in the branch file.  In other words, Vivarium does not accept a list of lists in a branches specification. Also,
-you should remember that varying the time step, start or end time, or the population size will make profiling jobs very
-difficult and runs the risk of breaking our output writing tools. Keep this in mind when you write a branch file.
+
+Dual Parameter Variation
+^^^^^^^^^^^^^^^^^^^^^^^^
+Branches files really shine when you want to vary a lot of aspects of your model. Let's add another parameter to create
+scenarios along a new dimension. Say, for instance, we were also interested in the implementing the egg intervention
+for people of a certain age. Provided components were available that can implement this,we could add a variety of
+starting ages to our branches file like so:
+
+.. code-block:: yaml
+    input_draw_count: 100
+
+    branches:
+            - egg_intervention:
+                    recruitment:
+                        proportion: [0.0, 0.4, 0.8, 1.0]
+                        age_start: [10.0, 25.0, 45.0, 65.0]
+
+
+Complex Configurations
+^^^^^^^^^^^^^^^^^^^^^^
+TBD
