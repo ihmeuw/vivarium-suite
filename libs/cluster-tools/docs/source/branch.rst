@@ -39,8 +39,8 @@ output draws.
 
 To do this, we can use the ``input_draw_count`` key in a branches file. This key specifies an integer that represents
 the number of different simulations that will be run in parallel, each with a different draw of GBD results drawn
-uniformly from the number available. Below is a very simple branches file, containing only a mapping that dictates the
-number of draws to run.
+uniformly from the number available, which is generally 1,000. Below is a very simple branches file containing only a
+mapping that dictates the number of draws to run.
 
 .. code-block:: yaml
 
