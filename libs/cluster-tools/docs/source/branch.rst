@@ -153,8 +153,8 @@ this,we could add a variety of starting ages to our branches file like so:
                         age_start: [10.0, 25.0, 45.0, 65.0]
 
 This will result in scenarios encompassing every combination of recruitment proportion and starting age. Specifically,
-it will result in 100 separate simulations per combination, one for each randomly sampled draw. This means
-there will be draws * proportions * starting_age simulations, or 1,600 in total.
+it will result in 100 separate simulations per combination, one for each randomly sampled draw. This means the total
+number of simulations is given by draws * proportions * starting age, or 1,600 altogether.
 
 Complex Configurations
 ^^^^^^^^^^^^^^^^^^^^^^
