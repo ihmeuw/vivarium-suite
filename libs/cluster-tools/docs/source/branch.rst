@@ -53,7 +53,7 @@ randomly and run in a separate simulation.
 .. note::
     Random seeds are a convenient way to scale up a simulation's population in parallel. For example, running a simulation with one million simulants and a
     single random seed is equivalent to running the same simulation with ten thousand people and 100 random seeds. However, because simulations specified
-    with different seeds will be run in parallel (link psimulate), this is often prefereable.
+    with different seeds will be run in parallel (link psimulate), this is often preferable.
     conceptually the same as
 
 An example of specifying ``random_seed_count`` is below.
@@ -64,8 +64,15 @@ An example of specifying ``random_seed_count`` is below.
 Combining Draws and Seeds
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 Since specifying either draws or seeds will result in multiple simulations being run, it is important to understand how simulation parameters are determined
-when both are specified.
+when both are specified. The specification of more than one branch configuration that would result in more than one simulation will lead to simulations for the
+cross-product of the the two configuration sets. For example, consider the following model specification.
 
+.. code-block:: yaml
+    input_draw_count: 100
+    random_seed_count: 10
+
+It combines the two configuration keys we just learned about. It will result in one thousand simulations. For each draw of data from GBD, a simulation will be
+run with that data ten times, one for each of ten random seeds.
 
 Parameter Variations
 --------------------
