@@ -140,8 +140,8 @@ Dual Parameter Variation
 ^^^^^^^^^^^^^^^^^^^^^^^^
 Branches files really shine when you want to vary a lot of aspects of your model. Let's add another parameter to create
 scenarios along a new dimension. Say, for instance, we were also interested in the implementing the egg intervention
-for people of a certain age. Provided components were available that can implement this,we could add a variety of
-starting ages to our branches file like so:
+by recruiting people only once they pass a certain age threshold. Provided components were available that can implement
+this,we could add a variety of starting ages to our branches file like so:
 
 .. code-block:: yaml
     input_draw_count: 100
@@ -152,6 +152,9 @@ starting ages to our branches file like so:
                         proportion: [0.0, 0.4, 0.8, 1.0]
                         age_start: [10.0, 25.0, 45.0, 65.0]
 
+This will result in scenarios encompassing every combination of recruitment proportion and starting age. Specifically,
+it will result in 100 separate simulations per combination, one for each randomly sampled draw. This means
+there will be draws * proportions * starting_age simulations, or 1,600 in total.
 
 Complex Configurations
 ^^^^^^^^^^^^^^^^^^^^^^
