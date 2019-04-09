@@ -63,16 +63,18 @@ An example of specifying ``random_seed_count`` is below.
 
 Combining Draws and Seeds
 ^^^^^^^^^^^^^^^^^^^^^^^^^
-Since specifying either draws or seeds will result in multiple simulations being run, it is important to understand how simulation parameters are determined
-when both are specified. The specification of more than one branch configuration that would result in more than one simulation will lead to simulations for the
-cross-product of the the two configuration sets. For example, consider the following model specification.
+Since specifying either draws or seeds will result in multiple simulations being run, it is important to understand how simulation configurations are determined
+when both are specified. The specification of multiple branch configuration that would result in more than one simulation will lead to simulations for the
+cartesian product of the the configuration sets. For example, consider the following model specification.
 
 .. code-block:: yaml
     input_draw_count: 100
     random_seed_count: 10
 
-It combines the two configuration keys we just learned about. It will result in one thousand simulations. For each draw of data from GBD, a simulation will be
-run with that data ten times, one for each of ten random seeds.
+It combines the two configuration keys we just learned about. Taken separately, the ``input_draw_count`` mapping would lead to 100 simulations on 100 random draws
+of input data, while the ``random_seed_count`` mapping would lead to ten simulations on ten randomly generated random seeds. With both specified, the result is one
+thousand total simulations, one for each member of the cartesian product of those sets. That is, ten simulations with the ten random seeds for each of the 100 GBD
+draws.
 
 Parameter Variations
 --------------------
