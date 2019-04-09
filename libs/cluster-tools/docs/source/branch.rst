@@ -115,8 +115,8 @@ from that specification underneath.  Here, the YAML list [0.0, 0.4, 0.8, 1.0] di
 to be simulated. Thus, you can expect four separate simulations to be run, one for each.
 
 .. warning::
-    Keep in mind when writing your branches file that varying the time step, start or end time, or the population size
-    will make profiling jobs very difficult and runs the risk of breaking our output writing tools.
+    Varying the time step, start or end time, or the population size of a simulation will make profiling very difficult
+    and runs the risk of breaking our output writing tools.
 
 
 Interaction with Uncertainty
