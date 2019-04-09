@@ -33,7 +33,7 @@ output draws.
     A draw is a statistical term related to bootstrapping that has a specific meaning in the context of the GBD. The
     implementation details vary, but the purpose is for
 
-    some quantity or measure of interest, a draw is a member of a set a full set of results such that, when taken
+    some quantity or measure of interest, a draw is a member of a full set of results such that, when taken
     together, the set of draws describes at least some of the uncertainty surrounding the quantity as a result of the
     modeling process, data uncertainty, etc. Generally, GBD results are produced in sets of 1000 draws.
 
@@ -71,7 +71,7 @@ Combining Draws and Seeds
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 Since specifying either draws or seeds will result in multiple simulations being run, it is important to understand how
 simulation configurations are determined when both are specified. The specification of multiple branch configurations
-that would result in more than one simulation will lead to simulations for the cartesian product of the the
+that would result in more than one simulation will lead to simulations for the cartesian product of the
 configuration sets. An example may make this clearer, so consider the following model specification.
 
 .. code-block:: yaml
@@ -142,7 +142,7 @@ Dual Parameter Variation
 Branches files really shine when you want to vary a lot of aspects of your model. Let's add another parameter to create
 scenarios along a new dimension. Say, for instance, we were also interested in the implementing the egg intervention
 by recruiting people only once they pass a certain age threshold. Provided components were available that can implement
-this,we could add a variety of starting ages to our branches file like so:
+this, we could add a variety of starting ages to our branches file like so:
 
 .. code-block:: yaml
 
