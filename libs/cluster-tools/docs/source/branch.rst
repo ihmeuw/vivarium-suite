@@ -93,7 +93,7 @@ In the following sections we will describe a number of ways you can construct di
 the number of simulations these will have.
 
 .. note::
-    The following examples that alter configuration parameters all lie under a ``branches`` key
+    The following examples that alter configuration parameters all lie under a ``branches`` key.
 
 Single Parameter Variation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -127,6 +127,7 @@ product, of the parameters. Let's add draws to our previous branches file and fi
 result in.
 
 .. code-block:: yaml
+
     input_draw_count: 100
 
     branches:
@@ -134,7 +135,7 @@ result in.
                     recruitment:
                         proportion: [0.0, 0.4, 0.8, 1.0]
 
-
+This branches file will result in 400 simulations, a set of 100 different draws for each recruitment proportion.
 
 Dual Parameter Variation
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -144,6 +145,7 @@ by recruiting people only once they pass a certain age threshold. Provided compo
 this,we could add a variety of starting ages to our branches file like so:
 
 .. code-block:: yaml
+
     input_draw_count: 100
 
     branches:
@@ -156,6 +158,61 @@ This will result in scenarios encompassing every combination of recruitment prop
 it will result in 100 separate simulations per combination, one for each randomly sampled draw. This means the total
 number of simulations is given by draws * proportions * starting age, or 1,600 altogether.
 
+.. note:: The top-level keys for controlling seeds and draws are the same across branches.
+
 Complex Configurations
 ^^^^^^^^^^^^^^^^^^^^^^
-TBD
+Let's look at a final example with a bit more going on. This branches file alters a model that simulates a Shigellosis
+vaccine intervention parameterized on dose administration ages and dose protection effects.
+
+.. code-block:: yaml
+
+    input_draw_count: 500
+    random_seed_count: 4
+
+    branches:
+            - shigellosis_vaccine:
+                    dose_age_range:
+                            first:
+                                    start: 270
+                                    end: 300
+                            second:
+                                    start: 360
+                                    end: 390
+                            booster:
+                                    start: 450
+                                    end: 480
+                            catchup:
+                                    start: 450
+                                    end: 480
+                    protection:
+                            dose_protection:
+                                    first: 0.0
+                                    second: 0.0
+                                    booster: 0.0
+                                    catchup: 0.0
+            - shigellosis_vaccine:
+                    dose_age_range :
+                            first :
+                                    start: 270
+                                    end: 300
+                            second :
+                                    start: 360
+                                    end: 390
+                            booster :
+                                    start: 450
+                                    end: 480
+                            catchup :
+                                    start: 450
+                                    end: 480
+                    protection:
+                            dose_protection:
+                                    first: 0.7
+                                    second: 1.0
+                                    booster: 0.0
+                                    catchup: 0.0
+
+The :ref:`YAML List<Lists>` underneath the ``branches`` key denotes two different simulation scenario each with a set of
+parameters. Because all of the children of those list entries are singular values, only one simulation is produced for
+each. Since we have additionally specified counts for draws and random seeds, we will run a simulation for each of these
+scenarios, for each combination of random seed and draw. This will result in 4,000 total simulations.
