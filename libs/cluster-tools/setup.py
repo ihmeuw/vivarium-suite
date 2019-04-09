@@ -15,7 +15,8 @@ if __name__ == "__main__":
 
     install_requires = [
         'pandas',
-        'numpy',
+        'numpy<=1.15.4',  # to match VPH
+        'table<=3.4.0',  # to match VPH
         'loguru',
         'pyyaml',
         'drmaa',
