@@ -9,7 +9,7 @@ The Branches File
 
 When investigating a research question with the Vivarium framework, it usually becomes necessary to vary aspects of a
 model configuration in order to evaluate the uncertainty of model outputs or to explore different scenarios based on
-model parameters. Without any extra tooling this would require manually manipulating the configuration file and
+model parameters. Without any extra tooling this would require manually manipulating the model specification file and
 re-running for each desired change which would quickly get out of hand. The branches file helps us do this in a
 convenient way. This section will detail the common ways simulations are varied and the different aspects of a branches
 file that help us do this.
