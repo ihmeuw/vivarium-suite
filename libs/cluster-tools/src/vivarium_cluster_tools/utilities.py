@@ -16,7 +16,9 @@ def configure_master_process_logging_to_terminal():
 
 def configure_master_process_logging_to_file(output_directory):
     master_log = output_directory / 'master.log'
-    logger.add(master_log, level="INFO", serialize=True)
+    serial_log = output_directory / 'master.log.json'
+    logger.add(master_log, level="INFO")
+    logger.add(serial_log, level="INFO", serialize=True)
 
 
 def get_output_directory(model_specification_file=None, output_directory=None, restart=False):
@@ -67,3 +69,9 @@ def get_uge_specification(peak_memory, project, job_name):
         preamble += f' -P {project}'
 
     return preamble
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]

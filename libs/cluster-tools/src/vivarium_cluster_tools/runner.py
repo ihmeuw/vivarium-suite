@@ -1,20 +1,17 @@
 import os
 import atexit
+import math
 import tempfile
 import shutil
 import socket
 import subprocess
 from pathlib import Path
-import random
 from time import sleep, time
 from types import SimpleNamespace
 
 from loguru import logger
 import numpy as np
 import pandas as pd
-import redis
-from rq import Queue, get_failed_queue
-from rq.registry import StartedJobRegistry, FinishedJobRegistry
 
 try:
     import drmaa
@@ -32,18 +29,21 @@ from vivarium.framework.utilities import collapse_nested_dict
 from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path_config
 
 from vivarium_cluster_tools.branches import Keyspace
-from vivarium_cluster_tools.distributed_worker import ResilientWorker
-from vivarium_cluster_tools import utilities
+from vivarium_cluster_tools import utilities, globals as vtc_globals
+from .registry import RegistryManager
 
 
-def init_job_template(jt, peak_memory, broker_url, sge_log_directory, worker_log_directory, project, job_name):
+def init_job_template(jt, peak_memory, sge_log_directory, worker_log_directory,
+                      project, job_name, worker_settings_file):
     launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
                                            suffix='.sh', delete=False)
     atexit.register(lambda: os.remove(launcher.name))
+    output_dir = str(worker_settings_file.resolve().parent)
     launcher.write(f'''
     export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
-    {shutil.which(
-        'rq')} worker --url {broker_url} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
+    export PYTHONPATH={output_dir}:$PYTHONPATH
+    
+    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
 
     ''')
     launcher.close()
@@ -90,17 +90,25 @@ def launch_redis(port):
     return redis_process
 
 
-def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, worker_log_directory, project,
-                  job_name="ceam"):
+def launch_redis_processes(num_processes):
     hostname = socket.getfqdn()
-    port = get_random_free_port()
-    logger.info(f'Starting Redis Broker at {hostname}:{port}')
-    broker_process = launch_redis(port)
-    broker_url = 'redis://{}:{}'.format(hostname, port)
+    redis_ports = []
+    for i in range(num_processes):
+        port = get_random_free_port()
+        logger.info(f'Starting Redis Broker at {hostname}:{port}')
+        launch_redis(port)
+        redis_ports.append((hostname, port))
 
+    redis_urls = [f'redis://{hostname}:{port}' for hostname, port in redis_ports]
+    worker_config = f"import random\nredis_urls = {redis_urls}\nREDIS_URL = random.choice(redis_urls)\n\n"
+    return worker_config, redis_ports
+
+
+def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, worker_log_directory,
+                  project, worker_settings_file, job_name="vivarium"):
     s = drmaa_session
-    jt = init_job_template(s.createJobTemplate(), peak_memory, broker_url, sge_log_directory,
-                           worker_log_directory, project, job_name)
+    jt = init_job_template(s.createJobTemplate(), peak_memory, sge_log_directory,
+                           worker_log_directory, project, job_name, worker_settings_file)
     if num_workers:
         job_ids = s.runBulkJobs(jt, 1, num_workers, 1)
         array_job_id = job_ids[0].split('.')[0]
@@ -120,13 +128,13 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
                     # This is the case where all our workers have already shut down
                     # on their own, which isn't actually an error.
                     pass
+                elif 'Discontinued delete' in str(e):
+                    # sge has already cleaned up some of the jobs.
+                    pass
                 else:
                     raise
 
         atexit.register(kill_jobs)
-
-    queue = Queue('vivarium', connection=redis.Redis(hostname, port))
-    return queue
 
 
 class RunContext:
@@ -137,8 +145,8 @@ class RunContext:
         self.cluster_project = arguments.project
         self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
-        self.job_name = Path(arguments.model_specification_file).stem
         self.results_writer = ResultsWriter(arguments.result_directory)
+        self.job_name = Path(arguments.result_directory).resolve().parts[-2]  # The model specification name.
 
         if arguments.restart:
             self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
@@ -229,96 +237,70 @@ def build_job_list(ctx):
     return jobs
 
 
-def process_job_results(job_arguments, queue, ctx):
+def concat_results(old_results, new_results):
+    # Skips all the pandas index checking because columns are in the same order.
+    start = time()
+    if not old_results.empty:
+        old_results = old_results.reset_index(drop=True)
+        results = pd.DataFrame(data=np.concatenate([d.values for d in new_results] + [old_results.values]),
+                               columns=old_results.columns)
+    else:
+        columns = new_results[0].columns
+        results = pd.DataFrame(data=np.concatenate([d.reset_index(drop=True).values for d in new_results]),
+                               columns=columns)
+    results = results.set_index(['input_draw', 'random_seed'], drop=False)
+    results.index.names = ['input_draw_number', 'random_seed']
+    end = time()
+    logger.info(f"Concatenated {len(new_results)} results in {end - start:.2f}s.")
+    return results
+
+
+def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
+    new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
+    results_to_write = concat_results(written_results, new_results_to_write)
+    start = time()
+    retries = 3
+    while retries:
+        try:
+            ctx.results_writer.write_output(results_to_write, 'output.hdf')
+            break
+        except Exception as e:
+            logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
+            sleep(30)
+            retries -= 1
+    end = time()
+    logger.info(f"Updated output.hdf in {end - start:.4f}s.")
+    return results_to_write, unwritten_results
+
+
+def process_job_results(registry_manager, ctx):
     start_time = time()
 
     if ctx.existing_outputs is not None:
-        results = ctx.existing_outputs
+        written_results = ctx.existing_outputs
     else:
-        results = pd.DataFrame()
+        written_results = pd.DataFrame()
+    unwritten_results = []
 
-    finished_registry = FinishedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class)
-    wip_registry = StartedJobRegistry(queue.name, connection=queue.connection, job_class=queue.job_class)
-
-    heartbeat = 0
-    while (len(queue) + len(wip_registry)) > 0:
+    logger.info('Entering main processing loop.')
+    batch_size = 50
+    while registry_manager.jobs_to_finish:
         sleep(5)
-        finished_jobs = finished_registry.get_job_ids()
+        unwritten_results.extend(registry_manager.get_results())
+        if len(unwritten_results) > batch_size:
+            written_results, unwritten_results = write_results_batch(ctx, written_results,
+                                                                     unwritten_results, batch_size)
 
-        chunk_size = 10
+        registry_manager.update_and_report()
+        logger.info(f'Unwritten results: {len(unwritten_results)}')
+        logger.info(f'Elapsed time: {(time() - start_time)/60:.1f} minutes.')
 
-        # We batch, enumerate and log progress below to prevent broken pipes from long periods of
-        # inactivity while things are processed.
-        for i, finished_jobs_chunk in enumerate(chunks(finished_jobs, chunk_size)):
-            chunk_results = []
-            dirty = False
-            for job_id in finished_jobs_chunk:
-                start = time()
-                retries = 0
-                while retries < 10:
-                    try:
-                        job = queue.fetch_job(job_id)
-                    except redis.exceptions.ConnectionError:
-                        backoff = random.random()*60
-                        logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
-                        retries += 1
-                        sleep(backoff)
-                end = time()
-                logger.info(f'\t\tfetched job in {end - start:.4f}')
-                start = end
-                result = pd.read_msgpack(job.result[0])
-                end = time()
-                logger.info(f'\t\tread from msgpack in {end - start:.4f}')
-                chunk_results.append(result)
-                dirty = True
-                finished_registry.remove(job)
-
-            if dirty:
-                start = time()
-                results = pd.concat([results] + chunk_results, axis=0)
-                end = time()
-                logger.info(f"\t\tConcatenated batch in {end - start:.4f}")
-
-                start = end
-                ctx.results_writer.write_output(results, 'output.hdf')
-                end = time()
-                logger.info(f"\t\tWrote chunk to output.hdf in {end - start:.4f}")
-                logger.info(f"\tWriting {len(finished_jobs)} jobs to output.hdf. "
-                            f"{(i * chunk_size + len(finished_jobs_chunk)) / len(finished_jobs) * 100:.1f}% done.")
-
-        fail_queue = get_failed_queue(queue.connection)
-
-        # TODO: Sometimes there are duplicate job_ids, why?
-        waiting_jobs = len(set(queue.job_ids))
-        running_jobs = len(wip_registry)
-        finished_jobs = len(finished_registry) + len(results) - ctx.number_already_completed
-        failed_jobs = len(fail_queue)
-
-        percent_complete = 100 * finished_jobs / (waiting_jobs + running_jobs + finished_jobs + failed_jobs)
-        elapsed_time = time() - start_time
-
-        if finished_jobs <= 100:
-            remaining_time = '---'
-        else:
-            remaining_time = elapsed_time / (finished_jobs + failed_jobs) * (waiting_jobs + running_jobs)
-            remaining_time = '{:.1f} minutes'.format(remaining_time / 60)
-
-        # display run info, and a "heartbeat"
-        heartbeat = (heartbeat + 1) % 4
-        worker_count = len(ResilientWorker.all(queue=queue))
-        logger.info(f'{finished_jobs + ctx.number_already_completed} completed and {failed_jobs} '
-                    f'failed of {waiting_jobs + running_jobs + finished_jobs + failed_jobs + ctx.number_already_completed} '
-                    f'({percent_complete:.1f}% completed)' +
-                    f'/ Remaining time: {remaining_time} ' +
-                    '.' * heartbeat + ' ' * (4 - heartbeat) +
-                    f'    {worker_count} Workers' +
-                    '           ')
-
-
-def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
+    batch_size = 200
+    while unwritten_results:
+        written_results, unwritten_results = write_results_batch(ctx, written_results, unwritten_results,
+                                                                 batch_size=batch_size)
+        logger.info(f'Unwritten results: {len(unwritten_results)}')
+        logger.info(f'Elapsed time: {(time() - start_time) / 60:.1f} minutes.')
 
 
 def check_user_sge_config():
@@ -339,7 +321,7 @@ def check_user_sge_config():
                                    "with the worker logs.")
 
 
-def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory,
+def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, redis_processes,
          copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False):
 
     output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
@@ -364,21 +346,23 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
 
     logger.info('Starting jobs. Results will be written to: {}'.format(ctx.results_writer.results_root))
 
-    num_workers = len(jobs)
+    if redis_processes == -1:
+        redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
+
+    worker_template, redis_ports = launch_redis_processes(redis_processes)
+    worker_file = output_directory / 'settings.py'
+    with worker_file.open('w') as f:
+        f.write(worker_template)
+
+    registry_manager = RegistryManager(redis_ports, ctx.number_already_completed)
+    registry_manager.enqueue(jobs)
+
     drmaa_session = drmaa.Session()
     drmaa_session.initialize()
 
-    queue = start_cluster(drmaa_session, num_workers, ctx.peak_memory, ctx.sge_log_directory,
-                          ctx.worker_log_directory, ctx.cluster_project, job_name=ctx.job_name)
+    start_cluster(drmaa_session, len(jobs), ctx.peak_memory, ctx.sge_log_directory,
+                  ctx.worker_log_directory, project, worker_file, ctx.job_name)
 
-    # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
-    # will take from model to model and the entire system is short lived anyway
-    job_arguments = {queue.enqueue('vivarium_cluster_tools.distributed_worker.worker',
-                                   parameters=job,
-                                   ttl=60 * 60 * 24 * 2,
-                                   result_ttl=60 * 60,
-                                   timeout='7d').id: job for job in jobs}
-
-    process_job_results(job_arguments, queue, ctx)
+    process_job_results(registry_manager, ctx)
 
     logger.info('Jobs completed. Results written to: {}'.format(ctx.results_writer.results_root))
