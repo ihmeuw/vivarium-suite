@@ -8,9 +8,9 @@ Vivarium Cluster Tools
     :target: https://travis-ci.org/ihmeuw/vivarium_cluster_tools
     :alt: Latest Version
 
-.. image:: https://readthedocs.org/projects/vivarium_cluster_tools/badge/?version=latest
-    :target: https://vivarium_cluster_tools.readthedocs.io/en/latest/?badge=latest
-    :alt: Latest Docs
+.. image:: https://readthedocs.org/projects/vivarium-cluster-tools/badge/?version=latest
+    :target: https://vivarium-cluster-tools.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
 
 Vivarium cluster tools is a python package that makes running ``vivarium``
 simulations at scale on a Univa Grid Engine cluster easy.
