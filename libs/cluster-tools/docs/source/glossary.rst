@@ -1,3 +1,6 @@
+Glossary
+========
+
 .. glossary::
 
   Model Specification
@@ -31,7 +34,7 @@
 
   Input Draw
     A way of representing uncertainty in the input parameters. Rather than
-    having an explicit distribution, each input draw of a parameter is 
+    having an explicit distribution, each input draw of a parameter is
     a sample from the underlying distribution of that parameter in a population.
     Taken collectively, all the input draws form a numeric representation of
     the original parameter distribution.
