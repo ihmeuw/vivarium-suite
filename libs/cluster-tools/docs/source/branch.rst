@@ -74,6 +74,13 @@ but simulation run time scales directly with the size of the population you're s
 you can run multiple simulations with different :term:`random seeds<Random Seed>` and aggregate your results across
 those simulations. This second approach takes advantage of parallel computing to keep run times under control.
 
+.. note::
+   
+    Random seeds are a convenient way to scale up a simulation's population in parallel. For example, running a
+    simulation with one million simulants and a single random seed is equivalent to running the same simulation with
+    ten thousand people and 100 random seeds. Because simulations specified with different seeds will be run
+    in parallel, the latter run strategy is often preferable.   
+
 To run our simulation for multiple random seeds, we use the ``random_seed_count`` key in a
 :term:`branch configuration<Branch Configuration>`. This key specifies an integer that represents the number of
 different random seeds to use, each generated randomly and run in a separate simulation.
@@ -163,22 +170,32 @@ Thus, you can expect four separate simulations to be run, one for each variation
 
 Interaction with Uncertainty
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-As touched upon in the section on :ref:`combining draws and seeds<Combining Draws and Seeds>`, when multiple
-:term:`branch configurations<Branch Configuration>` would result in multiple simulations the result is a simulation for
-every combination. Let's add draws to our previous branches file and figure out how many simulations it will result in.
+
+As touched upon in the section on :ref:`combining draws and seeds<Combining Draws and Seeds>`, each of the top
+level keys in a :term:`branch configuration<Branch Configuration>` can be independently produce a set of simulations
+to be run.  To find the total set of simulations to be run from a branch configuration file, we need to count
+the Cartesian product of the top level keys.  We'll use a slight alteration of our intervention configuration
+as an example.
+
 
 .. code-block:: yaml
     :caption: egg_intervention_with_parameter_uncertainty_branches.yaml
 
     input_draw_count: 100
+    random_seed_count: 4
 
     branches:
             - egg_intervention:
                     recruitment:
                         proportion: [0.0, 0.4, 0.8, 1.0]
 
-This branch configuration will produce 400 simulations. For each of the 100 :term:`input draws<Input Draw>` a
-simulation will be run with the egg intervention recruitment set to each of the four options in turn.
+This branch configuration will produce 400 simulations. First we consider the space of 
+:term:`configuration parameters<Configuration Parameter>` the simulation will be run for: one scenario for 
+each of the four recruitment proportions.  For each scenario, we will run a simulation for each combination
+of :term:`input draw<Input Draw>` and :term:`random seed<Random Seed>` specified byt the ``input_draw_count`` 
+and ``random_seed_count`` keys.  So we'll have:
+``(Number of input draws) * (Number of random seeds) * (Number of scenarios) = 100 * 4 * 4 = 1600`` 
+simulations to run from this branch configuration.
 
 Multi-parameter Variation
 ^^^^^^^^^^^^^^^^^^^^^^^^^
