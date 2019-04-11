@@ -89,7 +89,7 @@ class QueueManager:
                 q_pending = len(set(self._queue.job_ids)) if self._queue else 0
                 q_running = len(self._wip) if self._wip else 0
                 q_to_write = len(self._finished) if self._finished else 0
-                q_failed = len(rq.get_failed_queue(self._queue.connection)) if self._queue else self._status['failed']
+                q_failed = len(self._queue.failed_job_registry) if self._queue else self._status['failed']
                 q_finished = self._status['finished']
                 q_total = q_pending + q_running + q_failed + q_to_write + q_finished
                 q_workers = len(ResilientWorker.all(queue=self._queue)) if self._queue else 0
@@ -103,6 +103,9 @@ class QueueManager:
                 self._status['done'] = q_finished / q_total * 100
 
                 if sum([q_pending, q_running, q_to_write]) == 0:
+                    self._mark_complete()
+                elif sum([q_pending, q_workers, q_to_write]) == 0:
+                    self._logger.info(f'Queue {self.name} ran out of workers with running jobs.  Marking finished.')
                     self._mark_complete()
             except redis.connection.ConnectionError:
                 self._sleep_on_it()
@@ -166,7 +169,7 @@ class QueueManager:
 
     def _mark_failed(self):
         # TODO: Probably should cleanup redis stuff, but not sure how yet.
-        if not self.failed or self.completed:
+        if not (self.failed or self.completed):
             self._logger.warning(f'Queue {self.name} has run out of retries.  Marking as failed.')
             self._status['failed'] += self._status['pending'] + self._status['running']
             self._status['pending'] = 0
@@ -175,7 +178,7 @@ class QueueManager:
             self._failed = True
 
     def _mark_complete(self):
-        if not self.failed or self.completed:
+        if not (self.failed or self.completed):
             self._logger.info(f'All jobs on queue {self.name} complete.')
             self._status['finished'] += self._status['pending'] + self._status['running']
             self._status['pending'] = 0
