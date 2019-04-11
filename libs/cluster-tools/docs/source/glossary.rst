@@ -24,7 +24,7 @@
     using random numbers to sample from distributions. Our simulations
     control stochastic uncertainty with :term:`random seeds<Random Seed>`.
     Stochastic uncertainty in simulations is deeply related to sampling
-    uncertanty in a study. By holding the input parameters constant and
+    uncertainty in a study. By holding the input parameters constant and
     varying the random seed, we can produce many realizations (or samples)
     of the same underlying population and use that to minimize the
     stochastic uncertainty.
