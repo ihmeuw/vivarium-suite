@@ -47,7 +47,7 @@ This key refers to an integer that represents the number of different input draw
     input_draw_count: 10
 
 When we use this branch configuration along with the original :term:`model specification<Model Specification>`,
-we'll launch 10 simulations in parallel, each using a different set of input paramemters represented by the
+we'll launch 10 simulations in parallel, each using a different set of input parameters represented by the
 draw number.
 
 .. code-block:: sh
@@ -119,7 +119,7 @@ Configuration Variations
 
 A major function of :term:`branch configurations<Branch Configuration>` is to enable easy manipulation of
 the :term:`configuration parameters<Configuration Parameter>` of a :term:`model specification<Model Specification>`.
-These parameters generally govern interesting features of an intervention, such as it's target coverage or efficacy.
+These parameters generally govern interesting features of an intervention, such as its target coverage or efficacy.
 
 Within a branch configuration, you can specify several variations of these parameters to generate different
 scenarios or examine the sensitivity of a model to changes in a specific parameter. In the following sections we
@@ -203,7 +203,7 @@ branches file like so:
 
 This will result in scenarios encompassing every combination of recruitment proportion and starting age. Additionally,
 it will result in 100 simulations for each one of the scenarios, one for each of the :term:`input draws<Input Draw>`.
-This means the total number of simulations is given by ``(Number of input draws) * (Number of recruitment proportions
+This means the total number of simulations is given by ``(Number of input draws) * (Number of recruitment proportions)
 * (Number of starting ages)`` giving a total of 1600 simulations.
 
 Complex Configurations
