@@ -18,7 +18,6 @@ import os
 import sys
 
 import vivarium_cluster_tools
-
 src_dir = os.path.dirname(vivarium_cluster_tools.__file__)
 
 about = {}
@@ -57,6 +56,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
     'sphinx_autodoc_typehints',
+    'sphinx.ext.autosectionlabel'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -194,4 +194,3 @@ autodoc_member_order = 'bysource'
 # Defaults for automodule and autoclass
 # To negate add `:no-undoc-members:` flag to a particular instance
 autodoc_default_flags = ['members', 'undoc-members' ]
-
