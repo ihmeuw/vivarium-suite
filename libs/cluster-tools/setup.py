@@ -21,7 +21,7 @@ if __name__ == "__main__":
         'pyyaml',
         'drmaa',
         'redis<=3.0.1',
-        'rq',
+        'rq>=1.0',
         'vivarium',
         'vivarium_public_health',
         'click',

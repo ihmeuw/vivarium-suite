@@ -13,16 +13,6 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 
-try:
-    import drmaa
-except (RuntimeError, OSError):
-    sge_cluster_name = os.environ['SGE_CLUSTER_NAME']
-    if sge_cluster_name == "cluster":  # new cluster
-        os.environ['DRMAA_LIBRARY_PATH'] = '/opt/sge/lib/lx-amd64/libdrmaa.so'
-    else:  # old cluster - dev or prod
-        os.environ['DRMAA_LIBRARY_PATH'] = f'/usr/local/UGE-{sge_cluster_name}/lib/lx-amd64/libdrmaa.so'
-    import drmaa
-
 from vivarium.framework.configuration import build_model_specification
 from vivarium.framework.results_writer import ResultsWriter
 from vivarium.framework.utilities import collapse_nested_dict
@@ -31,6 +21,8 @@ from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path
 from vivarium_cluster_tools.branches import Keyspace
 from vivarium_cluster_tools import utilities, globals as vtc_globals
 from .registry import RegistryManager
+
+drmaa = utilities.get_drmaa()
 
 
 def init_job_template(jt, peak_memory, sge_log_directory, worker_log_directory,
@@ -118,7 +110,8 @@ def start_cluster(drmaa_session, num_workers, peak_memory, sge_log_directory, wo
                 # FIXME: The global drmaa should be available here.
                 # This is maybe a holdover from old code?
                 # Maybe something to do with atexit?
-                import drmaa
+                drmaa = utilities.get_drmaa()
+
             try:
                 s.control(array_job_id, drmaa.JobControlAction.TERMINATE)
             # FIXME: Hack around issue where drmaa.errors sometimes doesn't

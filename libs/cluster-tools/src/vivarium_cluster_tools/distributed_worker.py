@@ -13,10 +13,9 @@ import pandas as pd
 import redis
 from rq import Queue
 from rq import get_current_job
-from rq.connections import get_current_connection
 from rq.job import JobStatus
-from rq.queue import get_failed_queue
 from rq.worker import Worker, StopRequested
+from rq.registry import FailedJobRegistry
 
 
 def retry_handler(job, *exc_info):
@@ -34,8 +33,9 @@ def retry_handler(job, *exc_info):
     else:
         logger.error(f'Failing job {job.id}')
         # exc_string = Worker._get_safe_exception_string(traceback.format_exception(*exc_info))
-        failed_queue = get_failed_queue(get_current_connection(), job.__class__)
-        failed_queue.quarantine(job, exc_info=exc_info)
+        q = Queue(name=job.origin, connection=job.connection)
+        failed_queue = FailedJobRegistry(queue=q)
+        failed_queue.add(job, exc_string=exc_info)
     return False
 
 
