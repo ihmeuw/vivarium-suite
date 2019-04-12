@@ -19,7 +19,7 @@ Very similar to this, ``vivarium-cluster-tools`` includes a command for simulati
 
     psimulate run /path/to/your/model/specification  /path/to/your/branch
 
-By default, output will be saved in ``/share/scratch/users/{$USER}/vivarium_results``. If you want to save the
+By default, output will be saved in ``/share/costeffectiveness/results``. If you want to save the
 results somewhere else you can specify your output directory as an optional argument
 
 .. code-block:: console
