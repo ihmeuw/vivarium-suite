@@ -36,8 +36,12 @@ def pass_shared_options(func):
 
 @click.group()
 def psimulate():
-    """psimulate is a command line utility for running many simulations in parallel.  You may initiate a new run with
-    `run` or restart a run from where it was stopped by using `restart`."""
+    """A command line utility for running many simulations in parallel.
+
+    You may initiate a new run with the ``run`` sub-command or restart a run
+    from where it was stopped by using the ``restart`` sub-command.
+
+    """
     pass
 
 
@@ -49,15 +53,19 @@ def psimulate():
                    'as the configuration file.')
 @pass_shared_options
 def run(model_specification, branch_configuration, result_directory, **options):
-    """Run a parallel simulation. The simulation itself is defined by a MODEL_SPECIFICATION yaml file
-    and the parameter changes across runs are defined by a BRANCH_CONFIGURATION yaml file.
+    """Run a parallel simulation.
 
-    If a results directory is provided, a subdirectory will be created with the same name as the
-    MODEL_SPECIFICATION if one does not exist. Results will be written to a further subdirectory
-    named after the start time of the simulation run.
+    The simulation itself is defined by a MODEL_SPECIFICATION yaml file
+    and the parameter changes across runs are defined by a BRANCH_CONFIGURATION
+    yaml file.
 
-    If a results directory is not provided the base results_directory is taken to be
-    /share/scratch/users/{$USER}/vivarium_results.
+    If a results directory is provided, a subdirectory will be created with the
+    same name as the MODEL_SPECIFICATION if one does not exist. Results will be
+    written to a further subdirectory named after the start time of the
+    simulation run.
+
+    If a results directory is not provided the base results_directory is taken
+    to be /share/costeffectiveness/results.
 
     """
     try:
@@ -82,9 +90,13 @@ def run(model_specification, branch_configuration, result_directory, **options):
 @click.argument('results-root', type=click.Path(exists=True, file_okay=False, writable=True))
 @pass_shared_options
 def restart(results_root, **options):
-    """Restart a parallel simulation defined by a results directory RESULTS_ROOT. Restarting will not erase existing
-    results, but will start workers to perform the remaining simulations.  RESULTS_ROOT is expected to be an output
-    directory from a previous `psimulate run`."""
+    """Restart a parallel simulation from a previous run at RESULTS_ROOT.
+
+    Restarting will not erase existing results, but will start workers to
+    perform the remaining simulations.  RESULTS_ROOT is expected to be an
+    output directory from a previous ``psimulate run`` invocation.
+
+    """
     try:
         utilities.configure_master_process_logging_to_terminal()
         runner.main(None, None, results_root,
