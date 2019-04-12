@@ -58,7 +58,7 @@ class QueueManager:
                                 parameters=job,
                                 ttl=60 * 60 * 24 * 2,
                                 result_ttl=60 * 60,
-                                timeout='7d')
+                                job_timeout='7d')
 
     def get_results(self):
         self._logger.info(f'Checking queue {self.name}')
