@@ -9,6 +9,22 @@ from loguru import logger
 from vivarium_cluster_tools import globals as vct_globals
 
 
+def get_drmaa():
+    try:
+        import drmaa
+    except (RuntimeError, OSError):
+        if 'SGE_CLUSTER_NAME' in os.environ:
+            sge_cluster_name = os.environ['SGE_CLUSTER_NAME']
+            if sge_cluster_name == "cluster":  # new cluster
+                os.environ['DRMAA_LIBRARY_PATH'] = '/opt/sge/lib/lx-amd64/libdrmaa.so'
+            else:  # old cluster - dev or prod
+                os.environ['DRMAA_LIBRARY_PATH'] = f'/usr/local/UGE-{sge_cluster_name}/lib/lx-amd64/libdrmaa.so'
+            import drmaa
+        else:
+            drmaa = object()
+    return drmaa
+
+
 def configure_master_process_logging_to_terminal():
     logger.remove()  # Clear default configuration
     logger.add(sys.stdout, colorize=True, level="INFO")
