@@ -207,7 +207,7 @@ def build_job_list(ctx):
             mask &= ctx.existing_outputs.random_seed == int(random_seed)
             for k, v in collapse_nested_dict(branch_config):
                 if isinstance(v, float):
-                    mask &= np.isclose(ctx.existing_outputs[k], v)
+                    mask &= np.isclose(ctx.existing_outputs[k].astype(float), v)
                 else:
                     mask &= ctx.existing_outputs[k] == v
             do_schedule = not np.any(mask)
@@ -310,7 +310,7 @@ def check_user_sge_config():
                     logger.warning("You may have settings in your .sge_request file "
                                    "that could overwrite the log location set by this script. "
                                    f"Your .sge_request file is here: {sge_config}.  Look for "
-                                   "-o and -e and comment those lines to recieve logs side-by-side"
+                                   "-o and -e and comment those lines to receive logs side-by-side"
                                    "with the worker logs.")
 
 

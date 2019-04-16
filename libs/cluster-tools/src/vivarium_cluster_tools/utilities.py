@@ -1,4 +1,6 @@
+from bdb import BdbQuit
 from datetime import datetime
+import functools
 import math
 import os
 from pathlib import Path
@@ -25,16 +27,29 @@ def get_drmaa():
     return drmaa
 
 
-def configure_master_process_logging_to_terminal():
+def add_logging_sink(sink, verbose, colorize=False, serialize=False):
+    message_format = ('<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
+                      '<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> '
+                      '- <level>{message}</level>')
+    if verbose == 0:
+        logger.add(sink, colorize=colorize, level="INFO", format=message_format,
+                   filter=lambda record: record.extra['queue'] == 'all', serialize=serialize)
+    elif verbose == 1:
+        logger.add(sink, colorize=colorize, level="INFO", format=message_format, serialize=serialize)
+    elif verbose >= 2:
+        logger.add(sink, colorize=colorize, level="DEBUG", format=message_format, serialize=serialize)
+
+
+def configure_master_process_logging_to_terminal(verbose):
     logger.remove()  # Clear default configuration
-    logger.add(sys.stdout, colorize=True, level="INFO")
+    add_logging_sink(sys.stdout, verbose, colorize=True)
 
 
 def configure_master_process_logging_to_file(output_directory):
     master_log = output_directory / 'master.log'
     serial_log = output_directory / 'master.log.json'
-    logger.add(master_log, level="INFO")
-    logger.add(serial_log, level="INFO", serialize=True)
+    add_logging_sink(master_log, verbose=2)
+    add_logging_sink(serial_log, verbose=2, serialize=True)
 
 
 def get_output_directory(model_specification_file=None, output_directory=None, restart=False):
@@ -91,3 +106,25 @@ def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
+
+
+def handle_exceptions(func, with_debugger):
+    """Drops a user into an interactive debugger if func raises an error."""
+
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except (BdbQuit, KeyboardInterrupt):
+            raise
+        except Exception as e:
+            logger.exception("Uncaught exception {}".format(e))
+            if with_debugger:
+                import pdb
+                import traceback
+                traceback.print_exc()
+                pdb.post_mortem()
+            else:
+                raise
+
+    return wrapped
