@@ -207,6 +207,8 @@ def build_job_list(ctx):
             mask &= ctx.existing_outputs.random_seed == int(random_seed)
             for k, v in collapse_nested_dict(branch_config):
                 if isinstance(v, float):
+                    # FIXME: The fast concat method will coerce floats to objects when writing
+                    # if there is one or more string columns.  Hack a coercion here to make restart work.
                     mask &= np.isclose(ctx.existing_outputs[k].astype(float), v)
                 else:
                     mask &= ctx.existing_outputs[k] == v
