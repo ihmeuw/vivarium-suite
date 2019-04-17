@@ -1,7 +1,4 @@
-from bdb import BdbQuit
-
 import click
-from loguru import logger
 
 from vivarium_cluster_tools import runner, utilities, globals as vct_globals
 
@@ -24,6 +21,9 @@ shared_options = [
                  default=-1,
                  help=(f'Number of redis databases to use.  Defaults to a redis instance for every '
                        f'{vct_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE} jobs.')),
+    click.option('-v', 'verbose',
+                 count=True,
+                 help='Configure logging verbosity.')
 ]
 
 
@@ -68,7 +68,7 @@ def run(model_specification, branch_configuration, result_directory, **options):
     to be /share/costeffectiveness/results.
 
     """
-    utilities.configure_master_process_logging_to_terminal()
+    utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = utilities.handle_exceptions(runner.main, options['with_debugger'])
 
     main(model_specification, branch_configuration, result_directory,
@@ -87,7 +87,7 @@ def restart(results_root, **options):
     output directory from a previous ``psimulate run`` invocation.
 
     """
-    utilities.configure_master_process_logging_to_terminal()
+    utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = utilities.handle_exceptions(runner.main, options['with_debugger'])
 
     main(None, None, results_root,
