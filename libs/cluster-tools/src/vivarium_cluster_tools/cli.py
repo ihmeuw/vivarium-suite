@@ -93,3 +93,28 @@ def restart(results_root, **options):
     main(None, None, results_root,
          options['project'], options['peak_memory'],
          redis_processes=options['redis'], restart=True)
+
+
+@psimulate.command()
+@click.argument('results-roots', type=click.Path(exists=True, file_okay=False, writable=True))
+@click.option('--add-draws', type=int, default=0, help='The number of input draws to add to a previous run.')
+@click.option('--add-seeds', type=int, default=0, help='The number of random seeds to add to a previous run.')
+@pass_shared_options
+def expand(results_root, **options):
+    """Expand a previous run at RESULTS_ROOT by adding input draws and/or
+    random seeds.
+
+    Expanding will not erase existing results, but will start workers to perform
+    the additional simulations determined by the added draws/seeds.
+    RESULTS_ROOT is expected to be an output directory from a previous
+    ``psimulate run`` invocation.
+
+    """
+    utilities.configure_master_process_logging_to_terminal(options['verbose'])
+    main = utilities.handle_exceptions(runner.main, options['with_debugger'])
+
+    main(None, None, results_root,
+         options['project'], options['peak_memory'],
+         redis_processes=options['redis'],
+         expand={'num_draws': options['add_draws'],
+                 'num_seeds': options['add_seeds']})
