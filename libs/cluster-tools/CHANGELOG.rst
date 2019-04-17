@@ -1,3 +1,16 @@
+**1.0.8 - 04/16/19**
+
+ - Switch to loguru for logging and cleanup usage.
+ - Log cluster and node information from the workers.
+ - Add serialized logs.
+ - Client side sharding of redis instances.
+ - More robustness in failure handling.
+ - Tutorial documentation for yaml syntax.
+ - Tutorial documentation for branches files.
+ - Tutorial documentation for psimulate.
+ - Readthedocs integration.
+ - Extraction of shared CLI options
+
 **1.0.7 - 04/02/19**
 
  - Be defensive about retrieving jobs.
