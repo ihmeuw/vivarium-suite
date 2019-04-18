@@ -69,7 +69,7 @@ class QueueManager:
             result = self._get_result(job_id)
             if result is not None:
                 results.append(result)
-        self._logger.info(f'Retrieved {len(results)} results form queue {self.name} in {time.time() - start:.2f}s')
+        self._logger.info(f'Retrieved {len(results)} results from queue {self.name} in {time.time() - start:.2f}s')
         return results
 
     def update_and_report(self):
