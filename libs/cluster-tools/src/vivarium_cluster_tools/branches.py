@@ -100,14 +100,16 @@ def calculate_input_draws(input_draw_count, existing_draws=None):
     np.random.seed(123456)
     if existing_draws:
         possible = list(set(range(1000)).difference(existing_draws))
+        min_input_draw_count_allowed = 0
     else:
         possible = list(range(1000))
+        min_input_draw_count_allowed = 1
 
-    if 0 < input_draw_count <= len(possible):
+    if min_input_draw_count_allowed <= input_draw_count <= len(possible):
         return np.random.choice(possible, input_draw_count, replace=False).tolist()
     else:
-        raise ValueError(f"Input draw count must be between 1 and {len(possible)} (inclusive). "
-                         f"You specified {input_draw_count}.")
+        raise ValueError(f"Input draw count must be between {min_input_draw_count_allowed} "
+                         f"and {len(possible)} (inclusive). You specified {input_draw_count}.")
 
 
 def calculate_random_seeds(random_seed_count, existing_seeds=None):

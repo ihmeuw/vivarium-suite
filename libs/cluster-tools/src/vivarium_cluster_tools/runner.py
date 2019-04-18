@@ -141,15 +141,13 @@ class RunContext:
         self.results_writer = ResultsWriter(arguments.result_directory)
         self.job_name = Path(arguments.result_directory).resolve().parts[-2]  # The model specification name.
 
-        if arguments.expand:
-            self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
-            self.keyspace.add_draws(arguments.expand['num_draws'])
-            self.keyspace.add_draws(arguments.expand['num_seeds'])
-            self.keyspace.persist(self.results_writer)
-            self.existing_outputs = pd.read_hdf(os.path.join(self.results_writer.results_root, 'output.hdf'))
-        elif arguments.restart:
+        if arguments.restart:
             self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
             self.existing_outputs = pd.read_hdf(os.path.join(self.results_writer.results_root, 'output.hdf'))
+            if arguments.expand:
+                self.keyspace.add_draws(arguments.expand['num_draws'])
+                self.keyspace.add_draws(arguments.expand['num_seeds'])
+                self.keyspace.persist(self.results_writer)
         else:
             model_specification = build_model_specification(arguments.model_specification_file)
 
