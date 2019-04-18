@@ -116,5 +116,6 @@ def expand(results_root, **options):
     main(None, None, results_root,
          options['project'], options['peak_memory'],
          redis_processes=options['redis'],
+         restart=True,
          expand={'num_draws': options['add_draws'],
                  'num_seeds': options['add_seeds']})
