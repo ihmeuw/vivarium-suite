@@ -96,7 +96,7 @@ def restart(results_root, **options):
 
 
 @psimulate.command()
-@click.argument('results-roots', type=click.Path(exists=True, file_okay=False, writable=True))
+@click.argument('results-root', type=click.Path(exists=True, file_okay=False, writable=True))
 @click.option('--add-draws', type=int, default=0, help='The number of input draws to add to a previous run.')
 @click.option('--add-seeds', type=int, default=0, help='The number of random seeds to add to a previous run.')
 @pass_shared_options
