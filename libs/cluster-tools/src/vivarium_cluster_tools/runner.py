@@ -146,7 +146,7 @@ class RunContext:
             self.existing_outputs = pd.read_hdf(os.path.join(self.results_writer.results_root, 'output.hdf'))
             if arguments.expand:
                 self.keyspace.add_draws(arguments.expand['num_draws'])
-                self.keyspace.add_draws(arguments.expand['num_seeds'])
+                self.keyspace.add_seeds(arguments.expand['num_seeds'])
                 self.keyspace.persist(self.results_writer)
         else:
             model_specification = build_model_specification(arguments.model_specification_file)
