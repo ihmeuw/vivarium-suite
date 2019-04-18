@@ -99,7 +99,7 @@ def calculate_input_draws(input_draw_count, existing_draws=None):
     """
     np.random.seed(123456)
     if existing_draws:
-        possible = list(set(range(1000).difference(existing_draws)))
+        possible = list(set(range(1000)).difference(existing_draws))
     else:
         possible = list(range(1000))
 
