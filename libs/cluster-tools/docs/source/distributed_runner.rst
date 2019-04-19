@@ -44,3 +44,16 @@ includes the partially completed jobs using ``restart``
     psimulate restart /path/to/the/previous/results/
 
 For ``psimulate restart`` you can also choose a project with optional flag ``-P``.
+
+
+If you wish to expand a previous ``psimulate run`` by adding additional input draws and/or random seeds, you can do so
+using ``expand``.
+
+.. code-block:: console
+
+    psimulate expand /path/to/the/previous/results/ --add-draws 10 --add-seeds 5
+
+You can use one or both of ``--add-draws`` and ``--add-seeds`` to expand your simulation. Any previous results will not
+be overwritten, but any additional simulations resulting from the new input draws and/or random seeds will be run.
+
+``psimulate expand`` also supports choosing a project via the option flag ``-P``.

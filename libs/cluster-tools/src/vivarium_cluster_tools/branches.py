@@ -59,6 +59,16 @@ class Keyspace:
         results_writer.write_output(self.get_data(), 'keyspace.yaml')
         results_writer.write_output(self.branches, 'branches.yaml')
 
+    def add_draws(self, num_draws):
+        existing = self._keyspace['input_draw']
+        additional = calculate_input_draws(num_draws, existing)
+        self._keyspace['input_draw'] = existing + additional
+
+    def add_seeds(self, num_seeds):
+        existing = self._keyspace['random_seed']
+        additional = calculate_random_seeds(num_seeds, existing)
+        self._keyspace['random_seed'] = existing + additional
+
     def __iter__(self):
         """Yields and individual simulation configuration from the keyspace."""
         for job_config in product(self._keyspace['input_draw'], self._keyspace['random_seed'], self.branches):
@@ -69,30 +79,67 @@ class Keyspace:
         return len(list(product(self._keyspace['input_draw'], self._keyspace['random_seed'], self.branches)))
 
 
-def calculate_input_draws(input_draw_count):
-    """Determines a random sample of the GBD input draws to use given a draw count.
+def calculate_input_draws(input_draw_count, existing_draws=None):
+    """Determines a random sample of the GBD input draws to use given a draw
+    count and any existing draws.
 
     Parameters
     ----------
     input_draw_count: int
         The number of draws to pull.
 
+    existing_draws: list
+        Any draws that have already been pulled and should not be pulled again.
+
     Returns
     -------
     Iterable:
-        A set of unique input draw numbers.
+        A set of unique input draw numbers, guaranteed not to overlap with any
+        existing draw numbers.
     """
     np.random.seed(123456)
-    if 0 < input_draw_count <= 1000:
-        return np.random.choice(range(1000), input_draw_count, replace=False).tolist()
+    if existing_draws:
+        possible = list(set(range(1000)).difference(existing_draws))
+        min_input_draw_count_allowed = 0
     else:
-        raise ValueError(f"Input draw count must be between 1 and 1000 (inclusive). "
-                         f"You specified {input_draw_count}")
+        possible = list(range(1000))
+        min_input_draw_count_allowed = 1
+
+    if min_input_draw_count_allowed <= input_draw_count <= len(possible):
+        return np.random.choice(possible, input_draw_count, replace=False).tolist()
+    else:
+        raise ValueError(f"Input draw count must be between {min_input_draw_count_allowed} "
+                         f"and {len(possible)} (inclusive). You specified {input_draw_count}.")
 
 
-def calculate_random_seeds(random_seed_count):
+def calculate_random_seeds(random_seed_count, existing_seeds=None):
+    """Generates random seeds to use given a count of seeds and any existing
+    seeds.
+
+    Parameters
+    ----------
+    random_seed_count: int
+        The number of random seeds to generate.
+
+    existing_seeds: list
+        Any random seeds that have already been generated and should not be
+        generated again.
+
+    Returns
+    -------
+    Iterable:
+        A set of unique random seeds, guaranteed not to overlap with any
+        existing random seeds.
+    """
     np.random.seed(654321)
-    return np.random.randint(10*random_seed_count, size=random_seed_count).tolist()
+
+    if existing_seeds:
+        min_possible = max(existing_seeds) + 1
+    else:
+        min_possible = 0
+
+    low, high = min_possible, min_possible + 10*random_seed_count
+    return np.random.randint(low, high, size=random_seed_count).tolist()
 
 
 def calculate_keyspace(branches):

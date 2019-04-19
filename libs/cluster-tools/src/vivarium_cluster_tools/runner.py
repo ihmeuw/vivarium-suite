@@ -144,6 +144,10 @@ class RunContext:
         if arguments.restart:
             self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
             self.existing_outputs = pd.read_hdf(os.path.join(self.results_writer.results_root, 'output.hdf'))
+            if arguments.expand:
+                self.keyspace.add_draws(arguments.expand['num_draws'])
+                self.keyspace.add_seeds(arguments.expand['num_seeds'])
+                self.keyspace.persist(self.results_writer)
         else:
             model_specification = build_model_specification(arguments.model_specification_file)
 
@@ -317,7 +321,7 @@ def check_user_sge_config():
 
 
 def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, redis_processes,
-         copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False):
+         copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False, expand=None):
 
     output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
     utilities.configure_master_process_logging_to_file(output_directory)
@@ -330,7 +334,8 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
                                 copy_data=copy_data,
                                 num_input_draws=num_input_draws,
                                 num_random_seeds=num_random_seeds,
-                                restart=restart)
+                                restart=restart,
+                                expand=expand)
     ctx = RunContext(arguments)
     check_user_sge_config()
     jobs = build_job_list(ctx)
