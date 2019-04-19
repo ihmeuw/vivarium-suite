@@ -321,7 +321,7 @@ def check_user_sge_config():
 
 
 def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, redis_processes,
-         copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False, expand={}):
+         copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False, expand=None):
 
     output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
     utilities.configure_master_process_logging_to_file(output_directory)
