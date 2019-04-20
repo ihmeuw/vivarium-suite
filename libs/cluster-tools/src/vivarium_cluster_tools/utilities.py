@@ -32,8 +32,11 @@ def add_logging_sink(sink, verbose, colorize=False, serialize=False):
                       '<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> '
                       '- <level>{message}</level>')
     if verbose == 0:
+        def quiet_filter(record):
+            return record.get('extra', {}).get('queue', None) == 'all'
+
         logger.add(sink, colorize=colorize, level="INFO", format=message_format,
-                   filter=lambda record: record.extra['queue'] == 'all', serialize=serialize)
+                   filter=quiet_filter, serialize=serialize)
     elif verbose == 1:
         logger.add(sink, colorize=colorize, level="INFO", format=message_format, serialize=serialize)
     elif verbose >= 2:
