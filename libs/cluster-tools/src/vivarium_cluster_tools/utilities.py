@@ -33,7 +33,7 @@ def add_logging_sink(sink, verbose, colorize=False, serialize=False):
                       '- <level>{message}</level>')
     if verbose == 0:
         def quiet_filter(record):
-            return 'queue' not in record.extra or record.extra['queue'] == 'all'
+            return record.get('extra', {}).get('queue', None) == 'all'
 
         logger.add(sink, colorize=colorize, level="INFO", format=message_format,
                    filter=quiet_filter, serialize=serialize)
