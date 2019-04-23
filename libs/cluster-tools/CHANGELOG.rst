@@ -1,3 +1,10 @@
+**1.0.9 - 04/22/19**
+
+ - Bugfix in restart with string columns in outputs.
+ - Extract common cli options.
+ - Add verbosity levels to logging.
+ - Add command to add draws/seeds to previous runs.
+
 **1.0.8 - 04/16/19**
 
  - Switch to loguru for logging and cleanup usage.
