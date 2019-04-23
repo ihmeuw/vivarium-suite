@@ -23,7 +23,10 @@ shared_options = [
                        f'{vct_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE} jobs.')),
     click.option('-v', 'verbose',
                  count=True,
-                 help='Configure logging verbosity.')
+                 help='Configure logging verbosity.'),
+    click.option('--no-batch',
+                 is_flag=True,
+                 help="Don't batch results, write them as they come in.")
 ]
 
 
@@ -73,7 +76,7 @@ def run(model_specification, branch_configuration, result_directory, **options):
 
     main(model_specification, branch_configuration, result_directory,
          options['project'], options['peak_memory'],
-         redis_processes=options['redis'])
+         redis_processes=options['redis'], no_batch=options['no_batch'])
 
 
 @psimulate.command()
@@ -92,7 +95,7 @@ def restart(results_root, **options):
 
     main(None, None, results_root,
          options['project'], options['peak_memory'],
-         redis_processes=options['redis'], restart=True)
+         redis_processes=options['redis'], restart=True, no_batch=options['no_batch'])
 
 
 @psimulate.command()
@@ -118,4 +121,5 @@ def expand(results_root, **options):
          redis_processes=options['redis'],
          restart=True,
          expand={'num_draws': options['add_draws'],
-                 'num_seeds': options['add_seeds']})
+                 'num_seeds': options['add_seeds']},
+         no_batch=options['no_batch'])
