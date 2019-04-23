@@ -34,7 +34,7 @@ def init_job_template(jt, peak_memory, sge_log_directory, worker_log_directory,
     launcher.write(f'''
     export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
     export PYTHONPATH={output_dir}:$PYTHONPATH
-    
+
     {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
 
     ''')
@@ -140,6 +140,7 @@ class RunContext:
         self.number_already_completed = 0
         self.results_writer = ResultsWriter(arguments.result_directory)
         self.job_name = Path(arguments.result_directory).resolve().parts[-2]  # The model specification name.
+        self.no_batch = arguments.no_batch
 
         if arguments.restart:
             self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
@@ -286,7 +287,10 @@ def process_job_results(registry_manager, ctx):
     while registry_manager.jobs_to_finish:
         sleep(5)
         unwritten_results.extend(registry_manager.get_results())
-        if len(unwritten_results) > batch_size:
+        if ctx.no_batch:
+            written_results, unwritten_results = write_results_batch(ctx, written_results,
+                                                                     unwritten_results, len(unwritten_results))
+        elif len(unwritten_results) > batch_size:
             written_results, unwritten_results = write_results_batch(ctx, written_results,
                                                                      unwritten_results, batch_size)
 
@@ -321,7 +325,7 @@ def check_user_sge_config():
 
 
 def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, redis_processes,
-         copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False, expand=None):
+         copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False, expand=None, no_batch=False):
 
     output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
     utilities.configure_master_process_logging_to_file(output_directory)
@@ -335,7 +339,8 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
                                 num_input_draws=num_input_draws,
                                 num_random_seeds=num_random_seeds,
                                 restart=restart,
-                                expand=expand)
+                                expand=expand,
+                                no_batch=no_batch)
     ctx = RunContext(arguments)
     check_user_sge_config()
     jobs = build_job_list(ctx)
