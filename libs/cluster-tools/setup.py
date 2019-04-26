@@ -18,7 +18,7 @@ if __name__ == "__main__":
         'numpy<=1.15.4',  # to match VPH
         'table<=3.4.0',  # to match VPH
         'loguru',
-        'pyyaml',
+        'pyyaml>=5.1',
         'drmaa',
         'redis<=3.0.1',
         'rq>=1.0',
