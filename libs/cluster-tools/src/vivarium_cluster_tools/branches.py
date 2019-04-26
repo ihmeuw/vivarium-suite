@@ -40,9 +40,9 @@ class Keyspace:
     @classmethod
     def from_previous_run(cls, path):
         with open(os.path.join(path, "keyspace.yaml")) as f:
-                keyspace = yaml.load(f)
+                keyspace = yaml.full_load(f)
         with open(os.path.join(path, "branches.yaml")) as f:
-                branches = yaml.load(f)
+                branches = yaml.full_load(f)
         return Keyspace(branches, keyspace)
 
     def get_data(self):
@@ -173,7 +173,7 @@ def load_branches(num_input_draws, num_random_seeds, branch_configuration_file):
 
 def load_branch_configurations(path):
     with open(path) as f:
-        data = yaml.load(f)
+        data = yaml.full_load(f)
 
     input_draw_count = data.get('input_draw_count', 1)
     random_seed_count = data.get('random_seed_count', 1)
