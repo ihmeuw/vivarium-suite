@@ -238,10 +238,10 @@ def build_job_list(ctx):
 
 
 def np_concat_preserve_types(df_list):
-    dtypes = df_list[0].dtypes
+    dtypes = df_list[0].dtypes.unique()
     splits = []
     for dtype in dtypes:
-        slices = [df.select_dtype(dtype).values for df in df_list]
+        slices = [df.select_dtypes(dtype).values for df in df_list]
         splits.append(np.concatenate(slices))
     out = np.concatenate(splits, axis=1)
     return out
