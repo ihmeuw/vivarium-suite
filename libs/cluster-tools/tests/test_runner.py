@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from vivarium_cluster_tools.runner import np_concat_preserve_types, concat_results
+from vivarium_cluster_tools.runner import concat_preserve_types, concat_results
 
 
 @pytest.mark.parametrize('data_types', [[0, 1, 2],
@@ -14,15 +14,13 @@ from vivarium_cluster_tools.runner import np_concat_preserve_types, concat_resul
                                              'just floats',
                                              'ints, floats, and strings',
                                              'just strings'])
-def test_np_concat_preserve_types(data_types):
+def test_concat_preserve_types(data_types):
     df = pd.DataFrame([data_types])
     df2 = pd.DataFrame([[d*2 for d in data_types]])
 
-    result = pd.DataFrame(np_concat_preserve_types([df, df2]))
+    result = pd.DataFrame(concat_preserve_types([df, df2]))
 
     expected_dtypes = df.dtypes
-    if (expected_dtypes == 'float64').any():
-        expected_dtypes.loc[expected_dtypes == 'int64'] = 'float64'  # np converts int64 to floats if any floats
 
     expected_shape = (df.shape[0] + df2.shape[0], df.shape[1])
 
@@ -30,7 +28,7 @@ def test_np_concat_preserve_types(data_types):
         assert (result[c] == df[c].append(df2[c]).reset_index(drop=True)).all()
 
     assert result.shape == expected_shape
-    assert (result.dtypes == expected_dtypes).all()
+    assert result.dtypes.sort_index().equals(expected_dtypes)
 
 
 @pytest.mark.parametrize('data_types', [[0, 1, 2],
@@ -44,8 +42,9 @@ def test_np_concat_preserve_types(data_types):
                                              'ints, floats, and strings',
                                              'just strings'])
 def test_concat_results(data_types):
-    old = pd.DataFrame([data_types])
-    new = pd.DataFrame([[d*2 for d in data_types]])
+    columns = [chr(i) for i in range(ord('a'), ord('a')+len(data_types))]
+    old = pd.DataFrame([data_types], columns=columns)
+    new = pd.DataFrame([[d*2 for d in data_types]], columns=columns)
 
     old['input_draw'] = old['random_seed'] = 0.0
     new['input_draw'] = new['random_seed'] = 1.0
@@ -56,8 +55,6 @@ def test_concat_results(data_types):
     combined = concat_results(old, [new])
 
     expected_dtypes = old.dtypes
-    if (expected_dtypes == 'float64').any():
-        expected_dtypes.loc[expected_dtypes == 'int64'] = 'float64'  # np converts int64 to floats if any floats
 
     expected_shape = (old.shape[0] + new.shape[0], old.shape[1])
 
@@ -65,4 +62,4 @@ def test_concat_results(data_types):
         assert (combined[c] == new[c].append(old[c])).all()
 
     assert combined.shape == expected_shape
-    assert (combined.dtypes == expected_dtypes).all()
+    assert combined.dtypes.sort_index().equals(expected_dtypes.sort_index())
