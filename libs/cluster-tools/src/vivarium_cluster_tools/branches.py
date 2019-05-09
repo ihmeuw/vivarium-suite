@@ -182,7 +182,10 @@ def load_branch_configurations(path):
 
     assert input_draw_count <= 1000, "Cannot use more that 1000 draws from GBD"
 
-    branches = expand_branch_templates(data['branches'])
+    if 'branches' in data:
+        branches = expand_branch_templates(data['branches'])
+    else:
+        branches = [None]
 
     return input_draw_count, random_seed_count, branches
 
