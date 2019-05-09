@@ -297,7 +297,7 @@ def process_job_results(registry_manager, ctx):
     while registry_manager.jobs_to_finish:
         sleep(5)
         unwritten_results.extend(registry_manager.get_results())
-        if ctx.no_batch:
+        if ctx.no_batch and unwritten_results:
             written_results, unwritten_results = write_results_batch(ctx, written_results,
                                                                      unwritten_results, len(unwritten_results))
         elif len(unwritten_results) > batch_size:
