@@ -58,7 +58,7 @@ class Keyspace:
     def persist(self, output_directory):
         with open(os.path.join(output_directory, 'keyspace.yaml'), 'w') as f:
             yaml.dump(self.get_data(), f)
-        with open(os.path.join(output_directory, 'branches.yaml')) as f:
+        with open(os.path.join(output_directory, 'branches.yaml'), 'w') as f:
             yaml.dump(self.branches, f)
 
     def add_draws(self, num_draws):
