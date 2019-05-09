@@ -161,9 +161,6 @@ class RunContext:
 
             if "artifact_path" in model_specification.configuration.input_data:
                 artifact_path = parse_artifact_path_config(model_specification.configuration)
-                if arguments.copy_data:
-                    self.copy_artifact(artifact_path, self.keyspace.get_data().get('input_data.location'))
-                    artifact_path = os.path.join(self.results_writer.results_root, "data_artifact.hdf")
                 model_specification.configuration.input_data.update(
                     {"artifact_path": artifact_path},
                     source=__file__)
@@ -181,17 +178,6 @@ class RunContext:
         os.makedirs(self.sge_log_directory, exist_ok=True)
         self.worker_log_directory = os.path.join(self.results_writer.results_root, 'worker_logs')
         os.makedirs(self.worker_log_directory, exist_ok=True)
-
-    def copy_artifact(self, artifact_path, locations):
-        full_art = Artifact(artifact_path)
-
-        artifact_locs = set(full_art.load('metadata.locations'))
-        if not set(locations).issubset(artifact_locs):
-            raise ValueError(f'You have specified locations {", ".join(set(locations) - artifact_locs)} in your '
-                             f'branches/model specifications that are not present in the specified artifact.')
-
-        # very slow to copy just relevant locs so copy the whole artifact
-        self.results_writer.copy_file(artifact_path, "data_artifact.hdf")
 
 
 def build_job_list(ctx):
@@ -335,7 +321,7 @@ def check_user_sge_config():
 
 
 def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, redis_processes,
-         copy_data=False, num_input_draws=None, num_random_seeds=None, restart=False, expand=None, no_batch=False):
+         num_input_draws=None, num_random_seeds=None, restart=False, expand=None, no_batch=False):
 
     output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
     utilities.configure_master_process_logging_to_file(output_directory)
@@ -345,7 +331,6 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
                                 result_directory=output_directory,
                                 project=project,
                                 peak_memory=peak_memory,
-                                copy_data=copy_data,
                                 num_input_draws=num_input_draws,
                                 num_random_seeds=num_random_seeds,
                                 restart=restart,
