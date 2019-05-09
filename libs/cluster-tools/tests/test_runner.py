@@ -63,3 +63,8 @@ def test_concat_results(data_types):
 
     assert combined.shape == expected_shape
     assert combined.dtypes.sort_index().equals(expected_dtypes.sort_index())
+
+    # now no existing results
+    no_old_combined = concat_results(pd.DataFrame(), [new, old])
+
+    assert no_old_combined.equals(combined)
