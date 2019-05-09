@@ -237,27 +237,27 @@ def build_job_list(ctx):
     return jobs
 
 
-def np_concat_preserve_types(df_list):
+def concat_preserve_types(df_list):
     dtypes = df_list[0].dtypes
+    columns_by_dtype = [list(dtype_group.index) for _, dtype_group in dtypes.groupby(dtypes)]
+
     splits = []
-    for dtype in dtypes:
-        slices = [df.select_dtype(dtype).values for df in df_list]
-        splits.append(np.concatenate(slices))
-    out = np.concatenate(splits, axis=1)
-    return out
+    for columns in columns_by_dtype:
+        slices = [df.filter(columns) for df in df_list]
+        splits.append(pd.DataFrame(data=np.concatenate(slices), columns=columns))
+    return pd.concat(splits, axis=1)
 
 
 def concat_results(old_results, new_results):
     # Skips all the pandas index checking because columns are in the same order.
     start = time()
+
+    to_concat = [d.reset_index(drop=True) for d in new_results]
     if not old_results.empty:
-        old_results = old_results.reset_index(drop=True)
-        results = pd.DataFrame(data=np_concat_preserve_types(new_results + [old_results]),
-                               columns=old_results.columns)
-    else:
-        columns = new_results[0].columns
-        results = pd.DataFrame(data=np_concat_preserve_types([d.reset_index(drop=True) for d in new_results]),
-                               columns=columns)
+        to_concat += [old_results.reset_index(drop=True)]
+
+    results = concat_preserve_types(to_concat)
+
     results = results.set_index(['input_draw', 'random_seed'], drop=False)
     results.index.names = ['input_draw_number', 'random_seed']
     end = time()
@@ -297,7 +297,7 @@ def process_job_results(registry_manager, ctx):
     while registry_manager.jobs_to_finish:
         sleep(5)
         unwritten_results.extend(registry_manager.get_results())
-        if ctx.no_batch:
+        if ctx.no_batch and unwritten_results:
             written_results, unwritten_results = write_results_batch(ctx, written_results,
                                                                      unwritten_results, len(unwritten_results))
         elif len(unwritten_results) > batch_size:
