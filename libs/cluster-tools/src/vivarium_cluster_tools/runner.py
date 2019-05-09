@@ -239,10 +239,10 @@ def build_job_list(ctx):
 
 def concat_preserve_types(df_list):
     dtypes = df_list[0].dtypes
-    dtypes = [list(d[1].index) for d in dtypes.groupby(dtypes)]
+    columns_by_dtype = [list(d[1].index) for d in dtypes.groupby(dtypes)]
 
     splits = []
-    for columns in dtypes:
+    for columns in columns_by_dtype:
         slices = [df.filter(columns) for df in df_list]
         splits.append(pd.DataFrame(data=np.concatenate(slices), columns=columns))
     return pd.concat(splits, axis=1)
