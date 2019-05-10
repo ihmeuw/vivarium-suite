@@ -39,7 +39,7 @@ def init_job_template(jt, peak_memory, sge_log_directory, worker_log_directory,
     ''')
     launcher.close()
 
-    jt.workingDirectory = Path.cwd()
+    jt.workingDirectory = os.getcwd()
     jt.remoteCommand = shutil.which('sh')
     jt.args = [launcher.name]
     jt.outputPath = f":{sge_log_directory}"
@@ -184,7 +184,7 @@ def build_job_list(ctx):
     number_already_completed = 0
 
     for (input_draw, random_seed, branch_config) in ctx.keyspace:
-        parameters = {'model_specification_file': ctx.model_specification,
+        parameters = {'model_specification_file': str(ctx.model_specification),
                       'branch_configuration': branch_config,
                       'input_draw': int(input_draw),
                       'random_seed': int(random_seed),
@@ -263,8 +263,8 @@ def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
             output_path = ctx.output_directory / 'output.hdf'
             # Writing to an hdf over and over balloons the file size so write to new file and move it over to avoid
             temp_output_path = output_path.with_name(output_path.name + 'update')
-            results_to_write.to_hdf(output_path + "update", 'data')
-            output_path.replace(temp_output_path)
+            results_to_write.to_hdf(temp_output_path, 'data')
+            temp_output_path.replace(output_path)
             break
         except Exception as e:
             logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
