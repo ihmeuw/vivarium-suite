@@ -1,8 +1,8 @@
-import os
 from itertools import product
 
 import yaml
 import numpy as np
+from pathlib import Path
 
 from vivarium.framework.utilities import collapse_nested_dict
 
@@ -38,11 +38,9 @@ class Keyspace:
         return Keyspace(branches, keyspace)
 
     @classmethod
-    def from_previous_run(cls, path):
-        with open(os.path.join(path, "keyspace.yaml")) as f:
-                keyspace = yaml.full_load(f)
-        with open(os.path.join(path, "branches.yaml")) as f:
-                branches = yaml.full_load(f)
+    def from_previous_run(cls, path: Path):
+        keyspace = yaml.full_load((path / 'keyspace.yaml').read_text())
+        branches = yaml.full_load((path / 'branches.yaml').read_text())
         return Keyspace(branches, keyspace)
 
     def get_data(self):
@@ -55,11 +53,9 @@ class Keyspace:
                 return i
         raise KeyError(f"No matching branch {branch}")
 
-    def persist(self, output_directory):
-        with open(os.path.join(output_directory, 'keyspace.yaml'), 'w') as f:
-            yaml.dump(self.get_data(), f)
-        with open(os.path.join(output_directory, 'branches.yaml'), 'w') as f:
-            yaml.dump(self.branches, f)
+    def persist(self, output_directory: Path):
+        (output_directory / 'keyspace.yaml').write_text(yaml.dump(self.get_data()))
+        (output_directory / 'branches.yaml').write_text(yaml.dump(self.branches))
 
     def add_draws(self, num_draws):
         existing = self._keyspace['input_draw']
