@@ -223,6 +223,8 @@ def build_job_list(ctx):
 
 
 def concat_preserve_types(df_list):
+    """Concatenation preserves all ``numpy`` dtypes but does not preserve any
+    pandas speciifc dtypes (e.g., categories become objects."""
     dtypes = df_list[0].dtypes
     columns_by_dtype = [list(dtype_group.index) for _, dtype_group in dtypes.groupby(dtypes)]
 
@@ -253,10 +255,6 @@ def concat_results(old_results, new_results):
 def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
     new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
     results_to_write = concat_results(written_results, new_results_to_write)
-
-    # to_hdf breaks with categorical dtypes
-    categorical_columns = results_to_write.dtypes[results_to_write.dtypes == 'category'].index
-    results_to_write.loc[:, categorical_columns] = results_to_write.loc[:, categorical_columns].astype('object')
 
     start = time()
     retries = 3
