@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 
 from vivarium.framework.configuration import build_model_specification
-from vivarium.framework.results_writer import ResultsWriter
 from vivarium.framework.utilities import collapse_nested_dict
 from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path_config
 
@@ -138,17 +137,17 @@ class RunContext:
         self.cluster_project = arguments.project
         self.peak_memory = arguments.peak_memory
         self.number_already_completed = 0
-        self.results_writer = ResultsWriter(arguments.result_directory)
-        self.job_name = Path(arguments.result_directory).resolve().parts[-2]  # The model specification name.
+        self.output_directory = arguments.output_directory
+        self.job_name = Path(arguments.output_directory).resolve().parts[-2]  # The model specification name.
         self.no_batch = arguments.no_batch
 
         if arguments.restart:
-            self.keyspace = Keyspace.from_previous_run(self.results_writer.results_root)
-            self.existing_outputs = pd.read_hdf(os.path.join(self.results_writer.results_root, 'output.hdf'))
+            self.keyspace = Keyspace.from_previous_run(self.output_directory)
+            self.existing_outputs = pd.read_hdf(os.path.join(self.output_directory, 'output.hdf'))
             if arguments.expand:
                 self.keyspace.add_draws(arguments.expand['num_draws'])
                 self.keyspace.add_seeds(arguments.expand['num_seeds'])
-                self.keyspace.persist(self.results_writer)
+                self.keyspace.persist(self.output_directory)
         else:
             model_specification = build_model_specification(arguments.model_specification_file)
 
@@ -165,18 +164,18 @@ class RunContext:
                     {"artifact_path": artifact_path},
                     source=__file__)
 
-            model_specification_path = os.path.join(self.results_writer.results_root, 'model_specification.yaml')
+            model_specification_path = os.path.join(self.output_directory, 'model_specification.yaml')
             shutil.copy(arguments.model_specification_file, model_specification_path)
 
             self.existing_outputs = None
 
             # Log some basic stuff about the simulation to be run.
-            self.keyspace.persist(self.results_writer)
-        self.model_specification = os.path.join(self.results_writer.results_root, 'model_specification.yaml')
+            self.keyspace.persist(self.output_directory)
+        self.model_specification = os.path.join(self.output_directory, 'model_specification.yaml')
 
-        self.sge_log_directory = os.path.join(self.results_writer.results_root, "sge_logs")
+        self.sge_log_directory = os.path.join(self.output_directory, "sge_logs")
         os.makedirs(self.sge_log_directory, exist_ok=True)
-        self.worker_log_directory = os.path.join(self.results_writer.results_root, 'worker_logs')
+        self.worker_log_directory = os.path.join(self.output_directory, 'worker_logs')
         os.makedirs(self.worker_log_directory, exist_ok=True)
 
 
@@ -189,7 +188,7 @@ def build_job_list(ctx):
                       'branch_configuration': branch_config,
                       'input_draw': int(input_draw),
                       'random_seed': int(random_seed),
-                      'results_path': ctx.results_writer.results_root,
+                      'results_path': ctx.output_directory,
                       }
 
         do_schedule = True
@@ -224,6 +223,8 @@ def build_job_list(ctx):
 
 
 def concat_preserve_types(df_list):
+    """Concatenation preserves all ``numpy`` dtypes but does not preserve any
+    pandas speciifc dtypes (e.g., categories become objects."""
     dtypes = df_list[0].dtypes
     columns_by_dtype = [list(dtype_group.index) for _, dtype_group in dtypes.groupby(dtypes)]
 
@@ -254,11 +255,17 @@ def concat_results(old_results, new_results):
 def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
     new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
     results_to_write = concat_results(written_results, new_results_to_write)
+
     start = time()
     retries = 3
     while retries:
         try:
-            ctx.results_writer.write_output(results_to_write, 'output.hdf')
+            output_path = os.path.join(ctx.output_directory, 'output.hdf')
+            # Writing to an hdf over and over balloons the file size so write to new file and move it over to avoid
+            results_to_write.to_hdf(output_path + "update", 'data')
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            os.rename(output_path + "update", output_path)
             break
         except Exception as e:
             logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
@@ -326,9 +333,11 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
     output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
     utilities.configure_master_process_logging_to_file(output_directory)
 
+    os.makedirs(output_directory, exist_ok=True)
+
     arguments = SimpleNamespace(model_specification_file=model_specification_file,
                                 branch_configuration_file=branch_configuration_file,
-                                result_directory=output_directory,
+                                output_directory=output_directory,
                                 project=project,
                                 peak_memory=peak_memory,
                                 num_input_draws=num_input_draws,
@@ -344,7 +353,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
         logger.info("Nothing to do")
         return
 
-    logger.info('Starting jobs. Results will be written to: {}'.format(ctx.results_writer.results_root))
+    logger.info('Starting jobs. Results will be written to: {}'.format(ctx.output_directory))
 
     if redis_processes == -1:
         redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
@@ -365,4 +374,4 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
 
     process_job_results(registry_manager, ctx)
 
-    logger.info('Jobs completed. Results written to: {}'.format(ctx.results_writer.results_root))
+    logger.info('Jobs completed. Results written to: {}'.format(ctx.output_directory))

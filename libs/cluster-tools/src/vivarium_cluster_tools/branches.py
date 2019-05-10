@@ -55,9 +55,11 @@ class Keyspace:
                 return i
         raise KeyError(f"No matching branch {branch}")
 
-    def persist(self, results_writer):
-        results_writer.write_output(self.get_data(), 'keyspace.yaml')
-        results_writer.write_output(self.branches, 'branches.yaml')
+    def persist(self, output_directory):
+        with open(os.path.join(output_directory, 'keyspace.yaml'), 'w') as f:
+            yaml.dump(self.get_data(), f)
+        with open(os.path.join(output_directory, 'branches.yaml'), 'w') as f:
+            yaml.dump(self.branches, f)
 
     def add_draws(self, num_draws):
         existing = self._keyspace['input_draw']
