@@ -69,11 +69,11 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
 def setup_directories(model_specification_file, result_directory, restart, expand):
     output_directory = get_output_directory(model_specification_file, result_directory, restart)
 
-    if expand:
-        command = 'expand'
-        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    elif restart:  # expand will also have restart=True so order is important here
+    if restart and not expand:
         command = 'restart'
+        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    elif restart and expand:  # expand will also have restart=True so order is important here
+        command = 'expand'
         launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     else:
         command = 'run'
