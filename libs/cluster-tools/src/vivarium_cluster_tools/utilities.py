@@ -72,7 +72,7 @@ def setup_directories(model_specification_file, result_directory, restart, expan
     if restart and not expand:
         command = 'restart'
         launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    elif restart and expand:  # expand will also have restart=True so order is important here
+    elif restart and expand:
         command = 'expand'
         launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     else:
