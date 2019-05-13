@@ -66,6 +66,28 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
     return output_directory
 
 
+def setup_directories(model_specification_file, result_directory, restart, expand):
+    if expand:
+        command = 'expand'
+    elif restart:  # expand will also have restart=True so order is important here
+        command = 'restart'
+    else:
+        command = 'run'
+
+    output_directory = get_output_directory(model_specification_file, result_directory, restart)
+    logging_directory = output_directory / "logs" / f'{datetime.now().strftime("%Y_%m_%d_%H_%M_%S")}_{command}'
+
+    logging_dirs = {'main': logging_directory,
+                    'sge': logging_directory / 'sge_logs',
+                    'worker': logging_directory / 'worker_logs'}
+
+    output_directory.mkdir(exist_ok=True, parents=True)
+    for d in logging_dirs.values():
+        d.mkdir(parents=True)
+
+    return output_directory, logging_dirs
+
+
 def get_cluster_name():
     try:
         cluster_name = {'prod': 'cluster-prod',
