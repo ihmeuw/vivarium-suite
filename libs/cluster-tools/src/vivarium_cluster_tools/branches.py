@@ -137,7 +137,7 @@ def calculate_random_seeds(random_seed_count, existing_seeds=None):
         min_possible = 0
 
     low, high = min_possible, min_possible + 10*random_seed_count
-    return np.random.randint(low, high, size=random_seed_count).tolist()
+    return np.random.randint(low, high, size=random_seed_count).tolist() if random_seed_count else []
 
 
 def calculate_keyspace(branches):

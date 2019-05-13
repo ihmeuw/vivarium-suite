@@ -195,13 +195,14 @@ def build_job_list(ctx):
         if ctx.existing_outputs is not None:
             mask = ctx.existing_outputs.input_draw == int(input_draw)
             mask &= ctx.existing_outputs.random_seed == int(random_seed)
-            for k, v in collapse_nested_dict(branch_config):
-                if isinstance(v, float):
-                    # FIXME: The fast concat method will coerce floats to objects when writing
-                    # if there is one or more string columns.  Hack a coercion here to make restart work.
-                    mask &= np.isclose(ctx.existing_outputs[k].astype(float), v)
-                else:
-                    mask &= ctx.existing_outputs[k] == v
+            if branch_config:
+                for k, v in collapse_nested_dict(branch_config):
+                    if isinstance(v, float):
+                        # FIXME: The fast concat method will coerce floats to objects when writing
+                        # if there is one or more string columns.  Hack a coercion here to make restart work.
+                        mask &= np.isclose(ctx.existing_outputs[k].astype(float), v)
+                    else:
+                        mask &= ctx.existing_outputs[k] == v
             do_schedule = not np.any(mask)
 
         if do_schedule:
