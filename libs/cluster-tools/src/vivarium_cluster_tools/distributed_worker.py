@@ -8,6 +8,7 @@ from traceback import format_exc
 from typing import Mapping
 
 from loguru import logger
+import logging
 import numpy as np
 import pandas as pd
 import redis
@@ -17,6 +18,10 @@ from rq.job import JobStatus
 from rq.worker import Worker, StopRequested
 from rq.registry import FailedJobRegistry
 
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        logger_opt = logger.opt(depth=6, exception=record.exc_info)
+        logger_opt.log(logging.getLevelName(record.levelno), record.getMessage())
 
 def retry_handler(job, *exc_info):
     retries = job.meta.get('remaining_retries', 2)
@@ -49,6 +54,8 @@ class ResilientWorker(Worker):
         logger.remove()
         logging_directory = Path(os.environ['VIVARIUM_LOGGING_DIRECTORY'])
         logger.add(logging_directory / (str(worker_) + '.log'), level='DEBUG', serialize=True)
+
+        logging.basicConfig(level=logging.DEBUG, handlers=[InterceptHandler()])
 
         retries = 0
         while retries < 10:
