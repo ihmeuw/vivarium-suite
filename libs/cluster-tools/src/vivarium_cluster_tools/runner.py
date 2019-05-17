@@ -140,6 +140,8 @@ class RunContext:
         self.output_directory = arguments.output_directory
         self.job_name = arguments.output_directory.parts[-2]  # The model specification name.
         self.no_batch = arguments.no_batch
+        self.sge_log_directory = arguments.logging_directories['sge']
+        self.worker_log_directory = arguments.logging_directories['worker']
 
         if arguments.restart:
             self.keyspace = Keyspace.from_previous_run(self.output_directory)
@@ -172,11 +174,6 @@ class RunContext:
             # Log some basic stuff about the simulation to be run.
             self.keyspace.persist(self.output_directory)
         self.model_specification = self.output_directory / 'model_specification.yaml'
-
-        self.sge_log_directory = self.output_directory / "sge_logs"
-        self.sge_log_directory.mkdir(exist_ok=True)
-        self.worker_log_directory = self.output_directory / 'worker_logs'
-        self.worker_log_directory.mkdir(exist_ok=True)
 
 
 def build_job_list(ctx):
@@ -328,14 +325,15 @@ def check_user_sge_config():
 def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, redis_processes,
          num_input_draws=None, num_random_seeds=None, restart=False, expand=None, no_batch=False):
 
-    output_directory = utilities.get_output_directory(model_specification_file, result_directory, restart)
-    utilities.configure_master_process_logging_to_file(output_directory)
+    output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
+                                                           restart, expand=(num_input_draws or num_random_seeds))
 
-    output_directory.mkdir(exist_ok=True, parents=True)
+    utilities.configure_master_process_logging_to_file(logging_dirs['main'])
 
     arguments = SimpleNamespace(model_specification_file=model_specification_file,
                                 branch_configuration_file=branch_configuration_file,
-                                output_directory=output_directory,
+                                output_directory=output_dir,
+                                logging_directories=logging_dirs,
                                 project=project,
                                 peak_memory=peak_memory,
                                 num_input_draws=num_input_draws,
@@ -357,7 +355,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
         redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
 
     worker_template, redis_ports = launch_redis_processes(redis_processes)
-    worker_file = output_directory / 'settings.py'
+    worker_file = output_dir / 'settings.py'
     with worker_file.open('w') as f:
         f.write(worker_template)
 
