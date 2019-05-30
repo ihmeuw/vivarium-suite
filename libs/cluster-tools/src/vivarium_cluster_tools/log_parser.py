@@ -157,7 +157,7 @@ class WorkerLog:
 
 def parse_log_directory(input_directory: Union[Path, str], output_directory: Union[Path, str]):
     input_directory, output_directory = Path(input_directory), Path(output_directory)
-    log_files = [f for f in input_directory.iterdir()]
+    log_files = [f for f in input_directory.iterdir() if f.suffix == '.log']
 
     worker_data = []
     sim_data = []
