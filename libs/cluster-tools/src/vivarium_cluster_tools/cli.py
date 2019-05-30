@@ -133,7 +133,14 @@ def expand(results_root, **options):
 @click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
 def parse_logs(logs_directory, result_directory, verbose):
     """Parse the worker_logs from a previous ``psimulate run`` into a more
-    easily digestable summary form. """
+    easily digestable summary form.
+
+    Given a worker logs directory from a previous run, a summary hdf will be
+    created in the ``result_directory`` (which defaults to the given logs
+    directory unless otherwise specified) with two keys: 'worker_data', which
+    includes a summary line for each worker log in the directory and 'sim_data',
+    which includes a summary line for each simulation job run by a worker.
+    """
     utilities.configure_master_process_logging_to_terminal(verbose)
     if not result_directory:
         result_directory = logs_directory

@@ -4,6 +4,7 @@ import json
 from loguru import logger
 from pathlib import Path
 import pandas as pd
+from typing import Union
 
 
 class LogType(Enum):
@@ -154,7 +155,8 @@ class WorkerLog:
         return worker, pd.concat(sims)
 
 
-def parse_log_directory(input_directory: Path, output_directory: Path):
+def parse_log_directory(input_directory: Union[Path, str], output_directory: Union[Path, str]):
+    input_directory, output_directory = Path(input_directory), Path(output_directory)
     log_files = [f for f in input_directory.iterdir()]
 
     worker_data = []
