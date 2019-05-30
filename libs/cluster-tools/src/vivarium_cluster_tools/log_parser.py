@@ -154,3 +154,23 @@ class WorkerLog:
         return worker, pd.concat(sims)
 
 
+def parse_log_directory(input_directory: Path, output_directory: Path):
+    log_files = [f for f in input_directory.iterdir()]
+
+    worker_data = []
+    sim_data = []
+    for i, file in enumerate(log_files):
+        logger.info(f'Parsing file {i} of {len(log_files)}.')
+        w = WorkerLog(file)
+        w_d, s_d = w.summarize()
+        worker_data.append(w_d)
+        sim_data.append(s_d)
+
+    worker_data = pd.concat(worker_data)
+    sim_data = pd.concat(sim_data)
+
+    out_file = output_directory / 'log_summary.hdf'
+    worker_data.to_hdf(out_file, key='worker_data')
+    sim_data.to_hdf(out_file, key='sim_data')
+
+    logger.info(f'All log files successfully parsed. Summary hdf can be found at {out_file}.')
