@@ -51,7 +51,8 @@ class LogType(Enum):
 
     @classmethod
     def classify_log(cls, log_msg):
-        possible = [l for l in cls if l.str_match in log_msg and l is not cls.NON_ESSENTIAL]  # non-essential will match everything, so exclude it unless no other options
+        # non-essential will match everything, so exclude it unless no other options
+        possible = [l for l in cls if l.str_match in log_msg and l is not cls.NON_ESSENTIAL]
         return possible[0] if possible else cls.NON_ESSENTIAL
 
 
@@ -162,7 +163,7 @@ def parse_log_directory(input_directory: Union[Path, str], output_directory: Uni
     worker_data = []
     sim_data = []
     for i, file in enumerate(log_files):
-        logger.info(f'Parsing file {i} of {len(log_files)}.')
+        logger.info(f'Parsing file {i+1} of {len(log_files)}.')
         w = WorkerLog(file)
         w_d, s_d = w.summarize()
         worker_data.append(w_d)
