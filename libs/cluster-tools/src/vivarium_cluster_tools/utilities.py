@@ -8,6 +8,7 @@ import sys
 
 from loguru import logger
 from typing import Dict, List, Tuple
+# depending on version of pip, freeze may be in one of two places
 try:
     from pip._internal.operations import freeze
 except ImportError:
@@ -223,11 +224,14 @@ def validate_environment(output_dir: Path):
 
     current_environment_list = [p for p in freeze.freeze()]
     if not original_environment_file.exists():  # original run
-        with open(original_environment_file, 'w') as f:
+        with original_environment_file.open('w') as f:
             f.write('\n'.join(current_environment_list))
     else:  # compare with original
-        with open(original_environment_file, 'r') as f:
+        with original_environment_file.open('r') as f:
             original_environment_list = [line.replace('\n', '') for line in f]
         current_environment = convert_pip_list_to_dict(current_environment_list)
         original_environment = convert_pip_list_to_dict(original_environment_list)
         compare_environments(current_environment, original_environment)
+        logger.info('Validation of environment successful. All pip installed packages match '
+                    'original versions. Run can proceed.')
+
