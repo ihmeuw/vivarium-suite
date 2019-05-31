@@ -163,9 +163,10 @@ def handle_exceptions(func, with_debugger):
 
     return wrapped
 
+
 def parse_package_version(s: str) -> Tuple[str, str]:
     if 'no version control' in s:  # installed from non-git controlled source code in editable mode
-        s = s.split('(')[1].split(')')[0] # yields <package>==<version>
+        s = s.split('(')[1].split(')')[0]  # yields <package>==<version>
 
     packaged = s.split('==')
     if len(packaged) == 2:  # not installed from source code, e.g., <package>==<version>
@@ -222,7 +223,7 @@ def validate_environment(output_dir: Path):
     original_environment_file = output_dir / 'requirements.txt'
 
     current_environment_list = [p for p in freeze.freeze()]
-    if not original_environment_file.exists:  # original run
+    if not original_environment_file.exists():  # original run
         with open(original_environment_file, 'w') as f:
             f.write('\n'.join(current_environment_list))
     else:  # compare with original
