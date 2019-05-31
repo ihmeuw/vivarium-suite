@@ -1,0 +1,6 @@
+{
+    "package_name": "cookiecutter-vivarium",
+    "package_version": "1.0.0",
+    "package_description": "Template for vivarium research repositories",
+    "package_url": "https://github.com/ihmeuw/vivarium_research_template"
+}
