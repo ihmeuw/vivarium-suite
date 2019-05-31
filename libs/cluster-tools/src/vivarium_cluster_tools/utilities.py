@@ -213,10 +213,9 @@ def compare_environments(current: Dict, original: Dict):
 
     if differences:
         differences = "\n".join(differences)
-        raise EnvironmentError(f'Differences found between environment used for original run and current '
-                               f'environment. In order to successfully run, you should make a new environment '
-                               f'using the requirements.txt file found in the output directory. Differences found as '
-                               f'follows: {differences}.')
+        raise ValueError(f'Differences found between environment used for original run and current environment. '
+                         f'In order to successfully run, you should make a new environment using the requirements.txt '
+                         f'file found in the output directory. Differences found as follows: {differences}.')
 
 
 def validate_environment(output_dir: Path):
