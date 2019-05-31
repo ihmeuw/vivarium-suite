@@ -7,8 +7,11 @@ from pathlib import Path
 import sys
 
 from loguru import logger
-from pip._internal.operations import freeze
 from typing import Dict, List, Tuple
+try:
+    from pip._internal.operations import freeze
+except ImportError:
+    from pip.operations import freeze
 
 from vivarium_cluster_tools import globals as vct_globals
 
