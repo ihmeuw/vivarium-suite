@@ -15,7 +15,7 @@ def vadmin():
               help='The directory into which to write the summary of the parsed logs. '
                    'Defaults to given logs directory if not given.')
 @click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
-def parse_logs(logs_directory, result_directory, verbose):
+def parse(logs_directory, result_directory, verbose):
     """Parse and summarize the worker_logs from a ``psimulate`` command.
 
     Given a worker logs directory from a previous run, a summary hdf will be
