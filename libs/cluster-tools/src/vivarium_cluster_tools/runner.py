@@ -329,6 +329,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
                                                            restart, expand=(num_input_draws or num_random_seeds))
 
     utilities.configure_master_process_logging_to_file(logging_dirs['main'])
+    utilities.validate_environment(output_dir)
 
     arguments = SimpleNamespace(model_specification_file=model_specification_file,
                                 branch_configuration_file=branch_configuration_file,
