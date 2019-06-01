@@ -15,11 +15,11 @@ import pandas as pd
 
 from vivarium.framework.configuration import build_model_specification
 from vivarium.framework.utilities import collapse_nested_dict
-from vivarium_public_health.dataset_manager import Artifact, parse_artifact_path_config
+from vivarium_public_health.dataset_manager import parse_artifact_path_config
 
-from vivarium_cluster_tools.branches import Keyspace
-from vivarium_cluster_tools import utilities, globals as vtc_globals
-from .registry import RegistryManager
+from vivarium_cluster_tools.psimulate.branches import Keyspace
+from vivarium_cluster_tools.psimulate import globals as vtc_globals, utilities
+from vivarium_cluster_tools.psimulate.registry import RegistryManager
 
 drmaa = utilities.get_drmaa()
 

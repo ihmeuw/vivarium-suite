@@ -1,6 +1,6 @@
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.branches import expand_branch_templates
+from vivarium_cluster_tools.psimulate.branches import expand_branch_templates
 
 
 def test_expand_branch_template():

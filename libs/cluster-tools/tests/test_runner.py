@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from vivarium_cluster_tools.runner import concat_preserve_types, concat_results
+from vivarium_cluster_tools.psimulate.runner import concat_preserve_types, concat_results
 
 
 @pytest.mark.parametrize('data_types', [[0, 1, 2],
