@@ -18,10 +18,12 @@ from rq.job import JobStatus
 from rq.worker import Worker, StopRequested
 from rq.registry import FailedJobRegistry
 
+
 class InterceptHandler(logging.Handler):
     def emit(self, record):
         logger_opt = logger.opt(depth=6, exception=record.exc_info)
         logger_opt.log(logging.getLevelName(record.levelno), record.getMessage())
+
 
 def retry_handler(job, *exc_info):
     retries = job.meta.get('remaining_retries', 2)

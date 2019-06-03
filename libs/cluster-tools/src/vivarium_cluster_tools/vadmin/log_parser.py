@@ -80,7 +80,7 @@ class WorkerLog:
         self.task_id = int(name[1])
 
     def _load_messages(self):
-        with open(self.file) as f:
+        with self.file.open('r') as f:
             messages = [LogMessage(json.loads(line)) for line in f]
         return messages
 

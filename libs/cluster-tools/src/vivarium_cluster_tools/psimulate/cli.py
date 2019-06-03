@@ -1,7 +1,6 @@
 import click
 
-from vivarium_cluster_tools import runner, utilities, log_parser, globals as vct_globals
-
+from vivarium_cluster_tools.psimulate import globals as vct_globals, runner, utilities
 
 shared_options = [
     click.option('--project', '-P',
@@ -123,25 +122,3 @@ def expand(results_root, **options):
          expand={'num_draws': options['add_draws'],
                  'num_seeds': options['add_seeds']},
          no_batch=options['no_batch'])
-
-
-@psimulate.command()
-@click.argument('logs-directory', type=click.Path(exists=True, file_okay=False))
-@click.option('--result-directory', '-o', type=click.Path(exists=True, file_okay=False),
-              help='The directory into which to write the summary of the parsed logs. '
-                   'Defaults to given logs directory if not given.')
-@click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
-def parse_logs(logs_directory, result_directory, verbose):
-    """Parse the worker_logs from a previous ``psimulate run`` into a more
-    easily digestable summary form.
-
-    Given a worker logs directory from a previous run, a summary hdf will be
-    created in the ``result_directory`` (which defaults to the given logs
-    directory unless otherwise specified) with two keys: 'worker_data', which
-    includes a summary line for each worker log in the directory and 'sim_data',
-    which includes a summary line for each simulation job run by a worker.
-    """
-    utilities.configure_master_process_logging_to_terminal(verbose)
-    if not result_directory:
-        result_directory = logs_directory
-    log_parser.parse_log_directory(logs_directory, result_directory)

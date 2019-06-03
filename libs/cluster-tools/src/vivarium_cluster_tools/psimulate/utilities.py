@@ -14,7 +14,7 @@ try:
 except ImportError:
     from pip.operations import freeze
 
-from vivarium_cluster_tools import globals as vct_globals
+from vivarium_cluster_tools.psimulate import globals as vct_globals
 
 
 def get_drmaa():

@@ -16,7 +16,7 @@ if __name__ == "__main__":
     install_requires = [
         'pandas',
         'numpy<=1.15.4',  # to match VPH
-        'table<=3.4.0',  # to match VPH
+        'tables<=3.4.0',  # to match VPH
         'loguru',
         'pyyaml>=5.1',
         'drmaa',
@@ -43,7 +43,8 @@ if __name__ == "__main__":
         include_package_data=True,
         entry_points="""
             [console_scripts]
-            psimulate=vivarium_cluster_tools.cli:psimulate
+            psimulate=vivarium_cluster_tools.psimulate.cli:psimulate
+            vadmin=vivarium_cluster_tools.vadmin.cli:vadmin
         """,
 
         install_requires=install_requires,
