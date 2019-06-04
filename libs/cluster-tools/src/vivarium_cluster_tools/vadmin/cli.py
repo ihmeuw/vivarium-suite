@@ -1,6 +1,7 @@
 import click
 
-from vivarium_cluster_tools.vadmin import utilities, log_parser, repositories
+from vivarium_cluster_tools import shared
+from vivarium_cluster_tools.vadmin import utilities, log_parser, repositories, oauth_utilities
 
 
 @click.group()
@@ -49,13 +50,17 @@ def oauth():
 def create(service, verbose):
     """Create a new OAuth token for a SERVICE."""
     utilities.configure_master_process_logging_to_terminal(verbose)
-    repositories.oauth_create(service)
+    main = shared.handle_exceptions(oauth_utilities.oauth_create, with_debugger=True)
+    main(service)
 
 
 @oauth.command()
 @click.argument('service', type=click.Choice(['stash', 'github']))
-def remove(service):
-    print(f'creating oauth token for {service}')
+@click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
+def remove(service, verbose):
+    utilities.configure_master_process_logging_to_terminal(verbose)
+    main = shared.handle_exceptions(oauth_utilities.oauth_remove, with_debugger=True)
+    main(service)
 
 
 @oauth.command()
