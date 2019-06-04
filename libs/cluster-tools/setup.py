@@ -25,6 +25,8 @@ if __name__ == "__main__":
         'vivarium',
         'vivarium_public_health',
         'click',
+        'cookiecutter',
+        'requests',
     ]
 
     setup(
