@@ -32,6 +32,14 @@ def parse(logs_directory, result_directory, verbose):
 
 @vadmin.group()
 def oauth():
+    """Add or delete OAuth tokens from github and stash.
+
+    This command manages authentication for github and stash by communicating
+    with the webservices over http through their respective REST APIs. It
+    allows a user to create, store, or delete OAuth tokens which will be
+    used in place of a user name and password when managing repositories.
+
+    """
     pass
 
 
@@ -39,6 +47,7 @@ def oauth():
 @click.argument('service', type=click.Choice(['stash', 'github']))
 @click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
 def create(service, verbose):
+    """Create a new OAuth token for a SERVICE."""
     utilities.configure_master_process_logging_to_terminal(verbose)
     repositories.oauth_create(service)
 

@@ -7,6 +7,7 @@ import requests
 
 
 class OAuthConfig:
+    """Wrapper around a user OAuth configuration."""
 
     def __init__(self):
         self._path = Path().home() / '.config' / 'vadmin_tokens.json'
@@ -25,7 +26,7 @@ class OAuthConfig:
         self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.path.touch(mode=0o600)
 
-    def _load_content(self):
+    def _load_content(self) -> dict:
         with self.path.open('r') as f:
             try:
                 content = json.load(f)
@@ -33,7 +34,7 @@ class OAuthConfig:
                 content = {}
         return content
 
-    def update_from_http_response(self, response, service):
+    def update_from_http_response(self, response: requests.Response, service: str):
         if response.status_code == 200:
             print(f'{service} token successfully created.\n'
                   f'Token details: {response.json()}\n')
@@ -46,13 +47,42 @@ class OAuthConfig:
                                f'Response details: {response.json()}')
 
 
-def get_user(service):
+User = namedtuple('User', ['name', 'password'])
+
+
+def get_user(service: str) -> User:
+    """Retrieves and wraps a user name and password for a service.
+
+    Parameters
+    ----------
+    service
+        One of 'stash' or 'github'.
+
+    Returns
+    -------
+        A ``User`` tuple with a name and password.
+
+    """
     username = input(f'Please enter your {service} user name: ')
     password = getpass(f'Please enter your {service} password: ')
-    return namedtuple('User', ['name', 'password'])(username, password)
+    return User(username, password)
 
 
-def oauth_create(service):
+def oauth_create(service: str):
+    """Generates a new OAuth token for the service.
+
+    Parameters
+    ----------
+    service
+        One of 'stash' or 'github'.
+
+    Raises
+    ------
+    RuntimeError
+        If a token for the service exists locally or remotely.
+
+    """
+
     config = OAuthConfig()
     if service in config.content:
         raise RuntimeError(f'Local token for {service} already present.')
