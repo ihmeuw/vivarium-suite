@@ -104,10 +104,10 @@ def oauth_create_stash(config: OAuthConfig):
     payload = {'name': 'vadmin',
                'permissions': ['PROJECT_ADMIN']}
     response = requests.put(api_endpoint, headers=headers, auth=user, data=json.dumps(payload))
-    config.update_from_http_response(response)
+    config.update_from_http_response(response, 'stash')
 
 
-def _check_stash_token(response):
+def _check_stash_token(response: requests.Response):
     if response.status_code == 200:
         tokens = response.json()['values']
         vadmin_token = [t for t in tokens if t['name'] == 'vadmin']
@@ -119,7 +119,7 @@ def _check_stash_token(response):
                            f'Response details: {response.json()}')
 
 
-def oauth_create_github(config):
+def oauth_create_github(config: OAuthConfig):
     user = get_user('github')
     api_endpoint = 'https://api.github.com/authorizations'
 
@@ -128,4 +128,4 @@ def oauth_create_github(config):
         'scopes': ['user', 'repo']
     }
     response = requests.post(api_endpoint, auth=user, data=json.dumps(payload))
-    config.update_from_http_response(response)
+    config.update_from_http_response(response, 'github')
