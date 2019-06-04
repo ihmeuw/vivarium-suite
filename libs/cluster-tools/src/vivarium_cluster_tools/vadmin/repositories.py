@@ -4,7 +4,49 @@ import json
 from pathlib import Path
 
 import requests
+from loguru import logger
 
+
+#####################
+# Main Entry Points #
+#####################
+
+def oauth_create(service: str):
+    """Generates a new OAuth token for the service.
+
+    Parameters
+    ----------
+    service
+        One of 'stash' or 'github'.
+
+    Raises
+    ------
+    RuntimeError
+        If a token for the service exists locally or remotely.
+
+    """
+
+    config = OAuthConfig()
+    if config.content[service]:
+        raise RuntimeError(f'Local token for {service} already present.')
+
+    creators = {'stash': oauth_create_stash, 'github': oauth_create_github}
+    creators[service](config)
+
+
+def oauth_remove(service: str):
+    config = OAuthConfig()
+    if not config.content[service]:
+        raise RuntimeError(f'No local token for {service} present. You can '
+                           f'delete tokens from the web page if necessary.')
+
+    removers = {'stash': oauth_remove_stash, 'github': oauth_remove_github}
+    removers[service](config)
+
+
+####################
+# Shared Utilities #
+####################
 
 class OAuthConfig:
     """Wrapper around a user OAuth configuration."""
@@ -24,27 +66,22 @@ class OAuthConfig:
 
     def _make_file(self):
         self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        self.path.touch(mode=0o600)
+
+        if not self.path.exists():
+            self.path.touch(mode=0o600)
+            with self.path.open('w') as f:
+                json.dump({'stash': {}, 'github': {}}, f)
 
     def _load_content(self) -> dict:
         with self.path.open('r') as f:
-            try:
-                content = json.load(f)
-            except json.decoder.JSONDecodeError:  # The json file exists, but is empty
-                content = {}
+            content = json.load(f)
         return content
 
-    def update_from_http_response(self, response: requests.Response, service: str):
-        if response.status_code == 200:
-            print(f'{service} token successfully created.\n'
-                  f'Token details: {response.json()}\n')
-
-            self._content.update({service: response.json()})
-            with self.path.open('w') as f:
-                json.dump(self.content, f)
-        else:
-            raise RuntimeError(f'Unknown response {response.status_code} while creating token.\n'
-                               f'Response details: {response.json()}')
+    def update(self, service: str, content: dict):
+        logger.info(f'Updating config for {service} with content {content}.')
+        self._content.update({service: content})
+        with self.path.open('w') as f:
+            json.dump(self.content, f)
 
 
 User = namedtuple('User', ['name', 'password'])
@@ -68,28 +105,27 @@ def get_user(service: str) -> User:
     return User(username, password)
 
 
-def oauth_create(service: str):
-    """Generates a new OAuth token for the service.
+def parse_token_creation_response(response: requests.Response) -> dict:
+    if response.status_code in [200, 201]:
+        logger.info(f'Token successfully created.')
+    else:
+        raise RuntimeError(f'Unknown response {response.status_code} while creating token.\n'
+                           f'Response details: {response.text}')
+    return response.json()
 
-    Parameters
-    ----------
-    service
-        One of 'stash' or 'github'.
 
-    Raises
-    ------
-    RuntimeError
-        If a token for the service exists locally or remotely.
+def parse_token_deletion_response(response: requests.Response) -> dict:
+    if response.status_code == 204:
+        logger.info(f'Token successfully deleted.')
+    else:
+        raise RuntimeError(f'Unknown response {response.status_code} while deleting token.\n'
+                           f'Response details: {response.text}')
+    return {}
 
-    """
 
-    config = OAuthConfig()
-    if service in config.content:
-        raise RuntimeError(f'Local token for {service} already present.')
-
-    creators = {'stash': oauth_create_stash, 'github': oauth_create_github}
-    creators[service](config)
-
+############################
+# Stash-specific utilities #
+############################
 
 def oauth_create_stash(config: OAuthConfig):
     user = get_user('stash')
@@ -104,7 +140,8 @@ def oauth_create_stash(config: OAuthConfig):
     payload = {'name': 'vadmin',
                'permissions': ['PROJECT_ADMIN']}
     response = requests.put(api_endpoint, headers=headers, auth=user, data=json.dumps(payload))
-    config.update_from_http_response(response, 'stash')
+    token_config = parse_token_creation_response(response)
+    config.update('stash', token_config)
 
 
 def _check_stash_token(response: requests.Response):
@@ -116,8 +153,23 @@ def _check_stash_token(response: requests.Response):
                                f'Token properties: {vadmin_token[0]}')
     else:
         raise RuntimeError(f'Unknown response {response.status_code} while querying token.\n'
-                           f'Response details: {response.json()}')
+                           f'Response details: {response.text}')
 
+
+def oauth_remove_stash(config: OAuthConfig):
+    user = get_user('stash')
+    token_id = config.content['stash']['id']
+    api_endpoint = f'https://stash.ihme.washington.edu/rest/access-tokens/1.0/users/{user.name}/{token_id}'
+    headers = {'Content-Type': 'application/json'}
+
+    response = requests.delete(api_endpoint, auth=user, headers=headers)
+    token_config = parse_token_deletion_response(response)
+    config.update('stash', token_config)
+
+
+#############################
+# Github-specific utilities #
+#############################
 
 def oauth_create_github(config: OAuthConfig):
     user = get_user('github')
@@ -128,4 +180,15 @@ def oauth_create_github(config: OAuthConfig):
         'scopes': ['user', 'repo']
     }
     response = requests.post(api_endpoint, auth=user, data=json.dumps(payload))
-    config.update_from_http_response(response, 'github')
+    token_config = parse_token_creation_response(response)
+    config.update('github', token_config)
+
+
+def oauth_remove_github(config: OAuthConfig):
+    user = get_user('github')
+    token_id = config.content['github']['id']
+    api_endpoint = f'https://api.github.com/authorizations/{token_id}'
+
+    response = requests.delete(api_endpoint, auth=user)
+    token_config = parse_token_deletion_response(response)
+    config.update('stash', token_config)
