@@ -1,6 +1,6 @@
 import click
 
-from vivarium_cluster_tools.vadmin import utilities, log_parser
+from vivarium_cluster_tools.vadmin import utilities, log_parser, repositories
 
 
 @click.group()
@@ -9,7 +9,7 @@ def vadmin():
     pass
 
 
-@click.command()
+@vadmin.command()
 @click.argument('logs-directory', type=click.Path(exists=True, file_okay=False))
 @click.option('--result-directory', '-o', type=click.Path(exists=True, file_okay=False),
               help='The directory into which to write the summary of the parsed logs. '
@@ -28,3 +28,25 @@ def parse(logs_directory, result_directory, verbose):
     if not result_directory:
         result_directory = logs_directory
     log_parser.parse_log_directory(logs_directory, result_directory)
+
+
+@vadmin.group()
+def oauth():
+    pass
+
+
+@oauth.command()
+@click.argument('service', type=click.Choice(['stash', 'github']))
+def create(service):
+    print(f'creating oauth token for {service}')
+
+
+@oauth.command()
+@click.argument('service', type=click.Choice(['stash', 'github']))
+def remove(service):
+    print(f'creating oauth token for {service}')
+
+
+@oauth.command()
+def display():
+    print(f'Displaying OAuth tokens')
