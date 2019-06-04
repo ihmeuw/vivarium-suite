@@ -37,8 +37,10 @@ def oauth():
 
 @oauth.command()
 @click.argument('service', type=click.Choice(['stash', 'github']))
-def create(service):
-    print(f'creating oauth token for {service}')
+@click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
+def create(service, verbose):
+    utilities.configure_master_process_logging_to_terminal(verbose)
+    repositories.oauth_create(service)
 
 
 @oauth.command()
