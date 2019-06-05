@@ -124,17 +124,17 @@ def create_repository(service: str, oauth_token: str, repo_name: str) -> str:
 
 
 def delete_repository(service: str, oauth_token: str, repo_name: str):
-    """Creates a new remote repository.
+    """Deletes a remote repository.
 
     Parameters
     ----------
     service
-        Either 'stash' or 'github'.  The service to generate the new repository
-        on.
+        Either 'stash' or 'github'.  The service to delete the repository
+        from.
     oauth_token
         The user's credentials to access the service.
     repo_name
-        The name of the new remote repository to create.
+        The name of the remote repository to delete.
 
     """
     if service == 'stash':
