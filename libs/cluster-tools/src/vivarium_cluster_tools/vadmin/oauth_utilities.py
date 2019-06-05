@@ -2,6 +2,7 @@ from collections import namedtuple
 from getpass import getpass
 import json
 from pathlib import Path
+from pprint import pformat
 
 import requests
 from loguru import logger
@@ -42,6 +43,13 @@ def oauth_remove(service: str):
 
     removers = {'stash': oauth_remove_stash, 'github': oauth_remove_github}
     removers[service](config)
+
+
+def oauth_display():
+    config = OAuthConfig()
+    logger.info(f'Local oauth configuration:\n{pformat(config.content)}')
+
+    # TODO: Implement display of remote OAuth tokens.
 
 
 ####################

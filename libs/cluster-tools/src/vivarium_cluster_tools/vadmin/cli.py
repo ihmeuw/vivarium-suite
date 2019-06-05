@@ -64,5 +64,8 @@ def remove(service, verbose):
 
 
 @oauth.command()
-def display():
-    print(f'Displaying OAuth tokens')
+@click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
+def display(verbose):
+    utilities.configure_master_process_logging_to_terminal(verbose)
+    main = shared.handle_exceptions(oauth_utilities.oauth_display, with_debugger=True)
+    main()
