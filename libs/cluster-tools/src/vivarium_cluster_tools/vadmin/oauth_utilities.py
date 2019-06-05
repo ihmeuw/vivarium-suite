@@ -297,11 +297,12 @@ def oauth_create_github(config: OAuthConfig):
 
 
 def oauth_remove_github(config: OAuthConfig):
-    """Creates a new OAuth token on github."""
+    """Removes an existing OAuth token from github."""
     user = get_user('github')
     token_id = config.content['github']['id']
     api_endpoint = f'https://api.github.com/authorizations/{token_id}'
-
+    
+    logger.debug('Removing OAuth token from github.')
     response = requests.delete(api_endpoint, auth=user)
     token_config = parse_token_deletion_response(response)
     config.update('github', token_config)
