@@ -80,7 +80,7 @@ def display(verbose):
               help='Directory to create the new repository in.')
 @click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
 def init(service, repo_name, output_root, verbose):
-    """Creates a new research repository REPO_NAME and hosts in on SERVICE.
+    """Creates a new research repository REPO_NAME and hosts it on SERVICE.
 
     In order to use this command, you must have an OAuth token for the
     requested SERVICE. You can generate an OAuth token by running::
