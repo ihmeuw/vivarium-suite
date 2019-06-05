@@ -58,6 +58,7 @@ def create(service, verbose):
 @click.argument('service', type=click.Choice(['stash', 'github']))
 @click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
 def remove(service, verbose):
+    """Remove an existing OAuth token for SERVICE."""
     utilities.configure_master_process_logging_to_terminal(verbose)
     main = shared.handle_exceptions(oauth_utilities.oauth_remove, with_debugger=True)
     main(service)
@@ -66,6 +67,34 @@ def remove(service, verbose):
 @oauth.command()
 @click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
 def display(verbose):
+    """Display local OAuth information."""
     utilities.configure_master_process_logging_to_terminal(verbose)
     main = shared.handle_exceptions(oauth_utilities.oauth_display, with_debugger=True)
     main()
+
+
+@vadmin.command()
+@click.argument('service', type=click.Choice(['stash', 'github']))
+@click.argument('repo_name', type=click.STRING)
+@click.option('-o', '--output_root', type=click.Path(exists=True, file_okay=False, resolve_path=True),
+              help='Directory to create the new repository in.')
+@click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
+def init(service, repo_name, output_root, verbose):
+    """Creates a new research repository REPO_NAME and hosts in on SERVICE.
+
+    In order to use this command, you must have an OAuth token for the
+    requested SERVICE. You can generate an OAuth token by running::
+
+    vadmin oauth create SERVICE
+
+    You must also have ssh keys set up on the requested SERVICE so that you
+    can ``clone`` and ``push`` to the new repository.  You must handle the
+    ssh configuration manually.
+
+    The research repository will be generated from a template at
+    `https://github.com/ihmeuw/vivarium_research_template`_.
+
+    """
+    utilities.configure_master_process_logging_to_terminal(verbose)
+    main = shared.handle_exceptions(repositories.init, with_debugger=True)
+    main(service, repo_name, output_root)
