@@ -1,44 +1,66 @@
-import io
+#!/usr/bin/env python
 import os
-import re
 
-from setuptools import find_packages
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
-def read(filename):
-    filename = os.path.join(os.path.dirname(__file__), filename)
-    text_type = type(u"")
-    with io.open(filename, mode="r", encoding='utf-8') as fd:
-        return re.sub(text_type(r':[a-z]+:`~?(.*?)`'), text_type(r'``\1``'), fd.read())
+if __name__ == "__main__":
+
+    base_dir = os.path.dirname(__file__)
+    src_dir = os.path.join(base_dir, "src")
+
+    about = {}
+    with open(os.path.join(src_dir, "{{cookiecutter.package_name}}", "__about__.py")) as f:
+        exec(f.read(), about)
+
+    with open(os.path.join(base_dir, "README.rst")) as f:
+        long_description = f.read()
+
+    install_requirements = [
+        'vivarium=={{cookiecutter.vivarium_version}}',
+        'vivarium_public_health=={{cookiecutter.vivarium_public_health_version}}',
+        'vivarium_cluster_tools=={{cookiecutter.vivarium_cluster_tools_version}}',
+        'numpy',
+        'pandas',
+        'scipy',
+        'matplotlib',
+        'seaborn',
+        'jupyter',
+        'jupyterlab',
+        'pytest',
+        'pytest-mock',
+    ]
+
+    setup(
+        name=about['__title__'],
+        version=about['__version__'],
+
+        description=about['__summary__'],
+        long_description=long_description,
+        license=about['__license__'],
+        url=about["__uri__"],
+
+        author=about["__author__"],
+        author_email=about["__email__"],
 
 
-setup(
-    name="{{ cookiecutter.package_name }}",
-    version="{{ cookiecutter.package_version }}",
-    url="{{ cookiecutter.package_url }}",
-    license='MIT',
+        package_dir={'': 'src'},
+        packages=find_packages(where='src'),
+        include_package_data=True,
 
-    author="{{ cookiecutter.author_name }}",
-    author_email="{{ cookiecutter.author_email }}",
+        install_requires=install_requirements,
+        tests_require=test_requirements,
+        extras_require={
+            'docs': doc_requirements,
+            'test': test_requirements,
+            'interactive': interactive_requirements,
+            'dev': doc_requirements + test_requirements + interactive_requirements,
+        },
 
-    description="{{ cookiecutter.package_description }}",
-    long_description=read("README.rst"),
+        entry_points="""
+                [console_scripts]
+                simulate=vivarium.interface.cli:simulate
+            """,
 
-    packages=find_packages(exclude=('tests',)),
-
-    install_requires=[],
-
-    classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-    ],
-)
+        zip_safe=False,
+    )
