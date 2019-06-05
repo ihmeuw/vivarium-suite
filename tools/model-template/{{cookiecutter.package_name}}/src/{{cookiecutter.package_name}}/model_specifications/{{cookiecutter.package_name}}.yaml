@@ -19,7 +19,7 @@ configuration:
     input_data:
         location: United States
         input_draw_number: 0
-        artifact_path: # FILL ME
+        artifact_path: /share/costeffectiveness/artifacts/{{cookiecutter.package_name}}/{{cookiecutter.package_name}}.hdf
     interpolation:
         order: 0
         extrapolate: False

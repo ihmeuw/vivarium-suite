@@ -1,6 +1,9 @@
 Authors
 ======
 
-{% for author in cookiecutter.authors.split(',') %}
-    -  {{- author -}}
-{% endfor %}
+LEAD ENGINEER:
+RESEARCHER:
+DATA ANALYST:
+
+Contributors
+-------------

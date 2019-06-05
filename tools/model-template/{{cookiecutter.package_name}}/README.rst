@@ -1,6 +1,5 @@
 {{ cookiecutter.package_name }}
 ===============================
-
 {{ cookiecutter.package_description }}
 
 Usage
@@ -28,7 +27,7 @@ To set up a new research environment, open up a terminal on the cluster and run:
     ...standard conda install stuff...
     $> conda activate {{ cookiecutter.package_name }}
     ({{ cookiecutter.package_name }}) $> conda install redis cython
-    ({{ cookiecutter.package_name }}) $> git clone {{ cookiecutter.package_url }}
+    ({{ cookiecutter.package_name }}) $> git clone {{ cookiecutter.ssh_url }}
     ...you may need to do username/password stuff here...
     ({{ cookiecutter.package_name }}) $> cd neonatal
     ({{ cookiecutter.package_name }}) $> pip install -e .
