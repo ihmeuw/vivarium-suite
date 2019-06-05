@@ -3,6 +3,16 @@ import sys
 from loguru import logger
 
 
+class VAdminError(Exception):
+    """Main error class for ``vadmin`` commands."""
+    pass
+
+
+class HTTPError(VAdminError, RuntimeError):
+    """Error when http requests are malformed."""
+    pass
+
+
 def add_logging_sink(sink, verbose, colorize=False, serialize=False):
     message_format = ('<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
                       '<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> '
