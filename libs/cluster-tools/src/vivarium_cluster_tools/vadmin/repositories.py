@@ -6,11 +6,24 @@ from cookiecutter.main import cookiecutter
 from loguru import logger
 import requests
 
-from vivarium_cluster_tools.vadmin.utilities import HTTPError
+from vivarium_cluster_tools.vadmin.utilities import HTTPError, VAdminError
 from vivarium_cluster_tools.vadmin.oauth_utilities import OAuthConfig, OAuthError
 
 
-def init(service: str, repo_name: str, output_root: str = None):
+def init(service: str, repo_name: str, output_root: str):
+    """Creates a new research repository from a template.
+
+    Parameters
+    ----------
+    service
+        Either 'stash' or 'github'. The service to create the new
+        research repository on.
+    repo_name
+        The name of the new research repository.
+    output_root
+        The local directory to create the new repository in.
+
+    """
     repo_name = repo_name.replace(' ', '_').replace('-', '_')
     output_path = check_output_path(output_root, repo_name)
 
@@ -47,11 +60,15 @@ def check_output_path(output_root: str, repo_name: str) -> Path:
     logger.debug(f'Checking if output path {str(output_path)} is valid.')
     if output_path.exists():
         raise FileExistsError(f'Repository directory {str(output_path)} already exists.')
+    logger.info(f'Output path validated.')
     return output_path
 
 
 def authenticate(service: str) -> str:
     """Verifies that the user has credentials to access the service.
+
+    This function checks both that you can connect via ``ssh`` and that you
+    have a valid OAuth token for transactions with the service.
 
     Parameters
     ----------
@@ -69,10 +86,28 @@ def authenticate(service: str) -> str:
 
     """
     config = OAuthConfig()
-    logger.debug(f'Checking if you have local credentials for {service}.')
+    logger.debug(f'Checking if you have local OAuth credentials for {service}.')
     if not config.content[service]:
         raise OAuthError(f'No OAuth config for {service}.  You must run `vadmin oauth create {service}` before you '
                          f'can initialize research repositories.')
+
+    # Check ssh
+    logger.debug(f'Checking if you can access {service} via ssh.')
+    url = {'stash': f'{config.content["stash"]["user"]["name"]}@stash.ihme.washington.edu',
+           'github': 'git@github.com'}[service]
+    p = subprocess.Popen(['ssh', '-o BatchMode=yes', '-o ConnectionTimeout=3', url], stderr=subprocess.PIPE)
+    _, stderr = p.communicate()
+
+    if service == 'stash':
+        if 'This host is for the exclusive use of the IHME staff' not in stderr.decode():
+            raise VAdminError("Can't access stash. Either you're not connected to the "
+                              "internet or you're not connected to the IHME Network.")
+    else:  # service == github
+        if "You've successfully authenticated, but GitHub" not in stderr.decode():
+            raise VAdminError("Cant access github.  Check your internet connection.")
+
+    logger.info('OAuth and ssh credentials authenticated.')
+
     return config.content[service]['token']
 
 
@@ -165,7 +200,7 @@ def parse_repo_creation_response(response: requests.Response) -> dict:
         logger.info('Repository successfully created')
         return response.json()
     elif response.status_code == 409:
-        raise HTTPError(f'Repository already exists.')
+        raise VAdminError(f'Repository already exists.')
     else:
         raise HTTPError(f'Unknown response {response.status_code} when creating repo.\n'
                         f'Response details: {response.text}')
@@ -208,11 +243,20 @@ def clone_repository(repository_url: str, output_dir: Path) -> Path:
         The path to the new repository.
 
     """
+    logger.debug(f'Cloning empty repository from {repository_url} into {output_dir}')
     subprocess.run(['git', 'clone', repository_url, str(output_dir)], check=True)
     return output_dir
 
 
-def get_library_versions():
+def get_library_versions() -> dict:
+    """Gets the version information for upstream dependencies.
+
+    Returns
+    -------
+        A mapping of the form {'LIBRARY_version': VERSION_STRING}.
+        For example: {'vivarium': '0.8.20'}
+
+    """
     libraries = ['vivarium', 'vivarium_public_health', 'vivarium_cluster_tools', 'vivarium_inputs']
     versions = {}
 
@@ -223,7 +267,20 @@ def get_library_versions():
     return versions
 
 
-def generate_template(repo_name, repo_path, repo_url):
+def generate_template(repo_name: str, repo_path: Path, repo_url: str):
+    """Uses ``cookicutter`` to populate an empty repository from a template.
+
+    Parameters
+    ----------
+    repo_name
+        The name of the new package.
+    repo_path
+        The fully resolved path to the local repository root directory.
+    repo_url
+        The ``git clone`` ssh url.
+
+    """
+    # Template parameters for the new research package.
     extra = {'package_name': repo_name,
              'ssh_url': repo_url}
     extra.update(get_library_versions())
@@ -237,7 +294,15 @@ def generate_template(repo_name, repo_path, repo_url):
 
 
 def update_repository(repo_path):
+    """Commit and push the research repo to the empty upstream repository.
+
+    Parameters
+    ----------
+    repo_path
+        The fully resolved path to the local repository root directory.
+
+    """
     subprocess.run(['git', 'add', '.'], cwd=repo_path)
     subprocess.run(['git', 'commit', '-m "Template commit"'], cwd=repo_path)
-    subprocess.run(['git', 'push'], cwd=repo_path)
+    subprocess.run(['git', 'push', 'origin', 'master'], cwd=repo_path)
 
