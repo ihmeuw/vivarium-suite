@@ -21,8 +21,11 @@ if __name__ == "__main__":
         'vivarium_public_health=={{cookiecutter.vivarium_public_health_version}}',
         'vivarium_cluster_tools=={{cookiecutter.vivarium_cluster_tools_version}}',
         'vivarium_inputs[data]=={{cookiecutter.vivarium_inputs_version}}',
+        
+        # These are pinned for internal dependencies on IHME libraries
         'numpy<=1.15.4',
         'tables<=3.4.0',
+        
         'pandas',
         'scipy',
         'matplotlib',
