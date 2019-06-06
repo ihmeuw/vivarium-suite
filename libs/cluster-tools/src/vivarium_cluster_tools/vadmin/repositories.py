@@ -95,7 +95,7 @@ def authenticate(service: str) -> str:
     logger.debug(f'Checking if you can access {service} via ssh.')
     url = {'stash': f'{config.content["stash"]["user"]["name"]}@stash.ihme.washington.edu',
            'github': 'git@github.com'}[service]
-    p = subprocess.Popen(['ssh', '-o BatchMode=yes', url], stderr=subprocess.PIPE)
+    p = subprocess.Popen(['ssh', '-o BatchMode=yes', '-o ConnectionTimeout=3', url], stderr=subprocess.PIPE)
     _, stderr = p.communicate()
 
     if service == 'stash':
