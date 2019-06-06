@@ -60,6 +60,7 @@ def check_output_path(output_root: str, repo_name: str) -> Path:
     logger.debug(f'Checking if output path {str(output_path)} is valid.')
     if output_path.exists():
         raise FileExistsError(f'Repository directory {str(output_path)} already exists.')
+    logger.info(f'Output path validated.')
     return output_path
 
 
@@ -91,6 +92,7 @@ def authenticate(service: str) -> str:
                          f'can initialize research repositories.')
 
     # Check ssh
+    logger.debug(f'Checking if you can access {service} via ssh.')
     url = {'stash': f'{config.content["stash"]["user"]["name"]}@stash.ihme.washington.edu',
            'github': 'git@github.com'}[service]
     p = subprocess.Popen(['ssh', '-o BatchMode=yes', url], stderr=subprocess.PIPE)
@@ -103,6 +105,8 @@ def authenticate(service: str) -> str:
     else:  # service == github
         if "You've successfully authenticated, but GitHub" not in stderr.decode():
             raise VAdminError("Cant access github.  Check your internet connection.")
+
+    logger.info('OAuth and ssh credentials authenticated.')
 
     return config.content[service]['token']
 
@@ -239,6 +243,7 @@ def clone_repository(repository_url: str, output_dir: Path) -> Path:
         The path to the new repository.
 
     """
+    logger.debug(f'Cloning empty repository from {repository_url} into {output_dir}')
     subprocess.run(['git', 'clone', repository_url, str(output_dir)], check=True)
     return output_dir
 
@@ -299,5 +304,5 @@ def update_repository(repo_path):
     """
     subprocess.run(['git', 'add', '.'], cwd=repo_path)
     subprocess.run(['git', 'commit', '-m "Template commit"'], cwd=repo_path)
-    subprocess.run(['git', 'push'], cwd=repo_path)
+    subprocess.run(['git', 'push', 'origin', 'master'], cwd=repo_path)
 
