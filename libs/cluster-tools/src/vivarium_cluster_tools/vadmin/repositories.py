@@ -6,11 +6,24 @@ from cookiecutter.main import cookiecutter
 from loguru import logger
 import requests
 
-from vivarium_cluster_tools.vadmin.utilities import HTTPError
+from vivarium_cluster_tools.vadmin.utilities import HTTPError, VAdminError
 from vivarium_cluster_tools.vadmin.oauth_utilities import OAuthConfig, OAuthError
 
 
-def init(service: str, repo_name: str, output_root: str = None):
+def init(service: str, repo_name: str, output_root: str):
+    """Creates a new research repository from a template.
+
+    Parameters
+    ----------
+    service
+        Either 'stash' or 'github'. The service to create the new
+        research repository on.
+    repo_name
+        The name of the new research repository.
+    output_root
+        The local directory to create the new repository in.
+
+    """
     repo_name = repo_name.replace(' ', '_').replace('-', '_')
     output_path = check_output_path(output_root, repo_name)
 
@@ -165,7 +178,7 @@ def parse_repo_creation_response(response: requests.Response) -> dict:
         logger.info('Repository successfully created')
         return response.json()
     elif response.status_code == 409:
-        raise HTTPError(f'Repository already exists.')
+        raise VAdminError(f'Repository already exists.')
     else:
         raise HTTPError(f'Unknown response {response.status_code} when creating repo.\n'
                         f'Response details: {response.text}')
@@ -212,7 +225,15 @@ def clone_repository(repository_url: str, output_dir: Path) -> Path:
     return output_dir
 
 
-def get_library_versions():
+def get_library_versions() -> dict:
+    """Gets the version information for upstream dependencies.
+
+    Returns
+    -------
+        A mapping of the form {'LIBRARY_version': VERSION_STRING}.
+        For example: {'vivarium': '0.8.20'}
+
+    """
     libraries = ['vivarium', 'vivarium_public_health', 'vivarium_cluster_tools', 'vivarium_inputs']
     versions = {}
 
@@ -223,7 +244,20 @@ def get_library_versions():
     return versions
 
 
-def generate_template(repo_name, repo_path, repo_url):
+def generate_template(repo_name: str, repo_path: Path, repo_url: str):
+    """Uses ``cookicutter`` to populate an empty repository from a template.
+
+    Parameters
+    ----------
+    repo_name
+        The name of the new package.
+    repo_path
+        The fully resolved path to the local repository root directory.
+    repo_url
+        The ``git clone`` ssh url.
+
+    """
+    # Template parameters for the new research package.
     extra = {'package_name': repo_name,
              'ssh_url': repo_url}
     extra.update(get_library_versions())
@@ -237,6 +271,14 @@ def generate_template(repo_name, repo_path, repo_url):
 
 
 def update_repository(repo_path):
+    """Commit and push the research repo to the empty upstream repository.
+
+    Parameters
+    ----------
+    repo_path
+        The fully resolved path to the local repository root directory.
+
+    """
     subprocess.run(['git', 'add', '.'], cwd=repo_path)
     subprocess.run(['git', 'commit', '-m "Template commit"'], cwd=repo_path)
     subprocess.run(['git', 'push'], cwd=repo_path)
