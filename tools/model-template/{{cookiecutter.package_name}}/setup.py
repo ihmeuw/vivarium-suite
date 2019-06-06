@@ -20,7 +20,8 @@ if __name__ == "__main__":
         'vivarium=={{cookiecutter.vivarium_version}}',
         'vivarium_public_health=={{cookiecutter.vivarium_public_health_version}}',
         'vivarium_cluster_tools=={{cookiecutter.vivarium_cluster_tools_version}}',
-        'numpy',
+        'numpy<=1.15.4',
+        'tables<=3.4.0',
         'pandas',
         'scipy',
         'matplotlib',
@@ -43,24 +44,11 @@ if __name__ == "__main__":
         author=about["__author__"],
         author_email=about["__email__"],
 
-
         package_dir={'': 'src'},
         packages=find_packages(where='src'),
         include_package_data=True,
 
         install_requires=install_requirements,
-        tests_require=test_requirements,
-        extras_require={
-            'docs': doc_requirements,
-            'test': test_requirements,
-            'interactive': interactive_requirements,
-            'dev': doc_requirements + test_requirements + interactive_requirements,
-        },
-
-        entry_points="""
-                [console_scripts]
-                simulate=vivarium.interface.cli:simulate
-            """,
 
         zip_safe=False,
     )

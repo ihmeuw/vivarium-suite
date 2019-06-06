@@ -3,4 +3,8 @@
     "package_version": "1.0.0",
     "package_description": "Research repository for the {{cookiecutter.package_name}} project.",
     "package_url": "https://github.com/ihmeuw/{{cookiecutter.package_name}}",
+    "ssh_url": "git@github.com:ihmeuw/{{cookiecutter.package_name}}.git",
+    "vivarium_version": "",
+    "vivarium_public_health_version": "",
+    "vivarium_cluster_tools_version": ""
 }
