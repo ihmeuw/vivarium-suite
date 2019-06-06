@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import subprocess
 
-import cookiecutter
+from cookiecutter.main import cookiecutter
 from loguru import logger
 import requests
 
@@ -10,8 +10,8 @@ from vivarium_cluster_tools.vadmin.utilities import HTTPError
 from vivarium_cluster_tools.vadmin.oauth_utilities import OAuthConfig, OAuthError
 
 
-def init(service: str, repo_name: str, output_root: str):
-    repo_name = repo_name.replace(' ', '-').replace('_', '-')
+def init(service: str, repo_name: str, output_root: str = None):
+    repo_name = repo_name.replace(' ', '_').replace('-', '_')
     output_path = check_output_path(output_root, repo_name)
 
     oauth_token = authenticate(service)
@@ -23,16 +23,8 @@ def init(service: str, repo_name: str, output_root: str):
         delete_repository(service, oauth_token, repo_name)
         raise
 
-    #
-    # extra = {'project_name': repo_name}
-    # extra.update(get_library_versions())
-    #
-    # output_root = output_root if output_root else '.'
-    #
-    # cookiecutter(TEMPLATE_URL,
-    #              no_input=True,
-    #              extra_context=extra,
-    #              output_dir=output_root,)
+    generate_template(repo_name, repo_path, repo_url)
+    update_repository(repo_path)
 
 
 def check_output_path(output_root: str, repo_name: str) -> Path:
@@ -50,6 +42,7 @@ def check_output_path(output_root: str, repo_name: str) -> Path:
         A ``Path`` object representing the new repository directory.
 
     """
+    output_root = output_root if output_root else '.'
     output_path = (Path(output_root) / repo_name).resolve()
     logger.debug(f'Checking if output path {str(output_path)} is valid.')
     if output_path.exists():
@@ -220,7 +213,7 @@ def clone_repository(repository_url: str, output_dir: Path) -> Path:
 
 
 def get_library_versions():
-    libraries = ['vivarium', 'vivarium_public_health', 'vivarium_cluster_tools']
+    libraries = ['vivarium', 'vivarium_public_health', 'vivarium_cluster_tools', 'vivarium_inputs']
     versions = {}
 
     for l in libraries:
@@ -228,3 +221,23 @@ def get_library_versions():
         versions[f'{l}_version'] = r.json()['info']['version']
 
     return versions
+
+
+def generate_template(repo_name, repo_path, repo_url):
+    extra = {'package_name': repo_name,
+             'ssh_url': repo_url}
+    extra.update(get_library_versions())
+
+    template_url = 'https://github.com/ihmeuw/vivarium_research_template.git'
+    cookiecutter(template_url,
+                 no_input=True,
+                 extra_context=extra,
+                 output_dir=str(repo_path.parent),
+                 overwrite_if_exists=True)
+
+
+def update_repository(repo_path):
+    subprocess.run(['git', 'add', '.'], cwd=repo_path)
+    subprocess.run(['git', 'commit', '-m "Template commit"'], cwd=repo_path)
+    subprocess.run(['git', 'push'], cwd=repo_path)
+
