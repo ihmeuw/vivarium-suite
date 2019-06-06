@@ -66,6 +66,9 @@ def check_output_path(output_root: str, repo_name: str) -> Path:
 def authenticate(service: str) -> str:
     """Verifies that the user has credentials to access the service.
 
+    This function checks both that you can connect via ``ssh`` and that you
+    have a valid OAuth token for transactions with the service.
+
     Parameters
     ----------
     service
@@ -82,10 +85,25 @@ def authenticate(service: str) -> str:
 
     """
     config = OAuthConfig()
-    logger.debug(f'Checking if you have local credentials for {service}.')
+    logger.debug(f'Checking if you have local OAuth credentials for {service}.')
     if not config.content[service]:
         raise OAuthError(f'No OAuth config for {service}.  You must run `vadmin oauth create {service}` before you '
                          f'can initialize research repositories.')
+
+    # Check ssh
+    url = {'stash': f'{config.content["stash"]["user"]["name"]}@stash.ihme.washington.edu',
+           'github': 'git@github.com'}[service]
+    p = subprocess.Popen(['ssh', '-o BatchMode=yes', url], stderr=subprocess.PIPE)
+    _, stderr = p.communicate()
+
+    if service == 'stash':
+        if 'This host is for the exclusive use of the IHME staff' not in stderr.decode():
+            raise VAdminError("Can't access stash. Either you're not connected to the "
+                              "internet or you're not connected to the IHME Network.")
+    else:  # service == github
+        if "You've successfully authenticated, but GitHub" not in stderr.decode():
+            raise VAdminError("Cant access github.  Check your internet connection.")
+
     return config.content[service]['token']
 
 
