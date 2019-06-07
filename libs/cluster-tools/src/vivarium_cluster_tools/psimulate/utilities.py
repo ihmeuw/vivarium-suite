@@ -1,4 +1,6 @@
+from bdb import BdbQuit
 from datetime import datetime
+import functools
 import math
 import os
 from pathlib import Path
@@ -211,3 +213,24 @@ def validate_environment(output_dir: Path):
         logger.info('Validation of environment successful. All pip installed packages match '
                     'original versions. Run can proceed.')
 
+
+def handle_exceptions(func, with_debugger):
+    """Drops a user into an interactive debugger if func raises an error."""
+
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except (BdbQuit, KeyboardInterrupt):
+            raise
+        except Exception as e:
+            logger.exception("Uncaught exception {}".format(e))
+            if with_debugger:
+                import pdb
+                import traceback
+                traceback.print_exc()
+                pdb.post_mortem()
+            else:
+                raise
+
+    return wrapped
