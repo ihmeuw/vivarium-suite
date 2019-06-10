@@ -25,8 +25,6 @@ if __name__ == "__main__":
         'vivarium',
         'vivarium_public_health',
         'click',
-        'cookiecutter',
-        'requests',
     ]
 
     setup(
@@ -46,7 +44,7 @@ if __name__ == "__main__":
         entry_points="""
             [console_scripts]
             psimulate=vivarium_cluster_tools.psimulate.cli:psimulate
-            vadmin=vivarium_cluster_tools.vadmin.cli:vadmin
+            vparse=vivarium_cluster_tools.vparse.cli:vparse
         """,
 
         install_requires=install_requires,
