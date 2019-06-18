@@ -1,3 +1,16 @@
+**1.0.10 - 06/18/19**
+
+ - Added option to not batch results.
+ - Updated yaml api usage.
+ - Bugfix in dtypes when writing results.
+ - Allow the usage of branch files without parameter variations.
+ - Don't use ``ResultsWriter`` directly.
+ - Switch to consistent pathlib usage.
+ - Enable restart when no parameter variations present.
+ - Setup log rotations.
+ - Forward vivarium logs to worker logs.
+ - New ``vparse`` command for parsing worker logs.
+
 **1.0.9 - 04/22/19**
 
  - Bugfix in restart with string columns in outputs.
