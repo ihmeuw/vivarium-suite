@@ -1,6 +1,5 @@
 import click
 
-from vivarium_cluster_tools import shared
 from vivarium_cluster_tools.psimulate import globals as vct_globals, runner, utilities
 
 shared_options = [
@@ -72,7 +71,7 @@ def run(model_specification, branch_configuration, result_directory, **options):
 
     """
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
-    main = shared.handle_exceptions(runner.main, options['with_debugger'])
+    main = utilities.handle_exceptions(runner.main, options['with_debugger'])
 
     main(model_specification, branch_configuration, result_directory,
          options['project'], options['peak_memory'],
@@ -91,7 +90,7 @@ def restart(results_root, **options):
 
     """
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
-    main = shared.handle_exceptions(runner.main, options['with_debugger'])
+    main = utilities.handle_exceptions(runner.main, options['with_debugger'])
 
     main(None, None, results_root,
          options['project'], options['peak_memory'],
@@ -114,7 +113,7 @@ def expand(results_root, **options):
 
     """
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
-    main = shared.handle_exceptions(runner.main, options['with_debugger'])
+    main = utilities.handle_exceptions(runner.main, options['with_debugger'])
 
     main(None, None, results_root,
          options['project'], options['peak_memory'],
