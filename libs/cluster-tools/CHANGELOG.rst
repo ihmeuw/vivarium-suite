@@ -1,7 +1,11 @@
+**1.0.12 - 06/20/19**
+
+ - Bugfix in worker invocation
+
 **1.0.11 - 06/19/19**
 
  - Namespace bugfix.
- 
+
 **1.0.10 - 06/18/19**
 
  - Added option to not batch results.
