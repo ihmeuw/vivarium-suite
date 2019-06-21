@@ -34,7 +34,7 @@ def init_job_template(jt, peak_memory, sge_log_directory, worker_log_directory,
     export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
     export PYTHONPATH={output_dir}:$PYTHONPATH
 
-    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.distributed_worker.retry_handler" vivarium
+    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.psimulate.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.psimulate.distributed_worker.retry_handler" vivarium
 
     ''')
     launcher.close()
