@@ -1,3 +1,7 @@
+**1.0.14 - 06/20/19**
+
+ - Bugfix in job enqueuing.
+
 **1.0.12 - 06/20/19**
 
  - Bugfix in worker invocation
