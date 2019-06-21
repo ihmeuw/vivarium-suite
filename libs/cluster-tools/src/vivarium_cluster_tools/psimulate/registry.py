@@ -54,7 +54,7 @@ class QueueManager:
         for job in jobs:
             # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
             # will take from model to model and the entire system is short lived anyway
-            self._queue.enqueue('vivarium_cluster_tools.distributed_worker.worker',
+            self._queue.enqueue('vivarium_cluster_tools.psimulate.distributed_worker.worker',
                                 parameters=job,
                                 ttl=60 * 60 * 24 * 2,
                                 result_ttl=60 * 60,
