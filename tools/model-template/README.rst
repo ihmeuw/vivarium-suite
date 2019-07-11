@@ -14,7 +14,7 @@ Usage
 -----
 
 This template should be used exclusively with the ``vadmin init`` command
-available from `vivarium_development`.
+available from ``vivarium_development``.
 
 Development
 -----------
