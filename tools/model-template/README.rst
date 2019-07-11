@@ -14,8 +14,7 @@ Usage
 -----
 
 This template should be used exclusively with the ``vadmin init`` command
-available from
-`vivarium_cluster_tools <https://github.com/ihmeuw/vivarium_cluster_tools>`_
+available from `vivarium_development`.
 
 Development
 -----------
