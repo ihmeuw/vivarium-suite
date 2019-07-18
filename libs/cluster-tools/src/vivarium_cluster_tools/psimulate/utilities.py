@@ -71,6 +71,14 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
         output_directory = root / model_specification_name / launch_time
     return output_directory
 
+DIRECTORY_PERMS=0o775
+def set_permissions(output_dir):
+    ''' Call to achieve side effect of relaxing permissions
+        on output dir and the parent
+    '''
+    output_dir.parent.chmod(DIRECTORY_PERMS)
+    output_dir.chmod(DIRECTORY_PERMS)
+
 
 def setup_directories(model_specification_file, result_directory, restart, expand):
     output_directory = get_output_directory(model_specification_file, result_directory, restart)
@@ -90,10 +98,12 @@ def setup_directories(model_specification_file, result_directory, restart, expan
     logging_dirs = {'main': logging_directory,
                     'sge': logging_directory / 'sge_logs',
                     'worker': logging_directory / 'worker_logs'}
-
+    
     output_directory.mkdir(exist_ok=True, parents=True)
+    set_permissions(output_directory)
     for d in logging_dirs.values():
         d.mkdir(parents=True)
+        set_permissions(d)
 
     return output_directory, logging_dirs
 
