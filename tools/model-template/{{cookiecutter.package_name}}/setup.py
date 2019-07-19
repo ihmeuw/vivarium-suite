@@ -25,8 +25,8 @@ if __name__ == "__main__":
         # These are pinned for internal dependencies on IHME libraries
         'numpy<=1.15.4',
         'tables<=3.4.0',
+        'pandas<0.25',        
         
-        'pandas',
         'scipy',
         'matplotlib',
         'seaborn',
@@ -34,6 +34,7 @@ if __name__ == "__main__":
         'jupyterlab',
         'pytest',
         'pytest-mock',
+        'pyyaml',
     ]
 
     setup(
