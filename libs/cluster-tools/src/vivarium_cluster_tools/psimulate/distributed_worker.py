@@ -110,7 +110,6 @@ class ResilientWorker(Worker):
                              "the worker to try and shift load onto other hosts.")
                 raise StopRequested()
 
-
 def worker(parameters: Mapping):
     node = f"{os.environ['SGE_CLUSTER_NAME']}:{os.environ['HOSTNAME']}"
     job = f"{os.environ['JOB_NAME']}: {os.environ['JOB_ID']}:{os.environ['SGE_TASK_ID']}"
@@ -131,11 +130,6 @@ def worker(parameters: Mapping):
         from vivarium.framework.utilities import collapse_nested_dict
 
         model_specification = build_model_specification(model_specification_file)
-
-        start_time = pd.Timestamp(**model_specification.configuration.time.start.to_dict())
-        end_time = pd.Timestamp(**model_specification.configuration.time.end.to_dict())
-        step_size = pd.Timedelta(days=model_specification.configuration.time.step_size)
-        num_steps = int(math.ceil((end_time - start_time)/step_size))
 
         run_key = {'input_draw': input_draw, 'random_seed': random_seed}
 
@@ -170,6 +164,12 @@ def worker(parameters: Mapping):
         logger.info('Starting main simulation loop.')
         metrics, final_state = run(simulation)
         end = time()
+
+        start_time = pd.Timestamp(**model_specification.configuration.time.start.to_dict())
+        end_time = pd.Timestamp(**model_specification.configuration.time.end.to_dict())
+        step_size = pd.Timedelta(days=model_specification.configuration.time.step_size)
+        num_steps = int(math.ceil((end_time - start_time)/step_size))
+        
         logger.info(f'Simulation main loop completed in {(end - sim_start)/60} minutes.')
         logger.info(f'Average step length was {(end - sim_start)/num_steps} seconds.')
         logger.info(f'Total simulation run time {(end - start) / 60} minutes.')
