@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from risk_distributions.formatting import cast_to_series
+from risk_distributions.formatting import cast_to_series, format_data_frame
 
 
 valid_inputs = (np.array([1]), pd.Series([1]), [1], (1,), 1)
@@ -90,3 +90,13 @@ def test_cast_to_series_mismatched_length(reference, other):
 
     with pytest.raises(ValueError, match='same number of values'):
         cast_to_series(other, reference)
+
+
+@pytest.mark.parametrize('data_columns, required_columns, match', [(['a', 'b', 'c'], ['b', 'c'], 'extra columns'),
+                                                                   (['a', 'b'], ['a', 'b', 'c'], 'missing columns'),
+                                                                   ([], ['a'], 'No data')])
+def test_format_data_frame(data_columns, required_columns, match):
+    data = pd.DataFrame(data={c: [1] for c in data_columns}, index=[0])
+
+    with pytest.raises(ValueError, match=match):
+        format_data_frame(data, required_columns, measure='test')

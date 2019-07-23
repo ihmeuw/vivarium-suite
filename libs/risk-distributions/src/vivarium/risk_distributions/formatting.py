@@ -117,7 +117,8 @@ def format_data_frame(data: pd.DataFrame, required_columns: List[Any], measure: 
     if data.empty:
         raise ValueError(f"No data provided for {measure.lower()}.")
 
-    if not np.all(data.columns.isin(required_columns)):
+    missing_cols = set(required_columns).difference(data.columns)
+    if missing_cols:
         raise ValueError(f"{measure} data provided is missing "
                          f"columns {set(required_columns).difference(data.columns)}.")
 
