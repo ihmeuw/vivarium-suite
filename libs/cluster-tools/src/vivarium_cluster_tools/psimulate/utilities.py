@@ -118,6 +118,17 @@ def get_cluster_name():
     return cluster_name
 
 
+ENV_HOSTNAME='HOSTNAME'
+def get_hostname() -> str:
+    return os.environ.get(ENV_HOSTNAME)
+
+
+SUBMIT_HOST_MARKER='-submit-'
+def exit_if_on_submit_host(name : str):
+    if SUBMIT_HOST_MARKER in name:
+        raise RuntimeError('This tool must not be run from a submit host.')
+
+
 def get_valid_project(project, cluster):
     if cluster == 'cluster-dev':
         project = None
