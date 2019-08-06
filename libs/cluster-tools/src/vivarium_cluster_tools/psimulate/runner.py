@@ -325,6 +325,8 @@ def check_user_sge_config():
 def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, redis_processes,
          num_input_draws=None, num_random_seeds=None, restart=False, expand=None, no_batch=False):
 
+    utilities.exit_if_on_submit_host(utilities.get_hostname())
+
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
                                                            restart, expand=(num_input_draws or num_random_seeds))
 
