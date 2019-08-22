@@ -15,7 +15,7 @@ import pandas as pd
 
 from vivarium.framework.configuration import build_model_specification
 from vivarium.framework.utilities import collapse_nested_dict
-from vivarium_public_health.dataset_manager import parse_artifact_path_config
+from vivarium.framework.artifact import parse_artifact_path_config
 
 from vivarium_cluster_tools.psimulate.branches import Keyspace
 from vivarium_cluster_tools.psimulate import globals as vtc_globals, utilities
