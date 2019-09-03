@@ -50,7 +50,7 @@ def add_logging_sink(sink, verbose, colorize=False, serialize=False):
 
 
 def configure_master_process_logging_to_terminal(verbose):
-    logger.remove()  # Clear default configuration
+    logger.remove(0)  # Clear default configuration
     add_logging_sink(sys.stdout, verbose, colorize=True)
 
 
@@ -98,7 +98,7 @@ def setup_directories(model_specification_file, result_directory, restart, expan
     logging_dirs = {'main': logging_directory,
                     'sge': logging_directory / 'sge_logs',
                     'worker': logging_directory / 'worker_logs'}
-    
+
     output_directory.mkdir(exist_ok=True, parents=True)
     set_permissions(output_directory)
     for d in logging_dirs.values():
