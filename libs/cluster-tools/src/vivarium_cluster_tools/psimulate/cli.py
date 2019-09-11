@@ -14,6 +14,13 @@ shared_options = [
                  default=3,
                  help=('The estimated maximum memory usage in GB of an individual simulate job. '
                        'The simulations will be run with this as a limit.')),
+    click.option('--runtime', '-r',
+                 type=str,
+                 default='24:00:00',
+                 help=('The estimated maximum runtime (DD:HH:MM) of the simulation jobs. '
+                       'By default, the cluster will terminate jobs after 24h, regardless of '
+                       'Queue. The maximum supported runtime is 3 days. Keep in mind, runtimes '
+                       'by node vary wildly.')),
     click.option('--pdb', 'with_debugger',
                  is_flag=True,
                  help='Drop into python debugger if an error occurs.'),
@@ -76,7 +83,7 @@ def run(model_specification, branch_configuration, result_directory, **options):
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
     main(model_specification, branch_configuration, result_directory,
-         options['project'], options['peak_memory'],
+         options['project'], options['peak_memory'], options['max_runtime'],
          redis_processes=options['redis'], no_batch=options['no_batch'])
 
 
@@ -95,7 +102,7 @@ def restart(results_root, **options):
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
     main(None, None, results_root,
-         options['project'], options['peak_memory'],
+         options['project'], options['peak_memory'], options['max_runtime'],
          redis_processes=options['redis'], restart=True, no_batch=options['no_batch'])
 
 
@@ -118,7 +125,7 @@ def expand(results_root, **options):
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
     main(None, None, results_root,
-         options['project'], options['peak_memory'],
+         options['project'], options['peak_memory'], options['max_runtime'],
          redis_processes=options['redis'],
          restart=True,
          expand={'num_draws': options['add_draws'],
