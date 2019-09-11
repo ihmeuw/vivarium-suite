@@ -14,7 +14,7 @@ shared_options = [
                  default=3,
                  help=('The estimated maximum memory usage in GB of an individual simulate job. '
                        'The simulations will be run with this as a limit.')),
-    click.option('--runtime', '-r',
+    click.option('--max-runtime', '-r',
                  type=str,
                  default='24:00:00',
                  help=('The estimated maximum runtime (DD:HH:MM) of the simulation jobs. '
