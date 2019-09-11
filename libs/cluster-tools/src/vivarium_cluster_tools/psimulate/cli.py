@@ -18,8 +18,8 @@ shared_options = [
                  type=str,
                  default='24:00:00',
                  help=('The estimated maximum runtime (DD:HH:MM) of the simulation jobs. '
-                       'By default, the cluster will terminate jobs after 24h, regardless of '
-                       'Queue. The maximum supported runtime is 3 days. Keep in mind, runtimes '
+                       'By default, the cluster will terminate jobs after 24h regardless of '
+                       'queue. The maximum supported runtime is 3 days. Keep in mind that runtimes '
                        'by node vary wildly.')),
     click.option('--pdb', 'with_debugger',
                  is_flag=True,
