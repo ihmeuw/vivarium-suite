@@ -1,3 +1,9 @@
+**1.0.15 - 09/11/2019**
+
+ - Add max runtime option
+ - Set output directory permissions to 775
+ - Prohibit launching from submit host
+
 **1.0.14 - 06/20/19**
 
  - Bugfix in job enqueuing.
