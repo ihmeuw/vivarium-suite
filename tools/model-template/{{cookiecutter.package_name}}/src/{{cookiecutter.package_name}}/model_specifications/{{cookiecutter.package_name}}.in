@@ -15,11 +15,15 @@ components:
 
     {{cookiecutter.package_name}}.components:
 
+
+{% raw %}
+{% set location = location.replace(" ", "_").replace("'", "").lower() %}
+{% endraw %}
 configuration:
     input_data:
-        location: United States
+        location: {% raw %}{{ location[0]|upper}}{{location[1:] }}{% endraw %}
         input_draw_number: 0
-        artifact_path: /share/costeffectiveness/artifacts/{{cookiecutter.package_name}}/{{cookiecutter.package_name}}.hdf
+        artifact_path: /share/costeffectiveness/artifacts/{{cookiecutter.package_name}}/{{cookiecutter.package_name}}_{% raw %}{{ location[0]|upper}}{{location[1:] }}{% endraw %}.hdf
     interpolation:
         order: 0
         extrapolate: False
