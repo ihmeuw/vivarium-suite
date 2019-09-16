@@ -45,6 +45,7 @@ def pbuild_artifacts(model_spec, project_name, output_root):
 NEWLINE='\n'
 COMMENT_CHAR='#'
 DEFAULT_LOCATIONS_FILE='locations.txt'
+PROJ_NAME='{{cookiecutter.package_name}}'
     
 def get_sanitized_locations(loc_file):
     chunks = []
@@ -55,8 +56,11 @@ def get_sanitized_locations(loc_file):
 
 
 @click.command()
-@click.option('-t', '--template', type=click.Path(dir_okay=False, exists=True), help='The model spec template file')
-@click.option('-l', '--locations',
+@click.option('-t', '--template',
+        default=f'{PROJ_NAME}.in',
+        type=click.Path(dir_okay=False, exists=True),
+        help='The model spec template file')
+@click.option('-l', '--locations_file',
         default=DEFAULT_LOCATIONS_FILE,
         type=click.Path(dir_okay=False, exists=True),
         help=f'The file with the location parameters for the template. The default is "{DEFAULT_LOCATIONS_FILE}"')
@@ -70,11 +74,11 @@ def generate_spec_from_template(template, locations_file):
 
     """
     with open(template, 'r') as infile:
-        temp = Template(infile.read())
+        jinja_temp = Template(infile.read())
 
         locations = get_sanitized_locations(locations_file)
         for loc in locations:
-            with open(f'{project_name}_{loc}.yaml', 'w+') as outfile:
-                outfile.write(temp.render(
+            with open(f'{PROJ_NAME}_{loc}.yaml', 'w+') as outfile:
+                outfile.write(jinja_temp.render(
                     location=loc
                 ))
