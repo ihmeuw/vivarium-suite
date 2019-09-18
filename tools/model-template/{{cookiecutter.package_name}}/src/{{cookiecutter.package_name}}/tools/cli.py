@@ -1,84 +1,105 @@
-from pathlib import Path
-
-from jinja2 import Template
 import click
+from pathlib import Path
+from jinja2 import Template
 import re
+from collections import namedtuple
 
-from vivarium_gbd_access.gbd import ARTIFACT_FOLDER
-from vivarium_cluster_tools.psimulate.utilities import get_drmaa
+from typing import List
 
-JOB_MEMORY_NEEDED = 50
-JOB_TIME_NEEDED = '24:00:00'
-
-drmaa = get_drmaa()  # safe if not on cluster
-
-
-def create_and_run_job(model_spec_path: Path, output_root: Path):
-    with drmaa.Session() as s:
-        jt = s.createJobTemplate()
-        jt.remoteCommand = "build_artifact"
-        jt.nativeSpecification = '-V -l m_mem_free={}G,fthread=1,h_rt={} -q all.q -P proj_cost_effect'.format(
-            JOB_MEMORY_NEEDED, JOB_TIME_NEEDED)
-        jt.args = [model_spec_path, '-o', output_root]
-        jt.jobName = f'build_artifact_{model_spec_path.name}'
-        result = s.runJob(jt)
-        print(f"Submitted job for {model_spec_path.name}. Job id: {result}")
-
-
-@click.command()
-@click.option('--model_spec', '-m', multiple=True, type=click.Path(dir_okay=False, exists=True),
-              help='Multiple model spec files can be provided. Each requires the option switch.')
-@click.option('--project_name', default='vivarium_conic_sam_comparison',
-              help='The name of the research project. Used if no output root is provided.')
-@click.option('--output-root', '-o', type=click.Path(file_okay=False, exists=True),
-              help='A directory root to store artifact results in.')
-def pbuild_artifacts(model_spec, project_name, output_root):
-    """Build artifacts in parallel from model specifications. Supports multiple
-    model specification files with the -m flag.
-    """
-    output_root = output_root if output_root else ARTIFACT_FOLDER / project_name
-    for m in model_spec:
-        p = Path(m)
-        create_and_run_job(p.resolve(), output_root)
-
-
-NEWLINE='\n'
-COMMENT_CHAR='#'
-DEFAULT_LOCATIONS_FILE='locations.txt'
 PROJ_NAME='{{cookiecutter.package_name}}'
+
+COMMENT_CHAR='#'
+MODEL_SPEC_DIR=Path(__file__).parent.parent / 'model_specifications'
+DEFAULT_TEMPLATE_FILE=MODEL_SPEC_DIR / 'model_spec.in'
+DEFAULT_LOCATIONS_FILE=MODEL_SPEC_DIR / 'locations.txt'
+Location = namedtuple('Location', ['loc_proper', 'loc_sanitized'])
+
+
+def sanitize(loc: str) -> (bool, Location):
+    loc_proper = loc.strip()
+    if loc.startswith(COMMENT_CHAR):
+        loc_proper = loc_sanitized = ''
+    else:
+        loc_sanitized = loc_proper
+        loc_sanitized = re.sub(REPLACE_WITH_UNDERSCORE, '_', loc_sanitized).lower()
+    return True if len(loc_proper) else False, Location(loc_proper, loc_sanitized)
+
+
+REPLACE_WITH_UNDERSCORE="[- ,.&']"
+def get_sanitized_locations(single_loc : str, loc_file : Path) -> List[Location]:
+    """ Naming convention is to lowercase the location string, replace spaces with underscores,
+        and capitalize the first letter. No manipulation happens in the template code.
+    """
+    def helper(item):
+        valid, loc = sanitize(item)
+        if valid:
+            locs.append(loc)
+
+    locs = []
+    if len(single_loc):
+        helper(single_loc)
+    else:
+        with loc_file.open('r') as infile:
+            for line in infile:
+                helper(line)
+    return locs
     
-def get_sanitized_locations(loc_file):
-    chunks = []
-    with open(loc_file, 'r') as infile:
-        s = infile.read().strip()
-        chunks = s.split(NEWLINE) if NEWLINE in s else re.split('[ ,\t]', s)
-    return [i.strip() for i in chunks if not i.strip().startswith(COMMENT_CHAR)]
+    
+def args_pass(template: Path, locations_file: Path, single_location: str, output_dir: Path) -> bool:
+    error = ''
+    if not template.exists():
+        error = f'\nError: the template file {template} does not exist.'
+    elif not locations_file.exists():
+        error = f'\nError: the locations file {locations_file} does not exist.'
+    elif not len(single_location) and not locations_file.stat().st_size:
+        error = f'\nError: the locations file {locations_file} is empty. Add locations ' \
+                'to this file, or, use the "-s" switch to specify a single location.'
+    elif not output_dir.exists():
+        error = f'\nError: the output director {output_dir} does not exist.'
+
+    if len(error):
+        print(error)
+
+    return True if 0 == len(error) else False
 
 
 @click.command()
-@click.option('-t', '--template',
-        default=f'{PROJ_NAME}.in',
-        type=click.Path(dir_okay=False, exists=True),
-        help='The model spec template file')
 @click.option('-l', '--locations_file',
-        default=DEFAULT_LOCATIONS_FILE,
-        type=click.Path(dir_okay=False, exists=True),
-        help=f'The file with the location parameters for the template. The default is "{DEFAULT_LOCATIONS_FILE}"')
-def generate_spec_from_template(template, locations_file):
-    """Generate model specifications based on a TEMPLATE. Supply the locations for which
-        you want a model spec generated by filling in the empty 'locations.txt' file.
-        The location file can be space|comma|tab|newline delimited.
-        
-    TEMPLATE is a model specification file. It should be a jinja2 template with
-    a keyword for location.
-
+                default=DEFAULT_LOCATIONS_FILE,
+                show_default=True,
+                type=click.Path(dir_okay=False, exists=True),
+                help=f'The file with the location parameters for the template')
+@click.option('-t', '--template',
+                default=DEFAULT_TEMPLATE_FILE,
+                show_default=True,
+                type=click.Path(dir_okay=False, exists=True),
+                help='The model spec template file')
+@click.option('-s', '--single_location',
+                default='',
+                help='Specify a single location name. This takes precedence over the default locations file')
+@click.option('-o', '--output_dir',
+                default=MODEL_SPEC_DIR,
+                show_default=True,
+                type=click.Path(dir_okay=True, exists=True),
+                help='Specify an output directory. Directory must exist.')
+def make_specs(template: Path, locations_file : Path, single_location: str, output_dir: Path) -> None:
     """
-    with open(template, 'r') as infile:
-        jinja_temp = Template(infile.read())
+    Generate model specifications based on a TEMPLATE. Supply the locations for which
+    you want a model spec generated by filling in the empty 'locations.txt' file.
+    The location file should contain a single location per line and locations must
+    be formatted so that they match location names in GBD location set X
+    """
+    if args_pass(template, locations_file, single_location, output_dir):
+        with template.open('r') as infile:
+            jinja_temp = Template(infile.read())
 
-        locations = get_sanitized_locations(locations_file)
-        for loc in locations:
-            with open(f'{PROJ_NAME}_{loc}.yaml', 'w+') as outfile:
-                outfile.write(jinja_temp.render(
-                    location=loc
-                ))
+            locations = get_sanitized_locations(single_location, locations_file)
+            if len(locations):
+                print(f'\nWriting model spec(s) to "{output_dir}"')
+            for loc in locations:
+                filespec = output_dir / f'{loc.loc_sanitized}.yaml'
+                with filespec.open('w+') as outfile:
+                    print(f'   {filespec.name}')
+                    outfile.write(jinja_temp.render(
+                        location_proper=loc.loc_proper,
+                        location_sanitized=loc.loc_sanitized))
