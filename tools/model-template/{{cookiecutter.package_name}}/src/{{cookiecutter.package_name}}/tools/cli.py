@@ -1,4 +1,4 @@
-''''
+"""
 Make model specifications
 
 click application that takes a template model specification file
@@ -14,7 +14,7 @@ location option will override an existing locations file.
 The application will look for the model spec and locations files based
 on the python environment that is active and these files don't need
 to be specified if the default names and location are used.
-'''
+"""
 import re
 import click
 from pathlib import Path
