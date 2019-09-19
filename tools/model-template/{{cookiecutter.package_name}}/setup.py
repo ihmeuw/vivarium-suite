@@ -36,6 +36,8 @@ if __name__ == "__main__":
         'pytest-mock',
         'pyyaml',
         'jinja2',
+        'click',
+        'loguru',
     ]
 
     setup(
