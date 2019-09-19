@@ -1,49 +1,46 @@
-# =============================================================================
-# Make model specifications
-#
-# click application that takes a template model specification file
-# and locations for which to create model specs and uses jinja2 to
-# render model specs with the correct location parameters plugged in.
-#
-# It will look for the model spec template in "model_spec.in" in
-# the directory "src/<project_name>/model_specification". Specify multiple
-# locations in a file called "locations.txt" in the same directory. You
-# can create a single location using the "-s" option. Using the single
-# location option will override an existing locations file.
-#
-# The application will look for the model spec and locations files based
-# on the python environment that is active and these files don't need
-# to be specified if the default names and location are used.
-# =============================================================================
+''''
+Make model specifications
+
+click application that takes a template model specification file
+and locations for which to create model specs and uses jinja2 to
+render model specs with the correct location parameters plugged in.
+
+It will look for the model spec template in "model_spec.in" in the directory
+"../{{cookiecutter.package_name}}/src/{{cookiecutter.package_name}}/model_specification".
+Specify multiple locations in a file called "locations.txt" in the same directory.
+You can create a single location using the "-s" option. Using the single
+location option will override an existing locations file.
+
+The application will look for the model spec and locations files based
+on the python environment that is active and these files don't need
+to be specified if the default names and location are used.
+'''
 import re
 import click
 from pathlib import Path
 from jinja2 import Template
 from collections import namedtuple
+from loguru import logger
+from typing import List, Callable
+from functools import wraps
+from sys import exit
 
-from typing import List
 
-
-PROJ_NAME='{{cookiecutter.package_name}}'
-MODEL_SPEC_DIR=Path(__file__).parent.parent / 'model_specifications'
-DEFAULT_TEMPLATE_FILE=MODEL_SPEC_DIR / 'model_spec.in'
-DEFAULT_LOCATIONS_FILE=MODEL_SPEC_DIR / 'locations.txt'
+PROJ_NAME = '{{cookiecutter.package_name}}'
 Location = namedtuple('Location', ['loc_proper', 'loc_sanitized'])
 
 
-COMMENT_CHAR='#'
-REPLACE_WITH_UNDERSCORE="[- ,.&']"
 def sanitize(loc: str) -> (bool, Location):
     loc_proper = loc.strip()
-    if loc.startswith(COMMENT_CHAR):
+    if loc_proper.startswith('#'):
         loc_proper = loc_sanitized = ''
     else:
         loc_sanitized = loc_proper
-        loc_sanitized = re.sub(REPLACE_WITH_UNDERSCORE, '_', loc_sanitized).lower()
-    return True if len(loc_proper) else False, Location(loc_proper, loc_sanitized)
+        loc_sanitized = re.sub("[- ,.&']", '_', loc_sanitized).lower()
+    return bool(loc_proper), Location(loc_proper, loc_sanitized)
 
 
-def get_sanitized_locations(single_loc : str, loc_file : Path) -> List[Location]:
+def get_sanitized_locations(single_loc: str, loc_file: Path) -> List[Location]:
     """ Naming convention is to lowercase the location string, replace spaces with underscores,
         and capitalize the first letter. No manipulation happens in the template code.
     """
@@ -53,73 +50,92 @@ def get_sanitized_locations(single_loc : str, loc_file : Path) -> List[Location]
             locs.append(loc)
 
     locs = []
-    if len(single_loc):
+    if single_loc:
         helper(single_loc)
     else:
         with loc_file.open('r') as infile:
             for line in infile:
                 helper(line)
     return locs
+
+
+def log_and_exit(f: Callable) -> Callable:
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        f(*args, **kwds)
+        exit(1)
+    return wrapper
+
     
-    
-def args_pass(template: Path, locations_file: Path, single_location: str, output_dir: Path) -> bool:
-    error = ''
+def verify_args(template: Path, locations_file: Path, single_location: str, output_dir: Path) -> None:
+    exit_logger = log_and_exit(logger.error)
     if not template.exists():
-        error = f'\nError: the template file {template} does not exist.'
-    elif not locations_file.exists():
-        error = f'\nError: the locations file {locations_file} does not exist. Create locations.txt ' \
-                'or use the "-s" switch to specify a single location.'
-    elif not len(single_location) and not locations_file.stat().st_size:
-        error = f'\nError: the locations file {locations_file} is empty. Add locations ' \
-                'to this file, or, use the "-s" switch to specify a single location.'
-    elif not output_dir.exists():
-        error = f'\nError: the output director {output_dir} does not exist.'
-
-    if len(error):
-        print(error)
-
-    return True if 0 == len(error) else False
+        exit_logger(f'\nError: the template file "{template}" does not exist.')
+    if not locations_file.exists():
+        exit_logger(f'\nError: the locations file "{locations_file}" does not exist. Create locations.txt '
+                    'or use the "-s" switch to specify a single location.')
+    if not single_location and not locations_file.stat().st_size:
+        exit_logger(f'\nError: the locations file "{locations_file}" is empty. Add locations '
+                    'to this file or use the "-s" switch to specify a single location.')
+    if not output_dir.exists():
+        exit_logger(f'\nError: the output directory "{output_dir}" does not exist.', exit=True)
 
 
+MODEL_SPEC_DIR = Path(__file__).parent.parent / 'model_specifications'
 @click.command()
 @click.option('-l', '--locations_file',
-                default=DEFAULT_LOCATIONS_FILE,
-                show_default=True,
-                type=click.Path(dir_okay=False),
-                help=f'The file with the location parameters for the template.')
+              default=MODEL_SPEC_DIR / 'locations.txt',
+              show_default=True,
+              type=click.Path(dir_okay=False),
+              help=f'The file with the location parameters for the template.')
 @click.option('-t', '--template',
-                default=DEFAULT_TEMPLATE_FILE,
-                show_default=True,
-                type=click.Path(dir_okay=False),
-                help='The model spec template file')
+              default=MODEL_SPEC_DIR / 'model_spec.in',
+              show_default=True,
+              type=click.Path(dir_okay=False),
+              help='The model spec template file')
 @click.option('-s', '--single_location',
-                default='',
-                help='Specify a single location name. This takes precedence over the default locations file.')
+              default='',
+              help='Specify a single location name. This takes precedence over the default locations file.')
 @click.option('-o', '--output_dir',
-                default=MODEL_SPEC_DIR,
-                show_default=True,
-                type=click.Path(dir_okay=True),
-                help='Specify an output directory. Directory must exist.')
-def make_specs(template: Path, locations_file : Path, single_location: str, output_dir: Path) -> None:
+              default=MODEL_SPEC_DIR,
+              show_default=True,
+              type=click.Path(dir_okay=True),
+              help='Specify an output directory. Directory must exist.')
+def make_specs(template: Path, locations_file: Path, single_location: str, output_dir: Path) -> None:
     """
-    Generate model specifications based on a TEMPLATE. Supply the locations for which
-    you want a model spec generated by filling in the empty 'locations.txt' file.
-    The location file should contain a single location per line and locations must
-    be formatted so that they match location names in GBD location set X
+    Generate model specifications based on a template. The template lives here:
+
+    ../{{cookiecutter.package_name}}/src/{{cookiecutter.package_name}}/model_specification/model_spec.in
+
+    Supply the locations for which you want a model spec generated by filling in the empty 'locations.txt' file.
+    The location file is in the same directory as the model specification file. It should contain a single location
+    per line and locations must be formatted so that they match location names in GBD location set X.
+
+    Valid location sets can be found in:
+
+    https://stash.ihme.washington.edu/projects/CSTE/repos/vivarium_gbd_access/browse/src/vivarium_gbd_access/gbd.py
+
+    Ipython:
+
+    \b
+    In [1]: from vivarium_gbd_access.gbd import get_location_ids
+    In [2]: get_location_ids()
     """
     template = Path(template)
     locations_file = Path(locations_file)
     output_dir = Path(output_dir)
-    if args_pass(template, locations_file, single_location, output_dir):
-        with template.open('r') as infile:
-            jinja_temp = Template(infile.read())
-            locations = get_sanitized_locations(single_location, locations_file)
-            if len(locations):
-                print(f'\nWriting model spec(s) to "{output_dir}"')
-            for loc in locations:
-                filespec = output_dir / f'{loc.loc_sanitized}.yaml'
-                with filespec.open('w+') as outfile:
-                    print(f'   {filespec.name}')
-                    outfile.write(jinja_temp.render(
-                        location_proper=loc.loc_proper,
-                        location_sanitized=loc.loc_sanitized))
+
+    verify_args(template, locations_file, single_location, output_dir)
+
+    with template.open('r') as infile:
+        jinja_temp = Template(infile.read())
+    locations = get_sanitized_locations(single_location, locations_file)
+
+    logger.info(f'Writing model spec(s) to "{output_dir}"')
+    for loc in locations:
+        filespec = output_dir / f'{loc.loc_sanitized}.yaml'
+        with filespec.open('w+') as outfile:
+            logger.info(f'   {filespec.name}')
+            outfile.write(jinja_temp.render(
+                location_proper=loc.loc_proper,
+                location_sanitized=loc.loc_sanitized))
