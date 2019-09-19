@@ -1,20 +1,38 @@
+# =============================================================================
+# Make model specifications
+#
+# click application that takes a template model specification file
+# and locations for which to create model specs and uses jinja2 to
+# render model specs with the correct location parameters plugged in.
+#
+# It will look for the model spec template in "model_spec.in" in
+# the directory "src/<project_name>/model_specification". Specify multiple
+# locations in a file called "locations.txt" in the same directory. You
+# can create a single location using the "-s" option. Using the single
+# location option will override an existing locations file.
+#
+# The application will look for the model spec and locations files based
+# on the python environment that is active and these files don't need
+# to be specified if the default names and location are used.
+# =============================================================================
+import re
 import click
 from pathlib import Path
 from jinja2 import Template
-import re
 from collections import namedtuple
 
 from typing import List
 
-PROJ_NAME='{{cookiecutter.package_name}}'
 
-COMMENT_CHAR='#'
+PROJ_NAME='{{cookiecutter.package_name}}'
 MODEL_SPEC_DIR=Path(__file__).parent.parent / 'model_specifications'
 DEFAULT_TEMPLATE_FILE=MODEL_SPEC_DIR / 'model_spec.in'
 DEFAULT_LOCATIONS_FILE=MODEL_SPEC_DIR / 'locations.txt'
 Location = namedtuple('Location', ['loc_proper', 'loc_sanitized'])
 
 
+COMMENT_CHAR='#'
+REPLACE_WITH_UNDERSCORE="[- ,.&']"
 def sanitize(loc: str) -> (bool, Location):
     loc_proper = loc.strip()
     if loc.startswith(COMMENT_CHAR):
@@ -25,7 +43,6 @@ def sanitize(loc: str) -> (bool, Location):
     return True if len(loc_proper) else False, Location(loc_proper, loc_sanitized)
 
 
-REPLACE_WITH_UNDERSCORE="[- ,.&']"
 def get_sanitized_locations(single_loc : str, loc_file : Path) -> List[Location]:
     """ Naming convention is to lowercase the location string, replace spaces with underscores,
         and capitalize the first letter. No manipulation happens in the template code.
@@ -50,7 +67,8 @@ def args_pass(template: Path, locations_file: Path, single_location: str, output
     if not template.exists():
         error = f'\nError: the template file {template} does not exist.'
     elif not locations_file.exists():
-        error = f'\nError: the locations file {locations_file} does not exist.'
+        error = f'\nError: the locations file {locations_file} does not exist. Create locations.txt ' \
+                'or use the "-s" switch to specify a single location.'
     elif not len(single_location) and not locations_file.stat().st_size:
         error = f'\nError: the locations file {locations_file} is empty. Add locations ' \
                 'to this file, or, use the "-s" switch to specify a single location.'
@@ -67,20 +85,20 @@ def args_pass(template: Path, locations_file: Path, single_location: str, output
 @click.option('-l', '--locations_file',
                 default=DEFAULT_LOCATIONS_FILE,
                 show_default=True,
-                type=click.Path(dir_okay=False, exists=True),
-                help=f'The file with the location parameters for the template')
+                type=click.Path(dir_okay=False),
+                help=f'The file with the location parameters for the template.')
 @click.option('-t', '--template',
                 default=DEFAULT_TEMPLATE_FILE,
                 show_default=True,
-                type=click.Path(dir_okay=False, exists=True),
+                type=click.Path(dir_okay=False),
                 help='The model spec template file')
 @click.option('-s', '--single_location',
                 default='',
-                help='Specify a single location name. This takes precedence over the default locations file')
+                help='Specify a single location name. This takes precedence over the default locations file.')
 @click.option('-o', '--output_dir',
                 default=MODEL_SPEC_DIR,
                 show_default=True,
-                type=click.Path(dir_okay=True, exists=True),
+                type=click.Path(dir_okay=True),
                 help='Specify an output directory. Directory must exist.')
 def make_specs(template: Path, locations_file : Path, single_location: str, output_dir: Path) -> None:
     """
@@ -89,10 +107,12 @@ def make_specs(template: Path, locations_file : Path, single_location: str, outp
     The location file should contain a single location per line and locations must
     be formatted so that they match location names in GBD location set X
     """
+    template = Path(template)
+    locations_file = Path(locations_file)
+    output_dir = Path(output_dir)
     if args_pass(template, locations_file, single_location, output_dir):
         with template.open('r') as infile:
             jinja_temp = Template(infile.read())
-
             locations = get_sanitized_locations(single_location, locations_file)
             if len(locations):
                 print(f'\nWriting model spec(s) to "{output_dir}"')
