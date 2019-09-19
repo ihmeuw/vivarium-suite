@@ -60,7 +60,6 @@ if __name__ == "__main__":
 
         entry_points='''
             [console_scripts]
-            pbuild_artifacts={{cookiecutter.package_name}}.tools.cli:pbuild_artifacts
             make_specs={{cookiecutter.package_name}}.tools.cli:make_specs
         '''
     )
