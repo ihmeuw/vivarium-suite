@@ -17,9 +17,9 @@ components:
 
 configuration:
     input_data:
-        location: United States
+        location: {% raw %}{{ location_proper }}{% endraw %}
         input_draw_number: 0
-        artifact_path: /share/costeffectiveness/artifacts/{{cookiecutter.package_name}}/{{cookiecutter.package_name}}.hdf
+        artifact_path: /share/costeffectiveness/artifacts/{{cookiecutter.package_name}}/{% raw %}{{ location_sanitized }}{% endraw %}.hdf
     interpolation:
         order: 0
         extrapolate: False

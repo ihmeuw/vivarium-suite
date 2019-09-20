@@ -1,0 +1,11 @@
+# Locations file for generating model specifications
+#
+# This file is meant to be used with the provided ``make_spec`` command line
+# tool installed with this repository.
+#
+# To use, provide a list of proper location names, one per line.
+# Proper location names should come from GBD location set 1, the
+# location reporting hierarchy wherever possible. If using sub-national
+# locations, they may be found in GBD location set 35, the model
+# results location hierarchy.
+
