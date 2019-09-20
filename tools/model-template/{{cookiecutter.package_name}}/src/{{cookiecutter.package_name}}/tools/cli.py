@@ -18,7 +18,7 @@ to be specified if the default names and location are used.
 from collections import namedtuple
 from pathlib import Path
 import re
-from typing import List, Optional, Generator
+from typing import List, Optional, Iterable
 
 import click
 from jinja2 import Template
@@ -29,7 +29,7 @@ PROJECT_NAME = '{{cookiecutter.package_name}}'
 Location = namedtuple('Location', ['proper', 'sanitized'])
 
 
-def sanitize(*locations: str) -> Generator[Location]:
+def sanitize(*locations: str) -> Iterable[Location]:
     """Processes locations into tuples of proper and sanitized names.
 
     Sanitized location strings are all lower case, have spaces replaced
@@ -66,7 +66,8 @@ def sanitize(*locations: str) -> Generator[Location]:
     #    bit of a pain to do now.
     for location in locations:
         proper = location.strip()
-        sanitized = re.sub("[- ,.&']", '_', proper).lower()
+        sanitized = re.sub("[- ]", '_', proper).lower()
+        sanitized = sanitized.replace("'", '-')
         yield Location(proper, sanitized)
 
 
@@ -104,7 +105,7 @@ def parse_locations(locations_file: Optional[str], single_location: Optional[str
     locations_file = Path(locations_file) if locations_file else MODEL_SPEC_DIR / 'locations.txt'
     with locations_file.open() as f:
         # Interpret each line that doesn't start with a '#' as a single location.
-        locations = [l for l in f.readlines() if not l.startswith('#')]
+        locations = [l for l in f.readlines() if not l.strip().startswith('#') and l.strip()]
     if not locations:
         raise ValueError(f'No locations provided in location file {str(locations_file)}.')
 
