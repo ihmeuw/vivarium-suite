@@ -66,7 +66,7 @@ def sanitize(*locations: str) -> Iterable[Location]:
     #    bit of a pain to do now.
     for location in locations:
         proper = location.strip()
-        sanitized = re.sub("[- ,.&]", '_', proper).lower()
+        sanitized = re.sub("[- ]", '_', proper).lower()
         sanitized = sanitized.replace("'", '-')
         yield Location(proper, sanitized)
 
