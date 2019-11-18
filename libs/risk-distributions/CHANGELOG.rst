@@ -1,3 +1,7 @@
+**2.0.2 - 11/18/19**
+
+ - Fix set logic in data frame formatting.
+
 **2.0.1 - 03/12/19**
 
  - Add API documentation.
