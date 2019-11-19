@@ -139,11 +139,11 @@ def get_valid_project(project, cluster):
     return project
 
 
-def get_uge_specification(peak_memory, project, job_name):
+def get_uge_specification(peak_memory, max_runtime, project, job_name):
     cluster_name = get_cluster_name()
     project = get_valid_project(project, cluster_name)
 
-    preamble = f'-w n -q all.q -l m_mem_free={peak_memory}G -N {job_name}'
+    preamble = f'-w n -q all.q -l m_mem_free={peak_memory}G -N {job_name} -l h_rt={max_runtime}'
 
     if cluster_name == "cluster-fair":
         preamble += " -l fthread=1"
