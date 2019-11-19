@@ -1,3 +1,10 @@
+**1.1.0 - 11/18/19**
+
+ - Move artifact from vivarium_public_health to vivarium proper. Remove the
+   package dependency.
+ - Clean up context interface and simulation creation.
+ - Switch all logging to loguru.
+
 **1.0.15 - 09/11/2019**
 
  - Add max runtime option

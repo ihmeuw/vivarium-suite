@@ -22,8 +22,7 @@ if __name__ == "__main__":
         'drmaa',
         'redis<=3.0.1',
         'rq>=1.0',
-        'vivarium',
-        'vivarium_public_health',
+        'vivarium>=0.9.1',
         'click',
     ]
 
