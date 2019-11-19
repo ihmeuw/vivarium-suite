@@ -2,7 +2,7 @@ Risk Distributions
 ======================
 
 .. image:: https://badge.fury.io/py/risk_distributions.svg
-    :target: https://badge.fury.io/py/risk_distributions
+    :target: https://badge.fury.io/py/risk-distributions
 
 .. image:: https://travis-ci.org/ihmeuw/risk_distributions.svg?branch=master
     :target: https://travis-ci.org/ihmeuw/risk_distributions
