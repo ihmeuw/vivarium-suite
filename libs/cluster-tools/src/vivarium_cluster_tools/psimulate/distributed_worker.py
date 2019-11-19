@@ -8,7 +8,6 @@ from traceback import format_exc
 from typing import Mapping
 
 from loguru import logger
-import logging
 import numpy as np
 import pandas as pd
 import redis
@@ -17,12 +16,6 @@ from rq import get_current_job
 from rq.job import JobStatus
 from rq.worker import Worker, StopRequested
 from rq.registry import FailedJobRegistry
-
-
-class InterceptHandler(logging.Handler):
-    def emit(self, record):
-        logger_opt = logger.opt(depth=6, exception=record.exc_info)
-        logger_opt.log(logging.getLevelName(record.levelno), record.getMessage())
 
 
 def retry_handler(job, *exc_info):
@@ -56,8 +49,6 @@ class ResilientWorker(Worker):
         logger.remove()
         logging_directory = Path(os.environ['VIVARIUM_LOGGING_DIRECTORY'])
         logger.add(logging_directory / (str(worker_) + '.log'), level='DEBUG', serialize=True)
-
-        logging.basicConfig(level=logging.DEBUG, handlers=[InterceptHandler()])
 
         retries = 0
         while retries < 10:
@@ -110,6 +101,7 @@ class ResilientWorker(Worker):
                              "the worker to try and shift load onto other hosts.")
                 raise StopRequested()
 
+
 def worker(parameters: Mapping):
     node = f"{os.environ['SGE_CLUSTER_NAME']}:{os.environ['HOSTNAME']}"
     job = f"{os.environ['JOB_NAME']}: {os.environ['JOB_ID']}:{os.environ['SGE_TASK_ID']}"
@@ -125,19 +117,17 @@ def worker(parameters: Mapping):
         np.random.seed([input_draw, random_seed])
         worker_ = get_current_job().id
 
-        from vivarium.framework.engine import setup_simulation, run
-        from vivarium.framework.configuration import build_model_specification
+        from vivarium.framework.engine import SimulationContext
         from vivarium.framework.utilities import collapse_nested_dict
 
-        model_specification = build_model_specification(model_specification_file)
-
+        configuration = {}
         run_key = {'input_draw': input_draw, 'random_seed': random_seed}
 
         if branch_config is not None:
-            model_specification.configuration.update(branch_config)
+            configuration.update(dict(branch_config))
             run_key.update(dict(branch_config))
 
-        model_specification.configuration.update({
+        configuration.update({
             'run_configuration': {
                 'input_draw_number': input_draw,
                 'run_id': str(worker_) + '_' + str(time()),
@@ -151,25 +141,29 @@ def worker(parameters: Mapping):
             'input_data': {
                 'input_draw_number': input_draw,
             }
-        }, layer='override', source=str(worker_))
+        })
 
-        logger.info('Simulation model specification:')
-        logger.info(str(model_specification))
+        sim = SimulationContext(model_specification_file, configuration=configuration)
+        logger.info('Simulation configuration:')
+        logger.info(str(sim.configuration))
 
         start = time()
         logger.info('Beginning simulation setup.')
-        simulation = setup_simulation(model_specification)
+        sim.setup()
+        sim.initialize_simulants()
         logger.info(f'Simulation setup complete in {(time() - start)/60} minutes.')
         sim_start = time()
         logger.info('Starting main simulation loop.')
-        metrics, final_state = run(simulation)
+        sim.run()
+        sim.finalize()
+        metrics = sim.report()
         end = time()
 
-        start_time = pd.Timestamp(**model_specification.configuration.time.start.to_dict())
-        end_time = pd.Timestamp(**model_specification.configuration.time.end.to_dict())
-        step_size = pd.Timedelta(days=model_specification.configuration.time.step_size)
+        start_time = pd.Timestamp(**sim.configuration.time.start.to_dict())
+        end_time = pd.Timestamp(**sim.configuration.time.end.to_dict())
+        step_size = pd.Timedelta(days=sim.configuration.time.step_size)
         num_steps = int(math.ceil((end_time - start_time)/step_size))
-        
+
         logger.info(f'Simulation main loop completed in {(end - sim_start)/60} minutes.')
         logger.info(f'Average step length was {(end - sim_start)/num_steps} seconds.')
         logger.info(f'Total simulation run time {(end - start) / 60} minutes.')
