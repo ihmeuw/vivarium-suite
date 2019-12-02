@@ -52,11 +52,12 @@ You'll find four directories inside the main
   the {{ cookiecutter.package_name }} project. You should work with the
   engineering staff to help scope out what you need and get them built.
 
-- ``external_data``
+- ``data``
 
   If you have **small scale** external data for use in your sim or in your
   results processing, it can live here. This is almost certainly not the right
   place for data, so make sure there's not a better place to put it first.
+  Otherwise, this is the place to put data processing tools and scripts.
 
 - ``model_specifications``
 
