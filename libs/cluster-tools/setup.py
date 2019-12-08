@@ -22,7 +22,7 @@ if __name__ == "__main__":
         'drmaa',
         'redis<=3.0.1',
         'rq>=1.0',
-        'vivarium>=0.9.1',
+        'vivarium>=0.9.3',
         'click',
     ]
 
