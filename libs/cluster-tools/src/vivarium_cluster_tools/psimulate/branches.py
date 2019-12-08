@@ -129,15 +129,20 @@ def calculate_random_seeds(random_seed_count, existing_seeds=None):
         A set of unique random seeds, guaranteed not to overlap with any
         existing random seeds.
     """
+    if not random_seed_count:
+        return []
+
     np.random.seed(654321)
 
     if existing_seeds:
         min_possible = max(existing_seeds) + 1
     else:
+        existing_seeds = []
         min_possible = 0
 
     low, high = min_possible, min_possible + 10*random_seed_count
-    return np.random.randint(low, high, size=random_seed_count).tolist() if random_seed_count else []
+    possible = list(range(low, high))
+    return np.random.choice(possible, random_seed_count, replace=False).tolist()
 
 
 def calculate_keyspace(branches):

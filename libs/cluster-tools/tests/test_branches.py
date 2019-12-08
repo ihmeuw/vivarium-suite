@@ -1,6 +1,7 @@
+import pytest
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate.branches import expand_branch_templates
+from vivarium_cluster_tools.psimulate.branches import expand_branch_templates, calculate_random_seeds
 
 
 def test_expand_branch_template():
@@ -25,3 +26,20 @@ def test_expand_branch_template():
             {'a': {'b': 2, 'c': 3, 'd': 6, 'e':False}},
         ]]
     assert sorted(result) == sorted(expected)
+
+
+@pytest.mark.parametrize('seed_count', [0, 10, 100, 1000])
+def test_calculate_random_seeds(seed_count):
+    seeds = calculate_random_seeds(seed_count)
+    assert len(seeds) == len(set(seeds))
+    assert len(seeds) == seed_count
+
+
+@pytest.mark.parametrize('seed_count', [0, 10, 100, 1000])
+def test_calculate_random_seeds_existing(seed_count):
+    existing = list(range(20))
+
+    seeds = calculate_random_seeds(seed_count, existing)
+    assert len(seeds) == len(set(seeds))
+    assert len(seeds + existing) == len(set(seeds + existing))
+    assert len(seeds) == seed_count
