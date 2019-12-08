@@ -1,3 +1,7 @@
+**1.1.1 - 12/08/19**
+
+ - Fix bug in random seed generation so that seeds are unique.
+
 **1.1.0 - 11/18/19**
 
  - Move artifact from vivarium_public_health to vivarium proper. Remove the
