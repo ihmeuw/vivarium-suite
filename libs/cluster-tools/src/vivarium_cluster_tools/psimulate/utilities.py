@@ -153,8 +153,8 @@ def get_valid_queue(max_runtime):
 def get_uge_specification(peak_memory, max_runtime, project, job_name):
     cluster_name = get_cluster_name()
     project = get_valid_project(project, cluster_name)
-
-    preamble = f'-w n -q all.q -l m_mem_free={peak_memory}G -N {job_name} -l h_rt={max_runtime}'
+    queue = get_valid_queue(max_runtime)
+    preamble = f'-w n -q {queue} -l m_mem_free={peak_memory}G -N {job_name} -l h_rt={max_runtime}'
 
     if cluster_name == "cluster-fair":
         preamble += " -l fthread=1"
