@@ -139,6 +139,17 @@ def get_valid_project(project, cluster):
     return project
 
 
+def get_valid_queue(max_runtime):
+    hours, minutes, seconds = max_runtime.split(":")
+    runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
+    if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
+        return 'all.q'
+    elif runtime_in_hours <= vct_globals.LONG_Q_MAX_RUNTIME_HOURS:
+        return 'long.q'
+    else:
+        raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
+
+
 def get_uge_specification(peak_memory, max_runtime, project, job_name):
     cluster_name = get_cluster_name()
     project = get_valid_project(project, cluster_name)
