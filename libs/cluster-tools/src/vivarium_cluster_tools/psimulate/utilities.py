@@ -140,7 +140,11 @@ def get_valid_project(project, cluster):
 
 
 def get_valid_queue(max_runtime):
-    hours, minutes, seconds = max_runtime.split(":")
+    runtime_args = max_runtime.split(":")
+    if len(runtime_args) != 3:
+        raise ValueError("Invalid --max-runtime supplied. Format should be hh:mm:ss.")
+    else:
+        hours, minutes, seconds = runtime_args
     runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
     if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
         return 'all.q'
