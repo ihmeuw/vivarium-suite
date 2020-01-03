@@ -139,11 +139,26 @@ def get_valid_project(project, cluster):
     return project
 
 
+def get_valid_queue(max_runtime):
+    runtime_args = max_runtime.split(":")
+    if len(runtime_args) != 3:
+        raise ValueError("Invalid --max-runtime supplied. Format should be hh:mm:ss.")
+    else:
+        hours, minutes, seconds = runtime_args
+    runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
+    if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
+        return 'all.q'
+    elif runtime_in_hours <= vct_globals.LONG_Q_MAX_RUNTIME_HOURS:
+        return 'long.q'
+    else:
+        raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
+
+
 def get_uge_specification(peak_memory, max_runtime, project, job_name):
     cluster_name = get_cluster_name()
     project = get_valid_project(project, cluster_name)
-
-    preamble = f'-w n -q all.q -l m_mem_free={peak_memory}G -N {job_name} -l h_rt={max_runtime}'
+    queue = get_valid_queue(max_runtime)
+    preamble = f'-w n -q {queue} -l m_mem_free={peak_memory}G -N {job_name} -l h_rt={max_runtime}'
 
     if cluster_name == "cluster-fair":
         preamble += " -l fthread=1"
