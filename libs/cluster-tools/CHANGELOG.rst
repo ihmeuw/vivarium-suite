@@ -1,3 +1,7 @@
+**1.1.2 - 01/03/20**
+
+ - Set cluster queue dynamically based on max runtime argument.
+
 **1.1.1 - 12/08/19**
 
  - Fix bug in random seed generation so that seeds are unique.
