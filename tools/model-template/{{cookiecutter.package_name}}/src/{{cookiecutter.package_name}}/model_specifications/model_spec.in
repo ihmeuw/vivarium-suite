@@ -19,7 +19,7 @@ configuration:
         extrapolate: False
     randomness:
         map_size: 1_000_000
-        key_columns: ['entrance_time']
+        key_columns: ['entrance_time', 'age']
         random_seed: 0
     time:
         start:
