@@ -19,25 +19,21 @@ if __name__ == "__main__":
     install_requirements = [
         'vivarium=={{cookiecutter.vivarium_version}}',
         'vivarium_public_health=={{cookiecutter.vivarium_public_health_version}}',
+
+        'click',
+        'gbd_mapping==2.1.0',
+        'jinja2',
+        'loguru',
+        'numpy<=1.15.4',
+        'pandas<0.25',
+        'scipy',
+        'tables<=3.4.0',
+    ]
+
+    # use "pip install -e .[dev]" to install required components + extra components
+    extras_require = [
         'vivarium_cluster_tools=={{cookiecutter.vivarium_cluster_tools_version}}',
         'vivarium_inputs[data]=={{cookiecutter.vivarium_inputs_version}}',
-        
-        # These are pinned for internal dependencies on IHME libraries
-        'numpy<=1.15.4',
-        'tables<=3.4.0',
-        'pandas<0.25',        
-        
-        'scipy',
-        'matplotlib',
-        'seaborn',
-        'jupyter',
-        'jupyterlab',
-        'pytest',
-        'pytest-mock',
-        'pyyaml',
-        'jinja2',
-        'click',
-        'loguru',
     ]
 
     setup(
@@ -57,11 +53,15 @@ if __name__ == "__main__":
         include_package_data=True,
 
         install_requires=install_requirements,
+        extras_require={
+            'dev': extras_require,
+        },
 
         zip_safe=False,
 
         entry_points='''
             [console_scripts]
             make_specs={{cookiecutter.package_name}}.tools.cli:make_specs
+            make_artifacts={{cookiecutter.package_name}}.tools.cli:make_artifacts
         '''
     )
