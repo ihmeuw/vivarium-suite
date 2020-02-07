@@ -123,6 +123,7 @@ TEMPLATE_FIELD_MAP = {
     'TRANSITION': TRANSITIONS,
 }
 
+{% raw %}
 def RESULT_COLUMNS(kind='all'):
     if kind not in COLUMN_TEMPLATES and kind != 'all':
         raise ValueError(f'Unknown result column type {kind}')
@@ -139,3 +140,4 @@ def RESULT_COLUMNS(kind='all'):
         for value_group in value_groups:
             columns.append(template.format(**{field: value for field, value in zip(fields, value_group)}))
     return columns
+{% endraw %}
