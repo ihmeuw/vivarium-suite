@@ -25,6 +25,7 @@ import {{cookiecutter.package_name}}.globals as project_globals
 
 from .app_logging import configure_logging_to_terminal
 from .make_specs import build_model_specifications
+from .make_artifacts import build_artifacts
 
 
 @click.command()
@@ -59,3 +60,29 @@ def make_specs(template: str, location: str, output_dir: str, verbose: int, with
     configure_logging_to_terminal(verbose)
     main = handle_exceptions(build_model_specifications, logger, with_debugger=with_debugger)
     main(template, location, output_dir)
+
+
+@click.command()
+@click.option('-l', '--location',
+              default='all',
+              show_default=True,
+              type=click.Choice(project_globals.LOCATIONS + ['all']),
+              help='Location to make artifact for.')
+@click.option('-o', '--output-dir',
+              default=str(paths.ARTIFACT_ROOT),
+              show_default=True,
+              type=click.Path(exists=True),
+              help='Specify an output directory. Directory must exist.')
+@click.option('-a', '--append',
+              is_flag=True,
+              help='Append to the artifact instead of overwriting.')
+@click.option('-v', 'verbose',
+              count=True,
+              help='Configure logging verbosity.')
+@click.option('--pdb', 'with_debugger',
+              is_flag=True,
+              help='Drop into python debugger if an error occurs.')
+def make_artifacts(location: str, output_dir: str, append: bool, verbose: int, with_debugger: bool) -> None:
+    configure_logging_to_terminal(verbose)
+    main = handle_exceptions(build_artifacts, logger, with_debugger=with_debugger)
+    main(location, output_dir, append, verbose)
