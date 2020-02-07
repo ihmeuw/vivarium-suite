@@ -125,28 +125,5 @@ def load_and_write_diarrhea_data(artifact: Artifact, location: str):
 
     for key in keys:
         load_and_write_data(artifact, key, location)
-
-
-def load_and_write_lbwsg_data(artifact: Artifact, location: str):
-    keys = [
-        project_globals.LBWSG_DISTRIBUTION,
-        project_globals.LBWSG_CATEGORIES,
-    ]
-    draw_keys = [
-        project_globals.LBWSG_EXPOSURE,
-        project_globals.LBWSG_RELATIVE_RISK,
-        project_globals.LBWSG_PAF
-    ]
-
-    for key in keys:
-        load_and_write_data(artifact, key, location)
-    for key in draw_keys:
-        if key in artifact:
-            logger.debug(f'Data for {key} already in artifact.  Skipping...')
-        else:
-            logger.debug(f'Loading data for {key} for location {location}.')
-            data = loader.get_data(key, location)
-            logger.debug(f'Writing data for {key} to artifact.')
-            write_data_by_draw(artifact, key, data)
 '''
 

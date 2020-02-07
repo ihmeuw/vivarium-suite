@@ -137,7 +137,7 @@ def build_all_artifacts(output_dir: Path, verbose: int):
                     jobs[location] = (job_id, session.jobStatus(job_id))
                     logger.info(f'{location:<35}: {decodestatus[jobs[location][1]]:>15}')
                 logger.info('')
-                time.sleep(10)
+                time.sleep(project_globals.MAKE_ARTIFACT_SLEEP)
                 logger.info('Checking status again')
                 logger.info('---------------------')
                 logger.info('')
