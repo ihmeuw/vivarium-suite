@@ -14,6 +14,7 @@ from pathlib import Path
 from loguru import logger
 import pandas as pd
 from vivarium.framework.artifact import Artifact, get_location_term, EntityKey
+from vivarium_public_health.risks.data_transformations import pivot_categorical
 
 from {{cookiecutter.package_name}} import globals as project_globals
 from {{cookiecutter.package_name}}.data import loader
@@ -92,7 +93,8 @@ def write_data(artifact: Artifact, key: str, data: pd.DataFrame):
         artifact.write(key, data)
     return artifact.load(key)
 
-
+# TODO - writing and reading by draw is necessary if you are using
+#        LBWSG data. If not, these functions can be removed.
 def write_data_by_draw(artifact: Artifact, key: str, data: pd.DataFrame):
     """Writes data to the artifact on a per-draw basis. This is useful
     for large datasets like Low Birthweight Short Gestation (LBWSG).
@@ -114,6 +116,32 @@ def write_data_by_draw(artifact: Artifact, key: str, data: pd.DataFrame):
         data = data.reset_index(drop=True)
         for c in data.columns:
             store.put(f'{key.path}/{c}', data[c])
+
+
+def read_data_by_draw(artifact_path, key, draw):
+    """Reads data from the artifact on a per-draw basis. This
+    is necessary for Low Birthweight Short Gestation (LBWSG) data.
+
+    Parameters
+    ----------
+    artifact
+        The artifact to read from.
+    key
+        The entity key associated with the data to read.
+    draw
+        The data to retrieve.
+
+    """
+    key = key.replace(".", "/")
+    with pd.HDFStore(artifact_path, mode='r') as store:
+        index = store.get(f'{key}/index')
+        draw = store.get(f'{key}/draw_{draw}')
+    draw = draw.rename("value")
+    data = pd.concat([index, draw], axis=1)
+    data = data.drop(columns='location')
+    data = pivot_categorical(data)
+    data[project_globals.LBWSG_MISSING_CATEGORY.CAT] = project_globals.LBWSG_MISSING_CATEGORY.EXPOSURE
+    return data
 
 
 def load_and_write_demographic_data(artifact: Artifact, location: str):

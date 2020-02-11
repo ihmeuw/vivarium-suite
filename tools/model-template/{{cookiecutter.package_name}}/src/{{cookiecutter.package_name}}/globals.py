@@ -12,7 +12,6 @@ CLUSTER_QUEUE = 'all.q'
 MAKE_ARTIFACT_MEM = '3G'
 MAKE_ARTIFACT_CPU = '1'
 MAKE_ARTIFACT_RUNTIME = '3:00:00'
-MAKE_ARTIFACT_SLEEP = 10
 
 LOCATIONS = [
     # TODO - project locations here
@@ -61,6 +60,22 @@ DISEASE_MODEL_MAP = {
         'transitions': DIARRHEA_MODEL_TRANSITIONS,
     },
 }
+
+
+########################
+# Risk Model Constants #
+########################
+# TODO - remove if you don't need lbwsg
+LBWSG_MODEL_NAME = 'low_birth_weight_and_short_gestation'
+
+
+class __LBWSG_MISSING_CATEGORY(NamedTuple):
+    CAT: str = 'cat212'
+    NAME: str = 'Birth prevalence - [37, 38) wks, [1000, 1500) g'
+    EXPOSURE: float = 0.
+
+
+LBWSG_MISSING_CATEGORY = __LBWSG_MISSING_CATEGORY()
 
 
 #################################
