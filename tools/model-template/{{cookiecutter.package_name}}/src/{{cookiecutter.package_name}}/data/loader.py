@@ -1,4 +1,17 @@
-"""Loads, standardizes and validates input data for the simulation."""
+"""Loads, standardizes and validates input data for the simulation.
+
+Abstract the extract and transform pieces of the artifact ETL.
+The intent here is to provide a uniform interface around this portion
+of artifact creation. The value of this interface shows up when more
+complicated data needs are part of the project. See the BEP project
+for an example.
+
+`BEP <https://github.com/ihmeuw/vivarium_gates_bep/blob/master/src/vivarium_gates_bep/data/loader.py>`_
+
+.. admonition::
+
+   No logging is done here. Logging is done in vivarium inputs itself and forwarded.
+"""
 from gbd_mapping import causes, risk_factors, covariates
 import pandas as pd
 from vivarium.framework.artifact import EntityKey

@@ -1,11 +1,11 @@
 {
-    "package_name": "vivarium_research_template",
+    "package_name": "ks_test",
     "package_version": "1.0.0",
-    "package_description": "Research repository for the {{cookiecutter.package_name}} project.",
-    "package_url": "https://github.com/ihmeuw/{{cookiecutter.package_name}}",
-    "ssh_url": "git@github.com:ihmeuw/{{cookiecutter.package_name}}.git",
-    "vivarium_version": "",
-    "vivarium_public_health_version": "",
-    "vivarium_cluster_tools_version": "",
-    "vivarium_inputs_version": ""
+    "package_description": "description",
+    "package_url": "",
+    "ssh_url": "",
+    "vivarium_version": "0.9.3",
+    "vivarium_public_health_version": "0.10.4",
+    "vivarium_cluster_tools_version": "1.1.1",
+    "vivarium_inputs_version": "3.1.1"
 }

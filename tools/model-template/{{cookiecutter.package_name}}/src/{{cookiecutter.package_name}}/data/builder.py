@@ -1,5 +1,9 @@
 """Modularized functions for building project data artifacts.
 
+This module is an abstraction around the load portion of our artifact building ETL pipeline.
+The intent is to be declarative so it's easy to see what is put into the artifact and how.
+Some degree of verbosity/boilerplate is fine in the interest of transparancy.
+
 .. admonition::
 
    Logging in this module should be done at the ``debug`` level.
@@ -90,6 +94,19 @@ def write_data(artifact: Artifact, key: str, data: pd.DataFrame):
 
 
 def write_data_by_draw(artifact: Artifact, key: str, data: pd.DataFrame):
+    """Writes data to the artifact on a per-draw basis. This is useful
+    for large datasets like Low Birthweight Short Gestation (LBWSG).
+
+    Parameters
+    ----------
+    artifact
+        The artifact to write to.
+    key
+        The entity key associated with the data to write.
+    data
+        The data to write.
+
+    """
     with pd.HDFStore(artifact.path, complevel=9, mode='a') as store:
         key = EntityKey(key)
         artifact._keys.append(key)

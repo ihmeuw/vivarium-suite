@@ -23,9 +23,9 @@ from vivarium.framework.utilities import handle_exceptions
 from {{cookiecutter.package_name}} import paths
 import {{cookiecutter.package_name}}.globals as project_globals
 
-from .app_logging import configure_logging_to_terminal
-from .make_specs import build_model_specifications
-from .make_artifacts import build_artifacts
+from {{cookiecutter.package_name}}.tools import configure_logging_to_terminal
+from {{cookiecutter.package_name}}.tools import build_model_specifications
+from {{cookiecutter.package_name}}.tools import build_artifacts
 
 
 @click.command()
