@@ -20,9 +20,8 @@ def add_logging_sink(sink: TextIO, verbose: int, colorize: bool = False, seriali
         to the logging sink.
 
     """
-    message_format = ('<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
-                      '<cyan>{function}</cyan>:<cyan>{line}</cyan> '
-                      '- <level>{message}</level>')
+    message_format = ('<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <green>{elapsed}</green> | '
+                      '<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>')
     if verbose == 0:
         logger.add(sink, colorize=colorize, level="WARNING", format=message_format, serialize=serialize)
     elif verbose == 1:
