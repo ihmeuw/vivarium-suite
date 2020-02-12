@@ -62,6 +62,22 @@ DISEASE_MODEL_MAP = {
 }
 
 
+########################
+# Risk Model Constants #
+########################
+# TODO - remove if you don't need lbwsg
+LBWSG_MODEL_NAME = 'low_birth_weight_and_short_gestation'
+
+
+class __LBWSG_MISSING_CATEGORY(NamedTuple):
+    CAT: str = 'cat212'
+    NAME: str = 'Birth prevalence - [37, 38) wks, [1000, 1500) g'
+    EXPOSURE: float = 0.
+
+
+LBWSG_MISSING_CATEGORY = __LBWSG_MISSING_CATEGORY()
+
+
 #################################
 # Results columns and variables #
 #################################
