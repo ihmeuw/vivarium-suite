@@ -4,7 +4,7 @@ components:
             - BasePopulation()
             - Mortality()
         metrics:
-            - Disability()
+            - DisabilityObserver()
             - MortalityObserver()
 
     {{cookiecutter.package_name}}.components:
