@@ -1,5 +1,4 @@
 import itertools
-from typing import NamedTuple
 
 from typing import NamedTuple
 

@@ -7,6 +7,7 @@ components:
             - DisabilityObserver()
             - MortalityObserver()
 
+    # Causes an error if left empty. Uncomment when you have components. 
     # {{cookiecutter.package_name}}.components:
 
 configuration:
