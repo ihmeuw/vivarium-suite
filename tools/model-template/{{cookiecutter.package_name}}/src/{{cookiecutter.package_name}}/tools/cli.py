@@ -67,8 +67,8 @@ def make_specs(template: str, location: str, output_dir: str, verbose: int, with
               default='all',
               show_default=True,
               type=click.Choice(project_globals.LOCATIONS + ['all']),
-              help=('Location to make artifact for. Note: specifying "all" will launch '
-                    'jobs on the cluster'))
+              help=('Location to make artifact for. Note: specifying "all" requires '
+                    'that you be running from a cluster node.'))
 @click.option('-o', '--output-dir',
               default=str(paths.ARTIFACT_ROOT),
               show_default=True,

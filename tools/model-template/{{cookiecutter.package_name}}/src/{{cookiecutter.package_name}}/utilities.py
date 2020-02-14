@@ -1,8 +1,22 @@
 import pandas as pd
 
+from typing import NamedTuple, Union, List
+from pathlib import Path
+from loguru import logger
+
 from vivarium_public_health.risks.data_transformations import pivot_categorical
 
 from {{cookiecutter.package_name}} import globals as project_globals
+
+
+def len_longest_location() -> int:
+    """Returns the length of the longest location in the project.
+
+    Returns
+    -------
+       Length of the longest location in the project.
+    """
+    return len(max(project_globals.LOCATIONS, key=len))
 
 
 def sanitize_location(location: str):
@@ -21,6 +35,21 @@ def sanitize_location(location: str):
     """
     # FIXME: Should make this a reversible transformation.
     return location.replace(" ", "_").replace("'", "_").lower()
+
+
+def delete_if_exists(*paths: Union[Path, List[Path]], confirm=False):
+    paths = paths[0] if isinstance(paths[0], list) else paths
+    existing_paths = [p for p in paths if p.exists()]
+    if existing_paths:
+        if confirm:
+            # Assumes all paths have the same root dir
+            root = existing_paths[0].parent
+            names = [p.name for p in existing_paths]
+            click.confirm(f"Existing files {names} found in directory {root}. Do you want to delete and replace?",
+                          abort=True)
+        for p in existing_paths:
+            logger.info(f'Deleting artifact at {str(p)}.')
+            p.unlink()
 
 
 def read_data_by_draw(artifact_path: str, key : str, draw: int) -> pd.DataFrame:

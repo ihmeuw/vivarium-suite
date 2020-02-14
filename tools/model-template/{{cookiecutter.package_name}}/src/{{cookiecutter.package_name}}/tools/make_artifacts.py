@@ -16,7 +16,7 @@ import click
 from loguru import logger
 
 from {{cookiecutter.package_name}} import globals as project_globals
-from {{cookiecutter.package_name}}.utilities import sanitize_location
+from {{cookiecutter.package_name}}.utilities import sanitize_location, delete_if_exists, len_longest_location
 from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink
 
 
@@ -44,11 +44,8 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
     if location in project_globals.LOCATIONS:
         path = Path(output_dir) / f'{sanitize_location(location)}.hdf'
 
-        if path.exists() and not append:
-            click.confirm(f"Existing artifact found for {location}. Do you want to delete and rebuild?",
-                          abort=True)
-            logger.info(f'Deleting artifact at {str(path)}.')
-            path.unlink()
+        if not append:
+            delete_if_exists(path)
 
         build_single_location_artifact(path, location)
 
@@ -92,7 +89,11 @@ def build_all_artifacts(output_dir: Path, verbose: int):
 
 
     """
-    from vivarium_cluster_tools.psimulate.utilities import get_drmaa
+    from vivarium_cluster_tools.psimulate.utilities import get_drmaa, get_cluster_name, exit_if_on_submit_host
+
+    # bail if we are not on a proper cluster node
+    exit_if_on_submit_host(get_cluster_name())
+
     drmaa = get_drmaa()
 
     jobs = {}
@@ -135,7 +136,8 @@ def build_all_artifacts(output_dir: Path, verbose: int):
             while any([job[1] not in [drmaa.JobState.DONE, drmaa.JobState.FAILED] for job in jobs.values()]):
                 for location, (job_id, status) in jobs.items():
                     jobs[location] = (job_id, session.jobStatus(job_id))
-                    logger.info(f'{location:<35}: {decodestatus[jobs[location][1]]:>15}')
+                    padding = len_longest_location() + 1
+                    logger.info(f'{location:<{padding}}: {decodestatus[jobs[location][1]]:>15}')
                 logger.info('')
                 time.sleep(project_globals.MAKE_ARTIFACT_SLEEP)
                 logger.info('Checking status again')
@@ -169,8 +171,7 @@ def build_single_location_artifact(path: Union[str, Path], location: str, log_to
     path = Path(path)
     if log_to_file:
         log_file = path.parent / 'logs' / f'{sanitize_location(location)}.log'
-        if log_file.exists():
-            log_file.unlink()
+        delete_if_exists(log_file)
         add_logging_sink(log_file, verbose=2)
 
     # Local import to avoid data dependencies

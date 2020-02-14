@@ -4,10 +4,10 @@ components:
             - BasePopulation()
             - Mortality()
         metrics:
-            - Disability()
+            - DisabilityObserver()
             - MortalityObserver()
 
-    {{cookiecutter.package_name}}.components:
+    # {{cookiecutter.package_name}}.components:
 
 configuration:
     input_data:

@@ -41,7 +41,7 @@ def get_data(lookup_key: str, location: str) -> pd.DataFrame:
         project_globals.POPULATION_STRUCTURE: load_population_structure,
         project_globals.POPULATION_AGE_BINS: load_age_bins,
         project_globals.POPULATION_DEMOGRAPHY: load_demographic_dimensions,
-
+        project_globals.POPULATION_TMRLE: load_theoretical_minimum_risk_life_expectancy,
         project_globals.ALL_CAUSE_CSMR: load_standard_data,
 
         # TODO - add appropriate mappings
