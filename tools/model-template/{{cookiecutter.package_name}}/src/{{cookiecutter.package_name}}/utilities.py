@@ -29,7 +29,7 @@ def read_data_by_draw(artifact_path: str, key : str, draw: int) -> pd.DataFrame:
 
     Parameters
     ----------
-    artifact
+    artifact_path
         The artifact to read from.
     key
         The entity key associated with the data to read.
