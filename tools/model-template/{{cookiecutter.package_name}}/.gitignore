@@ -125,3 +125,6 @@ dmypy.json
 
 # Pycharm project settings
 .idea/
+
+# Model specification files
+src/{{ cookiecutter.package_name }}/model_specifications/*.yaml
