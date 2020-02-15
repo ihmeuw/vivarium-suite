@@ -45,24 +45,18 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
         path = Path(output_dir) / f'{sanitize_location(location)}.hdf'
 
         if not append:
-            delete_if_exists(path)
+            delete_if_exists(path,  confirm=True)
 
         build_single_location_artifact(path, location)
 
     elif location == 'all':
-        # FIXME: could be more careful
         existing_artifacts = set([item.stem for item in output_dir.iterdir()
                                   if item.is_file() and item.suffix == '.hdf'])
         locations = set([sanitize_location(loc) for loc in project_globals.LOCATIONS])
         existing = locations.intersection(existing_artifacts)
 
         if existing and not append:
-            click.confirm(f'Existing artifacts found for {existing}. Do you want to delete and rebuild?',
-                          abort=True)
-            for loc in existing:
-                path = output_dir / f'{loc}.hdf'
-                logger.info(f'Deleting artifact at {str(path)}.')
-                path.unlink()
+            delete_if_exists([output_dir / f'{loc}.hdf' for loc in existing], confirm=True)
 
         build_all_artifacts(output_dir, verbose)
 

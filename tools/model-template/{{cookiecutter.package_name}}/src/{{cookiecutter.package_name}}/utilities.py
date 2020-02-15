@@ -1,3 +1,4 @@
+import click
 import pandas as pd
 
 from typing import NamedTuple, Union, List
