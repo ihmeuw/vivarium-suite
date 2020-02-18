@@ -29,7 +29,7 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
         The location to build the artifact for.  Must be one of the
         locations specified in the project globals or the string 'all'.
         If the latter, this application will build all artifacts in
-        parallel.
+        parallel. Click enforces valid locations and existing output dir.
     output_dir
         The path where the artifact files will be built.
     append
@@ -40,29 +40,17 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
 
     """
     output_dir = Path(output_dir)
+    existing = ([output_dir / f'{sanitize_location(loc)}.hdf' for loc in project_globals.LOCATIONS]
+                if location == 'all' else
+                output_dir / f'{sanitize_location(location)}.hdf')
 
-    if location in project_globals.LOCATIONS:
-        path = Path(output_dir) / f'{sanitize_location(location)}.hdf'
+    if not append:
+        delete_if_exists(existing, confirm=True)
 
-        if not append:
-            delete_if_exists(path,  confirm=True)
-
-        build_single_location_artifact(path, location)
-
-    elif location == 'all':
-        existing_artifacts = set([item.stem for item in output_dir.iterdir()
-                                  if item.is_file() and item.suffix == '.hdf'])
-        locations = set([sanitize_location(loc) for loc in project_globals.LOCATIONS])
-        existing = locations.intersection(existing_artifacts)
-
-        if existing and not append:
-            delete_if_exists([output_dir / f'{loc}.hdf' for loc in existing], confirm=True)
-
+    if location == 'all':
         build_all_artifacts(output_dir, verbose)
-
     else:
-        raise ValueError(f'Location must be one of {project_globals.LOCATIONS} or the string "all". '
-                         f'You specified {location}.')
+        build_single_location_artifact(existing, location)
 
 
 def build_all_artifacts(output_dir: Path, verbose: int):
