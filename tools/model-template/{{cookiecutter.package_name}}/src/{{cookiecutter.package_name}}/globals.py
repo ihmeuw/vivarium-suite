@@ -1,6 +1,6 @@
 import itertools
-from typing import NamedTuple
 
+from typing import NamedTuple
 
 ####################
 # Project metadata #
@@ -13,6 +13,7 @@ CLUSTER_QUEUE = 'all.q'
 MAKE_ARTIFACT_MEM = '3G'
 MAKE_ARTIFACT_CPU = '1'
 MAKE_ARTIFACT_RUNTIME = '3:00:00'
+MAKE_ARTIFACT_SLEEP = 10
 
 LOCATIONS = [
     # TODO - project locations here
@@ -28,6 +29,7 @@ METADATA_LOCATIONS = 'metadata.locations'
 POPULATION_STRUCTURE = 'population.structure'
 POPULATION_AGE_BINS = 'population.age_bins'
 POPULATION_DEMOGRAPHY = 'population.demographic_dimensions'
+POPULATION_TMRLE = 'population.theoretical_minimum_risk_life_expectancy'
 
 ALL_CAUSE_CSMR = 'cause.all_causes.cause_specific_mortality_rate'
 
