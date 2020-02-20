@@ -49,9 +49,6 @@ def test_concat_results(data_types):
     old['input_draw'] = old['random_seed'] = 0.0
     new['input_draw'] = new['random_seed'] = 1.0
 
-    old = old.set_index(['input_draw', 'random_seed'], drop=False)
-    new = new.set_index(['input_draw', 'random_seed'], drop=False)
-
     combined = concat_results(old, [new])
 
     expected_dtypes = old.dtypes
@@ -59,7 +56,7 @@ def test_concat_results(data_types):
     expected_shape = (old.shape[0] + new.shape[0], old.shape[1])
 
     for c in old:
-        assert (combined[c] == new[c].append(old[c])).all()
+        assert (combined[c] == (new[c].append(old[c])).reset_index(drop=True)).all()
 
     assert combined.shape == expected_shape
     assert combined.dtypes.sort_index().equals(expected_dtypes.sort_index())
