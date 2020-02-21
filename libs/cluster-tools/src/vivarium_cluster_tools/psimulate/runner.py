@@ -242,8 +242,6 @@ def concat_results(old_results, new_results):
 
     results = concat_preserve_types(to_concat)
 
-    results = results.set_index(['input_draw', 'random_seed'], drop=False)
-    results.index.names = ['input_draw_number', 'random_seed']
     end = time()
     logger.info(f"Concatenated {len(new_results)} results in {end - start:.2f}s.")
     return results
