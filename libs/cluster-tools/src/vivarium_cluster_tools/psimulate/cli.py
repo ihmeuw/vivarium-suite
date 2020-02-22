@@ -83,8 +83,8 @@ def run(model_specification, branch_configuration, result_directory, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    main(model_specification, branch_configuration, result_directory,
-         options['project'], options['peak_memory'], options['max_runtime'],
+    native_specification = runner.NativeSpecification(**options)
+    main(model_specification, branch_configuration, result_directory, native_specification,
          redis_processes=options['redis'], no_batch=options['no_batch'])
 
 

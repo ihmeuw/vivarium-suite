@@ -1,7 +1,4 @@
-from bdb import BdbQuit
 from datetime import datetime
-import functools
-import math
 import os
 from pathlib import Path
 import sys
@@ -73,9 +70,8 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
 
 DIRECTORY_PERMS=0o775
 def set_permissions(output_dir):
-    ''' Call to achieve side effect of relaxing permissions
-        on output dir and the parent
-    '''
+    """Call to achieve side effect of relaxing permissions
+        on output dir and the parent"""
     output_dir.parent.chmod(DIRECTORY_PERMS)
     output_dir.chmod(DIRECTORY_PERMS)
 
@@ -117,60 +113,58 @@ def get_cluster_name():
         raise RuntimeError('This tool must be run from the IHME cluster.')
     return cluster_name
 
-
 ENV_HOSTNAME='HOSTNAME'
 def get_hostname() -> str:
     return os.environ.get(ENV_HOSTNAME)
-
 
 SUBMIT_HOST_MARKER='-submit-'
 def exit_if_on_submit_host(name : str):
     if SUBMIT_HOST_MARKER in name:
         raise RuntimeError('This tool must not be run from a submit host.')
 
-
-def get_valid_project(project, cluster):
-    if cluster == 'cluster-dev':
-        project = None
-    else:
-        if project not in vct_globals.CLUSTER_PROJECTS:
-            raise RuntimeError(f"Script only for use with Simulation Science "
-                               f"cluster projects: {vct_globals.CLUSTER_PROJECTS}.")
-    return project
-
-
-def get_valid_queue(max_runtime):
-    runtime_args = max_runtime.split(":")
-    if len(runtime_args) != 3:
-        raise ValueError("Invalid --max-runtime supplied. Format should be hh:mm:ss.")
-    else:
-        hours, minutes, seconds = runtime_args
-    runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
-    if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
-        return 'all.q'
-    elif runtime_in_hours <= vct_globals.LONG_Q_MAX_RUNTIME_HOURS:
-        return 'long.q'
-    else:
-        raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
+#
+# def get_valid_project(project, cluster):
+#     if cluster == 'cluster-dev':
+#         project = None
+#     else:
+#         if project not in vct_globals.CLUSTER_PROJECTS:
+#             raise RuntimeError(f"Script only for use with Simulation Science "
+#                                f"cluster projects: {vct_globals.CLUSTER_PROJECTS}.")
+#     return project
 
 
-def get_uge_specification(peak_memory, max_runtime, project, job_name):
-    cluster_name = get_cluster_name()
-    project = get_valid_project(project, cluster_name)
-    queue = get_valid_queue(max_runtime)
-    preamble = f'-w n -q {queue} -l m_mem_free={peak_memory}G -N {job_name} -l h_rt={max_runtime}'
+# def get_valid_queue(max_runtime):
+#     runtime_args = max_runtime.split(":")
+#     if len(runtime_args) != 3:
+#         raise ValueError("Invalid --max-runtime supplied. Format should be hh:mm:ss.")
+#     else:
+#         hours, minutes, seconds = runtime_args
+#     runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
+#     if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
+#         return 'all.q'
+#     elif runtime_in_hours <= vct_globals.LONG_Q_MAX_RUNTIME_HOURS:
+#         return 'long.q'
+#     else:
+#         raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
 
-    if cluster_name == "cluster-fair":
-        preamble += " -l fthread=1"
-    else:
-        # Calculate slot count based on expected peak memory usage and 2g per slot
-        num_slots = int(math.ceil(peak_memory / 2.5))
-        preamble += f' -pe multi_slot {num_slots}'
 
-    if project:
-        preamble += f' -P {project}'
-
-    return preamble
+# def get_uge_specification(peak_memory, max_runtime, project, job_name):
+#     cluster_name = get_cluster_name()
+#     project = get_valid_project(project, cluster_name)
+#     queue = get_valid_queue(max_runtime)
+#     preamble = f'-w n -q {queue} -l m_mem_free={peak_memory}G -N {job_name} -l h_rt={max_runtime}'
+#
+#     if cluster_name == "cluster-fair":
+#         preamble += " -l fthread=1"
+#     else:
+#         # Calculate slot count based on expected peak memory usage and 2g per slot
+#         num_slots = int(math.ceil(peak_memory / 2.5))
+#         preamble += f' -pe multi_slot {num_slots}'
+#
+#     if project:
+#         preamble += f' -P {project}'
+#
+#     return preamble
 
 
 def chunks(l, n):
@@ -248,4 +242,3 @@ def validate_environment(output_dir: Path):
         compare_environments(current_environment, original_environment)
         logger.info('Validation of environment successful. All pip installed packages match '
                     'original versions. Run can proceed.')
-

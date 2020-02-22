@@ -9,23 +9,23 @@ from pathlib import Path
 from time import sleep, time
 from types import SimpleNamespace
 
-from loguru import logger
 import numpy as np
 import pandas as pd
+from loguru import logger
 
 from vivarium.framework.configuration import build_model_specification
 from vivarium.framework.utilities import collapse_nested_dict
 from vivarium.framework.artifact import parse_artifact_path_config
 
 from vivarium_cluster_tools.psimulate.branches import Keyspace
-from vivarium_cluster_tools.psimulate import globals as vtc_globals, utilities
+from vivarium_cluster_tools.psimulate import globals as vct_globals, utilities
 from vivarium_cluster_tools.psimulate.registry import RegistryManager
 
 drmaa = utilities.get_drmaa()
 
 
-def init_job_template(jt, peak_memory, max_runtime, sge_log_directory, worker_log_directory,
-                      project, job_name, worker_settings_file):
+def init_job_template(jt, native_specification, sge_log_directory, worker_log_directory,
+                      worker_settings_file):
     launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
                                            suffix='.sh', delete=False)
     atexit.register(lambda: os.remove(launcher.name))
@@ -51,7 +51,8 @@ def init_job_template(jt, peak_memory, max_runtime, sge_log_directory, worker_lo
         'SGE_CLUSTER_NAME': sge_cluster,
     }
     jt.joinFiles = True
-    jt.nativeSpecification = utilities.get_uge_specification(peak_memory, max_runtime, project, job_name)
+    jt.nativeSpecification = str(native_specification)
+    # jt.nativeSpecification = utilities.get_uge_specification(peak_memory, max_runtime, project, job_name)
     return jt
 
 
@@ -95,11 +96,11 @@ def launch_redis_processes(num_processes):
     return worker_config, redis_ports
 
 
-def start_cluster(drmaa_session, num_workers, peak_memory, max_runtime, sge_log_directory, worker_log_directory,
-                  project, worker_settings_file, job_name="vivarium"):
+def start_cluster(drmaa_session, num_workers, sge_log_directory, worker_log_directory,
+                  worker_settings_file, native_specification):
     s = drmaa_session
-    jt = init_job_template(s.createJobTemplate(), peak_memory, max_runtime, sge_log_directory,
-                           worker_log_directory, project, job_name, worker_settings_file)
+    jt = init_job_template(s.createJobTemplate(), native_specification, sge_log_directory,
+                           worker_log_directory, worker_settings_file)
     if num_workers:
         job_ids = s.runBulkJobs(jt, 1, num_workers, 1)
         array_job_id = job_ids[0].split('.')[0]
@@ -134,12 +135,12 @@ class RunContext:
         # TODO This constructor has side effects (it creates directories under some circumstances) which is weird.
         # It should probably be split into two phases with the side effects in the second phase.
 
-        self.cluster_project = arguments.project
-        self.peak_memory = arguments.peak_memory
-        self.max_runtime = arguments.max_runtime
+        # self.cluster_project = arguments.project
+        # self.peak_memory = arguments.peak_memory
+        # self.max_runtime = arguments.max_runtime
         self.number_already_completed = 0
         self.output_directory = arguments.output_directory
-        self.job_name = arguments.output_directory.parts[-2]  # The model specification name.
+        # self.job_name = arguments.output_directory.parts[-2]  # The model specification name.
         self.no_batch = arguments.no_batch
         self.sge_log_directory = arguments.logging_directories['sge']
         self.worker_log_directory = arguments.logging_directories['worker']
@@ -175,6 +176,38 @@ class RunContext:
             # Log some basic stuff about the simulation to be run.
             self.keyspace.persist(self.output_directory)
         self.model_specification = self.output_directory / 'model_specification.yaml'
+
+
+# TODO: The dumb thing for now. Can I make this work with NamedTuple ?
+class NativeSpecification:
+
+    def __init__(self, project, peak_memory, max_runtime, validation='n', threads=1, **__):
+        self.project = project
+        self.peak_memory = peak_memory
+        self.max_runtime = max_runtime
+        self.validation = validation
+        self.threads = threads
+        self.queue = self.get_valid_queue(max_runtime)
+
+    @staticmethod
+    def get_valid_queue(max_runtime: str):
+        runtime_args = max_runtime.split(":")
+        if len(runtime_args) != 3:
+            raise ValueError("Invalid --max-runtime supplied. Format should be hh:mm:ss.")
+        else:
+            hours, minutes, seconds = runtime_args
+        runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
+        if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
+            return 'all.q'
+        elif runtime_in_hours <= vct_globals.LONG_Q_MAX_RUNTIME_HOURS:
+            return 'long.q'
+        else:
+            raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
+
+    def __str__(self):
+        return (f"-w {self.validation} -q {self.queue} -l m_mem_free={self.peak_memory} "
+                f"-l h_rt={self.max_runtime} -l fthread={self.threads} -N {self.job_name} "
+                f"-P {self.project}")
 
 
 def build_job_list(ctx):
@@ -321,13 +354,18 @@ def check_user_sge_config():
                                    "with the worker logs.")
 
 
-def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, max_runtime,
-         redis_processes, num_input_draws=None, num_random_seeds=None, restart=False, expand=None, no_batch=False):
+def main(model_specification_file: str, branch_configuration_file: str, result_directory: str,
+         native_specification: NativeSpecification, redis_processes: int, num_input_draws=None,
+         num_random_seeds=None, restart=False, expand=None, no_batch=False):
 
     utilities.exit_if_on_submit_host(utilities.get_hostname())
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
                                                            restart, expand=(num_input_draws or num_random_seeds))
+    # TODO: DO I like this split from the rest of the things?
+    #       I could push the Path coercion in to CLI, then take model spec name directly and remove casting
+    #       from setup_directories
+    native_specification.job_name = output_dir.parts[-2]  # model_specification_name
 
     utilities.configure_master_process_logging_to_file(logging_dirs['main'])
     utilities.validate_environment(output_dir)
@@ -336,14 +374,15 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
                                 branch_configuration_file=branch_configuration_file,
                                 output_directory=output_dir,
                                 logging_directories=logging_dirs,
-                                project=project,
-                                peak_memory=peak_memory,
-                                max_runtime=max_runtime,
+                                # project=project,
+                                # peak_memory=peak_memory,
+                                # max_runtime=max_runtime,
                                 num_input_draws=num_input_draws,
                                 num_random_seeds=num_random_seeds,
                                 restart=restart,
                                 expand=expand,
                                 no_batch=no_batch)
+
     ctx = RunContext(arguments)
     check_user_sge_config()
     jobs = build_job_list(ctx)
@@ -355,7 +394,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
     logger.info('Starting jobs. Results will be written to: {}'.format(ctx.output_directory))
 
     if redis_processes == -1:
-        redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
+        redis_processes = int(math.ceil(len(jobs) / vct_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
 
     worker_template, redis_ports = launch_redis_processes(redis_processes)
     worker_file = output_dir / 'settings.py'
@@ -368,8 +407,17 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
     drmaa_session = drmaa.Session()
     drmaa_session.initialize()
 
-    start_cluster(drmaa_session, len(jobs), ctx.peak_memory, ctx.max_runtime, ctx.sge_log_directory,
-                  ctx.worker_log_directory, project, worker_file, ctx.job_name)
+    # TODO: Replace most of this with native specification object
+    start_cluster(drmaa_session,
+                  len(jobs),
+                  # ctx.peak_memory,
+                  # ctx.max_runtime,
+                  ctx.sge_log_directory,
+                  ctx.worker_log_directory,
+                  # project,
+                  worker_file,
+                  native_specification)
+                  # ctx.job_name)
 
     process_job_results(registry_manager, ctx)
 
