@@ -387,7 +387,6 @@ def main(model_specification_file: str, branch_configuration_file: str, result_d
     drmaa_session = drmaa.Session()
     drmaa_session.initialize()
 
-    # TODO: Replace most of this with native specification object
     start_cluster(drmaa_session,
                   len(jobs),
                   ctx.sge_log_directory,
