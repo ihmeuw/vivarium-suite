@@ -104,8 +104,8 @@ def restart(results_root, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    main(None, None, results_root,
-         options['project'], options['peak_memory'], options['max_runtime'],
+    native_specification = runner.NativeSpecification(**options, job_name=Path(results_root).parts[-2])
+    main(None, None, results_root, native_specification,
          redis_processes=options['redis'], restart=True, no_batch=options['no_batch'])
 
 
@@ -127,8 +127,8 @@ def expand(results_root, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    main(None, None, results_root,
-         options['project'], options['peak_memory'], options['max_runtime'],
+    native_specification = runner.NativeSpecification(**options, job_name=Path(results_root).parts[-2])
+    main(None, None, results_root, native_specification,
          redis_processes=options['redis'],
          restart=True,
          expand={'num_draws': options['add_draws'],
