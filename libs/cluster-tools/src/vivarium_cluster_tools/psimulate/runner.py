@@ -7,7 +7,6 @@ import socket
 import subprocess
 from pathlib import Path
 from time import sleep, time
-from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -52,7 +51,6 @@ def init_job_template(jt, native_specification, sge_log_directory, worker_log_di
     }
     jt.joinFiles = True
     jt.nativeSpecification = str(native_specification)
-    # jt.nativeSpecification = utilities.get_uge_specification(peak_memory, max_runtime, project, job_name)
     return jt
 
 
@@ -108,14 +106,14 @@ def start_cluster(drmaa_session, num_workers, sge_log_directory, worker_log_dire
         def kill_jobs():
             if "drmaa" not in dir():
                 # FIXME: The global drmaa should be available here.
-                # This is maybe a holdover from old code?
-                # Maybe something to do with atexit?
+                #        This is maybe a holdover from old code?
+                #        Maybe something to do with atexit?
                 drmaa = utilities.get_drmaa()
 
             try:
                 s.control(array_job_id, drmaa.JobControlAction.TERMINATE)
             # FIXME: Hack around issue where drmaa.errors sometimes doesn't
-            # exist.
+            #        exist.
             except Exception as e:
                 if 'There are no jobs registered' in str(e):
                     # This is the case where all our workers have already shut down
@@ -131,32 +129,31 @@ def start_cluster(drmaa_session, num_workers, sge_log_directory, worker_log_dire
 
 
 class RunContext:
-    def __init__(self, arguments):
-        # TODO This constructor has side effects (it creates directories under some circumstances) which is weird.
-        # It should probably be split into two phases with the side effects in the second phase.
+    def __init__(self, model_specification_file, branch_configuration_file, output_directory,
+                 logging_directories, num_input_draws, num_random_seeds, restart,
+                 expand, no_batch):
+        # TODO This constructor has side effects (it creates directories under
+        #      some circumstances) which is weird. It should probably be split
+        #      into two phases with the side effects in the second phase.
 
-        # self.cluster_project = arguments.project
-        # self.peak_memory = arguments.peak_memory
-        # self.max_runtime = arguments.max_runtime
         self.number_already_completed = 0
-        self.output_directory = arguments.output_directory
-        # self.job_name = arguments.output_directory.parts[-2]  # The model specification name.
-        self.no_batch = arguments.no_batch
-        self.sge_log_directory = arguments.logging_directories['sge']
-        self.worker_log_directory = arguments.logging_directories['worker']
+        self.output_directory = output_directory
+        self.no_batch = no_batch
+        self.sge_log_directory = logging_directories['sge']
+        self.worker_log_directory = logging_directories['worker']
 
-        if arguments.restart:
+        if restart:
             self.keyspace = Keyspace.from_previous_run(self.output_directory)
             self.existing_outputs = pd.read_hdf(self.output_directory / 'output.hdf')
-            if arguments.expand:
-                self.keyspace.add_draws(arguments.expand['num_draws'])
-                self.keyspace.add_seeds(arguments.expand['num_seeds'])
+            if expand:
+                self.keyspace.add_draws(expand['num_draws'])
+                self.keyspace.add_seeds(expand['num_seeds'])
                 self.keyspace.persist(self.output_directory)
         else:
-            model_specification = build_model_specification(arguments.model_specification_file)
+            model_specification = build_model_specification(model_specification_file)
 
-            self.keyspace = Keyspace.from_branch_configuration(arguments.num_input_draws, arguments.num_random_seeds,
-                                                               arguments.branch_configuration_file)
+            self.keyspace = Keyspace.from_branch_configuration(num_input_draws, num_random_seeds,
+                                                               branch_configuration_file)
 
             if "input_data.artifact_path" in self.keyspace.get_data():
                 raise ValueError("An artifact path can only be supplied in the model specification file, "
@@ -169,7 +166,7 @@ class RunContext:
                     source=__file__)
 
             model_specification_path = self.output_directory / 'model_specification.yaml'
-            shutil.copy(arguments.model_specification_file, model_specification_path)
+            shutil.copy(model_specification_file, model_specification_path)
 
             self.existing_outputs = None
 
@@ -178,15 +175,14 @@ class RunContext:
         self.model_specification = self.output_directory / 'model_specification.yaml'
 
 
-# TODO: The dumb thing for now. Can I make this work with NamedTuple ?
 class NativeSpecification:
-
-    def __init__(self, project, peak_memory, max_runtime, validation='n', threads=1, **__):
+    def __init__(self, project, peak_memory, max_runtime, validation='n', threads=1, job_name='vivarium', **__):
         self.project = project
         self.peak_memory = peak_memory
         self.max_runtime = max_runtime
         self.validation = validation
         self.threads = threads
+        self.job_name = job_name
         self.queue = self.get_valid_queue(max_runtime)
 
     @staticmethod
@@ -362,28 +358,12 @@ def main(model_specification_file: str, branch_configuration_file: str, result_d
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
                                                            restart, expand=(num_input_draws or num_random_seeds))
-    # TODO: DO I like this split from the rest of the things?
-    #       I could push the Path coercion in to CLI, then take model spec name directly and remove casting
-    #       from setup_directories
-    native_specification.job_name = output_dir.parts[-2]  # model_specification_name
 
     utilities.configure_master_process_logging_to_file(logging_dirs['main'])
     utilities.validate_environment(output_dir)
 
-    arguments = SimpleNamespace(model_specification_file=model_specification_file,
-                                branch_configuration_file=branch_configuration_file,
-                                output_directory=output_dir,
-                                logging_directories=logging_dirs,
-                                # project=project,
-                                # peak_memory=peak_memory,
-                                # max_runtime=max_runtime,
-                                num_input_draws=num_input_draws,
-                                num_random_seeds=num_random_seeds,
-                                restart=restart,
-                                expand=expand,
-                                no_batch=no_batch)
-
-    ctx = RunContext(arguments)
+    ctx = RunContext(model_specification_file, branch_configuration_file, output_dir, logging_dirs,
+                     num_input_draws, num_random_seeds, restart, expand, no_batch)
     check_user_sge_config()
     jobs = build_job_list(ctx)
 
@@ -410,14 +390,10 @@ def main(model_specification_file: str, branch_configuration_file: str, result_d
     # TODO: Replace most of this with native specification object
     start_cluster(drmaa_session,
                   len(jobs),
-                  # ctx.peak_memory,
-                  # ctx.max_runtime,
                   ctx.sge_log_directory,
                   ctx.worker_log_directory,
-                  # project,
                   worker_file,
                   native_specification)
-                  # ctx.job_name)
 
     process_job_results(registry_manager, ctx)
 
