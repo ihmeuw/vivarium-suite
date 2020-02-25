@@ -14,9 +14,10 @@ shared_options = [
     click.option('--queue', '-q',
                  type=click.Choice(['all.q', 'long.q']),
                  default=None,  # dynamically set based on max-runtime
-                 help='The cluster queue to assign the jobs to, defaults to the appropriate queue based on max-runtime.'
-                      'long.q allows for much longer runtimes but there may be reasons to send jobs to that queue even '
-                      'if they don\'t have runtime constraints, such as open node availability.'),
+                 help='The cluster queue to assign psimulate jobs to. Queue defaults to the '
+                      'appropriate queue based on max-runtime. long.q allows for much longer '
+                      'runtimes but there may be reasons to send jobs to that queue even '
+                      'if they don\'t have runtime constraints, such as node availability.'),
     click.option('--peak-memory', '-m',
                  type=int,
                  default=3,
