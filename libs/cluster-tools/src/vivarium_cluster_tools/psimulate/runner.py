@@ -247,7 +247,7 @@ def build_job_list(ctx: RunContext) -> List[dict]:
     return jobs
 
 
-def concat_preserve_types(df_list):
+def concat_preserve_types(df_list: List[pd.DataFrame]):
     """Concatenation preserves all ``numpy`` dtypes but does not preserve any
     pandas speciifc dtypes (e.g., categories become objects."""
     dtypes = df_list[0].dtypes
@@ -260,7 +260,7 @@ def concat_preserve_types(df_list):
     return pd.concat(splits, axis=1)
 
 
-def concat_results(old_results, new_results):
+def concat_results(old_results: pd.DataFrame, new_results: List[pd.DataFrame]):
     # Skips all the pandas index checking because columns are in the same order.
     start = time()
 
@@ -275,7 +275,8 @@ def concat_results(old_results, new_results):
     return results
 
 
-def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
+def write_results_batch(ctx: RunContext, written_results: pd.DataFrame,
+                        unwritten_results: List[pd.DataFrame], batch_size=50):
     new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
     results_to_write = concat_results(written_results, new_results_to_write)
 
