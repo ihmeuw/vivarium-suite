@@ -11,10 +11,6 @@ shared_options = [
                  type=click.Choice(vct_globals.CLUSTER_PROJECTS),
                  default=vct_globals.DEFAULT_CLUSTER_PROJECT,
                  help='The cluster project under which to run the simulation.'),
-    click.option('--job-name', '-n',
-                 type=str,
-                 default='vivarium',
-                 help='The job name for the worker jobs.'),
     click.option('--peak-memory', '-m',
                  type=int,
                  default=3,
@@ -94,8 +90,11 @@ def run(model_specification, branch_configuration, result_directory, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    native_specification = runner.NativeSpecification(**options, job_name=Path(model_specification).name)
-    main(model_specification, branch_configuration, result_directory, native_specification,
+    main(model_specification, branch_configuration, result_directory,
+         {'project': options['project'],
+          'peak_memory': options['peak_memory'],
+          'max_runtime': options['max_runtime'],
+          'threads': options['threads']},
          redis_processes=options['redis'], no_batch=options['no_batch'])
 
 
@@ -113,8 +112,11 @@ def restart(results_root, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    native_specification = runner.NativeSpecification(**options, job_name=Path(results_root).parts[-2])
-    main(None, None, results_root, native_specification,
+    main(None, None, results_root,
+         {'project': options['project'],
+          'peak_memory': options['peak_memory'],
+          'max_runtime': options['max_runtime'],
+          'threads': options['threads']},
          redis_processes=options['redis'], restart=True, no_batch=options['no_batch'])
 
 
@@ -136,8 +138,11 @@ def expand(results_root, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    native_specification = runner.NativeSpecification(**options, job_name=Path(results_root).parts[-2])
-    main(None, None, results_root, native_specification,
+    main(None, None, results_root,
+         {'project': options['project'],
+          'peak_memory': options['peak_memory'],
+          'max_runtime': options['max_runtime'],
+          'threads': options['threads']},
          redis_processes=options['redis'],
          restart=True,
          expand={'num_draws': options['add_draws'],
