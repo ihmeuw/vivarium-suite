@@ -176,13 +176,13 @@ class RunContext:
 
 
 class NativeSpecification:
-    def __init__(self, project, peak_memory, max_runtime, threads, job_name, **__):
+    def __init__(self, project, peak_memory, max_runtime, job_name, **__):
         self.project = project
         self.peak_memory = peak_memory
         self.max_runtime = max_runtime
-        self.threads = threads
         self.job_name = job_name
         self.queue = self.get_valid_queue(max_runtime)
+        self.threads = vct_globals.DEFAULT_THREADS_PER_JOB
         self.qsub_validation = 'n'
 
     @staticmethod
