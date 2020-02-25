@@ -20,12 +20,7 @@ def get_drmaa() -> object:
         import drmaa
     except (RuntimeError, OSError):
         if 'SGE_CLUSTER_NAME' in os.environ:
-            sge_cluster_name = os.environ['SGE_CLUSTER_NAME']
-            if sge_cluster_name == "cluster":  # new cluster
-                os.environ['DRMAA_LIBRARY_PATH'] = '/opt/sge/lib/lx-amd64/libdrmaa.so'
-            else:  # old cluster - dev or prod
-                os.environ['DRMAA_LIBRARY_PATH'] = f'/usr/local/UGE-{sge_cluster_name}/lib/lx-amd64/libdrmaa.so'
-            import drmaa
+            os.environ['DRMAA_LIBRARY_PATH'] = '/opt/sge/lib/lx-amd64/libdrmaa.so'
         else:
             drmaa = object()
     return drmaa
@@ -106,16 +101,6 @@ def setup_directories(model_specification_file: str, result_directory: str,
         set_permissions(d)
 
     return output_directory, logging_dirs
-
-
-def get_cluster_name() -> str:
-    try:
-        cluster_name = {'prod': 'cluster-prod',
-                        'dev': 'cluster-dev',
-                        'cluster': 'cluster-fair'}[os.environ['SGE_CLUSTER_NAME']]
-    except KeyError:
-        raise RuntimeError('This tool must be run from the IHME cluster.')
-    return cluster_name
 
 
 def get_hostname() -> str:
