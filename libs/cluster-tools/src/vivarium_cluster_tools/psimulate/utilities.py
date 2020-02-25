@@ -71,10 +71,11 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
 
 
 def set_permissions(output_dir):
-    """Call to achieve side effect of relaxing permissions
+    """Call to achieve side effect of relaxing permissions to 775
         on output dir and the parent"""
-    output_dir.parent.chmod(vct_globals.DIRECTORY_PERMS)
-    output_dir.chmod(vct_globals.DIRECTORY_PERMS)
+    permissions = 0o775
+    output_dir.parent.chmod(permissions)
+    output_dir.chmod(permissions)
 
 
 def setup_directories(model_specification_file, result_directory, restart, expand):
