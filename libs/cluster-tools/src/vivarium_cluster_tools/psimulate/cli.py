@@ -11,6 +11,10 @@ shared_options = [
                  type=click.Choice(vct_globals.CLUSTER_PROJECTS),
                  default=vct_globals.DEFAULT_CLUSTER_PROJECT,
                  help='The cluster project under which to run the simulation.'),
+    click.option('--job-name', '-n',
+                 type=str,
+                 default='vivarium',
+                 help='The job name for the worker jobs.'),
     click.option('--peak-memory', '-m',
                  type=int,
                  default=3,
@@ -24,6 +28,11 @@ shared_options = [
                        'queue. The maximum supported runtime is 3 days. Keep in mind that the '
                        'session you are launching from must be able to live at least as long '
                        'as the simulation jobs, and that runtimes by node vary wildly.')),
+    click.option('--threads', '-t',
+                 type=int,
+                 default=1,
+                 help=('The number of threads to request for an individual simulate job. You'
+                       'probably only need one.')),
     click.option('--pdb', 'with_debugger',
                  is_flag=True,
                  help='Drop into python debugger if an error occurs.'),

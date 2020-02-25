@@ -176,14 +176,15 @@ class RunContext:
 
 
 class NativeSpecification:
-    def __init__(self, project, peak_memory, max_runtime, validation='n', threads=1, job_name='vivarium', **__):
+    def __init__(self, project, peak_memory, max_runtime, threads, job_name, **__):
         self.project = project
         self.peak_memory = peak_memory
         self.max_runtime = max_runtime
-        self.validation = validation
         self.threads = threads
         self.job_name = job_name
         self.queue = self.get_valid_queue(max_runtime)
+
+        self.qsub_validation = 'n'
 
     @staticmethod
     def get_valid_queue(max_runtime: str):
@@ -201,7 +202,7 @@ class NativeSpecification:
             raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
 
     def __str__(self):
-        return (f"-w {self.validation} -q {self.queue} -l m_mem_free={self.peak_memory} "
+        return (f"-w {self.qsub_validation} -q {self.queue} -l m_mem_free={self.peak_memory} "
                 f"-l h_rt={self.max_runtime} -l fthread={self.threads} -N {self.job_name} "
                 f"-P {self.project}")
 
