@@ -350,7 +350,7 @@ def check_user_sge_config():
 
 
 def main(model_specification_file: str, branch_configuration_file: str, result_directory: str,
-         native_specification: NativeSpecification, redis_processes: int, num_input_draws: Optional[int] = None,
+         native_specification: dict, redis_processes: int, num_input_draws: Optional[int] = None,
          num_random_seeds: Optional[int] = None, restart:  bool = False,
          expand: Optional[Dict[str, int]] = None, no_batch: bool = False):
 
@@ -358,6 +358,9 @@ def main(model_specification_file: str, branch_configuration_file: str, result_d
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
                                                            restart, expand=(num_input_draws or num_random_seeds))
+
+    native_specification['job_name'] = output_dir.parts[-2]
+    native_specification = NativeSpecification(**native_specification)
 
     utilities.configure_master_process_logging_to_file(logging_dirs['main'])
     utilities.validate_environment(output_dir)

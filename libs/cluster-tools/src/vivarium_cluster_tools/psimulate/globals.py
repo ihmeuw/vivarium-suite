@@ -1,7 +1,5 @@
 
 
-DIRECTORY_PERMS = 0o775
-
 # Cluster projects under the purview of Simulation Science
 CLUSTER_PROJECTS = ['proj_cost_effect', 'proj_cost_effect_diarrhea', 'proj_cost_effect_dcpn', 'proj_cost_effect_conic',
                     'proj_csu']
