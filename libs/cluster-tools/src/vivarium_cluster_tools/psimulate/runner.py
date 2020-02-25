@@ -28,10 +28,6 @@ class RunContext:
     def __init__(self, model_specification_file: str, branch_configuration_file: str, output_directory: Path,
                  logging_directories: Dict[str, Path], num_input_draws: int, num_random_seeds: int,
                  restart: bool, expand: Dict[str, int], no_batch: bool):
-        # TODO This constructor has side effects (it creates             directories under
-        #      some circumstances) which is weird. It should probably be split
-        #      into two phases with the side effects in the second phase.
-
         self.number_already_completed = 0
         self.output_directory = output_directory
         self.no_batch = no_batch
@@ -72,14 +68,14 @@ class RunContext:
 
 
 class NativeSpecification:
-    def __init__(self, project, peak_memory, max_runtime, validation='n', threads=1, job_name='vivarium', **__):
+    def __init__(self, project, peak_memory, max_runtime, job_name, **__):
         self.project = project
         self.peak_memory = peak_memory
         self.max_runtime = max_runtime
-        self.validation = validation
-        self.threads = threads
         self.job_name = job_name
         self.queue = self.get_valid_queue(max_runtime)
+        self.threads = vct_globals.DEFAULT_THREADS_PER_JOB
+        self.qsub_validation = 'n'
 
     @staticmethod
     def get_valid_queue(max_runtime: str):
@@ -97,13 +93,13 @@ class NativeSpecification:
             raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
 
     def __str__(self):
-        return (f"-w {self.validation} -q {self.queue} -l m_mem_free={self.peak_memory} "
+        return (f"-w {self.qsub_validation} -q {self.queue} -l m_mem_free={self.peak_memory} "
                 f"-l h_rt={self.max_runtime} -l fthread={self.threads} -N {self.job_name} "
                 f"-P {self.project}")
 
 
-def init_job_template(jt: drmaa.JobTemplate, native_specification: NativeSpecification,
-                      sge_log_directory, worker_log_directory, worker_settings_file) -> drmaa.JobTemplate:
+def init_job_template(jt, native_specification: NativeSpecification,
+                      sge_log_directory, worker_log_directory, worker_settings_file):
     launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
                                            suffix='.sh', delete=False)
     atexit.register(lambda: os.remove(launcher.name))
@@ -171,7 +167,7 @@ def launch_redis_processes(num_processes: int) -> Tuple[str, List[Tuple[str, int
     return worker_config, redis_ports
 
 
-def start_cluster(drmaa_session: drmaa.Session, num_workers: int, sge_log_directory, worker_log_directory,
+def start_cluster(drmaa_session, num_workers: int, sge_log_directory, worker_log_directory,
                   worker_settings_file, native_specification: NativeSpecification):
     s = drmaa_session
     jt = init_job_template(s.createJobTemplate(), native_specification, sge_log_directory,

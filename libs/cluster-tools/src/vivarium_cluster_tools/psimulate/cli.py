@@ -24,11 +24,6 @@ shared_options = [
                        'queue. The maximum supported runtime is 3 days. Keep in mind that the '
                        'session you are launching from must be able to live at least as long '
                        'as the simulation jobs, and that runtimes by node vary wildly.')),
-    click.option('--threads', '-t',
-                 type=int,
-                 default=1,
-                 help=('The number of threads to request for an individual simulate job. You'
-                       'probably only need one.')),
     click.option('--pdb', 'with_debugger',
                  is_flag=True,
                  help='Drop into python debugger if an error occurs.'),
@@ -93,8 +88,7 @@ def run(model_specification, branch_configuration, result_directory, **options):
     main(model_specification, branch_configuration, result_directory,
          {'project': options['project'],
           'peak_memory': options['peak_memory'],
-          'max_runtime': options['max_runtime'],
-          'threads': options['threads']},
+          'max_runtime': options['max_runtime']},
          redis_processes=options['redis'], no_batch=options['no_batch'])
 
 
@@ -115,8 +109,7 @@ def restart(results_root, **options):
     main(None, None, results_root,
          {'project': options['project'],
           'peak_memory': options['peak_memory'],
-          'max_runtime': options['max_runtime'],
-          'threads': options['threads']},
+          'max_runtime': options['max_runtime']},
          redis_processes=options['redis'], restart=True, no_batch=options['no_batch'])
 
 
@@ -141,8 +134,7 @@ def expand(results_root, **options):
     main(None, None, results_root,
          {'project': options['project'],
           'peak_memory': options['peak_memory'],
-          'max_runtime': options['max_runtime'],
-          'threads': options['threads']},
+          'max_runtime': options['max_runtime']},
          redis_processes=options['redis'],
          restart=True,
          expand={'num_draws': options['add_draws'],

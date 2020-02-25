@@ -27,8 +27,7 @@ def get_drmaa():
                 os.environ['DRMAA_LIBRARY_PATH'] = f'/usr/local/UGE-{sge_cluster_name}/lib/lx-amd64/libdrmaa.so'
             import drmaa
         else:
-            from unittest.mock import MagicMock
-            drmaa = MagicMock()
+            drmaa = object()
     return drmaa
 
 

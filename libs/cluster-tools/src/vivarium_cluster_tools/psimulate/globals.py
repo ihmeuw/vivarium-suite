@@ -8,6 +8,7 @@ DEFAULT_CLUSTER_PROJECT = 'proj_cost_effect'
 DEFAULT_OUTPUT_DIRECTORY = '/share/costeffectiveness/results'
 
 DEFAULT_JOBS_PER_REDIS_INSTANCE = 1000
+DEFAULT_THREADS_PER_JOB = 1
 
 # Cluster specific parameters
 ALL_Q_MAX_RUNTIME_HOURS = 3 * 24
