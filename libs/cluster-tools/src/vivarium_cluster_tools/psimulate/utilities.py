@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from loguru import logger
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Union, Sequence
 
 # depending on version of pip, freeze may be in one of two places
 try:
@@ -15,7 +15,7 @@ except ImportError:
 from vivarium_cluster_tools.psimulate import globals as vct_globals
 
 
-def get_drmaa():
+def get_drmaa() -> object:
     try:
         import drmaa
     except (RuntimeError, OSError):
@@ -31,7 +31,7 @@ def get_drmaa():
     return drmaa
 
 
-def add_logging_sink(sink, verbose, colorize=False, serialize=False):
+def add_logging_sink(sink, verbose: int, colorize=False, serialize=False):
     message_format = ('<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
                       '<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> '
                       '- <level>{message}</level>')
@@ -47,7 +47,7 @@ def add_logging_sink(sink, verbose, colorize=False, serialize=False):
         logger.add(sink, colorize=colorize, level="DEBUG", format=message_format, serialize=serialize)
 
 
-def configure_master_process_logging_to_terminal(verbose):
+def configure_master_process_logging_to_terminal(verbose: int):
     logger.remove(0)  # Clear default configuration
     add_logging_sink(sys.stdout, verbose, colorize=True)
 
@@ -59,7 +59,8 @@ def configure_master_process_logging_to_file(output_directory: Path):
     add_logging_sink(serial_log, verbose=2, serialize=True)
 
 
-def get_output_directory(model_specification_file=None, output_directory=None, restart=False) -> Path:
+def get_output_directory(model_specification_file: str = None,
+                         output_directory: str = None, restart: bool = False) -> Path:
     if restart:
         output_directory = Path(output_directory)
     else:
@@ -70,7 +71,7 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
     return output_directory
 
 
-def set_permissions(output_dir):
+def set_permissions(output_dir: Path):
     """Call to achieve side effect of relaxing permissions to 775
         on output dir and the parent"""
     permissions = 0o775
@@ -107,7 +108,7 @@ def setup_directories(model_specification_file: str, result_directory: str,
     return output_directory, logging_dirs
 
 
-def get_cluster_name():
+def get_cluster_name() -> str:
     try:
         cluster_name = {'prod': 'cluster-prod',
                         'dev': 'cluster-dev',
@@ -126,7 +127,7 @@ def exit_if_on_submit_host(name: str):
         raise RuntimeError('This tool must not be run from a submit host.')
 
 
-def chunks(l, n):
+def chunks(l: Sequence, n: int):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
