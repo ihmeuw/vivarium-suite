@@ -1,10 +1,10 @@
-from datetime import datetime
 import os
-from pathlib import Path
 import sys
+from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence
 
 # depending on version of pip, freeze may be in one of two places
 try:
@@ -15,23 +15,18 @@ except ImportError:
 from vivarium_cluster_tools.psimulate import globals as vct_globals
 
 
-def get_drmaa():
+def get_drmaa() -> object:
     try:
         import drmaa
     except (RuntimeError, OSError):
         if 'SGE_CLUSTER_NAME' in os.environ:
-            sge_cluster_name = os.environ['SGE_CLUSTER_NAME']
-            if sge_cluster_name == "cluster":  # new cluster
-                os.environ['DRMAA_LIBRARY_PATH'] = '/opt/sge/lib/lx-amd64/libdrmaa.so'
-            else:  # old cluster - dev or prod
-                os.environ['DRMAA_LIBRARY_PATH'] = f'/usr/local/UGE-{sge_cluster_name}/lib/lx-amd64/libdrmaa.so'
-            import drmaa
+            os.environ['DRMAA_LIBRARY_PATH'] = '/opt/sge/lib/lx-amd64/libdrmaa.so'
         else:
             drmaa = object()
     return drmaa
 
 
-def add_logging_sink(sink, verbose, colorize=False, serialize=False):
+def add_logging_sink(sink, verbose: int, colorize=False, serialize=False):
     message_format = ('<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
                       '<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> '
                       '- <level>{message}</level>')
@@ -47,19 +42,20 @@ def add_logging_sink(sink, verbose, colorize=False, serialize=False):
         logger.add(sink, colorize=colorize, level="DEBUG", format=message_format, serialize=serialize)
 
 
-def configure_master_process_logging_to_terminal(verbose):
+def configure_master_process_logging_to_terminal(verbose: int):
     logger.remove(0)  # Clear default configuration
     add_logging_sink(sys.stdout, verbose, colorize=True)
 
 
-def configure_master_process_logging_to_file(output_directory):
+def configure_master_process_logging_to_file(output_directory: Path):
     master_log = output_directory / 'master.log'
     serial_log = output_directory / 'master.log.json'
     add_logging_sink(master_log, verbose=2)
     add_logging_sink(serial_log, verbose=2, serialize=True)
 
 
-def get_output_directory(model_specification_file=None, output_directory=None, restart=False):
+def get_output_directory(model_specification_file: str = None,
+                         output_directory: str = None, restart: bool = False) -> Path:
     if restart:
         output_directory = Path(output_directory)
     else:
@@ -70,7 +66,7 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
     return output_directory
 
 
-def set_permissions(output_dir):
+def set_permissions(output_dir: Path):
     """Call to achieve side effect of relaxing permissions to 775
         on output dir and the parent"""
     permissions = 0o775
@@ -78,7 +74,8 @@ def set_permissions(output_dir):
     output_dir.chmod(permissions)
 
 
-def setup_directories(model_specification_file, result_directory, restart, expand):
+def setup_directories(model_specification_file: str, result_directory: str,
+                      restart: bool, expand: bool) -> (Path, Dict[str, Path]):
     output_directory = get_output_directory(model_specification_file, result_directory, restart)
 
     if restart and not expand:
@@ -106,32 +103,22 @@ def setup_directories(model_specification_file, result_directory, restart, expan
     return output_directory, logging_dirs
 
 
-def get_cluster_name():
-    try:
-        cluster_name = {'prod': 'cluster-prod',
-                        'dev': 'cluster-dev',
-                        'cluster': 'cluster-fair'}[os.environ['SGE_CLUSTER_NAME']]
-    except KeyError:
-        raise RuntimeError('This tool must be run from the IHME cluster.')
-    return cluster_name
-
-
 def get_hostname() -> str:
     return os.environ.get(vct_globals.CLUSTER_ENV_HOSTNAME)
 
 
-def exit_if_on_submit_host(name : str):
+def exit_if_on_submit_host(name: str):
     if vct_globals.SUBMIT_HOST_MARKER in name:
         raise RuntimeError('This tool must not be run from a submit host.')
 
 
-def chunks(l, n):
+def chunks(l: Sequence, n: int):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
 
-def parse_package_version(s: str) -> Tuple[str, str]:
+def parse_package_version(s: str) -> (str, str):
     if 'no version control' in s:  # installed from non-git controlled source code in editable mode
         s = s.split('(')[1].split(')')[0]  # yields <package>==<version>
 

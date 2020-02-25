@@ -5,6 +5,7 @@ import tempfile
 import shutil
 import socket
 import subprocess
+from typing import List, Dict, Tuple
 from pathlib import Path
 from time import sleep, time
 
@@ -23,119 +24,10 @@ from vivarium_cluster_tools.psimulate.registry import RegistryManager
 drmaa = utilities.get_drmaa()
 
 
-def init_job_template(jt, native_specification, sge_log_directory, worker_log_directory,
-                      worker_settings_file):
-    launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
-                                           suffix='.sh', delete=False)
-    atexit.register(lambda: os.remove(launcher.name))
-    output_dir = str(worker_settings_file.resolve().parent)
-    launcher.write(f'''
-    export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
-    export PYTHONPATH={output_dir}:$PYTHONPATH
-
-    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.psimulate.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.psimulate.distributed_worker.retry_handler" vivarium
-
-    ''')
-    launcher.close()
-
-    jt.workingDirectory = os.getcwd()
-    jt.remoteCommand = shutil.which('sh')
-    jt.args = [launcher.name]
-    jt.outputPath = f":{sge_log_directory}"
-    jt.errorPath = f":{sge_log_directory}"
-    sge_cluster = utilities.get_cluster_name()
-    jt.jobEnvironment = {
-        'LC_ALL': 'en_US.UTF-8',
-        'LANG': 'en_US.UTF-8',
-        'SGE_CLUSTER_NAME': sge_cluster,
-    }
-    jt.joinFiles = True
-    jt.nativeSpecification = str(native_specification)
-    return jt
-
-
-def get_random_free_port():
-    # NOTE: this implementation is vulnerable to rare race conditions where some other process gets the same
-    # port after we free our socket but before we use the port number we got. Should be so rare in practice
-    # that it doesn't matter.
-    s = socket.socket()
-    s.bind(('', 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
-
-
-def launch_redis(port):
-    try:
-        # inline config for redis server.
-        redis_process = subprocess.Popen(["redis-server", "--port", f"{port}",
-                                          "--timeout", "2",
-                                          "--protected-mode", "no"], stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.DEVNULL)
-    except FileNotFoundError:
-        raise OSError("In order for redis to launch you need both the redis client and the python bindings. "
-                      "You seem to be missing the redis client.  Do 'conda install redis' and try again. If "
-                      "failures continue you may need to download redis yourself, make it and add it to PATH.")
-    atexit.register(redis_process.kill)
-    return redis_process
-
-
-def launch_redis_processes(num_processes):
-    hostname = socket.getfqdn()
-    redis_ports = []
-    for i in range(num_processes):
-        port = get_random_free_port()
-        logger.info(f'Starting Redis Broker at {hostname}:{port}')
-        launch_redis(port)
-        redis_ports.append((hostname, port))
-
-    redis_urls = [f'redis://{hostname}:{port}' for hostname, port in redis_ports]
-    worker_config = f"import random\nredis_urls = {redis_urls}\nREDIS_URL = random.choice(redis_urls)\n\n"
-    return worker_config, redis_ports
-
-
-def start_cluster(drmaa_session, num_workers, sge_log_directory, worker_log_directory,
-                  worker_settings_file, native_specification):
-    s = drmaa_session
-    jt = init_job_template(s.createJobTemplate(), native_specification, sge_log_directory,
-                           worker_log_directory, worker_settings_file)
-    if num_workers:
-        job_ids = s.runBulkJobs(jt, 1, num_workers, 1)
-        array_job_id = job_ids[0].split('.')[0]
-
-        def kill_jobs():
-            if "drmaa" not in dir():
-                # FIXME: The global drmaa should be available here.
-                #        This is maybe a holdover from old code?
-                #        Maybe something to do with atexit?
-                drmaa = utilities.get_drmaa()
-
-            try:
-                s.control(array_job_id, drmaa.JobControlAction.TERMINATE)
-            # FIXME: Hack around issue where drmaa.errors sometimes doesn't
-            #        exist.
-            except Exception as e:
-                if 'There are no jobs registered' in str(e):
-                    # This is the case where all our workers have already shut down
-                    # on their own, which isn't actually an error.
-                    pass
-                elif 'Discontinued delete' in str(e):
-                    # sge has already cleaned up some of the jobs.
-                    pass
-                else:
-                    raise
-
-        atexit.register(kill_jobs)
-
-
 class RunContext:
-    def __init__(self, model_specification_file, branch_configuration_file, output_directory,
-                 logging_directories, num_input_draws, num_random_seeds, restart,
-                 expand, no_batch):
-        # TODO This constructor has side effects (it creates directories under
-        #      some circumstances) which is weird. It should probably be split
-        #      into two phases with the side effects in the second phase.
-
+    def __init__(self, model_specification_file: str, branch_configuration_file: str, output_directory: Path,
+                 logging_directories: Dict[str, Path], num_input_draws: int, num_random_seeds: int,
+                 restart: bool, expand: Dict[str, int], no_batch: bool):
         self.number_already_completed = 0
         self.output_directory = output_directory
         self.no_batch = no_batch
@@ -176,27 +68,41 @@ class RunContext:
 
 
 class NativeSpecification:
-    def __init__(self, project, peak_memory, max_runtime, job_name, **__):
+    def __init__(self, project: str, queue: str, peak_memory: int, max_runtime: str, job_name: str, **__):
         self.project = project
         self.peak_memory = peak_memory
         self.max_runtime = max_runtime
         self.job_name = job_name
-        self.queue = self.get_valid_queue(max_runtime)
+        self.queue = self.get_queue(queue, max_runtime)
         self.threads = vct_globals.DEFAULT_THREADS_PER_JOB
         self.qsub_validation = 'n'
 
+    def get_queue(self, queue: str, max_runtime: str) -> str:
+        valid_queues = self.get_valid_queues(max_runtime)
+        if queue is None:
+            return valid_queues[0]
+        else:
+            if queue in valid_queues:
+                return queue
+            else:
+                raise ValueError("Specified queue is not valid for jobs with the max runtime provided. "
+                                 "Likely you requested all.q for a job requiring long.q.")
+
     @staticmethod
-    def get_valid_queue(max_runtime: str):
+    def get_valid_queues(max_runtime: str) -> List[str]:
         runtime_args = max_runtime.split(":")
+
         if len(runtime_args) != 3:
             raise ValueError("Invalid --max-runtime supplied. Format should be hh:mm:ss.")
         else:
             hours, minutes, seconds = runtime_args
+
         runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
+
         if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
-            return 'all.q'
+            return ['all.q', 'long.q']
         elif runtime_in_hours <= vct_globals.LONG_Q_MAX_RUNTIME_HOURS:
-            return 'long.q'
+            return ['long.q']
         else:
             raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
 
@@ -206,7 +112,110 @@ class NativeSpecification:
                 f"-P {self.project}")
 
 
-def build_job_list(ctx):
+def init_job_template(jt, native_specification: NativeSpecification, sge_log_directory: Path,
+                      worker_log_directory: Path, worker_settings_file: Path):
+    launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
+                                           suffix='.sh', delete=False)
+    atexit.register(lambda: os.remove(launcher.name))
+    output_dir = str(worker_settings_file.resolve().parent)
+    launcher.write(f'''
+    export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
+    export PYTHONPATH={output_dir}:$PYTHONPATH
+
+    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.psimulate.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.psimulate.distributed_worker.retry_handler" vivarium
+
+    ''')
+    launcher.close()
+
+    jt.workingDirectory = os.getcwd()
+    jt.remoteCommand = shutil.which('sh')
+    jt.args = [launcher.name]
+    jt.outputPath = f":{sge_log_directory}"
+    jt.errorPath = f":{sge_log_directory}"
+    jt.jobEnvironment = {
+        'LC_ALL': 'en_US.UTF-8',
+        'LANG': 'en_US.UTF-8',
+    }
+    jt.joinFiles = True
+    jt.nativeSpecification = str(native_specification)
+    return jt
+
+
+def get_random_free_port() -> int:
+    # NOTE: this implementation is vulnerable to rare race conditions where some other process gets the same
+    # port after we free our socket but before we use the port number we got. Should be so rare in practice
+    # that it doesn't matter.
+    s = socket.socket()
+    s.bind(('', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def launch_redis(port: int) -> subprocess.Popen:
+    try:
+        # inline config for redis server.
+        redis_process = subprocess.Popen(["redis-server", "--port", f"{port}",
+                                          "--timeout", "2",
+                                          "--protected-mode", "no"], stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise OSError("In order for redis to launch you need both the redis client and the python bindings. "
+                      "You seem to be missing the redis client.  Do 'conda install redis' and try again. If "
+                      "failures continue you may need to download redis yourself, make it and add it to PATH.")
+    atexit.register(redis_process.kill)
+    return redis_process
+
+
+def launch_redis_processes(num_processes: int) -> (str, List[Tuple[str, int]]):
+    hostname = socket.getfqdn()
+    redis_ports = []
+    for i in range(num_processes):
+        port = get_random_free_port()
+        logger.info(f'Starting Redis Broker at {hostname}:{port}')
+        launch_redis(port)
+        redis_ports.append((hostname, port))
+
+    redis_urls = [f'redis://{hostname}:{port}' for hostname, port in redis_ports]
+    worker_config = f"import random\nredis_urls = {redis_urls}\nREDIS_URL = random.choice(redis_urls)\n\n"
+    return worker_config, redis_ports
+
+
+def start_cluster(drmaa_session, num_workers: int, sge_log_directory: Path, worker_log_directory: Path,
+                  worker_settings_file: Path, native_specification: NativeSpecification):
+    s = drmaa_session
+    jt = init_job_template(s.createJobTemplate(), native_specification, sge_log_directory,
+                           worker_log_directory, worker_settings_file)
+    if num_workers:
+        job_ids = s.runBulkJobs(jt, 1, num_workers, 1)
+        array_job_id = job_ids[0].split('.')[0]
+
+        def kill_jobs():
+            if "drmaa" not in dir():
+                # FIXME: The global drmaa should be available here.
+                #        This is maybe a holdover from old code?
+                #        Maybe something to do with atexit?
+                drmaa = utilities.get_drmaa()
+
+            try:
+                s.control(array_job_id, drmaa.JobControlAction.TERMINATE)
+            # FIXME: Hack around issue where drmaa.errors sometimes doesn't
+            #        exist.
+            except Exception as e:
+                if 'There are no jobs registered' in str(e):
+                    # This is the case where all our workers have already shut down
+                    # on their own, which isn't actually an error.
+                    pass
+                elif 'Discontinued delete' in str(e):
+                    # sge has already cleaned up some of the jobs.
+                    pass
+                else:
+                    raise
+
+        atexit.register(kill_jobs)
+
+
+def build_job_list(ctx: RunContext) -> List[dict]:
     jobs = []
     number_already_completed = 0
 
@@ -248,7 +257,7 @@ def build_job_list(ctx):
     return jobs
 
 
-def concat_preserve_types(df_list):
+def concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
     """Concatenation preserves all ``numpy`` dtypes but does not preserve any
     pandas speciifc dtypes (e.g., categories become objects."""
     dtypes = df_list[0].dtypes
@@ -261,7 +270,7 @@ def concat_preserve_types(df_list):
     return pd.concat(splits, axis=1)
 
 
-def concat_results(old_results, new_results):
+def concat_results(old_results: pd.DataFrame, new_results: List[pd.DataFrame]) -> pd.DataFrame:
     # Skips all the pandas index checking because columns are in the same order.
     start = time()
 
@@ -276,7 +285,8 @@ def concat_results(old_results, new_results):
     return results
 
 
-def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
+def write_results_batch(ctx: RunContext, written_results: pd.DataFrame, unwritten_results: List[pd.DataFrame],
+                        batch_size: int = 50) -> (pd.DataFrame, List[pd.DataFrame]):
     new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
     results_to_write = concat_results(written_results, new_results_to_write)
 
@@ -299,7 +309,7 @@ def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
     return results_to_write, unwritten_results
 
 
-def process_job_results(registry_manager, ctx):
+def process_job_results(registry_manager: RegistryManager, ctx: RunContext):
     start_time = time()
 
     if ctx.existing_outputs is not None:
@@ -351,13 +361,14 @@ def check_user_sge_config():
 
 
 def main(model_specification_file: str, branch_configuration_file: str, result_directory: str,
-         native_specification: dict, redis_processes: int, num_input_draws=None,
-         num_random_seeds=None, restart=False, expand=None, no_batch=False):
+         native_specification: dict, redis_processes: int, num_input_draws: int = None,
+         num_random_seeds: int = None, restart:  bool = False,
+         expand: Dict[str, int] = None, no_batch: bool = False):
 
     utilities.exit_if_on_submit_host(utilities.get_hostname())
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
-                                                           restart, expand=(num_input_draws or num_random_seeds))
+                                                           restart, expand=bool(num_input_draws or num_random_seeds))
 
     native_specification['job_name'] = output_dir.parts[-2]
     native_specification = NativeSpecification(**native_specification)
