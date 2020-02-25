@@ -5,27 +5,115 @@ import tempfile
 import shutil
 import socket
 import subprocess
+from typing import List, Dict, Tuple
 from pathlib import Path
 from time import sleep, time
-from types import SimpleNamespace
 
-from loguru import logger
 import numpy as np
 import pandas as pd
+from loguru import logger
 
 from vivarium.framework.configuration import build_model_specification
 from vivarium.framework.utilities import collapse_nested_dict
 from vivarium.framework.artifact import parse_artifact_path_config
 
 from vivarium_cluster_tools.psimulate.branches import Keyspace
-from vivarium_cluster_tools.psimulate import globals as vtc_globals, utilities
+from vivarium_cluster_tools.psimulate import globals as vct_globals, utilities
 from vivarium_cluster_tools.psimulate.registry import RegistryManager
 
 drmaa = utilities.get_drmaa()
 
 
-def init_job_template(jt, peak_memory, max_runtime, sge_log_directory, worker_log_directory,
-                      project, job_name, worker_settings_file):
+class RunContext:
+    def __init__(self, model_specification_file: str, branch_configuration_file: str, output_directory: Path,
+                 logging_directories: Dict[str, Path], num_input_draws: int, num_random_seeds: int,
+                 restart: bool, expand: Dict[str, int], no_batch: bool):
+        self.number_already_completed = 0
+        self.output_directory = output_directory
+        self.no_batch = no_batch
+        self.sge_log_directory = logging_directories['sge']
+        self.worker_log_directory = logging_directories['worker']
+
+        if restart:
+            self.keyspace = Keyspace.from_previous_run(self.output_directory)
+            self.existing_outputs = pd.read_hdf(self.output_directory / 'output.hdf')
+            if expand:
+                self.keyspace.add_draws(expand['num_draws'])
+                self.keyspace.add_seeds(expand['num_seeds'])
+                self.keyspace.persist(self.output_directory)
+        else:
+            model_specification = build_model_specification(model_specification_file)
+
+            self.keyspace = Keyspace.from_branch_configuration(num_input_draws, num_random_seeds,
+                                                               branch_configuration_file)
+
+            if "input_data.artifact_path" in self.keyspace.get_data():
+                raise ValueError("An artifact path can only be supplied in the model specification file, "
+                                 "not the branches configuration.")
+
+            if "artifact_path" in model_specification.configuration.input_data:
+                artifact_path = parse_artifact_path_config(model_specification.configuration)
+                model_specification.configuration.input_data.update(
+                    {"artifact_path": artifact_path},
+                    source=__file__)
+
+            model_specification_path = self.output_directory / 'model_specification.yaml'
+            shutil.copy(model_specification_file, model_specification_path)
+
+            self.existing_outputs = None
+
+            # Log some basic stuff about the simulation to be run.
+            self.keyspace.persist(self.output_directory)
+        self.model_specification = self.output_directory / 'model_specification.yaml'
+
+
+class NativeSpecification:
+    def __init__(self, project: str, queue: str, peak_memory: int, max_runtime: str, job_name: str, **__):
+        self.project = project
+        self.peak_memory = peak_memory
+        self.max_runtime = max_runtime
+        self.job_name = job_name
+        self.queue = self.get_queue(queue, max_runtime)
+        self.threads = vct_globals.DEFAULT_THREADS_PER_JOB
+        self.qsub_validation = 'n'
+
+    def get_queue(self, queue: str, max_runtime: str) -> str:
+        valid_queues = self.get_valid_queues(max_runtime)
+        if queue is None:
+            return valid_queues[0]
+        else:
+            if queue in valid_queues:
+                return queue
+            else:
+                raise ValueError("Specified queue is not valid for jobs with the max runtime provided. "
+                                 "Likely you requested all.q for a job requiring long.q.")
+
+    @staticmethod
+    def get_valid_queues(max_runtime: str) -> List[str]:
+        runtime_args = max_runtime.split(":")
+
+        if len(runtime_args) != 3:
+            raise ValueError("Invalid --max-runtime supplied. Format should be hh:mm:ss.")
+        else:
+            hours, minutes, seconds = runtime_args
+
+        runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
+
+        if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
+            return ['all.q', 'long.q']
+        elif runtime_in_hours <= vct_globals.LONG_Q_MAX_RUNTIME_HOURS:
+            return ['long.q']
+        else:
+            raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
+
+    def __str__(self):
+        return (f"-w {self.qsub_validation} -q {self.queue} -l m_mem_free={self.peak_memory} "
+                f"-l h_rt={self.max_runtime} -l fthread={self.threads} -N {self.job_name} "
+                f"-P {self.project}")
+
+
+def init_job_template(jt, native_specification: NativeSpecification, sge_log_directory: Path,
+                      worker_log_directory: Path, worker_settings_file: Path):
     launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
                                            suffix='.sh', delete=False)
     atexit.register(lambda: os.remove(launcher.name))
@@ -44,18 +132,16 @@ def init_job_template(jt, peak_memory, max_runtime, sge_log_directory, worker_lo
     jt.args = [launcher.name]
     jt.outputPath = f":{sge_log_directory}"
     jt.errorPath = f":{sge_log_directory}"
-    sge_cluster = utilities.get_cluster_name()
     jt.jobEnvironment = {
         'LC_ALL': 'en_US.UTF-8',
         'LANG': 'en_US.UTF-8',
-        'SGE_CLUSTER_NAME': sge_cluster,
     }
     jt.joinFiles = True
-    jt.nativeSpecification = utilities.get_uge_specification(peak_memory, max_runtime, project, job_name)
+    jt.nativeSpecification = str(native_specification)
     return jt
 
 
-def get_random_free_port():
+def get_random_free_port() -> int:
     # NOTE: this implementation is vulnerable to rare race conditions where some other process gets the same
     # port after we free our socket but before we use the port number we got. Should be so rare in practice
     # that it doesn't matter.
@@ -66,7 +152,7 @@ def get_random_free_port():
     return port
 
 
-def launch_redis(port):
+def launch_redis(port: int) -> subprocess.Popen:
     try:
         # inline config for redis server.
         redis_process = subprocess.Popen(["redis-server", "--port", f"{port}",
@@ -81,7 +167,7 @@ def launch_redis(port):
     return redis_process
 
 
-def launch_redis_processes(num_processes):
+def launch_redis_processes(num_processes: int) -> (str, List[Tuple[str, int]]):
     hostname = socket.getfqdn()
     redis_ports = []
     for i in range(num_processes):
@@ -95,11 +181,11 @@ def launch_redis_processes(num_processes):
     return worker_config, redis_ports
 
 
-def start_cluster(drmaa_session, num_workers, peak_memory, max_runtime, sge_log_directory, worker_log_directory,
-                  project, worker_settings_file, job_name="vivarium"):
+def start_cluster(drmaa_session, num_workers: int, sge_log_directory: Path, worker_log_directory: Path,
+                  worker_settings_file: Path, native_specification: NativeSpecification):
     s = drmaa_session
-    jt = init_job_template(s.createJobTemplate(), peak_memory, max_runtime, sge_log_directory,
-                           worker_log_directory, project, job_name, worker_settings_file)
+    jt = init_job_template(s.createJobTemplate(), native_specification, sge_log_directory,
+                           worker_log_directory, worker_settings_file)
     if num_workers:
         job_ids = s.runBulkJobs(jt, 1, num_workers, 1)
         array_job_id = job_ids[0].split('.')[0]
@@ -107,14 +193,14 @@ def start_cluster(drmaa_session, num_workers, peak_memory, max_runtime, sge_log_
         def kill_jobs():
             if "drmaa" not in dir():
                 # FIXME: The global drmaa should be available here.
-                # This is maybe a holdover from old code?
-                # Maybe something to do with atexit?
+                #        This is maybe a holdover from old code?
+                #        Maybe something to do with atexit?
                 drmaa = utilities.get_drmaa()
 
             try:
                 s.control(array_job_id, drmaa.JobControlAction.TERMINATE)
             # FIXME: Hack around issue where drmaa.errors sometimes doesn't
-            # exist.
+            #        exist.
             except Exception as e:
                 if 'There are no jobs registered' in str(e):
                     # This is the case where all our workers have already shut down
@@ -129,55 +215,7 @@ def start_cluster(drmaa_session, num_workers, peak_memory, max_runtime, sge_log_
         atexit.register(kill_jobs)
 
 
-class RunContext:
-    def __init__(self, arguments):
-        # TODO This constructor has side effects (it creates directories under some circumstances) which is weird.
-        # It should probably be split into two phases with the side effects in the second phase.
-
-        self.cluster_project = arguments.project
-        self.peak_memory = arguments.peak_memory
-        self.max_runtime = arguments.max_runtime
-        self.number_already_completed = 0
-        self.output_directory = arguments.output_directory
-        self.job_name = arguments.output_directory.parts[-2]  # The model specification name.
-        self.no_batch = arguments.no_batch
-        self.sge_log_directory = arguments.logging_directories['sge']
-        self.worker_log_directory = arguments.logging_directories['worker']
-
-        if arguments.restart:
-            self.keyspace = Keyspace.from_previous_run(self.output_directory)
-            self.existing_outputs = pd.read_hdf(self.output_directory / 'output.hdf')
-            if arguments.expand:
-                self.keyspace.add_draws(arguments.expand['num_draws'])
-                self.keyspace.add_seeds(arguments.expand['num_seeds'])
-                self.keyspace.persist(self.output_directory)
-        else:
-            model_specification = build_model_specification(arguments.model_specification_file)
-
-            self.keyspace = Keyspace.from_branch_configuration(arguments.num_input_draws, arguments.num_random_seeds,
-                                                               arguments.branch_configuration_file)
-
-            if "input_data.artifact_path" in self.keyspace.get_data():
-                raise ValueError("An artifact path can only be supplied in the model specification file, "
-                                 "not the branches configuration.")
-
-            if "artifact_path" in model_specification.configuration.input_data:
-                artifact_path = parse_artifact_path_config(model_specification.configuration)
-                model_specification.configuration.input_data.update(
-                    {"artifact_path": artifact_path},
-                    source=__file__)
-
-            model_specification_path = self.output_directory / 'model_specification.yaml'
-            shutil.copy(arguments.model_specification_file, model_specification_path)
-
-            self.existing_outputs = None
-
-            # Log some basic stuff about the simulation to be run.
-            self.keyspace.persist(self.output_directory)
-        self.model_specification = self.output_directory / 'model_specification.yaml'
-
-
-def build_job_list(ctx):
+def build_job_list(ctx: RunContext) -> List[dict]:
     jobs = []
     number_already_completed = 0
 
@@ -219,7 +257,7 @@ def build_job_list(ctx):
     return jobs
 
 
-def concat_preserve_types(df_list):
+def concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
     """Concatenation preserves all ``numpy`` dtypes but does not preserve any
     pandas speciifc dtypes (e.g., categories become objects."""
     dtypes = df_list[0].dtypes
@@ -232,7 +270,7 @@ def concat_preserve_types(df_list):
     return pd.concat(splits, axis=1)
 
 
-def concat_results(old_results, new_results):
+def concat_results(old_results: pd.DataFrame, new_results: List[pd.DataFrame]) -> pd.DataFrame:
     # Skips all the pandas index checking because columns are in the same order.
     start = time()
 
@@ -247,7 +285,8 @@ def concat_results(old_results, new_results):
     return results
 
 
-def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
+def write_results_batch(ctx: RunContext, written_results: pd.DataFrame, unwritten_results: List[pd.DataFrame],
+                        batch_size: int = 50) -> (pd.DataFrame, List[pd.DataFrame]):
     new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
     results_to_write = concat_results(written_results, new_results_to_write)
 
@@ -270,7 +309,7 @@ def write_results_batch(ctx, written_results, unwritten_results, batch_size=50):
     return results_to_write, unwritten_results
 
 
-def process_job_results(registry_manager, ctx):
+def process_job_results(registry_manager: RegistryManager, ctx: RunContext):
     start_time = time()
 
     if ctx.existing_outputs is not None:
@@ -321,30 +360,24 @@ def check_user_sge_config():
                                    "with the worker logs.")
 
 
-def main(model_specification_file, branch_configuration_file, result_directory, project, peak_memory, max_runtime,
-         redis_processes, num_input_draws=None, num_random_seeds=None, restart=False, expand=None, no_batch=False):
+def main(model_specification_file: str, branch_configuration_file: str, result_directory: str,
+         native_specification: dict, redis_processes: int, num_input_draws: int = None,
+         num_random_seeds: int = None, restart:  bool = False,
+         expand: Dict[str, int] = None, no_batch: bool = False):
 
     utilities.exit_if_on_submit_host(utilities.get_hostname())
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
-                                                           restart, expand=(num_input_draws or num_random_seeds))
+                                                           restart, expand=bool(num_input_draws or num_random_seeds))
+
+    native_specification['job_name'] = output_dir.parts[-2]
+    native_specification = NativeSpecification(**native_specification)
 
     utilities.configure_master_process_logging_to_file(logging_dirs['main'])
     utilities.validate_environment(output_dir)
 
-    arguments = SimpleNamespace(model_specification_file=model_specification_file,
-                                branch_configuration_file=branch_configuration_file,
-                                output_directory=output_dir,
-                                logging_directories=logging_dirs,
-                                project=project,
-                                peak_memory=peak_memory,
-                                max_runtime=max_runtime,
-                                num_input_draws=num_input_draws,
-                                num_random_seeds=num_random_seeds,
-                                restart=restart,
-                                expand=expand,
-                                no_batch=no_batch)
-    ctx = RunContext(arguments)
+    ctx = RunContext(model_specification_file, branch_configuration_file, output_dir, logging_dirs,
+                     num_input_draws, num_random_seeds, restart, expand, no_batch)
     check_user_sge_config()
     jobs = build_job_list(ctx)
 
@@ -355,7 +388,7 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
     logger.info('Starting jobs. Results will be written to: {}'.format(ctx.output_directory))
 
     if redis_processes == -1:
-        redis_processes = int(math.ceil(len(jobs) / vtc_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
+        redis_processes = int(math.ceil(len(jobs) / vct_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
 
     worker_template, redis_ports = launch_redis_processes(redis_processes)
     worker_file = output_dir / 'settings.py'
@@ -368,8 +401,12 @@ def main(model_specification_file, branch_configuration_file, result_directory, 
     drmaa_session = drmaa.Session()
     drmaa_session.initialize()
 
-    start_cluster(drmaa_session, len(jobs), ctx.peak_memory, ctx.max_runtime, ctx.sge_log_directory,
-                  ctx.worker_log_directory, project, worker_file, ctx.job_name)
+    start_cluster(drmaa_session,
+                  len(jobs),
+                  ctx.sge_log_directory,
+                  ctx.worker_log_directory,
+                  worker_file,
+                  native_specification)
 
     process_job_results(registry_manager, ctx)
 

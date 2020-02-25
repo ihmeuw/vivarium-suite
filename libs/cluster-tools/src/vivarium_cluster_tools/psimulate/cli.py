@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import click
 from loguru import logger
 
@@ -9,6 +11,12 @@ shared_options = [
                  type=click.Choice(vct_globals.CLUSTER_PROJECTS),
                  default=vct_globals.DEFAULT_CLUSTER_PROJECT,
                  help='The cluster project under which to run the simulation.'),
+    click.option('--queue', '-q',
+                 type=click.Choice(['all.q', 'long.q']),
+                 default=None,  # dynamically set based on max-runtime
+                 help='The cluster queue to assign the jobs to, defaults to the appropriate queue based on max-runtime.'
+                      'long.q allows for much longer runtimes but there may be reasons to send jobs to that queue even '
+                      'if they don\'t have runtime constraints, such as open node availability.'),
     click.option('--peak-memory', '-m',
                  type=int,
                  default=3,
@@ -60,7 +68,7 @@ def psimulate():
 @psimulate.command()
 @click.argument('model_specification', type=click.Path(exists=True, dir_okay=False))
 @click.argument('branch_configuration', type=click.Path(exists=True, dir_okay=False))
-@click.option('--result-directory', '-o', default=None,
+@click.option('--result-directory', '-o', type=click.Path(exists=True, file_okay=False), default=None,
               help='The directory to write results to. A folder will be created in this directory with the same name '
                    'as the configuration file.')
 @pass_shared_options
@@ -84,7 +92,10 @@ def run(model_specification, branch_configuration, result_directory, **options):
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
     main(model_specification, branch_configuration, result_directory,
-         options['project'], options['peak_memory'], options['max_runtime'],
+         {'project': options['project'],
+          'queue': options['queue'],
+          'peak_memory': options['peak_memory'],
+          'max_runtime': options['max_runtime']},
          redis_processes=options['redis'], no_batch=options['no_batch'])
 
 
@@ -103,7 +114,10 @@ def restart(results_root, **options):
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
     main(None, None, results_root,
-         options['project'], options['peak_memory'], options['max_runtime'],
+         {'project': options['project'],
+          'queue': options['queue'],
+          'peak_memory': options['peak_memory'],
+          'max_runtime': options['max_runtime']},
          redis_processes=options['redis'], restart=True, no_batch=options['no_batch'])
 
 
@@ -126,7 +140,10 @@ def expand(results_root, **options):
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
     main(None, None, results_root,
-         options['project'], options['peak_memory'], options['max_runtime'],
+         {'project': options['project'],
+          'queue': options['queue'],
+          'peak_memory': options['peak_memory'],
+          'max_runtime': options['max_runtime']},
          redis_processes=options['redis'],
          restart=True,
          expand={'num_draws': options['add_draws'],
