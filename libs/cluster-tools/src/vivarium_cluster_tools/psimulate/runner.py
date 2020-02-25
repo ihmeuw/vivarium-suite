@@ -5,7 +5,7 @@ import tempfile
 import shutil
 import socket
 import subprocess
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Dict
 from pathlib import Path
 from time import sleep, time
 
@@ -28,10 +28,6 @@ class RunContext:
     def __init__(self, model_specification_file: str, branch_configuration_file: str, output_directory: Path,
                  logging_directories: Dict[str, Path], num_input_draws: int, num_random_seeds: int,
                  restart: bool, expand: Dict[str, int], no_batch: bool):
-        # TODO This constructor has side effects (it creates             directories under
-        #      some circumstances) which is weird. It should probably be split
-        #      into two phases with the side effects in the second phase.
-
         self.number_already_completed = 0
         self.output_directory = output_directory
         self.no_batch = no_batch
@@ -72,13 +68,13 @@ class RunContext:
 
 
 class NativeSpecification:
-    def __init__(self, project: str, queue: str, peak_memory: int, max_runtime: str, threads: int, job_name: str, **__):
+    def __init__(self, project: str, queue: str, peak_memory: int, max_runtime: str, job_name: str, **__):
         self.project = project
         self.peak_memory = peak_memory
         self.max_runtime = max_runtime
-        self.queue = self.get_queue(queue, max_runtime)
-        self.threads = threads
         self.job_name = job_name
+        self.queue = self.get_queue(queue, max_runtime)
+        self.threads = vct_globals.DEFAULT_THREADS_PER_JOB
         self.qsub_validation = 'n'
 
     def get_queue(self, queue: str, max_runtime: str) -> str:
@@ -116,8 +112,8 @@ class NativeSpecification:
                 f"-P {self.project}")
 
 
-def init_job_template(jt: drmaa.JobTemplate, native_specification: NativeSpecification,
-                      sge_log_directory, worker_log_directory, worker_settings_file) -> drmaa.JobTemplate:
+def init_job_template(jt, native_specification: NativeSpecification, sge_log_directory: Path,
+                      worker_log_directory: Path, worker_settings_file: Path):
     launcher = tempfile.NamedTemporaryFile(mode='w', dir='.', prefix='vivarium_cluster_tools_launcher_',
                                            suffix='.sh', delete=False)
     atexit.register(lambda: os.remove(launcher.name))
@@ -185,8 +181,8 @@ def launch_redis_processes(num_processes: int) -> Tuple[str, List[Tuple[str, int
     return worker_config, redis_ports
 
 
-def start_cluster(drmaa_session: drmaa.Session, num_workers: int, sge_log_directory, worker_log_directory,
-                  worker_settings_file, native_specification: NativeSpecification):
+def start_cluster(drmaa_session, num_workers: int, sge_log_directory: Path, worker_log_directory: Path,
+                  worker_settings_file: Path, native_specification: NativeSpecification):
     s = drmaa_session
     jt = init_job_template(s.createJobTemplate(), native_specification, sge_log_directory,
                            worker_log_directory, worker_settings_file)
@@ -261,7 +257,7 @@ def build_job_list(ctx: RunContext) -> List[dict]:
     return jobs
 
 
-def concat_preserve_types(df_list: List[pd.DataFrame]):
+def concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
     """Concatenation preserves all ``numpy`` dtypes but does not preserve any
     pandas speciifc dtypes (e.g., categories become objects."""
     dtypes = df_list[0].dtypes
@@ -274,7 +270,7 @@ def concat_preserve_types(df_list: List[pd.DataFrame]):
     return pd.concat(splits, axis=1)
 
 
-def concat_results(old_results: pd.DataFrame, new_results: List[pd.DataFrame]):
+def concat_results(old_results: pd.DataFrame, new_results: List[pd.DataFrame]) -> pd.DataFrame:
     # Skips all the pandas index checking because columns are in the same order.
     start = time()
 
@@ -289,8 +285,8 @@ def concat_results(old_results: pd.DataFrame, new_results: List[pd.DataFrame]):
     return results
 
 
-def write_results_batch(ctx: RunContext, written_results: pd.DataFrame,
-                        unwritten_results: List[pd.DataFrame], batch_size=50):
+def write_results_batch(ctx: RunContext, written_results: pd.DataFrame, unwritten_results: List[pd.DataFrame],
+                        batch_size: int = 50) -> Tuple[pd.DataFrame, List[pd.DataFrame]]:
     new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
     results_to_write = concat_results(written_results, new_results_to_write)
 
@@ -365,14 +361,14 @@ def check_user_sge_config():
 
 
 def main(model_specification_file: str, branch_configuration_file: str, result_directory: str,
-         native_specification: dict, redis_processes: int, num_input_draws: Optional[int] = None,
-         num_random_seeds: Optional[int] = None, restart:  bool = False,
-         expand: Optional[Dict[str, int]] = None, no_batch: bool = False):
+         native_specification: dict, redis_processes: int, num_input_draws: int = None,
+         num_random_seeds: int = None, restart:  bool = False,
+         expand: Dict[str, int] = None, no_batch: bool = False):
 
     utilities.exit_if_on_submit_host(utilities.get_hostname())
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
-                                                           restart, expand=(num_input_draws or num_random_seeds))
+                                                           restart, expand=bool(num_input_draws or num_random_seeds))
 
     native_specification['job_name'] = output_dir.parts[-2]
     native_specification = NativeSpecification(**native_specification)
