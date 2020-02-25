@@ -62,7 +62,7 @@ def psimulate():
 @psimulate.command()
 @click.argument('model_specification', type=click.Path(exists=True, dir_okay=False))
 @click.argument('branch_configuration', type=click.Path(exists=True, dir_okay=False))
-@click.option('--result-directory', '-o', default=None,
+@click.option('--result-directory', '-o', type=click.Path(exists=True, file_okay=False), default=None,
               help='The directory to write results to. A folder will be created in this directory with the same name '
                    'as the configuration file.')
 @pass_shared_options

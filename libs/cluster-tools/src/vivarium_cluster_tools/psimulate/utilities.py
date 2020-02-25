@@ -1,10 +1,10 @@
-from datetime import datetime
 import os
-from pathlib import Path
 import sys
+from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 # depending on version of pip, freeze may be in one of two places
 try:
@@ -52,14 +52,14 @@ def configure_master_process_logging_to_terminal(verbose):
     add_logging_sink(sys.stdout, verbose, colorize=True)
 
 
-def configure_master_process_logging_to_file(output_directory):
+def configure_master_process_logging_to_file(output_directory: Path):
     master_log = output_directory / 'master.log'
     serial_log = output_directory / 'master.log.json'
     add_logging_sink(master_log, verbose=2)
     add_logging_sink(serial_log, verbose=2, serialize=True)
 
 
-def get_output_directory(model_specification_file=None, output_directory=None, restart=False):
+def get_output_directory(model_specification_file=None, output_directory=None, restart=False) -> Path:
     if restart:
         output_directory = Path(output_directory)
     else:
@@ -72,12 +72,13 @@ def get_output_directory(model_specification_file=None, output_directory=None, r
 
 def set_permissions(output_dir):
     """Call to achieve side effect of relaxing permissions
-        on output dir and the parent"""
+       on output dir and the parent"""
     output_dir.parent.chmod(vct_globals.DIRECTORY_PERMS)
     output_dir.chmod(vct_globals.DIRECTORY_PERMS)
 
 
-def setup_directories(model_specification_file, result_directory, restart, expand):
+def setup_directories(model_specification_file: str, result_directory: str,
+                      restart: bool, expand: bool) -> Tuple[Path, Dict[str, Path]]:
     output_directory = get_output_directory(model_specification_file, result_directory, restart)
 
     if restart and not expand:
@@ -119,7 +120,7 @@ def get_hostname() -> str:
     return os.environ.get(vct_globals.CLUSTER_ENV_HOSTNAME)
 
 
-def exit_if_on_submit_host(name : str):
+def exit_if_on_submit_host(name: str):
     if vct_globals.SUBMIT_HOST_MARKER in name:
         raise RuntimeError('This tool must not be run from a submit host.')
 
