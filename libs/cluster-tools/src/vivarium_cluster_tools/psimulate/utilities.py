@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from loguru import logger
-from typing import Dict, List, Tuple, Union, Sequence
+from typing import Dict, List, Sequence
 
 # depending on version of pip, freeze may be in one of two places
 try:
@@ -80,7 +80,7 @@ def set_permissions(output_dir: Path):
 
 
 def setup_directories(model_specification_file: str, result_directory: str,
-                      restart: bool, expand: bool) -> Tuple[Path, Dict[str, Path]]:
+                      restart: bool, expand: bool) -> (Path, Dict[str, Path]):
     output_directory = get_output_directory(model_specification_file, result_directory, restart)
 
     if restart and not expand:
@@ -133,7 +133,7 @@ def chunks(l: Sequence, n: int):
         yield l[i:i + n]
 
 
-def parse_package_version(s: str) -> Tuple[str, str]:
+def parse_package_version(s: str) -> (str, str):
     if 'no version control' in s:  # installed from non-git controlled source code in editable mode
         s = s.split('(')[1].split(')')[0]  # yields <package>==<version>
 

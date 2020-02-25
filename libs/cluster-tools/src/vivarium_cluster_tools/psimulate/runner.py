@@ -5,7 +5,7 @@ import tempfile
 import shutil
 import socket
 import subprocess
-from typing import Tuple, List, Dict
+from typing import List, Dict
 from pathlib import Path
 from time import sleep, time
 
@@ -153,7 +153,7 @@ def launch_redis(port: int) -> subprocess.Popen:
     return redis_process
 
 
-def launch_redis_processes(num_processes: int) -> Tuple[str, List[Tuple[str, int]]]:
+def launch_redis_processes(num_processes: int) -> (str, List[(str, int)]):
     hostname = socket.getfqdn()
     redis_ports = []
     for i in range(num_processes):
@@ -272,7 +272,7 @@ def concat_results(old_results: pd.DataFrame, new_results: List[pd.DataFrame]) -
 
 
 def write_results_batch(ctx: RunContext, written_results: pd.DataFrame, unwritten_results: List[pd.DataFrame],
-                        batch_size: int = 50) -> Tuple[pd.DataFrame, List[pd.DataFrame]]:
+                        batch_size: int = 50) -> (pd.DataFrame, List[pd.DataFrame]):
     new_results_to_write, unwritten_results = (unwritten_results[:batch_size], unwritten_results[batch_size:])
     results_to_write = concat_results(written_results, new_results_to_write)
 
