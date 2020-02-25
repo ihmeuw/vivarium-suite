@@ -5,6 +5,7 @@ import tempfile
 import shutil
 import socket
 import subprocess
+from typing import List
 from pathlib import Path
 from time import sleep, time
 
@@ -176,27 +177,41 @@ class RunContext:
 
 
 class NativeSpecification:
-    def __init__(self, project, peak_memory, max_runtime, threads, job_name, **__):
+    def __init__(self, project, queue, peak_memory, max_runtime, threads, job_name, **__):
         self.project = project
         self.peak_memory = peak_memory
         self.max_runtime = max_runtime
+        self.queue = self.get_queue(queue, max_runtime)
         self.threads = threads
         self.job_name = job_name
-        self.queue = self.get_valid_queue(max_runtime)
         self.qsub_validation = 'n'
 
+    def get_queue(self, queue: str, max_runtime: str) -> str:
+        valid_queues = self.get_valid_queues(max_runtime)
+        if queue is None:
+            return valid_queues[0]
+        else:
+            if queue in valid_queues:
+                return queue
+            else:
+                raise ValueError("Specified queue is not valid for jobs with the max runtime provided. "
+                                 "Likely you requested all.q for a job requiring long.q.")
+
     @staticmethod
-    def get_valid_queue(max_runtime: str):
+    def get_valid_queues(max_runtime: str) -> List[str]:
         runtime_args = max_runtime.split(":")
+
         if len(runtime_args) != 3:
             raise ValueError("Invalid --max-runtime supplied. Format should be hh:mm:ss.")
         else:
             hours, minutes, seconds = runtime_args
+
         runtime_in_hours = int(hours) + float(minutes) / 60. + float(seconds) / 3600.
+
         if runtime_in_hours <= vct_globals.ALL_Q_MAX_RUNTIME_HOURS:
-            return 'all.q'
+            return ['all.q', 'long.q']
         elif runtime_in_hours <= vct_globals.LONG_Q_MAX_RUNTIME_HOURS:
-            return 'long.q'
+            return ['long.q']
         else:
             raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
 

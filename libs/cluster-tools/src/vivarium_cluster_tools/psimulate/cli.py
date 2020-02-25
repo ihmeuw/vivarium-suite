@@ -11,6 +11,12 @@ shared_options = [
                  type=click.Choice(vct_globals.CLUSTER_PROJECTS),
                  default=vct_globals.DEFAULT_CLUSTER_PROJECT,
                  help='The cluster project under which to run the simulation.'),
+    click.option('--queue', '-q',
+                 type=click.Choice(['all.q', 'long.q']),
+                 default=None,  # dynamically set based on max-runtime
+                 help='The cluster queue to assign the jobs to, defaults to the appropriate queue based on max-runtime.'
+                      'long.q allows for much longer runtimes but there may be reasons to send jobs to that queue even '
+                      'if they don\'t have runtime constraints, such as open node availability.'),
     click.option('--peak-memory', '-m',
                  type=int,
                  default=3,
@@ -92,6 +98,7 @@ def run(model_specification, branch_configuration, result_directory, **options):
 
     main(model_specification, branch_configuration, result_directory,
          {'project': options['project'],
+          'queue': options['queue'],
           'peak_memory': options['peak_memory'],
           'max_runtime': options['max_runtime'],
           'threads': options['threads']},
@@ -114,6 +121,7 @@ def restart(results_root, **options):
 
     main(None, None, results_root,
          {'project': options['project'],
+          'queue': options['queue'],
           'peak_memory': options['peak_memory'],
           'max_runtime': options['max_runtime'],
           'threads': options['threads']},
@@ -140,6 +148,7 @@ def expand(results_root, **options):
 
     main(None, None, results_root,
          {'project': options['project'],
+          'queue': options['queue'],
           'peak_memory': options['peak_memory'],
           'max_runtime': options['max_runtime'],
           'threads': options['threads']},
