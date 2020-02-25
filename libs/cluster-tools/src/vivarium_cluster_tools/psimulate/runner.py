@@ -5,7 +5,7 @@ import tempfile
 import shutil
 import socket
 import subprocess
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from pathlib import Path
 from time import sleep, time
 
@@ -153,7 +153,7 @@ def launch_redis(port: int) -> subprocess.Popen:
     return redis_process
 
 
-def launch_redis_processes(num_processes: int) -> (str, List[(str, int)]):
+def launch_redis_processes(num_processes: int) -> (str, List[Tuple[str, int]]):
     hostname = socket.getfqdn()
     redis_ports = []
     for i in range(num_processes):
