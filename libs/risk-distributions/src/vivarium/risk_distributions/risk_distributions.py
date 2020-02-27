@@ -1,3 +1,4 @@
+import warnings
 from typing import Tuple, Union, Callable, Dict
 
 import numpy as np
@@ -38,10 +39,14 @@ class BaseDistribution:
             computable = cls.computable_parameter_index(mean, sd)
             parameters.loc[computable, ['x_min', 'x_max']] = cls.compute_min_max(mean.loc[computable],
                                                                                  sd.loc[computable])
-            parameters.loc[computable, list(cls.expected_parameters)] = cls._get_parameters(
-                mean.loc[computable], sd.loc[computable],
-                parameters.loc[computable, 'x_min'], parameters.loc[computable, 'x_max']
-            )
+            # The scipy.stats distributions run optimization routines that handle FloatingPointErrors,
+            # transforming them into RuntimeWarnings. This gets noisy in our logs.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', RuntimeWarning)
+                parameters.loc[computable, list(cls.expected_parameters)] = cls._get_parameters(
+                    mean.loc[computable], sd.loc[computable],
+                    parameters.loc[computable, 'x_min'], parameters.loc[computable, 'x_max']
+                )
 
         return parameters
 
