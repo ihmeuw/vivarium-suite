@@ -28,6 +28,7 @@ if __name__ == "__main__":
         'pandas<0.25',
         'scipy',
         'tables<=3.4.0',
+        'pyyaml',
     ]
 
     # use "pip install -e .[dev]" to install required components + extra components
