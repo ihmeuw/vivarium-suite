@@ -107,7 +107,7 @@ class NativeSpecification:
             raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
 
     def __str__(self):
-        return (f"-w {self.qsub_validation} -q {self.queue} -l m_mem_free={self.peak_memory} "
+        return (f"-w {self.qsub_validation} -q {self.queue} -l m_mem_free={self.peak_memory}G "
                 f"-l h_rt={self.max_runtime} -l fthread={self.threads} -N {self.job_name} "
                 f"-P {self.project}")
 
