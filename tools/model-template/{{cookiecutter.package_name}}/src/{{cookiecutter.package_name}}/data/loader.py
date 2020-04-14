@@ -12,6 +12,7 @@ for an example.
 
    No logging is done here. Logging is done in vivarium inputs itself and forwarded.
 """
+from vivarium_gbd_access import gbd
 from gbd_mapping import causes, risk_factors, covariates
 import pandas as pd
 from vivarium.framework.artifact import EntityKey
@@ -85,6 +86,19 @@ def load_metadata(key: str, location: str):
     if hasattr(metadata, 'to_dict'):
         metadata = metadata.to_dict()
     return metadata
+
+
+def _load_em_from_meid(location, meid, measure):
+    location_id = utility_data.get_location_id(location)
+    data = gbd.get_modelable_entity_draws(meid, location_id)
+    data = data[data.measure_id == vi_globals.MEASURES[measure]]
+    data = utilities.normalize(data, fill_value=0)
+    data = data.filter(vi_globals.DEMOGRAPHIC_COLUMNS + vi_globals.DRAW_COLUMNS)
+    data = utilities.reshape(data)
+    data = utilities.scrub_gbd_conventions(data, location)
+    data = utilities.split_interval(data, interval_column='age', split_column_prefix='age')
+    data = utilities.split_interval(data, interval_column='year', split_column_prefix='year')
+    return utilities.sort_hierarchical_data(data)
 
 
 # TODO - add project-specific data functions here
