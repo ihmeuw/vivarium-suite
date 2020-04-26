@@ -93,10 +93,12 @@ class NativeSpecification:
             'qsub_validation': '-w {value}'
         }
 
+        # On IHME's cluster
         if self.cluster_name == 'cluster':
             self.allowable_resources = ['project', 'peak_memory', 'max_runtime', 'job_name',
                                         'queue', 'threads', 'qsub_validation']
-        else:  # only default resources, for AWS compatibility
+        # On an unknown SGE cluster, only use barebones configuration resources
+        else:
             self.allowable_resources = ['job_name', 'queue', 'max_runtime', 'qsub_validation']
 
     def get_queue(self, queue: str, max_runtime: str) -> str:
