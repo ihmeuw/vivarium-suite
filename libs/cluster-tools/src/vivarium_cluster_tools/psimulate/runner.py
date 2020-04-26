@@ -93,13 +93,12 @@ class NativeSpecification:
             'qsub_validation': '-w {value}'
         }
 
-        # On IHME's cluster
+        # base configuration resources
+        self.allowed_resources = ['job_name', 'queue', 'max_runtime', 'qsub_validation']
+
+        # IHME-specific configuration
         if self.cluster_name == 'cluster':
-            self.allowable_resources = ['project', 'peak_memory', 'max_runtime', 'job_name',
-                                        'queue', 'threads', 'qsub_validation']
-        # On an unknown SGE cluster, only use barebones configuration resources
-        else:
-            self.allowable_resources = ['job_name', 'queue', 'max_runtime', 'qsub_validation']
+            self.allowed_resources.extend(['project', 'peak_memory', 'threads'])
 
     def get_queue(self, queue: str, max_runtime: str) -> str:
         valid_queues = self.get_valid_queues(max_runtime)
@@ -132,7 +131,7 @@ class NativeSpecification:
 
     def __str__(self):
         return " ".join([self.flag_map[resource].format(value=getattr(self, resource))
-                         for resource in self.allowable_resources])
+                         for resource in self.allowed_resources])
 
 
 def init_job_template(jt, native_specification: NativeSpecification, sge_log_directory: Path,
