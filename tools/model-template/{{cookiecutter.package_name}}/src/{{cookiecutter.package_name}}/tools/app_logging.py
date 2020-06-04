@@ -41,3 +41,18 @@ def configure_logging_to_terminal(verbose: int):
     """
     logger.remove(0)  # Clear default configuration
     add_logging_sink(sys.stdout, verbose, colorize=True)
+
+
+def decode_status(drmaa, job_status):
+    decoder_map = {drmaa.JobState.UNDETERMINED: 'undetermined',
+                   drmaa.JobState.QUEUED_ACTIVE: 'queued_active',
+                   drmaa.JobState.SYSTEM_ON_HOLD: 'system_hold',
+                   drmaa.JobState.USER_ON_HOLD: 'user_hold',
+                   drmaa.JobState.USER_SYSTEM_ON_HOLD: 'user_system_hold',
+                   drmaa.JobState.RUNNING: 'running',
+                   drmaa.JobState.SYSTEM_SUSPENDED: 'system_suspended',
+                   drmaa.JobState.USER_SUSPENDED: 'user_suspended',
+                   drmaa.JobState.DONE: 'finished',
+                   drmaa.JobState.FAILED: 'failed'}
+
+    return decoder_map[job_status]

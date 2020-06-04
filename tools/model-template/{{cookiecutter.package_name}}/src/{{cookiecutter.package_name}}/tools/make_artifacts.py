@@ -17,19 +17,18 @@ from loguru import logger
 
 from {{cookiecutter.package_name}} import globals as project_globals
 from {{cookiecutter.package_name}}.utilities import sanitize_location, delete_if_exists, len_longest_location
-from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink
+from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink, decode_status
 
 
 def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
     """Main application function for building artifacts.
-
     Parameters
     ----------
     location
         The location to build the artifact for.  Must be one of the
         locations specified in the project globals or the string 'all'.
         If the latter, this application will build all artifacts in
-        parallel. Click enforces valid locations and existing output dir.
+        parallel.
     output_dir
         The path where the artifact files will be built.
     append
@@ -37,45 +36,57 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
         directory.  Has no effect if artifacts are not found.
     verbose
         How noisy the logger should be.
-
     """
     output_dir = Path(output_dir)
-    existing = ([output_dir / f'{sanitize_location(loc)}.hdf' for loc in project_globals.LOCATIONS]
-                if location == 'all' else
-                output_dir / f'{sanitize_location(location)}.hdf')
 
-    if not append:
-        delete_if_exists(existing, confirm=True)
+    if location in project_globals.LOCATIONS:
+        path = Path(output_dir) / f'{sanitize_location(location)}.hdf'
 
-    if location == 'all':
+        if path.exists() and not append:
+            click.confirm(f"Existing artifact found for {location}. Do you want to delete and rebuild?",
+                          abort=True)
+            logger.info(f'Deleting artifact at {str(path)}.')
+            path.unlink()
+
+        build_single_location_artifact(path, location)
+
+    elif location == 'all':
+        # FIXME: could be more careful
+        existing_artifacts = set([item.stem for item in output_dir.iterdir()
+                                  if item.is_file() and item.suffix == '.hdf'])
+        locations = set([sanitize_location(loc) for loc in project_globals.LOCATIONS])
+        existing = locations.intersection(existing_artifacts)
+
+        if existing and not append:
+            click.confirm(f'Existing artifacts found for {existing}. Do you want to delete and rebuild?',
+                          abort=True)
+            for loc in existing:
+                path = output_dir / f'{loc}.hdf'
+                logger.info(f'Deleting artifact at {str(path)}.')
+                path.unlink()
+
         build_all_artifacts(output_dir, verbose)
+
     else:
-        build_single_location_artifact(existing, location)
+        raise ValueError(f'Location must be one of {project_globals.LOCATIONS} or the string "all". '
+                         f'You specified {location}.')
 
 
 def build_all_artifacts(output_dir: Path, verbose: int):
     """Builds artifacts for all locations in parallel.
-
     Parameters
     ----------
     output_dir
         The directory where the artifacts will be built.
     verbose
         How noisy the logger should be.
-
     Note
     ----
         This function should not be called directly.  It is intended to be
         called by the :func:`build_artifacts` function located in the same
         module.
-
-
     """
-    from vivarium_cluster_tools.psimulate.utilities import get_drmaa, get_cluster_name, exit_if_on_submit_host
-
-    # bail if we are not on a proper cluster node
-    exit_if_on_submit_host(get_cluster_name())
-
+    from vivarium_cluster_tools.psimulate.utilities import get_drmaa
     drmaa = get_drmaa()
 
     jobs = {}
@@ -99,17 +110,6 @@ def build_all_artifacts(output_dir: Path, verbose: int):
             logger.info(f'Submitted job {jobs[location][0]} to build artifact for {location}.')
             session.deleteJobTemplate(job_template)
 
-        decodestatus = {drmaa.JobState.UNDETERMINED: 'undetermined',
-                        drmaa.JobState.QUEUED_ACTIVE: 'queued_active',
-                        drmaa.JobState.SYSTEM_ON_HOLD: 'system_hold',
-                        drmaa.JobState.USER_ON_HOLD: 'user_hold',
-                        drmaa.JobState.USER_SYSTEM_ON_HOLD: 'user_system_hold',
-                        drmaa.JobState.RUNNING: 'running',
-                        drmaa.JobState.SYSTEM_SUSPENDED: 'system_suspended',
-                        drmaa.JobState.USER_SUSPENDED: 'user_suspended',
-                        drmaa.JobState.DONE: 'finished',
-                        drmaa.JobState.FAILED: 'failed'}
-
         if verbose:
             logger.info('Entering monitoring loop.')
             logger.info('-------------------------')
@@ -118,8 +118,7 @@ def build_all_artifacts(output_dir: Path, verbose: int):
             while any([job[1] not in [drmaa.JobState.DONE, drmaa.JobState.FAILED] for job in jobs.values()]):
                 for location, (job_id, status) in jobs.items():
                     jobs[location] = (job_id, session.jobStatus(job_id))
-                    padding = len_longest_location() + 1
-                    logger.info(f'{location:<{padding}}: {decodestatus[jobs[location][1]]:>15}')
+                    logger.info(f'{location:<35}: {decode_status(drmaa, jobs[location][1]):>15}')
                 logger.info('')
                 time.sleep(project_globals.MAKE_ARTIFACT_SLEEP)
                 logger.info('Checking status again')
@@ -131,7 +130,6 @@ def build_all_artifacts(output_dir: Path, verbose: int):
 
 def build_single_location_artifact(path: Union[str, Path], location: str, log_to_file: bool = False):
     """Builds an artifact for a single location.
-
     Parameters
     ----------
     path
@@ -141,19 +139,18 @@ def build_single_location_artifact(path: Union[str, Path], location: str, log_to
         specified in the project globals.
     log_to_file
         Whether we should write the application logs to a file.
-
     Note
     ----
         This function should not be called directly.  It is intended to be
         called by the :func:`build_artifacts` function located in the same
         module.
-
     """
     location = location.strip('"')
     path = Path(path)
     if log_to_file:
         log_file = path.parent / 'logs' / f'{sanitize_location(location)}.log'
-        delete_if_exists(log_file)
+        if log_file.exists():
+            log_file.unlink()
         add_logging_sink(log_file, verbose=2)
 
     # Local import to avoid data dependencies
@@ -161,10 +158,11 @@ def build_single_location_artifact(path: Union[str, Path], location: str, log_to
 
     logger.info(f'Building artifact for {location} at {str(path)}.')
     artifact = builder.open_artifact(path, location)
-    logger.info(f'Loading and writing demographic data.')
-    builder.load_and_write_demographic_data(artifact, location)
 
-    # TODO - add your data
+    for key_group in project_globals.MAKE_ARTIFACT_KEY_GROUPS:
+        logger.info(f'Loading and writing {key_group.log_name} data')
+        for key in key_group:
+            builder.load_and_write_data(artifact, key, location)
 
     logger.info('**DONE**')
 

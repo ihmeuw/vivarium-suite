@@ -39,11 +39,11 @@ def get_data(lookup_key: str, location: str) -> pd.DataFrame:
 
     """
     mapping = {
-        project_globals.POPULATION_STRUCTURE: load_population_structure,
-        project_globals.POPULATION_AGE_BINS: load_age_bins,
-        project_globals.POPULATION_DEMOGRAPHY: load_demographic_dimensions,
-        project_globals.POPULATION_TMRLE: load_theoretical_minimum_risk_life_expectancy,
-        project_globals.ALL_CAUSE_CSMR: load_standard_data,
+        project_globals.POPULATION.STRUCTURE: load_population_structure,
+        project_globals.POPULATION.AGE_BINS: load_age_bins,
+        project_globals.POPULATION.DEMOGRAPHY: load_demographic_dimensions,
+        project_globals.POPULATION.TMRLE: load_theoretical_minimum_risk_life_expectancy,
+        project_globals.POPULATION.ACMR: load_standard_data,
 
         # TODO - add appropriate mappings
         # project_globals.DIARRHEA_PREVALENCE: load_standard_data,

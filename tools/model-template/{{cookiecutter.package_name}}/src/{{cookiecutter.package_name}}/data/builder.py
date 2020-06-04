@@ -115,34 +115,3 @@ def write_data_by_draw(artifact: Artifact, key: str, data: pd.DataFrame):
         data = data.reset_index(drop=True)
         for c in data.columns:
             store.put(f'{key.path}/{c}', data[c])
-
-
-def load_and_write_demographic_data(artifact: Artifact, location: str):
-    keys = [
-        project_globals.POPULATION_STRUCTURE,
-        project_globals.POPULATION_AGE_BINS,
-        project_globals.POPULATION_DEMOGRAPHY,
-        project_globals.POPULATION_TMRLE,  # Theoretical life expectancy
-        project_globals.ALL_CAUSE_CSMR,
-    ]
-
-    for key in keys:
-        load_and_write_data(artifact, key, location)
-
-# TODO - create appropriate functions to write data
-'''
-def load_and_write_diarrhea_data(artifact: Artifact, location: str):
-    keys = [
-        project_globals.DIARRHEA_PREVALENCE,
-        project_globals.DIARRHEA_INCIDENCE_RATE,
-        project_globals.DIARRHEA_REMISSION_RATE,
-        project_globals.DIARRHEA_CAUSE_SPECIFIC_MORTALITY_RATE,
-        project_globals.DIARRHEA_EXCESS_MORTALITY_RATE,
-        project_globals.DIARRHEA_DISABILITY_WEIGHT,
-        project_globals.DIARRHEA_RESTRICTIONS
-    ]
-
-    for key in keys:
-        load_and_write_data(artifact, key, location)
-'''
-
