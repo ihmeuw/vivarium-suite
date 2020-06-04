@@ -46,28 +46,37 @@ class __Population(NamedTuple):
 POPULATION = __Population()
 
 
-# TODO - sample keys key group
+# TODO - sample key group used to idneitfy keys in model
 # For more information see the tutorial:
 # https://vivarium-inputs.readthedocs.io/en/latest/tutorials/pulling_data.html#entity-measure-data
-class __KeyGroup(NamedTuple):
-    KEY_ONE: str = 'key.one'
-    KEY_TWO: str = 'key.two'
+class __IHD(NamedTuple):
+    ACUTE_MI_PREVALENCE: str = 'sequela.acute_myocardial_infarction.prevalence'
+    POST_MI_PREVALENCE: str = 'sequela.post_myocardial_infarction.prevalence'
+    ACUTE_MI_INCIDENCE_RATE: str = 'cause.ischemic_heart_disease.incidence_rate'
+    ACUTE_MI_DISABILITY_WEIGHT: str = 'sequela.acute_myocardial_infarction.disability_weight'
+    POST_MI_DISABILITY_WEIGHT: str = 'sequela.post_myocardial_infarction.disability_weight'
+    ACUTE_MI_EMR: str = 'sequela.acute_myocardial_infarction.excess_mortality_rate'
+    POST_MI_EMR: str = 'sequela.post_myocardial_infarction.excess_mortality_rate'
+    CSMR: str = 'cause.ischemic_heart_disease.cause_specific_mortality_rate'
+    RESTRICTIONS: str = 'cause.ischemic_heart_disease.restrictions'
 
     @property
     def name(self):
-        return 'key_group'
+        return 'ischemic_heart_disease'
 
     @property
     def log_name(self):
-        return 'key group'
+        return 'ischemic heart disease'
 
 
-KEY_GROUP = __KeyGroup()
+IHD = __IHD()
 
 
 MAKE_ARTIFACT_KEY_GROUPS = [
     POPULATION,
+    IHD,
 ]
+
 
 ###########################
 # Disease Model variables #
