@@ -12,6 +12,7 @@ for an example.
 
    No logging is done here. Logging is done in vivarium inputs itself and forwarded.
 """
+from vivarium_gbd_access import gbd
 from gbd_mapping import causes, risk_factors, covariates
 import pandas as pd
 from vivarium.framework.artifact import EntityKey
@@ -38,11 +39,11 @@ def get_data(lookup_key: str, location: str) -> pd.DataFrame:
 
     """
     mapping = {
-        project_globals.POPULATION_STRUCTURE: load_population_structure,
-        project_globals.POPULATION_AGE_BINS: load_age_bins,
-        project_globals.POPULATION_DEMOGRAPHY: load_demographic_dimensions,
-        project_globals.POPULATION_TMRLE: load_theoretical_minimum_risk_life_expectancy,
-        project_globals.ALL_CAUSE_CSMR: load_standard_data,
+        project_globals.POPULATION.STRUCTURE: load_population_structure,
+        project_globals.POPULATION.AGE_BINS: load_age_bins,
+        project_globals.POPULATION.DEMOGRAPHY: load_demographic_dimensions,
+        project_globals.POPULATION.TMRLE: load_theoretical_minimum_risk_life_expectancy,
+        project_globals.POPULATION.ACMR: load_standard_data,
 
         # TODO - add appropriate mappings
         # project_globals.DIARRHEA_PREVALENCE: load_standard_data,
@@ -85,6 +86,19 @@ def load_metadata(key: str, location: str):
     if hasattr(metadata, 'to_dict'):
         metadata = metadata.to_dict()
     return metadata
+
+
+def _load_em_from_meid(location, meid, measure):
+    location_id = utility_data.get_location_id(location)
+    data = gbd.get_modelable_entity_draws(meid, location_id)
+    data = data[data.measure_id == vi_globals.MEASURES[measure]]
+    data = utilities.normalize(data, fill_value=0)
+    data = data.filter(vi_globals.DEMOGRAPHIC_COLUMNS + vi_globals.DRAW_COLUMNS)
+    data = utilities.reshape(data)
+    data = utilities.scrub_gbd_conventions(data, location)
+    data = utilities.split_interval(data, interval_column='age', split_column_prefix='age')
+    data = utilities.split_interval(data, interval_column='year', split_column_prefix='year')
+    return utilities.sort_hierarchical_data(data)
 
 
 # TODO - add project-specific data functions here

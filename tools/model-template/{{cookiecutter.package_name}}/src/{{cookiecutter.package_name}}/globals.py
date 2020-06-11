@@ -26,19 +26,56 @@ LOCATIONS = [
 
 METADATA_LOCATIONS = 'metadata.locations'
 
-POPULATION_STRUCTURE = 'population.structure'
-POPULATION_AGE_BINS = 'population.age_bins'
-POPULATION_DEMOGRAPHY = 'population.demographic_dimensions'
-POPULATION_TMRLE = 'population.theoretical_minimum_risk_life_expectancy'
 
-ALL_CAUSE_CSMR = 'cause.all_causes.cause_specific_mortality_rate'
+class __Population(NamedTuple):
+    STRUCTURE: str = 'population.structure'
+    AGE_BINS: str = 'population.age_bins'
+    DEMOGRAPHY: str = 'population.demographic_dimensions'
+    TMRLE: str = 'population.theoretical_minimum_risk_life_expectancy'
+    ACMR: str = 'cause.all_causes.cause_specific_mortality_rate'
 
-# TODO - sample keys of type EntityKey used to identify data in the model.
+    @property
+    def name(self):
+        return 'population'
+
+    @property
+    def log_name(self):
+        return 'population'
+
+
+POPULATION = __Population()
+
+
+# TODO - sample key group used to idneitfy keys in model
 # For more information see the tutorial:
 # https://vivarium-inputs.readthedocs.io/en/latest/tutorials/pulling_data.html#entity-measure-data
-# DIARRHEA_PREVALENCE = 'cause.diarrheal_diseases.prevalence'
-# STUNTING_CATEGORIES = 'risk_factor.child_stunting.categories'
-# STUNTING_EXPOSURE_MEAN = 'alternative_risk_factor.child_stunting.exposure'
+class __IHD(NamedTuple):
+    ACUTE_MI_PREVALENCE: str = 'sequela.acute_myocardial_infarction.prevalence'
+    POST_MI_PREVALENCE: str = 'sequela.post_myocardial_infarction.prevalence'
+    ACUTE_MI_INCIDENCE_RATE: str = 'cause.ischemic_heart_disease.incidence_rate'
+    ACUTE_MI_DISABILITY_WEIGHT: str = 'sequela.acute_myocardial_infarction.disability_weight'
+    POST_MI_DISABILITY_WEIGHT: str = 'sequela.post_myocardial_infarction.disability_weight'
+    ACUTE_MI_EMR: str = 'sequela.acute_myocardial_infarction.excess_mortality_rate'
+    POST_MI_EMR: str = 'sequela.post_myocardial_infarction.excess_mortality_rate'
+    CSMR: str = 'cause.ischemic_heart_disease.cause_specific_mortality_rate'
+    RESTRICTIONS: str = 'cause.ischemic_heart_disease.restrictions'
+
+    @property
+    def name(self):
+        return 'ischemic_heart_disease'
+
+    @property
+    def log_name(self):
+        return 'ischemic heart disease'
+
+
+IHD = __IHD()
+
+
+MAKE_ARTIFACT_KEY_GROUPS = [
+    POPULATION,
+    IHD,
+]
 
 
 ###########################
