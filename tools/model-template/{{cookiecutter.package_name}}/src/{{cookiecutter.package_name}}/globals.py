@@ -82,24 +82,27 @@ MAKE_ARTIFACT_KEY_GROUPS = [
 # Disease Model variables #
 ###########################
 
-# TODO - sample states and transitions
-DIARRHEA_MODEL_NAME = 'diarrheal_diseases'
-DIARRHEA_SUSCEPTIBLE_STATE_NAME = f'susceptible_to_{DIARRHEA_MODEL_NAME}'
-DIARRHEA_WITH_CONDITION_STATE_NAME = DIARRHEA_MODEL_NAME
-DIARRHEA_MODEL_STATES = (DIARRHEA_SUSCEPTIBLE_STATE_NAME, DIARRHEA_WITH_CONDITION_STATE_NAME)
-DIARRHEA_MODEL_TRANSITIONS = (
-    f'{DIARRHEA_SUSCEPTIBLE_STATE_NAME}_TO_{DIARRHEA_WITH_CONDITION_STATE_NAME}',
-    f'{DIARRHEA_WITH_CONDITION_STATE_NAME}_TO_{DIARRHEA_SUSCEPTIBLE_STATE_NAME}',
-)
 
-# TODO - add all diseases to DISEASE_MODELS tuple and the DISEASE_MODEL_MAP dictionary
-DISEASE_MODELS = (DIARRHEA_MODEL_NAME)
-DISEASE_MODEL_MAP = {
-    DIARRHEA_MODEL_NAME: {
-        'states': DIARRHEA_MODEL_STATES,
-        'transitions': DIARRHEA_MODEL_TRANSITIONS,
-    },
-}
+class TransitionString(str):
+
+    def __new__(cls, value):
+        # noinspection PyArgumentList
+        obj = str.__new__(cls, value.lower())
+        obj.from_state, obj.to_state = value.split('_TO_')
+        return obj
+
+
+# TODO input details of model states and transitions
+SOME_MODEL_NAME = 'some_model'
+SUSCEPTIBLE_STATE_NAME = f'susceptible_to_{SOME_MODEL_NAME}'
+FIRST_STATE_NAME = 'first_state'
+SECOND_STATE_NAME = 'second_state'
+IHD_MODEL_STATES = (SUSCEPTIBLE_STATE_NAME, FIRST_STATE_NAME, SECOND_STATE_NAME)
+IHD_MODEL_TRANSITIONS = (
+    TransitionString(f'{SUSCEPTIBLE_STATE_NAME}_TO_{FIRST_STATE_NAME}'),
+    TransitionString(f'{FIRST_STATE_NAME}_TO_{SECOND_STATE_NAME}'),
+    TransitionString(f'{SECOND_STATE_NAME}_TO_{FIRST_STATE_NAME}')
+)
 
 
 ########################
@@ -125,6 +128,11 @@ LBWSG_MISSING_CATEGORY = __LBWSG_MISSING_CATEGORY()
 TOTAL_POPULATION_COLUMN = 'total_population'
 TOTAL_YLDS_COLUMN = 'years_lived_with_disability'
 TOTAL_YLLS_COLUMN = 'years_of_life_lost'
+
+# Columns from parallel runs
+INPUT_DRAW_COLUMN = 'input_draw'
+RANDOM_SEED_COLUMN = 'random_seed'
+OUTPUT_SCENARIO_COLUMN = 'scenario'
 
 STANDARD_COLUMNS = {
     'total_population': TOTAL_POPULATION_COLUMN,
