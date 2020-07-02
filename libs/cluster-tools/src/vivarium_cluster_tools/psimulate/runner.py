@@ -320,26 +320,27 @@ def process_job_results(registry_manager: RegistryManager, ctx: RunContext):
 
     logger.info('Entering main processing loop.')
     batch_size = 200
-    while registry_manager.jobs_to_finish:
-        sleep(5)
-        unwritten_results.extend(registry_manager.get_results())
-        if ctx.no_batch and unwritten_results:
-            written_results, unwritten_results = write_results_batch(ctx, written_results,
-                                                                     unwritten_results, len(unwritten_results))
-        elif len(unwritten_results) > batch_size:
-            written_results, unwritten_results = write_results_batch(ctx, written_results,
-                                                                     unwritten_results, batch_size)
+    try:
+        while registry_manager.jobs_to_finish:
+            sleep(5)
+            unwritten_results.extend(registry_manager.get_results())
+            if ctx.no_batch and unwritten_results:
+                written_results, unwritten_results = write_results_batch(ctx, written_results,
+                                                                        unwritten_results, len(unwritten_results))
+            elif len(unwritten_results) > batch_size:
+                written_results, unwritten_results = write_results_batch(ctx, written_results,
+                                                                        unwritten_results, batch_size)
 
-        registry_manager.update_and_report()
-        logger.info(f'Unwritten results: {len(unwritten_results)}')
-        logger.info(f'Elapsed time: {(time() - start_time)/60:.1f} minutes.')
-
-    batch_size = 500
-    while unwritten_results:
-        written_results, unwritten_results = write_results_batch(ctx, written_results, unwritten_results,
-                                                                 batch_size=batch_size)
-        logger.info(f'Unwritten results: {len(unwritten_results)}')
-        logger.info(f'Elapsed time: {(time() - start_time) / 60:.1f} minutes.')
+            registry_manager.update_and_report()
+            logger.info(f'Unwritten results: {len(unwritten_results)}')
+            logger.info(f'Elapsed time: {(time() - start_time)/60:.1f} minutes.')
+    finally:
+        batch_size = 500
+        while unwritten_results:
+            written_results, unwritten_results = write_results_batch(ctx, written_results, unwritten_results,
+                                                                    batch_size=batch_size)
+            logger.info(f'Unwritten results: {len(unwritten_results)}')
+            logger.info(f'Elapsed time: {(time() - start_time) / 60:.1f} minutes.')
 
 
 def check_user_sge_config():
