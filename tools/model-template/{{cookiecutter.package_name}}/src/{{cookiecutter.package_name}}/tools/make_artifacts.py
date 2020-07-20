@@ -15,6 +15,8 @@ from typing import Union
 import click
 from loguru import logger
 
+import vivarium_cluster_tools as vct
+
 from {{cookiecutter.package_name}} import globals as project_globals
 from {{cookiecutter.package_name}}.utilities import sanitize_location, delete_if_exists, len_longest_location
 from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink, decode_status
@@ -30,7 +32,8 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
         If the latter, this application will build all artifacts in
         parallel.
     output_dir
-        The path where the artifact files will be built.
+        The path where the artifact files will be built. The directory
+        will be created if it doesn't exist
     append
         Whether we should append to existing artifacts at the given output
         directory.  Has no effect if artifacts are not found.
@@ -38,6 +41,7 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
         How noisy the logger should be.
     """
     output_dir = Path(output_dir)
+    vct.mkdir(output_dir, parents=True, exist_ok=True)
 
     if location in project_globals.LOCATIONS:
         path = Path(output_dir) / f'{sanitize_location(location)}.hdf'

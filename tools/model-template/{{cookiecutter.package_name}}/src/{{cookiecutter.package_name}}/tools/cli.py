@@ -72,7 +72,7 @@ def make_specs(template: str, location: str, output_dir: str, verbose: int, with
 @click.option('-o', '--output-dir',
               default=str(paths.ARTIFACT_ROOT),
               show_default=True,
-              type=click.Path(exists=True),
+              type=click.Path(),
               help='Specify an output directory. Directory must exist.')
 @click.option('-a', '--append',
               is_flag=True,
