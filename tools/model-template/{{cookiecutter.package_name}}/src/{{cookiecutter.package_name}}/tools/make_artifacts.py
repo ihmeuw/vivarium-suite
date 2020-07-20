@@ -30,7 +30,8 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
         If the latter, this application will build all artifacts in
         parallel.
     output_dir
-        The path where the artifact files will be built.
+        The path where the artifact files will be built. The directory
+        will be created if it doesn't exist
     append
         Whether we should append to existing artifacts at the given output
         directory.  Has no effect if artifacts are not found.
@@ -38,6 +39,7 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
         How noisy the logger should be.
     """
     output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     if location in project_globals.LOCATIONS:
         path = Path(output_dir) / f'{sanitize_location(location)}.hdf'
