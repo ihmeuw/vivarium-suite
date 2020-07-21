@@ -6,13 +6,13 @@
    Use your best judgement.
 
 """
-from pathlib import Path
 import shutil
 import sys
 import time
-from typing import Union
-
 import click
+
+from pathlib import Path
+from typing import Union
 from loguru import logger
 
 import vivarium_cluster_tools as vct
@@ -20,6 +20,27 @@ import vivarium_cluster_tools as vct
 from {{cookiecutter.package_name}} import globals as project_globals
 from {{cookiecutter.package_name}}.utilities import sanitize_location, delete_if_exists, len_longest_location
 from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink, decode_status
+
+
+def running_from_cluster() -> bool:
+    on_cluster = True
+    try:
+        vct.get_cluster_name()
+    except:
+        on_cluster = False
+    return on_cluster
+
+
+def build_single(location: str, output_dir: str, append: bool):
+    path = Path(output_dir) / f'{sanitize_location(location)}.hdf'
+
+    if path.exists() and not append:
+        click.confirm(f"Existing artifact found for {location}. Do you want to delete and rebuild?",
+                        abort=True)
+        logger.info(f'Deleting artifact at {str(path)}.')
+        path.unlink()
+
+    build_single_location_artifact(path, location)
 
 
 def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
@@ -44,16 +65,7 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
     vct.mkdir(output_dir, parents=True, exist_ok=True)
 
     if location in project_globals.LOCATIONS:
-        path = Path(output_dir) / f'{sanitize_location(location)}.hdf'
-
-        if path.exists() and not append:
-            click.confirm(f"Existing artifact found for {location}. Do you want to delete and rebuild?",
-                          abort=True)
-            logger.info(f'Deleting artifact at {str(path)}.')
-            path.unlink()
-
-        build_single_location_artifact(path, location)
-
+        build_single(location, output_dir, append)
     elif location == 'all':
         # FIXME: could be more careful
         existing_artifacts = set([item.stem for item in output_dir.iterdir()
@@ -69,8 +81,13 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
                 logger.info(f'Deleting artifact at {str(path)}.')
                 path.unlink()
 
-        build_all_artifacts(output_dir, verbose)
-
+        if running_from_cluster():
+            # parallel build when on cluster
+            build_all_artifacts(output_dir, verbose)
+        else:
+            # serial build when not on cluster
+            for loc in project_globals.LOCATIONS:
+                build_single(loc, output_dir, append)
     else:
         raise ValueError(f'Location must be one of {project_globals.LOCATIONS} or the string "all". '
                          f'You specified {location}.')
@@ -168,7 +185,7 @@ def build_single_location_artifact(path: Union[str, Path], location: str, log_to
         for key in key_group:
             builder.load_and_write_data(artifact, key, location)
 
-    logger.info('**DONE**')
+    logger.info(f'**Done building -- {location}**')
 
 
 if __name__ == "__main__":
