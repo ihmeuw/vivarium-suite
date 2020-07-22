@@ -31,15 +31,25 @@ def running_from_cluster() -> bool:
     return on_cluster
 
 
+def check_for_existing(output_dir: Path, location: str, append: bool):
+    existing_artifacts = set([item.stem for item in output_dir.iterdir()
+                              if item.is_file() and item.suffix == '.hdf'])
+    locations = set([sanitize_location(loc) for loc in project_globals.LOCATIONS])
+    existing = locations.intersection(existing_artifacts)
+
+    if existing and not append:
+        if location != 'all':
+            existing = [sanitize_location(location)]
+        click.confirm(f'Existing artifacts found for {existing}. Do you want to delete and rebuild?',
+                      abort=True)
+        for loc in existing:
+            path = output_dir / f'{loc}.hdf'
+            logger.info(f'Deleting artifact at {str(path)}.')
+            path.unlink()
+
+
 def build_single(location: str, output_dir: str, append: bool):
     path = Path(output_dir) / f'{sanitize_location(location)}.hdf'
-
-    if path.exists() and not append:
-        click.confirm(f"Existing artifact found for {location}. Do you want to delete and rebuild?",
-                        abort=True)
-        logger.info(f'Deleting artifact at {str(path)}.')
-        path.unlink()
-
     build_single_location_artifact(path, location)
 
 
@@ -64,23 +74,11 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
     output_dir = Path(output_dir)
     vct.mkdir(output_dir, parents=True, exist_ok=True)
 
+    check_for_existing(output_dir, location, append)
+
     if location in project_globals.LOCATIONS:
         build_single(location, output_dir, append)
     elif location == 'all':
-        # FIXME: could be more careful
-        existing_artifacts = set([item.stem for item in output_dir.iterdir()
-                                  if item.is_file() and item.suffix == '.hdf'])
-        locations = set([sanitize_location(loc) for loc in project_globals.LOCATIONS])
-        existing = locations.intersection(existing_artifacts)
-
-        if existing and not append:
-            click.confirm(f'Existing artifacts found for {existing}. Do you want to delete and rebuild?',
-                          abort=True)
-            for loc in existing:
-                path = output_dir / f'{loc}.hdf'
-                logger.info(f'Deleting artifact at {str(path)}.')
-                path.unlink()
-
         if running_from_cluster():
             # parallel build when on cluster
             build_all_artifacts(output_dir, verbose)
