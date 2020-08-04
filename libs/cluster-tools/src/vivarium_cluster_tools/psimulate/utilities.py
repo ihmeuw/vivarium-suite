@@ -22,6 +22,7 @@ def get_drmaa() -> object:
     except (RuntimeError, OSError):
         if 'SGE_CLUSTER_NAME' in os.environ:
             os.environ['DRMAA_LIBRARY_PATH'] = '/opt/sge/lib/lx-amd64/libdrmaa.so'
+            import drmaa
         else:
             drmaa = object()
     return drmaa
