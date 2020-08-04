@@ -12,6 +12,7 @@ try:
 except ImportError:
     from pip.operations import freeze
 
+from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import globals as vct_globals
 
 
@@ -65,14 +66,12 @@ def get_output_directory(model_specification_file: str = None,
         output_directory = root / model_specification_name / launch_time
     return output_directory
 
-
 def set_permissions(output_dir: Path):
     """Call to achieve side effect of relaxing permissions to 775
         on output dir and the parent"""
     permissions = 0o775
     output_dir.parent.chmod(permissions)
     output_dir.chmod(permissions)
-
 
 def setup_directories(model_specification_file: str, result_directory: str,
                       restart: bool, expand: bool) -> (Path, Dict[str, Path]):
@@ -94,11 +93,9 @@ def setup_directories(model_specification_file: str, result_directory: str,
                     'sge': logging_directory / 'sge_logs',
                     'worker': logging_directory / 'worker_logs'}
 
-    output_directory.mkdir(exist_ok=True, parents=True)
-    set_permissions(output_directory)
+    vct_utils.mkdir(output_directory, exists_ok=True, parents=True)
     for d in logging_dirs.values():
-        d.mkdir(parents=True)
-        set_permissions(d)
+        vct_utils.mkdir(d, parents=True)
 
     return output_directory, logging_dirs
 

@@ -26,6 +26,11 @@ if __name__ == "__main__":
         'click',
     ]
 
+    test_requirements = [
+        'pytest',
+        'pytest-mock',
+    ]
+
     setup(
         name=about['__title__'],
         version=about['__version__'],
@@ -47,6 +52,10 @@ if __name__ == "__main__":
         """,
 
         install_requires=install_requires,
+        extras_require={
+            'test': test_requirements,
+            'dev': test_requirements,
+        },
 
         zip_safe=False,
     )
