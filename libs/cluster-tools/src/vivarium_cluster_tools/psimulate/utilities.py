@@ -2,6 +2,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from shutil import rmtree
 
 from loguru import logger
 from typing import Dict, List, Sequence
@@ -185,3 +186,9 @@ def validate_environment(output_dir: Path):
         compare_environments(current_environment, original_environment)
         logger.info('Validation of environment successful. All pip installed packages match '
                     'original versions. Run can proceed.')
+
+
+def check_for_empty_results_dir(output_dir: Path):
+    results_file = output_dir / 'output.hdf'
+    if not results_file.exists():
+        rmtree(output_dir)

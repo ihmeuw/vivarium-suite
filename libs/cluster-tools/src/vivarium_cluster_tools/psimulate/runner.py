@@ -370,6 +370,8 @@ def main(model_specification_file: str, branch_configuration_file: str, result_d
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
                                                            restart, expand=bool(num_input_draws or num_random_seeds))
+    atexit.register(utilities.check_for_empty_results_dir, output_dir=output_dir)
+    atexit.register(lambda: logger.remove())
 
     native_specification['job_name'] = output_dir.parts[-2]
     native_specification = NativeSpecification(**native_specification)
