@@ -69,6 +69,12 @@ class RunContext:
 
 class NativeSpecification:
     def __init__(self, project: str, queue: str, peak_memory: int, max_runtime: str, job_name: str, **__):
+
+        try:
+            self.cluster_name = os.environ['SGE_CLUSTER_NAME']
+        except KeyError:
+            raise RuntimeError('This tool must be run from an SGE/UGE cluster.')
+
         self.project = project
         self.peak_memory = peak_memory
         self.max_runtime = max_runtime
@@ -76,6 +82,23 @@ class NativeSpecification:
         self.queue = self.get_queue(queue, max_runtime)
         self.threads = vct_globals.DEFAULT_THREADS_PER_JOB
         self.qsub_validation = 'n'
+
+        self.flag_map = {
+            'project': '-P {value}',
+            'peak_memory': '-l m_mem_free={value}G',
+            'max_runtime': '-l h_rt={value}',
+            'threads': '-l fthread={value}',
+            'job_name': '-N {value}',
+            'queue': '-q {value}',
+            'qsub_validation': '-w {value}'
+        }
+
+        # base configuration resources
+        self.allowed_resources = ['job_name', 'queue', 'max_runtime', 'qsub_validation']
+
+        # IHME-specific configuration
+        if self.cluster_name == 'cluster':
+            self.allowed_resources.extend(['project', 'peak_memory', 'threads'])
 
     def get_queue(self, queue: str, max_runtime: str) -> str:
         valid_queues = self.get_valid_queues(max_runtime)
@@ -107,9 +130,8 @@ class NativeSpecification:
             raise ValueError(f"Max runtime value too large. Must be less than {vct_globals.LONG_Q_MAX_RUNTIME_HOURS}h.")
 
     def __str__(self):
-        return (f"-w {self.qsub_validation} -q {self.queue} -l m_mem_free={self.peak_memory}G "
-                f"-l h_rt={self.max_runtime} -l fthread={self.threads} -N {self.job_name} "
-                f"-P {self.project}")
+        return " ".join([self.flag_map[resource].format(value=getattr(self, resource))
+                         for resource in self.allowed_resources])
 
 
 def init_job_template(jt, native_specification: NativeSpecification, sge_log_directory: Path,
