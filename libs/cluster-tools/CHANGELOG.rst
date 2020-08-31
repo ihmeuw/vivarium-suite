@@ -1,3 +1,14 @@
+**1.2.0 - 08/31/20**
+
+ - Update output.hdf to remove duplicate draw and random seed from the index.
+ - Adds option for choosing scheduling queue.
+ - Adds typing to internal functions.
+ - Removed references to old IHME cluster.
+ - Separated run configuration from cluster configuration.
+ - Added utility function to make directories with consistent permissions.
+ - Added functionality to serialize unwritten in-memory results on exit.
+ - Added functionality to clean up directories if psimulate fails to produce results.
+
 **1.1.2 - 01/03/20**
 
  - Set cluster queue dynamically based on max runtime argument.
