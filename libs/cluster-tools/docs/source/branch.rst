@@ -32,7 +32,7 @@ input draws.
 
 .. note::
 
-    A draw is a statistical term related to bootstrapping that has a specific meaning in the context of the GBD. The
+    A draw is a statistical term related to Bayesian statistics that has a specific meaning in the context of the GBD. The
     implementation details vary, but the purpose is for some quantity or measure of interest, a draw is a member of
     a full set of results such that, when taken together, the set of draws describes at least some of the uncertainty
     surrounding the quantity as a result of the modeling process, data uncertainty, etc. Generally, GBD results are
@@ -192,7 +192,7 @@ as an example.
 This branch configuration will produce 400 simulations. First we consider the space of 
 :term:`configuration parameters<Configuration Parameter>` the simulation will be run for: one scenario for 
 each of the four recruitment proportions.  For each scenario, we will run a simulation for each combination
-of :term:`input draw<Input Draw>` and :term:`random seed<Random Seed>` specified byt the ``input_draw_count`` 
+of :term:`input draw<Input Draw>` and :term:`random seed<Random Seed>` specified by the ``input_draw_count`` 
 and ``random_seed_count`` keys.  So we'll have:
 ``(Number of input draws) * (Number of random seeds) * (Number of scenarios) = 100 * 4 * 4 = 1600`` 
 simulations to run from this branch configuration.
