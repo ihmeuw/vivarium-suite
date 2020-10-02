@@ -1,3 +1,7 @@
+**1.2.1 - 10/2/20**
+
+ - Pin rq to 1.2.2
+
 **1.2.0 - 08/31/20**
 
  - Update output.hdf to remove duplicate draw and random seed from the index.

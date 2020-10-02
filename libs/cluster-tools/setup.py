@@ -21,7 +21,7 @@ if __name__ == "__main__":
         'pyyaml>=5.1',
         'drmaa',
         'redis<=3.0.1',
-        'rq>=1.0',
+        'rq>=1.0, <=1.2.2',
         'vivarium>=0.9.3',
         'click',
     ]
