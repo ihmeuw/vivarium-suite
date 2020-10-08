@@ -172,7 +172,7 @@ class BaseDistribution:
 class Beta(BaseDistribution):
 
     distribution = stats.beta
-    expected_parameters = ('a', 'b', 'scale')
+    expected_parameters = ('a', 'b', 'scale', 'loc')
 
     @staticmethod
     def _get_parameters(mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series) -> pd.DataFrame:
@@ -183,19 +183,10 @@ class Beta(BaseDistribution):
         params = pd.DataFrame({
             'a': a ** 2 / b * (1 - a) - a,
             'b': a / b * (1 - a) ** 2 + (a - 1),
-            'scale': scale
+            'scale': scale,
+            'loc': x_min,
         }, index=mean.index)
         return params
-
-    def process(self, data: pd.Series, parameters: pd.DataFrame, process_type: str) -> pd.Series:
-        x_min, x_max = parameters.loc[data.index, 'x_min'], parameters.loc[data.index, 'x_max']
-        if process_type in ['pdf_preprocess', 'cdf_preprocess']:
-            value = data - x_min
-        elif process_type == 'ppf_postprocess':
-            value = data + x_max - x_min
-        else:
-            value = super().process(data, parameters, process_type)
-        return value
 
 
 class Exponential(BaseDistribution):
