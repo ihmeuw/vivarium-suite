@@ -10,7 +10,7 @@ distributions = [risk_distributions.Exponential, risk_distributions.Gamma, risk_
                  risk_distributions.Beta]
 
 # FIXME: The following distributions break without updates to the processing functions
-# risk_distributions.Beta,risk_distributions.MirroredGumbel, risk_distributions.MirroredGamma,
+# risk_distributions.MirroredGumbel, risk_distributions.MirroredGamma,
 
 @pytest.fixture
 def test_data():
