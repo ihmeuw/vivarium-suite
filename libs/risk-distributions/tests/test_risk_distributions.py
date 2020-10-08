@@ -6,10 +6,11 @@ from risk_distributions import risk_distributions
 
 distributions = [risk_distributions.Exponential, risk_distributions.Gamma, risk_distributions.Gumbel,
                  risk_distributions.InverseGamma, risk_distributions.InverseWeibull, risk_distributions.LogLogistic,
-                 risk_distributions.LogNormal, risk_distributions.Normal, risk_distributions.Weibull]
+                 risk_distributions.LogNormal, risk_distributions.Normal, risk_distributions.Weibull,
+                 risk_distributions.Beta]
 
 # FIXME: The following distributions break without updates to the processing functions
-# risk_distributions.Beta,risk_distributions.MirroredGumbel, risk_distributions.MirroredGamma,
+# risk_distributions.MirroredGumbel, risk_distributions.MirroredGamma,
 
 @pytest.fixture
 def test_data():
