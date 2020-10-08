@@ -10,5 +10,6 @@ Current Maintainers
 -------------------
 
 - James Collins <collijk@uw.edu>
-- Cody Horst <chorst@uw.edu>
 - Kjell Swedin <kjells@uw.edu>
+- Rajan Mudambi <rmudambi@uw.edu>
+- Matt Kappel <mkappel@uw.edu>
