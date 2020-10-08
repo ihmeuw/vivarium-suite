@@ -1,3 +1,9 @@
+**2.0.3 - 09/08/20**
+
+ - Correction to the Beta distribution wrapper.
+ - supress RuntimeWarning around dist calculation
+ - Update authors and maintainers
+
 **2.0.2 - 11/18/19**
 
  - Fix set logic in data frame formatting.
