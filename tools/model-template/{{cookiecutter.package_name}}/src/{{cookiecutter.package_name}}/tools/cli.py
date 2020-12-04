@@ -7,10 +7,11 @@ render model specs with the correct location parameters plugged in.
 
 It will look for the model spec template in "model_spec.in" in the directory
 ``src/{{cookiecutter.package_name}}/model_specifications``.
-Add location strings to the ``src/globals.py`` file. By default, specifications
-for all locations will be built. You can choose to make a model specification
-for a single location by specifying that location. However, the location
-string must exist in the list in ``src/globals.py``.
+Add location strings to the ``src/{{cookiecutter.package_name}}/constants/metadata.py``
+file. By default, specifications for all locations will be built. You can
+choose to make a model specification for a single location by specifying
+that location. However, the location string must exist in the list in
+`src/{{cookiecutter.package_name}}/constants/metadata.py``.
 
 The application will look for the model spec based on the python environment
 that is active and these files don't need to be specified if the
@@ -20,8 +21,7 @@ import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
-from {{cookiecutter.package_name}} import paths
-import {{cookiecutter.package_name}}.globals as project_globals
+from {{cookiecutter.package_name}} import metadata, paths
 
 from {{cookiecutter.package_name}}.tools import configure_logging_to_terminal
 from {{cookiecutter.package_name}}.tools import build_model_specifications
@@ -37,8 +37,8 @@ from {{cookiecutter.package_name}}.tools import build_artifacts
 @click.option('-l', '--location',
               default='all',
               show_default=True,
-              type=click.Choice(project_globals.LOCATIONS + ['all']),
-              help='Location to make specification for. Specify locations in globals.py')
+              type=click.Choice(metadata.LOCATIONS + ['all']),
+              help='Location to make specification for. Specify locations in metadata.py')
 @click.option('-o', '--output-dir',
               default=str(paths.MODEL_SPEC_DIR),
               show_default=True,
@@ -66,7 +66,7 @@ def make_specs(template: str, location: str, output_dir: str, verbose: int, with
 @click.option('-l', '--location',
               default='all',
               show_default=True,
-              type=click.Choice(project_globals.LOCATIONS + ['all']),
+              type=click.Choice(metadata.LOCATIONS + ['all']),
               help=('Location for which to make an artifact. Note: prefer building archives on the cluster.\n'
                     'If you specify location "all" you must be on a cluster node.'))
 @click.option('-o', '--output-dir',

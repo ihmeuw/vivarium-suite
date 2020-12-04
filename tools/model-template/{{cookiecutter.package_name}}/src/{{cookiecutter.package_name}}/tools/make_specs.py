@@ -4,7 +4,7 @@ from pathlib import Path
 from jinja2 import Template
 from loguru import logger
 
-from {{cookiecutter.package_name}} import globals as project_globals, paths
+from {{cookiecutter.package_name}} import metadata, paths
 from {{cookiecutter.package_name}}.utilities import sanitize_location
 
 
@@ -17,7 +17,7 @@ def build_model_specifications(template: str, location: str, output_dir: str):
         String path to the model specification template file.
     location
         Location to generate the model specification for. Must be a
-        location configured in the project ``globals.py`` or ``'all'``
+        location configured in the project ``constants/metadata.py`` or ``'all'``
         to generate all model specifications.
     output_dir
         String path to the output directory where the model specification(s)
@@ -27,19 +27,19 @@ def build_model_specifications(template: str, location: str, output_dir: str):
     ------
     ValueError
         If the provided location in not ``'all'`` or is not one of the
-        locations configured in the project ``globals.py``.
+        locations configured in the project ``constants/metadata.py``.
 
     """
     template = Path(template)
     output_dir = Path(output_dir)
 
-    if location == 'all' and len(project_globals.LOCATIONS):
-        locations = project_globals.LOCATIONS
-    elif location in project_globals.LOCATIONS:
+    if location == 'all' and len(metadata.LOCATIONS):
+        locations = metadata.LOCATIONS
+    elif location in metadata.LOCATIONS:
         locations = [location]
     else:
-        raise ValueError(f'Make sure you have populated the LOCATIONS list in globals.py.\n'
-                         f'Location must be the string "all" or one of {project_globals.LOCATIONS}\n'
+        raise ValueError(f'Make sure you have populated the LOCATIONS list in constants/metadata.py.\n'
+                         f'Location must be the string "all" or one of {metadata.LOCATIONS}\n'
                          f'You specified "{location}".\n')
 
     logger.debug(f'Reading model spec template from {str(template)}.')

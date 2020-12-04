@@ -1,9 +1,10 @@
 from pathlib import Path
 
-import {{cookiecutter.package_name}}.globals as project_globals
+import {{cookiecutter.package_name}}
+from {{cookiecutter.package_name}} import metadata
 
 BASE_DIR = Path({{cookiecutter.package_name}}.__file__).resolve().parent
 
-ARTIFACT_ROOT = Path(f"/share/costeffectiveness/artifacts/{project_globals.PROJECT_NAME}/")
+ARTIFACT_ROOT = Path(f"/share/costeffectiveness/artifacts/{metadata.PROJECT_NAME}/")
 MODEL_SPEC_DIR = BASE_DIR / 'model_specifications'
-RESULTS_ROOT = Path(f'/share/costeffectiveness/results/{project_globals.PROJECT_NAME}/')
+RESULTS_ROOT = Path(f'/share/costeffectiveness/results/{metadata.PROJECT_NAME}/')

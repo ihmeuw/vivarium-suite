@@ -2,4 +2,5 @@ input_draw_count: 10
 random_seed_count: 5
 
 branches:
-    
+  - branch_name:
+      scenario: ['baseline']

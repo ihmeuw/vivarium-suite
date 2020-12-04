@@ -7,7 +7,7 @@ from loguru import logger
 
 from vivarium_public_health.risks.data_transformations import pivot_categorical
 
-from {{cookiecutter.package_name}} import globals as project_globals
+from {{cookiecutter.package_name}} import metadata
 
 
 def len_longest_location() -> int:
@@ -17,7 +17,7 @@ def len_longest_location() -> int:
     -------
        Length of the longest location in the project.
     """
-    return len(max(project_globals.LOCATIONS, key=len))
+    return len(max(metadata.LOCATIONS, key=len))
 
 
 def sanitize_location(location: str):
