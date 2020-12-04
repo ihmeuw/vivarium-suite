@@ -1,6 +1,6 @@
 import itertools
 
-from vivarium_csu_swissre_cervical_cancer import models
+from {{cookiecutter.package_name}}.constants import models
 
 #################################
 # Results columns and variables #
