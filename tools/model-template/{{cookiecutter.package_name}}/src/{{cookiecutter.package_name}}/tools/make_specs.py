@@ -4,7 +4,8 @@ from pathlib import Path
 from jinja2 import Template
 from loguru import logger
 
-from {{cookiecutter.package_name}} import metadata, paths
+from {{cookiecutter.package_name}} import paths
+from {{cookiecutter.package_name}}.constants import metadata
 from {{cookiecutter.package_name}}.utilities import sanitize_location
 
 

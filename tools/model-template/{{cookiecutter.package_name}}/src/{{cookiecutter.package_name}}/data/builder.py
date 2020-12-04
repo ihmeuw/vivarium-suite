@@ -15,7 +15,7 @@ from loguru import logger
 import pandas as pd
 from vivarium.framework.artifact import Artifact, get_location_term, EntityKey
 
-from {{cookiecutter.package_name}} import data_keys
+from {{cookiecutter.package_name}}.constants import data_keys
 from {{cookiecutter.package_name}}.data import loader
 
 

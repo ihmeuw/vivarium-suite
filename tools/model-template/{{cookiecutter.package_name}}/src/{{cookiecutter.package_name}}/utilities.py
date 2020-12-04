@@ -7,7 +7,7 @@ from loguru import logger
 
 from vivarium_public_health.risks.data_transformations import pivot_categorical
 
-from {{cookiecutter.package_name}} import metadata
+from {{cookiecutter.package_name}}.constants import metadata
 
 
 def len_longest_location() -> int:

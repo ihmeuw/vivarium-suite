@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import {{cookiecutter.package_name}}
-from {{cookiecutter.package_name}} import metadata
+from {{cookiecutter.package_name}}.constants import metadata
 
 BASE_DIR = Path({{cookiecutter.package_name}}.__file__).resolve().parent
 

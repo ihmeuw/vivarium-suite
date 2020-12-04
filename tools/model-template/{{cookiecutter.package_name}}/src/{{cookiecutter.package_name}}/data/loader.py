@@ -19,7 +19,8 @@ from vivarium.framework.artifact import EntityKey
 from vivarium_inputs import interface, utilities, utility_data, globals as vi_globals
 from vivarium_inputs.mapping_extension import alternative_risk_factors
 
-from {{cookiecutter.package_name}} import paths, data_keys
+from {{cookiecutter.package_name}} import paths
+from {{cookiecutter.package_name}}.constants import data_keys
 
 
 def get_data(lookup_key: str, location: str) -> pd.DataFrame:

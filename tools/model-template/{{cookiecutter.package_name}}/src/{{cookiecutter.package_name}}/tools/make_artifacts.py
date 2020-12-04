@@ -17,7 +17,7 @@ from loguru import logger
 
 import vivarium_cluster_tools as vct
 
-from {{cookiecutter.package_name}} import data_keys, metadata
+from {{cookiecutter.package_name}}.constants import data_keys, metadata
 from {{cookiecutter.package_name}}.utilities import sanitize_location, delete_if_exists, len_longest_location
 from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink, decode_status
 

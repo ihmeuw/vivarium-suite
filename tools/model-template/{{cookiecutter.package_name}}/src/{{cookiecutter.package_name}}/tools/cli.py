@@ -21,11 +21,11 @@ import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
-from {{cookiecutter.package_name}} import metadata, paths
-
-from {{cookiecutter.package_name}}.tools import configure_logging_to_terminal
-from {{cookiecutter.package_name}}.tools import build_model_specifications
-from {{cookiecutter.package_name}}.tools import build_artifacts
+from {{cookiecutter.package_name}} import paths
+from {{cookiecutter.package_name}}.constants import metadata
+from {{cookiecutter.package_name}}.tools import (build_artifacts,
+                                                 build_model_specifications,
+                                                 configure_logging_to_terminal)
 
 
 @click.command()
