@@ -15,7 +15,7 @@ from loguru import logger
 import pandas as pd
 from vivarium.framework.artifact import Artifact, get_location_term, EntityKey
 
-from {{cookiecutter.package_name}} import globals as project_globals
+from {{cookiecutter.package_name}}.constants import data_keys
 from {{cookiecutter.package_name}}.data import loader
 
 
@@ -41,7 +41,7 @@ def open_artifact(output_path: Path, location: str) -> Artifact:
 
     artifact = Artifact(output_path, filter_terms=[get_location_term(location)])
 
-    key = project_globals.METADATA_LOCATIONS
+    key = data_keys.METADATA_LOCATIONS
     if key not in artifact:
         artifact.write(key, [location])
 

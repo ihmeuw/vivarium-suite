@@ -17,7 +17,7 @@ from loguru import logger
 
 import vivarium_cluster_tools as vct
 
-from {{cookiecutter.package_name}} import globals as project_globals
+from {{cookiecutter.package_name}}.constants import data_keys, metadata
 from {{cookiecutter.package_name}}.utilities import sanitize_location, delete_if_exists, len_longest_location
 from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink, decode_status
 
@@ -34,7 +34,7 @@ def running_from_cluster() -> bool:
 def check_for_existing(output_dir: Path, location: str, append: bool):
     existing_artifacts = set([item.stem for item in output_dir.iterdir()
                               if item.is_file() and item.suffix == '.hdf'])
-    locations = set([sanitize_location(loc) for loc in project_globals.LOCATIONS])
+    locations = set([sanitize_location(loc) for loc in metadata.LOCATIONS])
     existing = locations.intersection(existing_artifacts)
 
     if existing and not append:
@@ -76,7 +76,7 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
 
     check_for_existing(output_dir, location, append)
 
-    if location in project_globals.LOCATIONS:
+    if location in metadata.LOCATIONS:
         build_single(location, output_dir, append)
     elif location == 'all':
         if running_from_cluster():
@@ -84,10 +84,10 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
             build_all_artifacts(output_dir, verbose)
         else:
             # serial build when not on cluster
-            for loc in project_globals.LOCATIONS:
+            for loc in metadata.LOCATIONS:
                 build_single(loc, output_dir, append)
     else:
-        raise ValueError(f'Location must be one of {project_globals.LOCATIONS} or the string "all". '
+        raise ValueError(f'Location must be one of {metadata.LOCATIONS} or the string "all". '
                          f'You specified {location}.')
 
 
@@ -110,7 +110,7 @@ def build_all_artifacts(output_dir: Path, verbose: int):
 
     jobs = {}
     with drmaa.Session() as session:
-        for location in project_globals.LOCATIONS:
+        for location in metadata.LOCATIONS:
             path = output_dir / f'{sanitize_location(location)}.hdf'
 
             job_template = session.createJobTemplate()
@@ -118,11 +118,11 @@ def build_all_artifacts(output_dir: Path, verbose: int):
             job_template.args = [__file__, str(path), f'"{location}"']
             job_template.nativeSpecification = (f'-V '  # Export all environment variables
                                                 f'-b y '  # Command is a binary (python)
-                                                f'-P {project_globals.CLUSTER_PROJECT} '  
-                                                f'-q {project_globals.CLUSTER_QUEUE} '  
-                                                f'-l fmem={project_globals.MAKE_ARTIFACT_MEM} '
-                                                f'-l fthread={project_globals.MAKE_ARTIFACT_CPU} '
-                                                f'-l h_rt={project_globals.MAKE_ARTIFACT_RUNTIME} '
+                                                f'-P {metadata.CLUSTER_PROJECT} '  
+                                                f'-q {metadata.CLUSTER_QUEUE} '  
+                                                f'-l fmem={metadata.MAKE_ARTIFACT_MEM} '
+                                                f'-l fthread={metadata.MAKE_ARTIFACT_CPU} '
+                                                f'-l h_rt={metadata.MAKE_ARTIFACT_RUNTIME} '
                                                 f'-l archive=TRUE '  # Need J-drive access for data
                                                 f'-N {sanitize_location(location)}_artifact')  # Name of the job
             jobs[location] = (session.runJob(job_template), drmaa.JobState.UNDETERMINED)
@@ -139,7 +139,7 @@ def build_all_artifacts(output_dir: Path, verbose: int):
                     jobs[location] = (job_id, session.jobStatus(job_id))
                     logger.info(f'{location:<35}: {decode_status(drmaa, jobs[location][1]):>15}')
                 logger.info('')
-                time.sleep(project_globals.MAKE_ARTIFACT_SLEEP)
+                time.sleep(metadata.MAKE_ARTIFACT_SLEEP)
                 logger.info('Checking status again')
                 logger.info('---------------------')
                 logger.info('')
@@ -178,7 +178,7 @@ def build_single_location_artifact(path: Union[str, Path], location: str, log_to
     logger.info(f'Building artifact for {location} at {str(path)}.')
     artifact = builder.open_artifact(path, location)
 
-    for key_group in project_globals.MAKE_ARTIFACT_KEY_GROUPS:
+    for key_group in data_keys.MAKE_ARTIFACT_KEY_GROUPS:
         logger.info(f'Loading and writing {key_group.log_name} data')
         for key in key_group:
             builder.load_and_write_data(artifact, key, location)

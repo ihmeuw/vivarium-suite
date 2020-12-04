@@ -19,7 +19,8 @@ from vivarium.framework.artifact import EntityKey
 from vivarium_inputs import interface, utilities, utility_data, globals as vi_globals
 from vivarium_inputs.mapping_extension import alternative_risk_factors
 
-from {{cookiecutter.package_name}} import paths, globals as project_globals
+from {{cookiecutter.package_name}} import paths
+from {{cookiecutter.package_name}}.constants import data_keys
 
 
 def get_data(lookup_key: str, location: str) -> pd.DataFrame:
@@ -39,20 +40,20 @@ def get_data(lookup_key: str, location: str) -> pd.DataFrame:
 
     """
     mapping = {
-        project_globals.POPULATION.STRUCTURE: load_population_structure,
-        project_globals.POPULATION.AGE_BINS: load_age_bins,
-        project_globals.POPULATION.DEMOGRAPHY: load_demographic_dimensions,
-        project_globals.POPULATION.TMRLE: load_theoretical_minimum_risk_life_expectancy,
-        project_globals.POPULATION.ACMR: load_standard_data,
+        data_keys.POPULATION.STRUCTURE: load_population_structure,
+        data_keys.POPULATION.AGE_BINS: load_age_bins,
+        data_keys.POPULATION.DEMOGRAPHY: load_demographic_dimensions,
+        data_keys.POPULATION.TMRLE: load_theoretical_minimum_risk_life_expectancy,
+        data_keys.POPULATION.ACMR: load_standard_data,
 
         # TODO - add appropriate mappings
-        # project_globals.DIARRHEA_PREVALENCE: load_standard_data,
-        # project_globals.DIARRHEA_INCIDENCE_RATE: load_standard_data,
-        # project_globals.DIARRHEA_REMISSION_RATE: load_standard_data,
-        # project_globals.DIARRHEA_CAUSE_SPECIFIC_MORTALITY_RATE: load_standard_data,
-        # project_globals.DIARRHEA_EXCESS_MORTALITY_RATE: load_standard_data,
-        # project_globals.DIARRHEA_DISABILITY_WEIGHT: load_standard_data,
-        # project_globals.DIARRHEA_RESTRICTIONS: load_metadata,
+        # data_keys.DIARRHEA_PREVALENCE: load_standard_data,
+        # data_keys.DIARRHEA_INCIDENCE_RATE: load_standard_data,
+        # data_keys.DIARRHEA_REMISSION_RATE: load_standard_data,
+        # data_keys.DIARRHEA_CAUSE_SPECIFIC_MORTALITY_RATE: load_standard_data,
+        # data_keys.DIARRHEA_EXCESS_MORTALITY_RATE: load_standard_data,
+        # data_keys.DIARRHEA_DISABILITY_WEIGHT: load_standard_data,
+        # data_keys.DIARRHEA_RESTRICTIONS: load_metadata,
     }
     return mapping[lookup_key](lookup_key, location)
 
