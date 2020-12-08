@@ -25,6 +25,13 @@ SOME_DISEASE_MODEL_TRANSITIONS = (
     TransitionString(f'{SECOND_STATE_NAME}_TO_{FIRST_STATE_NAME}')
 )
 
+STATE_MACHINE_MAP = {
+    SOME_MODEL_NAME: {
+        'states': SOME_DISEASE_MODEL_STATES,
+        'transitions': SOME_DISEASE_MODEL_TRANSITIONS,
+    },
+}
+
 
 STATES = tuple(state for model in STATE_MACHINE_MAP.values() for state in model['states'])
 TRANSITIONS = tuple(state for model in STATE_MACHINE_MAP.values() for state in model['transitions'])
