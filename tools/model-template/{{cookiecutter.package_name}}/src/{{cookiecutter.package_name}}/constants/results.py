@@ -41,6 +41,9 @@ COLUMN_TEMPLATES = {
     'transition_count': TRANSITION_COUNT_COLUMN_TEMPLATE,
 }
 
+NON_COUNT_TEMPLATES = [
+]
+
 POP_STATES = ('living', 'dead', 'tracked', 'untracked')
 SEXES = ('male', 'female')
 # TODO - add literals for years in the model
