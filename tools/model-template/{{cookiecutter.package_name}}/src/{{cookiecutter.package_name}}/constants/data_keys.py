@@ -60,5 +60,6 @@ SOME_DISEASE = __SomeDisease()
 
 MAKE_ARTIFACT_KEY_GROUPS = [
     POPULATION,
-    SOME_DISEASE
+    # TODO: list all key groups here
+    # SOME_DISEASE
 ]
