@@ -84,10 +84,10 @@ def load_standard_data(key: str, location: str) -> pd.DataFrame:
 def load_metadata(key: str, location: str):
     key = EntityKey(key)
     entity = get_entity(key)
-    metadata = entity[key.measure]
-    if hasattr(metadata, 'to_dict'):
-        metadata = metadata.to_dict()
-    return metadata
+    entity_metadata = entity[key.measure]
+    if hasattr(entity_metadata, 'to_dict'):
+        entity_metadata = entity_metadata.to_dict()
+    return entity_metadata
 
 
 def _load_em_from_meid(location, meid, measure):
