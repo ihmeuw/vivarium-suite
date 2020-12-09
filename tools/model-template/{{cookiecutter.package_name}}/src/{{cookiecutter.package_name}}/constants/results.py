@@ -53,12 +53,12 @@ AGE_GROUPS = ()
 # TODO - add causes of death
 CAUSES_OF_DEATH = (
     'other_causes',
-    models.FIRST_STATE_NAME,
+    # models.FIRST_STATE_NAME,
 )
 # TODO - add causes of disability
 CAUSES_OF_DISABILITY = (
-    models.FIRST_STATE_NAME,
-    models.SECOND_STATE_NAME,
+    # models.FIRST_STATE_NAME,
+    # models.SECOND_STATE_NAME,
 )
 
 TEMPLATE_FIELD_MAP = {

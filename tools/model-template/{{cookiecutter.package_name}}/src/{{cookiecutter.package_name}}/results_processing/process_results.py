@@ -123,6 +123,7 @@ def sort_data(data):
 def split_processing_column(data):
     # TODO the required splitting here is dependant on what types of stratification exist in the model
     data['process'], data['age'] = data.process.str.split('_age').str
+    data['process'], data['sex'] = data.process.str.split('_among_').str
     data['year'] = data.process.str.split('_in_').str[-1]
     data['measure'] = data.process.str.split('_in_').str[:-1].apply(lambda x: '_in_'.join(x))
     return data.drop(columns='process')
