@@ -41,6 +41,9 @@ COLUMN_TEMPLATES = {
     'transition_count': TRANSITION_COUNT_COLUMN_TEMPLATE,
 }
 
+NON_COUNT_TEMPLATES = [
+]
+
 POP_STATES = ('living', 'dead', 'tracked', 'untracked')
 SEXES = ('male', 'female')
 # TODO - add literals for years in the model
@@ -50,11 +53,12 @@ AGE_GROUPS = ()
 # TODO - add causes of death
 CAUSES_OF_DEATH = (
     'other_causes',
-    DIARRHEA_WITH_CONDITION_STATE_NAME,
+    # models.FIRST_STATE_NAME,
 )
 # TODO - add causes of disability
 CAUSES_OF_DISABILITY = (
-    DIARRHEA_WITH_CONDITION_STATE_NAME,
+    # models.FIRST_STATE_NAME,
+    # models.SECOND_STATE_NAME,
 )
 
 TEMPLATE_FIELD_MAP = {
@@ -64,8 +68,8 @@ TEMPLATE_FIELD_MAP = {
     'AGE_GROUP': AGE_GROUPS,
     'CAUSE_OF_DEATH': CAUSES_OF_DEATH,
     'CAUSE_OF_DISABILITY': CAUSES_OF_DISABILITY,
-    'STATE': STATES,
-    'TRANSITION': TRANSITIONS,
+    'STATE': models.STATES,
+    'TRANSITION': models.TRANSITIONS,
 }
 
 {% raw %}

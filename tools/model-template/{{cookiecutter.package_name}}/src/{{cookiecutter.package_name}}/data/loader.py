@@ -12,11 +12,12 @@ for an example.
 
    No logging is done here. Logging is done in vivarium inputs itself and forwarded.
 """
-from vivarium_gbd_access import gbd
-from gbd_mapping import causes, risk_factors, covariates
 import pandas as pd
+
+from gbd_mapping import causes, covariates, risk_factors
 from vivarium.framework.artifact import EntityKey
-from vivarium_inputs import interface, utilities, utility_data, globals as vi_globals
+from vivarium_gbd_access import gbd
+from vivarium_inputs import globals as vi_globals, interface, utilities as vi_utils, utility_data
 from vivarium_inputs.mapping_extension import alternative_risk_factors
 
 from {{cookiecutter.package_name}} import paths
@@ -83,10 +84,10 @@ def load_standard_data(key: str, location: str) -> pd.DataFrame:
 def load_metadata(key: str, location: str):
     key = EntityKey(key)
     entity = get_entity(key)
-    metadata = entity[key.measure]
-    if hasattr(metadata, 'to_dict'):
-        metadata = metadata.to_dict()
-    return metadata
+    entity_metadata = entity[key.measure]
+    if hasattr(entity_metadata, 'to_dict'):
+        entity_metadata = entity_metadata.to_dict()
+    return entity_metadata
 
 
 def _load_em_from_meid(location, meid, measure):

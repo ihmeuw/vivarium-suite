@@ -72,7 +72,7 @@ def build_artifacts(location: str, output_dir: str, append: bool, verbose: int):
         How noisy the logger should be.
     """
     output_dir = Path(output_dir)
-    vct.mkdir(output_dir, parents=True, exist_ok=True)
+    vct.mkdir(output_dir, parents=True, exists_ok=True)
 
     check_for_existing(output_dir, location, append)
 
