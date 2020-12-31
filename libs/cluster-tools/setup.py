@@ -14,9 +14,9 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requires = [
-        'pandas<0.25',
-        'numpy<=1.15.4',  # to match VPH
-        'tables<=3.4.0',  # to match VPH
+        'pandas',
+        'numpy',
+        'tables',
         'loguru',
         'pyyaml>=5.1',
         'drmaa',
