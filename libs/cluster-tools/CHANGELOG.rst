@@ -1,3 +1,9 @@
+
+**1.2.2 - 1/5/21**
+
+ - Github actions replaces Travis for CI
+ - Unpin pandas and numpy
+
 **1.2.1 - 10/2/20**
 
  - Pin rq to 1.2.2
