@@ -21,13 +21,13 @@ if __name__ == "__main__":
         'vivarium_public_health=={{cookiecutter.vivarium_public_health_version}}',
 
         'click',
-        'gbd_mapping==2.1.0',
+        'gbd_mapping>=3.0.0, <4.0.0',
         'jinja2',
         'loguru',
-        'numpy<=1.15.4',
-        'pandas<0.25',
+        'numpy',
+        'pandas',
         'scipy',
-        'tables<=3.4.0',
+        'tables',
         'pyyaml',
     ]
 
