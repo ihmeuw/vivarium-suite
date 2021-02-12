@@ -7,6 +7,9 @@ from pathlib import Path
 from vivarium.framework.utilities import collapse_nested_dict
 
 
+ARTIFACT_PATH_KEY = 'input_data.artifact_path'
+
+
 class Keyspace:
     """A representation of a collection of simulation configurations."""
 
@@ -156,6 +159,8 @@ def calculate_keyspace(branches):
         if set(branch.keys()) != set(keyspace.keys()):
             raise ValueError("All branches must have the same keys")
         for k, v in branch.items():
+            if k == ARTIFACT_PATH_KEY:
+                validate_artifact_path(v)
             keyspace[k].add(v)
     keyspace = {k: list(v) for k, v in keyspace.items()}
     return keyspace
@@ -253,3 +258,21 @@ def expand_branch_templates(templates):
             current[k] = v
 
     return final_branches
+
+
+def validate_artifact_path(artifact_path: str) -> str:
+    """Validates that the path to the data artifact from the branches file exists.
+
+    The path specified in the configuration must be absolute
+
+    Parameters
+    ----------
+    artifact_path :
+        The path to the artifact.
+    """
+    path = Path(artifact_path)
+
+    if not path.is_absolute() or not path.exists():
+        raise FileNotFoundError(f"Cannot find artifact at path {path}")
+
+    return str(path)

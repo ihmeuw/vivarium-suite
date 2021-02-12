@@ -47,10 +47,6 @@ class RunContext:
             self.keyspace = Keyspace.from_branch_configuration(num_input_draws, num_random_seeds,
                                                                branch_configuration_file)
 
-            if "input_data.artifact_path" in self.keyspace.get_data():
-                raise ValueError("An artifact path can only be supplied in the model specification file, "
-                                 "not the branches configuration.")
-
             if "artifact_path" in model_specification.configuration.input_data:
                 artifact_path = parse_artifact_path_config(model_specification.configuration)
                 model_specification.configuration.input_data.update(
