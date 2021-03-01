@@ -127,6 +127,12 @@ def worker(parameters: Mapping):
             configuration.update(dict(branch_config))
             run_key.update(dict(branch_config))
 
+        input_data_config = {
+            'input_draw_number': input_draw,
+        }
+        if 'artifact_path' in branch_config.get('input_data'):
+            input_data_config.update({'artifact_path': branch_config['input_data']['artifact_path']})
+
         configuration.update({
             'run_configuration': {
                 'input_draw_number': input_draw,
@@ -138,9 +144,7 @@ def worker(parameters: Mapping):
                 'random_seed': random_seed,
                 'additional_seed': input_draw,
             },
-            'input_data': {
-                'input_draw_number': input_draw,
-            }
+            'input_data': input_data_config
         })
 
         sim = SimulationContext(model_specification_file, configuration=configuration)
