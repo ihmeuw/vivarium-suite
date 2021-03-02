@@ -4,10 +4,12 @@ import yaml
 import numpy as np
 from pathlib import Path
 
+from vivarium.framework.configuration import ConfigurationError
 from vivarium.framework.utilities import collapse_nested_dict
 
+from vivarium_cluster_tools.psimulate import globals as vct_globals
 
-ARTIFACT_PATH_KEY = 'input_data.artifact_path'
+FULL_ARTIFACT_PATH_KEY = f'{vct_globals.INPUT_DATA_KEY}.{vct_globals.ARTIFACT_PATH_KEY}'
 
 
 class Keyspace:
@@ -69,6 +71,23 @@ class Keyspace:
         existing = self._keyspace['random_seed']
         additional = calculate_random_seeds(num_seeds, existing)
         self._keyspace['random_seed'] = existing + additional
+
+    def set_artifact_path(self, artifact_path: str):
+        if FULL_ARTIFACT_PATH_KEY in self._keyspace:
+            raise ConfigurationError(
+                'Artifact path already set. Most likely cause is trying to specify path in both the branch '
+                'specification file and a command line argument.', artifact_path)
+
+        if not Path(artifact_path).exists():
+            raise FileNotFoundError(f"Cannot find artifact at path {artifact_path}")
+
+        self._keyspace[FULL_ARTIFACT_PATH_KEY] = artifact_path
+
+        for branch in self.branches:
+            if vct_globals.INPUT_DATA_KEY in branch:
+                branch[vct_globals.INPUT_DATA_KEY][vct_globals.ARTIFACT_PATH_KEY] = artifact_path
+            else:
+                branch[vct_globals.INPUT_DATA_KEY] = {vct_globals.ARTIFACT_PATH_KEY: artifact_path}
 
     def __iter__(self):
         """Yields and individual simulation configuration from the keyspace."""
@@ -159,7 +178,7 @@ def calculate_keyspace(branches):
         if set(branch.keys()) != set(keyspace.keys()):
             raise ValueError("All branches must have the same keys")
         for k, v in branch.items():
-            if k == ARTIFACT_PATH_KEY:
+            if k == FULL_ARTIFACT_PATH_KEY:
                 validate_artifact_path(v)
             keyspace[k].add(v)
     keyspace = {k: list(v) for k, v in keyspace.items()}

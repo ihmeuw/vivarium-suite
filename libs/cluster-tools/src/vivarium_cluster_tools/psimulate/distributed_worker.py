@@ -17,6 +17,8 @@ from rq.job import JobStatus
 from rq.worker import Worker, StopRequested
 from rq.registry import FailedJobRegistry
 
+from vivarium_cluster_tools.psimulate import globals as vct_globals
+
 
 def retry_handler(job, *exc_info):
     retries = job.meta.get('remaining_retries', 2)
@@ -130,8 +132,10 @@ def worker(parameters: Mapping):
         input_data_config = {
             'input_draw_number': input_draw,
         }
-        if 'artifact_path' in branch_config.get('input_data'):
-            input_data_config.update({'artifact_path': branch_config['input_data']['artifact_path']})
+        if vct_globals.ARTIFACT_PATH_KEY in dict(branch_config).get(vct_globals.INPUT_DATA_KEY, {}):
+            input_data_config.update({
+                vct_globals.ARTIFACT_PATH_KEY: branch_config[vct_globals.INPUT_DATA_KEY][vct_globals.ARTIFACT_PATH_KEY]
+            })
 
         configuration.update({
             'run_configuration': {
@@ -144,7 +148,7 @@ def worker(parameters: Mapping):
                 'random_seed': random_seed,
                 'additional_seed': input_draw,
             },
-            'input_data': input_data_config
+            vct_globals.INPUT_DATA_KEY: input_data_config
         })
 
         sim = SimulationContext(model_specification_file, configuration=configuration)

@@ -25,9 +25,9 @@ drmaa = utilities.get_drmaa()
 
 
 class RunContext:
-    def __init__(self, model_specification_file: str, branch_configuration_file: str, output_directory: Path,
-                 logging_directories: Dict[str, Path], num_input_draws: int, num_random_seeds: int,
-                 restart: bool, expand: Dict[str, int], no_batch: bool):
+    def __init__(self, model_specification_file: str, branch_configuration_file: str, artifact_path: str,
+                 output_directory: Path, logging_directories: Dict[str, Path], num_input_draws: int,
+                 num_random_seeds: int, restart: bool, expand: Dict[str, int], no_batch: bool):
         self.number_already_completed = 0
         self.output_directory = output_directory
         self.no_batch = no_batch
@@ -47,7 +47,9 @@ class RunContext:
             self.keyspace = Keyspace.from_branch_configuration(num_input_draws, num_random_seeds,
                                                                branch_configuration_file)
 
-            if "artifact_path" in model_specification.configuration.input_data:
+            if artifact_path:
+                self.keyspace.set_artifact_path(artifact_path)
+            elif "artifact_path" in model_specification.configuration.input_data:
                 artifact_path = parse_artifact_path_config(model_specification.configuration)
                 model_specification.configuration.input_data.update(
                     {"artifact_path": artifact_path},
@@ -379,7 +381,7 @@ def check_user_sge_config():
                                    "with the worker logs.")
 
 
-def main(model_specification_file: str, branch_configuration_file: str, result_directory: str,
+def main(model_specification_file: str, branch_configuration_file: str, artifact_path: str, result_directory: str,
          native_specification: dict, redis_processes: int, num_input_draws: int = None,
          num_random_seeds: int = None, restart:  bool = False,
          expand: Dict[str, int] = None, no_batch: bool = False):
@@ -397,7 +399,7 @@ def main(model_specification_file: str, branch_configuration_file: str, result_d
     utilities.configure_master_process_logging_to_file(logging_dirs['main'])
     utilities.validate_environment(output_dir)
 
-    ctx = RunContext(model_specification_file, branch_configuration_file, output_dir, logging_dirs,
+    ctx = RunContext(model_specification_file, branch_configuration_file, artifact_path, output_dir, logging_dirs,
                      num_input_draws, num_random_seeds, restart, expand, no_batch)
     check_user_sge_config()
     jobs = build_job_list(ctx)
