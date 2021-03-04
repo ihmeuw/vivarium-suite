@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from vivarium.framework.configuration import build_model_specification
+from vivarium.framework.configuration import build_model_specification, ConfigurationError
 from vivarium.framework.utilities import collapse_nested_dict
 from vivarium.framework.artifact import parse_artifact_path_config
 
@@ -25,6 +25,7 @@ from vivarium_cluster_tools.psimulate.registry import RegistryManager
 drmaa = utilities.get_drmaa()
 
 MODEL_SPEC_FILENAME = 'model_specification.yaml'
+FULL_ARTIFACT_PATH_KEY = f'{vct_globals.INPUT_DATA_KEY}.{vct_globals.ARTIFACT_PATH_KEY}'
 
 
 class RunContext:
@@ -50,9 +51,14 @@ class RunContext:
 
             self.keyspace = Keyspace.from_branch_configuration(num_input_draws, num_random_seeds,
                                                                branch_configuration_file)
+            if artifact_path:
+                if FULL_ARTIFACT_PATH_KEY in self.keyspace:
+                    raise ConfigurationError('Artifact path cannot be specified both in the branch specification file'
+                                             ' and as a command line argument.', artifact_path)
+                if not Path(artifact_path).exists():
+                    raise FileNotFoundError(f"Cannot find artifact at path {artifact_path}")
 
-            if (not artifact_path
-                    and vct_globals.ARTIFACT_PATH_KEY in model_specification.configuration[vct_globals.INPUT_DATA_KEY]):
+            elif vct_globals.ARTIFACT_PATH_KEY in model_specification.configuration[vct_globals.INPUT_DATA_KEY]:
                 artifact_path = parse_artifact_path_config(model_specification.configuration)
 
             if artifact_path:

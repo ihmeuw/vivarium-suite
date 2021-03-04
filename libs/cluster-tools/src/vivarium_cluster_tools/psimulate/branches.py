@@ -71,6 +71,10 @@ class Keyspace:
         additional = calculate_random_seeds(num_seeds, existing)
         self._keyspace['random_seed'] = existing + additional
 
+    def __contains__(self, item):
+        """Checks whether the item is present in the Keyspace"""
+        return item in self._keyspace
+
     def __iter__(self):
         """Yields and individual simulation configuration from the keyspace."""
         for job_config in product(self._keyspace['input_draw'], self._keyspace['random_seed'], self.branches):
