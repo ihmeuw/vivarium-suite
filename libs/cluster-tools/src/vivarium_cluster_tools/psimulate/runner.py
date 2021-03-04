@@ -8,6 +8,7 @@ import subprocess
 from typing import List, Dict, Tuple
 from pathlib import Path
 from time import sleep, time
+import yaml
 
 import numpy as np
 import pandas as pd
@@ -23,6 +24,8 @@ from vivarium_cluster_tools.psimulate.registry import RegistryManager
 
 drmaa = utilities.get_drmaa()
 
+MODEL_SPEC_FILENAME = 'model_specification.yaml'
+
 
 class RunContext:
     def __init__(self, model_specification_file: str, branch_configuration_file: str, artifact_path: str,
@@ -30,6 +33,7 @@ class RunContext:
                  num_random_seeds: int, restart: bool, expand: Dict[str, int], no_batch: bool):
         self.number_already_completed = 0
         self.output_directory = output_directory
+        self.model_specification = self.output_directory / MODEL_SPEC_FILENAME
         self.no_batch = no_batch
         self.sge_log_directory = logging_directories['sge']
         self.worker_log_directory = logging_directories['worker']
@@ -47,22 +51,22 @@ class RunContext:
             self.keyspace = Keyspace.from_branch_configuration(num_input_draws, num_random_seeds,
                                                                branch_configuration_file)
 
-            if artifact_path:
-                self.keyspace.set_artifact_path(artifact_path)
-            elif "artifact_path" in model_specification.configuration.input_data:
+            if (not artifact_path
+                    and vct_globals.ARTIFACT_PATH_KEY in model_specification.configuration[vct_globals.INPUT_DATA_KEY]):
                 artifact_path = parse_artifact_path_config(model_specification.configuration)
-                model_specification.configuration.input_data.update(
-                    {"artifact_path": artifact_path},
+
+            if artifact_path:
+                model_specification.configuration[vct_globals.INPUT_DATA_KEY].update(
+                    {vct_globals.ARTIFACT_PATH_KEY: artifact_path},
                     source=__file__)
 
-            model_specification_path = self.output_directory / 'model_specification.yaml'
-            shutil.copy(model_specification_file, model_specification_path)
+            with open(self.model_specification, 'w') as config_file:
+                yaml.dump(model_specification.to_dict(), config_file)
 
             self.existing_outputs = None
 
             # Log some basic stuff about the simulation to be run.
             self.keyspace.persist(self.output_directory)
-        self.model_specification = self.output_directory / 'model_specification.yaml'
 
 
 class NativeSpecification:
