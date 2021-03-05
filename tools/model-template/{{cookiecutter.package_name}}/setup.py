@@ -64,6 +64,5 @@ if __name__ == "__main__":
             [console_scripts]
             make_artifacts={{cookiecutter.package_name}}.tools.cli:make_artifacts
             make_results={{cookiecutter.package_name}}.tools.cli:make_results
-            make_specs={{cookiecutter.package_name}}.tools.cli:make_specs
         '''
     )

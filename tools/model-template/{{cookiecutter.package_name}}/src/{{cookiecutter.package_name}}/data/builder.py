@@ -13,7 +13,7 @@ from pathlib import Path
 
 from loguru import logger
 import pandas as pd
-from vivarium.framework.artifact import Artifact, get_location_term, EntityKey
+from vivarium.framework.artifact import Artifact, EntityKey
 
 from {{cookiecutter.package_name}}.constants import data_keys
 from {{cookiecutter.package_name}}.data import loader
@@ -39,7 +39,7 @@ def open_artifact(output_path: Path, location: str) -> Artifact:
     else:
         logger.debug(f"Opening artifact at {str(output_path)} for appending.")
 
-    artifact = Artifact(output_path, filter_terms=[get_location_term(location)])
+    artifact = Artifact(output_path)
 
     key = data_keys.METADATA_LOCATIONS
     if key not in artifact:
