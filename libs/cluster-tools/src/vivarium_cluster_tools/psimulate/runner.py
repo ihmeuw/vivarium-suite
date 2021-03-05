@@ -34,7 +34,6 @@ class RunContext:
                  num_random_seeds: int, restart: bool, expand: Dict[str, int], no_batch: bool):
         self.number_already_completed = 0
         self.output_directory = output_directory
-        self.model_specification = self.output_directory / MODEL_SPEC_FILENAME
         self.no_batch = no_batch
         self.sge_log_directory = logging_directories['sge']
         self.worker_log_directory = logging_directories['worker']
@@ -66,13 +65,14 @@ class RunContext:
                     {vct_globals.ARTIFACT_PATH_KEY: artifact_path},
                     source=__file__)
 
-            with open(self.model_specification, 'w') as config_file:
+            with open(self.output_directory / MODEL_SPEC_FILENAME, 'w') as config_file:
                 yaml.dump(model_specification.to_dict(), config_file)
 
             self.existing_outputs = None
 
             # Log some basic stuff about the simulation to be run.
             self.keyspace.persist(self.output_directory)
+        self.model_specification = self.output_directory / MODEL_SPEC_FILENAME
 
 
 class NativeSpecification:
