@@ -16,3 +16,8 @@ LONG_Q_MAX_RUNTIME_HOURS = 16 * 24
 
 CLUSTER_ENV_HOSTNAME = 'HOSTNAME'
 SUBMIT_HOST_MARKER = '-submit-'
+
+
+# Configuration key constants
+INPUT_DATA_KEY = 'input_data'
+ARTIFACT_PATH_KEY = 'artifact_path'

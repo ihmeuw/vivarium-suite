@@ -69,16 +69,24 @@ def psimulate():
 @psimulate.command()
 @click.argument('model_specification', type=click.Path(exists=True, dir_okay=False))
 @click.argument('branch_configuration', type=click.Path(exists=True, dir_okay=False))
+@click.option('--artifact_path', '-i', type=click.Path(resolve_path=True), help='The path to the artifact data file.')
 @click.option('--result-directory', '-o', type=click.Path(exists=True, file_okay=False), default=None,
               help='The directory to write results to. A folder will be created in this directory with the same name '
                    'as the configuration file.')
 @pass_shared_options
-def run(model_specification, branch_configuration, result_directory, **options):
+def run(model_specification, branch_configuration, artifact_path, result_directory, **options):
     """Run a parallel simulation.
 
     The simulation itself is defined by a MODEL_SPECIFICATION yaml file
     and the parameter changes across runs are defined by a BRANCH_CONFIGURATION
     yaml file.
+
+    The path to the data artifact can be provided as an argument here, in the
+    branch configuration, or in the model specification file. Values provided as
+    a command line argument or in the branch specification file will override a
+    value specified in the model specifications file. If an artifact path is
+    provided both as a command line argument and to the branch configuration file
+    a ConfigurationError will be thrown.
 
     If a results directory is provided, a subdirectory will be created with the
     same name as the MODEL_SPECIFICATION if one does not exist. Results will be
@@ -92,7 +100,7 @@ def run(model_specification, branch_configuration, result_directory, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    main(model_specification, branch_configuration, result_directory,
+    main(model_specification, branch_configuration, artifact_path, result_directory,
          {'project': options['project'],
           'queue': options['queue'],
           'peak_memory': options['peak_memory'],
