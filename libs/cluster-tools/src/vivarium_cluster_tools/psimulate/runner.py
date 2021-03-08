@@ -394,13 +394,15 @@ def check_user_sge_config():
 def main(model_specification_file: str, branch_configuration_file: str, artifact_path: str, result_directory: str,
          native_specification: dict, redis_processes: int, num_input_draws: int = None,
          num_random_seeds: int = None, restart:  bool = False,
-         expand: Dict[str, int] = None, no_batch: bool = False):
+         expand: Dict[str, int] = None, no_batch: bool = False, no_cleanup: bool = False):
 
     utilities.exit_if_on_submit_host(utilities.get_hostname())
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
                                                            restart, expand=bool(num_input_draws or num_random_seeds))
-    atexit.register(utilities.check_for_empty_results_dir, output_dir=output_dir)
+    if not no_cleanup:
+        atexit.register(utilities.check_for_empty_results_dir, output_dir=output_dir)
+
     atexit.register(lambda: logger.remove())
 
     native_specification['job_name'] = output_dir.parts[-2]

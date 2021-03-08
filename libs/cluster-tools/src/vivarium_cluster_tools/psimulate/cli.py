@@ -44,7 +44,11 @@ shared_options = [
                  help='Configure logging verbosity.'),
     click.option('--no-batch',
                  is_flag=True,
-                 help="Don't batch results, write them as they come in.")
+                 help="Don't batch results, write them as they come in."),
+    click.option('--no-cleanup',
+                 is_flag=True,
+                 hidden=True,
+                 help="Hidden developer option, if flagged, don't automatically cleanup results directory on failure.")
 ]
 
 
@@ -105,7 +109,7 @@ def run(model_specification, branch_configuration, artifact_path, result_directo
           'queue': options['queue'],
           'peak_memory': options['peak_memory'],
           'max_runtime': options['max_runtime']},
-         redis_processes=options['redis'], no_batch=options['no_batch'])
+         redis_processes=options['redis'], no_batch=options['no_batch'], no_cleanup=options['no_cleanup'])
 
 
 @psimulate.command()
@@ -127,7 +131,7 @@ def restart(results_root, **options):
           'queue': options['queue'],
           'peak_memory': options['peak_memory'],
           'max_runtime': options['max_runtime']},
-         redis_processes=options['redis'], restart=True, no_batch=options['no_batch'])
+         redis_processes=options['redis'], restart=True, no_batch=options['no_batch'], no_cleanup=options['no_cleanup'])
 
 
 @psimulate.command()
@@ -157,4 +161,5 @@ def expand(results_root, **options):
          restart=True,
          expand={'num_draws': options['add_draws'],
                  'num_seeds': options['add_seeds']},
-         no_batch=options['no_batch'])
+         no_batch=options['no_batch'],
+         no_cleanup=options['no_cleanup'])
