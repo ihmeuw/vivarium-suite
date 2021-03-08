@@ -11,6 +11,7 @@ METADATA_LOCATIONS = 'metadata.locations'
 
 
 class __Population(NamedTuple):
+    LOCATION: str = 'population.location'
     STRUCTURE: str = 'population.structure'
     AGE_BINS: str = 'population.age_bins'
     DEMOGRAPHY: str = 'population.demographic_dimensions'

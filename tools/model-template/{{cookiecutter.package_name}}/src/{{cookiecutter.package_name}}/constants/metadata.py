@@ -16,3 +16,11 @@ MAKE_ARTIFACT_SLEEP = 10
 LOCATIONS = [
     # TODO - project locations here
 ]
+
+
+class __Scenarios(NamedTuple):
+    baseline: str = 'baseline'
+    # TODO - add scenarios here
+
+
+SCENARIOS = __Scenarios()
