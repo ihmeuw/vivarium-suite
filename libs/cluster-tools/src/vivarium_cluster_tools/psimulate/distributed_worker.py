@@ -1,23 +1,24 @@
 import datetime
+import json
 import math
 import os
-from pathlib import Path
 import random
-from time import time, sleep
+from pathlib import Path
+from time import sleep, time
 from traceback import format_exc
 from typing import Mapping
 
-from loguru import logger
 import numpy as np
 import pandas as pd
 import redis
-from rq import Queue
-from rq import get_current_job
+from loguru import logger
+from rq import Queue, get_current_job
 from rq.job import JobStatus
-from rq.worker import Worker, StopRequested
 from rq.registry import FailedJobRegistry
+from rq.worker import StopRequested, Worker
 
 from vivarium_cluster_tools.psimulate import globals as vct_globals
+from vivarium_cluster_tools.vipin.perf_counters import CounterSnapshot
 
 
 def retry_handler(job, *exc_info):
@@ -155,26 +156,41 @@ def worker(parameters: Mapping):
         logger.info('Simulation configuration:')
         logger.info(str(sim.configuration))
 
-        start = time()
-        logger.info('Beginning simulation setup.')
-        sim.setup()
-        sim.initialize_simulants()
-        logger.info(f'Simulation setup complete in {(time() - start)/60} minutes.')
-        sim_start = time()
-        logger.info('Starting main simulation loop.')
-        sim.run()
-        sim.finalize()
-        metrics = sim.report()
-        end = time()
-
         start_time = pd.Timestamp(**sim.configuration.time.start.to_dict())
         end_time = pd.Timestamp(**sim.configuration.time.end.to_dict())
         step_size = pd.Timedelta(days=sim.configuration.time.step_size)
         num_steps = int(math.ceil((end_time - start_time)/step_size))
 
-        logger.info(f'Simulation main loop completed in {(end - sim_start)/60} minutes.')
-        logger.info(f'Average step length was {(end - sim_start)/num_steps} seconds.')
-        logger.info(f'Total simulation run time {(end - start) / 60} minutes.')
+        start_snapshot = CounterSnapshot()
+        event = {'start': time()}  # timestamps of application events
+        logger.info('Beginning simulation setup.')
+        sim.setup()
+        event['simulant_initialization_start'] = time()
+        exec_time = {'setup_minutes': (event["simulant_initialization_start"] - event["start"]) / 60}  # execution event
+        logger.info(f'Simulation setup completed in {exec_time["setup_minutes"]:.3f} minutes.')
+
+        sim.initialize_simulants()
+        event['simulation_start'] = time()
+        exec_time['simulant_initialization_minutes'] = (
+                (event["simulation_start"] - event["simulant_initialization_start"]) / 60)
+        logger.info(f'Simulant initialization completed in {exec_time["simulant_initialization_minutes"]:.3f} minutes.')
+
+        logger.info(f'Starting main simulation loop with {num_steps} time steps')
+        sim.run()
+        event['results_start'] = time()
+        exec_time['main_loop_minutes'] = (
+                (event["results_start"] - event["simulation_start"]) / 60)
+        exec_time['step_mean_seconds'] = (
+                (event["results_start"] - event["simulation_start"]) / num_steps)
+        logger.info(f'Simulation main loop completed in {exec_time["main_loop_minutes"]:.3f} minutes.')
+        logger.info(f'Average step length was {exec_time["step_mean_seconds"]:.3f} seconds.')
+
+        sim.finalize()
+        metrics = sim.report()
+        event['end'] = time()
+        end_snapshot = CounterSnapshot()
+
+        do_sim_epilogue(start_snapshot, end_snapshot, event, exec_time, parameters)
 
         idx = pd.MultiIndex.from_tuples([(input_draw, random_seed)], names=['input_draw_number', 'random_seed'])
         output_metrics = pd.DataFrame(metrics, index=idx)
@@ -191,3 +207,26 @@ def worker(parameters: Mapping):
         raise
     finally:
         logger.info('Exiting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
+
+
+def do_sim_epilogue(start: CounterSnapshot, end: CounterSnapshot, event: dict, exec_time: dict, parameters:dict):
+    exec_time['results_minutes'] = (event['end'] - event["results_start"]) / 60
+    logger.info(f'Results reporting completed in {exec_time["results_minutes"]:.3f} minutes.')
+    exec_time['total_minutes'] = (event['end'] - event["start"]) / 60
+    logger.info(f'Total simulation run time {exec_time["total_minutes"]:.3f} minutes.')
+
+    # Write out debug JSON line to shared performance log
+    perf_log = logger.add(Path(os.environ['VIVARIUM_LOGGING_DIRECTORY']) / 'performance.log', level='DEBUG',
+                          serialize=True, enqueue=True)
+    logger.debug(json.dumps({
+        "host": os.environ['HOSTNAME'].split('.')[0],
+        "job_number": os.environ['JOB_ID'],
+        "task_number": os.environ['SGE_TASK_ID'],
+        "draw": parameters['input_draw'],
+        "seed": parameters['random_seed'],
+        "scenario": parameters['branch_configuration'],  # assumes leaves of branch config tree are scenarios
+        "event": event,
+        "exec_time": exec_time,
+        "counters": (end - start).to_dict()
+    }))
+    logger.remove(perf_log)

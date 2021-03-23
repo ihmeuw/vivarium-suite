@@ -152,7 +152,9 @@ def init_job_template(jt, native_specification: NativeSpecification, sge_log_dir
     export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
     export PYTHONPATH={output_dir}:$PYTHONPATH
 
-    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst -w "vivarium_cluster_tools.psimulate.distributed_worker.ResilientWorker" --exception-handler "vivarium_cluster_tools.psimulate.distributed_worker.retry_handler" vivarium
+    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst \
+        -w "vivarium_cluster_tools.psimulate.distributed_worker.ResilientWorker" \
+        --exception-handler "vivarium_cluster_tools.psimulate.distributed_worker.retry_handler" vivarium
 
     ''')
     launcher.close()
@@ -289,7 +291,7 @@ def build_job_list(ctx: RunContext) -> List[dict]:
 
 def concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
     """Concatenation preserves all ``numpy`` dtypes but does not preserve any
-    pandas speciifc dtypes (e.g., categories become objects."""
+    pandas specific dtypes (e.g., categories become objects."""
     dtypes = df_list[0].dtypes
     columns_by_dtype = [list(dtype_group.index) for _, dtype_group in dtypes.groupby(dtypes)]
 

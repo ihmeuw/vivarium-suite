@@ -24,6 +24,8 @@ if __name__ == "__main__":
         'rq>=1.0, <=1.2.2',
         'vivarium>=0.9.3',
         'click',
+        'psutil',
+        'requests'
     ]
 
     test_requirements = [
@@ -49,6 +51,7 @@ if __name__ == "__main__":
             [console_scripts]
             psimulate=vivarium_cluster_tools.psimulate.cli:psimulate
             vparse=vivarium_cluster_tools.vparse.cli:vparse
+            vipin=vivarium_cluster_tools.vipin.cli:vipin
         """,
 
         install_requires=install_requires,
