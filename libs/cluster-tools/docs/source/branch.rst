@@ -18,7 +18,7 @@ Uncertainty
 -----------
 
 Generating uncertainty for results is a core tenant of IHME and this is no different for simulation science. We are
-primarily concerned with two kinds of uncertainy in our model -- :term:`parameter uncertainy<Parameter Uncertainty>`
+primarily concerned with two kinds of uncertainty in our model -- :term:`parameter uncertainty<Parameter Uncertainty>`
 and :term:`stochastic uncertainty<Stochastic Uncertainty>`. The branch configuration can help us explore both sources
 of uncertainty by varying both the :term:`input draw<Input Draw>` of the parameter data and the
 :term:`seed<Random Seed>` of the simulation's random number generator.
@@ -26,7 +26,7 @@ of uncertainty by varying both the :term:`input draw<Input Draw>` of the paramet
 Parameter Uncertainty
 ^^^^^^^^^^^^^^^^^^^^^
 Our simulations primarily rely on results from the Global Burden of Disease (GBD). GBD results are produced with
-:term:`uncertainy<Parameter Uncertainty>` represented as :term:`draws<Input Draw>`. Once we have a model we trust,
+:term:`uncertainty<Parameter Uncertainty>` represented as :term:`draws<Input Draw>`. Once we have a model we trust,
 we typically want to capture our uncertainty in the input data by running the simulation model for several different
 input draws.
 
@@ -143,23 +143,22 @@ Single Parameter Variation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In order to illustrate the variation of a single :term:`parameter<Configuration Parameter>`, let's assume
-you have defined a :term:`model specification<Model Specification>` that includes a dietary intervention of
-egg supplementation and that this intervention is parameterized by the proportion of the population that is recruited
-into the intervention program. We may want to run simulations on several different proportions including full
-recruitment and no recruitment, which would function as a baseline. We can easily do this with the following
-branches file.
+you have defined a :term:`model specification<Model Specification>` that includes the expansion of a dietary
+intervention of egg supplementation and that this intervention is parameterized by the proportion of the population
+that is recruited into the intervention program. We may want to run simulations on several different proportions. We
+can easily do this with the following branches file.
 
 .. code-block:: yaml
     :caption: egg_intervention_branches.yaml
 
     branches:
-            - egg_intervention:
-                    recruitment:
-                        proportion: [0.0, 0.4, 0.8, 1.0]
+      - egg_intervention:
+          recruitment:
+            proportion: [0.1, 0.4, 0.8, 1.0]
 
 The ``branches`` block specifies changes to values found in the configuration block of the original model specification
 YAML. The block found in the branches file must exactly match the block from the original model specification.
-Here, the YAML list [0.0, 0.4, 0.8, 1.0] dictates specific recruitment proportions to be simulated.
+Here, the YAML list [0.1, 0.4, 0.8, 1.0] dictates specific recruitment proportions to be simulated.
 Thus, you can expect four separate simulations to be run, one for each variation.
 
 .. warning::
@@ -185,9 +184,9 @@ as an example.
     random_seed_count: 4
 
     branches:
-            - egg_intervention:
-                    recruitment:
-                        proportion: [0.0, 0.4, 0.8, 1.0]
+      - egg_intervention:
+          recruitment:
+            proportion: [0.1, 0.4, 0.8, 1.0]
 
 This branch configuration will produce 400 simulations. First we consider the space of 
 :term:`configuration parameters<Configuration Parameter>` the simulation will be run for: one scenario for 
@@ -211,25 +210,57 @@ branches file like so:
     :caption: egg_intervention_with_ages_branches.yaml
 
     input_draw_count: 100
+    random_seed_count: 4
 
     branches:
-            - egg_intervention:
-                    recruitment:
-                        proportion: [0.0, 0.4, 0.8, 1.0]
-                        age_start: [10.0, 25.0, 45.0, 65.0]
+      - egg_intervention:
+          recruitment:
+            proportion: [0.1, 0.4, 0.8, 1.0]
+            age_start: [10.0, 25.0, 45.0, 65.0]
 
 This will result in scenarios encompassing every combination of recruitment proportion and starting age. Additionally,
 it will result in 100 simulations for each one of the scenarios, one for each of the :term:`input draws<Input Draw>`.
-This means the total number of simulations is given by ``(Number of input draws) * (Number of recruitment proportions)
-* (Number of starting ages)`` giving a total of 1600 simulations.
+This means the total number of simulations is given by ``(Number of input draws) * (Number of random seeds)
+* (Number of recruitment proportions) * (Number of starting ages)`` giving a total of 6400 simulations.
+
+Multi-parameter Variation
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We can also create scenarios with multiple top-level configurations. Now imagine, we would like to study another dietary
+intervention of lentils concurrently with the egg supplementation.
+
+.. code-block:: yaml
+    :caption: egg__and_lentil_intervention_with_ages_branches.yaml
+
+    input_draw_count: 100
+    random_seed_count: 4
+
+    branches:
+      - egg_intervention:
+          recruitment:
+            proportion: [0.1, 0.4, 0.8, 1.0]
+            age_start: [10.0, 25.0, 45.0, 65.0]
+        lentil_intervention:
+          recruitment:
+            proportion: [0.1, 0.4, 0.8, 1.0]
+            age_start: [10.0, 25.0, 45.0, 65.0]
+
+This will result in scenarios encompassing every combination of recruitment proportion and starting age for eggs
+combined with each combination of recruitment proportion and starting age for lentils. Additionally, it will result in
+100 simulations for each one of the scenarios, one for each of the :term:`input draws<Input Draw>`. This means the
+total number of simulations is given by ``(Number of input draws) * (Number of random seeds)
+* (Number of egg recruitment proportions) * (Number of egg starting ages) * (Number of lentil recruitment proportions)
+* (Number of egg starting ages)`` giving a total of 102,400 simulations. As you can see, it is very easy to create a
+dangerously large number of simulations in this manner.
 
 Complex Configurations
 ^^^^^^^^^^^^^^^^^^^^^^
 
 Let's look at a final example with a bit more going on. Note that in our last example
-:term:`branch configuration<Branch Configuration>` we did significantly more work than we needed to. When our recruitment
-proportion is ``0``, it doesn't matter what age we start recruiting people at.  This caused us to run 300 more simulations
-than we needed to.  How do we write a better branch configuration?
+:term:`branch configuration<Branch Configuration>` we ended up with a huge number of simulations - probably more than
+it is reasonable to run. What if instead of scaling up both interventions in conjunction across the scenarios, we only
+wanted to scale up egg supplementation, holding lentil supplementation constant, and scale up lentil supplementation,
+holding egg supplementation constant.
 
 .. code-block:: yaml
     :caption: better_egg_intervention_with_ages_branches.yaml
@@ -238,22 +269,30 @@ than we needed to.  How do we write a better branch configuration?
     random_seed_count: 4
 
     branches:
-            # Baseline scenario
-            - egg_intervention:
-                  recruitment:
-                      proportion: 0.0
-            # Intervention variations
-            - egg_intervention:
-                  recruitment:
-                      proportion: [0.4, 0.8, 1.0]
-                      age_start: [10.0, 25.0, 45.0, 65.0]
+      # Egg supplementation
+      - egg_intervention:
+          recruitment:
+            proportion: [0.1, 0.4, 0.8, 1.0]
+            age_start: [10.0, 25.0, 45.0, 65.0]
+        lentil_intervention:
+          recruitment:
+            proportion: 0.1
+            age_start: 25.0
+      # Lentil supplementation
+      - egg_intervention:
+          recruitment:
+            proportion: 0.1
+            age_start: 25.0
+        lentil_intervention:
+          recruitment:
+            proportion: [0.1, 0.4, 0.8, 1.0]
+            age_start: [10.0, 25.0, 45.0, 65.0]
 
 The :ref:`YAML List<Lists>` underneath the ``branches`` key denotes two different simulation scenario branches
 each with a set of :term:`configuration parameters<Configuration Parameter>`. We resolve each one of the list
-items under the ``branches`` key separately.  The first block resolves to a single baseline scenario.
-The second block resolves to three different recruitment proportions for four different ages, which produces
-a total of 12 intervention scenarios.  Thus the entire ``branches`` block resolves to 13 different sets of
-configuration parameters.
+items under the ``branches`` key separately.  The first block resolves to a 16 egg supplementation scenarios.
+The second block resolves to 16 lentil supplementation scenarios.  Thus the entire ``branches`` block resolves to 32
+different sets of configuration parameters.
 
 Following the same logic as in the previous section, we compute the total number of simulations to be run as
-``(Number of input draws) * (Number of random seeds) * (Number of scenarios) = 100 * 4 * 13 = 5200``.
+``(Number of input draws) * (Number of random seeds) * (Number of scenarios) = 100 * 4 * 32 = 12,800``.
