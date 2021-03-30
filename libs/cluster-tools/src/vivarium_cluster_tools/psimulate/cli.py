@@ -126,7 +126,7 @@ def restart(results_root, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    main(None, None, results_root,
+    main(None, None, None, results_root,
          {'project': options['project'],
           'queue': options['queue'],
           'peak_memory': options['peak_memory'],
@@ -152,7 +152,7 @@ def expand(results_root, **options):
     utilities.configure_master_process_logging_to_terminal(options['verbose'])
     main = handle_exceptions(runner.main, logger, options['with_debugger'])
 
-    main(None, None, results_root,
+    main(None, None, None, results_root,
          {'project': options['project'],
           'queue': options['queue'],
           'peak_memory': options['peak_memory'],
