@@ -209,15 +209,15 @@ def worker(parameters: Mapping):
         logger.info('Exiting job: {}'.format((input_draw, random_seed, model_specification_file, branch_config)))
 
 
-def do_sim_epilogue(start: CounterSnapshot, end: CounterSnapshot, event: dict, exec_time: dict, parameters:dict):
+def do_sim_epilogue(start: CounterSnapshot, end: CounterSnapshot, event: dict, exec_time: dict, parameters: Mapping):
     exec_time['results_minutes'] = (event['end'] - event["results_start"]) / 60
     logger.info(f'Results reporting completed in {exec_time["results_minutes"]:.3f} minutes.')
     exec_time['total_minutes'] = (event['end'] - event["start"]) / 60
     logger.info(f'Total simulation run time {exec_time["total_minutes"]:.3f} minutes.')
 
-    # Write out debug JSON line to shared performance log
-    perf_log = logger.add(Path(os.environ['VIVARIUM_LOGGING_DIRECTORY']) / 'performance.log', level='DEBUG',
-                          serialize=True, enqueue=True)
+    perf_log = logger.add(
+        Path(os.environ['VIVARIUM_LOGGING_DIRECTORY']) / f'perf.{os.environ["JOB_ID"]}.{os.environ["SGE_TASK_ID"]}.log',
+        level='DEBUG', serialize=True)
     logger.debug(json.dumps({
         "host": os.environ['HOSTNAME'].split('.')[0],
         "job_number": os.environ['JOB_ID'],

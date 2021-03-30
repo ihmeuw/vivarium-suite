@@ -14,15 +14,13 @@ from vivarium_cluster_tools.vipin import utilities, perf_report
 def vipin(logs_directory, result_directory, hdf, verbose):
     """Get performance information from worker_logs from a ``psimulate`` command.
 
-    Given a worker logs directory from a previous run, a summary hdf will be
+    Given a worker logs directory from a previous run, a summary csv will be
     created in the ``result_directory`` (which defaults to the given logs
-    directory unless otherwise specified) with two keys: 'worker_data', which
-    includes a summary line for each worker log in the directory and 'sim_data',
-    which includes a summary line for each simulation job run by a worker.
+    directory unless otherwise specified).
     """
     utilities.configure_master_process_logging_to_terminal(verbose)
     if not result_directory:
         result_directory = logs_directory
 
-    perf_report.report_performance(logs_directory, result_directory, hdf)
+    perf_report.report_performance(logs_directory, result_directory, hdf, verbose)
 
