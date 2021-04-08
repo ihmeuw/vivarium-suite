@@ -63,6 +63,8 @@ class PerformanceSummary:
         perf_data = []
         for item in self.get_summaries():
             perf_data.append(item)
+        if len(perf_data) < 1:
+            return pd.DataFrame()
         perf_df = pd.concat(perf_data)
 
         # Convert the Unix timestamps to datetimes
@@ -157,6 +159,10 @@ def report_performance(input_directory: Union[Path, str], output_directory: Unio
 
     perf_df = perf_summary.to_df()
 
+    if len(perf_df) < 1:
+        logger.warning(f'No performance data found in {input_directory}.')
+        return  # nothing left to do
+
     # Add jobapi data about the job to dataframe
     perf_df = add_jobapi_data(perf_df)
 
@@ -179,3 +185,4 @@ def report_performance(input_directory: Union[Path, str], output_directory: Unio
         logger.warning(f'{perf_summary.errors} log row{"s were" if perf_summary.errors > 1 else " was"} unreadable.')
     logger.info(f'Performance summary {"hdf" if output_hdf else "csv"} can be found at {out_file}, with '
                 f'{perf_df.shape[0]} row{"s" if perf_df.shape[0] > 1 else ""}.')
+    return

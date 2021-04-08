@@ -3,6 +3,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from shutil import rmtree
+from typing import Union
+
 
 from loguru import logger
 from typing import Dict, List, Sequence
@@ -15,6 +17,7 @@ except ImportError:
 
 from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import globals as vct_globals
+from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 
 def get_drmaa() -> object:
@@ -68,12 +71,14 @@ def get_output_directory(model_specification_file: str = None,
         output_directory = root / model_specification_name / launch_time
     return output_directory
 
+
 def set_permissions(output_dir: Path):
     """Call to achieve side effect of relaxing permissions to 775
         on output dir and the parent"""
     permissions = 0o775
     output_dir.parent.chmod(permissions)
     output_dir.chmod(permissions)
+
 
 def setup_directories(model_specification_file: str, result_directory: str,
                       restart: bool, expand: bool) -> (Path, Dict[str, Path]):
@@ -189,6 +194,7 @@ def validate_environment(output_dir: Path):
 
 
 def check_for_empty_results_dir(output_dir: Path):
-    results_file = output_dir / 'output.hdf'
-    if not results_file.exists():
+    """Remove the results directory including runner and worker logs if the simulation produced no results (i.e.,
+    it failed). """
+    if not (output_dir / 'output.hdf').exists():
         rmtree(output_dir)

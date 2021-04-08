@@ -21,6 +21,7 @@ from vivarium.framework.artifact import parse_artifact_path_config
 from vivarium_cluster_tools.psimulate.branches import Keyspace
 from vivarium_cluster_tools.psimulate import globals as vct_globals, utilities
 from vivarium_cluster_tools.psimulate.registry import RegistryManager
+from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 drmaa = utilities.get_drmaa()
 
@@ -393,6 +394,13 @@ def check_user_sge_config():
                                    "with the worker logs.")
 
 
+def try_run_vipin(log_path: Path):
+
+    try:
+        report_performance(input_directory=log_path, output_directory=log_path, output_hdf=False, verbose=1)
+    except Exception as e:
+        logger.warning(f'Performance reporting failed with: {e}')
+
 def main(model_specification_file: str, branch_configuration_file: str, artifact_path: str, result_directory: str,
          native_specification: dict, redis_processes: int, num_input_draws: int = None,
          num_random_seeds: int = None, restart:  bool = False,
@@ -402,6 +410,7 @@ def main(model_specification_file: str, branch_configuration_file: str, artifact
 
     output_dir, logging_dirs = utilities.setup_directories(model_specification_file, result_directory,
                                                            restart, expand=bool(num_input_draws or num_random_seeds))
+
     if not no_cleanup:
         atexit.register(utilities.check_for_empty_results_dir, output_dir=output_dir)
 
@@ -446,5 +455,7 @@ def main(model_specification_file: str, branch_configuration_file: str, artifact
                   native_specification)
 
     process_job_results(registry_manager, ctx)
+
+    try_run_vipin(logging_dirs['worker'])
 
     logger.info('Jobs completed. Results written to: {}'.format(ctx.output_directory))
