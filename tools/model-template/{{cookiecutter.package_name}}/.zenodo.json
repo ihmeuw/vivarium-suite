@@ -1,0 +1,10 @@
+{
+    "license": "BSD-3-Clause",
+    "title": "ihmeuw/{{ cookiecutter.package_name }}: Archival release",
+    "upload_type": "software",
+    "creators": [
+
+    ],
+    "access_right": "open",
+    "description": "<p>Archival release of simulation software.</p>"
+}
