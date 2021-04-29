@@ -12,9 +12,7 @@ components:
 
 configuration:
     input_data:
-        location: {% raw %}{{ location_proper }}{% endraw %}
         input_draw_number: 0
-        artifact_path: {% raw %}{{ artifact_directory }}{% endraw %}/{% raw %}{{ location_sanitized }}{% endraw %}.hdf
     interpolation:
         order: 0
         extrapolate: False
