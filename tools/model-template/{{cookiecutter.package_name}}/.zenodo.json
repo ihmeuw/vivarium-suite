@@ -1,0 +1,14 @@
+{
+    "license": "BSD-3-Clause",
+    "title": "ihmeuw/{{ cookiecutter.package_name }}: Archival release",
+    "upload_type": "software",
+    "creators": [
+//        {
+//            "orcid": "0000-0000-0000-0000",
+//            "affiliation": "Institute for Health Metrics and Evaluation",
+//            "name": "TODO: Add authors names, affiliation, and orcid (if applicable) to `creators` array"
+//        }
+    ],
+    "access_right": "open",
+    "description": "<p>TODO: add description (e.g., Archival release of simulation software.)</p>"
+}
