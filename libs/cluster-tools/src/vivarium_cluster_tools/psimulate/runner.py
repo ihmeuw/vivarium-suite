@@ -333,7 +333,7 @@ def write_results_batch(ctx: RunContext, written_results: pd.DataFrame, unwritte
             results_to_write.to_hdf(temp_output_path, 'data')
             temp_output_path.replace(output_path)
             break
-        except Exception as e:
+        except Exception:
             logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
             sleep(30)
             retries -= 1
@@ -400,6 +400,7 @@ def try_run_vipin(log_path: Path):
         report_performance(input_directory=log_path, output_directory=log_path, output_hdf=False, verbose=1)
     except Exception as e:
         logger.warning(f'Performance reporting failed with: {e}')
+
 
 def main(model_specification_file: str, branch_configuration_file: str, artifact_path: str, result_directory: str,
          native_specification: dict, redis_processes: int, num_input_draws: int = None,

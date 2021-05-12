@@ -129,7 +129,7 @@ class QueueManager:
         result = None
         if job is not None:
             start = time.time()
-            result = pd.read_msgpack(job.result[0])
+            result = job.result
             end = time.time()
             self._logger.debug(f'Read {job_id} from msgpack from queue {self.name} in {end - start:.2f}s.')
             self._status['finished'] += 1
