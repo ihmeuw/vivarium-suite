@@ -196,8 +196,7 @@ def worker(parameters: Mapping):
         output_metrics = pd.DataFrame(metrics, index=idx)
         for k, v in collapse_nested_dict(run_key):
             output_metrics[k] = v
-        output = [output_metrics.to_msgpack()]
-        return output
+        return output_metrics
 
     except Exception:
         logger.exception('Unhandled exception in worker')
