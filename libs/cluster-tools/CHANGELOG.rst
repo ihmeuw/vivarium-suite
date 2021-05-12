@@ -1,15 +1,24 @@
+**1.2.4 - 05/12/21**
 
-**1.2.3 - 1/5/21**
+ - Add artifact path as an argument to psimulate
+ - Fix redis connection bug
+ - Add no_cleanup option to prevent auto-deletion on a failure
+ - Add additional timing messages in the worker logs
+ - Add JSON telemetry logging for each job run
+ - Add vipin tool which logs job stats and outputs them to a csv or hdf file
+ - Remove vparse functionality which is superseded by vipin
+ - Remove references to deprecated DataFrame's msgpack functionality
+
+**1.2.3 - 01/05/21**
 
  - Fix deploy script
 
-
-**1.2.2 - 1/5/21**
+**1.2.2 - 01/05/21**
 
  - Github actions replaces Travis for CI
  - Unpin pandas and numpy
 
-**1.2.1 - 10/2/20**
+**1.2.1 - 10/02/20**
 
  - Pin rq to 1.2.2
 
