@@ -1,3 +1,7 @@
+**1.2.5 - 06/08/21**
+
+ - Unpin redis and rq dependencies
+
 **1.2.4 - 05/12/21**
 
  - Add artifact path as an argument to psimulate
