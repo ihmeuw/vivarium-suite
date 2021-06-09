@@ -492,7 +492,21 @@ class EnsembleDistribution:
             p = p.values
         return p
 
-    def ppf(self, q: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
+    def ppf(self, q: Union[pd.Series, np.ndarray, float, int],
+            q_dist: Union[pd.Series, np.ndarray, float, int]) -> Union[pd.Series, np.ndarray, float]:
+        """Quantile function using 2 propensities.
+
+        Parameters
+        ---------
+        q :
+            value propensity
+        q_dist :
+            propensity for picking the distribution
+
+        Returns
+        --------
+            Sample from the ensembled distribution.
+        """
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
 
@@ -500,14 +514,19 @@ class EnsembleDistribution:
 
         computable = weights[(weights.sum(axis=1) != 0) & ~np.isnan(q)].index
 
+        p_bins = np.cumsum(weights, axis=1)
+        choice_index = (q_dist[np.newaxis].T > p_bins).sum(axis=1)
+
         x = pd.Series(np.nan, index=q.index)
 
         if not computable.empty:
             x.loc[computable] = 0
+            idx_lookup = {v: i for i, v in enumerate(weights.columns)}
             for name, parameters in self.parameters.items():
-                w = weights.loc[computable, name]
-                params = parameters.loc[computable] if len(parameters) > 1 else parameters
-                x += w * self._distribution_map[name](parameters=params).ppf(q.loc[computable])
+                idx = choice_index[choice_index==idx_lookup[name]].index
+                if len(idx):
+                    params = parameters.loc[computable.intersection(idx)] if len(parameters) > 1 else parameters
+                    x[idx] = self._distribution_map[name](parameters=params).ppf(q[idx])
 
         if single_val:
             x = x.iloc[0]
