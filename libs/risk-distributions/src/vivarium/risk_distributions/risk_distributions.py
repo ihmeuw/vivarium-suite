@@ -518,7 +518,7 @@ class EnsembleDistribution:
 
         if not computable.empty:
             p_bins = np.cumsum(weights.loc[computable], axis=1)
-            choice_index = (q_dist.values[np.newaxis].T > p_bins).sum(axis=1)
+            choice_index = (q_dist.loc[computable].values[np.newaxis].T > p_bins).sum(axis=1)
             x.loc[computable] = 0
             idx_lookup = {v: i for i, v in enumerate(weights.columns)}
             for name, parameters in self.parameters.items():
