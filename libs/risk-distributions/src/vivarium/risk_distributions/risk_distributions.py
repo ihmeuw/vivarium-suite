@@ -511,15 +511,14 @@ class EnsembleDistribution:
         values_only = isinstance(q, np.ndarray)
 
         q, weights = format_call_data(q, self.weights)
+        q_dist, _ = format_call_data(q_dist, self.weights)
 
         computable = weights[(weights.sum(axis=1) != 0) & ~np.isnan(q)].index
-
-        p_bins = np.cumsum(weights, axis=1)
-        choice_index = (q_dist[np.newaxis].T > p_bins).sum(axis=1)
-
         x = pd.Series(np.nan, index=q.index)
 
         if not computable.empty:
+            p_bins = np.cumsum(weights.loc[computable], axis=1)
+            choice_index = (q_dist.values[np.newaxis].T > p_bins).sum(axis=1)
             x.loc[computable] = 0
             idx_lookup = {v: i for i, v in enumerate(weights.columns)}
             for name, parameters in self.parameters.items():
