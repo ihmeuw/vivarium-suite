@@ -1,3 +1,11 @@
+"""
+================================
+vivarium_cluster_tools Utilities
+================================
+
+Making directories is hard.
+
+"""
 import os
 from pathlib import Path
 from typing import Union

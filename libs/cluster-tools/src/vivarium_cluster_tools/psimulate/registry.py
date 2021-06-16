@@ -1,10 +1,17 @@
+"""
+===================================
+Redis Queue and Registry Management
+===================================
+
+Centralized management of jobs and results.
+
+"""
 from collections import defaultdict
 import math
 import random
 import time
 
 from loguru import logger
-import pandas as pd
 import redis
 import rq
 from rq.registry import StartedJobRegistry, FinishedJobRegistry

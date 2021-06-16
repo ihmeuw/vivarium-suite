@@ -1,8 +1,11 @@
+# -----------------------------------------------------------------------------
+#   Continuous Intergration for Vivarium Public Health
+#   - invoked on push and pull_request
+#   - test under 3 versions of python
+#   - look for an upstream (vivarium) branch and use it if it exists
+# -----------------------------------------------------------------------------
 name: build
-
 on:
-  workflow_dispatch:
-
   push:
     branches:
       - '*'
@@ -14,22 +17,54 @@ on:
     tags-ignore:
       - v*
 
+  # Run this workflow manually from the Actions tab.
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: [3.6, 3.7, 3.8]
+    defaults:
+      run:
+        shell: bash -l {0}
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+      - name: check for upstream branch
+        run: |
+          if git ls-remote --exit-code --heads https://github.com/ihmeuw/vivarium.git ${GITHUB_HEAD_REF} == "0"; then
+            echo "upstream_exist=true" >> $GITHUB_ENV
+          else
+            echo "upstream_exist=false" >> $GITHUB_ENV
+          fi
+      - name: print environment values
+        run: |
+          cat $GITHUB_ENV
+      - name: Update pip
         run: |
           python -m pip install --upgrade pip
+      - name: Retrieve upstream branch if exists
+        if: env.upstream_exist == 'true'
+        run: |
+          echo "Cloning upstream branch: ${GITHUB_HEAD_REF}"
+          git clone --branch=${GITHUB_HEAD_REF} https://github.com/ihmeuw/vivarium.git
+          pushd vivarium
+          pip install .
+          popd
+      - name: Install dependencies
+        run: |
           pip install .[dev]
       - name: Test
         run: |
-          pytest tests/
+          pytest ./tests
+      - name: Doc build
+        run: |
+          make html -C docs/ SPHINXOPTS="-W --keep-going -n"
+      - name: Doctest
+        run: |
+          make doctest -C docs/

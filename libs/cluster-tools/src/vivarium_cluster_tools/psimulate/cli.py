@@ -1,3 +1,15 @@
+"""
+=============
+psimulate CLI
+=============
+
+Command line interface for `psimulate`.
+
+.. click:: vivarium_cluster_tools.psimulate.cli:psimulate
+   :prog: psimulate
+   :show-nested:
+
+"""
 from pathlib import Path
 
 import click

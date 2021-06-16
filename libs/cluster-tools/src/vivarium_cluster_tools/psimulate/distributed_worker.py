@@ -1,3 +1,11 @@
+"""
+==================
+Distributed Worker
+==================
+
+Custome RQ worker for running vivarium jobs.
+
+"""
 import datetime
 import json
 import math

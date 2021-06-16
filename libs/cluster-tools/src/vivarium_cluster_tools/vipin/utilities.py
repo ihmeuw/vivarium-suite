@@ -1,3 +1,11 @@
+"""
+===============
+vipin Utilities
+===============
+
+Mainly logging.
+
+"""
 import sys
 
 from loguru import logger

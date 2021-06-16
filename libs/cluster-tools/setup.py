@@ -22,7 +22,7 @@ if __name__ == "__main__":
         'drmaa',
         'redis',
         'rq',
-        'vivarium>=0.9.3',
+        'vivarium>=0.10.4',
         'click',
         'psutil',
         'requests'
@@ -34,8 +34,7 @@ if __name__ == "__main__":
     ]
 
     doc_requirements = [
-        'sphinx<2.1',
-        'sphinx-autodoc-typehints<=1.7',
+        'sphinx>=4.0',
         'sphinx-rtd-theme',
         'sphinx-click',
         'IPython',
