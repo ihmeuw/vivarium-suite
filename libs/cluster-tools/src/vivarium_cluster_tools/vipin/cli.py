@@ -1,3 +1,15 @@
+"""
+=========
+vipin CLI
+=========
+
+Command line interface for `vipin`.
+
+.. click:: vivarium_cluster_tools.vipin.cli:vipin
+   :prog: vipin
+   :show-nested:
+
+"""
 import click
 
 from vivarium_cluster_tools.vipin import utilities, perf_report

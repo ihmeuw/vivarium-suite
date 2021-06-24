@@ -170,8 +170,8 @@ Thus, you can expect four separate simulations to be run, one for each variation
 Interaction with Uncertainty
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As touched upon in the section on :ref:`combining draws and seeds<Combining Draws and Seeds>`, each of the top
-level keys in a :term:`branch configuration<Branch Configuration>` can be independently produce a set of simulations
+As touched upon in the section on `combining draws and seeds <Combining Draws and Seeds>`_, each of the top
+level keys in a :term:`branch configuration <Branch Configuration>` can be independently produce a set of simulations
 to be run.  To find the total set of simulations to be run from a branch configuration file, we need to count
 the Cartesian product of the top level keys.  We'll use a slight alteration of our intervention configuration
 as an example.
