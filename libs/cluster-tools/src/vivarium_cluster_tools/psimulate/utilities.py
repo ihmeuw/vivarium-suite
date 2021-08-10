@@ -1,13 +1,20 @@
-import os
-import sys
+"""
+===================
+psimulate Utilities
+===================
+
+Utilities for psimulate runs.
+
+"""
 from datetime import datetime
+import os
 from pathlib import Path
 from shutil import rmtree
-from typing import Union
-
+import sys
+from typing import Dict, List, Tuple, Sequence
 
 from loguru import logger
-from typing import Dict, List, Sequence
+
 
 # depending on version of pip, freeze may be in one of two places
 try:
@@ -17,7 +24,6 @@ except ImportError:
 
 from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import globals as vct_globals
-from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 
 def get_drmaa() -> object:
@@ -81,7 +87,7 @@ def set_permissions(output_dir: Path):
 
 
 def setup_directories(model_specification_file: str, result_directory: str,
-                      restart: bool, expand: bool) -> (Path, Dict[str, Path]):
+                      restart: bool, expand: bool) -> Tuple[Path, Dict[str, Path]]:
     output_directory = get_output_directory(model_specification_file, result_directory, restart)
 
     if restart and not expand:
@@ -122,7 +128,7 @@ def chunks(l: Sequence, n: int):
         yield l[i:i + n]
 
 
-def parse_package_version(s: str) -> (str, str):
+def parse_package_version(s: str) -> Tuple[str, str]:
     if 'no version control' in s:  # installed from non-git controlled source code in editable mode
         s = s.split('(')[1].split(')')[0]  # yields <package>==<version>
 

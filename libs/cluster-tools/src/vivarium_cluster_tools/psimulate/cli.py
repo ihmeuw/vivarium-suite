@@ -1,3 +1,15 @@
+"""
+=============
+psimulate CLI
+=============
+
+Command line interface for `psimulate`.
+
+.. click:: vivarium_cluster_tools.psimulate.cli:psimulate
+   :prog: psimulate
+   :show-nested:
+
+"""
 from pathlib import Path
 
 import click
@@ -74,7 +86,7 @@ def psimulate():
 @click.argument('model_specification', type=click.Path(exists=True, dir_okay=False))
 @click.argument('branch_configuration', type=click.Path(exists=True, dir_okay=False))
 @click.option('--artifact_path', '-i', type=click.Path(resolve_path=True), help='The path to the artifact data file.')
-@click.option('--result-directory', '-o', type=click.Path(exists=True, file_okay=False), default=None,
+@click.option('--result-directory', '-o', type=click.Path(file_okay=False), default=None,
               help='The directory to write results to. A folder will be created in this directory with the same name '
                    'as the configuration file.')
 @pass_shared_options

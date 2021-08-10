@@ -1,9 +1,16 @@
+"""
+==============================
+Branch and Keyspace Management
+==============================
+
+Tools for managing the parameter space of a parallel run.
+
+"""
 from itertools import product
 
 import yaml
 import numpy as np
 from pathlib import Path
-
 from vivarium.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.psimulate import globals as vct_globals
@@ -210,18 +217,22 @@ def expand_branch_templates(templates):
 
     For example this:
 
-    {'a': {'b': [1,2], 'c': 3, 'd': [4,5,6]}}
+    .. code::
+
+       {'a': {'b': [1,2], 'c': 3, 'd': [4,5,6]}}
 
     becomes this:
 
-    [
-        {'a': {'b': 1, 'c': 3, 'd': 4}},
-        {'a': {'b': 2, 'c': 3, 'd': 5}},
-        {'a': {'b': 1, 'c': 3, 'd': 6}},
-        {'a': {'b': 2, 'c': 3, 'd': 4}},
-        {'a': {'b': 1, 'c': 3, 'd': 5}},
-        {'a': {'b': 2, 'c': 3, 'd': 6}}
-    ]
+    .. code::
+
+       [
+           {'a': {'b': 1, 'c': 3, 'd': 4}},
+           {'a': {'b': 2, 'c': 3, 'd': 5}},
+           {'a': {'b': 1, 'c': 3, 'd': 6}},
+           {'a': {'b': 2, 'c': 3, 'd': 4}},
+           {'a': {'b': 1, 'c': 3, 'd': 5}},
+           {'a': {'b': 2, 'c': 3, 'd': 6}}
+       ]
 
     """
     expanded_branches = []
@@ -272,8 +283,9 @@ def validate_artifact_path(artifact_path: str) -> str:
 
     Parameters
     ----------
-    artifact_path :
+    artifact_path
         The path to the artifact.
+
     """
     path = Path(artifact_path)
 

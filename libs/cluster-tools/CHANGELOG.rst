@@ -1,3 +1,10 @@
+**1.2.6 - 08/10/21**
+
+ - Standardize CI scripts
+ - Upgrade readthedocs
+ - Add API documentation
+ - Allow psimulate to create result root directories
+
 **1.2.5 - 06/08/21**
 
  - Unpin redis and rq dependencies

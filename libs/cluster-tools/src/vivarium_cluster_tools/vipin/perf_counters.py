@@ -1,3 +1,11 @@
+"""
+==========================
+vipin Performance Counters
+==========================
+
+Structs for counting performance metrics.
+
+"""
 import json
 from time import time
 

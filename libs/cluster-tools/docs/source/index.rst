@@ -16,4 +16,5 @@ simulations at scale on a Univa Grid Engine cluster easy.
    distributed_runner
    yaml_basics
    branch
+   api_reference/index
    glossary

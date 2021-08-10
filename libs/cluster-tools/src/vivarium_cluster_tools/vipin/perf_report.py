@@ -1,13 +1,21 @@
-import json
-import re
-from pathlib import Path
-from typing import Union
+"""
+=====================
+Performance Reporting
+=====================
 
+Tools for summarizing and reporting performance information.
+
+"""
+import json
+from pathlib import Path
+import re
+from typing import Tuple, Union
+
+from loguru import logger
 import numpy as np
 import pandas as pd
-import requests
-from loguru import logger
 from pandas.io.json import json_normalize
+import requests
 
 
 BASE_PERF_INDEX_COLS = ['host', 'job_number', 'task_number', 'draw', 'seed']
@@ -27,15 +35,9 @@ class PerformanceSummary:
 
     Attributes
     ----------
-    log_dir : Path
+    log_dir
         Path of log_dir
 
-    Methods
-    -------
-    get_summaries():
-        Generator to retrieve entries in the performance logs as dict objects.
-    to_df():
-        Returns the performance log data as a pd.DataFrame.
     """
 
     def __init__(self, log_dir: Path):
@@ -79,7 +81,7 @@ class PerformanceSummary:
     PERF_LOG_PATTERN = re.compile(r'^perf\.([0-9]+)\.([0-9]+)\.log$')
 
 
-def set_index_scenario_cols(perf_df: pd.DataFrame) -> (pd.DataFrame, list):
+def set_index_scenario_cols(perf_df: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
     """Given a dataframe from PerformanceSummary.to_df, add QPID Job API data for the job"""
     index_cols = BASE_PERF_INDEX_COLS
     scenario_cols = [col for col in perf_df.columns if col.startswith("scenario_")]
