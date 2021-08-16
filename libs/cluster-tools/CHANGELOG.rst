@@ -1,4 +1,4 @@
-**1.2.7 - 08/16/21**
+**1.2.8 - 08/16/21**
 
  - Don't write sim results in worker logs.
 
