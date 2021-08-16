@@ -194,7 +194,7 @@ def worker(parameters: Mapping):
         logger.info(f'Average step length was {exec_time["step_mean_seconds"]:.3f} seconds.')
 
         sim.finalize()
-        metrics = sim.report()
+        metrics = sim.report(print_results=False)
         event['end'] = time()
         end_snapshot = CounterSnapshot()
 
