@@ -1,3 +1,7 @@
+**1.2.7 - 08/16/21**
+
+ - Don't write sim results in worker logs.
+
 **1.2.6 - 08/10/21**
 
  - Standardize CI scripts
