@@ -194,7 +194,7 @@ def get_random_free_port() -> int:
 
 
 def launch_redis(port: int, logging_dirs: Dict) -> subprocess.Popen:
-    log = open(f'{logging_dirs["main"]}/redis.log', 'a')
+    log = open(f'{logging_dirs["main"]}/redis.p{port}.log', 'a')
     log.write(f'>>>>>>>> Starting log for redis-server on port {port}\n')
     log.flush()
     try:
