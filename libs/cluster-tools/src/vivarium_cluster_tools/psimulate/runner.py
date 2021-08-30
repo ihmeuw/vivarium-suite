@@ -193,13 +193,16 @@ def get_random_free_port() -> int:
     return port
 
 
-def launch_redis(port: int) -> subprocess.Popen:
+def launch_redis(port: int, logging_dirs: Dict) -> subprocess.Popen:
+    log = open(f'{logging_dirs["main"]}/redis.p{port}.log', 'a')
+    log.write(f'>>>>>>>> Starting log for redis-server on port {port}\n')
+    log.flush()
     try:
         # inline config for redis server.
         redis_process = subprocess.Popen(["redis-server", "--port", f"{port}",
                                           "--timeout", "2",
-                                          "--protected-mode", "no"], stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.DEVNULL)
+                                          "--protected-mode", "no"], stdout=log,
+                                         stderr=log)
     except FileNotFoundError:
         raise OSError("In order for redis to launch you need both the redis client and the python bindings. "
                       "You seem to be missing the redis client.  Do 'conda install redis' and try again. If "
@@ -208,13 +211,13 @@ def launch_redis(port: int) -> subprocess.Popen:
     return redis_process
 
 
-def launch_redis_processes(num_processes: int) -> Tuple[str, List[Tuple[str, int]]]:
+def launch_redis_processes(num_processes: int, logging_dirs: Dict) -> Tuple[str, List[Tuple[str, int]]]:
     hostname = socket.getfqdn()
     redis_ports = []
     for i in range(num_processes):
         port = get_random_free_port()
         logger.info(f'Starting Redis Broker at {hostname}:{port}')
-        launch_redis(port)
+        launch_redis(port, logging_dirs)
         redis_ports.append((hostname, port))
 
     redis_urls = [f'redis://{hostname}:{port}' for hostname, port in redis_ports]
@@ -447,7 +450,7 @@ def main(model_specification_file: str, branch_configuration_file: str, artifact
     if redis_processes == -1:
         redis_processes = int(math.ceil(len(jobs) / vct_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE))
 
-    worker_template, redis_ports = launch_redis_processes(redis_processes)
+    worker_template, redis_ports = launch_redis_processes(redis_processes, logging_dirs)
     worker_file = output_dir / 'settings.py'
     with worker_file.open('w') as f:
         f.write(worker_template)
