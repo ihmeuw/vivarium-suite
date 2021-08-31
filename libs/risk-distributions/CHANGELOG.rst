@@ -1,3 +1,7 @@
+**2.0.6 - 08/31/21**
+
+ - Add credentials to repository 
+ 
 **2.0.5 - 08/31/21**
 
  - Set python deployment version to 3.8 
