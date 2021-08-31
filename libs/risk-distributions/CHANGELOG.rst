@@ -1,3 +1,7 @@
+**2.0.5 - 08/31/21**
+
+ - Set python deployment version to 3.8 
+ 
 **2.0.4 - 08/31/21**
 
  - Implement quantile (ppf) function for EnsembleDistribution using 2 pr
