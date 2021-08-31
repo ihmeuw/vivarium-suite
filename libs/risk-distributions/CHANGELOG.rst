@@ -1,3 +1,9 @@
+**2.0.4 - 08/31/21**
+
+ - Implement quantile (ppf) function for EnsembleDistribution using 2 pr
+ - CI changes
+ - Update authors and maintainers
+
 **2.0.3 - 09/08/20**
 
  - Correction to the Beta distribution wrapper.

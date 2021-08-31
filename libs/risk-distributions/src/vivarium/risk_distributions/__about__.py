@@ -7,7 +7,7 @@ __title__ = "risk_distributions"
 __summary__ = "Components for building distributions. Compatible for use with ``vivarium``"
 __uri__ = "https://github.com/ihmeuw/risk_distributions"
 
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 
 __author__ = "The risk_distributions developers"
 __email__ = "vivarium.dev@gmail.com"
