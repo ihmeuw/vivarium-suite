@@ -6,7 +6,6 @@ Distributed Worker
 Custome RQ worker for running vivarium jobs.
 
 """
-import datetime
 import json
 import math
 import os
@@ -23,7 +22,7 @@ from loguru import logger
 from rq import Queue, get_current_job
 from rq.job import JobStatus
 from rq.registry import FailedJobRegistry
-from rq.worker import StopRequested, Worker
+from rq.worker import Worker
 
 from vivarium_cluster_tools.psimulate import globals as vct_globals
 from vivarium_cluster_tools.vipin.perf_counters import CounterSnapshot
@@ -57,9 +56,9 @@ class ResilientWorker(Worker):
 
     def work(self, *args, **kwargs):
         worker_ = self.name
-        logger.remove()
         logging_directory = Path(os.environ['VIVARIUM_LOGGING_DIRECTORY'])
         logger.add(logging_directory / (str(worker_) + '.log'), level='DEBUG', serialize=True)
+        kwargs['logging_level'] = 'DEBUG'
 
         retries = 0
         while retries < 10:
@@ -85,32 +84,6 @@ class ResilientWorker(Worker):
                 retries += 1
                 sleep(backoff)
         logger.error(f"Ran out of retries. Killing work horse")
-
-    def _monitor_work_horse_tick(self, job):
-        _, ret_val = os.waitpid(self._horse_pid, 0)
-        if ret_val == os.EX_OK:  # The process exited normally.
-            return
-        job_status = job.get_status()
-        if job_status is None:  # Job completed and its ttl has expired
-            return
-        if job_status not in [JobStatus.FINISHED, JobStatus.FAILED]:
-
-            if not job.ended_at:
-                job.ended_at = datetime.datetime.utcnow()
-
-            self.handle_job_failure(job=job)
-
-            # Unhandled failure
-            logger.error(f'(work-horse terminated unexpectedly; waitpid returned {ret_val})')
-
-            retry_handler(job, f"Work-horse process was terminated unexpectedly (waitpid returned {ret_val})",
-                          None, None)
-
-            self.acceptable_failure_count -= 1
-            if self.acceptable_failure_count < 0:
-                logger.error("This worker has had multiple jobs fail. That may mean the host is sick. Terminating "
-                             "the worker to try and shift load onto other hosts.")
-                raise StopRequested()
 
 
 def worker(parameters: Mapping):
