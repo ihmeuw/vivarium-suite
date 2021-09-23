@@ -38,7 +38,7 @@ shared_options = [
     click.option('--max-runtime', '-r',
                  type=str,
                  default='24:00:00',
-                 help=('The estimated maximum runtime (DD:HH:MM) of the simulation jobs. '
+                 help=('The estimated maximum runtime (HH:MM:SS) of the simulation jobs. '
                        'By default, the cluster will terminate jobs after 24h regardless of '
                        'queue. The maximum supported runtime is 3 days. Keep in mind that the '
                        'session you are launching from must be able to live at least as long '
