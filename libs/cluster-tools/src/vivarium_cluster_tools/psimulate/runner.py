@@ -201,6 +201,8 @@ def launch_redis(port: int, logging_dirs: Dict) -> subprocess.Popen:
         # inline config for redis server.
         redis_process = subprocess.Popen(["redis-server", "--port", f"{port}",
                                           "--timeout", "2",
+                                          "--loglevel", "debug",
+                                         # "--daemonize", "yes",
                                           "--protected-mode", "no"], stdout=log,
                                          stderr=log)
     except FileNotFoundError:
