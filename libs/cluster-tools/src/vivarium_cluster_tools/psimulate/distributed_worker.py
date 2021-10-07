@@ -85,6 +85,19 @@ class ResilientWorker(Worker):
                 sleep(backoff)
         logger.error(f"Ran out of retries. Killing work horse")
 
+    def fork_work_horse(self, job, queue):
+        """Spawns a work horse to perform the actual work and passes it a job.
+        """
+        child_pid = os.fork()
+        os.environ['RQ_WORKER_ID'] = self.name
+        os.environ['RQ_JOB_ID'] = job.id
+        if child_pid == 0:
+            self.main_work_horse(job, queue)
+            os._exit(0)  # just in case
+        else:
+            self._horse_pid = child_pid
+            self.procline('Forked {0} at {1}'.format(child_pid, time()))
+
 
 def worker(parameters: Mapping):
     node = f"{os.environ['SGE_CLUSTER_NAME']}:{os.environ['HOSTNAME']}"
