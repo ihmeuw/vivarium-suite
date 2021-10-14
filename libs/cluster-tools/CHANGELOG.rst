@@ -1,3 +1,10 @@
+**1.2.9 - 10/14/21**
+
+ - Set log-level to debug for both redis server and workers
+ - Create separate redis logs for each redis server
+ - Fix bug inherited from rq hiding worker processes from scheduler
+ - Fix incorrect help text for psimulate max-runtime flag
+
 **1.2.8 - 08/16/21**
 
  - Don't write sim results in worker logs.
