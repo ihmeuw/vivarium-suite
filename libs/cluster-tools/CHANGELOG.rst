@@ -1,3 +1,7 @@
+**1.2.10 - 10/28/21**
+
+ - Add Zenodo metadata and update license to BSD 3-clause
+
 **1.2.9 - 10/14/21**
 
  - Set log-level to debug for both redis server and workers
