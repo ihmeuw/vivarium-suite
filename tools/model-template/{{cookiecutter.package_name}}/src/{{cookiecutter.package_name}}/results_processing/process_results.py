@@ -1,7 +1,9 @@
+import itertools
 from pathlib import Path
 from typing import NamedTuple, List
 
 import pandas as pd
+from loguru import logger
 import yaml
 
 from {{cookiecutter.package_name}}.constants import results
@@ -21,6 +23,10 @@ OUTPUT_COLUMN_SORT_ORDER = [
     'measure',
     'input_draw'
 ]
+RENAME_COLUMNS = {
+    'age_group': 'age',
+    'cause_of_death': 'cause',
+}
 
 
 def make_measure_data(data):
@@ -110,48 +116,47 @@ def pivot_data(data):
             .set_index(GROUPBY_COLUMNS)
             .stack()
             .reset_index()
-            .rename(columns={f'level_{len(GROUPBY_COLUMNS)}': 'process', 0: 'value'}))
+            .rename(columns={f'level_{len(GROUPBY_COLUMNS)}': 'key', 0: 'value'}))
 
 
 def sort_data(data):
     sort_order = [c for c in OUTPUT_COLUMN_SORT_ORDER if c in data.columns]
-    other_cols = [c for c in data.columns if c not in sort_order]
-    data = data[sort_order + other_cols].sort_values(sort_order)
+    other_cols = [c for c in data.columns if c not in sort_order and c != 'value']
+    data = data[sort_order + other_cols + ['value']].sort_values(sort_order)
     return data.reset_index(drop=True)
 
 
-def split_processing_column(data):
-    # TODO the required splitting here is dependant on what types of stratification exist in the model
-    data['process'], data['age'] = data.process.str.split('_age').str
-    data['process'], data['sex'] = data.process.str.split('_among_').str
-    data['year'] = data.process.str.split('_in_').str[-1]
-    data['measure'] = data.process.str.split('_in_').str[:-1].apply(lambda x: '_in_'.join(x))
-    return data.drop(columns='process')
+def apply_results_map(data, kind):
+    logger.info(f"Mapping {kind} data to stratifications.")
+    map_df = results.RESULTS_MAP(kind)
+    data = data.set_index('key')
+    data = data.join(map_df).reset_index(drop=True)
+    data = data.rename(columns=RENAME_COLUMNS)
+    logger.info(f"Mapping {kind} complete.")
+    return data
 
 
 def get_population_data(data):
     total_pop = pivot_data(data[[results.TOTAL_POPULATION_COLUMN]
                                 + results.RESULT_COLUMNS('population')
                                 + GROUPBY_COLUMNS])
-    total_pop = total_pop.rename(columns={'process': 'measure'})
+    total_pop = total_pop.rename(columns={'key': 'measure'})
     return sort_data(total_pop)
 
 
 def get_measure_data(data, measure):
     data = pivot_data(data[results.RESULT_COLUMNS(measure) + GROUPBY_COLUMNS])
-    data = split_processing_column(data)
+    data = apply_results_map(data, measure)
     return sort_data(data)
 
 
 def get_by_cause_measure_data(data, measure):
     data = get_measure_data(data, measure)
-    data['measure'], data['cause'] = data.measure.str.split('_due_to_').str
     return sort_data(data)
 
 
 def get_state_person_time_measure_data(data, measure):
     data = get_measure_data(data, measure)
-    data['measure'], data['cause'] = 'state_person_time', data.measure.str.split('_person_time').str[0]
     return sort_data(data)
 
 

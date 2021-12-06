@@ -1,5 +1,7 @@
 import itertools
 
+import pandas as pd
+
 from {{cookiecutter.package_name}}.constants import models
 
 #################################
@@ -89,4 +91,20 @@ def RESULT_COLUMNS(kind='all'):
         for value_group in value_groups:
             columns.append(template.format(**{field: value for field, value in zip(fields, value_group)}))
     return columns
+
+
+def RESULTS_MAP(kind):
+    if kind not in COLUMN_TEMPLATES:
+        raise ValueError(f'Unknown result column type {kind}')
+    columns = []
+    template = COLUMN_TEMPLATES[kind]
+    filtered_field_map = {field: values
+                          for field, values in TEMPLATE_FIELD_MAP.items() if f'{{{field}}}' in template}
+    fields, value_groups = list(filtered_field_map.keys()), list(itertools.product(*filtered_field_map.values()))
+    for value_group in value_groups:
+        columns.append(template.format(**{field: value for field, value in zip(fields, value_group)}))
+    df = pd.DataFrame(value_groups, columns=map(lambda x: x.lower(), fields))
+    df['key'] = columns
+    df['measure'] = kind  # per researcher feedback, this column is useful, even when it's identical for all rows
+    return df.set_index('key').sort_index()
 {% endraw %}
