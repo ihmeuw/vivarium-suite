@@ -1,3 +1,7 @@
+**1.2.11 - 02/11/22**
+
+ - CI configuration updates.
+
 **1.2.10 - 10/28/21**
 
  - Add Zenodo metadata and update license to BSD 3-clause
