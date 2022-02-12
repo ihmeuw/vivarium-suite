@@ -1,0 +1,6 @@
+# risk_distributions
+# Type aliases don't play nicely with sphinx when you import them
+# elsewhere.  Works fine for static type checker though.  I think this
+# is cause sphinx does runtime checks.
+py:class risk_distributions.formatting.Parameter
+py:class risk_distributions.formatting.Parameters
