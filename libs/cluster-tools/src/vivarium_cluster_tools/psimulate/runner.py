@@ -348,10 +348,13 @@ def write_results_batch(ctx: RunContext,
             results_to_write.to_hdf(temp_output_path, 'data')
             temp_output_path.replace(output_path)
             break
-        except Exception:
+        except Exception as e:
             logger.warning(f'Error trying to write results to hdf, retries remaining {retries}')
             sleep(30)
             retries -= 1
+            if not retries:
+                logger.warning(f"Retries exhausted.")
+                raise e
     end = time()
     logger.info(f"Updated output.hdf in {end - start:.4f}s.")
     return results_to_write, unwritten_results

@@ -1,3 +1,8 @@
+**1.2.12 - 02/11/22**
+
+ - Update pip freeze behavior to be more robust
+ - Add logging and error handling when the node with the main process can't view the filesystem.
+
 **1.2.11 - 02/11/22**
 
  - CI configuration updates.
