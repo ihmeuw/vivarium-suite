@@ -7,10 +7,10 @@ __title__ = "risk_distributions"
 __summary__ = "Components for building distributions. Compatible for use with ``vivarium``"
 __uri__ = "https://github.com/ihmeuw/risk_distributions"
 
-__version__ = "2.0.6"
+__version__ = "2.0.7"
 
 __author__ = "The risk_distributions developers"
 __email__ = "vivarium.dev@gmail.com"
 
-__license__ = "GNU GPLv3"
-__copyright__ = f"Copyright 2016-2019 {__author__}"
+__license__ = "BSD-3-Clause"
+__copyright__ = f"Copyright 2022 {__author__}"
