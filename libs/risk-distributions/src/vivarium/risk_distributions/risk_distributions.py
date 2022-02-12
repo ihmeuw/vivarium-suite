@@ -86,6 +86,7 @@ class BaseDistribution:
 
         Returns
         -------
+        pandas.Series
             The processed data.
         """
         return data
@@ -448,7 +449,7 @@ class EnsembleDistribution:
     def get_parameters(cls, weights: Parameters,
                        parameters: Parameters = None,
                        mean: Parameter = None,
-                       sd: Parameter = None) -> (pd.DataFrame, Dict[str, pd.DataFrame]):
+                       sd: Parameter = None) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
         weights = format_data(weights, list(cls._distribution_map.keys()), 'weights')
 
         params = {}
@@ -505,6 +506,7 @@ class EnsembleDistribution:
 
         Returns
         --------
+        Union[pandas.Series, numpy.ndarray, float]
             Sample from the ensembled distribution.
         """
         single_val = isinstance(q, (float, int))
