@@ -1,3 +1,11 @@
+**2.0.7 - 02/12/22**
+
+ - Modernize CI.
+ - Add PR template.
+ - Update to BSD 3-clause license.
+ - Squash warnings in doc building
+ - Fix remote doc builds.
+
 **2.0.6 - 08/31/21**
 
  - Add credentials to repository 
