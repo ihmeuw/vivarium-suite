@@ -2,7 +2,7 @@
 line_length = 94
 exclude = '''
 /(
-   | vivarium
+   vivarium
 )/
 
 '''
