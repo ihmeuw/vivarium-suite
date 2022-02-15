@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Union
 
 
-def mkdir(path: Union[str, Path], umask: int = 0o002, exists_ok: bool = False, parents: bool = False) -> None:
+def mkdir(
+    path: Union[str, Path], umask: int = 0o002, exists_ok: bool = False, parents: bool = False
+) -> None:
     """
     Utility method to create a directory with specified permissions
     :param path: path of the directory to create

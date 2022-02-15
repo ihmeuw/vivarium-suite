@@ -7,18 +7,17 @@ Tools for summarizing and reporting performance information.
 
 """
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Tuple, Union
 
-from loguru import logger
 import numpy as np
 import pandas as pd
-from pandas.io.json import json_normalize
 import requests
+from loguru import logger
+from pandas.io.json import json_normalize
 
-
-BASE_PERF_INDEX_COLS = ['host', 'job_number', 'task_number', 'draw', 'seed']
+BASE_PERF_INDEX_COLS = ["host", "job_number", "task_number", "draw", "seed"]
 
 # The number of scenario columns beyond which we shorten the scenarios to a single string
 COMPOUND_SCENARIO_COL_COUNT = 2
@@ -46,20 +45,24 @@ class PerformanceSummary:
 
     def get_summaries(self) -> dict:
         """Generator to get all performance summary log messages in PerformanceSummary"""
-        for log in [f for f in self.log_dir.iterdir() if self.PERF_LOG_PATTERN.fullmatch(f.name)]:
-            with log.open('r') as f:
+        for log in [
+            f for f in self.log_dir.iterdir() if self.PERF_LOG_PATTERN.fullmatch(f.name)
+        ]:
+            with log.open("r") as f:
                 count: int = 0
                 for line in f.readlines():
                     count += 1
                     try:
-                        message = json.loads(line)['record']['message']
+                        message = json.loads(line)["record"]["message"]
                     except Exception as e:
-                        logger.warning(f"Exception: {e}. Malformed message in {log} line {count}, skipping...")
+                        logger.warning(
+                            f"Exception: {e}. Malformed message in {log} line {count}, skipping..."
+                        )
                         self.errors += 1
                         continue
                     m = self.TELEMETRY_PATTERN.fullmatch(str(message))
                     if m:
-                        yield json_normalize(json.loads(message), sep='_')
+                        yield json_normalize(json.loads(message), sep="_")
 
     def to_df(self) -> pd.DataFrame:
         perf_data = []
@@ -71,14 +74,14 @@ class PerformanceSummary:
 
         # Convert the Unix timestamps to datetimes
         for col in [col for col in perf_df.columns if col.startswith("event_")]:
-            perf_df[col] = pd.to_datetime(perf_df[col], unit='s')
+            perf_df[col] = pd.to_datetime(perf_df[col], unit="s")
 
         # Remove trailing "_scenario" from normalized label
-        perf_df.columns = perf_df.columns.str.replace('_scenario', '', regex=False)
+        perf_df.columns = perf_df.columns.str.replace("_scenario", "", regex=False)
         return perf_df
 
-    TELEMETRY_PATTERN = re.compile(r'^{\"host\".+\"job_number\".+}$')
-    PERF_LOG_PATTERN = re.compile(r'^perf\.([0-9]+)\.([0-9]+)\.log$')
+    TELEMETRY_PATTERN = re.compile(r"^{\"host\".+\"job_number\".+}$")
+    PERF_LOG_PATTERN = re.compile(r"^perf\.([0-9]+)\.([0-9]+)\.log$")
 
 
 def set_index_scenario_cols(perf_df: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
@@ -95,66 +98,85 @@ def add_jobapi_data(perf_df: pd.DataFrame):
     Job API reference: https://stash.ihme.washington.edu/projects/QPID/repos/job-db/browse/docs/index.md
     """
     try:
-        job_numbers = perf_df['job_number'].unique()
-        assert (len(job_numbers) == 1)
-        jobapi_data = requests.get("http://jobapi.ihme.washington.edu/fair/queryjobids",
-                                   params=[('job_number', job_numbers[0]), ('limit', 50000)]).json()
-        jobapi_df = pd.DataFrame(jobapi_data["data"]).add_prefix('qpid_')
-        perf_df = perf_df.astype({'job_number': np.int64, 'task_number': np.int64})
-        perf_df = perf_df.merge(jobapi_df, left_on=['job_number', 'task_number'],
-                                right_on=['qpid_job_number', 'qpid_task_number'])
+        job_numbers = perf_df["job_number"].unique()
+        assert len(job_numbers) == 1
+        jobapi_data = requests.get(
+            "http://jobapi.ihme.washington.edu/fair/queryjobids",
+            params=[("job_number", job_numbers[0]), ("limit", 50000)],
+        ).json()
+        jobapi_df = pd.DataFrame(jobapi_data["data"]).add_prefix("qpid_")
+        perf_df = perf_df.astype({"job_number": np.int64, "task_number": np.int64})
+        perf_df = perf_df.merge(
+            jobapi_df,
+            left_on=["job_number", "task_number"],
+            right_on=["qpid_job_number", "qpid_task_number"],
+        )
     except Exception as e:
-        logger.warning(f'Job API request failed with {e}')
+        logger.warning(f"Job API request failed with {e}")
     return perf_df
 
 
 def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list):
     """Print some helpful stats from the performance data, grouped by scenario_cols"""
-    pd.set_option('display.max_rows', None)
-    pd.set_option('display.max_columns', None)
-    pd.options.display.float_format = '{:.2f}'.format
+    pd.set_option("display.max_rows", None)
+    pd.set_option("display.max_columns", None)
+    pd.options.display.float_format = "{:.2f}".format
 
     do_compound = len(scenario_cols) > COMPOUND_SCENARIO_COL_COUNT
 
     perf_df = perf_df.reset_index()
 
     if do_compound:
-        logger.info(f"compound scenario:\n({'/'.join([s.replace('scenario_', '') for s in scenario_cols])}):")
-        perf_df["compound_scenario"] = perf_df[scenario_cols].to_csv(
-            header=None, index=False, sep='/').strip('\n').split('\n')
+        logger.info(
+            f"compound scenario:\n({'/'.join([s.replace('scenario_', '') for s in scenario_cols])}):"
+        )
+        perf_df["compound_scenario"] = (
+            perf_df[scenario_cols]
+            .to_csv(header=None, index=False, sep="/")
+            .strip("\n")
+            .split("\n")
+        )
 
     # Print execution times stats by scenario
-    temp = (perf_df.set_index('compound_scenario' if do_compound else scenario_cols)
-            .filter(like='exec_time_')
-            .stack()
-            .reset_index())
+    temp = (
+        perf_df.set_index("compound_scenario" if do_compound else scenario_cols)
+        .filter(like="exec_time_")
+        .stack()
+        .reset_index()
+    )
 
     if do_compound:
-        cols = ['compound_scenario', 'measure', 'value']
+        cols = ["compound_scenario", "measure", "value"]
     else:
         cols = scenario_cols
-        cols.extend(['measure', 'value'])
+        cols.extend(["measure", "value"])
 
     temp.columns = cols
-    cols.remove('value')
+    cols.remove("value")
 
     report_df = temp.groupby(cols).describe()
     report_df.columns = report_df.columns.droplevel()
-    report_df = report_df.drop(['count', '25%', '50%', '75%'], axis=1)
+    report_df = report_df.drop(["count", "25%", "50%", "75%"], axis=1)
     report_df = report_df.reset_index()
 
     # Abbreviate execution time measures for printing
-    report_df['measure'] = report_df['measure'].replace('^exec_time_', '', regex=True)
-    report_df['measure'] = report_df['measure'].replace('^simulant_initialization', 'sim_init', regex=True)
-    report_df['measure'] = report_df['measure'].replace('minutes$', 'min', regex=True)
-    report_df['measure'] = report_df['measure'].replace('seconds', 's', regex=True)
+    report_df["measure"] = report_df["measure"].replace("^exec_time_", "", regex=True)
+    report_df["measure"] = report_df["measure"].replace(
+        "^simulant_initialization", "sim_init", regex=True
+    )
+    report_df["measure"] = report_df["measure"].replace("minutes$", "min", regex=True)
+    report_df["measure"] = report_df["measure"].replace("seconds", "s", regex=True)
 
     report_df = report_df.set_index(cols).sort_index()
-    logger.info(f'\n{report_df}')
+    logger.info(f"\n{report_df}")
 
 
-def report_performance(input_directory: Union[Path, str], output_directory: Union[Path, str], output_hdf: bool,
-                       verbose: int):
+def report_performance(
+    input_directory: Union[Path, str],
+    output_directory: Union[Path, str],
+    output_hdf: bool,
+    verbose: int,
+):
     """Main method for vipin reporting. Gets job performance data, outputs to a file, and logs a report."""
     input_directory, output_directory = Path(input_directory), Path(output_directory)
     perf_summary = PerformanceSummary(input_directory)
@@ -162,7 +184,7 @@ def report_performance(input_directory: Union[Path, str], output_directory: Unio
     perf_df = perf_summary.to_df()
 
     if len(perf_df) < 1:
-        logger.warning(f'No performance data found in {input_directory}.')
+        logger.warning(f"No performance data found in {input_directory}.")
         return  # nothing left to do
 
     # Add jobapi data about the job to dataframe
@@ -172,10 +194,10 @@ def report_performance(input_directory: Union[Path, str], output_directory: Unio
     perf_df, scenario_cols = set_index_scenario_cols(perf_df)
 
     # Write to file
-    out_file = output_directory / 'log_summary'
+    out_file = output_directory / "log_summary"
     if output_hdf:
         out_file = out_file.with_suffix(".hdf")
-        perf_df.to_hdf(out_file, key='worker_data')
+        perf_df.to_hdf(out_file, key="worker_data")
     else:
         out_file = out_file.with_suffix(".csv")
         perf_df.to_csv(out_file)
@@ -184,7 +206,11 @@ def report_performance(input_directory: Union[Path, str], output_directory: Unio
         print_stat_report(perf_df, scenario_cols)
 
     if perf_summary.errors > 0:
-        logger.warning(f'{perf_summary.errors} log row{"s were" if perf_summary.errors > 1 else " was"} unreadable.')
-    logger.info(f'Performance summary {"hdf" if output_hdf else "csv"} can be found at {out_file}, with '
-                f'{perf_df.shape[0]} row{"s" if perf_df.shape[0] > 1 else ""}.')
+        logger.warning(
+            f'{perf_summary.errors} log row{"s were" if perf_summary.errors > 1 else " was"} unreadable.'
+        )
+    logger.info(
+        f'Performance summary {"hdf" if output_hdf else "csv"} can be found at {out_file}, with '
+        f'{perf_df.shape[0]} row{"s" if perf_df.shape[0] > 1 else ""}.'
+    )
     return

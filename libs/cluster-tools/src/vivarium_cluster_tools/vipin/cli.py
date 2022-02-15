@@ -12,17 +12,22 @@ Command line interface for `vipin`.
 """
 import click
 
-from vivarium_cluster_tools.vipin import utilities, perf_report
+from vivarium_cluster_tools.vipin import perf_report, utilities
 
 
 @click.command()
-@click.argument('logs-directory', type=click.Path(exists=True, file_okay=False))
-@click.option('--result-directory', '-o', type=click.Path(exists=True, file_okay=False),
-              help='The directory into which to write the summary of the parsed logs. '
-                   'Defaults to given logs directory if not given.')
-@click.option('--hdf/--csv', default=False,
-              help='Choose hdf or csv for output data. Defaults to csv.')
-@click.option('-v', 'verbose', count=True, help='Configure logging verbosity.')
+@click.argument("logs-directory", type=click.Path(exists=True, file_okay=False))
+@click.option(
+    "--result-directory",
+    "-o",
+    type=click.Path(exists=True, file_okay=False),
+    help="The directory into which to write the summary of the parsed logs. "
+    "Defaults to given logs directory if not given.",
+)
+@click.option(
+    "--hdf/--csv", default=False, help="Choose hdf or csv for output data. Defaults to csv."
+)
+@click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
 def vipin(logs_directory, result_directory, hdf, verbose):
     """Get performance information from worker_logs from a ``psimulate`` command.
 
@@ -35,4 +40,3 @@ def vipin(logs_directory, result_directory, hdf, verbose):
         result_directory = logs_directory
 
     perf_report.report_performance(logs_directory, result_directory, hdf, verbose)
-
