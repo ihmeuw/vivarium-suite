@@ -1,4 +1,11 @@
-"""Tools to manage and validate reproducible Python environments for simulation runs."""
+"""
+=====================================
+Reproducible Programming Environments
+=====================================
+
+Tools to manage and validate reproducible Python environments for simulation runs.
+
+"""
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Tuple
