@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 import os
 
-from setuptools import setup, find_packages
-
+from setuptools import find_packages, setup
 
 if __name__ == "__main__":
 
@@ -17,14 +16,14 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requirements = [
-        'numpy',
-        'pandas',
-        'scipy',
+        "numpy",
+        "pandas",
+        "scipy",
     ]
 
     test_requirements = [
-        'pytest',
-        'pytest-mock',
+        "pytest",
+        "pytest-mock",
     ]
 
     doc_requirements = [
@@ -33,17 +32,14 @@ if __name__ == "__main__":
     ]
 
     setup(
-        name=about['__title__'],
-        version=about['__version__'],
-
-        description=about['__summary__'],
+        name=about["__title__"],
+        version=about["__version__"],
+        description=about["__summary__"],
         long_description=long_description,
-        license=about['__license__'],
+        license=about["__license__"],
         url=about["__uri__"],
-
         author=about["__author__"],
         author_email=about["__email__"],
-
         classifiers=[
             "Intended Audience :: Developers",
             "Intended Audience :: Science/Research",
@@ -61,18 +57,15 @@ if __name__ == "__main__":
             "Topic :: Scientific/Engineering",
             "Topic :: Software Development :: Libraries",
         ],
-
-        package_dir={'': 'src'},
-        packages=find_packages(where='src'),
+        package_dir={"": "src"},
+        packages=find_packages(where="src"),
         include_package_data=True,
-
         install_requires=install_requirements,
         tests_require=test_requirements,
         extras_require={
-            'test': test_requirements,
-            'dev': test_requirements + doc_requirements,
-            'docs': doc_requirements
+            "test": test_requirements,
+            "dev": test_requirements + doc_requirements,
+            "docs": doc_requirements,
         },
-
         zip_safe=False,
     )
