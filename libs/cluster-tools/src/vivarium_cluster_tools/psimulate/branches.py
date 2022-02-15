@@ -7,15 +7,15 @@ Tools for managing the parameter space of a parallel run.
 
 """
 from itertools import product
-
-import yaml
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import yaml
 from vivarium.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.psimulate import globals as vct_globals
 
-FULL_ARTIFACT_PATH_KEY = f'{vct_globals.INPUT_DATA_KEY}.{vct_globals.ARTIFACT_PATH_KEY}'
+FULL_ARTIFACT_PATH_KEY = f"{vct_globals.INPUT_DATA_KEY}.{vct_globals.ARTIFACT_PATH_KEY}"
 
 
 class Keyspace:
@@ -26,7 +26,9 @@ class Keyspace:
         self._keyspace = keyspace
 
     @classmethod
-    def from_branch_configuration(cls, num_input_draws, num_random_seeds, branch_configuration_file):
+    def from_branch_configuration(
+        cls, num_input_draws, num_random_seeds, branch_configuration_file
+    ):
         """
         Parameters
         ----------
@@ -39,19 +41,19 @@ class Keyspace:
         branch_configuration_file: str
             Absolute path to the branch configuration file.
         """
-        branches, input_draw_count, random_seed_count = load_branches(num_input_draws,
-                                                                      num_random_seeds,
-                                                                      branch_configuration_file)
+        branches, input_draw_count, random_seed_count = load_branches(
+            num_input_draws, num_random_seeds, branch_configuration_file
+        )
         keyspace = calculate_keyspace(branches)
-        keyspace['input_draw'] = calculate_input_draws(input_draw_count)
-        keyspace['random_seed'] = calculate_random_seeds(random_seed_count)
+        keyspace["input_draw"] = calculate_input_draws(input_draw_count)
+        keyspace["random_seed"] = calculate_random_seeds(random_seed_count)
 
         return Keyspace(branches, keyspace)
 
     @classmethod
     def from_previous_run(cls, path: Path):
-        keyspace = yaml.full_load((path / 'keyspace.yaml').read_text())
-        branches = yaml.full_load((path / 'branches.yaml').read_text())
+        keyspace = yaml.full_load((path / "keyspace.yaml").read_text())
+        branches = yaml.full_load((path / "branches.yaml").read_text())
         return Keyspace(branches, keyspace)
 
     def get_data(self):
@@ -65,18 +67,18 @@ class Keyspace:
         raise KeyError(f"No matching branch {branch}")
 
     def persist(self, output_directory: Path):
-        (output_directory / 'keyspace.yaml').write_text(yaml.dump(self.get_data()))
-        (output_directory / 'branches.yaml').write_text(yaml.dump(self.branches))
+        (output_directory / "keyspace.yaml").write_text(yaml.dump(self.get_data()))
+        (output_directory / "branches.yaml").write_text(yaml.dump(self.branches))
 
     def add_draws(self, num_draws):
-        existing = self._keyspace['input_draw']
+        existing = self._keyspace["input_draw"]
         additional = calculate_input_draws(num_draws, existing)
-        self._keyspace['input_draw'] = existing + additional
+        self._keyspace["input_draw"] = existing + additional
 
     def add_seeds(self, num_seeds):
-        existing = self._keyspace['random_seed']
+        existing = self._keyspace["random_seed"]
         additional = calculate_random_seeds(num_seeds, existing)
-        self._keyspace['random_seed'] = existing + additional
+        self._keyspace["random_seed"] = existing + additional
 
     def __contains__(self, item):
         """Checks whether the item is present in the Keyspace"""
@@ -84,12 +86,20 @@ class Keyspace:
 
     def __iter__(self):
         """Yields and individual simulation configuration from the keyspace."""
-        for job_config in product(self._keyspace['input_draw'], self._keyspace['random_seed'], self.branches):
+        for job_config in product(
+            self._keyspace["input_draw"], self._keyspace["random_seed"], self.branches
+        ):
             yield job_config
 
     def __len__(self):
         """Returns the number of individual simulation runs this keyspace represents."""
-        return len(list(product(self._keyspace['input_draw'], self._keyspace['random_seed'], self.branches)))
+        return len(
+            list(
+                product(
+                    self._keyspace["input_draw"], self._keyspace["random_seed"], self.branches
+                )
+            )
+        )
 
 
 def calculate_input_draws(input_draw_count, existing_draws=None):
@@ -121,8 +131,10 @@ def calculate_input_draws(input_draw_count, existing_draws=None):
     if min_input_draw_count_allowed <= input_draw_count <= len(possible):
         return np.random.choice(possible, input_draw_count, replace=False).tolist()
     else:
-        raise ValueError(f"Input draw count must be between {min_input_draw_count_allowed} "
-                         f"and {len(possible)} (inclusive). You specified {input_draw_count}.")
+        raise ValueError(
+            f"Input draw count must be between {min_input_draw_count_allowed} "
+            f"and {len(possible)} (inclusive). You specified {input_draw_count}."
+        )
 
 
 def calculate_random_seeds(random_seed_count, existing_seeds=None):
@@ -155,7 +167,7 @@ def calculate_random_seeds(random_seed_count, existing_seeds=None):
         existing_seeds = []
         min_possible = 0
 
-    low, high = min_possible, min_possible + 10*random_seed_count
+    low, high = min_possible, min_possible + 10 * random_seed_count
     possible = list(range(low, high))
     return np.random.choice(possible, random_seed_count, replace=False).tolist()
 
@@ -179,14 +191,22 @@ def calculate_keyspace(branches):
 
 
 def load_branches(num_input_draws, num_random_seeds, branch_configuration_file):
-    if num_input_draws is None and num_random_seeds is None and branch_configuration_file is not None:
-        input_draw_count, random_seed_count, branches = load_branch_configurations(branch_configuration_file)
+    if (
+        num_input_draws is None
+        and num_random_seeds is None
+        and branch_configuration_file is not None
+    ):
+        input_draw_count, random_seed_count, branches = load_branch_configurations(
+            branch_configuration_file
+        )
     elif num_input_draws is not None and branch_configuration_file is None:
         input_draw_count = num_input_draws
         random_seed_count = num_random_seeds if num_random_seeds is not None else 1
         branches = [None]
     else:
-        raise ValueError('Must supply one of branch_configuration_file or --num_input_draws but not both')
+        raise ValueError(
+            "Must supply one of branch_configuration_file or --num_input_draws but not both"
+        )
 
     return branches, input_draw_count, random_seed_count
 
@@ -195,13 +215,13 @@ def load_branch_configurations(path):
     with open(path) as f:
         data = yaml.full_load(f)
 
-    input_draw_count = data.get('input_draw_count', 1)
-    random_seed_count = data.get('random_seed_count', 1)
+    input_draw_count = data.get("input_draw_count", 1)
+    random_seed_count = data.get("random_seed_count", 1)
 
     assert input_draw_count <= 1000, "Cannot use more that 1000 draws from GBD"
 
-    if 'branches' in data:
-        branches = expand_branch_templates(data['branches'])
+    if "branches" in data:
+        branches = expand_branch_templates(data["branches"])
     else:
         branches = [None]
 
@@ -249,7 +269,7 @@ def expand_branch_templates(templates):
             for k, v in branch:
                 new_branch.append((k, v[pointers[k]]))
                 if tick:
-                    i = pointers[k]+1
+                    i = pointers[k] + 1
                     if i < len(v):
                         tick = False
                         pointers[k] = i
@@ -264,7 +284,7 @@ def expand_branch_templates(templates):
         final_branches.append(root)
         for k, v in branch:
             current = root
-            *ks, k = k.split('.')
+            *ks, k = k.split(".")
             for sub_k in ks:
                 if sub_k in current:
                     current = current[sub_k]
