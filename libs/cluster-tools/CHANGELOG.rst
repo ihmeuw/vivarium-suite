@@ -1,3 +1,8 @@
+**1.2.13 - 02/15/22**
+
+ - Autoformat code with black and isort.
+ - Add black and isort checks to CI.
+
 **1.2.12 - 02/11/22**
 
  - Update pip freeze behavior to be more robust
