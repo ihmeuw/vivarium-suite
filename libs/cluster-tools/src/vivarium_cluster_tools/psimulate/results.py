@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from shutil import rmtree
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -119,24 +119,16 @@ def write_results_batch(
     results_to_write = concat_results(written_results, new_results_to_write)
 
     start = time.time()
-    retries = 3
-    while retries:
-        try:
-            output_path = output_directory / "output.hdf"
-            # Writing to an hdf over and over balloons the file size so write to new file and move it over to avoid
-            temp_output_path = output_path.with_name(output_path.name + "update")
-            results_to_write.to_hdf(temp_output_path, "data")
-            temp_output_path.replace(output_path)
-            break
-        except Exception as e:
-            logger.warning(
-                f"Error trying to write results to hdf, retries remaining {retries}"
-            )
-            time.sleep(30)
-            retries -= 1
-            if not retries:
-                logger.warning(f"Retries exhausted.")
-                raise e
+    safe_write_results(results_to_write, output_directory / "output.hdf")
     end = time.time()
     logger.info(f"Updated output.hdf in {end - start:.4f}s.")
     return results_to_write, unwritten_results
+
+
+@vct_utils.backoff_and_retry(backoff_seconds=30, num_retries=3, log_function=logger.warning)
+def safe_write_results(results: pd.DataFrame, output_path: Union[str, Path]) -> None:
+    # Writing to a hdf over and over balloons the file size so
+    # write to new file and move it over to avoid
+    temp_output_path = output_path.with_name(output_path.name + "update")
+    results.to_hdf(temp_output_path, "data")
+    temp_output_path.replace(output_path)

@@ -1,12 +1,13 @@
 import os
 import shutil
+import time
 from pathlib import Path
 from subprocess import PIPE, Popen
 from typing import Dict, List, Optional
 
 import pytest
 
-from vivarium_cluster_tools.utilities import mkdir
+from vivarium_cluster_tools.utilities import backoff_and_retry, mkdir
 
 
 @pytest.fixture(
@@ -76,3 +77,35 @@ def test_mkdir_set_permissions(permissions_params: List) -> None:
             shutil.rmtree(parent_path)
 
         assert prior_umask == os.umask(prior_umask), "umask was changed and not reset"
+
+
+def test_backoff_and_retry():
+    class WarningCatcher:
+        def __init__(self):
+            self.caught_warnings = []
+
+        def warn(self, message, *args, **kwargs):
+            self.caught_warnings.append(message)
+
+    wc = WarningCatcher()
+
+    @backoff_and_retry(log_function=wc.warn)
+    def successful_function():
+        return True
+
+    assert successful_function()
+    assert len(wc.caught_warnings) == 0
+
+    wc = WarningCatcher()
+
+    @backoff_and_retry(backoff_seconds=0.1, num_retries=5, log_function=wc.warn)
+    def failing_function():
+        raise ValueError
+
+    start = time.time()
+    with pytest.raises(ValueError):
+        failing_function()
+    duration = time.time() - start
+    # 5 for the retries, 1 for the final fail
+    assert len(wc.caught_warnings) == 5 + 1
+    assert abs(duration - 0.1 * 5) < 0.01
