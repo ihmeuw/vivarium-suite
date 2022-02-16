@@ -288,7 +288,7 @@ def main(
     native_specification["job_name"] = output_dir.parts[-2]
     native_specification = cluster.NativeSpecification(**native_specification)
 
-    utilities.configure_master_process_logging_to_file(logging_dirs["main"])
+    utilities.configure_main_process_logging_to_file(logging_dirs["main"])
     programming_environment.validate(output_dir)
 
     ctx = RunContext(

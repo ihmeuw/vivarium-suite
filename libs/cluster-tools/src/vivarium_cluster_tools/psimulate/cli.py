@@ -147,7 +147,7 @@ def run(
     to be /share/costeffectiveness/results.
 
     """
-    logs.configure_master_process_logging_to_terminal(options["verbose"])
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -178,7 +178,7 @@ def restart(results_root, **options):
     output directory from a previous ``psimulate run`` invocation.
 
     """
-    logs.configure_master_process_logging_to_terminal(options["verbose"])
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -224,7 +224,7 @@ def expand(results_root, **options):
     ``psimulate run`` invocation.
 
     """
-    logs.configure_master_process_logging_to_terminal(options["verbose"])
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(

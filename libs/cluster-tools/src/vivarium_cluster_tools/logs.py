@@ -33,7 +33,7 @@ def add_logging_sink(sink, verbose: int, colorize=False, serialize=False):
         )
 
 
-def configure_master_process_logging_to_terminal(
+def configure_main_process_logging_to_terminal(
     verbose: int, process_name: str = "psimulate"
 ):
     if process_name != "psimulate":
@@ -44,8 +44,8 @@ def configure_master_process_logging_to_terminal(
     add_logging_sink(sys.stdout, verbose, colorize=True)
 
 
-def configure_master_process_logging_to_file(output_directory: Path):
-    master_log = output_directory / "master.log"
-    serial_log = output_directory / "master.log.json"
-    add_logging_sink(master_log, verbose=2)
+def configure_main_process_logging_to_file(output_directory: Path):
+    main_log = output_directory / "main.log"
+    serial_log = output_directory / "main.log.json"
+    add_logging_sink(main_log, verbose=2)
     add_logging_sink(serial_log, verbose=2, serialize=True)
