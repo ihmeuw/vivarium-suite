@@ -23,6 +23,7 @@ from vivarium.framework.configuration import (
 )
 from vivarium.framework.utilities import collapse_nested_dict
 
+from vivarium_cluster_tools import logs
 from vivarium_cluster_tools.psimulate import cluster
 from vivarium_cluster_tools.psimulate import globals as vct_globals
 from vivarium_cluster_tools.psimulate import programming_environment, utilities
@@ -288,7 +289,7 @@ def main(
     native_specification["job_name"] = output_dir.parts[-2]
     native_specification = cluster.NativeSpecification(**native_specification)
 
-    utilities.configure_main_process_logging_to_file(logging_dirs["main"])
+    logs.configure_main_process_logging_to_file(logging_dirs["main"])
     programming_environment.validate(output_dir)
 
     ctx = RunContext(
