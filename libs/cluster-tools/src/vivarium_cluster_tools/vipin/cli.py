@@ -12,7 +12,8 @@ Command line interface for `vipin`.
 """
 import click
 
-from vivarium_cluster_tools.vipin import perf_report, utilities
+from vivarium_cluster_tools import logs
+from vivarium_cluster_tools.vipin import perf_report
 
 
 @click.command()
@@ -35,7 +36,7 @@ def vipin(logs_directory, result_directory, hdf, verbose):
     created in the ``result_directory`` (which defaults to the given logs
     directory unless otherwise specified).
     """
-    utilities.configure_master_process_logging_to_terminal(verbose)
+    logs.configure_master_process_logging_to_terminal(verbose, process_name="vipin")
     if not result_directory:
         result_directory = logs_directory
 

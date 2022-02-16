@@ -6,57 +6,13 @@ psimulate Utilities
 Utilities for psimulate runs.
 
 """
-import sys
 from datetime import datetime
 from pathlib import Path
 from shutil import rmtree
 from typing import Dict, Sequence, Tuple
 
-from loguru import logger
-
 from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import globals as vct_globals
-
-
-def add_logging_sink(sink, verbose: int, colorize=False, serialize=False):
-    message_format = (
-        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
-        "- <level>{message}</level>"
-    )
-    if verbose == 0:
-
-        def quiet_filter(record):
-            return record.get("extra", {}).get("queue", None) == "all"
-
-        logger.add(
-            sink,
-            colorize=colorize,
-            level="INFO",
-            format=message_format,
-            filter=quiet_filter,
-            serialize=serialize,
-        )
-    elif verbose == 1:
-        logger.add(
-            sink, colorize=colorize, level="INFO", format=message_format, serialize=serialize
-        )
-    elif verbose >= 2:
-        logger.add(
-            sink, colorize=colorize, level="DEBUG", format=message_format, serialize=serialize
-        )
-
-
-def configure_master_process_logging_to_terminal(verbose: int):
-    logger.remove(0)  # Clear default configuration
-    add_logging_sink(sys.stdout, verbose, colorize=True)
-
-
-def configure_master_process_logging_to_file(output_directory: Path):
-    master_log = output_directory / "master.log"
-    serial_log = output_directory / "master.log.json"
-    add_logging_sink(master_log, verbose=2)
-    add_logging_sink(serial_log, verbose=2, serialize=True)
 
 
 def get_output_directory(
@@ -74,14 +30,6 @@ def get_output_directory(
         model_specification_name = Path(model_specification_file).stem
         output_directory = root / model_specification_name / launch_time
     return output_directory
-
-
-def set_permissions(output_dir: Path):
-    """Call to achieve side effect of relaxing permissions to 775
-    on output dir and the parent"""
-    permissions = 0o775
-    output_dir.parent.chmod(permissions)
-    output_dir.chmod(permissions)
 
 
 def setup_directories(
