@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.psimulate.branches
+.. automodule:: vivarium_cluster_tools.psimulate.cluster
