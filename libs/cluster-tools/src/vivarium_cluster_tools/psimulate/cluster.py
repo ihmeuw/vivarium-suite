@@ -274,7 +274,7 @@ def start_cluster(
         atexit.register(kill_jobs)
 
 
-def get_drmaa() -> object:
+def get_drmaa():
     try:
         import drmaa
     except (RuntimeError, OSError):

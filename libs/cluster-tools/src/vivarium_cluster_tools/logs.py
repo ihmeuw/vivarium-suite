@@ -39,9 +39,7 @@ def add_logging_sink(sink, verbose: int, colorize=False, serialize=False):
         )
 
 
-def configure_main_process_logging_to_terminal(
-    verbose: int, process_name: str = "psimulate"
-):
+def configure_main_process_logging_to_terminal(verbose: int, process_name: str = "psimulate"):
     if process_name != "psimulate":
         # We don't have individual queue logs to silence
         # which is what verbosity 0 does.

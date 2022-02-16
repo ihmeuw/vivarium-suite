@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from vivarium_cluster_tools.psimulate.runner import (
+from vivarium_cluster_tools.psimulate.results import (
     concat_preserve_types,
     concat_results,
 )

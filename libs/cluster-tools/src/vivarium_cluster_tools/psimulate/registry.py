@@ -10,14 +10,14 @@ import math
 import random
 import time
 from collections import defaultdict
+from typing import Sequence
 
 import redis
 import rq
 from loguru import logger
 from rq.registry import FinishedJobRegistry, StartedJobRegistry
 
-from .distributed_worker import ResilientWorker
-from .utilities import chunks
+from vivarium_cluster_tools.psimulate.distributed_worker import ResilientWorker
 
 
 class QueueManager:
@@ -242,8 +242,14 @@ class RegistryManager:
 
     def enqueue(self, jobs):
         workers_per_queue = int(math.ceil(len(jobs) / len(self._queues)))
-        for queue, jobs_chunk in zip(self._queues, chunks(jobs, workers_per_queue)):
+        for queue, jobs_chunk in zip(self._queues, self._chunks(jobs, workers_per_queue)):
             queue.enqueue(jobs_chunk)
+
+    @staticmethod
+    def _chunks(sequence: Sequence, n: int):
+        """Yield successive n-sized chunks from l."""
+        for i in range(0, len(sequence), n):
+            yield sequence[i : i + n]
 
     def get_results(self):
         to_check = [q for q in self._queues if q.jobs_to_finish]
