@@ -13,9 +13,7 @@ import numpy as np
 import yaml
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate import globals as vct_globals
-
-FULL_ARTIFACT_PATH_KEY = f"{vct_globals.INPUT_DATA_KEY}.{vct_globals.ARTIFACT_PATH_KEY}"
+from vivarium_cluster_tools.psimulate.globals import FULL_ARTIFACT_PATH_KEY
 
 
 class Keyspace:

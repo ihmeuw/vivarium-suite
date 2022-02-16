@@ -23,7 +23,7 @@ def validate(output_dir: Path):
     current_environment_list = out.decode().strip().split("\n")
 
     if not original_environment_file.exists():  # original run
-        logger.info(f'Writing environment file to {str(original_environment_file)}.')
+        logger.info(f"Writing environment file to {str(original_environment_file)}.")
         with original_environment_file.open("w") as f:
             f.write("\n".join(current_environment_list))
     else:  # compare with original
@@ -97,5 +97,3 @@ def _compare_environments(current: Dict, original: Dict):
             f"In order to successfully run, you should make a new environment using the requirements.txt "
             f"file found in the output directory. Differences found as follows: {differences}."
         )
-
-
