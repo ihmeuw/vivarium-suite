@@ -10,7 +10,7 @@ import atexit
 import math
 from pathlib import Path
 from time import sleep, time
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -26,7 +26,7 @@ from vivarium.framework.utilities import collapse_nested_dict
 from vivarium_cluster_tools import logs
 from vivarium_cluster_tools.psimulate import cluster
 from vivarium_cluster_tools.psimulate import globals as vct_globals
-from vivarium_cluster_tools.psimulate import programming_environment, utilities
+from vivarium_cluster_tools.psimulate import programming_environment, results
 from vivarium_cluster_tools.psimulate.branches import Keyspace
 from vivarium_cluster_tools.psimulate.registry import RegistryManager
 from vivarium_cluster_tools.vipin.perf_report import report_performance
@@ -145,72 +145,6 @@ def build_job_list(ctx: RunContext) -> List[dict]:
     return jobs
 
 
-def concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
-    """Concatenation preserves all ``numpy`` dtypes but does not preserve any
-    pandas specific dtypes (e.g., categories become objects."""
-    dtypes = df_list[0].dtypes
-    columns_by_dtype = [list(dtype_group.index) for _, dtype_group in dtypes.groupby(dtypes)]
-
-    splits = []
-    for columns in columns_by_dtype:
-        slices = [df.filter(columns) for df in df_list]
-        splits.append(pd.DataFrame(data=np.concatenate(slices), columns=columns))
-    return pd.concat(splits, axis=1)
-
-
-def concat_results(
-    old_results: pd.DataFrame, new_results: List[pd.DataFrame]
-) -> pd.DataFrame:
-    # Skips all the pandas index checking because columns are in the same order.
-    start = time()
-
-    to_concat = [d.reset_index(drop=True) for d in new_results]
-    if not old_results.empty:
-        to_concat += [old_results.reset_index(drop=True)]
-
-    results = concat_preserve_types(to_concat)
-
-    end = time()
-    logger.info(f"Concatenated {len(new_results)} results in {end - start:.2f}s.")
-    return results
-
-
-def write_results_batch(
-    ctx: RunContext,
-    written_results: pd.DataFrame,
-    unwritten_results: List[pd.DataFrame],
-    batch_size: int = 50,
-) -> Tuple[pd.DataFrame, List[pd.DataFrame]]:
-    new_results_to_write, unwritten_results = (
-        unwritten_results[:batch_size],
-        unwritten_results[batch_size:],
-    )
-    results_to_write = concat_results(written_results, new_results_to_write)
-
-    start = time()
-    retries = 3
-    while retries:
-        try:
-            output_path = ctx.output_directory / "output.hdf"
-            # Writing to an hdf over and over balloons the file size so write to new file and move it over to avoid
-            temp_output_path = output_path.with_name(output_path.name + "update")
-            results_to_write.to_hdf(temp_output_path, "data")
-            temp_output_path.replace(output_path)
-            break
-        except Exception as e:
-            logger.warning(
-                f"Error trying to write results to hdf, retries remaining {retries}"
-            )
-            sleep(30)
-            retries -= 1
-            if not retries:
-                logger.warning(f"Retries exhausted.")
-                raise e
-    end = time()
-    logger.info(f"Updated output.hdf in {end - start:.4f}s.")
-    return results_to_write, unwritten_results
-
-
 def process_job_results(registry_manager: RegistryManager, ctx: RunContext):
     start_time = time()
 
@@ -227,12 +161,18 @@ def process_job_results(registry_manager: RegistryManager, ctx: RunContext):
             sleep(5)
             unwritten_results.extend(registry_manager.get_results())
             if ctx.no_batch and unwritten_results:
-                written_results, unwritten_results = write_results_batch(
-                    ctx, written_results, unwritten_results, len(unwritten_results)
+                written_results, unwritten_results = results.write_results_batch(
+                    ctx.output_directory,
+                    written_results,
+                    unwritten_results,
+                    len(unwritten_results),
                 )
             elif len(unwritten_results) > batch_size:
-                written_results, unwritten_results = write_results_batch(
-                    ctx, written_results, unwritten_results, batch_size
+                written_results, unwritten_results = results.write_results_batch(
+                    ctx.output_directory,
+                    written_results,
+                    unwritten_results,
+                    batch_size,
                 )
 
             registry_manager.update_and_report()
@@ -241,8 +181,11 @@ def process_job_results(registry_manager: RegistryManager, ctx: RunContext):
     finally:
         batch_size = 500
         while unwritten_results:
-            written_results, unwritten_results = write_results_batch(
-                ctx, written_results, unwritten_results, batch_size=batch_size
+            written_results, unwritten_results = results.write_results_batch(
+                ctx.output_directory,
+                written_results,
+                unwritten_results,
+                batch_size=batch_size,
             )
             logger.info(f"Unwritten results: {len(unwritten_results)}")
             logger.info(f"Elapsed time: {(time() - start_time) / 60:.1f} minutes.")
@@ -274,7 +217,7 @@ def main(
 ):
     cluster.exit_if_on_submit_host(cluster.get_hostname())
 
-    output_dir, logging_dirs = utilities.setup_directories(
+    output_dir, logging_dirs = results.setup_directories(
         model_specification_file,
         result_directory,
         restart,
@@ -282,7 +225,7 @@ def main(
     )
 
     if not no_cleanup:
-        atexit.register(utilities.check_for_empty_results_dir, output_dir=output_dir)
+        atexit.register(results.check_for_empty_results_dir, output_dir=output_dir)
 
     atexit.register(lambda: logger.remove())
 

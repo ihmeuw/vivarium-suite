@@ -1,0 +1,142 @@
+"""
+==================
+Results Management
+==================
+
+Tools for interacting with output directories and writing results.
+
+"""
+import time
+from datetime import datetime
+from pathlib import Path
+from shutil import rmtree
+from typing import Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
+from loguru import logger
+
+from vivarium_cluster_tools import utilities as vct_utils
+from vivarium_cluster_tools.psimulate import globals as vct_globals
+
+
+def get_output_directory(
+    model_specification_file: str = None, output_directory: str = None, restart: bool = False
+) -> Path:
+    if restart:
+        output_directory = Path(output_directory)
+    else:
+        root = (
+            Path(output_directory)
+            if output_directory
+            else Path(vct_globals.DEFAULT_OUTPUT_DIRECTORY)
+        )
+        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        model_specification_name = Path(model_specification_file).stem
+        output_directory = root / model_specification_name / launch_time
+    return output_directory
+
+
+def setup_directories(
+    model_specification_file: str, result_directory: str, restart: bool, expand: bool
+) -> Tuple[Path, Dict[str, Path]]:
+    output_directory = get_output_directory(
+        model_specification_file, result_directory, restart
+    )
+
+    if restart and not expand:
+        command = "restart"
+        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    elif restart and expand:
+        command = "expand"
+        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    else:
+        command = "run"
+        launch_time = output_directory.stem
+
+    logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
+
+    logging_dirs = {
+        "main": logging_directory,
+        "sge": logging_directory / "sge_logs",
+        "worker": logging_directory / "worker_logs",
+    }
+
+    vct_utils.mkdir(output_directory, exists_ok=True, parents=True)
+    for d in logging_dirs.values():
+        vct_utils.mkdir(d, parents=True)
+
+    return output_directory, logging_dirs
+
+
+def check_for_empty_results_dir(output_dir: Path):
+    """Remove the results directory including runner and worker logs if the simulation produced no results (i.e.,
+    it failed)."""
+    if not (output_dir / "output.hdf").exists():
+        rmtree(output_dir)
+
+
+def concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
+    """Concatenation preserves all ``numpy`` dtypes but does not preserve any
+    pandas specific dtypes (e.g., categories become objects."""
+    dtypes = df_list[0].dtypes
+    columns_by_dtype = [list(dtype_group.index) for _, dtype_group in dtypes.groupby(dtypes)]
+
+    splits = []
+    for columns in columns_by_dtype:
+        slices = [df.filter(columns) for df in df_list]
+        splits.append(pd.DataFrame(data=np.concatenate(slices), columns=columns))
+    return pd.concat(splits, axis=1)
+
+
+def concat_results(
+    old_results: pd.DataFrame, new_results: List[pd.DataFrame]
+) -> pd.DataFrame:
+    # Skips all the pandas index checking because columns are in the same order.
+    start = time.time()
+
+    to_concat = [d.reset_index(drop=True) for d in new_results]
+    if not old_results.empty:
+        to_concat += [old_results.reset_index(drop=True)]
+
+    results = concat_preserve_types(to_concat)
+
+    end = time.time()
+    logger.info(f"Concatenated {len(new_results)} results in {end - start:.2f}s.")
+    return results
+
+
+def write_results_batch(
+    output_directory: Path,
+    written_results: pd.DataFrame,
+    unwritten_results: List[pd.DataFrame],
+    batch_size: int = 50,
+) -> Tuple[pd.DataFrame, List[pd.DataFrame]]:
+    new_results_to_write, unwritten_results = (
+        unwritten_results[:batch_size],
+        unwritten_results[batch_size:],
+    )
+    results_to_write = concat_results(written_results, new_results_to_write)
+
+    start = time.time()
+    retries = 3
+    while retries:
+        try:
+            output_path = output_directory / "output.hdf"
+            # Writing to an hdf over and over balloons the file size so write to new file and move it over to avoid
+            temp_output_path = output_path.with_name(output_path.name + "update")
+            results_to_write.to_hdf(temp_output_path, "data")
+            temp_output_path.replace(output_path)
+            break
+        except Exception as e:
+            logger.warning(
+                f"Error trying to write results to hdf, retries remaining {retries}"
+            )
+            time.sleep(30)
+            retries -= 1
+            if not retries:
+                logger.warning(f"Retries exhausted.")
+                raise e
+    end = time.time()
+    logger.info(f"Updated output.hdf in {end - start:.4f}s.")
+    return results_to_write, unwritten_results
