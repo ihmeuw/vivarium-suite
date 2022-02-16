@@ -14,7 +14,8 @@ import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
-from vivarium_cluster_tools.psimulate import cluster, runner, utilities
+from vivarium_cluster_tools import logs
+from vivarium_cluster_tools.psimulate import cluster, runner
 
 shared_options = [
     click.option(
@@ -146,7 +147,7 @@ def run(
     to be /share/costeffectiveness/results.
 
     """
-    utilities.configure_master_process_logging_to_terminal(options["verbose"])
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -177,7 +178,7 @@ def restart(results_root, **options):
     output directory from a previous ``psimulate run`` invocation.
 
     """
-    utilities.configure_master_process_logging_to_terminal(options["verbose"])
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -223,7 +224,7 @@ def expand(results_root, **options):
     ``psimulate run`` invocation.
 
     """
-    utilities.configure_master_process_logging_to_terminal(options["verbose"])
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
