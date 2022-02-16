@@ -6,29 +6,16 @@ psimulate Utilities
 Utilities for psimulate runs.
 
 """
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
 from shutil import rmtree
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, Sequence, Tuple
 
 from loguru import logger
 
 from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import globals as vct_globals
-
-
-def get_drmaa() -> object:
-    try:
-        import drmaa
-    except (RuntimeError, OSError):
-        if "SGE_CLUSTER_NAME" in os.environ:
-            os.environ["DRMAA_LIBRARY_PATH"] = "/opt/sge/lib/lx-amd64/libdrmaa.so"
-            import drmaa
-        else:
-            drmaa = object()
-    return drmaa
 
 
 def add_logging_sink(sink, verbose: int, colorize=False, serialize=False):
@@ -127,15 +114,6 @@ def setup_directories(
         vct_utils.mkdir(d, parents=True)
 
     return output_directory, logging_dirs
-
-
-def get_hostname() -> str:
-    return os.environ.get(vct_globals.CLUSTER_ENV_HOSTNAME)
-
-
-def exit_if_on_submit_host(name: str):
-    if vct_globals.SUBMIT_HOST_MARKER in name:
-        raise RuntimeError("This tool must not be run from a submit host.")
 
 
 def chunks(l: Sequence, n: int):

@@ -10,21 +10,18 @@ Command line interface for `psimulate`.
    :show-nested:
 
 """
-from pathlib import Path
-
 import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
-from vivarium_cluster_tools.psimulate import globals as vct_globals
-from vivarium_cluster_tools.psimulate import runner, utilities
+from vivarium_cluster_tools.psimulate import cluster, runner, utilities
 
 shared_options = [
     click.option(
         "--project",
         "-P",
-        type=click.Choice(vct_globals.CLUSTER_PROJECTS),
-        default=vct_globals.DEFAULT_CLUSTER_PROJECT,
+        type=click.Choice(cluster.PROJECTS),
+        default=cluster.DEFAULT_PROJECT,
         help="The cluster project under which to run the simulation.",
     ),
     click.option(
@@ -72,7 +69,7 @@ shared_options = [
         default=-1,
         help=(
             f"Number of redis databases to use.  Defaults to a redis instance for every "
-            f"{vct_globals.DEFAULT_JOBS_PER_REDIS_INSTANCE} jobs."
+            f"{cluster.DEFAULT_JOBS_PER_REDIS_INSTANCE} jobs."
         ),
     ),
     click.option("-v", "verbose", count=True, help="Configure logging verbosity."),
