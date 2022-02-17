@@ -40,8 +40,6 @@ class RunContext:
         artifact_path: str,
         output_directory: Path,
         logging_directories: Dict[str, Path],
-        num_input_draws: int,
-        num_random_seeds: int,
         restart: bool,
         expand: Dict[str, int],
         no_batch: bool,
@@ -62,9 +60,7 @@ class RunContext:
         else:
             model_specification = build_model_specification(model_specification_file)
 
-            self.keyspace = Keyspace.from_branch_configuration(
-                num_input_draws, num_random_seeds, branch_configuration_file
-            )
+            self.keyspace = Keyspace.from_branch_configuration(branch_configuration_file)
             if artifact_path:
                 if vct_globals.FULL_ARTIFACT_PATH_KEY in self.keyspace:
                     raise ConfigurationError(
@@ -208,8 +204,6 @@ def main(
     result_directory: str,
     native_specification: dict,
     redis_processes: int,
-    num_input_draws: int = None,
-    num_random_seeds: int = None,
     restart: bool = False,
     expand: Dict[str, int] = None,
     no_batch: bool = False,
@@ -221,7 +215,7 @@ def main(
         model_specification_file,
         result_directory,
         restart,
-        expand=bool(num_input_draws or num_random_seeds),
+        expand=bool(expand),
     )
 
     if not no_cleanup:
@@ -241,8 +235,6 @@ def main(
         artifact_path,
         output_dir,
         logging_dirs,
-        num_input_draws,
-        num_random_seeds,
         restart,
         expand,
         no_batch,

@@ -24,23 +24,15 @@ class Keyspace:
         self._keyspace = keyspace
 
     @classmethod
-    def from_branch_configuration(
-        cls, num_input_draws, num_random_seeds, branch_configuration_file
-    ):
+    def from_branch_configuration(cls, branch_configuration_file):
         """
         Parameters
         ----------
-        num_input_draws: int
-            The number of GBD input draws to run.
-        num_random_seeds: int
-            The number of different random seeds to use for each GBD input draw.  Each model
-            draw creates a simulation with fixed GBD data, but a different sample of the
-            exogenous randomness used in the simulation.
         branch_configuration_file: str
             Absolute path to the branch configuration file.
         """
-        branches, input_draw_count, random_seed_count = load_branches(
-            num_input_draws, num_random_seeds, branch_configuration_file
+        branches, input_draw_count, random_seed_count = load_branch_configuration(
+            branch_configuration_file
         )
         keyspace = calculate_keyspace(branches)
         keyspace["input_draw"] = calculate_input_draws(input_draw_count)
@@ -188,28 +180,7 @@ def calculate_keyspace(branches):
     return keyspace
 
 
-def load_branches(num_input_draws, num_random_seeds, branch_configuration_file):
-    if (
-        num_input_draws is None
-        and num_random_seeds is None
-        and branch_configuration_file is not None
-    ):
-        input_draw_count, random_seed_count, branches = load_branch_configurations(
-            branch_configuration_file
-        )
-    elif num_input_draws is not None and branch_configuration_file is None:
-        input_draw_count = num_input_draws
-        random_seed_count = num_random_seeds if num_random_seeds is not None else 1
-        branches = [None]
-    else:
-        raise ValueError(
-            "Must supply one of branch_configuration_file or --num_input_draws but not both"
-        )
-
-    return branches, input_draw_count, random_seed_count
-
-
-def load_branch_configurations(path):
+def load_branch_configuration(path):
     with open(path) as f:
         data = yaml.full_load(f)
 
@@ -223,7 +194,7 @@ def load_branch_configurations(path):
     else:
         branches = [None]
 
-    return input_draw_count, random_seed_count, branches
+    return branches, input_draw_count, random_seed_count
 
 
 def expand_branch_templates(templates):
