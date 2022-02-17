@@ -7,67 +7,15 @@ Tools for interacting with output directories and writing results.
 
 """
 import time
-from datetime import datetime
+
 from pathlib import Path
-from shutil import rmtree
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
 from vivarium_cluster_tools import utilities as vct_utils
-
-
-def get_output_directory(
-    model_specification_file: Optional[Path], output_directory: Path, restart: bool
-) -> Path:
-    if not restart:
-        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        output_directory = output_directory / model_specification_file.stem / launch_time
-    return output_directory
-
-
-def setup_directories(
-    model_specification_file: Optional[Path],
-    result_directory: Path,
-    restart: bool,
-    expand: bool,
-) -> Tuple[Path, Dict[str, Path]]:
-    output_directory = get_output_directory(
-        model_specification_file, result_directory, restart
-    )
-
-    if restart and not expand:
-        command = "restart"
-        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    elif restart and expand:
-        command = "expand"
-        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    else:
-        command = "run"
-        launch_time = output_directory.stem
-
-    logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
-
-    logging_dirs = {
-        "main": logging_directory,
-        "sge": logging_directory / "sge_logs",
-        "worker": logging_directory / "worker_logs",
-    }
-
-    vct_utils.mkdir(output_directory, exists_ok=True, parents=True)
-    for d in logging_dirs.values():
-        vct_utils.mkdir(d, parents=True)
-
-    return output_directory, logging_dirs
-
-
-def check_for_empty_results_dir(output_dir: Path):
-    """Remove the results directory including runner and worker logs if the simulation produced no results (i.e.,
-    it failed)."""
-    if not (output_dir / "output.hdf").exists():
-        rmtree(output_dir)
 
 
 def concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:

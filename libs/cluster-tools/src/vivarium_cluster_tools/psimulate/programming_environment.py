@@ -13,21 +13,18 @@ from typing import Dict, List, Tuple
 from loguru import logger
 
 
-def validate(output_dir: Path):
-    original_environment_file = output_dir / "requirements.txt"
-
+def validate(environment_file: Path):
     pip_list_proc = subprocess.Popen(
         ["pip", "list", "--format=freeze"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     out, err = pip_list_proc.communicate()
     current_environment_list = out.decode().strip().split("\n")
 
-    if not original_environment_file.exists():  # original run
-        logger.info(f"Writing environment file to {str(original_environment_file)}.")
-        with original_environment_file.open("w") as f:
-            f.write("\n".join(current_environment_list))
+    if not environment_file.exists():  # original run
+        logger.info(f"Writing environment file to {str(environment_file)}.")
+        environment_file.write_text("\n".join(current_environment_list))
     else:  # compare with original
-        with original_environment_file.open("r") as f:
+        with environment_file.open() as f:
             original_environment_list = [line.replace("\n", "") for line in f]
         current_environment = _convert_pip_list_to_dict(current_environment_list)
         original_environment = _convert_pip_list_to_dict(original_environment_list)

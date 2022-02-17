@@ -184,8 +184,8 @@ def get_random_free_port() -> int:
     return port
 
 
-def launch_redis(port: int, logging_dirs: Dict) -> subprocess.Popen:
-    log = open(f'{logging_dirs["main"]}/redis.p{port}.log', "a")
+def launch_redis(port: int, redis_logging_root: Path) -> subprocess.Popen:
+    log = (redis_logging_root / f'redis.p{port}.log').open("a")
     log.write(f">>>>>>>> Starting log for redis-server on port {port}\n")
     log.flush()
     try:
@@ -217,14 +217,14 @@ def launch_redis(port: int, logging_dirs: Dict) -> subprocess.Popen:
 
 
 def launch_redis_processes(
-    num_processes: int, logging_dirs: Dict
+    num_processes: int, redis_logging_root: Path,
 ) -> Tuple[str, List[Tuple[str, int]]]:
     hostname = socket.getfqdn()
     redis_ports = []
     for i in range(num_processes):
         port = get_random_free_port()
         logger.info(f"Starting Redis Broker at {hostname}:{port}")
-        launch_redis(port, logging_dirs)
+        launch_redis(port, redis_logging_root)
         redis_ports.append((hostname, port))
 
     redis_urls = [f"redis://{hostname}:{port}" for hostname, port in redis_ports]
