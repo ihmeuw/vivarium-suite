@@ -247,7 +247,8 @@ def main(
         redis_processes = int(math.ceil(len(jobs) / cluster.DEFAULT_JOBS_PER_REDIS_INSTANCE))
 
     worker_template, redis_ports = cluster.launch_redis_processes(
-        redis_processes, output_paths.logging_root,
+        redis_processes,
+        output_paths.logging_root,
     )
     output_paths.worker_settings.write_text(worker_template)
 

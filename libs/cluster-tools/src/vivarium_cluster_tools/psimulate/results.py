@@ -7,7 +7,6 @@ Tools for interacting with output directories and writing results.
 
 """
 import time
-
 from pathlib import Path
 from typing import List, Tuple, Union
 
