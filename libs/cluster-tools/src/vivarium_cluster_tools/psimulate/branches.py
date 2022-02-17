@@ -196,6 +196,8 @@ def calculate_keyspace(branches):
         if set(branch.keys()) != set(keyspace.keys()):
             raise ValueError("All branches must have the same keys")
         for k, v in branch.items():
+            if k == FULL_ARTIFACT_PATH_KEY:
+                validate_artifact_path(v)
             keyspace[k].add(v)
     keyspace = {k: list(v) for k, v in keyspace.items()}
     return keyspace
