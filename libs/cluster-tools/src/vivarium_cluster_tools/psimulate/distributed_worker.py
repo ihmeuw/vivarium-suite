@@ -13,9 +13,7 @@ import random
 from pathlib import Path
 from time import sleep, time
 from traceback import format_exc
-from typing import Mapping
 
-import numpy as np
 import pandas as pd
 import redis
 from loguru import logger
@@ -23,8 +21,10 @@ from rq import Queue, get_current_job
 from rq.job import JobStatus
 from rq.registry import FailedJobRegistry
 from rq.worker import Worker
+from vivarium.framework.engine import SimulationContext
+from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate import globals as vct_globals
+from vivarium_cluster_tools.psimulate import jobs
 from vivarium_cluster_tools.vipin.perf_counters import CounterSnapshot
 
 
@@ -98,66 +98,42 @@ class ResilientWorker(Worker):
             self.procline("Forked {0} at {1}".format(child_pid, time()))
 
 
-def worker(parameters: Mapping):
+def worker(job_parameters: dict):
     node = f"{os.environ['SGE_CLUSTER_NAME']}:{os.environ['HOSTNAME']}"
     job = f"{os.environ['JOB_NAME']}: {os.environ['JOB_ID']}:{os.environ['SGE_TASK_ID']}"
 
-    input_draw = parameters["input_draw"]
-    random_seed = parameters["random_seed"]
-    model_specification_file = parameters["model_specification_file"]
-    branch_config = parameters["branch_configuration"]
+    job_parameters = jobs.JobParameters(**job_parameters)
+
     logger.info(f"Launching new job {job} on {node}")
-    logger.info(
-        "Starting job: {}".format(
-            (input_draw, random_seed, model_specification_file, branch_config)
-        )
-    )
+    logger.info(f"Starting job: {job_parameters}")
 
     try:
-        np.random.seed([input_draw, random_seed])
-        worker_ = get_current_job().id
-
-        from vivarium.framework.engine import SimulationContext
-        from vivarium.framework.utilities import collapse_nested_dict
-
-        configuration = {}
-        run_key = {"input_draw": input_draw, "random_seed": random_seed}
-
-        if branch_config is not None:
-            configuration.update(dict(branch_config))
-            run_key.update(dict(branch_config))
-
-        input_data_config = {
-            "input_draw_number": input_draw,
-        }
-        if vct_globals.ARTIFACT_PATH_KEY in dict(branch_config).get(
-            vct_globals.INPUT_DATA_KEY, {}
-        ):
-            input_data_config.update(
-                {
-                    vct_globals.ARTIFACT_PATH_KEY: branch_config[vct_globals.INPUT_DATA_KEY][
-                        vct_globals.ARTIFACT_PATH_KEY
-                    ]
-                }
-            )
+        configuration = job_parameters.branch_configuration
+        # TODO: Need to test serialization of an empty dict, then this
+        #   can go away.  If you're successfully running code and this
+        #   assert is still here, delete it.
+        assert configuration is not None
 
         configuration.update(
             {
                 "run_configuration": {
-                    "input_draw_number": input_draw,
-                    "run_id": str(worker_) + "_" + str(time()),
-                    "results_directory": parameters["results_path"],
-                    "run_key": run_key,
+                    "run_id": str(get_current_job().id) + "_" + str(time()),
+                    "results_directory": job_parameters.results_path,
+                    "run_key": job_parameters.job_specific,
                 },
                 "randomness": {
-                    "random_seed": random_seed,
-                    "additional_seed": input_draw,
+                    "random_seed": job_parameters.random_seed,
+                    "additional_seed": job_parameters.input_draw,
                 },
-                vct_globals.INPUT_DATA_KEY: input_data_config,
+                "input_data": {
+                    "input_draw_number": job_parameters.input_draw,
+                },
             }
         )
 
-        sim = SimulationContext(model_specification_file, configuration=configuration)
+        sim = SimulationContext(
+            job_parameters.model_specification, configuration=configuration
+        )
         logger.info("Simulation configuration:")
         logger.info(str(sim.configuration))
 
@@ -206,13 +182,14 @@ def worker(parameters: Mapping):
         event["end"] = time()
         end_snapshot = CounterSnapshot()
 
-        do_sim_epilogue(start_snapshot, end_snapshot, event, exec_time, parameters)
+        do_sim_epilogue(start_snapshot, end_snapshot, event, exec_time, job_parameters)
 
         idx = pd.MultiIndex.from_tuples(
-            [(input_draw, random_seed)], names=["input_draw_number", "random_seed"]
+            [(job_parameters.input_draw, job_parameters.random_seed)],
+            names=["input_draw_number", "random_seed"],
         )
         output_metrics = pd.DataFrame(metrics, index=idx)
-        for k, v in collapse_nested_dict(run_key):
+        for k, v in collapse_nested_dict(job_parameters.branch_configuration):
             output_metrics[k] = v
         return output_metrics
 
@@ -223,11 +200,7 @@ def worker(parameters: Mapping):
         job.save_meta()
         raise
     finally:
-        logger.info(
-            "Exiting job: {}".format(
-                (input_draw, random_seed, model_specification_file, branch_config)
-            )
-        )
+        logger.info(f"Exiting job: {job_parameters}")
 
 
 def do_sim_epilogue(
@@ -235,7 +208,7 @@ def do_sim_epilogue(
     end: CounterSnapshot,
     event: dict,
     exec_time: dict,
-    parameters: Mapping,
+    parameters: jobs.JobParameters,
 ):
     exec_time["results_minutes"] = (event["end"] - event["results_start"]) / 60
     logger.info(f'Results reporting completed in {exec_time["results_minutes"]:.3f} minutes.')
@@ -254,11 +227,9 @@ def do_sim_epilogue(
                 "host": os.environ["HOSTNAME"].split(".")[0],
                 "job_number": os.environ["JOB_ID"],
                 "task_number": os.environ["SGE_TASK_ID"],
-                "draw": parameters["input_draw"],
-                "seed": parameters["random_seed"],
-                "scenario": parameters[
-                    "branch_configuration"
-                ],  # assumes leaves of branch config tree are scenarios
+                "draw": parameters.input_draw,
+                "seed": parameters.random_seed,
+                "scenario": parameters.branch_configuration,
                 "event": event,
                 "exec_time": exec_time,
                 "counters": (end - start).to_dict(),

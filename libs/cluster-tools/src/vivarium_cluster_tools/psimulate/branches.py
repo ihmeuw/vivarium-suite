@@ -14,7 +14,7 @@ import numpy as np
 import yaml
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate.globals import FULL_ARTIFACT_PATH_KEY
+from vivarium_cluster_tools.psimulate.model_specification import FULL_ARTIFACT_PATH_KEY
 
 
 class Keyspace:
@@ -100,6 +100,8 @@ class Keyspace:
         for job_config in product(
             self._keyspace["input_draw"], self._keyspace["random_seed"], self.branches
         ):
+            if job_config[2] is None:
+                job_config[2] = {}
             yield job_config
 
     def __len__(self):
@@ -194,8 +196,6 @@ def calculate_keyspace(branches):
         if set(branch.keys()) != set(keyspace.keys()):
             raise ValueError("All branches must have the same keys")
         for k, v in branch.items():
-            if k == FULL_ARTIFACT_PATH_KEY:
-                validate_artifact_path(v)
             keyspace[k].add(v)
     keyspace = {k: list(v) for k, v in keyspace.items()}
     return keyspace

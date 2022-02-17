@@ -4,6 +4,7 @@ Model specification management
 ==============================
 
 """
+import typing
 from pathlib import Path
 from typing import Optional
 
@@ -15,8 +16,15 @@ from vivarium.framework.configuration import (
     build_model_specification,
 )
 
-from vivarium_cluster_tools.psimulate import globals as vct_globals
-from vivarium_cluster_tools.psimulate.branches import Keyspace
+if typing.TYPE_CHECKING:
+    # Cyclic import.
+    from vivarium_cluster_tools.psimulate.branches import Keyspace
+
+
+# Configuration key constants
+INPUT_DATA_KEY = "input_data"
+ARTIFACT_PATH_KEY = "artifact_path"
+FULL_ARTIFACT_PATH_KEY = f"{INPUT_DATA_KEY}.{ARTIFACT_PATH_KEY}"
 
 
 def parse(
@@ -24,7 +32,7 @@ def parse(
     artifact_path: Optional[Path],
     model_specification_path: Path,
     restart: bool,
-    keyspace: Keyspace,
+    keyspace: "Keyspace",
 ) -> ConfigTree:
     if restart:
         return build_model_specification(model_specification_path)
@@ -32,7 +40,7 @@ def parse(
     model_specification = build_model_specification(input_model_specification_path)
 
     artifact_path_is_cli_arg = artifact_path.is_file()
-    artifact_path_in_keyspace = vct_globals.FULL_ARTIFACT_PATH_KEY in keyspace
+    artifact_path_in_keyspace = FULL_ARTIFACT_PATH_KEY in keyspace
 
     if artifact_path_is_cli_arg and artifact_path_in_keyspace:
         raise ConfigurationError(
@@ -41,8 +49,8 @@ def parse(
             str(artifact_path),
         )
     elif artifact_path_is_cli_arg:
-        model_specification.configuration[vct_globals.INPUT_DATA_KEY].update(
-            {vct_globals.ARTIFACT_PATH_KEY: str(artifact_path)}, source=__file__
+        model_specification.configuration[INPUT_DATA_KEY].update(
+            {ARTIFACT_PATH_KEY: str(artifact_path)}, source=__file__
         )
     else:
         # Artifact path comes from the model spec.

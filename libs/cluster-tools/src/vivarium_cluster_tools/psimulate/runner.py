@@ -10,17 +10,16 @@ import atexit
 import math
 from pathlib import Path
 from time import sleep, time
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Optional
 
-import numpy as np
 import pandas as pd
 from loguru import logger
-from vivarium.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools import logs
 from vivarium_cluster_tools.psimulate import (
     branches,
     cluster,
+    jobs,
     model_specification,
     paths,
     programming_environment,
@@ -28,57 +27,6 @@ from vivarium_cluster_tools.psimulate import (
     results,
 )
 from vivarium_cluster_tools.vipin.perf_report import report_performance
-
-
-def build_job_list(
-    model_specification_path: Path,
-    output_root: Path,
-    keyspace: branches.Keyspace,
-    existing_outputs: Optional[pd.DataFrame],
-) -> Tuple[List[dict], int]:
-    jobs = []
-    number_already_completed = 0
-
-    for (input_draw, random_seed, branch_config) in keyspace:
-        parameters = {
-            "model_specification_file": str(model_specification_path),
-            "branch_configuration": branch_config,
-            "input_draw": int(input_draw),
-            "random_seed": int(random_seed),
-            "results_path": str(output_root),
-        }
-
-        do_schedule = True
-        if existing_outputs is not None:
-            mask = existing_outputs.input_draw == int(input_draw)
-            mask &= existing_outputs.random_seed == int(random_seed)
-            if branch_config:
-                for k, v in collapse_nested_dict(branch_config):
-                    if isinstance(v, float):
-                        mask &= np.isclose(existing_outputs[k], v)
-                    else:
-                        mask &= existing_outputs[k] == v
-            do_schedule = not np.any(mask)
-
-        if do_schedule:
-            jobs.append(parameters)
-        else:
-            number_already_completed += 1
-
-    if number_already_completed:
-        logger.info(
-            f"{number_already_completed} of {len(keyspace)} jobs completed in previous run."
-        )
-        if number_already_completed != len(existing_outputs):
-            logger.warning(
-                "There are jobs from the previous run which would not have been created "
-                "with the configuration saved with the run. That either means that code "
-                "has changed between then and now or that the outputs or configuration data "
-                "have been modified. This may represent a serious error so give it some thought."
-            )
-
-    np.random.shuffle(jobs)
-    return jobs, number_already_completed
 
 
 def process_job_results(
@@ -132,15 +80,32 @@ def process_job_results(
             logger.info(f"Elapsed time: {(time() - start_time) / 60:.1f} minutes.")
 
 
-def load_existing_outputs(result_path: Path, restart: bool) -> Union[pd.DataFrame, None]:
+def load_existing_outputs(result_path: Path, restart: bool) -> pd.DataFrame:
     try:
         existing_outputs = pd.read_hdf(result_path)
     except FileNotFoundError:
-        existing_outputs = None
+        existing_outputs = pd.DataFrame()
     assert (
-        existing_outputs is None or restart
+        existing_outputs.empty or restart
     ), "How do you have existing outputs on an initial run?"
     return existing_outputs
+
+
+def report_initial_status(
+    num_jobs_completed: int, existing_outputs: pd.DataFrame, keyspace: branches.Keyspace
+) -> None:
+    if num_jobs_completed:
+        logger.info(
+            f"{num_jobs_completed} of {len(keyspace)} jobs completed in previous run."
+        )
+    if num_jobs_completed != len(existing_outputs):
+        extra_jobs_completed = num_jobs_completed - len(existing_outputs)
+        logger.warning(
+            f"There are {extra_jobs_completed} jobs from the previous run which would not have been created "
+            "with the configuration saved with the run. That either means that code "
+            "has changed between then and now or that the outputs or configuration data "
+            "have been modified. This may represent a serious error so give it some thought."
+        )
 
 
 def try_run_vipin(log_path: Path):
@@ -196,13 +161,14 @@ def main(
 
     existing_outputs = load_existing_outputs(output_paths.results, restart)
 
-    jobs, num_jobs_completed = build_job_list(
+    job_parameters, num_jobs_completed = jobs.build_job_list(
         model_specification_path=output_paths.model_specification,
         output_root=output_paths.root,
         keyspace=keyspace,
         existing_outputs=existing_outputs,
     )
-    if len(jobs) == 0:
+    report_initial_status(num_jobs_completed, existing_outputs, keyspace)
+    if len(job_parameters) == 0:
         logger.info("Nothing to do")
         return
 
@@ -219,7 +185,9 @@ def main(
     logger.info(f"Starting jobs. Results will be written to: {str(output_paths.root)}")
 
     if redis_processes == -1:
-        redis_processes = int(math.ceil(len(jobs) / cluster.DEFAULT_JOBS_PER_REDIS_INSTANCE))
+        redis_processes = int(
+            math.ceil(len(job_parameters) / cluster.DEFAULT_JOBS_PER_REDIS_INSTANCE)
+        )
 
     worker_template, redis_ports = cluster.launch_redis_processes(
         redis_processes,
@@ -231,7 +199,7 @@ def main(
     registry_manager.enqueue(jobs)
 
     cluster.start_cluster(
-        len(jobs),
+        len(job_parameters),
         output_paths.cluster_logging_root,
         output_paths.worker_logging_root,
         output_paths.worker_settings,
