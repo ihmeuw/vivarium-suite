@@ -209,12 +209,15 @@ def main(
 ):
     cluster.exit_if_on_submit_host(cluster.get_hostname())
 
+    # Generate programmatic representation of the output directory structure
     output_paths = paths.OutputPaths.from_entry_point_args(
         input_model_specification_path=input_paths.model_specification,
         result_directory=input_paths.result_directory,
         restart=restart,
         expand=bool(expand),
     )
+    # Make output root and all subdirectories.
+    output_paths.touch()
 
     if not no_cleanup:
         atexit.register(paths.delete_on_catastrophic_failure, output_paths=output_paths)
