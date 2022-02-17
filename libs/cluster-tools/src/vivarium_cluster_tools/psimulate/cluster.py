@@ -6,8 +6,8 @@ Cluster Interaction
 Tools for interacting with the IHME cluster.
 
 """
-
 import atexit
+import math
 import os
 import shutil
 import socket
@@ -218,8 +218,12 @@ def launch_redis(port: int, redis_logging_root: Path) -> subprocess.Popen:
 
 def launch_redis_processes(
     num_processes: int,
+    num_jobs: int,
     redis_logging_root: Path,
 ) -> Tuple[str, List[Tuple[str, int]]]:
+    if num_processes == -1:
+        num_processes = int(math.ceil(num_jobs / DEFAULT_JOBS_PER_REDIS_INSTANCE))
+
     hostname = socket.getfqdn()
     redis_ports = []
     for i in range(num_processes):
