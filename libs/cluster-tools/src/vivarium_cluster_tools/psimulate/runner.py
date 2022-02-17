@@ -24,13 +24,9 @@ from vivarium.framework.configuration import (
 from vivarium.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools import logs
-from vivarium_cluster_tools.psimulate import (
-    cluster,
-    globals as vct_globals,
-    paths,
-    programming_environment,
-    results,
-)
+from vivarium_cluster_tools.psimulate import cluster
+from vivarium_cluster_tools.psimulate import globals as vct_globals
+from vivarium_cluster_tools.psimulate import paths, programming_environment, results
 from vivarium_cluster_tools.psimulate.branches import Keyspace
 from vivarium_cluster_tools.psimulate.registry import RegistryManager
 from vivarium_cluster_tools.vipin.perf_report import report_performance
@@ -62,7 +58,9 @@ class RunContext:
         else:
             model_specification = build_model_specification(input_paths.model_specification)
 
-            self.keyspace = Keyspace.from_branch_configuration(input_paths.branch_configuration)
+            self.keyspace = Keyspace.from_branch_configuration(
+                input_paths.branch_configuration
+            )
             if input_paths.artifact:
                 if vct_globals.FULL_ARTIFACT_PATH_KEY in self.keyspace:
                     raise ConfigurationError(
@@ -71,7 +69,9 @@ class RunContext:
                         str(input_paths.artifact),
                     )
                 if not input_paths.artifact.exists():
-                    raise FileNotFoundError(f"Cannot find artifact at path {str(input_paths.artifact)}")
+                    raise FileNotFoundError(
+                        f"Cannot find artifact at path {str(input_paths.artifact)}"
+                    )
 
             elif (
                 vct_globals.ARTIFACT_PATH_KEY

@@ -29,7 +29,10 @@ def get_output_directory(
 
 
 def setup_directories(
-    model_specification_file: Optional[Path], result_directory: Path, restart: bool, expand: bool
+    model_specification_file: Optional[Path],
+    result_directory: Path,
+    restart: bool,
+    expand: bool,
 ) -> Tuple[Path, Dict[str, Path]]:
     output_directory = get_output_directory(
         model_specification_file, result_directory, restart
