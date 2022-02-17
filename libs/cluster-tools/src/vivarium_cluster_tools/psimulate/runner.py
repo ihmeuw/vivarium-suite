@@ -72,14 +72,14 @@ class RunContext:
                     raise FileNotFoundError(
                         f"Cannot find artifact at path {str(input_paths.artifact)}"
                     )
-
+                artifact_path = input_paths.artifact
             elif (
                 vct_globals.ARTIFACT_PATH_KEY
                 in model_specification.configuration[vct_globals.INPUT_DATA_KEY]
             ):
                 artifact_path = parse_artifact_path_config(model_specification.configuration)
 
-            if input_paths.artifact:
+            if artifact_path:
                 model_specification.configuration[vct_globals.INPUT_DATA_KEY].update(
                     {vct_globals.ARTIFACT_PATH_KEY: input_paths.artifact}, source=__file__
                 )
