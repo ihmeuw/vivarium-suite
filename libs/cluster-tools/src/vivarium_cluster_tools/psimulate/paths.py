@@ -109,6 +109,7 @@ class OutputPaths(NamedTuple):
 
 def delete_on_catastrophic_failure(output_paths: OutputPaths):
     """Deletes the entire results root if no results are found.
+
     Remove the results directory including runner and worker logs if
     the simulation produced no results. This failure category usually
     happens when there is a code or data error that would cause
