@@ -148,7 +148,7 @@ def main(
         keyspace_path=output_paths.keyspace,
         branches_path=output_paths.branches,
     )
-    # Throw that into our output director. The keyspace output is
+    # Throw that into our output directory. The keyspace output is
     # a cartesian product representation of the parameter space and
     # branches is a flat representation with the product expanded out.
     keyspace.persist(output_paths.keyspace, output_paths.branches)
@@ -203,7 +203,11 @@ def main(
     native_specification = cluster.NativeSpecification(**native_specification)
     cluster.check_user_sge_config()
 
-    # Start an rq worker for every job using the cluster scheduler.
+    # Start an rq worker for every job using the cluster scheduler. The workers
+    # will start as soon as they get scheduled and start looking for work. They
+    # run in burst mode which means they shut down if they can't find anything
+    # to do. This means it's critical that we put the jobs on the queue before
+    # the workers land, otherwise they'll just show up and shut down.
     cluster.start_cluster(
         len(job_parameters),
         output_paths.cluster_logging_root,
