@@ -76,10 +76,10 @@ class OutputPaths(NamedTuple):
         command = _resolve_command(restart, expand)
         launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
-        output_directory = Path(result_directory)
+        output_directory = result_directory
         if command == "run":
             output_directory = (
-                output_directory / Path(input_model_specification_path).stem / launch_time
+                output_directory / input_model_specification_path.stem / launch_time
             )
 
         logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
