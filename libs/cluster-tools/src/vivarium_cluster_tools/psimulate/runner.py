@@ -37,6 +37,7 @@ class RunContext:
         self,
         input_paths: paths.InputPaths,
         output_paths: paths.OutputPaths,
+        keyspace: Keyspace,
         restart: bool,
         expand: Dict[str, int],
         no_batch: bool,
@@ -46,20 +47,13 @@ class RunContext:
         self.no_batch = no_batch
         self.sge_log_directory = output_paths.cluster_logging_root
         self.worker_log_directory = output_paths.worker_logging_root
+        self.keyspace = keyspace
 
         if restart:
-            self.keyspace = Keyspace.from_previous_run(self.output_directory)
             self.existing_outputs = pd.read_hdf(output_paths.results)
-            if expand:
-                self.keyspace.add_draws(expand["num_draws"])
-                self.keyspace.add_seeds(expand["num_seeds"])
-                self.keyspace.persist(self.output_directory)
         else:
             model_specification = build_model_specification(input_paths.model_specification)
 
-            self.keyspace = Keyspace.from_branch_configuration(
-                input_paths.branch_configuration
-            )
             if input_paths.artifact:
                 if vct_globals.FULL_ARTIFACT_PATH_KEY in self.keyspace:
                     raise ConfigurationError(
@@ -90,8 +84,6 @@ class RunContext:
 
             self.existing_outputs = None
 
-            # Log some basic stuff about the simulation to be run.
-            self.keyspace.persist(self.output_directory)
         self.model_specification = self.output_directory / vct_globals.MODEL_SPEC_FILENAME
 
 
@@ -219,6 +211,15 @@ def main(
     # Make output root and all subdirectories.
     output_paths.touch()
 
+    keyspace = Keyspace.from_entry_point_args(
+        input_branch_configuration_path=input_paths.branch_configuration,
+        restart=restart,
+        expand=expand,
+        keyspace_path=output_paths.keyspace,
+        branches_path=output_paths.branches,
+    )
+    keyspace.persist(output_paths.keyspace, output_paths.branches)
+
     if not no_cleanup:
         atexit.register(paths.delete_on_catastrophic_failure, output_paths=output_paths)
 
@@ -233,6 +234,7 @@ def main(
     ctx = RunContext(
         input_paths,
         output_paths,
+        keyspace,
         restart,
         expand,
         no_batch,

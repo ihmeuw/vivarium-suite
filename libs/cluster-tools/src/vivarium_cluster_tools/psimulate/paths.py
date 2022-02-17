@@ -68,6 +68,7 @@ class OutputPaths(NamedTuple):
     @classmethod
     def from_entry_point_args(
         cls,
+        *,
         input_model_specification_path: Optional[Path],
         result_directory: Path,
         restart: bool,
