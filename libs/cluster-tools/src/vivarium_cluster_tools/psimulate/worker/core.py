@@ -22,7 +22,7 @@ from rq.job import JobStatus
 from rq.registry import FailedJobRegistry
 from rq.worker import Worker
 
-from vivarium_cluster_tools.psimulate.cluster import ENV_VARIABLES
+from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
 
 def build_launch_script(

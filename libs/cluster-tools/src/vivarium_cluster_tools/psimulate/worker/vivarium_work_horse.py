@@ -18,7 +18,7 @@ from rq import get_current_job
 from vivarium.framework.engine import SimulationContext
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate.cluster import ENV_VARIABLES
+from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.vipin.perf_counters import CounterSnapshot
 

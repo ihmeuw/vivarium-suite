@@ -21,7 +21,7 @@ from vivarium_cluster_tools.psimulate import (
     jobs,
     model_specification,
     paths,
-    programming_environment,
+    pip_env,
     redis_dbs,
     results,
     worker,
@@ -137,7 +137,7 @@ def main(
     # Either write a requirements.txt with the current environment
     # or verify the current environment matches the prior environment
     # used when doing a restart.
-    programming_environment.validate(output_paths.environment_file)
+    pip_env.validate(output_paths.environment_file)
 
     # Parse the branches configuration into a parameter space
     # and a flat representation of all parameters to be run.
