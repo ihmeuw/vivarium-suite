@@ -29,7 +29,7 @@ from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 
 def process_job_results(
-    registry_manager: registry.RegistryManager,
+    registry_manager: redis_dbs.RegistryManager,
     existing_outputs: pd.DataFrame,
     output_directory: Path,
     no_batch: bool,

@@ -12,7 +12,7 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Tuple, TextIO
+from typing import List, TextIO, Tuple
 
 from loguru import logger
 
@@ -47,7 +47,9 @@ def _get_num_redis_dbs(num_processes: int, num_jobs: int) -> int:
     return num_processes
 
 
-def _launch_redis(port: int, stdout: TextIO = sys.stdout, stderr: TextIO = sys.stderr) -> subprocess.Popen:
+def _launch_redis(
+    port: int, stdout: TextIO = sys.stdout, stderr: TextIO = sys.stderr
+) -> subprocess.Popen:
     stdout.write(f">>>>>>>> Starting log for redis-server on port {port}\n")
     stdout.flush()
     try:

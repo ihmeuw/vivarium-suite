@@ -1,1 +1,1 @@
-.. automodule::vivarium_cluster_tools.psimulate.redis_dbs.launcher
+.. automodule:: vivarium_cluster_tools.psimulate.redis_dbs.launcher
