@@ -15,7 +15,7 @@ from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools import logs
-from vivarium_cluster_tools.psimulate import cluster, runner
+from vivarium_cluster_tools.psimulate import cluster, paths, runner
 
 shared_options = [
     click.option(
@@ -117,7 +117,7 @@ def psimulate():
     "--result-directory",
     "-o",
     type=click.Path(file_okay=False),
-    default=None,
+    default=paths.DEFAULT_OUTPUT_DIRECTORY,
     help="The directory to write results to. A folder will be created in this directory with the same name "
     "as the configuration file.",
 )
@@ -151,11 +151,13 @@ def run(
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
-        model_specification,
-        branch_configuration,
-        artifact_path,
-        result_directory,
-        {
+        input_paths=paths.InputPaths.from_args(
+            input_model_specification_path=model_specification,
+            input_branch_configuration_path=branch_configuration,
+            input_artifact_path=artifact_path,
+            result_directory=result_directory,
+        ),
+        native_specification={
             "project": options["project"],
             "queue": options["queue"],
             "peak_memory": options["peak_memory"],
@@ -182,11 +184,10 @@ def restart(results_root, **options):
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
-        None,
-        None,
-        None,
-        results_root,
-        {
+        input_paths=paths.InputPaths.from_args(
+            result_directory=results_root,
+        ),
+        native_specification={
             "project": options["project"],
             "queue": options["queue"],
             "peak_memory": options["peak_memory"],
@@ -228,11 +229,10 @@ def expand(results_root, **options):
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
-        None,
-        None,
-        None,
-        results_root,
-        {
+        input_paths=paths.InputPaths.from_args(
+            result_directory=results_root,
+        ),
+        native_specification={
             "project": options["project"],
             "queue": options["queue"],
             "peak_memory": options["peak_memory"],

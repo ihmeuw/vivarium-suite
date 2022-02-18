@@ -6,7 +6,6 @@ psimulate Constants
 Shared constants for psimulate runs.
 """
 
-DEFAULT_OUTPUT_DIRECTORY = "/share/costeffectiveness/results"
 MODEL_SPEC_FILENAME = "model_specification.yaml"
 
 # Configuration key constants

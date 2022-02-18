@@ -26,7 +26,7 @@ from vivarium.framework.utilities import collapse_nested_dict
 from vivarium_cluster_tools import logs
 from vivarium_cluster_tools.psimulate import cluster
 from vivarium_cluster_tools.psimulate import globals as vct_globals
-from vivarium_cluster_tools.psimulate import programming_environment, results
+from vivarium_cluster_tools.psimulate import paths, programming_environment, results
 from vivarium_cluster_tools.psimulate.branches import Keyspace
 from vivarium_cluster_tools.psimulate.registry import RegistryManager
 from vivarium_cluster_tools.vipin.perf_report import report_performance
@@ -35,9 +35,7 @@ from vivarium_cluster_tools.vipin.perf_report import report_performance
 class RunContext:
     def __init__(
         self,
-        model_specification_file: str,
-        branch_configuration_file: str,
-        artifact_path: str,
+        input_paths: paths.InputPaths,
         output_directory: Path,
         logging_directories: Dict[str, Path],
         restart: bool,
@@ -58,19 +56,23 @@ class RunContext:
                 self.keyspace.add_seeds(expand["num_seeds"])
                 self.keyspace.persist(self.output_directory)
         else:
-            model_specification = build_model_specification(model_specification_file)
+            model_specification = build_model_specification(input_paths.model_specification)
 
-            self.keyspace = Keyspace.from_branch_configuration(branch_configuration_file)
-            if artifact_path:
+            self.keyspace = Keyspace.from_branch_configuration(
+                input_paths.branch_configuration
+            )
+            if input_paths.artifact:
                 if vct_globals.FULL_ARTIFACT_PATH_KEY in self.keyspace:
                     raise ConfigurationError(
                         "Artifact path cannot be specified both in the branch specification file"
                         " and as a command line argument.",
-                        artifact_path,
+                        str(input_paths.artifact),
                     )
-                if not Path(artifact_path).exists():
-                    raise FileNotFoundError(f"Cannot find artifact at path {artifact_path}")
-
+                if not input_paths.artifact.exists():
+                    raise FileNotFoundError(
+                        f"Cannot find artifact at path {str(input_paths.artifact)}"
+                    )
+                artifact_path = input_paths.artifact
             elif (
                 vct_globals.ARTIFACT_PATH_KEY
                 in model_specification.configuration[vct_globals.INPUT_DATA_KEY]
@@ -79,7 +81,7 @@ class RunContext:
 
             if artifact_path:
                 model_specification.configuration[vct_globals.INPUT_DATA_KEY].update(
-                    {vct_globals.ARTIFACT_PATH_KEY: artifact_path}, source=__file__
+                    {vct_globals.ARTIFACT_PATH_KEY: input_paths.artifact}, source=__file__
                 )
 
             with open(
@@ -198,10 +200,7 @@ def try_run_vipin(log_path: Path):
 
 
 def main(
-    model_specification_file: str,
-    branch_configuration_file: str,
-    artifact_path: str,
-    result_directory: str,
+    input_paths: paths.InputPaths,
     native_specification: dict,
     redis_processes: int,
     restart: bool = False,
@@ -212,8 +211,8 @@ def main(
     cluster.exit_if_on_submit_host(cluster.get_hostname())
 
     output_dir, logging_dirs = results.setup_directories(
-        model_specification_file,
-        result_directory,
+        input_paths.model_specification,
+        input_paths.result_directory,
         restart,
         expand=bool(expand),
     )
@@ -230,9 +229,7 @@ def main(
     programming_environment.validate(output_dir)
 
     ctx = RunContext(
-        model_specification_file,
-        branch_configuration_file,
-        artifact_path,
+        input_paths,
         output_dir,
         logging_dirs,
         restart,

@@ -10,35 +10,29 @@ import time
 from datetime import datetime
 from pathlib import Path
 from shutil import rmtree
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
 from vivarium_cluster_tools import utilities as vct_utils
-from vivarium_cluster_tools.psimulate import globals as vct_globals
 
 
 def get_output_directory(
-    model_specification_file: str = None, output_directory: str = None, restart: bool = False
+    model_specification_file: Optional[Path], output_directory: Path, restart: bool
 ) -> Path:
-    if restart:
-        output_directory = Path(output_directory)
-    else:
-        root = (
-            Path(output_directory)
-            if output_directory
-            else Path(vct_globals.DEFAULT_OUTPUT_DIRECTORY)
-        )
+    if not restart:
         launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        model_specification_name = Path(model_specification_file).stem
-        output_directory = root / model_specification_name / launch_time
+        output_directory = output_directory / model_specification_file.stem / launch_time
     return output_directory
 
 
 def setup_directories(
-    model_specification_file: str, result_directory: str, restart: bool, expand: bool
+    model_specification_file: Optional[Path],
+    result_directory: Path,
+    restart: bool,
+    expand: bool,
 ) -> Tuple[Path, Dict[str, Path]]:
     output_directory = get_output_directory(
         model_specification_file, result_directory, restart
