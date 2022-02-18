@@ -14,7 +14,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, NamedTuple, Tuple
 
 from loguru import logger
 
@@ -28,9 +28,6 @@ PROJECTS = [
 ]
 DEFAULT_PROJECT = "proj_cost_effect"
 
-CLUSTER_ENV_HOSTNAME = "HOSTNAME"
-SUBMIT_HOST_MARKER = "-submit-"
-
 # Cluster specific parameters
 ALL_Q_MAX_RUNTIME_HOURS = 3 * 24
 LONG_Q_MAX_RUNTIME_HOURS = 16 * 24
@@ -38,12 +35,58 @@ LONG_Q_MAX_RUNTIME_HOURS = 16 * 24
 DEFAULT_JOBS_PER_REDIS_INSTANCE = 1000
 
 
-def get_hostname() -> str:
-    return os.environ.get(CLUSTER_ENV_HOSTNAME)
+class EnvVariable:
+    """Convenience wrapper around an environment variable."""
+
+    def __init__(self, name: str):
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def value(self) -> str:
+        return os.environ[self.name]
+
+    @property
+    def exists(self) -> bool:
+        return self.name in os.environ
+
+    def update(self, value: str) -> None:
+        os.environ[self.name] = value
 
 
-def exit_if_on_submit_host(name: str):
-    if SUBMIT_HOST_MARKER in name:
+class __EnvVariables(NamedTuple):
+    CLUSTER_NAME: EnvVariable
+    HOSTNAME: EnvVariable
+    JOB_NAME: EnvVariable
+    JOB_ID: EnvVariable
+    TASK_ID: EnvVariable
+    VIVARIUM_LOGGING_DIRECTORY: EnvVariable
+    RQ_WORKER_ID: EnvVariable
+    RQ_JOB_ID: EnvVariable
+    DRMAA_LIB_PATH: EnvVariable
+    PYTHONPATH: EnvVariable
+
+
+ENV_VARIABLES = __EnvVariables(
+    CLUSTER_NAME=EnvVariable("SGE_CLUSTER_NAME"),
+    HOSTNAME=EnvVariable("HOSTNAME"),
+    JOB_NAME=EnvVariable("JOB_NAME"),
+    JOB_ID=EnvVariable("JOB_ID"),
+    TASK_ID=EnvVariable("TASK_ID"),
+    VIVARIUM_LOGGING_DIRECTORY=EnvVariable("VIVARIUM_LOGGING_DIRECTORY"),
+    RQ_WORKER_ID=EnvVariable("RQ_WORKER_ID"),
+    RQ_JOB_ID=EnvVariable("RQ_JOB_ID"),
+    DRMAA_LIB_PATH=EnvVariable("DRMAA_LIB_PATH"),
+    PYTHONPATH=EnvVariable("PYTHONPATH"),
+)
+
+
+def exit_if_on_submit_host():
+    submit_host_marker = "-submit-"
+    if submit_host_marker in ENV_VARIABLES.HOSTNAME.value:
         raise RuntimeError("This tool must not be run from a submit host.")
 
 
@@ -59,7 +102,7 @@ class NativeSpecification:
     ):
 
         try:
-            self.cluster_name = os.environ["SGE_CLUSTER_NAME"]
+            self.cluster_name = ENV_VARIABLES.CLUSTER_NAME.value
         except KeyError:
             raise RuntimeError("This tool must be run from an SGE/UGE cluster.")
 
@@ -148,10 +191,12 @@ def init_job_template(
     output_dir = str(worker_settings_file.resolve().parent)
     launcher.write(
         f"""
-    export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
-    export PYTHONPATH={output_dir}:$PYTHONPATH
+    export {ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.name}={worker_log_directory}
+    export {ENV_VARIABLES.PYTHONPATH.name}={output_dir}:${ENV_VARIABLES.PYTHONPATH.name}
 
-    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst \
+    {shutil.which('rq')} worker -c {worker_settings_file.stem} \
+        --name ${{{ENV_VARIABLES.JOB_ID.name}}}.${{{ENV_VARIABLES.TASK_ID.name}}} \
+        --burst \
         -w "vivarium_cluster_tools.psimulate.distributed_worker.ResilientWorker" \
         --exception-handler "vivarium_cluster_tools.psimulate.distributed_worker.retry_handler" vivarium
 
@@ -283,8 +328,8 @@ def get_drmaa():
     try:
         import drmaa
     except (RuntimeError, OSError):
-        if "SGE_CLUSTER_NAME" in os.environ:
-            os.environ["DRMAA_LIBRARY_PATH"] = "/opt/sge/lib/lx-amd64/libdrmaa.so"
+        if ENV_VARIABLES.CLUSTER_NAME.exists:
+            ENV_VARIABLES.DRMAA_LIB_PATH.update("/opt/sge/lib/lx-amd64/libdrmaa.so")
             import drmaa
         else:
             drmaa = object()

@@ -35,7 +35,7 @@ def test_concat_preserve_types(data_types):
     expected_shape = (df.shape[0] + df2.shape[0], df.shape[1])
 
     for c in df:
-        assert (result[c] == df[c].append(df2[c]).reset_index(drop=True)).all()
+        assert (result[c] == pd.concat([df[c], df2[c]]).reset_index(drop=True)).all()
 
     assert result.shape == expected_shape
     assert result.dtypes.sort_index().equals(expected_dtypes)
