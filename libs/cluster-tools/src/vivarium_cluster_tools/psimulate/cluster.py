@@ -67,6 +67,7 @@ class __EnvVariables(NamedTuple):
     RQ_WORKER_ID: EnvVariable
     RQ_JOB_ID: EnvVariable
     DRMAA_LIB_PATH: EnvVariable
+    PYTHONPATH: EnvVariable
 
 
 ENV_VARIABLES = __EnvVariables(
@@ -79,6 +80,7 @@ ENV_VARIABLES = __EnvVariables(
     RQ_WORKER_ID=EnvVariable("RQ_WORKER_ID"),
     RQ_JOB_ID=EnvVariable("RQ_JOB_ID"),
     DRMAA_LIB_PATH=EnvVariable("DRMAA_LIB_PATH"),
+    PYTHONPATH=EnvVariable("PYTHONPATH"),
 )
 
 
@@ -189,10 +191,12 @@ def init_job_template(
     output_dir = str(worker_settings_file.resolve().parent)
     launcher.write(
         f"""
-    export VIVARIUM_LOGGING_DIRECTORY={worker_log_directory}
-    export PYTHONPATH={output_dir}:$PYTHONPATH
+    export {ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.name}={worker_log_directory}
+    export {ENV_VARIABLES.PYTHONPATH.name}={output_dir}:${ENV_VARIABLES.PYTHONPATH.name}
 
-    {shutil.which('rq')} worker -c {worker_settings_file.stem} --name ${{JOB_ID}}.${{SGE_TASK_ID}} --burst \
+    {shutil.which('rq')} worker -c {worker_settings_file.stem} \
+        --name ${{{ENV_VARIABLES.JOB_ID.name}}}.${{{ENV_VARIABLES.TASK_ID.name}}} \
+        --burst \
         -w "vivarium_cluster_tools.psimulate.distributed_worker.ResilientWorker" \
         --exception-handler "vivarium_cluster_tools.psimulate.distributed_worker.retry_handler" vivarium
 

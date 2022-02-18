@@ -1,6 +1,9 @@
 import pytest
 
-from vivarium_cluster_tools.psimulate.cluster import exit_if_on_submit_host, ENV_VARIABLES
+from vivarium_cluster_tools.psimulate.cluster import (
+    ENV_VARIABLES,
+    exit_if_on_submit_host,
+)
 
 
 @pytest.fixture(params=["user@int-uge-archive-p006"])
@@ -8,7 +11,13 @@ def good_host(request):
     return request.param
 
 
-@pytest.fixture(params=["user@gen-uge-submit-p01", "-submit-", "user@gen-uge-submit-p02",])
+@pytest.fixture(
+    params=[
+        "user@gen-uge-submit-p01",
+        "-submit-",
+        "user@gen-uge-submit-p02",
+    ]
+)
 def bad_host(request):
     return request.param
 
