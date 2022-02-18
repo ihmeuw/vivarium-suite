@@ -16,7 +16,7 @@ from typing import List, TextIO, Tuple
 
 from loguru import logger
 
-from vivarium_cluster_tools.psimulate.cluster import ENV_VARIABLES
+from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
 DEFAULT_NUM_REDIS_DBS = -1
 DEFAULT_JOBS_PER_REDIS_INSTANCE = 1000

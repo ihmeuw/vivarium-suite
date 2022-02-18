@@ -21,7 +21,7 @@ from vivarium_cluster_tools.psimulate import (
     jobs,
     model_specification,
     paths,
-    programming_environment,
+    pip_env,
     redis_dbs,
     results,
     worker,

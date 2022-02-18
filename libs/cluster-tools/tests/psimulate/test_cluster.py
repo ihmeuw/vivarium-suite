@@ -1,9 +1,7 @@
 import pytest
 
-from vivarium_cluster_tools.psimulate.cluster import (
-    ENV_VARIABLES,
-    exit_if_on_submit_host,
-)
+from vivarium_cluster_tools.psimulate.cluster import exit_if_on_submit_host
+from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
 
 @pytest.fixture(params=["user@int-uge-archive-p006"])

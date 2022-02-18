@@ -10,9 +10,11 @@ import atexit
 import os
 import shutil
 from pathlib import Path
-from typing import List, NamedTuple, TextIO
+from typing import List, TextIO
 
 from loguru import logger
+
+from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
 # Cluster projects under the purview of Simulation Science
 PROJECTS = [
@@ -27,55 +29,6 @@ DEFAULT_PROJECT = "proj_cost_effect"
 # Cluster specific parameters
 ALL_Q_MAX_RUNTIME_HOURS = 3 * 24
 LONG_Q_MAX_RUNTIME_HOURS = 16 * 24
-
-
-class EnvVariable:
-    """Convenience wrapper around an environment variable."""
-
-    def __init__(self, name: str):
-        self._name = name
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def value(self) -> str:
-        return os.environ[self.name]
-
-    @property
-    def exists(self) -> bool:
-        return self.name in os.environ
-
-    def update(self, value: str) -> None:
-        os.environ[self.name] = value
-
-
-class __EnvVariables(NamedTuple):
-    CLUSTER_NAME: EnvVariable
-    HOSTNAME: EnvVariable
-    JOB_NAME: EnvVariable
-    JOB_ID: EnvVariable
-    TASK_ID: EnvVariable
-    VIVARIUM_LOGGING_DIRECTORY: EnvVariable
-    RQ_WORKER_ID: EnvVariable
-    RQ_JOB_ID: EnvVariable
-    DRMAA_LIB_PATH: EnvVariable
-    PYTHONPATH: EnvVariable
-
-
-ENV_VARIABLES = __EnvVariables(
-    CLUSTER_NAME=EnvVariable("SGE_CLUSTER_NAME"),
-    HOSTNAME=EnvVariable("HOSTNAME"),
-    JOB_NAME=EnvVariable("JOB_NAME"),
-    JOB_ID=EnvVariable("JOB_ID"),
-    TASK_ID=EnvVariable("TASK_ID"),
-    VIVARIUM_LOGGING_DIRECTORY=EnvVariable("VIVARIUM_LOGGING_DIRECTORY"),
-    RQ_WORKER_ID=EnvVariable("RQ_WORKER_ID"),
-    RQ_JOB_ID=EnvVariable("RQ_JOB_ID"),
-    DRMAA_LIB_PATH=EnvVariable("DRMAA_LIB_PATH"),
-    PYTHONPATH=EnvVariable("PYTHONPATH"),
-)
 
 
 def exit_if_on_submit_host():
