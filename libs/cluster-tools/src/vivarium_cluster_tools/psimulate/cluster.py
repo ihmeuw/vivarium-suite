@@ -7,14 +7,11 @@ Tools for interacting with the IHME cluster.
 
 """
 import atexit
-import math
 import os
 import shutil
-import socket
-import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, NamedTuple, Tuple
+from typing import List, NamedTuple
 
 from loguru import logger
 
@@ -31,8 +28,6 @@ DEFAULT_PROJECT = "proj_cost_effect"
 # Cluster specific parameters
 ALL_Q_MAX_RUNTIME_HOURS = 3 * 24
 LONG_Q_MAX_RUNTIME_HOURS = 16 * 24
-
-DEFAULT_JOBS_PER_REDIS_INSTANCE = 1000
 
 
 class EnvVariable:
@@ -212,72 +207,6 @@ def init_job_template(
     jt.joinFiles = True
     jt.nativeSpecification = str(native_specification)
     return jt
-
-
-def get_random_free_port() -> int:
-    # NOTE: this implementation is vulnerable to rare race conditions where some other process gets the same
-    # port after we free our socket but before we use the port number we got. Should be so rare in practice
-    # that it doesn't matter.
-    s = socket.socket()
-    s.bind(("", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
-
-
-def launch_redis(port: int, redis_logging_root: Path) -> subprocess.Popen:
-    log = (redis_logging_root / f"redis.p{port}.log").open("a")
-    log.write(f">>>>>>>> Starting log for redis-server on port {port}\n")
-    log.flush()
-    try:
-        # inline config for redis server.
-        redis_process = subprocess.Popen(
-            [
-                "redis-server",
-                "--port",
-                f"{port}",
-                "--timeout",
-                "2",
-                "--loglevel",
-                "debug",
-                # "--daemonize", "yes",
-                "--protected-mode",
-                "no",
-            ],
-            stdout=log,
-            stderr=log,
-        )
-    except FileNotFoundError:
-        raise OSError(
-            "In order for redis to launch you need both the redis client and the python bindings. "
-            "You seem to be missing the redis client.  Do 'conda install redis' and try again. If "
-            "failures continue you may need to download redis yourself, make it and add it to PATH."
-        )
-    atexit.register(redis_process.kill)
-    return redis_process
-
-
-def launch_redis_processes(
-    num_processes: int,
-    num_jobs: int,
-    redis_logging_root: Path,
-) -> Tuple[str, List[Tuple[str, int]]]:
-    if num_processes == -1:
-        num_processes = int(math.ceil(num_jobs / DEFAULT_JOBS_PER_REDIS_INSTANCE))
-
-    hostname = socket.getfqdn()
-    redis_ports = []
-    for i in range(num_processes):
-        port = get_random_free_port()
-        logger.info(f"Starting Redis Broker at {hostname}:{port}")
-        launch_redis(port, redis_logging_root)
-        redis_ports.append((hostname, port))
-
-    redis_urls = [f"redis://{hostname}:{port}" for hostname, port in redis_ports]
-    worker_config = (
-        f"import random\nredis_urls = {redis_urls}\nREDIS_URL = random.choice(redis_urls)\n\n"
-    )
-    return worker_config, redis_ports
 
 
 def start_cluster(
