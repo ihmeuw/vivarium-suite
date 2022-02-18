@@ -31,32 +31,22 @@ from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 def process_job_results(
     registry_manager: registry.RegistryManager,
-    existing_outputs: Optional[pd.DataFrame],
+    existing_outputs: pd.DataFrame,
     output_directory: Path,
     no_batch: bool,
 ):
-    start_time = time()
-
-    if existing_outputs is not None:
-        written_results = existing_outputs
-    else:
-        written_results = pd.DataFrame()
+    written_results = existing_outputs
     unwritten_results = []
+    batch_size = 0 if no_batch else 200
 
     logger.info("Entering main processing loop.")
-    batch_size = 200
+    start_time = time()
     try:
         while registry_manager.jobs_to_finish:
             sleep(5)
             unwritten_results.extend(registry_manager.get_results())
-            if no_batch and unwritten_results:
-                written_results, unwritten_results = results.write_results_batch(
-                    output_directory,
-                    written_results,
-                    unwritten_results,
-                    len(unwritten_results),
-                )
-            elif len(unwritten_results) > batch_size:
+
+            if len(unwritten_results) > batch_size:
                 written_results, unwritten_results = results.write_results_batch(
                     output_directory,
                     written_results,
@@ -137,10 +127,20 @@ def main(
     )
     # Make output root and all subdirectories.
     output_paths.touch()
+    # Hook for blowing away output directories if things go really
+    # poorly and no results get written out.
+    if not no_cleanup:
+        atexit.register(paths.delete_on_catastrophic_failure, output_paths=output_paths)
 
+    # Start sending logs to a file now that it exists.
     logs.configure_main_process_logging_to_file(output_paths.logging_root)
+    # Either write a requirements.txt with the current environment
+    # or verify the current environment matches the prior environment
+    # used when doing a restart.
     programming_environment.validate(output_paths.environment_file)
 
+    # Parse the branches configuration into a parameter space
+    # and a flat representation of all parameters to be run.
     keyspace = branches.Keyspace.from_entry_point_args(
         input_branch_configuration_path=input_paths.branch_configuration,
         restart=restart,
@@ -148,8 +148,13 @@ def main(
         keyspace_path=output_paths.keyspace,
         branches_path=output_paths.branches,
     )
+    # Throw that into our output directory. The keyspace output is
+    # a cartesian product representation of the parameter space and
+    # branches is a flat representation with the product expanded out.
     keyspace.persist(output_paths.keyspace, output_paths.branches)
 
+    # Parse the model specification and resolve the artifact path
+    # and then write to the output directory.
     model_spec = model_specification.parse(
         input_model_specification_path=input_paths.model_specification,
         artifact_path=input_paths.artifact,
@@ -159,45 +164,50 @@ def main(
     )
     model_specification.persist(model_spec, output_paths.model_specification)
 
+    # Load in any existing partial outputs if present.
     existing_outputs = load_existing_outputs(output_paths.results, restart)
 
+    # Translate the keyspace into the list of jobs to actually run
+    # after accounting for any partially present results.
     job_parameters, num_jobs_completed = jobs.build_job_list(
         model_specification_path=output_paths.model_specification,
         output_root=output_paths.root,
         keyspace=keyspace,
         existing_outputs=existing_outputs,
     )
+    # Let the user know if something is fishy at this point.
     report_initial_status(num_jobs_completed, existing_outputs, keyspace)
     if len(job_parameters) == 0:
         logger.info("Nothing to do")
         return
 
-    if not no_cleanup:
-        atexit.register(paths.delete_on_catastrophic_failure, output_paths=output_paths)
-
-    atexit.register(lambda: logger.remove())
-
-    native_specification["job_name"] = output_paths.root.parts[-2]
-    native_specification = cluster.NativeSpecification(**native_specification)
-
-    cluster.check_user_sge_config()
-
     logger.info(f"Starting jobs. Results will be written to: {str(output_paths.root)}")
-
-    if redis_processes == -1:
-        redis_processes = int(
-            math.ceil(len(job_parameters) / cluster.DEFAULT_JOBS_PER_REDIS_INSTANCE)
-        )
-
+    # Spin up the job & result dbs, get back a template for
+    # the rq workers and (hostname, port) pairs for all the dbs.
     worker_template, redis_ports = cluster.launch_redis_processes(
-        redis_processes,
-        output_paths.logging_root,
+        num_processes=redis_processes,
+        num_jobs=len(job_parameters),
+        redis_logging_root=output_paths.logging_root,
     )
+    # Dump the worker config to a file we can pass to the workers on startup.
     output_paths.worker_settings.write_text(worker_template)
 
+    # Spin up a unified interface to all the redis databases
     registry_manager = registry.RegistryManager(redis_ports, num_jobs_completed)
-    registry_manager.enqueue(jobs)
+    # Distribute all the remaining jobs across the job queues
+    # in the redis databases.
+    registry_manager.enqueue(job_parameters)
 
+    # Cluster specification stuff to be cleaned up.
+    native_specification["job_name"] = output_paths.root.parts[-2]
+    native_specification = cluster.NativeSpecification(**native_specification)
+    cluster.check_user_sge_config()
+
+    # Start an rq worker for every job using the cluster scheduler. The workers
+    # will start as soon as they get scheduled and start looking for work. They
+    # run in burst mode which means they shut down if they can't find anything
+    # to do. This means it's critical that we put the jobs on the queue before
+    # the workers land, otherwise they'll just show up and shut down.
     cluster.start_cluster(
         len(job_parameters),
         output_paths.cluster_logging_root,
@@ -206,6 +216,9 @@ def main(
         native_specification,
     )
 
+    # Enter the main monitoring and processing loop, which will check on
+    # all the queues periodically, report status updates, and gather
+    # and write results when they are available.
     process_job_results(
         registry_manager=registry_manager,
         existing_outputs=existing_outputs,
@@ -213,6 +226,7 @@ def main(
         no_batch=no_batch,
     )
 
+    # Spit out a performance report for the workers.
     try_run_vipin(output_paths.worker_logging_root)
 
     logger.info(f"Jobs completed. Results written to: {str(output_paths.root)}")
