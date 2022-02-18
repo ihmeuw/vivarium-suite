@@ -17,8 +17,6 @@ import rq
 from loguru import logger
 from rq.registry import FinishedJobRegistry, StartedJobRegistry
 
-from vivarium_cluster_tools.psimulate.distributed_worker import ResilientWorker
-
 
 class QueueManager:
 
@@ -68,13 +66,13 @@ class QueueManager:
     def jobs_to_finish(self):
         return not (self.failed or self.completed)
 
-    def enqueue(self, jobs):
+    def enqueue(self, jobs, workhorse_import_path: str):
         self._logger.info(f"Enqueuing jobs in queue {self.name}")
         for job in jobs:
             # TODO: might be nice to have tighter ttls but it's hard to predict how long our jobs
             # will take from model to model and the entire system is short lived anyway
             self._queue.enqueue(
-                "vivarium_cluster_tools.psimulate.distributed_worker.worker",
+                workhorse_import_path,
                 parameters=job,
                 ttl=60 * 60 * 24 * 2,
                 result_ttl=60 * 60,
@@ -121,7 +119,7 @@ class QueueManager:
                 )
                 q_finished = self._status["finished"]
                 q_total = q_pending + q_running + q_failed + q_to_write + q_finished
-                q_workers = len(ResilientWorker.all(queue=self._queue)) if self._queue else 0
+                q_workers = len(rq.Worker.all(queue=self._queue)) if self._queue else 0
 
                 self._status["pending"] = q_pending
                 self._status["running"] = q_running + q_to_write
@@ -240,10 +238,10 @@ class RegistryManager:
     def jobs_to_finish(self):
         return any([q.jobs_to_finish for q in self._queues])
 
-    def enqueue(self, jobs):
+    def enqueue(self, jobs, workhorse_import_path: str):
         workers_per_queue = int(math.ceil(len(jobs) / len(self._queues)))
         for queue, jobs_chunk in zip(self._queues, self._chunks(jobs, workers_per_queue)):
-            queue.enqueue(jobs_chunk)
+            queue.enqueue(jobs_chunk, workhorse_import_path)
 
     @staticmethod
     def _chunks(sequence: Sequence, n: int):
