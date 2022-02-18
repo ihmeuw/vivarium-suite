@@ -175,6 +175,13 @@ def init_job_template(
     worker_log_directory: Path,
     worker_settings_file: Path,
 ):
+    # FIXME: Cyclic import if at top level. This launcher template stuff should
+    #   move to the worker subpackage soon.
+    from vivarium_cluster_tools.psimulate.worker import (
+        RETRY_HANDLER_IMPORT_PATH,
+        WORKER_CLASS_IMPORT_PATH,
+    )
+
     launcher = tempfile.NamedTemporaryFile(
         mode="w",
         dir=".",
@@ -192,8 +199,8 @@ def init_job_template(
     {shutil.which('rq')} worker -c {worker_settings_file.stem} \
         --name ${{{ENV_VARIABLES.JOB_ID.name}}}.${{{ENV_VARIABLES.TASK_ID.name}}} \
         --burst \
-        -w "vivarium_cluster_tools.psimulate.distributed_worker.ResilientWorker" \
-        --exception-handler "vivarium_cluster_tools.psimulate.distributed_worker.retry_handler" vivarium
+        -w "{WORKER_CLASS_IMPORT_PATH}" \
+        --exception-handler "{RETRY_HANDLER_IMPORT_PATH}" vivarium
 
     """
     )

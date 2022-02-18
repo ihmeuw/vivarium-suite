@@ -25,6 +25,7 @@ from vivarium_cluster_tools.psimulate import (
     redis_dbs,
     results,
 )
+from vivarium_cluster_tools.psimulate.worker import WORK_HORSE_PATHS
 from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 
@@ -200,7 +201,9 @@ def main(
     registry_manager = redis_dbs.RegistryManager(redis_ports, num_jobs_completed)
     # Distribute all the remaining jobs across the job queues
     # in the redis databases.
-    registry_manager.enqueue(job_parameters)
+    registry_manager.enqueue(
+        jobs=job_parameters, workhorse_import_path=WORK_HORSE_PATHS["vivarium"]
+    )
 
     # Cluster specification stuff to be cleaned up.
     native_specification["job_name"] = output_paths.root.parts[-2]
