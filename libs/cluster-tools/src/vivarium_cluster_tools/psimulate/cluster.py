@@ -70,15 +70,15 @@ class __EnvVariables(NamedTuple):
 
 
 ENV_VARIABLES = __EnvVariables(
-    CLUSTER_NAME=EnvVariable('SGE_CLUSTER_NAME'),
-    HOSTNAME=EnvVariable('HOSTNAME'),
-    JOB_NAME=EnvVariable('JOB_NAME'),
-    JOB_ID=EnvVariable('JOB_ID'),
-    TASK_ID=EnvVariable('TASK_ID'),
-    VIVARIUM_LOGGING_DIRECTORY=EnvVariable('VIVARIUM_LOGGING_DIRECTORY'),
-    RQ_WORKER_ID=EnvVariable('RQ_WORKER_ID'),
-    RQ_JOB_ID=EnvVariable('RQ_JOB_ID'),
-    DRMAA_LIB_PATH=EnvVariable('DRMAA_LIB_PATH'),
+    CLUSTER_NAME=EnvVariable("SGE_CLUSTER_NAME"),
+    HOSTNAME=EnvVariable("HOSTNAME"),
+    JOB_NAME=EnvVariable("JOB_NAME"),
+    JOB_ID=EnvVariable("JOB_ID"),
+    TASK_ID=EnvVariable("TASK_ID"),
+    VIVARIUM_LOGGING_DIRECTORY=EnvVariable("VIVARIUM_LOGGING_DIRECTORY"),
+    RQ_WORKER_ID=EnvVariable("RQ_WORKER_ID"),
+    RQ_JOB_ID=EnvVariable("RQ_JOB_ID"),
+    DRMAA_LIB_PATH=EnvVariable("DRMAA_LIB_PATH"),
 )
 
 

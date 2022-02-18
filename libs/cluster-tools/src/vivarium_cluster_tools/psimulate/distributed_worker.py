@@ -218,7 +218,7 @@ def do_sim_epilogue(
 
     perf_log = logger.add(
         Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
-        / f'perf.{ENV_VARIABLES.JOB_ID.value}.{ENV_VARIABLES.TASK_ID.value}.log',
+        / f"perf.{ENV_VARIABLES.JOB_ID.value}.{ENV_VARIABLES.TASK_ID.value}.log",
         level="DEBUG",
         serialize=True,
     )
