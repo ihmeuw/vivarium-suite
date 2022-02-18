@@ -151,7 +151,7 @@ def run(
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
-        input_paths=paths.InputPaths.from_args(
+        input_paths=paths.InputPaths.from_entry_point_args(
             input_model_specification_path=model_specification,
             input_branch_configuration_path=branch_configuration,
             input_artifact_path=artifact_path,
@@ -184,7 +184,7 @@ def restart(results_root, **options):
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
-        input_paths=paths.InputPaths.from_args(
+        input_paths=paths.InputPaths.from_entry_point_args(
             result_directory=results_root,
         ),
         native_specification={
@@ -229,7 +229,7 @@ def expand(results_root, **options):
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
-        input_paths=paths.InputPaths.from_args(
+        input_paths=paths.InputPaths.from_entry_point_args(
             result_directory=results_root,
         ),
         native_specification={

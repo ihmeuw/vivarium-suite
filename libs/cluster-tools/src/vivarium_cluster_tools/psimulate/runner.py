@@ -36,21 +36,20 @@ class RunContext:
     def __init__(
         self,
         input_paths: paths.InputPaths,
-        output_directory: Path,
-        logging_directories: Dict[str, Path],
+        output_paths: paths.OutputPaths,
         restart: bool,
         expand: Dict[str, int],
         no_batch: bool,
     ):
         self.number_already_completed = 0
-        self.output_directory = output_directory
+        self.output_directory = output_paths.root
         self.no_batch = no_batch
-        self.sge_log_directory = logging_directories["sge"]
-        self.worker_log_directory = logging_directories["worker"]
+        self.sge_log_directory = output_paths.cluster_logging_root
+        self.worker_log_directory = output_paths.worker_logging_root
 
         if restart:
             self.keyspace = Keyspace.from_previous_run(self.output_directory)
-            self.existing_outputs = pd.read_hdf(self.output_directory / "output.hdf")
+            self.existing_outputs = pd.read_hdf(output_paths.results)
             if expand:
                 self.keyspace.add_draws(expand["num_draws"])
                 self.keyspace.add_seeds(expand["num_seeds"])
@@ -210,28 +209,30 @@ def main(
 ):
     cluster.exit_if_on_submit_host(cluster.get_hostname())
 
-    output_dir, logging_dirs = results.setup_directories(
-        input_paths.model_specification,
-        input_paths.result_directory,
-        restart,
+    # Generate programmatic representation of the output directory structure
+    output_paths = paths.OutputPaths.from_entry_point_args(
+        input_model_specification_path=input_paths.model_specification,
+        result_directory=input_paths.result_directory,
+        restart=restart,
         expand=bool(expand),
     )
+    # Make output root and all subdirectories.
+    output_paths.touch()
 
     if not no_cleanup:
-        atexit.register(results.check_for_empty_results_dir, output_dir=output_dir)
+        atexit.register(paths.delete_on_catastrophic_failure, output_paths=output_paths)
 
     atexit.register(lambda: logger.remove())
 
-    native_specification["job_name"] = output_dir.parts[-2]
+    native_specification["job_name"] = output_paths.root.parts[-2]
     native_specification = cluster.NativeSpecification(**native_specification)
 
-    logs.configure_main_process_logging_to_file(logging_dirs["main"])
-    programming_environment.validate(output_dir)
+    logs.configure_main_process_logging_to_file(output_paths.logging_root)
+    programming_environment.validate(output_paths.environment_file)
 
     ctx = RunContext(
         input_paths,
-        output_dir,
-        logging_dirs,
+        output_paths,
         restart,
         expand,
         no_batch,
@@ -249,11 +250,10 @@ def main(
         redis_processes = int(math.ceil(len(jobs) / cluster.DEFAULT_JOBS_PER_REDIS_INSTANCE))
 
     worker_template, redis_ports = cluster.launch_redis_processes(
-        redis_processes, logging_dirs
+        redis_processes,
+        output_paths.logging_root,
     )
-    worker_file = output_dir / "settings.py"
-    with worker_file.open("w") as f:
-        f.write(worker_template)
+    output_paths.worker_settings.write_text(worker_template)
 
     registry_manager = RegistryManager(redis_ports, ctx.number_already_completed)
     registry_manager.enqueue(jobs)
@@ -262,12 +262,12 @@ def main(
         len(jobs),
         ctx.sge_log_directory,
         ctx.worker_log_directory,
-        worker_file,
+        output_paths.worker_settings,
         native_specification,
     )
 
     process_job_results(registry_manager, ctx)
 
-    try_run_vipin(logging_dirs["worker"])
+    try_run_vipin(output_paths.worker_logging_root)
 
     logger.info("Jobs completed. Results written to: {}".format(ctx.output_directory))
