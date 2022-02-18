@@ -3,7 +3,7 @@
 Distributed Worker
 ==================
 
-Custome RQ worker for running vivarium jobs.
+Custom RQ worker for running vivarium jobs.
 
 """
 import json
@@ -25,6 +25,7 @@ from vivarium.framework.engine import SimulationContext
 from vivarium.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.psimulate import jobs
+from vivarium_cluster_tools.psimulate.cluster import ENV_VARIABLES
 from vivarium_cluster_tools.vipin.perf_counters import CounterSnapshot
 
 
@@ -56,7 +57,7 @@ class ResilientWorker(Worker):
 
     def work(self, *args, **kwargs):
         worker_ = self.name
-        logging_directory = Path(os.environ["VIVARIUM_LOGGING_DIRECTORY"])
+        logging_directory = Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
         logger.add(logging_directory / (str(worker_) + ".log"), level="DEBUG", serialize=True)
         kwargs["logging_level"] = "DEBUG"
 
@@ -88,8 +89,8 @@ class ResilientWorker(Worker):
     def fork_work_horse(self, job, queue):
         """Spawns a work horse to perform the actual work and passes it a job."""
         child_pid = os.fork()
-        os.environ["RQ_WORKER_ID"] = self.name
-        os.environ["RQ_JOB_ID"] = job.id
+        ENV_VARIABLES.RQ_WORKER_ID.update(self.name)
+        ENV_VARIABLES.RQ_JOB_ID.update(job.id)
         if child_pid == 0:
             self.main_work_horse(job, queue)
             os._exit(0)  # just in case
@@ -99,8 +100,8 @@ class ResilientWorker(Worker):
 
 
 def worker(job_parameters: dict):
-    node = f"{os.environ['SGE_CLUSTER_NAME']}:{os.environ['HOSTNAME']}"
-    job = f"{os.environ['JOB_NAME']}: {os.environ['JOB_ID']}:{os.environ['SGE_TASK_ID']}"
+    node = f"{ENV_VARIABLES.CLUSTER_NAME.value}:{ENV_VARIABLES.HOSTNAME.value}"
+    job = f"{ENV_VARIABLES.JOB_NAME.value}: {ENV_VARIABLES.JOB_ID.value}:{ENV_VARIABLES.TASK_ID.value}"
 
     job_parameters = jobs.JobParameters(**job_parameters)
 
@@ -216,17 +217,17 @@ def do_sim_epilogue(
     logger.info(f'Total simulation run time {exec_time["total_minutes"]:.3f} minutes.')
 
     perf_log = logger.add(
-        Path(os.environ["VIVARIUM_LOGGING_DIRECTORY"])
-        / f'perf.{os.environ["JOB_ID"]}.{os.environ["SGE_TASK_ID"]}.log',
+        Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
+        / f'perf.{ENV_VARIABLES.JOB_ID.value}.{ENV_VARIABLES.TASK_ID.value}.log',
         level="DEBUG",
         serialize=True,
     )
     logger.debug(
         json.dumps(
             {
-                "host": os.environ["HOSTNAME"].split(".")[0],
-                "job_number": os.environ["JOB_ID"],
-                "task_number": os.environ["SGE_TASK_ID"],
+                "host": ENV_VARIABLES.HOSTNAME.value.split(".")[0],
+                "job_number": ENV_VARIABLES.JOB_ID.value,
+                "task_number": ENV_VARIABLES.TASK_ID.value,
                 "draw": parameters.input_draw,
                 "seed": parameters.random_seed,
                 "scenario": parameters.branch_configuration,

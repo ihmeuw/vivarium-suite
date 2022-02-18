@@ -7,10 +7,9 @@ The main process loop for `psimulate` runs.
 
 """
 import atexit
-import math
 from pathlib import Path
 from time import sleep, time
-from typing import Dict, Optional
+from typing import Dict
 
 import pandas as pd
 from loguru import logger
@@ -116,7 +115,7 @@ def main(
     no_batch: bool = False,
     no_cleanup: bool = False,
 ):
-    cluster.exit_if_on_submit_host(cluster.get_hostname())
+    cluster.exit_if_on_submit_host()
 
     # Generate programmatic representation of the output directory structure
     output_paths = paths.OutputPaths.from_entry_point_args(
