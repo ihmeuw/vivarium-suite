@@ -25,7 +25,7 @@ from vivarium_cluster_tools.vipin.perf_counters import CounterSnapshot
 VIVARIUM_WORK_HORSE_IMPORT_PATH = f"{__name__}.worker"
 
 
-def work_horse(job_parameters: dict):
+def work_horse(job_parameters: dict) -> pd.DataFrame:
     node = f"{ENV_VARIABLES.CLUSTER_NAME.value}:{ENV_VARIABLES.HOSTNAME.value}"
     job = f"{ENV_VARIABLES.JOB_NAME.value}: {ENV_VARIABLES.JOB_ID.value}:{ENV_VARIABLES.TASK_ID.value}"
 
@@ -136,7 +136,7 @@ def do_sim_epilogue(
     event: dict,
     exec_time: dict,
     parameters: JobParameters,
-):
+) -> None:
     exec_time["results_minutes"] = (event["end"] - event["results_start"]) / 60
     logger.info(f'Results reporting completed in {exec_time["results_minutes"]:.3f} minutes.')
     exec_time["total_minutes"] = (event["end"] - event["start"]) / 60

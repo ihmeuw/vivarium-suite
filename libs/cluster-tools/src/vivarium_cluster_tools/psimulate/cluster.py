@@ -10,7 +10,7 @@ import atexit
 import os
 import shutil
 from pathlib import Path
-from typing import List, TextIO
+from typing import Any, List, TextIO
 
 from loguru import logger
 
@@ -31,7 +31,7 @@ ALL_Q_MAX_RUNTIME_HOURS = 3 * 24
 LONG_Q_MAX_RUNTIME_HOURS = 16 * 24
 
 
-def exit_if_on_submit_host():
+def exit_if_on_submit_host() -> None:
     submit_host_marker = "-submit-"
     if submit_host_marker in ENV_VARIABLES.HOSTNAME.value:
         raise RuntimeError("This tool must not be run from a submit host.")
@@ -111,7 +111,7 @@ class NativeSpecification:
                 f"Max runtime value too large. Must be less than {LONG_Q_MAX_RUNTIME_HOURS}h."
             )
 
-    def __str__(self):
+    def __str__(self) -> str:
         return " ".join(
             [
                 self.flag_map[resource].format(value=getattr(self, resource))
@@ -121,11 +121,11 @@ class NativeSpecification:
 
 
 def init_job_template(
-    jt,
+    jt,  # drmaa.session.JobTemplate.  Not typing because the import is tricky.
     native_specification: NativeSpecification,
     cluster_logging_root: Path,
     worker_launch_script: TextIO,
-):
+):  # -> drmaa.session.JobTemplate
     jt.workingDirectory = os.getcwd()
     jt.remoteCommand = shutil.which("sh")
     jt.args = [worker_launch_script.name]
@@ -145,7 +145,7 @@ def start_cluster(
     worker_launch_script: TextIO,
     cluster_logging_root: Path,
     native_specification: NativeSpecification,
-):
+) -> None:
     drmaa = get_drmaa()
     s = drmaa.Session()
     s.initialize()
@@ -178,7 +178,7 @@ def start_cluster(
         atexit.register(kill_jobs)
 
 
-def get_drmaa():
+def get_drmaa() -> Any:
     try:
         import drmaa
     except (RuntimeError, OSError):
@@ -190,7 +190,7 @@ def get_drmaa():
     return drmaa
 
 
-def check_user_sge_config():
+def check_user_sge_config() -> None:
     """Warn if a user has set their stdout and stderr output paths
     in a home directory config file. This overrides settings from py-drmaa."""
 

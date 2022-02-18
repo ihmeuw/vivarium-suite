@@ -13,12 +13,12 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, Tuple, Union
 
 import redis
 from loguru import logger
 from rq import Queue
-from rq.job import JobStatus
+from rq.job import Job, JobStatus
 from rq.registry import FailedJobRegistry
 from rq.worker import Worker
 
@@ -58,7 +58,7 @@ def build_launch_script(
     return launcher
 
 
-def _retry_handler(job, *exc_info):
+def _retry_handler(job: Job, *exc_info: Tuple[Union[str, bytes], ...]) -> bool:
     retries = job.meta.get("remaining_retries", 2)
 
     if retries > 0:
@@ -83,7 +83,7 @@ class _ResilientWorker(Worker):
         super().__init__(*args, **kwargs)
         self.acceptable_failure_count = 3
 
-    def work(self, *args, **kwargs):
+    def work(self, *args, **kwargs) -> None:
         worker_ = self.name
         logging_directory = Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
         logger.add(logging_directory / (str(worker_) + ".log"), level="DEBUG", serialize=True)
@@ -101,7 +101,7 @@ class _ResilientWorker(Worker):
                 time.sleep(backoff)
         logger.error(f"Ran out of retries. Killing worker")
 
-    def main_work_horse(self, job, queue):
+    def main_work_horse(self, job: Job, queue: Queue) -> None:
         retries = 0
         while retries < 10:
             try:
@@ -114,7 +114,7 @@ class _ResilientWorker(Worker):
                 time.sleep(backoff)
         logger.error(f"Ran out of retries. Killing work horse")
 
-    def fork_work_horse(self, job, queue):
+    def fork_work_horse(self, job: Job, queue: Queue):
         """Spawns a work horse to perform the actual work and passes it a job."""
         child_pid = os.fork()
         ENV_VARIABLES.RQ_WORKER_ID.update(self.name)

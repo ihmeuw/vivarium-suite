@@ -102,13 +102,13 @@ class OutputPaths(NamedTuple):
         )
         return output_paths
 
-    def touch(self):
+    def touch(self) -> None:
         vct_utils.mkdir(self.root, exists_ok=True, parents=True)
         for d in [self.logging_root, self.cluster_logging_root, self.worker_logging_root]:
             vct_utils.mkdir(d, parents=True)
 
 
-def delete_on_catastrophic_failure(output_paths: OutputPaths):
+def delete_on_catastrophic_failure(output_paths: OutputPaths) -> None:
     """Deletes the entire results root if no results are found.
 
     Remove the results directory including runner and worker logs if
@@ -120,7 +120,7 @@ def delete_on_catastrophic_failure(output_paths: OutputPaths):
         shutil.rmtree(output_paths.root)
 
 
-def _resolve_command(restart: bool, expand: bool):
+def _resolve_command(restart: bool, expand: bool) -> str:
     command = {
         (False, False): "run",
         (False, True): "invalid",

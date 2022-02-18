@@ -8,7 +8,7 @@ Tools for managing the parameter space of a parallel run.
 """
 from itertools import product
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import yaml
@@ -20,12 +20,14 @@ from vivarium_cluster_tools.psimulate.model_specification import FULL_ARTIFACT_P
 class Keyspace:
     """A representation of a collection of simulation configurations."""
 
-    def __init__(self, branches, keyspace):
+    def __init__(self, branches: List[Dict], keyspace: Dict):
         self.branches = branches
         self._keyspace = keyspace
 
     @classmethod
-    def from_branch_configuration(cls, branch_configuration_file: Union[str, Path]):
+    def from_branch_configuration(
+        cls, branch_configuration_file: Union[str, Path]
+    ) -> "Keyspace":
         """
         Parameters
         ----------
@@ -42,7 +44,7 @@ class Keyspace:
         return Keyspace(branches, keyspace)
 
     @classmethod
-    def from_previous_run(cls, keyspace_path: Path, branches_path: Path):
+    def from_previous_run(cls, keyspace_path: Path, branches_path: Path) -> "Keyspace":
         keyspace = yaml.full_load(keyspace_path.read_text())
         branches = yaml.full_load(branches_path.read_text())
         return Keyspace(branches, keyspace)
@@ -67,35 +69,25 @@ class Keyspace:
             )
         return keyspace
 
-    def get_data(self):
-        """Returns a copy of the underlying keyspace data."""
-        return self._keyspace.copy()
-
-    def get_branch_number(self, branch):
-        for (i, b) in enumerate(self.branches):
-            if b == branch:
-                return i
-        raise KeyError(f"No matching branch {branch}")
-
-    def persist(self, keyspace_path: Path, branches_path: Path):
-        keyspace_path.write_text(yaml.dump(self.get_data()))
+    def persist(self, keyspace_path: Path, branches_path: Path) -> None:
+        keyspace_path.write_text(yaml.dump(self._keyspace))
         branches_path.write_text(yaml.dump(self.branches))
 
-    def add_draws(self, num_draws):
+    def add_draws(self, num_draws: int) -> None:
         existing = self._keyspace["input_draw"]
         additional = calculate_input_draws(num_draws, existing)
         self._keyspace["input_draw"] = existing + additional
 
-    def add_seeds(self, num_seeds):
+    def add_seeds(self, num_seeds: int) -> None:
         existing = self._keyspace["random_seed"]
         additional = calculate_random_seeds(num_seeds, existing)
         self._keyspace["random_seed"] = existing + additional
 
-    def __contains__(self, item):
+    def __contains__(self, item: str) -> bool:
         """Checks whether the item is present in the Keyspace"""
         return item in self._keyspace
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[int, int, Dict]]:
         """Yields and individual simulation configuration from the keyspace."""
         for job_config in product(
             self._keyspace["input_draw"], self._keyspace["random_seed"], self.branches
@@ -104,7 +96,7 @@ class Keyspace:
                 job_config[2] = {}
             yield job_config
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Returns the number of individual simulation runs this keyspace represents."""
         return len(
             list(
@@ -115,23 +107,26 @@ class Keyspace:
         )
 
 
-def calculate_input_draws(input_draw_count, existing_draws=None):
+def calculate_input_draws(
+    input_draw_count: int, existing_draws: List[int] = None
+) -> List[int]:
     """Determines a random sample of the GBD input draws to use given a draw
     count and any existing draws.
 
     Parameters
     ----------
-    input_draw_count: int
+    input_draw_count
         The number of draws to pull.
 
-    existing_draws: list
+    existing_draws
         Any draws that have already been pulled and should not be pulled again.
 
     Returns
     -------
-    Iterable:
+    List[int]
         A set of unique input draw numbers, guaranteed not to overlap with any
         existing draw numbers.
+
     """
     np.random.seed(123456)
     if existing_draws:
@@ -150,24 +145,27 @@ def calculate_input_draws(input_draw_count, existing_draws=None):
         )
 
 
-def calculate_random_seeds(random_seed_count, existing_seeds=None):
+def calculate_random_seeds(
+    random_seed_count: int, existing_seeds: List[int] = None
+) -> List[int]:
     """Generates random seeds to use given a count of seeds and any existing
     seeds.
 
     Parameters
     ----------
-    random_seed_count: int
+    random_seed_count
         The number of random seeds to generate.
 
-    existing_seeds: list
+    existing_seeds
         Any random seeds that have already been generated and should not be
         generated again.
 
     Returns
     -------
-    Iterable:
+    List[int]
         A set of unique random seeds, guaranteed not to overlap with any
         existing random seeds.
+
     """
     if not random_seed_count:
         return []
@@ -185,10 +183,7 @@ def calculate_random_seeds(random_seed_count, existing_seeds=None):
     return np.random.choice(possible, random_seed_count, replace=False).tolist()
 
 
-def calculate_keyspace(branches):
-    if branches[0] is None:
-        return {}
-
+def calculate_keyspace(branches: List[Dict]) -> Dict:
     keyspace = {k: {v} for k, v in collapse_nested_dict(branches[0])}
 
     for branch in branches[1:]:
@@ -203,9 +198,8 @@ def calculate_keyspace(branches):
     return keyspace
 
 
-def load_branch_configuration(path):
-    with open(path) as f:
-        data = yaml.full_load(f)
+def load_branch_configuration(path: Path) -> Tuple[List[Dict], int, int]:
+    data = yaml.full_load(path.read_text())
 
     input_draw_count = data.get("input_draw_count", 1)
     random_seed_count = data.get("random_seed_count", 1)
@@ -215,12 +209,12 @@ def load_branch_configuration(path):
     if "branches" in data:
         branches = expand_branch_templates(data["branches"])
     else:
-        branches = [None]
+        branches = [{}]
 
     return branches, input_draw_count, random_seed_count
 
 
-def expand_branch_templates(templates):
+def expand_branch_templates(templates: Dict) -> List[Dict]:
     """
     Take a list of dictionaries of configuration values (like the ones used in
     experiment branch configurations) and expand it by taking any values which
