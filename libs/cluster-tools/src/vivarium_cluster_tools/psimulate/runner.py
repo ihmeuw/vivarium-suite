@@ -24,8 +24,8 @@ from vivarium_cluster_tools.psimulate import (
     programming_environment,
     redis_dbs,
     results,
+    worker,
 )
-from vivarium_cluster_tools.psimulate.worker import WORK_HORSE_PATHS
 from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 
@@ -188,6 +188,13 @@ def main(
         num_jobs=len(job_parameters),
         redis_logging_root=output_paths.logging_root,
     )
+    # Spin up a unified interface to all the redis databases
+    registry_manager = redis_dbs.RegistryManager(redis_ports, num_jobs_completed)
+    # Distribute all the remaining jobs across the job queues
+    # in the redis databases.
+    registry_manager.enqueue(
+        jobs=job_parameters, workhorse_import_path=worker.WORK_HORSE_PATHS["vivarium"]
+    )
     # Generate a worker template that chooses a redis DB at random to connect to.
     # This should (approximately) evenly distribute the workers over the work.
     redis_urls = [f"redis://{hostname}:{port}" for hostname, port in redis_ports]
@@ -196,31 +203,24 @@ def main(
     )
     # Dump the worker config to a file we can pass to the workers on startup.
     output_paths.worker_settings.write_text(worker_template)
-
-    # Spin up a unified interface to all the redis databases
-    registry_manager = redis_dbs.RegistryManager(redis_ports, num_jobs_completed)
-    # Distribute all the remaining jobs across the job queues
-    # in the redis databases.
-    registry_manager.enqueue(
-        jobs=job_parameters, workhorse_import_path=WORK_HORSE_PATHS["vivarium"]
+    worker_launch_script = worker.build_launch_script(
+        worker_settings_file=output_paths.worker_settings,
+        worker_log_directory=output_paths.worker_logging_root,
     )
-
     # Cluster specification stuff to be cleaned up.
     native_specification["job_name"] = output_paths.root.parts[-2]
     native_specification = cluster.NativeSpecification(**native_specification)
     cluster.check_user_sge_config()
-
     # Start an rq worker for every job using the cluster scheduler. The workers
     # will start as soon as they get scheduled and start looking for work. They
     # run in burst mode which means they shut down if they can't find anything
     # to do. This means it's critical that we put the jobs on the queue before
     # the workers land, otherwise they'll just show up and shut down.
     cluster.start_cluster(
-        len(job_parameters),
-        output_paths.cluster_logging_root,
-        output_paths.worker_logging_root,
-        output_paths.worker_settings,
-        native_specification,
+        num_workers=len(job_parameters),
+        worker_launch_script=worker_launch_script,
+        cluster_logging_root=output_paths.cluster_logging_root,
+        native_specification=native_specification,
     )
 
     # Enter the main monitoring and processing loop, which will check on

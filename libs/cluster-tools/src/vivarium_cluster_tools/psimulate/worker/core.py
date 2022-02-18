@@ -6,10 +6,14 @@ Distributed Worker
 RQ worker with custom retry handling.
 
 """
+import atexit
 import os
 import random
+import shutil
+import tempfile
 import time
 from pathlib import Path
+from typing import TextIO
 
 import redis
 from loguru import logger
@@ -20,11 +24,41 @@ from rq.worker import Worker
 
 from vivarium_cluster_tools.psimulate.cluster import ENV_VARIABLES
 
-RETRY_HANDLER_IMPORT_PATH = f"{__name__}.retry_handler"
-WORKER_CLASS_IMPORT_PATH = f"{__name__}.ResilientWorker"
+
+def build_launch_script(
+    worker_settings_file: Path,
+    worker_log_directory: Path,
+) -> TextIO:
+    """Generates a shell file that, on execution, spins up an RQ worker."""
+    launcher = tempfile.NamedTemporaryFile(
+        mode="w",
+        dir=".",
+        prefix="vivarium_cluster_tools_launcher_",
+        suffix=".sh",
+        delete=False,
+    )
+
+    output_dir = str(worker_settings_file.resolve().parent)
+    launcher.write(
+        f"""
+    export {ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.name}={worker_log_directory}
+    export {ENV_VARIABLES.PYTHONPATH.name}={output_dir}:${ENV_VARIABLES.PYTHONPATH.name}
+
+    {shutil.which('rq')} worker -c {worker_settings_file.stem} \
+        --name ${{{ENV_VARIABLES.JOB_ID.name}}}.${{{ENV_VARIABLES.TASK_ID.name}}} \
+        --burst \
+        -w "{__name__}._ResilientWorker" \
+        --exception-handler "{__name__}._retry_handler" vivarium
+
+    """
+    )
+    launcher.close()
+
+    atexit.register(lambda: os.remove(launcher.name))
+    return launcher
 
 
-def retry_handler(job, *exc_info):
+def _retry_handler(job, *exc_info):
     retries = job.meta.get("remaining_retries", 2)
 
     if retries > 0:
@@ -44,7 +78,7 @@ def retry_handler(job, *exc_info):
     return False
 
 
-class ResilientWorker(Worker):
+class _ResilientWorker(Worker):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.acceptable_failure_count = 3
@@ -58,7 +92,7 @@ class ResilientWorker(Worker):
         retries = 0
         while retries < 10:
             try:
-                super(ResilientWorker, self).work(*args, **kwargs)
+                super(_ResilientWorker, self).work(*args, **kwargs)
                 return
             except redis.exceptions.ConnectionError:
                 backoff = random.random() * 60
@@ -71,7 +105,7 @@ class ResilientWorker(Worker):
         retries = 0
         while retries < 10:
             try:
-                super(ResilientWorker, self).main_work_horse(job, queue)
+                super(_ResilientWorker, self).main_work_horse(job, queue)
                 return
             except redis.exceptions.ConnectionError:
                 backoff = random.random() * 60

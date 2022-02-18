@@ -9,9 +9,8 @@ Tools for interacting with the IHME cluster.
 import atexit
 import os
 import shutil
-import tempfile
 from pathlib import Path
-from typing import List, NamedTuple
+from typing import List, NamedTuple, TextIO
 
 from loguru import logger
 
@@ -171,46 +170,14 @@ class NativeSpecification:
 def init_job_template(
     jt,
     native_specification: NativeSpecification,
-    sge_log_directory: Path,
-    worker_log_directory: Path,
-    worker_settings_file: Path,
+    cluster_logging_root: Path,
+    worker_launch_script: TextIO,
 ):
-    # FIXME: Cyclic import if at top level. This launcher template stuff should
-    #   move to the worker subpackage soon.
-    from vivarium_cluster_tools.psimulate.worker import (
-        RETRY_HANDLER_IMPORT_PATH,
-        WORKER_CLASS_IMPORT_PATH,
-    )
-
-    launcher = tempfile.NamedTemporaryFile(
-        mode="w",
-        dir=".",
-        prefix="vivarium_cluster_tools_launcher_",
-        suffix=".sh",
-        delete=False,
-    )
-    atexit.register(lambda: os.remove(launcher.name))
-    output_dir = str(worker_settings_file.resolve().parent)
-    launcher.write(
-        f"""
-    export {ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.name}={worker_log_directory}
-    export {ENV_VARIABLES.PYTHONPATH.name}={output_dir}:${ENV_VARIABLES.PYTHONPATH.name}
-
-    {shutil.which('rq')} worker -c {worker_settings_file.stem} \
-        --name ${{{ENV_VARIABLES.JOB_ID.name}}}.${{{ENV_VARIABLES.TASK_ID.name}}} \
-        --burst \
-        -w "{WORKER_CLASS_IMPORT_PATH}" \
-        --exception-handler "{RETRY_HANDLER_IMPORT_PATH}" vivarium
-
-    """
-    )
-    launcher.close()
-
     jt.workingDirectory = os.getcwd()
     jt.remoteCommand = shutil.which("sh")
-    jt.args = [launcher.name]
-    jt.outputPath = f":{sge_log_directory}"
-    jt.errorPath = f":{sge_log_directory}"
+    jt.args = [worker_launch_script.name]
+    jt.outputPath = f":{str(cluster_logging_root)}"
+    jt.errorPath = f":{str(cluster_logging_root)}"
     jt.jobEnvironment = {
         "LC_ALL": "en_US.UTF-8",
         "LANG": "en_US.UTF-8",
@@ -222,9 +189,8 @@ def init_job_template(
 
 def start_cluster(
     num_workers: int,
-    sge_log_directory: Path,
-    worker_log_directory: Path,
-    worker_settings_file: Path,
+    worker_launch_script: TextIO,
+    cluster_logging_root: Path,
     native_specification: NativeSpecification,
 ):
     drmaa = get_drmaa()
@@ -233,9 +199,8 @@ def start_cluster(
     jt = init_job_template(
         s.createJobTemplate(),
         native_specification,
-        sge_log_directory,
-        worker_log_directory,
-        worker_settings_file,
+        cluster_logging_root,
+        worker_launch_script,
     )
     if num_workers:
 
