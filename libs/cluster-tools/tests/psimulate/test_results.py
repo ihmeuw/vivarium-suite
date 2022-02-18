@@ -73,7 +73,7 @@ def test_concat_results(data_types):
     expected_shape = (old.shape[0] + new.shape[0], old.shape[1])
 
     for c in old:
-        assert (combined[c] == (new[c].append(old[c])).reset_index(drop=True)).all()
+        assert (combined[c] == pd.concat([new[c], old[c]]).reset_index(drop=True)).all()
 
     assert combined.shape == expected_shape
     assert combined.dtypes.sort_index().equals(expected_dtypes.sort_index())

@@ -1,6 +1,3 @@
-psimulate - Vivarium Parallel Runner
-====================================
-
 .. automodule:: vivarium_cluster_tools.psimulate
 
 .. toctree::
@@ -8,3 +5,4 @@ psimulate - Vivarium Parallel Runner
    :glob:
 
    *
+   */index

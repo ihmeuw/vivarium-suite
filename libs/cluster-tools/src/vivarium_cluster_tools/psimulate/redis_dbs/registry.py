@@ -3,7 +3,7 @@
 Redis Queue and Registry Management
 ===================================
 
-Centralized management of jobs and results.
+Unified interface to multiple Redis Databases.
 
 """
 import math

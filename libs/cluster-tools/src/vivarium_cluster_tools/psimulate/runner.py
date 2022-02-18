@@ -22,14 +22,14 @@ from vivarium_cluster_tools.psimulate import (
     model_specification,
     paths,
     programming_environment,
-    registry,
+    redis_dbs,
     results,
 )
 from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 
 def process_job_results(
-    registry_manager: registry.RegistryManager,
+    registry_manager: redis_dbs.RegistryManager,
     existing_outputs: pd.DataFrame,
     output_directory: Path,
     no_batch: bool,
@@ -181,18 +181,23 @@ def main(
         return
 
     logger.info(f"Starting jobs. Results will be written to: {str(output_paths.root)}")
-    # Spin up the job & result dbs, get back a template for
-    # the rq workers and (hostname, port) pairs for all the dbs.
-    worker_template, redis_ports = cluster.launch_redis_processes(
+    # Spin up the job & result dbs and get back (hostname, port) pairs for all the dbs.
+    redis_ports = redis_dbs.launch(
         num_processes=redis_processes,
         num_jobs=len(job_parameters),
         redis_logging_root=output_paths.logging_root,
+    )
+    # Generate a worker template that chooses a redis DB at random to connect to.
+    # This should (approximately) evenly distribute the workers over the work.
+    redis_urls = [f"redis://{hostname}:{port}" for hostname, port in redis_ports]
+    worker_template = (
+        f"import random\nredis_urls = {redis_urls}\nREDIS_URL = random.choice(redis_urls)\n\n"
     )
     # Dump the worker config to a file we can pass to the workers on startup.
     output_paths.worker_settings.write_text(worker_template)
 
     # Spin up a unified interface to all the redis databases
-    registry_manager = registry.RegistryManager(redis_ports, num_jobs_completed)
+    registry_manager = redis_dbs.RegistryManager(redis_ports, num_jobs_completed)
     # Distribute all the remaining jobs across the job queues
     # in the redis databases.
     registry_manager.enqueue(job_parameters)

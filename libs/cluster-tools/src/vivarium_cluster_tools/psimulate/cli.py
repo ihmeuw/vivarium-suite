@@ -15,7 +15,7 @@ from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools import logs
-from vivarium_cluster_tools.psimulate import cluster, paths, runner
+from vivarium_cluster_tools.psimulate import cluster, paths, redis_dbs, runner
 
 shared_options = [
     click.option(
@@ -67,10 +67,10 @@ shared_options = [
     click.option(
         "--redis",
         type=int,
-        default=-1,
+        default=redis_dbs.DEFAULT_NUM_REDIS_DBS,
         help=(
             f"Number of redis databases to use.  Defaults to a redis instance for every "
-            f"{cluster.DEFAULT_JOBS_PER_REDIS_INSTANCE} jobs."
+            f"{redis_dbs.DEFAULT_JOBS_PER_REDIS_INSTANCE} jobs."
         ),
     ),
     click.option("-v", "verbose", count=True, help="Configure logging verbosity."),
