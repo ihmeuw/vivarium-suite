@@ -6,11 +6,14 @@ Logging Utilities
 """
 import sys
 from pathlib import Path
+from typing import TextIO
 
 from loguru import logger
 
 
-def add_logging_sink(sink, verbose: int, colorize=False, serialize=False):
+def add_logging_sink(
+    sink: TextIO, verbose: int, colorize: bool = False, serialize: bool = False
+) -> None:
     message_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
@@ -39,7 +42,9 @@ def add_logging_sink(sink, verbose: int, colorize=False, serialize=False):
         )
 
 
-def configure_main_process_logging_to_terminal(verbose: int, process_name: str = "psimulate"):
+def configure_main_process_logging_to_terminal(
+    verbose: int, process_name: str = "psimulate"
+) -> None:
     if process_name != "psimulate":
         # We don't have individual queue logs to silence
         # which is what verbosity 0 does.
@@ -48,7 +53,7 @@ def configure_main_process_logging_to_terminal(verbose: int, process_name: str =
     add_logging_sink(sys.stdout, verbose, colorize=True)
 
 
-def configure_main_process_logging_to_file(output_directory: Path):
+def configure_main_process_logging_to_file(output_directory: Path) -> None:
     main_log = output_directory / "main.log"
     serial_log = output_directory / "main.log.json"
     add_logging_sink(main_log, verbose=2)

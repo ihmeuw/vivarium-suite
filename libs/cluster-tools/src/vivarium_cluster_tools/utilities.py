@@ -11,7 +11,7 @@ import os
 import time
 import warnings
 from pathlib import Path
-from typing import Union
+from typing import Callable, Union
 
 
 def mkdir(
@@ -40,7 +40,9 @@ def mkdir(
 
 
 def backoff_and_retry(
-    backoff_seconds: Union[int, float] = 30, num_retries: int = 3, log_function=warnings.warn
+    backoff_seconds: Union[int, float] = 30,
+    num_retries: int = 3,
+    log_function: Callable[[str], None] = warnings.warn,
 ):
     """Adds a retry handler to the decorated function.
 
