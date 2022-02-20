@@ -116,6 +116,7 @@ def main(
     no_cleanup: bool,
     extra_args: dict,
 ) -> None:
+    logger.info('Validating cluster environment.')
     cluster.validate_cluster_environment()
 
     # Generate programmatic representation of the output directory structure
@@ -124,20 +125,25 @@ def main(
         input_model_specification_path=input_paths.model_specification,
         result_directory=input_paths.result_directory,
     )
-    # Make output root and all subdirectories.
+    logger.info("Setting up output directory and all subdirectories.")
     output_paths.touch()
     # Hook for blowing away output directories if things go really
     # poorly and no results get written out.
     if not no_cleanup:
         atexit.register(paths.delete_on_catastrophic_failure, output_paths=output_paths)
 
+    logger.info("Setting up logging to files.")
     # Start sending logs to a file now that it exists.
     logs.configure_main_process_logging_to_file(output_paths.logging_root)
+    logger.info("Validating programming environment.")
     # Either write a requirements.txt with the current environment
     # or verify the current environment matches the prior environment
     # used when doing a restart.
     pip_env.validate(output_paths.environment_file)
 
+    logger.info(
+        "Parsing input arguments into model specification and branches and writing to disk."
+    )
     # Parse the branches configuration into a parameter space
     # and a flat representation of all parameters to be run.
     keyspace = branches.Keyspace.from_entry_point_args(
@@ -162,12 +168,14 @@ def main(
     )
     model_specification.persist(model_spec, output_paths.model_specification)
 
+    logger.info("Loading existing outputs if present.")
     # Load in any existing partial outputs if present.
     existing_outputs = load_existing_outputs(
         result_path=output_paths.results,
         restart=command in [COMMANDS.restart, COMMANDS.expand],
     )
 
+    logger.info("Parsing arguments into worker job parameters.")
     # Translate the keyspace into the list of jobs to actually run
     # after accounting for any partially present results.
     job_parameters, num_jobs_completed = jobs.build_job_list(
@@ -181,10 +189,12 @@ def main(
     # Let the user know if something is fishy at this point.
     report_initial_status(num_jobs_completed, existing_outputs, keyspace)
     if len(job_parameters) == 0:
-        logger.info("Nothing to do")
+        logger.info("No jobs to run, exiting.")
         return
+    else:
+        logger.info(f"Found {len(job_parameters)} jobs to run.")
 
-    logger.info(f"Starting jobs. Results will be written to: {str(output_paths.root)}")
+    logger.info("Spinning up Redis DBs and connecting to main process.")
     # Spin up the job & result dbs and get back (hostname, port) pairs for all the dbs.
     redis_ports = redis_dbs.launch(
         num_processes=redis_processes,
@@ -193,6 +203,7 @@ def main(
     )
     # Spin up a unified interface to all the redis databases
     registry_manager = redis_dbs.RegistryManager(redis_ports, num_jobs_completed)
+    logger.info("Enqueuing jobs on Redis queues.")
     # Distribute all the remaining jobs across the job queues
     # in the redis databases.
     registry_manager.enqueue(
@@ -210,6 +221,7 @@ def main(
         worker_settings_file=output_paths.worker_settings,
         worker_log_directory=output_paths.worker_logging_root,
     )
+    logger.info(f"Submitting redis workers to the cluster.")
     # Start an rq worker for every job using the cluster scheduler. The workers
     # will start as soon as they get scheduled and start looking for work. They
     # run in burst mode which means they shut down if they can't find anything
@@ -222,6 +234,10 @@ def main(
         native_specification=native_specification,
     )
 
+    logger.info(
+        "Entering monitoring and results processing loop. "
+        f"Results will be written to {str(output_paths.root)}"
+    )
     # Enter the main monitoring and processing loop, which will check on
     # all the queues periodically, report status updates, and gather
     # and write results when they are available.

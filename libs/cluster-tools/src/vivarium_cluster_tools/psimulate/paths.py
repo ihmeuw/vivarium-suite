@@ -118,4 +118,4 @@ def delete_on_catastrophic_failure(output_paths: OutputPaths) -> None:
     individual ``simulate`` runs to fail.
     """
     if not output_paths.results.exists():
-        shutil.rmtree(output_paths.root)
+        shutil.rmtree(output_paths.root, ignore_errors=True)
