@@ -115,7 +115,7 @@ def main(
     no_batch: bool,
     extra_args: dict,
 ) -> None:
-    logger.info('Validating cluster environment.')
+    logger.info("Validating cluster environment.")
     cluster.validate_cluster_environment()
 
     # Generate programmatic representation of the output directory structure

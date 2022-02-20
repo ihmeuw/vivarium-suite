@@ -35,13 +35,13 @@ handler that will retry jobs a couple of times.
 """
 from vivarium_cluster_tools.psimulate import COMMANDS
 from vivarium_cluster_tools.psimulate.worker.core import build_launch_script
+from vivarium_cluster_tools.psimulate.worker.load_test_work_horse import (
+    LOAD_TEST_WORK_HORSE_IMPORT_PATH,
+)
 
 # Work horses are specific to a kind of job.
 from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
     VIVARIUM_WORK_HORSE_IMPORT_PATH,
-)
-from vivarium_cluster_tools.psimulate.worker.load_test_work_horse import (
-    LOAD_TEST_WORK_HORSE_IMPORT_PATH,
 )
 
 # All work horses available to psimulate

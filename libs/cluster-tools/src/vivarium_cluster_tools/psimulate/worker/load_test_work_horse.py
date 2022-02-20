@@ -55,5 +55,6 @@ def sleep_test(job_parameters: JobParameters) -> pd.DataFrame:
     logger.info(f"Sleeping for {sleep_time}s.")
     time.sleep(sleep_time)
     logger.info(f"Sleep test successful.")
-    return pd.DataFrame({'sleep_time': sleep_time}, 
-                        index=pd.Index([job_parameters.random_seed], name='seed'))
+    return pd.DataFrame(
+        {"sleep_time": sleep_time}, index=pd.Index([job_parameters.random_seed], name="seed")
+    )
