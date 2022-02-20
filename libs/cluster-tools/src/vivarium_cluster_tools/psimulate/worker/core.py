@@ -86,7 +86,7 @@ class _ResilientWorker(Worker):
     def work(self, *args, **kwargs) -> None:
         worker_ = self.name
         logging_directory = Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
-        logger.add(logging_directory / (str(worker_) + ".log"), level="DEBUG", serialize=True)
+        logger.add(logging_directory / (str(worker_) + ".log"), level="DEBUG")
         kwargs["logging_level"] = "DEBUG"
 
         retries = 0

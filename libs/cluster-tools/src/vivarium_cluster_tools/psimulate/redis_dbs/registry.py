@@ -75,7 +75,7 @@ class QueueManager:
             #    system is short lived anyway
             self._queue.enqueue(
                 workhorse_import_path,
-                parameters=job,
+                job_parameters=job,
                 ttl=60 * 60 * 24 * 2,
                 result_ttl=60 * 60,
                 job_timeout="7d",

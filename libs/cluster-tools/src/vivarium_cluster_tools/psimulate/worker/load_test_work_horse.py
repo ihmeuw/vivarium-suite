@@ -18,7 +18,7 @@ from vivarium.framework.randomness import get_hash
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 
-LOAD_TEST_WORK_HORSE_IMPORT_PATH = f"{__name__}.worker"
+LOAD_TEST_WORK_HORSE_IMPORT_PATH = f"{__name__}.work_horse"
 
 
 def work_horse(job_parameters: dict) -> pd.DataFrame:
@@ -55,4 +55,5 @@ def sleep_test(job_parameters: JobParameters) -> pd.DataFrame:
     logger.info(f"Sleeping for {sleep_time}s.")
     time.sleep(sleep_time)
     logger.info(f"Sleep test successful.")
-    return pd.DataFrame()
+    return pd.DataFrame({'sleep_time': sleep_time}, 
+                        index=pd.Index([job_parameters.random_seed], name='seed'))
