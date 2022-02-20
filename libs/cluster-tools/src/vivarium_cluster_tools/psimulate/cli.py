@@ -11,6 +11,7 @@ Command line interface for `psimulate`.
 
 """
 from pathlib import Path
+from typing import Optional
 
 import click
 from loguru import logger
@@ -81,8 +82,8 @@ shared_options = [
 def run(
     model_specification: Path,
     branch_configuration: Path,
-    artifact_path: Path,
-    result_directory: Path,
+    artifact_path: Optional[Path],
+    result_directory: Optional[Path],
     **options,
 ) -> None:
     """Run a parallel simulation.
