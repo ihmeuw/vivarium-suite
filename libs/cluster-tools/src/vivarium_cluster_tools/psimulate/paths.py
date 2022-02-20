@@ -86,7 +86,7 @@ class OutputPaths(NamedTuple):
         logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
         logging_dirs = {
             "logging_root": logging_directory,
-            "cluster_logging_root": logging_directory / "sge_logs",
+            "cluster_logging_root": logging_directory / "cluster_logs",
             "worker_logging_root": logging_directory / "worker_logs",
         }
 
