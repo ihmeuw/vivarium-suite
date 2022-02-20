@@ -27,9 +27,9 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
 
     job_parameters = JobParameters(**job_parameters)
 
-    test_type = job_parameters.extras['test_type']
+    test_type = job_parameters.extras["test_type"]
     test_runner = {
-        'sleep_test': sleep_test,
+        "sleep_test": sleep_test,
     }[test_type]
 
     logger.info(f"Launching new job {job} on {node}")
@@ -49,7 +49,7 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
 def sleep_test(job_parameters: JobParameters) -> pd.DataFrame:
     min_sleep_time = 5
     max_sleep_time = 60
-    rs = np.random.RandomState(seed=get_hash(f'sleep_test_{job_parameters.random_seed}'))
+    rs = np.random.RandomState(seed=get_hash(f"sleep_test_{job_parameters.random_seed}"))
     sleep_time = rs.randint(min_sleep_time, max_sleep_time)
 
     logger.info(f"Sleeping for {sleep_time}s.")

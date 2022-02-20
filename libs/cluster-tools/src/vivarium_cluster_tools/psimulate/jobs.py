@@ -88,7 +88,7 @@ def build_job_list(
                 input_draw=0,
                 random_seed=i,
                 results_path=str(output_root),
-                extras={'test_type': extras['test_type']},
+                extras={"test_type": extras["test_type"]},
             )
 
     np.random.shuffle(jobs)

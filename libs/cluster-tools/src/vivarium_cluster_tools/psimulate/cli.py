@@ -18,7 +18,12 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools import cli_tools, logs
 from vivarium_cluster_tools.psimulate import (
-    COMMANDS, cluster, paths, redis_dbs, results, runner,
+    COMMANDS,
+    cluster,
+    paths,
+    redis_dbs,
+    results,
+    runner,
 )
 
 
@@ -79,7 +84,7 @@ def run(
     branch_configuration: Path,
     artifact_path: Path,
     result_directory: Path,
-    **options
+    **options,
 ) -> None:
     """Run a parallel simulation.
 
@@ -121,7 +126,7 @@ def run(
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
         no_cleanup=options["no_cleanup"],
-        extra_args={}
+        extra_args={},
     )
 
 

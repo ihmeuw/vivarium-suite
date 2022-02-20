@@ -63,8 +63,8 @@ class Keyspace:
             )
         elif keyspace_path.exists():
             keyspace = cls.from_previous_run(keyspace_path, branches_path)
-            keyspace.add_draws(extras.get('num_draws', 0))
-            keyspace.add_seeds(extras.get('num_seeds', 0))
+            keyspace.add_draws(extras.get("num_draws", 0))
+            keyspace.add_seeds(extras.get("num_seeds", 0))
         else:
             keyspace = Keyspace([], {})
 
