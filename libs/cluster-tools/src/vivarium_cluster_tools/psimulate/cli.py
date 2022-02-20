@@ -220,7 +220,7 @@ def expand(results_root, **options):
 @psimulate.command()
 @click.argument(
     "test-type",
-    type=click.STRING,
+    type=click.Option(['sleep']),
 )
 @click.option(
     "--num-workers",
