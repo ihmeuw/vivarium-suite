@@ -11,6 +11,7 @@ import math
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import List, TextIO, Tuple
 
@@ -37,7 +38,7 @@ def launch_redis_processes(
         redis_log = (redis_logging_root / f"redis.p{port}.log").open("a")
         _launch_redis(port, stdout=redis_log, stderr=redis_log)
         redis_ports.append((hostname, port))
-
+    time.sleep(5)  # Give the dbs a few seconds to spin up.
     return redis_ports
 
 

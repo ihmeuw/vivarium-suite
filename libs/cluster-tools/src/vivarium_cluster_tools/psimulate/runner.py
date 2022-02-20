@@ -202,7 +202,7 @@ def main(
     # Distribute all the remaining jobs across the job queues
     # in the redis databases.
     registry_manager.enqueue(
-        jobs=job_parameters, workhorse_import_path=worker.WORK_HORSE_PATHS["vivarium"]
+        jobs=job_parameters, workhorse_import_path=worker.WORK_HORSE_PATHS[command]
     )
     # Generate a worker template that chooses a redis DB at random to connect to.
     # This should (approximately) evenly distribute the workers over the work.
