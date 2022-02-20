@@ -240,14 +240,13 @@ def expand(results_root, **options):
     callback=cli_tools.coerce_to_full_path,
 )
 @cli_tools.pass_shared_options(shared_options)
-def load_test(test_type, num_workers, results_directory, **options):
+def load_test(test_type, num_workers, result_directory, **options):
     logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
-
     main(
-        job_type=COMMANDS.load_test,
+        command=COMMANDS.load_test,
         input_paths=paths.InputPaths.from_entry_point_args(
-            result_directory=results_directory,
+            result_directory=result_directory,
         ),
         native_specification=cluster.NativeSpecification(
             job_name=f"load_test_{test_type}",
@@ -257,8 +256,6 @@ def load_test(test_type, num_workers, results_directory, **options):
             max_runtime=options["max_runtime"],
         ),
         redis_processes=options["redis"],
-        restart=False,
-        expand={},
         no_batch=options["no_batch"],
         no_cleanup=options["no_cleanup"],
         extra_args={
