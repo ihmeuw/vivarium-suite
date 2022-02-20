@@ -82,11 +82,11 @@ class _ResilientWorker(Worker):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.acceptable_failure_count = 3
+        log_name = f"{os.environ['SLURM_JOB_ID']}.{os.environ['SLURM_ARRAY_TASK_ID']}.log"
+        logging_directory = Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
+        logger.add(logging_directory / log_name, level="DEBUG")
 
     def work(self, *args, **kwargs) -> None:
-        worker_ = self.name
-        logging_directory = Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
-        logger.add(logging_directory / (str(worker_) + ".log"), level="DEBUG")
         kwargs["logging_level"] = "DEBUG"
 
         retries = 0

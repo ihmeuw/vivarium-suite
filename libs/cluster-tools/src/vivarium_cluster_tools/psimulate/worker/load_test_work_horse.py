@@ -22,7 +22,12 @@ LOAD_TEST_WORK_HORSE_IMPORT_PATH = f"{__name__}.work_horse"
 
 
 def work_horse(job_parameters: dict) -> pd.DataFrame:
-    node = f"{ENV_VARIABLES.CLUSTER_NAME.value}:{ENV_VARIABLES.HOSTNAME.value}"
+    import os
+    logger.info({k: v for k, v in dict(os.environ).items() if 'SLURM' in k})
+    logger.warning({k: v for k, v in dict(os.environ).items() if 'SLURM' in k})
+    logger.error({k: v for k, v in dict(os.environ).items() if 'SLURM' in k})
+
+    node = f"{ENV_VARIABLES.HOSTNAME.value}"
     job = f"{ENV_VARIABLES.JOB_NAME.value}: {ENV_VARIABLES.JOB_ID.value}:{ENV_VARIABLES.TASK_ID.value}"
 
     job_parameters = JobParameters(**job_parameters)

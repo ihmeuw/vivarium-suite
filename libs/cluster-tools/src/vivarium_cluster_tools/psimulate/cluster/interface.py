@@ -38,7 +38,7 @@ class NativeSpecification(NamedTuple):
             f"-J {self.job_name} "
             f"-A {self.project} "
             f"-p {self.queue} "
-            f"--mem {self.peak_memory}G "
+            f"--mem={self.peak_memory*1024} "
             f"-t {self.max_runtime} "
             f"-c {self.NUM_THREADS}"
         )
@@ -57,8 +57,8 @@ def submit_worker_jobs(
     jt.workingDirectory = os.getcwd()
     jt.remoteCommand = shutil.which("sh")
     jt.args = [worker_launch_script.name]
-    jt.outputPath = f":{str(cluster_logging_root)}"
-    jt.errorPath = f":{str(cluster_logging_root)}"
+    jt.outputPath = f":{str(cluster_logging_root / '%A.%a.log')}"
+    jt.errorPath = f":{str(cluster_logging_root / '%A.%a.log')}"
     jt.jobEnvironment = {
         "LC_ALL": "en_US.UTF-8",
         "LANG": "en_US.UTF-8",
@@ -75,12 +75,9 @@ def submit_worker_jobs(
         # FIXME: Hack around issue where drmaa.errors sometimes doesn't
         #        exist.
         except Exception as e:
-            if "There are no jobs registered" in str(e):
+            if "already completing or completed" in str(e):
                 # This is the case where all our workers have already shut down
                 # on their own, which isn't actually an error.
-                pass
-            elif "Discontinued delete" in str(e):
-                # The scheduler has already cleaned up some of the jobs.
                 pass
             else:
                 raise
