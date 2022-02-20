@@ -9,7 +9,6 @@ The main process loop for `psimulate` runs.
 import atexit
 from pathlib import Path
 from time import sleep, time
-from typing import Dict
 
 import pandas as pd
 from loguru import logger
@@ -108,22 +107,21 @@ def try_run_vipin(log_path: Path) -> None:
 
 
 def main(
+    command: str,
     input_paths: paths.InputPaths,
-    native_specification: dict,
+    native_specification: cluster.NativeSpecification,
     redis_processes: int,
-    restart: bool = False,
-    expand: Dict[str, int] = None,
-    no_batch: bool = False,
-    no_cleanup: bool = False,
+    no_batch: bool,
+    no_cleanup: bool,
+    extra_args: dict,
 ) -> None:
-    cluster.exit_if_on_submit_host()
+    cluster.validate_cluster_environment()
 
     # Generate programmatic representation of the output directory structure
     output_paths = paths.OutputPaths.from_entry_point_args(
+        command=command,
         input_model_specification_path=input_paths.model_specification,
         result_directory=input_paths.result_directory,
-        restart=restart,
-        expand=bool(expand),
     )
     # Make output root and all subdirectories.
     output_paths.touch()
@@ -143,10 +141,9 @@ def main(
     # and a flat representation of all parameters to be run.
     keyspace = branches.Keyspace.from_entry_point_args(
         input_branch_configuration_path=input_paths.branch_configuration,
-        restart=restart,
-        expand=expand,
         keyspace_path=output_paths.keyspace,
         branches_path=output_paths.branches,
+        extras=extra_args,
     )
     # Throw that into our output directory. The keyspace output is
     # a cartesian product representation of the parameter space and
@@ -156,24 +153,29 @@ def main(
     # Parse the model specification and resolve the artifact path
     # and then write to the output directory.
     model_spec = model_specification.parse(
+        command=command,
         input_model_specification_path=input_paths.model_specification,
         artifact_path=input_paths.artifact,
         model_specification_path=output_paths.model_specification,
-        restart=restart,
         keyspace=keyspace,
     )
     model_specification.persist(model_spec, output_paths.model_specification)
 
     # Load in any existing partial outputs if present.
-    existing_outputs = load_existing_outputs(output_paths.results, restart)
+    existing_outputs = load_existing_outputs(
+        result_path=output_paths.results,
+        restart=command in [jobs.COMMANDS.restart, jobs.COMMANDS.expand],
+    )
 
     # Translate the keyspace into the list of jobs to actually run
     # after accounting for any partially present results.
     job_parameters, num_jobs_completed = jobs.build_job_list(
+        command=command,
         model_specification_path=output_paths.model_specification,
         output_root=output_paths.root,
         keyspace=keyspace,
         existing_outputs=existing_outputs,
+        extras=extra_args,
     )
     # Let the user know if something is fishy at this point.
     report_initial_status(num_jobs_completed, existing_outputs, keyspace)
@@ -207,16 +209,12 @@ def main(
         worker_settings_file=output_paths.worker_settings,
         worker_log_directory=output_paths.worker_logging_root,
     )
-    # Cluster specification stuff to be cleaned up.
-    native_specification["job_name"] = output_paths.root.parts[-2]
-    native_specification = cluster.NativeSpecification(**native_specification)
-    cluster.check_user_sge_config()
     # Start an rq worker for every job using the cluster scheduler. The workers
     # will start as soon as they get scheduled and start looking for work. They
     # run in burst mode which means they shut down if they can't find anything
     # to do. This means it's critical that we put the jobs on the queue before
     # the workers land, otherwise they'll just show up and shut down.
-    cluster.start_cluster(
+    cluster.submit_worker_jobs(
         num_workers=len(job_parameters),
         worker_launch_script=worker_launch_script,
         cluster_logging_root=output_paths.cluster_logging_root,

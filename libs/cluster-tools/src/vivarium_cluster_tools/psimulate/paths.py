@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import NamedTuple, Optional, Union
 
 from vivarium_cluster_tools import utilities as vct_utils
+from vivarium_cluster_tools.psimulate.jobs import COMMANDS
 
 DEFAULT_OUTPUT_DIRECTORY = "/share/costeffectiveness/results"
 
@@ -69,18 +70,20 @@ class OutputPaths(NamedTuple):
     def from_entry_point_args(
         cls,
         *,
+        command: str,
         input_model_specification_path: Optional[Path],
         result_directory: Path,
-        restart: bool,
-        expand: bool,
     ) -> "OutputPaths":
-        command = _resolve_command(restart, expand)
         launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
         output_directory = result_directory
-        if command == "run":
+        if command == COMMANDS.run:
             output_directory = (
                 output_directory / input_model_specification_path.stem / launch_time
+            )
+        elif command == COMMANDS.load_test:
+            output_directory = (
+                output_directory / launch_time
             )
 
         logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
@@ -118,17 +121,3 @@ def delete_on_catastrophic_failure(output_paths: OutputPaths) -> None:
     """
     if not output_paths.results.exists():
         shutil.rmtree(output_paths.root)
-
-
-def _resolve_command(restart: bool, expand: bool) -> str:
-    command = {
-        (False, False): "run",
-        (False, True): "invalid",
-        (True, False): "restart",
-        (True, True): "expand",
-    }[(restart, expand)]
-
-    # Should be impossible from entry points.
-    if command == "invalid":
-        raise ValueError("Unknown command configuration")
-    return command

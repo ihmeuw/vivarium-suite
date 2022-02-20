@@ -18,6 +18,7 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools import cli_tools, logs
 from vivarium_cluster_tools.psimulate import cluster, paths, redis_dbs, results, runner
+from vivarium_cluster_tools.psimulate.jobs import COMMANDS
 
 
 @click.group()
@@ -102,6 +103,7 @@ def run(
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
+        command=COMMANDS.run,
         input_paths=paths.InputPaths.from_entry_point_args(
             input_model_specification_path=model_specification,
             input_branch_configuration_path=branch_configuration,
@@ -118,6 +120,7 @@ def run(
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
         no_cleanup=options["no_cleanup"],
+        extra_args={}
     )
 
 
@@ -140,6 +143,7 @@ def restart(results_root, **options):
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
+        command=COMMANDS.restart,
         input_paths=paths.InputPaths.from_entry_point_args(
             result_directory=results_root,
         ),
@@ -151,9 +155,9 @@ def restart(results_root, **options):
             max_runtime=options["max_runtime"],
         ),
         redis_processes=options["redis"],
-        restart=True,
         no_batch=options["no_batch"],
         no_cleanup=options["no_cleanup"],
+        extra_args={},
     )
 
 
@@ -190,6 +194,7 @@ def expand(results_root, **options):
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
+        command=COMMANDS.expand,
         input_paths=paths.InputPaths.from_entry_point_args(
             result_directory=results_root,
         ),
@@ -201,8 +206,57 @@ def expand(results_root, **options):
             max_runtime=options["max_runtime"],
         ),
         redis_processes=options["redis"],
-        restart=True,
-        expand={"num_draws": options["add_draws"], "num_seeds": options["add_seeds"]},
         no_batch=options["no_batch"],
         no_cleanup=options["no_cleanup"],
+        extra_args={
+            "num_draws": options["add_draws"],
+            "num_seeds": options["add_seeds"],
+        },
+    )
+
+
+@psimulate.command()
+@click.argument(
+    "test-type",
+    type=click.STRING,
+)
+@click.option(
+    "--num-workers",
+    "-n",
+    type=click.INT,
+    default=1000,
+)
+@click.option(
+    "--result-directory",
+    "-o",
+    type=click.Path(file_okay=False),
+    default=paths.DEFAULT_OUTPUT_DIRECTORY / 'load_tests',
+    callback=cli_tools.coerce_to_full_path,
+)
+@cli_tools.pass_shared_options(shared_options)
+def load_test(test_type, num_workers, results_directory, **options):
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
+    main = handle_exceptions(runner.main, logger, options["with_debugger"])
+
+    main(
+        job_type=COMMANDS.load_test,
+        input_paths=paths.InputPaths.from_entry_point_args(
+            result_directory=results_directory,
+        ),
+        native_specification=cluster.NativeSpecification(
+            job_name=f"load_test_{test_type}",
+            project=options["project"],
+            queue=options["queue"],
+            peak_memory=options["peak_memory"],
+            max_runtime=options["max_runtime"],
+        ),
+        redis_processes=options["redis"],
+        restart=False,
+        expand={},
+        no_batch=options["no_batch"],
+        no_cleanup=options["no_cleanup"],
+        extra_args={
+            "test_type": test_type,
+            "num_workers": num_workers,
+        },
     )
