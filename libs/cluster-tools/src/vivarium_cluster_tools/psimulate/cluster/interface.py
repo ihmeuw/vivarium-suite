@@ -53,7 +53,7 @@ def submit_worker_jobs(
     drmaa = _get_drmaa()
     s = drmaa.Session()
     s.initialize()
-    jt = (s.createJobTemplate(),)
+    jt = s.createJobTemplate()
     jt.workingDirectory = os.getcwd()
     jt.remoteCommand = shutil.which("sh")
     jt.args = [worker_launch_script.name]

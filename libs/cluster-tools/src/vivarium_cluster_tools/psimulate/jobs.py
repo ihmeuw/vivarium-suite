@@ -90,6 +90,7 @@ def build_job_list(
                 results_path=str(output_root),
                 extras={"test_type": extras["test_type"]},
             )
+            jobs.append(parameters.to_dict())
 
     np.random.shuffle(jobs)
     return jobs, number_already_completed
