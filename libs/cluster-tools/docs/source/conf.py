@@ -200,6 +200,7 @@ intersphinx_mapping = {
     "tables": ("https://www.pytables.org/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
     "vivarium": ("https://vivarium.readthedocs.io/en/latest/", None),
+    "redis": ("https://redis-py.readthedocs.io/en/stable/", None),
 }
 
 

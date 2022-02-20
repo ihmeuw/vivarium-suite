@@ -13,7 +13,7 @@ from typing import Dict, List, Tuple
 from loguru import logger
 
 
-def validate(environment_file: Path):
+def validate(environment_file: Path) -> None:
     pip_list_proc = subprocess.Popen(
         ["pip", "list", "--format=freeze"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
@@ -56,7 +56,7 @@ def _convert_pip_list_to_dict(pf_list: List[str]) -> Dict:
     return {p: v for p, v in [_parse_package_version(s) for s in pf_list]}
 
 
-def _compare_environments(current: Dict, original: Dict):
+def _compare_environments(current: Dict, original: Dict) -> None:
     differences = []
 
     current_packages = set(current.keys())
@@ -65,8 +65,8 @@ def _compare_environments(current: Dict, original: Dict):
     new_packages = current_packages.difference(original_packages)
     if new_packages:
         differences.append(
-            f"The current environment contains the following packages not present in the original "
-            f"environment: {new_packages}."
+            f"The current environment contains the following packages not present "
+            f"in the original environment: {new_packages}."
         )
 
     missing_packages = original_packages.difference(current_packages)

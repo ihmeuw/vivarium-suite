@@ -34,7 +34,7 @@ def process_job_results(
     existing_outputs: pd.DataFrame,
     output_directory: Path,
     no_batch: bool,
-):
+) -> None:
     written_results = existing_outputs
     unwritten_results = []
     batch_size = 0 if no_batch else 200
@@ -98,7 +98,7 @@ def report_initial_status(
         )
 
 
-def try_run_vipin(log_path: Path):
+def try_run_vipin(log_path: Path) -> None:
     try:
         report_performance(
             input_directory=log_path, output_directory=log_path, output_hdf=False, verbose=1
@@ -115,7 +115,7 @@ def main(
     expand: Dict[str, int] = None,
     no_batch: bool = False,
     no_cleanup: bool = False,
-):
+) -> None:
     cluster.exit_if_on_submit_host()
 
     # Generate programmatic representation of the output directory structure
