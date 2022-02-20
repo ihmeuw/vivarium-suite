@@ -7,7 +7,7 @@ File Path Management
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Union
 
 from vivarium_cluster_tools import utilities as vct_utils
 
@@ -15,19 +15,19 @@ DEFAULT_OUTPUT_DIRECTORY = "/share/costeffectiveness/results"
 
 
 class InputPaths(NamedTuple):
-    model_specification: Optional[Path]
-    branch_configuration: Optional[Path]
-    artifact: Optional[Path]
+    model_specification: Union[None, Path]
+    branch_configuration: Union[None, Path]
+    artifact: Union[None, Path]
     result_directory: Path
 
     @classmethod
     def from_entry_point_args(
         cls,
         *,  # No positional args allowed.
-        result_directory: str,
-        input_model_specification_path: str = None,
-        input_branch_configuration_path: str = None,
-        input_artifact_path: str = None,
+        result_directory: Union[str, Path],
+        input_model_specification_path: Union[str, Path] = None,
+        input_branch_configuration_path: Union[str, Path] = None,
+        input_artifact_path: Union[str, Path] = None,
     ) -> "InputPaths":
         if result_directory is None:
             raise ValueError("Result directory must be provided.")
@@ -39,7 +39,7 @@ class InputPaths(NamedTuple):
         )
 
     @staticmethod
-    def _coerce_path(path: Optional[str]) -> Path:
+    def _coerce_path(path: Optional[str]) -> Union[None, Path]:
         if path is not None:
             return Path(path)
 
