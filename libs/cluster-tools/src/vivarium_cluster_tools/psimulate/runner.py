@@ -113,7 +113,6 @@ def main(
     native_specification: cluster.NativeSpecification,
     redis_processes: int,
     no_batch: bool,
-    no_cleanup: bool,
     extra_args: dict,
 ) -> None:
     logger.info('Validating cluster environment.')
@@ -127,10 +126,6 @@ def main(
     )
     logger.info("Setting up output directory and all subdirectories.")
     output_paths.touch()
-    # Hook for blowing away output directories if things go really
-    # poorly and no results get written out.
-    if not no_cleanup:
-        atexit.register(paths.delete_on_catastrophic_failure, output_paths=output_paths)
 
     logger.info("Setting up logging to files.")
     # Start sending logs to a file now that it exists.

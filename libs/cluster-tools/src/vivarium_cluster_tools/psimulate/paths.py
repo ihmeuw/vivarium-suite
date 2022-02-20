@@ -4,7 +4,6 @@ File Path Management
 ====================
 
 """
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple, Optional, Union
@@ -107,15 +106,3 @@ class OutputPaths(NamedTuple):
         vct_utils.mkdir(self.root, exists_ok=True, parents=True)
         for d in [self.logging_root, self.cluster_logging_root, self.worker_logging_root]:
             vct_utils.mkdir(d, parents=True)
-
-
-def delete_on_catastrophic_failure(output_paths: OutputPaths) -> None:
-    """Deletes the entire results root if no results are found.
-
-    Remove the results directory including runner and worker logs if
-    the simulation produced no results. This failure category usually
-    happens when there is a code or data error that would cause
-    individual ``simulate`` runs to fail.
-    """
-    if not output_paths.results.exists():
-        shutil.rmtree(output_paths.root, ignore_errors=True)
