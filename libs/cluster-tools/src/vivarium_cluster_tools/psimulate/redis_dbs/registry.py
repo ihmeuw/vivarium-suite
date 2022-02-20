@@ -127,7 +127,11 @@ class QueueManager:
                 pending_ids = set(self._queue.job_ids) if self._queue else set()
                 pending_ids = pending_ids - running_ids
 
-                failed_ids = set(self._queue.failed_job_registry.get_job_ids()) if self._queue else set()
+                failed_ids = (
+                    set(self._queue.failed_job_registry.get_job_ids())
+                    if self._queue
+                    else set()
+                )
                 failed_ids = failed_ids - (running_ids | pending_ids)
 
                 q_workers = len(rq.Worker.all(queue=self._queue)) if self._queue else 0
@@ -136,7 +140,12 @@ class QueueManager:
                 self._status["running"] = len(running_ids) + len(finished_ids)
                 self._status["failed"] = len(failed_ids)
                 self._status["finished"] = self._status["finished"]
-                self._status["total"] = len(pending_ids) + len(running_ids) + len(failed_ids) + self._status["finished"]
+                self._status["total"] = (
+                    len(pending_ids)
+                    + len(running_ids)
+                    + len(failed_ids)
+                    + self._status["finished"]
+                )
                 self._status["workers"] = q_workers
                 self._status["done"] = 100 * self._status["finished"] / self._status["total"]
 

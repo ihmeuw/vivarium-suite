@@ -14,8 +14,9 @@ from typing import Callable, NamedTuple
 class EnvVariable:
     """Convenience wrapper around an environment variable."""
 
-    def __init__(self, name: str,
-                 finder: Callable[[str], str] = lambda name: os.environ[name]):
+    def __init__(
+        self, name: str, finder: Callable[[str], str] = lambda name: os.environ[name]
+    ):
         self._name = name
         self._finder = finder
 

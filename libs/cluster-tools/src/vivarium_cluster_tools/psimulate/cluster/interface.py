@@ -15,10 +15,10 @@ from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
 
 def validate_cluster_environment() -> None:
-    if 'slurm' not in ENV_VARIABLES.HOSTNAME.value:
+    if "slurm" not in ENV_VARIABLES.HOSTNAME.value:
         raise RuntimeError("This tool must be run from the IHME cluster.")
 
-    submit_host_marker = 'slogin'
+    submit_host_marker = "slogin"
     if submit_host_marker in ENV_VARIABLES.HOSTNAME.value:
         raise RuntimeError("This tool must not be run from a submit host.")
 
@@ -89,7 +89,7 @@ def _get_drmaa() -> Any:
     try:
         import drmaa
     except (RuntimeError, OSError):
-        if 'slurm' in ENV_VARIABLES.HOSTNAME.value:
+        if "slurm" in ENV_VARIABLES.HOSTNAME.value:
             ENV_VARIABLES.DRMAA_LIB_PATH.update("/opt/slurm-drmaa/lib/libdrmaa.so")
             import drmaa
         else:
