@@ -29,7 +29,7 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
 
     test_type = job_parameters.extras["test_type"]
     test_runner = {
-        "sleep_test": sleep_test,
+        "sleep": sleep_test,
     }[test_type]
 
     logger.info(f"Launching new job {job} on {node}")
