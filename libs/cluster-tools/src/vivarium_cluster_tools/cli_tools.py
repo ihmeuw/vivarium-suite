@@ -26,7 +26,8 @@ def with_verbose_and_pdb(func: Callable) -> Callable:
 
 
 def coerce_to_full_path(ctx: click.Context, param: str, value: str) -> Path:
-    return Path(value).resolve()
+    if value is not None:
+        return Path(value).resolve()
 
 
 def pass_shared_options(shared_options: List[Decorator]) -> Decorator:
