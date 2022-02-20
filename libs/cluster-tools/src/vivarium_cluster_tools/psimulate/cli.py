@@ -44,7 +44,6 @@ shared_options = [
     cluster.with_peak_memory,
     redis_dbs.with_redis,
     results.with_no_batch,
-    results.with_no_cleanup,
     cli_tools.with_verbose_and_pdb,
 ]
 
@@ -125,7 +124,6 @@ def run(
         ),
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
-        no_cleanup=options["no_cleanup"],
         extra_args={},
     )
 
@@ -162,7 +160,6 @@ def restart(results_root, **options):
         ),
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
-        no_cleanup=options["no_cleanup"],
         extra_args={},
     )
 
@@ -213,7 +210,6 @@ def expand(results_root, **options):
         ),
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
-        no_cleanup=options["no_cleanup"],
         extra_args={
             "num_draws": options["add_draws"],
             "num_seeds": options["add_seeds"],
@@ -257,7 +253,6 @@ def load_test(test_type, num_workers, result_directory, **options):
         ),
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
-        no_cleanup=options["no_cleanup"],
         extra_args={
             "test_type": test_type,
             "num_workers": num_workers,
