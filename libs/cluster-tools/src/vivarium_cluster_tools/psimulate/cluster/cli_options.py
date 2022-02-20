@@ -53,20 +53,19 @@ with_peak_memory = click.option(
 )
 
 
-_with_queue = click.option(
-    "--queue",
-    "-q",
-    type=click.Choice(["all.q", "long.q"]),
-    default=_DEFAULT_QUEUE,
-    help="The cluster queue to assign psimulate jobs to. Queue defaults to the "
-    "appropriate queue based on max-runtime. long.q allows for much longer "
-    "runtimes but there may be reasons to send jobs to that queue even "
-    "if they don't have runtime constraints, such as node availability.",
-    is_eager=True,
-)
+def _queue_and_runtime_callback(ctx: click.Context, param: str, value: str) -> str:
+    if param == 'queue' and 'max_runtime' in ctx.params:
+        runtime_string, queue = _validate_runtime_and_queue(ctx.params['max_runtime'], value)
+        ctx.params['max_runtime'], value = runtime_string, queue
+    elif param == 'max_runtime' and 'queue' in ctx.params:
+        runtime_string, queue = _validate_runtime_and_queue(value, ctx.params["queue"])
+        value, ctx.params['queue'] = runtime_string, queue
+    else:
+        pass
+    return value
 
 
-def _runtime_callback(ctx: click.Context, _: str, runtime_string: str) -> str:
+def _validate_runtime_and_queue(runtime_string: str, queue: str):
     try:
         hours, minutes, seconds = runtime_string.split(":")
     except ValueError:
@@ -74,8 +73,6 @@ def _runtime_callback(ctx: click.Context, _: str, runtime_string: str) -> str:
             f"Invalid --max-runtime supplied. Format should be {_RUNTIME_FORMAT}."
         )
     total_hours = int(hours) + float(minutes) / 60.0 + float(seconds) / 3600.0
-
-    queue = ctx.params["queue"]
 
     # Sorted from shortest to longest.
     max_runtime_map = {
@@ -107,10 +104,20 @@ def _runtime_callback(ctx: click.Context, _: str, runtime_string: str) -> str:
             if total_hours <= max_queue_runtime
         ][0]
 
-    ctx.params["queue"] = queue
-    return runtime_string
+    return runtime_string, queue
 
 
+_with_queue = click.option(
+    "--queue",
+    "-q",
+    type=click.Choice(["all.q", "long.q"]),
+    default=_DEFAULT_QUEUE,
+    help="The cluster queue to assign psimulate jobs to. Queue defaults to the "
+    "appropriate queue based on max-runtime. long.q allows for much longer "
+    "runtimes but there may be reasons to send jobs to that queue even "
+    "if they don't have runtime constraints, such as node availability.",
+    callback=_queue_and_runtime_callback,
+)
 _with_max_runtime = click.option(
     "--max-runtime",
     "-r",
@@ -123,5 +130,5 @@ _with_max_runtime = click.option(
         "session you are launching from must be able to live at least as long "
         "as the simulation jobs, and that runtimes by node vary wildly."
     ),
-    callback=_runtime_callback,
+    callback=_queue_and_runtime_callback,
 )
