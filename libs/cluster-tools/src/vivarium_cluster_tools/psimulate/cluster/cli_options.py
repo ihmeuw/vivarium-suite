@@ -9,9 +9,7 @@ Command line options for configuring the cluster environment in psimulate runs.
 
 import click
 
-# Tombstone value for internal use. Default options are not shown by
-# click unless explicitly requested.
-_DEFAULT_QUEUE = "max_runtime_queue.q"
+
 _RUNTIME_FORMAT = "hh:mm:ss"
 
 with_project = click.option(
@@ -96,7 +94,7 @@ def _validate_runtime_and_queue(runtime_string: str, queue: str):
         pass
     else:
         # We need to set a default based on the runtime.
-        assert queue == _DEFAULT_QUEUE
+        assert queue is None
         # First queue we qualify for.
         queue = [
             q
@@ -111,7 +109,7 @@ _with_queue = click.option(
     "--queue",
     "-q",
     type=click.Choice(["all.q", "long.q"]),
-    default=_DEFAULT_QUEUE,
+    default=None,
     help="The cluster queue to assign psimulate jobs to. Queue defaults to the "
     "appropriate queue based on max-runtime. long.q allows for much longer "
     "runtimes but there may be reasons to send jobs to that queue even "
