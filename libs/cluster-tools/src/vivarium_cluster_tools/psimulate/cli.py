@@ -236,7 +236,7 @@ def expand(results_root, **options):
     callback=cli_tools.coerce_to_full_path,
 )
 @cli_tools.pass_shared_options(shared_options)
-def load_test(test_type, num_workers, result_directory, **options):
+def test(test_type, num_workers, result_directory, **options):
     logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
     main(
