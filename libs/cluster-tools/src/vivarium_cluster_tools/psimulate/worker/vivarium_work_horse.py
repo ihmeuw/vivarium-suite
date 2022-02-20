@@ -151,7 +151,7 @@ def do_sim_epilogue(
     logger.debug(
         json.dumps(
             {
-                "host": ENV_VARIABLES.HOSTNAME,
+                "host": ENV_VARIABLES.HOSTNAME.value,
                 "job_number": ENV_VARIABLES.JOB_ID.value,
                 "task_number": ENV_VARIABLES.TASK_ID.value,
                 "draw": parameters.input_draw,
