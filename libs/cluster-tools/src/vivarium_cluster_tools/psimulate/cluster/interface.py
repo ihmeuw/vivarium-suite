@@ -15,10 +15,10 @@ from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
 
 def validate_cluster_environment() -> None:
-    if not ENV_VARIABLES.CLUSTER_NAME.exists:
+    if 'slurm' not in ENV_VARIABLES.HOSTNAME.value:
         raise RuntimeError("This tool must be run from the IHME cluster.")
 
-    submit_host_marker = "-submit-"
+    submit_host_marker = "-slogin-"
     if submit_host_marker in ENV_VARIABLES.HOSTNAME.value:
         raise RuntimeError("This tool must not be run from a submit host.")
 

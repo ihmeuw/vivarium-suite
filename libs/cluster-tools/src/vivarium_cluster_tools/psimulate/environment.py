@@ -33,7 +33,6 @@ class EnvVariable:
 
 
 class __EnvVariables(NamedTuple):
-    CLUSTER_NAME: EnvVariable
     HOSTNAME: EnvVariable
     JOB_NAME: EnvVariable
     JOB_ID: EnvVariable
@@ -46,7 +45,6 @@ class __EnvVariables(NamedTuple):
 
 
 ENV_VARIABLES = __EnvVariables(
-    CLUSTER_NAME=EnvVariable("SGE_CLUSTER_NAME"),
     HOSTNAME=EnvVariable("HOSTNAME"),
     JOB_NAME=EnvVariable("JOB_NAME"),
     JOB_ID=EnvVariable("JOB_ID"),
