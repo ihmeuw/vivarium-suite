@@ -15,6 +15,7 @@ from loguru import logger
 
 from vivarium_cluster_tools import logs
 from vivarium_cluster_tools.psimulate import (
+    COMMANDS,
     branches,
     cluster,
     jobs,
@@ -164,7 +165,7 @@ def main(
     # Load in any existing partial outputs if present.
     existing_outputs = load_existing_outputs(
         result_path=output_paths.results,
-        restart=command in [jobs.COMMANDS.restart, jobs.COMMANDS.expand],
+        restart=command in [COMMANDS.restart, COMMANDS.expand],
     )
 
     # Translate the keyspace into the list of jobs to actually run

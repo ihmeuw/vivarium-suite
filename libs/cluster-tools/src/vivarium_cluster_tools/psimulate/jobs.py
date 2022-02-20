@@ -11,17 +11,7 @@ import numpy as np
 import pandas as pd
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate import branches
-
-
-class __Commands(NamedTuple):
-    run: str
-    restart: str
-    expand: str
-    load_test: str
-
-
-COMMANDS = __Commands(*__Commands._fields)
+from vivarium_cluster_tools.psimulate import COMMANDS, branches
 
 
 class JobParameters(NamedTuple):

@@ -17,8 +17,9 @@ from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools import cli_tools, logs
-from vivarium_cluster_tools.psimulate import cluster, paths, redis_dbs, results, runner
-from vivarium_cluster_tools.psimulate.jobs import COMMANDS
+from vivarium_cluster_tools.psimulate import (
+    COMMANDS, cluster, paths, redis_dbs, results, runner,
+)
 
 
 @click.group()
@@ -230,7 +231,7 @@ def expand(results_root, **options):
     "--result-directory",
     "-o",
     type=click.Path(file_okay=False),
-    default=paths.DEFAULT_OUTPUT_DIRECTORY / 'load_tests',
+    default=f"{paths.DEFAULT_OUTPUT_DIRECTORY}/load_tests",
     callback=cli_tools.coerce_to_full_path,
 )
 @cli_tools.pass_shared_options(shared_options)

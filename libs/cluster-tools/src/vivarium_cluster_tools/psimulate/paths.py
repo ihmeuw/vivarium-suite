@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import NamedTuple, Optional, Union
 
 from vivarium_cluster_tools import utilities as vct_utils
-from vivarium_cluster_tools.psimulate.jobs import COMMANDS
+from vivarium_cluster_tools.psimulate import COMMANDS
 
 DEFAULT_OUTPUT_DIRECTORY = "/share/costeffectiveness/results"
 

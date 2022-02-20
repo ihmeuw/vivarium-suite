@@ -16,7 +16,7 @@ from vivarium.framework.configuration import (
     build_model_specification,
 )
 
-from vivarium_cluster_tools.psimulate.jobs import COMMANDS
+from vivarium_cluster_tools.psimulate import COMMANDS
 
 if typing.TYPE_CHECKING:
     # Cyclic import.
