@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate import branches
+from vivarium_cluster_tools.psimulate import COMMANDS, branches
 
 
 class JobParameters(NamedTuple):
@@ -22,6 +22,7 @@ class JobParameters(NamedTuple):
     input_draw: int
     random_seed: int
     results_path: str
+    extras: dict
 
     @property
     def shared(self) -> dict:
@@ -53,25 +54,42 @@ class JobParameters(NamedTuple):
 
 
 def build_job_list(
+    command: str,
     model_specification_path: Path,
     output_root: Path,
     keyspace: branches.Keyspace,
     existing_outputs: pd.DataFrame,
+    extras: dict,
 ) -> Tuple[List[dict], int]:
     jobs = []
     number_already_completed = 0
-    for (input_draw, random_seed, branch_config) in keyspace:
-        parameters = JobParameters(
-            model_specification=str(model_specification_path),
-            branch_configuration=branch_config,
-            input_draw=int(input_draw),
-            random_seed=int(random_seed),
-            results_path=str(output_root),
-        )
 
-        if already_complete(parameters, existing_outputs):
-            number_already_completed += 1
-        else:
+    if command in [COMMANDS.run, COMMANDS.restart, COMMANDS.expand]:
+        for (input_draw, random_seed, branch_config) in keyspace:
+            parameters = JobParameters(
+                model_specification=str(model_specification_path),
+                branch_configuration=branch_config,
+                input_draw=int(input_draw),
+                random_seed=int(random_seed),
+                results_path=str(output_root),
+                extras={},
+            )
+
+            if already_complete(parameters, existing_outputs):
+                number_already_completed += 1
+            else:
+                jobs.append(parameters.to_dict())
+    else:
+        assert command == COMMANDS.load_test
+        for i in range(extras["num_workers"]):
+            parameters = JobParameters(
+                model_specification=str(model_specification_path),
+                branch_configuration={},
+                input_draw=0,
+                random_seed=i,
+                results_path=str(output_root),
+                extras={"test_type": extras["test_type"]},
+            )
             jobs.append(parameters.to_dict())
 
     np.random.shuffle(jobs)

@@ -16,6 +16,8 @@ from vivarium.framework.configuration import (
     build_model_specification,
 )
 
+from vivarium_cluster_tools.psimulate import COMMANDS
+
 if typing.TYPE_CHECKING:
     # Cyclic import.
     from vivarium_cluster_tools.psimulate.branches import Keyspace
@@ -28,18 +30,20 @@ FULL_ARTIFACT_PATH_KEY = f"{INPUT_DATA_KEY}.{ARTIFACT_PATH_KEY}"
 
 
 def parse(
+    command: str,
     input_model_specification_path: Optional[Path],
     artifact_path: Optional[Path],
     model_specification_path: Path,
-    restart: bool,
     keyspace: "Keyspace",
 ) -> ConfigTree:
-    if restart:
+    if command in [COMMANDS.restart, COMMANDS.expand]:
         return build_model_specification(model_specification_path)
+    if command == COMMANDS.load_test:
+        return build_model_specification()
 
     model_specification = build_model_specification(input_model_specification_path)
 
-    artifact_path_is_cli_arg = artifact_path.is_file()
+    artifact_path_is_cli_arg = artifact_path is not None
     artifact_path_in_keyspace = FULL_ARTIFACT_PATH_KEY in keyspace
 
     if artifact_path_is_cli_arg and artifact_path_in_keyspace:

@@ -52,21 +52,22 @@ class Keyspace:
     @classmethod
     def from_entry_point_args(
         cls,
-        input_branch_configuration_path: Optional[str],
-        restart: bool,
-        expand: Optional[Dict[str, int]],
+        input_branch_configuration_path: Optional[Path],
         keyspace_path: Path,
         branches_path: Path,
+        extras: Dict,
     ) -> "Keyspace":
-        if restart:
-            keyspace = cls.from_previous_run(keyspace_path, branches_path)
-            if expand:
-                keyspace.add_draws(expand["num_draws"])
-                keyspace.add_seeds(expand["num_seeds"])
-        else:
+        if input_branch_configuration_path is not None:
             keyspace = cls.from_branch_configuration(
                 input_branch_configuration_path,
             )
+        elif keyspace_path.exists():
+            keyspace = cls.from_previous_run(keyspace_path, branches_path)
+            keyspace.add_draws(extras.get("num_draws", 0))
+            keyspace.add_seeds(extras.get("num_seeds", 0))
+        else:
+            keyspace = Keyspace([], {})
+
         return keyspace
 
     def persist(self, keyspace_path: Path, branches_path: Path) -> None:

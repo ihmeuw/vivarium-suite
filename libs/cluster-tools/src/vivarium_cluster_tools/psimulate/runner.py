@@ -9,13 +9,13 @@ The main process loop for `psimulate` runs.
 import atexit
 from pathlib import Path
 from time import sleep, time
-from typing import Dict
 
 import pandas as pd
 from loguru import logger
 
 from vivarium_cluster_tools import logs
 from vivarium_cluster_tools.psimulate import (
+    COMMANDS,
     branches,
     cluster,
     jobs,
@@ -108,45 +108,44 @@ def try_run_vipin(log_path: Path) -> None:
 
 
 def main(
+    command: str,
     input_paths: paths.InputPaths,
-    native_specification: dict,
+    native_specification: cluster.NativeSpecification,
     redis_processes: int,
-    restart: bool = False,
-    expand: Dict[str, int] = None,
-    no_batch: bool = False,
-    no_cleanup: bool = False,
+    no_batch: bool,
+    extra_args: dict,
 ) -> None:
-    cluster.exit_if_on_submit_host()
+    logger.info("Validating cluster environment.")
+    cluster.validate_cluster_environment()
 
     # Generate programmatic representation of the output directory structure
     output_paths = paths.OutputPaths.from_entry_point_args(
+        command=command,
         input_model_specification_path=input_paths.model_specification,
         result_directory=input_paths.result_directory,
-        restart=restart,
-        expand=bool(expand),
     )
-    # Make output root and all subdirectories.
+    logger.info("Setting up output directory and all subdirectories.")
     output_paths.touch()
-    # Hook for blowing away output directories if things go really
-    # poorly and no results get written out.
-    if not no_cleanup:
-        atexit.register(paths.delete_on_catastrophic_failure, output_paths=output_paths)
 
+    logger.info("Setting up logging to files.")
     # Start sending logs to a file now that it exists.
     logs.configure_main_process_logging_to_file(output_paths.logging_root)
+    logger.info("Validating programming environment.")
     # Either write a requirements.txt with the current environment
     # or verify the current environment matches the prior environment
     # used when doing a restart.
     pip_env.validate(output_paths.environment_file)
 
+    logger.info(
+        "Parsing input arguments into model specification and branches and writing to disk."
+    )
     # Parse the branches configuration into a parameter space
     # and a flat representation of all parameters to be run.
     keyspace = branches.Keyspace.from_entry_point_args(
         input_branch_configuration_path=input_paths.branch_configuration,
-        restart=restart,
-        expand=expand,
         keyspace_path=output_paths.keyspace,
         branches_path=output_paths.branches,
+        extras=extra_args,
     )
     # Throw that into our output directory. The keyspace output is
     # a cartesian product representation of the parameter space and
@@ -156,32 +155,41 @@ def main(
     # Parse the model specification and resolve the artifact path
     # and then write to the output directory.
     model_spec = model_specification.parse(
+        command=command,
         input_model_specification_path=input_paths.model_specification,
         artifact_path=input_paths.artifact,
         model_specification_path=output_paths.model_specification,
-        restart=restart,
         keyspace=keyspace,
     )
     model_specification.persist(model_spec, output_paths.model_specification)
 
+    logger.info("Loading existing outputs if present.")
     # Load in any existing partial outputs if present.
-    existing_outputs = load_existing_outputs(output_paths.results, restart)
+    existing_outputs = load_existing_outputs(
+        result_path=output_paths.results,
+        restart=command in [COMMANDS.restart, COMMANDS.expand],
+    )
 
+    logger.info("Parsing arguments into worker job parameters.")
     # Translate the keyspace into the list of jobs to actually run
     # after accounting for any partially present results.
     job_parameters, num_jobs_completed = jobs.build_job_list(
+        command=command,
         model_specification_path=output_paths.model_specification,
         output_root=output_paths.root,
         keyspace=keyspace,
         existing_outputs=existing_outputs,
+        extras=extra_args,
     )
     # Let the user know if something is fishy at this point.
     report_initial_status(num_jobs_completed, existing_outputs, keyspace)
     if len(job_parameters) == 0:
-        logger.info("Nothing to do")
+        logger.info("No jobs to run, exiting.")
         return
+    else:
+        logger.info(f"Found {len(job_parameters)} jobs to run.")
 
-    logger.info(f"Starting jobs. Results will be written to: {str(output_paths.root)}")
+    logger.info("Spinning up Redis DBs and connecting to main process.")
     # Spin up the job & result dbs and get back (hostname, port) pairs for all the dbs.
     redis_ports = redis_dbs.launch(
         num_processes=redis_processes,
@@ -190,10 +198,11 @@ def main(
     )
     # Spin up a unified interface to all the redis databases
     registry_manager = redis_dbs.RegistryManager(redis_ports, num_jobs_completed)
+    logger.info("Enqueuing jobs on Redis queues.")
     # Distribute all the remaining jobs across the job queues
     # in the redis databases.
     registry_manager.enqueue(
-        jobs=job_parameters, workhorse_import_path=worker.WORK_HORSE_PATHS["vivarium"]
+        jobs=job_parameters, workhorse_import_path=worker.WORK_HORSE_PATHS[command]
     )
     # Generate a worker template that chooses a redis DB at random to connect to.
     # This should (approximately) evenly distribute the workers over the work.
@@ -207,22 +216,23 @@ def main(
         worker_settings_file=output_paths.worker_settings,
         worker_log_directory=output_paths.worker_logging_root,
     )
-    # Cluster specification stuff to be cleaned up.
-    native_specification["job_name"] = output_paths.root.parts[-2]
-    native_specification = cluster.NativeSpecification(**native_specification)
-    cluster.check_user_sge_config()
+    logger.info(f"Submitting redis workers to the cluster.")
     # Start an rq worker for every job using the cluster scheduler. The workers
     # will start as soon as they get scheduled and start looking for work. They
     # run in burst mode which means they shut down if they can't find anything
     # to do. This means it's critical that we put the jobs on the queue before
     # the workers land, otherwise they'll just show up and shut down.
-    cluster.start_cluster(
+    cluster.submit_worker_jobs(
         num_workers=len(job_parameters),
         worker_launch_script=worker_launch_script,
         cluster_logging_root=output_paths.cluster_logging_root,
         native_specification=native_specification,
     )
 
+    logger.info(
+        "Entering monitoring and results processing loop. "
+        f"Results will be written to {str(output_paths.root)}"
+    )
     # Enter the main monitoring and processing loop, which will check on
     # all the queues periodically, report status updates, and gather
     # and write results when they are available.

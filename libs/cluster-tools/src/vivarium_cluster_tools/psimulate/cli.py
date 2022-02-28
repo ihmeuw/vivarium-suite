@@ -11,13 +11,21 @@ Command line interface for `psimulate`.
 
 """
 from pathlib import Path
+from typing import Optional
 
 import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools import cli_tools, logs
-from vivarium_cluster_tools.psimulate import cluster, paths, redis_dbs, results, runner
+from vivarium_cluster_tools.psimulate import (
+    COMMANDS,
+    cluster,
+    paths,
+    redis_dbs,
+    results,
+    runner,
+)
 
 
 @click.group()
@@ -37,7 +45,6 @@ shared_options = [
     cluster.with_peak_memory,
     redis_dbs.with_redis,
     results.with_no_batch,
-    results.with_no_cleanup,
     cli_tools.with_verbose_and_pdb,
 ]
 
@@ -75,9 +82,9 @@ shared_options = [
 def run(
     model_specification: Path,
     branch_configuration: Path,
-    artifact_path: Path,
-    result_directory: Path,
-    **options
+    artifact_path: Optional[Path],
+    result_directory: Optional[Path],
+    **options,
 ) -> None:
     """Run a parallel simulation.
 
@@ -102,6 +109,7 @@ def run(
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
+        command=COMMANDS.run,
         input_paths=paths.InputPaths.from_entry_point_args(
             input_model_specification_path=model_specification,
             input_branch_configuration_path=branch_configuration,
@@ -117,7 +125,7 @@ def run(
         ),
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
-        no_cleanup=options["no_cleanup"],
+        extra_args={},
     )
 
 
@@ -140,6 +148,7 @@ def restart(results_root, **options):
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
+        command=COMMANDS.restart,
         input_paths=paths.InputPaths.from_entry_point_args(
             result_directory=results_root,
         ),
@@ -151,9 +160,8 @@ def restart(results_root, **options):
             max_runtime=options["max_runtime"],
         ),
         redis_processes=options["redis"],
-        restart=True,
         no_batch=options["no_batch"],
-        no_cleanup=options["no_cleanup"],
+        extra_args={},
     )
 
 
@@ -190,6 +198,7 @@ def expand(results_root, **options):
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
+        command=COMMANDS.expand,
         input_paths=paths.InputPaths.from_entry_point_args(
             result_directory=results_root,
         ),
@@ -201,8 +210,52 @@ def expand(results_root, **options):
             max_runtime=options["max_runtime"],
         ),
         redis_processes=options["redis"],
-        restart=True,
-        expand={"num_draws": options["add_draws"], "num_seeds": options["add_seeds"]},
         no_batch=options["no_batch"],
-        no_cleanup=options["no_cleanup"],
+        extra_args={
+            "num_draws": options["add_draws"],
+            "num_seeds": options["add_seeds"],
+        },
+    )
+
+
+@psimulate.command()
+@click.argument(
+    "test-type",
+    type=click.Choice(['sleep']),
+)
+@click.option(
+    "--num-workers",
+    "-n",
+    type=click.INT,
+    default=1000,
+)
+@click.option(
+    "--result-directory",
+    "-o",
+    type=click.Path(file_okay=False),
+    default=f"{paths.DEFAULT_OUTPUT_DIRECTORY}/load_tests",
+    callback=cli_tools.coerce_to_full_path,
+)
+@cli_tools.pass_shared_options(shared_options)
+def test(test_type, num_workers, result_directory, **options):
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
+    main = handle_exceptions(runner.main, logger, options["with_debugger"])
+    main(
+        command=COMMANDS.load_test,
+        input_paths=paths.InputPaths.from_entry_point_args(
+            result_directory=result_directory,
+        ),
+        native_specification=cluster.NativeSpecification(
+            job_name=f"load_test_{test_type}",
+            project=options["project"],
+            queue=options["queue"],
+            peak_memory=options["peak_memory"],
+            max_runtime=options["max_runtime"],
+        ),
+        redis_processes=options["redis"],
+        no_batch=options["no_batch"],
+        extra_args={
+            "test_type": test_type,
+            "num_workers": num_workers,
+        },
     )

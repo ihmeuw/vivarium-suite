@@ -33,7 +33,11 @@ used to spin up our (slightly customized) general purpose worker class with an e
 handler that will retry jobs a couple of times.
 
 """
+from vivarium_cluster_tools.psimulate import COMMANDS
 from vivarium_cluster_tools.psimulate.worker.core import build_launch_script
+from vivarium_cluster_tools.psimulate.worker.load_test_work_horse import (
+    LOAD_TEST_WORK_HORSE_IMPORT_PATH,
+)
 
 # Work horses are specific to a kind of job.
 from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
@@ -42,9 +46,13 @@ from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
 
 # All work horses available to psimulate
 WORK_HORSE_PATHS = {
-    "vivarium": VIVARIUM_WORK_HORSE_IMPORT_PATH,
-    # TODO: Build some test work horses!
+    COMMANDS.run: VIVARIUM_WORK_HORSE_IMPORT_PATH,
+    COMMANDS.restart: VIVARIUM_WORK_HORSE_IMPORT_PATH,
+    COMMANDS.expand: VIVARIUM_WORK_HORSE_IMPORT_PATH,
+    COMMANDS.load_test: LOAD_TEST_WORK_HORSE_IMPORT_PATH,
 }
 
-# Remove from name space.  All references should be through the WORK_HORSE_PATHS dict.
+# Clean up the namespace
 del VIVARIUM_WORK_HORSE_IMPORT_PATH
+del LOAD_TEST_WORK_HORSE_IMPORT_PATH
+del COMMANDS
