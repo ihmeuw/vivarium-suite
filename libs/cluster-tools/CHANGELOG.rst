@@ -1,3 +1,11 @@
+**1.3.0 - 02/28/22**
+
+ - Refactor and reorganize codebase.
+ - Add load testing capabilities.
+ - Switch from UGE to SLURM.
+ - Fix failure accounting in the registry.
+ - Fail earlier from bad arguments.
+
 **1.2.13 - 02/15/22**
 
  - Autoformat code with black and isort.

@@ -1,35 +1,13 @@
 import os
 import shutil
+import time
 from pathlib import Path
 from subprocess import PIPE, Popen
 from typing import Dict, List, Optional
 
 import pytest
 
-from vivarium_cluster_tools.psimulate.utilities import exit_if_on_submit_host
-from vivarium_cluster_tools.utilities import mkdir
-
-
-@pytest.fixture
-def hostname_init():
-    return {
-        "good": [
-            "user@int-uge-archive-p006",
-        ],
-        "bad": [
-            "user@gen-uge-submit-p01",
-            "-submit-",
-            "user@gen-uge-submit-p02",
-        ],
-    }
-
-
-def test_exit_if_on_submit_host(hostname_init):
-    for host in hostname_init["bad"]:
-        with pytest.raises(RuntimeError) as _:
-            exit_if_on_submit_host(host)
-    for host in hostname_init["good"]:
-        assert not exit_if_on_submit_host(host)
+from vivarium_cluster_tools.utilities import backoff_and_retry, mkdir
 
 
 @pytest.fixture(
@@ -99,3 +77,35 @@ def test_mkdir_set_permissions(permissions_params: List) -> None:
             shutil.rmtree(parent_path)
 
         assert prior_umask == os.umask(prior_umask), "umask was changed and not reset"
+
+
+def test_backoff_and_retry():
+    class WarningCatcher:
+        def __init__(self):
+            self.caught_warnings = []
+
+        def warn(self, message, *args, **kwargs):
+            self.caught_warnings.append(message)
+
+    wc = WarningCatcher()
+
+    @backoff_and_retry(log_function=wc.warn)
+    def successful_function():
+        return True
+
+    assert successful_function()
+    assert len(wc.caught_warnings) == 0
+
+    wc = WarningCatcher()
+
+    @backoff_and_retry(backoff_seconds=0.1, num_retries=5, log_function=wc.warn)
+    def failing_function():
+        raise ValueError
+
+    start = time.time()
+    with pytest.raises(ValueError):
+        failing_function()
+    duration = time.time() - start
+    # 5 for the retries, 1 for the final fail
+    assert len(wc.caught_warnings) == 5 + 1
+    assert abs(duration - 0.1 * 5) < 0.01

@@ -9,3 +9,5 @@ py:class pandas._libs.interval.Interval
 py:class pandas.core.frame.DataFrame
 py:class pandas.core.series.Series
 py:class pandas.core.generic.PandasObject
+# redis
+py:class redis.client.Redis
