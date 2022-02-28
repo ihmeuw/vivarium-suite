@@ -16,14 +16,11 @@ with_project = click.option(
     "-P",
     type=click.Choice(
         [
-            "proj_cost_effect",
-            "proj_cost_effect_diarrhea",
-            "proj_cost_effect_dcpn",
-            "proj_cost_effect_conic",
+            "proj_simscience",
             "proj_csu",
         ]
     ),
-    default="proj_cost_effect",
+    default="proj_simscience",
     help="The cluster project under which to run the simulation.",
 )
 
