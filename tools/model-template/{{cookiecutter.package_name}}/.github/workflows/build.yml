@@ -16,10 +16,10 @@ jobs:
         shell: bash -l {0}
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ "{{" }} matrix.python-version {{ "}}" }}
         uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ "{{" }} matrix.python-version {{ "}}" }}
       - name: check for upstream vivarium
         run: |
           if git ls-remote --exit-code --heads https://github.com/ihmeuw/vivarium.git ${GITHUB_HEAD_REF} == "0"; then
