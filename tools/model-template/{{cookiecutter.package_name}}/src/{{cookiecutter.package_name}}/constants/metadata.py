@@ -19,6 +19,16 @@ LOCATIONS = [
     # TODO - project locations here
 ]
 
+ARTIFACT_INDEX_COLUMNS = [
+    'sex',
+    'age_start',
+    'age_end',
+    'year_start',
+    'year_end',
+]
+
+ARTIFACT_COLUMNS = pd.Index([f'draw_{i}' for i in range(0, 1000)])
+
 
 class __Scenarios(NamedTuple):
     baseline: str = 'baseline'

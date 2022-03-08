@@ -6,7 +6,7 @@ from loguru import logger
 from {{cookiecutter.package_name}}.results_processing import process_results
 
 
-def build_results(output_file: str, single_run: bool):
+def build_results(output_file: str, single_run: bool) -> None:
     output_file = Path(output_file)
     measure_dir = output_file.parent / 'count_data'
     if measure_dir.exists():
