@@ -97,6 +97,29 @@ def load_metadata(key: str, location: str):
     return entity_metadata
 
 
+def load_paf(key: str, location: str) -> pd.DataFrame:
+    try:
+        risk = {
+            # todo add keys as needed
+            data_keys.KEYGROUP.PAF: data_keys.KEYGROUP,
+        }[key]
+    except KeyError:
+        raise ValueError(f'Unrecognized key {key}')
+
+    exp = get_data(risk.EXPOSURE, location)
+    rr = get_data(risk.RELATIVE_RISK, location)
+
+    # paf = (sum_categories(exp * rr) - 1) / sum_categories(exp * rr)
+    sum_exp_x_rr = (
+        (exp * rr)
+        .groupby(list(set(rr.index.names) - {'parameter'})).sum()
+        .reset_index()
+        .set_index(rr.index.names[:-1])
+    )
+    paf = (sum_exp_x_rr - 1) / sum_exp_x_rr
+    return paf
+
+
 def _load_em_from_meid(location, meid, measure):
     location_id = utility_data.get_location_id(location)
     data = gbd.get_modelable_entity_draws(meid, location_id)
