@@ -1,4 +1,5 @@
 import click
+import numpy as np
 import pandas as pd
 from scipy import stats
 
@@ -10,6 +11,9 @@ from vivarium.framework.randomness import get_hash
 from vivarium_public_health.risks.data_transformations import pivot_categorical
 
 from {{cookiecutter.package_name}}.constants import metadata
+
+
+SeededDistribution = Tuple[str, stats.rv_continuous]
 
 
 def len_longest_location() -> int:
@@ -86,7 +90,7 @@ def get_norm(
         sd: float = None,
         ninety_five_pct_confidence_interval: Tuple[float, float] = None
 ) -> stats.norm:
-    sd = _get_standard_deviation(sd, ninety_five_pct_confidence_interval)
+    sd = _get_standard_deviation(mean, sd, ninety_five_pct_confidence_interval)
     return stats.norm(loc=mean, scale=sd)
 
 
@@ -97,25 +101,30 @@ def get_truncnorm(
         lower_clip: float = 0.0,
         upper_clip: float = 1.0
 ) -> stats.norm:
-    sd = _get_standard_deviation(ninety_five_pct_confidence_interval, sd)
+    sd = _get_standard_deviation(mean, sd, ninety_five_pct_confidence_interval)
     a = (lower_clip - mean) / sd if sd else mean - 1e-03
     b = (upper_clip - mean) / sd if sd else mean + 1e03
     return stats.truncnorm(loc=mean, scale=sd, a=a, b=b)
 
 
 def _get_standard_deviation(
-        sd: float, ninety_five_pct_confidence_interval: Tuple[float, float]
+        mean: float, sd: float, ninety_five_pct_confidence_interval: Tuple[float, float]
 ) -> float:
     if sd is None and ninety_five_pct_confidence_interval is None:
         raise ValueError("Must provide either a standard deviation or a 95% confidence interval.")
     if sd is not None and ninety_five_pct_confidence_interval is not None:
         raise ValueError("Cannot provide both a standard deviation and a 95% confidence interval.")
     if ninety_five_pct_confidence_interval is not None:
+        lower = ninety_five_pct_confidence_interval[0]
+        upper = ninety_five_pct_confidence_interval[1]
+        if not (lower <= mean <= upper):
+            raise ValueError(
+                f"The mean ({mean}) must be between the lower ({lower}) and upper ({upper}) "
+                "quantile values."
+            )
+
         stdnorm_quantiles = stats.norm.ppf((0.025, 0.975))
-        sd = (
-                (ninety_five_pct_confidence_interval[1] - ninety_five_pct_confidence_interval[0])
-                / (stdnorm_quantiles[1] - stdnorm_quantiles[0])
-        )
+        sd = (upper - lower) / (stdnorm_quantiles[1] - stdnorm_quantiles[0])
     return sd
 
 
@@ -128,6 +137,11 @@ def get_lognorm_from_quantiles(median: float, lower: float, upper: float,
     # Let Y ~ norm(mu, sigma^2) and X = exp(Y), where mu = log(median)
     # so X ~ lognorm(s=sigma, scale=exp(mu)) in scipy's notation.
     # We will determine sigma from the two specified quantiles lower and upper.
+    if not (lower <= median <= upper):
+        raise ValueError(
+            f"The median ({median}) must be between the lower ({lower}) and upper ({upper}) "
+            "quantile values."
+        )
 
     # mean (and median) of the normal random variable Y = log(X)
     mu = np.log(median)
@@ -143,10 +157,11 @@ def get_lognorm_from_quantiles(median: float, lower: float, upper: float,
     return stats.lognorm(s=sigma, scale=median)
 
 
-def get_random_variable_draws(columns: pd.Index, seed: str, distribution) -> pd.Series:
-    return pd.Series([get_random_variable(x, seed, distribution) for x in range(0, columns.size)], index=columns)
+def get_random_variable_draws(number: int, seeded_distribution: SeededDistribution) -> np.array:
+    return np.array([get_random_variable(x, seeded_distribution) for x in range(number)])
 
 
-def get_random_variable(draw: int, seed: str, distribution) -> pd.Series:
+def get_random_variable(draw: int, seeded_distribution: SeededDistribution) -> float:
+    seed, distribution = seeded_distribution
     np.random.seed(get_hash(f'{seed}_draw_{draw}'))
     return distribution.rvs()
