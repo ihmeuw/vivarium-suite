@@ -97,7 +97,7 @@ def load_metadata(key: str, location: str):
     return entity_metadata
 
 
-def load_paf(key: str, location: str) -> pd.DataFrame:
+def load_categorical_paf(key: str, location: str) -> pd.DataFrame:
     try:
         risk = {
             # todo add keys as needed
@@ -105,6 +105,14 @@ def load_paf(key: str, location: str) -> pd.DataFrame:
         }[key]
     except KeyError:
         raise ValueError(f'Unrecognized key {key}')
+
+    distribution_type = get_data(risk.DISTRIBUTION, location)
+
+    if distribution_type != 'dichotomous' and 'polytomous' not in distribution_type:
+        raise NotImplementedError(
+            f"Unrecognized distribution {distribution_type} for {risk.name}. Only dichotomous and "
+            f"polytomous are recognized categorical distributions."
+        )
 
     exp = get_data(risk.EXPOSURE, location)
     rr = get_data(risk.RELATIVE_RISK, location)
