@@ -36,7 +36,7 @@ def make_artifacts(location: str, output_dir: str, append: bool, replace_keys: T
                    verbose: int, with_debugger: bool) -> None:
     configure_logging_to_terminal(verbose)
     main = handle_exceptions(build_artifacts, logger, with_debugger=with_debugger)
-    main(location, output_dir, append, replace_keys, verbose)
+    main(location, output_dir, append or replace_keys, replace_keys, verbose)
 
 
 @click.command()
