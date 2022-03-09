@@ -2,7 +2,7 @@
 
 This module is an abstraction around the load portion of our artifact building ETL pipeline.
 The intent is to be declarative so it's easy to see what is put into the artifact and how.
-Some degree of verbosity/boilerplate is fine in the interest of transparancy.
+Some degree of verbosity/boilerplate is fine in the interest of transparency.
 
 .. admonition::
 
@@ -48,7 +48,7 @@ def open_artifact(output_path: Path, location: str) -> Artifact:
     return artifact
 
 
-def load_and_write_data(artifact: Artifact, key: str, location: str):
+def load_and_write_data(artifact: Artifact, key: str, location: str, replace: bool):
     """Loads data and writes it to the artifact if not already present.
 
     Parameters
@@ -60,15 +60,21 @@ def load_and_write_data(artifact: Artifact, key: str, location: str):
     location
         The location associated with the data to load and the artifact to
         write to.
+    replace
+        Flag which determines whether to overwrite existing data
 
     """
-    if key in artifact:
+    if key in artifact and not replace:
         logger.debug(f'Data for {key} already in artifact.  Skipping...')
     else:
         logger.debug(f'Loading data for {key} for location {location}.')
         data = loader.get_data(key, location)
-        logger.debug(f'Writing data for {key} to artifact.')
-        artifact.write(key, data)
+        if key not in artifact:
+            logger.debug(f'Writing data for {key} to artifact.')
+            artifact.write(key, data)
+        else:   # key is in artifact, but should be replaced
+            logger.debug(f'Replacing data for {key} in artifact.')
+            artifact.replace(key, data)
     return artifact.load(key)
 
 
@@ -91,6 +97,7 @@ def write_data(artifact: Artifact, key: str, data: pd.DataFrame):
         logger.debug(f'Writing data for {key} to artifact.')
         artifact.write(key, data)
     return artifact.load(key)
+
 
 # TODO - writing and reading by draw is necessary if you are using
 #        LBWSG data. Find the read function in utilities.py
