@@ -27,7 +27,8 @@ ARTIFACT_INDEX_COLUMNS = [
     'year_end',
 ]
 
-ARTIFACT_COLUMNS = pd.Index([f'draw_{i}' for i in range(0, 1000)])
+DRAW_COUNT = 1000
+ARTIFACT_COLUMNS = pd.Index([f'draw_{i}' for i in range(DRAW_COUNT)])
 
 
 class __Scenarios(NamedTuple):
