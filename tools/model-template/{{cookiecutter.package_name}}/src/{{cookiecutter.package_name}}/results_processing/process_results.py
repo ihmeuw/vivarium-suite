@@ -1,6 +1,6 @@
 import itertools
 from pathlib import Path
-from typing import Dict, NamedTuple, List, Union
+from typing import NamedTuple, List
 
 import pandas as pd
 from loguru import logger
