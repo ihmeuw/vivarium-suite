@@ -1,4 +1,3 @@
-import itertools
 from pathlib import Path
 from typing import NamedTuple, List
 
@@ -32,26 +31,22 @@ RENAME_COLUMNS = {
 def make_measure_data(data):
     measure_data = MeasureData(
         population=get_population_data(data),
-        person_time=get_measure_data(data, 'person_time'),
         ylls=get_by_cause_measure_data(data, 'ylls'),
         ylds=get_by_cause_measure_data(data, 'ylds'),
         deaths=get_by_cause_measure_data(data, 'deaths'),
-        # TODO duplicate for each model
-        disease_state_person_time=get_state_person_time_measure_data(data, 'disease_state_person_time'),
-        disease_transition_count=get_transition_count_measure_data(data, 'disease_transition_count'),
+        state_person_time=get_state_person_time_measure_data(data, 'disease_state_person_time'),
+        transition_count=get_transition_count_measure_data(data, 'disease_transition_count'),
     )
     return measure_data
 
 
 class MeasureData(NamedTuple):
     population: pd.DataFrame
-    person_time: pd.DataFrame
     ylls: pd.DataFrame
     ylds: pd.DataFrame
     deaths: pd.DataFrame
-    # TODO duplicate for each model
-    disease_state_person_time: pd.DataFrame
-    disease_transition_count: pd.DataFrame
+    state_person_time: pd.DataFrame
+    transition_count: pd.DataFrame
 
     def dump(self, output_dir: Path):
         for key, df in self._asdict().items():
