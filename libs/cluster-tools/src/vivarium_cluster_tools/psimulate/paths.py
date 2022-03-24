@@ -70,7 +70,7 @@ class OutputPaths(NamedTuple):
         cls,
         *,
         command: str,
-        input_model_specification_path: Optional[Path],
+        input_artifact_path: Optional[Path],
         result_directory: Path,
     ) -> "OutputPaths":
         launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -78,7 +78,7 @@ class OutputPaths(NamedTuple):
         output_directory = result_directory
         if command == COMMANDS.run:
             output_directory = (
-                output_directory / input_model_specification_path.stem / launch_time
+                output_directory / input_artifact_path.stem / launch_time
             )
         elif command == COMMANDS.load_test:
             output_directory = output_directory / launch_time
