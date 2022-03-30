@@ -121,7 +121,7 @@ def main(
     # Generate programmatic representation of the output directory structure
     output_paths = paths.OutputPaths.from_entry_point_args(
         command=command,
-        input_model_specification_path=input_paths.model_specification,
+        input_artifact_path=input_paths.artifact,
         result_directory=input_paths.result_directory,
     )
     logger.info("Setting up output directory and all subdirectories.")

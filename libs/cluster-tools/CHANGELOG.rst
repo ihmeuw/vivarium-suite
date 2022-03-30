@@ -1,3 +1,7 @@
+**1.3.1 - 03/30/22**
+
+ - Fix output directory naming based on location.
+
 **1.3.0 - 02/28/22**
 
  - Refactor and reorganize codebase.
