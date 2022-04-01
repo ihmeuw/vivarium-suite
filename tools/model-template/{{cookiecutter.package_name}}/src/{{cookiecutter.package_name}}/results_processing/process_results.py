@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import NamedTuple, List
+from typing import Dict, NamedTuple, List, Union
 
 import pandas as pd
 from loguru import logger

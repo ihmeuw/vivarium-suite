@@ -96,7 +96,7 @@ def build_artifacts(
     check_for_existing(output_dir, location, append, replace_keys)
 
     if location in metadata.LOCATIONS:
-            build_single(loc, output_dir, replace_keys)
+        build_single(location, output_dir, replace_keys)
     elif location == 'all':
         if running_from_cluster():
             # parallel build when on cluster
