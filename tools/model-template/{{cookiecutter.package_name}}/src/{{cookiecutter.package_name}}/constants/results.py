@@ -18,7 +18,7 @@ RANDOM_SEED_COLUMN = 'random_seed'
 
 OUTPUT_INPUT_DRAW_COLUMN = 'input_data.input_draw_number'
 OUTPUT_RANDOM_SEED_COLUMN = 'randomness.random_seed'
-OUTPUT_SCENARIO_COLUMN = 'screening_algorithm.scenario'
+OUTPUT_SCENARIO_COLUMN = 'placeholder_branch_name.scenario'
 
 STANDARD_COLUMNS = {
     'total_population': TOTAL_POPULATION_COLUMN,
@@ -78,6 +78,7 @@ TEMPLATE_FIELD_MAP = {
 }
 
 {% raw %}
+# noinspection PyPep8Naming
 def RESULT_COLUMNS(kind='all'):
     if kind not in COLUMN_TEMPLATES and kind != 'all':
         raise ValueError(f'Unknown result column type {kind}')
@@ -96,6 +97,7 @@ def RESULT_COLUMNS(kind='all'):
     return columns
 
 
+# noinspection PyPep8Naming
 def RESULTS_MAP(kind):
     if kind not in COLUMN_TEMPLATES:
         raise ValueError(f'Unknown result column type {kind}')
