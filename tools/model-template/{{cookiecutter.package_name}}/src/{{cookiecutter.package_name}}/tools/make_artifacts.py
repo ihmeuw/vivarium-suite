@@ -91,6 +91,7 @@ def build_artifacts(
     """
 
     import vivarium_cluster_tools as vct
+    output_dir = Path(output_dir)
     vct.mkdir(output_dir, parents=True, exists_ok=True)
 
     check_for_existing(output_dir, location, append, replace_keys)
