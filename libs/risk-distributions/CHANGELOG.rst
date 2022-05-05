@@ -1,3 +1,7 @@
+**2.0.9 - 05/05/22**
+
+ - Update black dependency in CI
+
 **2.0.8 - 02/15/22**
 
  - Autoformat code with black and isort.
