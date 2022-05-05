@@ -1,3 +1,9 @@
+**1.3.2 - 05/05/22**
+
+ - Fix pandas json deprecation.
+ - Fix new slurm atexit error.
+ - Update black version used in CI.
+
 **1.3.1 - 03/30/22**
 
  - Fix output directory naming based on location.

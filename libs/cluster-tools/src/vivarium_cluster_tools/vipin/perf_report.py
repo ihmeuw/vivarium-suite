@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import requests
 from loguru import logger
-from pandas.io.json import json_normalize
+from pandas import json_normalize
 
 BASE_PERF_INDEX_COLS = ["host", "job_number", "task_number", "draw", "seed"]
 
