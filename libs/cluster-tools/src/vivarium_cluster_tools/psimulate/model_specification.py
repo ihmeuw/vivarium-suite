@@ -27,6 +27,8 @@ if typing.TYPE_CHECKING:
 INPUT_DATA_KEY = "input_data"
 ARTIFACT_PATH_KEY = "artifact_path"
 FULL_ARTIFACT_PATH_KEY = f"{INPUT_DATA_KEY}.{ARTIFACT_PATH_KEY}"
+OUTPUT_DATA_KEY = "output_data"
+RESULTS_DIRECTORY_KEY = "results_directory"
 
 
 def parse(
@@ -34,6 +36,7 @@ def parse(
     input_model_specification_path: Optional[Path],
     artifact_path: Optional[Path],
     model_specification_path: Path,
+    results_root: Path,
     keyspace: "Keyspace",
 ) -> ConfigTree:
     if command in [COMMANDS.restart, COMMANDS.expand]:
@@ -42,6 +45,10 @@ def parse(
         return build_model_specification()
 
     model_specification = build_model_specification(input_model_specification_path)
+    model_specification.configuration.update(
+        {OUTPUT_DATA_KEY: {RESULTS_DIRECTORY_KEY: str(results_root)}},
+        source=__file__,
+    )
 
     artifact_path_is_cli_arg = artifact_path is not None
     artifact_path_in_keyspace = FULL_ARTIFACT_PATH_KEY in keyspace

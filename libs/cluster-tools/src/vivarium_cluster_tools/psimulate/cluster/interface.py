@@ -75,7 +75,7 @@ def submit_worker_jobs(
         # FIXME: Hack around issue where drmaa.errors sometimes doesn't
         #        exist.
         except Exception as e:
-            if "already completing or completed" in str(e) or "Invalid job id specified" in str(e):
+            if "already completing" in str(e) or "Invalid job" in str(e):
                 # This is the case where all our workers have already shut down
                 # on their own, which isn't actually an error.
                 pass
