@@ -77,9 +77,7 @@ class OutputPaths(NamedTuple):
 
         output_directory = result_directory
         if command == COMMANDS.run:
-            output_directory = (
-                output_directory / input_artifact_path.stem / launch_time
-            )
+            output_directory = output_directory / input_artifact_path.stem / launch_time
         elif command == COMMANDS.load_test:
             output_directory = output_directory / launch_time
 
