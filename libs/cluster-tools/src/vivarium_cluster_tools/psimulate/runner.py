@@ -159,6 +159,7 @@ def main(
         input_model_specification_path=input_paths.model_specification,
         artifact_path=input_paths.artifact,
         model_specification_path=output_paths.model_specification,
+        results_root=output_paths.root,
         keyspace=keyspace,
     )
     model_specification.persist(model_spec, output_paths.model_specification)
