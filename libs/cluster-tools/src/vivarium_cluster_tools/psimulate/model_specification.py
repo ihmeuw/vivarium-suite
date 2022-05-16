@@ -45,8 +45,9 @@ def parse(
         return build_model_specification()
 
     model_specification = build_model_specification(input_model_specification_path)
-    model_specification.configuration[OUTPUT_DATA_KEY].update(
-        {RESULTS_DIRECTORY_KEY: str(results_root)}, source=__file__
+    model_specification.configuration.update(
+        {OUTPUT_DATA_KEY: {RESULTS_DIRECTORY_KEY: str(results_root)}},
+        source=__file__,
     )
 
     artifact_path_is_cli_arg = artifact_path is not None
