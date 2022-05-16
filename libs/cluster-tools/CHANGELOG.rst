@@ -1,3 +1,7 @@
+**1.3.3 - 05/16/22**
+
+ - Add results directory to model specification in psimulate runs.
+
 **1.3.2 - 05/05/22**
 
  - Fix pandas json deprecation.

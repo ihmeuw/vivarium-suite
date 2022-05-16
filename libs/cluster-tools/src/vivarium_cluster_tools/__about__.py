@@ -11,7 +11,7 @@ __title__ = "vivarium_cluster_tools"
 __summary__ = "A set of tools for running simulation using vivarium on cluster."
 __uri__ = "https://github.com/ihmeuw/vivarium_cluster_tools"
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 
 __author__ = "The vivarium developers"
 __email__ = "vivarium.dev@gmail.com"
