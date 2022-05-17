@@ -103,8 +103,8 @@ def already_complete(job_parameters: JobParameters, existing_outputs: pd.DataFra
     job_parameter_list = collapse_nested_dict(job_parameters.branch_configuration)
     job_parameter_list.extend(
         [
-            ("input_draw", job_parameters.input_draw),
-            ("random_seed", job_parameters.random_seed),
+            ("run_configuration.run_key.input_draw", job_parameters.input_draw),
+            ("run_configuration.run_key.random_seed", job_parameters.random_seed),
         ]
     )
 
