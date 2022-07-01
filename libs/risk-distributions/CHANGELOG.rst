@@ -1,3 +1,8 @@
+**2.0.10 - 07/01/22**
+
+ - Add CODEOWNERS
+ - Fix autodoc warnings
+
 **2.0.9 - 05/05/22**
 
  - Update black dependency in CI
