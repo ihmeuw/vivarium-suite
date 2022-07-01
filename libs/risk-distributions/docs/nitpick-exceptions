@@ -5,5 +5,5 @@
 py:class Parameter
 py:class Parameters
 # Need these for python 3.6
-# py:obj typing.Parameter
-# py:obj typing.Parameters
+py:obj Parameter
+py:obj Parameters
