@@ -129,16 +129,20 @@ def calculate_input_draws(
         existing draw numbers.
 
     """
-    np.random.seed(123456)
+    max_draw_count = 1000
+    if input_draw_count > max_draw_count:
+        raise ValueError(f"Input draw count must be less than {max_draw_count}.")
+
+    possible = list(range(max_draw_count))
     if existing_draws:
-        possible = list(set(range(1000)).difference(existing_draws))
+        possible = sorted(list(set(possible).difference(existing_draws)))
         min_input_draw_count_allowed = 0
     else:
-        possible = list(range(1000))
         min_input_draw_count_allowed = 1
-
+    np.random.seed(123456)
+    np.random.shuffle(possible)
     if min_input_draw_count_allowed <= input_draw_count <= len(possible):
-        return np.random.choice(possible, input_draw_count, replace=False).tolist()
+        return possible[:input_draw_count]
     else:
         raise ValueError(
             f"Input draw count must be between {min_input_draw_count_allowed} "
@@ -171,17 +175,16 @@ def calculate_random_seeds(
     if not random_seed_count:
         return []
 
-    np.random.seed(654321)
+    max_seed_count = 10000
+    if random_seed_count > max_seed_count:
+        raise ValueError(f"Random seed count must be less than {max_seed_count}.")
 
+    possible = list(range(max_seed_count))
     if existing_seeds:
-        min_possible = max(existing_seeds) + 1
-    else:
-        existing_seeds = []
-        min_possible = 0
-
-    low, high = min_possible, min_possible + 10 * random_seed_count
-    possible = list(range(low, high))
-    return np.random.choice(possible, random_seed_count, replace=False).tolist()
+        possible = sorted(list(set(possible).difference(existing_seeds)))
+    np.random.seed(654321)
+    np.random.shuffle(possible)
+    return possible[:random_seed_count]
 
 
 def calculate_keyspace(branches: List[Dict]) -> Dict:

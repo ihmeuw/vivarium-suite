@@ -1,3 +1,9 @@
+**1.3.4 - 07/01/22**
+
+ - Mend key mismatch for random_seed and input_draw columns
+ - Make draw and seed generation deterministic in parallel simulations
+ - Add CODEOWNERS to repo
+
 **1.3.3 - 05/16/22**
 
  - Add results directory to model specification in psimulate runs.
