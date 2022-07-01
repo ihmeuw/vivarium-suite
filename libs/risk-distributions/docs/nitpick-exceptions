@@ -5,5 +5,5 @@
 py:class risk_distributions.formatting.Parameter
 py:class risk_distributions.formatting.Parameters
 # Need these for python 3.6
-py:class typing.Parameter
-py:class typing.Parameters
+py:class Parameter
+py:class Parameters
