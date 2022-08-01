@@ -1,6 +1,5 @@
 from datetime import datetime
 
-
 ############################
 # Disease Model Parameters #
 ############################

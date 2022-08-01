@@ -36,11 +36,13 @@ configuration:
         age_end: 100
 
     metrics:
-        disability:
-            by_age: False
-            by_sex: False
-            by_year: False
-        mortality:
-            by_age: False
-            by_sex: False
-            by_year: False
+        default:
+            - 'age'
+            - 'sex'
+            - 'year'
+        # disability:
+        #     include:
+        #     exclude:
+        # mortality:
+        #     include:
+        #     exclude:

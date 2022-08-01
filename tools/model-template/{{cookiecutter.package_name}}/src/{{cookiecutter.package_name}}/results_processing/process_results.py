@@ -1,12 +1,11 @@
 from pathlib import Path
-from typing import Dict, NamedTuple, List, Union
+from typing import Dict, List, NamedTuple, Union
 
 import pandas as pd
-from loguru import logger
 import yaml
+from loguru import logger
 
 from {{cookiecutter.package_name}}.constants import results, scenarios
-
 
 SCENARIO_COLUMN = 'scenario'
 GROUPBY_COLUMNS = [

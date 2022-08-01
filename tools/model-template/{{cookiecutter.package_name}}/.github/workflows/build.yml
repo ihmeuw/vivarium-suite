@@ -73,16 +73,10 @@ jobs:
           popd
       - name: Install dependencies
         run: |
-          pip install .[dev]
+          pip install .[test]
       - name: Test
         run: |
           pytest ./tests
-      - name: Doc build
-        run: |
-          make html -C docs/ SPHINXOPTS="-W --keep-going -n"
-      - name: Doctest
-        run: |
-          make doctest -C docs/
       - name: Lint
         run: |
           pip install black==22.1.0 isort

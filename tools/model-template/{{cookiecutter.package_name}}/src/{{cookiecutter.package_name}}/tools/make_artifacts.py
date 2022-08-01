@@ -9,22 +9,23 @@
 import shutil
 import sys
 import time
-import click
-
 from pathlib import Path
 from typing import Tuple, Union
+
+import click
+import vivarium_cluster_tools as vct
 from loguru import logger
 
-import vivarium_cluster_tools as vct
-
 from {{cookiecutter.package_name}}.constants import data_keys, metadata
-from {{cookiecutter.package_name}}.utilities import sanitize_location, delete_if_exists, len_longest_location
-from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink, decode_status
+from {{cookiecutter.package_name}}.tools.app_logging import (add_logging_sink,
+                                                             decode_status)
+from {{cookiecutter.package_name}}.utilities import (delete_if_exists,
+                                                     len_longest_location,
+                                                     sanitize_location)
 
 
 def running_from_cluster() -> bool:
 
-    import vivarium_cluster_tools as vct
     on_cluster = True
 
     try:

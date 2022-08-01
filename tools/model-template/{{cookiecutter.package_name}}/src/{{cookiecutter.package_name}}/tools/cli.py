@@ -5,7 +5,9 @@ from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
 from {{cookiecutter.package_name}}.constants import metadata, paths
-from {{cookiecutter.package_name}}.tools import build_artifacts, build_results, configure_logging_to_terminal
+from {{cookiecutter.package_name}}.tools import (build_artifacts,
+                                                 build_results,
+                                                 configure_logging_to_terminal)
 
 
 @click.command()
