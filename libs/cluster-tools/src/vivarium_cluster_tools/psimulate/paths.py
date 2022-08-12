@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple, Optional, Union
 
+from vivarium.interface.utilities import get_output_model_name_string
 from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import COMMANDS
 
@@ -72,12 +73,14 @@ class OutputPaths(NamedTuple):
         command: str,
         input_artifact_path: Optional[Path],
         result_directory: Path,
+        input_model_spec_path: Path,
     ) -> "OutputPaths":
         launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
         output_directory = result_directory
         if command == COMMANDS.run:
-            output_directory = output_directory / input_artifact_path.stem / launch_time
+            model_name = get_output_model_name_string(input_artifact_path, input_model_spec_path)
+            output_directory = output_directory / model_name / launch_time
         elif command == COMMANDS.load_test:
             output_directory = output_directory / launch_time
 

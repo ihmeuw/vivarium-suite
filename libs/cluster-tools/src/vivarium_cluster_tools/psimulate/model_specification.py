@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
+from loguru import logger
+from vivarium.config_tree import ConfigurationKeyError
 from vivarium.framework.artifact import parse_artifact_path_config
 from vivarium.framework.configuration import (
     ConfigTree,
@@ -64,10 +66,15 @@ def parse(
             {ARTIFACT_PATH_KEY: str(artifact_path)}, source=__file__
         )
     else:
-        # Artifact path comes from the model spec.
-        # Parsing here ensures the key exists and the value points
-        # to an actual file.
-        parse_artifact_path_config(model_specification.configuration)
+        # Artifact path (if any) comes from the model spec.
+        # The framework does not require an artifact, log a debug message in case this
+        # is unintentional...
+        try:
+            parse_artifact_path_config(model_specification.configuration)
+        except ConfigurationKeyError:
+            logger.debug("No artifact detected in arguments or configuration. This may"
+                         " be intentional. If not, supply one with the `-i` flag or in"
+                         " the configuration yaml.")
 
     return model_specification
 

@@ -123,6 +123,7 @@ def main(
         command=command,
         input_artifact_path=input_paths.artifact,
         result_directory=input_paths.result_directory,
+        input_model_spec_path=input_paths.model_specification,
     )
     logger.info("Setting up output directory and all subdirectories.")
     output_paths.touch()
