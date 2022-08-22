@@ -105,26 +105,25 @@ def set_index_scenario_cols(perf_df: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
     return perf_df, scenario_cols
 
 
-def add_jobapi_data(perf_df: pd.DataFrame):
-    """Given a dataframe from PerformanceSummary.to_df, add QPID Job API data for the job.
-    Job API reference: https://stash.ihme.washington.edu/projects/QPID/repos/job-db/browse/docs/index.md
+def add_squid_api_data(perf_df: pd.DataFrame):
+    """Given a dataframe from PerformanceSummary.to_df, add Squid API data for the job.
+    Squid API reference: https://hub.ihme.washington.edu/display/SCKB/How+to+use+Squid+API
     """
     try:
         job_numbers = perf_df["job_number"].unique()
         assert len(job_numbers) == 1
-        jobapi_data = requests.get(
-            "http://jobapi.ihme.washington.edu/fair/queryjobids",
-            params=[("job_number", job_numbers[0]), ("limit", 50000)],
+        squid_api_data = requests.get(
+            f"http://squid.ihme.washington.edu/api/jobs?job_ids={job_numbers[0]}"
         ).json()
-        jobapi_df = pd.DataFrame(jobapi_data["data"]).add_prefix("qpid_")
-        perf_df = perf_df.astype({"job_number": np.int64, "task_number": np.int64})
+        squid_api_df = pd.DataFrame(squid_api_data["jobs"]).add_prefix("squid_api_")
+        perf_df = perf_df.astype({"job_number": np.int64})
         perf_df = perf_df.merge(
-            jobapi_df,
-            left_on=["job_number", "task_number"],
-            right_on=["qpid_job_number", "qpid_task_number"],
+            squid_api_df,
+            left_on=["job_number"],
+            right_on=["squid_api_job_id"],
         )
     except Exception as e:
-        logger.warning(f"Job API request failed with {e}")
+        print(f"Squid API request failed with: {e}")
     return perf_df
 
 
@@ -199,7 +198,7 @@ def report_performance(
         return  # nothing left to do
 
     # Add jobapi data about the job to dataframe
-    perf_df = add_jobapi_data(perf_df)
+    perf_df = add_squid_api_data(perf_df)
 
     # Set index to include branch configuration/scenario columns
     perf_df, scenario_cols = set_index_scenario_cols(perf_df)
