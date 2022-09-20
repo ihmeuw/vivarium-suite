@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import NamedTuple, Optional, Union
 
 from vivarium.interface.utilities import get_output_model_name_string
+
 from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import COMMANDS
 
