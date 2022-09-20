@@ -22,6 +22,17 @@ BASE_PERF_INDEX_COLS = ["host", "job_number", "task_number", "draw", "seed"]
 # The number of scenario columns beyond which we shorten the scenarios to a single string
 COMPOUND_SCENARIO_COL_COUNT = 2
 
+# Scenario columns that are not useful describe a scenario or are duplicated
+EXTRANEOUS_SCENARIO_COLS = [
+    "scenario_run_configuration_run_id",
+    "scenario_run_configuration_results_directory",
+    "scenario_run_configuration_run_key_input_draw",
+    "scenario_run_configuration_run_key_random_seed",
+    "scenario_randomness_random_seed",
+    "scenario_randomness_additional_seed",
+    "scenario_input_data_input_draw_number",
+]
+
 
 class PerformanceSummary:
     """
@@ -85,34 +96,34 @@ class PerformanceSummary:
 
 
 def set_index_scenario_cols(perf_df: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
-    """Given a dataframe from PerformanceSummary.to_df, add QPID Job API data for the job"""
+    """Get the columns useful to index performance data by."""
     index_cols = BASE_PERF_INDEX_COLS
+    perf_df = perf_df.drop(EXTRANEOUS_SCENARIO_COLS, axis=1)
     scenario_cols = [col for col in perf_df.columns if col.startswith("scenario_")]
     index_cols.extend(scenario_cols)
     perf_df = perf_df.set_index(index_cols)
     return perf_df, scenario_cols
 
 
-def add_jobapi_data(perf_df: pd.DataFrame):
-    """Given a dataframe from PerformanceSummary.to_df, add QPID Job API data for the job.
-    Job API reference: https://stash.ihme.washington.edu/projects/QPID/repos/job-db/browse/docs/index.md
+def add_squid_api_data(perf_df: pd.DataFrame):
+    """Given a dataframe from PerformanceSummary.to_df, add Squid API data for the job.
+    Squid API reference: https://hub.ihme.washington.edu/display/SCKB/How+to+use+Squid+API
     """
     try:
         job_numbers = perf_df["job_number"].unique()
         assert len(job_numbers) == 1
-        jobapi_data = requests.get(
-            "http://jobapi.ihme.washington.edu/fair/queryjobids",
-            params=[("job_number", job_numbers[0]), ("limit", 50000)],
+        squid_api_data = requests.get(
+            f"http://squid.ihme.washington.edu/api/jobs?job_ids={job_numbers[0]}"
         ).json()
-        jobapi_df = pd.DataFrame(jobapi_data["data"]).add_prefix("qpid_")
-        perf_df = perf_df.astype({"job_number": np.int64, "task_number": np.int64})
+        squid_api_df = pd.DataFrame(squid_api_data["jobs"]).add_prefix("squid_api_")
+        perf_df = perf_df.astype({"job_number": np.int64})
         perf_df = perf_df.merge(
-            jobapi_df,
-            left_on=["job_number", "task_number"],
-            right_on=["qpid_job_number", "qpid_task_number"],
+            squid_api_df,
+            left_on=["job_number"],
+            right_on=["squid_api_job_id"],
         )
     except Exception as e:
-        logger.warning(f"Job API request failed with {e}")
+        print(f"Squid API request failed with: {e}")
     return perf_df
 
 
@@ -182,13 +193,12 @@ def report_performance(
     perf_summary = PerformanceSummary(input_directory)
 
     perf_df = perf_summary.to_df()
-
     if len(perf_df) < 1:
         logger.warning(f"No performance data found in {input_directory}.")
         return  # nothing left to do
 
     # Add jobapi data about the job to dataframe
-    perf_df = add_jobapi_data(perf_df)
+    perf_df = add_squid_api_data(perf_df)
 
     # Set index to include branch configuration/scenario columns
     perf_df, scenario_cols = set_index_scenario_cols(perf_df)

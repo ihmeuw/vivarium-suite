@@ -1,3 +1,9 @@
+**1.3.5 - 09/20/22**
+
+ - Standardize results directories
+ - Adds ability to run without artifact
+ - Specify correct permissions when creating directories and files
+
 **1.3.4 - 07/01/22**
 
  - Mend key mismatch for random_seed and input_draw columns
