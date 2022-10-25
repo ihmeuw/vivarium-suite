@@ -17,10 +17,11 @@ with_project = click.option(
     type=click.Choice(
         [
             "proj_simscience",
+            "proj_simscience_prod",
             "proj_csu",
         ]
     ),
-    default="proj_simscience",
+    default="proj_simscience_prod",
     help="The cluster project under which to run the simulation.",
 )
 

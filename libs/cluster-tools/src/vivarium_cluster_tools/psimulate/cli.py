@@ -26,6 +26,9 @@ from vivarium_cluster_tools.psimulate import (
     results,
     runner,
 )
+from vivarium_cluster_tools.psimulate.worker.load_test_work_horse import (
+    get_psimulate_test_dict,
+)
 
 
 @click.group()
@@ -221,7 +224,7 @@ def expand(results_root, **options):
 @psimulate.command()
 @click.argument(
     "test-type",
-    type=click.Choice(["sleep"]),
+    type=click.Choice(list(get_psimulate_test_dict())),
 )
 @click.option(
     "--num-workers",
