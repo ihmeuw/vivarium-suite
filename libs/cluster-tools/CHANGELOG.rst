@@ -3,6 +3,10 @@
  - Adds a test `psimulate test large_results` for scale testing
  - Sets the default project to `proj_simscience_prod`
 
+**1.3.6 - 10/04/22**
+
+ - Increments version of Vivarium required 
+
 **1.3.5 - 09/20/22**
 
  - Standardize results directories
