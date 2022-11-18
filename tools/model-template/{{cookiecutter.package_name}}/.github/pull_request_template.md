@@ -5,9 +5,10 @@
 <!-- For use in commit message, wrap at 72 chars. 72 chars is here: -->
 - *Category*: <!-- one of bugfix, data artifact, implementation, observers,
                    post-processing, refactor, revert, test, release, other/misc -->
-- *JIRA issue*: <!-- [MIC-XYZ](https://jira.ihme.washington.edu/browse/MIC-XYZ) -->
+- *JIRA issue*: [MIC-XYZ](https://jira.ihme.washington.edu/browse/MIC-XYZ)
 - *Research reference*: <!--Link to research documentation for code -->
 
+### Changes and notes
 <!-- 
 Change description – why, what, anything unexplained by the above.
 Include guidance to reviewers if changes are complex.
