@@ -1,3 +1,8 @@
+**1.3.8 - 12/27/22**
+
+ - Updates CI and setup to build python 3.7-3.10
+ - Updates codeowners
+
 **1.3.7 - 10/28/22**
 
  - Adds a test `psimulate test large_results` for scale testing
