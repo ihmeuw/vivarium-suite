@@ -80,7 +80,9 @@ class OutputPaths(NamedTuple):
 
         output_directory = result_directory
         if command == COMMANDS.run:
-            model_name = get_output_model_name_string(input_artifact_path, input_model_spec_path)
+            model_name = get_output_model_name_string(
+                input_artifact_path, input_model_spec_path
+            )
             output_directory = output_directory / model_name / launch_time
         elif command == COMMANDS.load_test:
             output_directory = output_directory / launch_time

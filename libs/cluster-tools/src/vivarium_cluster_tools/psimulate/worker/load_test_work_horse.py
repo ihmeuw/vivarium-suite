@@ -22,10 +22,7 @@ LOAD_TEST_WORK_HORSE_IMPORT_PATH = f"{__name__}.work_horse"
 
 
 def get_psimulate_test_dict():
-    return {
-        "sleep": sleep_test,
-        "large_results": large_results_test
-    }
+    return {"sleep": sleep_test, "large_results": large_results_test}
 
 
 def sleep_test(job_parameters: JobParameters) -> pd.DataFrame:
@@ -45,9 +42,7 @@ def sleep_test(job_parameters: JobParameters) -> pd.DataFrame:
 def large_results_test(job_parameters: JobParameters) -> pd.DataFrame:
     time.sleep(30)
     np.random.seed(seed=get_hash(f"large_results_test_{job_parameters.random_seed}"))
-    return pd.DataFrame(
-        np.random.random(10_000_000).reshape((1_000_000, 10))
-    )
+    return pd.DataFrame(np.random.random(10_000_000).reshape((1_000_000, 10)))
 
 
 def work_horse(job_parameters: dict) -> pd.DataFrame:

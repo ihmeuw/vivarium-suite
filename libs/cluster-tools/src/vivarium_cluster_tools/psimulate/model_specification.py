@@ -72,9 +72,11 @@ def parse(
         try:
             parse_artifact_path_config(model_specification.configuration)
         except ConfigurationKeyError:
-            logger.debug("No artifact detected in arguments or configuration. This may"
-                         " be intentional. If not, supply one with the `-i` flag or in"
-                         " the configuration yaml.")
+            logger.debug(
+                "No artifact detected in arguments or configuration. This may"
+                " be intentional. If not, supply one with the `-i` flag or in"
+                " the configuration yaml."
+            )
 
     return model_specification
 
