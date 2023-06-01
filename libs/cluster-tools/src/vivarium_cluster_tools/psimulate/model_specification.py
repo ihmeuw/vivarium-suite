@@ -85,4 +85,6 @@ def persist(
     model_specification: ConfigTree,
     model_specification_path: Path,
 ) -> None:
-    model_specification_path.write_text(yaml.dump(model_specification.to_dict()))
+    model_specification_path.write_text(
+        yaml.dump(model_specification.to_dict(), sort_keys=False)
+    )
