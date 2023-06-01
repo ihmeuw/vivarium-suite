@@ -1,3 +1,7 @@
+**1.3.9 - 06/01/23**
+
+ - Increments version of Vivarium required 
+
 **1.3.8 - 12/27/22**
 
  - Updates CI and setup to build python 3.7-3.10
