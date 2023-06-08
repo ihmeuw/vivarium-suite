@@ -17,11 +17,15 @@ import vivarium_cluster_tools as vct
 from loguru import logger
 
 from {{cookiecutter.package_name}}.constants import data_keys, metadata
-from {{cookiecutter.package_name}}.tools.app_logging import (add_logging_sink,
-                                                             decode_status)
-from {{cookiecutter.package_name}}.utilities import (delete_if_exists,
-                                                     len_longest_location,
-                                                     sanitize_location)
+from {{cookiecutter.package_name}}.tools.app_logging import (
+    add_logging_sink,
+    decode_status,
+)
+from {{cookiecutter.package_name}}.utilities import (
+    delete_if_exists,
+    len_longest_location,
+    sanitize_location,
+)
 
 
 def running_from_cluster() -> bool:
@@ -35,30 +39,39 @@ def running_from_cluster() -> bool:
     return on_cluster
 
 
-def check_for_existing(output_dir: Path, location: str, append: bool, replace_keys: Tuple) -> None:
-    existing_artifacts = set([item.stem for item in output_dir.iterdir()
-                              if item.is_file() and item.suffix == '.hdf'])
+def check_for_existing(
+    output_dir: Path, location: str, append: bool, replace_keys: Tuple
+) -> None:
+    existing_artifacts = set(
+        [
+            item.stem
+            for item in output_dir.iterdir()
+            if item.is_file() and item.suffix == ".hdf"
+        ]
+    )
     locations = set([sanitize_location(loc) for loc in metadata.LOCATIONS])
-    existing = locations.intersection(existing_artifacts)
+    location = sanitize_location(location)
+    if location == "all":
+        existing = locations.intersection(existing_artifacts)
+    else:
+        existing = [location] if location in existing_artifacts else None
 
     if existing:
-        if location != 'all':
-            existing = [sanitize_location(location)]
         if not append:
             click.confirm(
-                f'Existing artifacts found for {existing}. Do you want to delete and rebuild?',
-                abort=True
+                f"Existing artifacts found for {existing}. Do you want to delete and rebuild?",
+                abort=True,
             )
             for loc in existing:
-                path = output_dir / f'{loc}.hdf'
-                logger.info(f'Deleting artifact at {str(path)}.')
+                path = output_dir / f"{loc}.hdf"
+                logger.info(f"Deleting artifact at {str(path)}.")
                 path.unlink(missing_ok=True)
         elif replace_keys:
             click.confirm(
-                f'Existing artifacts found for {existing}. If the listed keys {replace_keys} '
-                'exist, they will be deleted and regenerated. Do you want to delete and regenerate '
-                'them?',
-                abort=True
+                f"Existing artifacts found for {existing}. If the listed keys {replace_keys} "
+                "exist, they will be deleted and regenerated. Do you want to delete and regenerate "
+                "them?",
+                abort=True,
             )
 
 
