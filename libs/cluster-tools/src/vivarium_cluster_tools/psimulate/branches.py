@@ -34,13 +34,17 @@ class Keyspace:
         branch_configuration_file
             Absolute path to the branch configuration file.
         """
-        branches, input_draw_count, random_seed_count = load_branch_configuration(
-            branch_configuration_file
-        )
+        (
+            branches,
+            input_draw_count,
+            random_seed_count,
+            input_draws,
+        ) = load_branch_configuration(branch_configuration_file)
         keyspace = calculate_keyspace(branches)
-        keyspace["input_draw"] = calculate_input_draws(input_draw_count)
+        keyspace["input_draw"] = (
+            input_draws if input_draws else calculate_input_draws(input_draw_count)
+        )
         keyspace["random_seed"] = calculate_random_seeds(random_seed_count)
-
         return Keyspace(branches, keyspace)
 
     @classmethod
@@ -202,20 +206,34 @@ def calculate_keyspace(branches: List[Dict]) -> Dict:
     return keyspace
 
 
-def load_branch_configuration(path: Path) -> Tuple[List[Dict], int, int]:
+def load_branch_configuration(path: Path) -> Tuple[List[Dict], int, int, Optional[List[int]]]:
     data = yaml.full_load(path.read_text())
 
     input_draw_count = data.get("input_draw_count", 1)
     random_seed_count = data.get("random_seed_count", 1)
+    input_draws = data.get("input_draws", None)
 
-    assert input_draw_count <= 1000, "Cannot use more that 1000 draws from GBD"
+    # Validate configuration of input_draws and input_draw_count
+    if "input_draw_count" in data and "input_draws" in data:
+        if len(input_draws) != input_draw_count:
+            raise ValueError(
+                f"Both input_draw_count and input_draws are defined but they are inconsistent. "
+                f"input_draw_count is {input_draw_count} while input_draws has length {len(input_draws)}. "
+            )
+    if input_draws:
+        if [d for d in input_draws if d not in range(0, 1000)]:
+            raise ValueError(
+                f"input_draws contains draws outside of 0-999: {[d for d in input_draws if d not in range(0, 1000)]}"
+            )
+    if input_draw_count < 1 or input_draw_count > 1000:
+        raise ValueError(f"input_draw_count must be within 1-1000. Given: {input_draw_count}")
 
     if "branches" in data:
         branches = expand_branch_templates(data["branches"])
     else:
         branches = [{}]
 
-    return branches, input_draw_count, random_seed_count
+    return branches, input_draw_count, random_seed_count, input_draws
 
 
 def expand_branch_templates(templates: Dict) -> List[Dict]:
