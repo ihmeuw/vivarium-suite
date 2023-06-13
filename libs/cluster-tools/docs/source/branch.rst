@@ -101,6 +101,10 @@ we'll launch 100 simulations in parallel, each using a different random seed.
 
   psimulate run /path/to/model_specification.yaml /path/to/stochastic_uncertainty_branches.yaml
 
+.. note::
+    Instead of, or in addition to, specifying an ``random_seed_count``, a list of seeds can be specified using the
+    ``random_seeds`` key. If ``random_seed_count`` is also specified, the two values must agree, i.e., the
+    length of the ``random_seeds`` list must be the same as ``random_seed_count``.
 
 Combining Draws and Seeds
 ^^^^^^^^^^^^^^^^^^^^^^^^^

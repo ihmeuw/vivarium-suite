@@ -39,12 +39,15 @@ class Keyspace:
             input_draw_count,
             random_seed_count,
             input_draws,
+            random_seeds,
         ) = load_branch_configuration(branch_configuration_file)
         keyspace = calculate_keyspace(branches)
         keyspace["input_draw"] = (
             input_draws if input_draws else calculate_input_draws(input_draw_count)
         )
-        keyspace["random_seed"] = calculate_random_seeds(random_seed_count)
+        keyspace["random_seed"] = (
+            random_seeds if random_seeds else calculate_random_seeds(random_seed_count)
+        )
         return Keyspace(branches, keyspace)
 
     @classmethod
@@ -206,34 +209,76 @@ def calculate_keyspace(branches: List[Dict]) -> Dict:
     return keyspace
 
 
-def load_branch_configuration(path: Path) -> Tuple[List[Dict], int, int, Optional[List[int]]]:
+def load_branch_configuration(
+    path: Path,
+) -> Tuple[List[Dict], int, int, Optional[List[int]], Optional[List[int]]]:
     data = yaml.full_load(path.read_text())
 
     input_draw_count = data.get("input_draw_count", 1)
     random_seed_count = data.get("random_seed_count", 1)
     input_draws = data.get("input_draws", None)
+    random_seeds = data.get("random_seeds", None)
 
-    # Validate configuration of input_draws and input_draw_count
-    if "input_draw_count" in data and "input_draws" in data:
-        if len(input_draws) != input_draw_count:
-            raise ValueError(
-                f"Both input_draw_count and input_draws are defined but they are inconsistent. "
-                f"input_draw_count is {input_draw_count} while input_draws has length {len(input_draws)}. "
-            )
-    if input_draws:
-        if [d for d in input_draws if d not in range(0, 1000)]:
-            raise ValueError(
-                f"input_draws contains draws outside of 0-999: {[d for d in input_draws if d not in range(0, 1000)]}"
-            )
-    if input_draw_count < 1 or input_draw_count > 1000:
-        raise ValueError(f"input_draw_count must be within 1-1000. Given: {input_draw_count}")
+    # Validate configuration of counts and values for input_draws and random_seeds
+    _check_count_and_values(
+        data, input_draw_count, input_draws, "input_draw_count", "input_draws", 1000
+    )
+    _check_count_and_values(
+        data,
+        random_seed_count,
+        random_seeds,
+        "random_seed_count",
+        "random_seeds",
+        10000,
+    )
 
     if "branches" in data:
         branches = expand_branch_templates(data["branches"])
     else:
         branches = [{}]
 
-    return branches, input_draw_count, random_seed_count, input_draws
+    return branches, input_draw_count, random_seed_count, input_draws, random_seeds
+
+
+def _check_count_and_values(
+    configuration: Dict,
+    value_count: int,
+    values: List[int],
+    count_name: str,
+    values_name: str,
+    max_count: int,
+):
+    """Checks input configuration count and values for integers outside of range.
+
+    Parameters
+    ----------
+    configuration
+        Dictionary of the configuration data.
+    value_count
+        Integer for the number of values provided.
+    values
+        List of integer values.
+    count_name
+        Configuration key string for value count.
+    values_name
+        Configuration key string for values list.
+    max_count
+        Integer for the maximum number of values, maximum value is max_count - 1.
+    """
+    if count_name in configuration and values_name in configuration:
+        if len(values) != value_count:
+            raise ValueError(
+                f"Both {count_name} and {values_name} are defined but they are inconsistent. "
+                f"{count_name} is {value_count} while {values_name} has length {len(values)}. "
+            )
+    if values:
+        if [d for d in values if d not in range(0, max_count)]:
+            raise ValueError(
+                f"{values_name} contains draws outside of 0-{max_count - 1}: "
+                f"{[d for d in values if d not in range(0, max_count)]}"
+            )
+    if value_count < 1 or value_count > max_count:
+        raise ValueError(f"{count_name} must be within 1-{max_count}. Given: {value_count}")
 
 
 def expand_branch_templates(templates: Dict) -> List[Dict]:
