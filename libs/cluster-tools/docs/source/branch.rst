@@ -104,7 +104,8 @@ we'll launch 100 simulations in parallel, each using a different random seed.
 .. note::
     Instead of, or in addition to, specifying an ``random_seed_count``, a list of seeds can be specified using the
     ``random_seeds`` key. If ``random_seed_count`` is also specified, the two values must agree, i.e., the
-    length of the ``random_seeds`` list must be the same as ``random_seed_count``.
+    length of the ``random_seeds`` list must be the same as ``random_seed_count``. Note that ``random_seeds`` values
+    must be integers in the range [0, 9999].
 
 Combining Draws and Seeds
 ^^^^^^^^^^^^^^^^^^^^^^^^^
