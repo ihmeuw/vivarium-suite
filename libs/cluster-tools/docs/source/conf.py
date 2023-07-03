@@ -37,9 +37,9 @@ copyright = f'2021, {about["__author__"]}'
 author = about["__author__"]
 
 # The short X.Y version.
-version = about["__version__"]
+version = vivarium_cluster_tools.__version__
 # The full version, including alpha/beta/rc tags.
-release = about["__version__"]
+release = vivarium_cluster_tools.__version__
 
 
 # -- General configuration ------------------------------------------------
