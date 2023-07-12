@@ -10,6 +10,7 @@
  - Increments version of Vivarium required
  - Prevent sorting of model specification keys
 
+
 **1.3.8 - 12/27/22**
 
  - Updates CI and setup to build python 3.7-3.10
