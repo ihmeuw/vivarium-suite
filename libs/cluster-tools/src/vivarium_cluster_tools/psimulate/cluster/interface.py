@@ -9,9 +9,10 @@ import atexit
 import os
 import shutil
 from pathlib import Path
-from typing import Any, NamedTuple, TextIO
+from typing import NamedTuple, TextIO
 
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
+from vivarium_cluster_tools.utilities import get_drmaa
 
 
 def validate_cluster_environment() -> None:
@@ -50,7 +51,7 @@ def submit_worker_jobs(
     cluster_logging_root: Path,
     native_specification: NativeSpecification,
 ) -> None:
-    drmaa = _get_drmaa()
+    drmaa = get_drmaa()
     s = drmaa.Session()
     s.initialize()
     jt = s.createJobTemplate()
@@ -83,15 +84,3 @@ def submit_worker_jobs(
                 raise
 
     atexit.register(kill_jobs)
-
-
-def _get_drmaa() -> Any:
-    try:
-        import drmaa
-    except (RuntimeError, OSError):
-        if "slurm" in ENV_VARIABLES.HOSTNAME.value:
-            ENV_VARIABLES.DRMAA_LIB_PATH.update("/opt/slurm-drmaa/lib/libdrmaa.so")
-            import drmaa
-        else:
-            drmaa = object()
-    return drmaa

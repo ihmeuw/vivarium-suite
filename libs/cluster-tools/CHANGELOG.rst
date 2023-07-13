@@ -1,6 +1,15 @@
+**1.3.10 - 07/12/23**
+
+ - Allow for specifying random seeds and draws in branches file
+ - Bugfixes for make_artifacts -l all
+ - Changes version metadata to use setuptools_scm
+ - Increments version of Vivarium required
+
 **1.3.9 - 06/01/23**
 
- - Increments version of Vivarium required 
+ - Increments version of Vivarium required
+ - Prevent sorting of model specification keys
+
 
 **1.3.8 - 12/27/22**
 

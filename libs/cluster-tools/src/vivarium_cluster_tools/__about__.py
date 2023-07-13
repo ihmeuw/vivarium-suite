@@ -2,7 +2,6 @@ __all__ = [
     "__title__",
     "__summary__",
     "__uri__",
-    "__version__",
     "__author__",
     "__email__",
 ]
@@ -10,8 +9,6 @@ __all__ = [
 __title__ = "vivarium_cluster_tools"
 __summary__ = "A set of tools for running simulation using vivarium on cluster."
 __uri__ = "https://github.com/ihmeuw/vivarium_cluster_tools"
-
-__version__ = "1.3.9"
 
 __author__ = "The vivarium developers"
 __email__ = "vivarium.dev@gmail.com"

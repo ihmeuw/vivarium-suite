@@ -8,10 +8,30 @@ Making directories is hard.
 """
 import functools
 import os
+import socket
 import time
 import warnings
 from pathlib import Path
-from typing import Callable, Union
+from typing import Any, Callable, Union
+
+from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
+
+
+def get_cluster_name() -> str:
+    """Returns the hostname"""
+    return socket.gethostname()
+
+
+def get_drmaa() -> Any:
+    try:
+        import drmaa
+    except (RuntimeError, OSError):
+        if "slurm" in ENV_VARIABLES.HOSTNAME.value:
+            ENV_VARIABLES.DRMAA_LIB_PATH.update("/opt/slurm-drmaa/lib/libdrmaa.so")
+            import drmaa
+        else:
+            drmaa = object()
+    return drmaa
 
 
 def mkdir(

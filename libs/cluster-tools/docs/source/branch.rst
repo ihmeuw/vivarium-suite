@@ -46,6 +46,11 @@ This key refers to an integer that represents the number of different input draw
 
     input_draw_count: 10
 
+.. note::
+    Instead of, or in addition to, specifying an ``input_draw_count``, a list of draws can be specified using the
+    ``input_draws`` key. If ``input_draw_count`` is also specified, the two values must agree, i.e., the
+    length of the ``input_draws`` list must be the same as ``input_draw_count``.
+
 When we use this branch configuration along with the original :term:`model specification<Model Specification>`,
 we'll launch 10 simulations in parallel, each using a different set of input parameters represented by the
 draw number.
@@ -53,7 +58,6 @@ draw number.
 .. code-block:: sh
 
   psimulate run /path/to/model_specification.yaml /path/to/parameter_uncertainty_branches.yaml
-
 
 .. note::
 
@@ -97,6 +101,11 @@ we'll launch 100 simulations in parallel, each using a different random seed.
 
   psimulate run /path/to/model_specification.yaml /path/to/stochastic_uncertainty_branches.yaml
 
+.. note::
+    Instead of, or in addition to, specifying an ``random_seed_count``, a list of seeds can be specified using the
+    ``random_seeds`` key. If ``random_seed_count`` is also specified, the two values must agree, i.e., the
+    length of the ``random_seeds`` list must be the same as ``random_seed_count``. Note that ``random_seeds`` values
+    must be integers in the range [0, 9999].
 
 Combining Draws and Seeds
 ^^^^^^^^^^^^^^^^^^^^^^^^^
