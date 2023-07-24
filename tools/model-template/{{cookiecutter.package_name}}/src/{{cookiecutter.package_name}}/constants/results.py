@@ -8,7 +8,6 @@ from {{cookiecutter.package_name}}.constants import models
 # Results columns and variables #
 #################################
 
-TOTAL_POPULATION_COLUMN = 'total_population'
 TOTAL_YLDS_COLUMN = 'years_lived_with_disability'
 TOTAL_YLLS_COLUMN = 'years_of_life_lost'
 
@@ -21,22 +20,25 @@ OUTPUT_RANDOM_SEED_COLUMN = 'randomness.random_seed'
 OUTPUT_SCENARIO_COLUMN = 'placeholder_branch_name.scenario'
 
 STANDARD_COLUMNS = {
-    'total_population': TOTAL_POPULATION_COLUMN,
     'total_ylls': TOTAL_YLLS_COLUMN,
     'total_ylds': TOTAL_YLDS_COLUMN,
 }
 
 THROWAWAY_COLUMNS = [f'{state}_event_count' for state in models.STATES]
 
-TOTAL_POPULATION_COLUMN_TEMPLATE = 'total_population_{POP_STATE}'
-DEATH_COLUMN_TEMPLATE = 'death_due_to_{CAUSE_OF_DEATH}_year_{YEAR}_sex_{SEX}_age_{AGE_GROUP}'
-YLLS_COLUMN_TEMPLATE = 'ylls_due_to_{CAUSE_OF_DEATH}_year_{YEAR}_sex_{SEX}_age_{AGE_GROUP}'
-YLDS_COLUMN_TEMPLATE = 'ylds_due_to_{CAUSE_OF_DISABILITY}_year_{YEAR}_sex_{SEX}_age_{AGE_GROUP}'
-STATE_PERSON_TIME_COLUMN_TEMPLATE = '{STATE}_person_time_year_{YEAR}_sex_{SEX}_age_{AGE_GROUP}'
-TRANSITION_COUNT_COLUMN_TEMPLATE = '{TRANSITION}_event_count_year_{YEAR}_sex_{SEX}_age_{AGE_GROUP}'
+DEATH_COLUMN_TEMPLATE = "MEASURE_death_due_to_{CAUSE_OF_DEATH}_AGE_GROUP_{AGE_GROUP}_CURRENT_YEAR_{YEAR}_SEX_{SEX}"
+YLLS_COLUMN_TEMPLATE = "MEASURE_ylls_due_to_{CAUSE_OF_DEATH}_AGE_GROUP_{AGE_GROUP}_CURRENT_YEAR_{YEAR}_SEX_{SEX}"
+YLDS_COLUMN_TEMPLATE = (
+    "MEASURE_ylds_due_to_{CAUSE_OF_DISABILITY}_AGE_GROUP_{AGE_GROUP}_CURRENT_YEAR_{YEAR}_SEX_{SEX}"
+)
+STATE_PERSON_TIME_COLUMN_TEMPLATE = (
+    "MEASURE_{STATE}_person_time_AGE_GROUP_{AGE_GROUP}_CURRENT_YEAR_{YEAR}_SEX_{SEX}"
+)
+TRANSITION_COUNT_COLUMN_TEMPLATE = (
+    "MEASURE_{TRANSITION}_event_count_AGE_GROUP_{AGE_GROUP}_CURRENT_YEAR_{YEAR}_SEX_{SEX}"
+)
 
 COLUMN_TEMPLATES = {
-    'population': TOTAL_POPULATION_COLUMN_TEMPLATE,
     'deaths': DEATH_COLUMN_TEMPLATE,
     'ylls': YLLS_COLUMN_TEMPLATE,
     'ylds': YLDS_COLUMN_TEMPLATE,
@@ -47,7 +49,6 @@ COLUMN_TEMPLATES = {
 NON_COUNT_TEMPLATES = [
 ]
 
-POP_STATES = ('living', 'dead', 'tracked', 'untracked')
 SEXES = ('male', 'female')
 # TODO - add literals for years in the model
 YEARS = ()
@@ -65,7 +66,6 @@ CAUSES_OF_DISABILITY = (
 )
 
 TEMPLATE_FIELD_MAP = {
-    'POP_STATE': POP_STATES,
     'YEAR': YEARS,
     'SEX': SEXES,
     'AGE_GROUP': AGE_GROUPS,

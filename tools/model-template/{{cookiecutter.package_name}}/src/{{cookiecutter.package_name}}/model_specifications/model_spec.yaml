@@ -35,11 +35,11 @@ configuration:
         age_start: 0
         age_end: 100
 
-    metrics:
+    stratification:
         default:
-            - 'age'
+            - 'age_group'
             - 'sex'
-            - 'year'
+            - 'current_year'
         # disability:
         #     include:
         #     exclude:
