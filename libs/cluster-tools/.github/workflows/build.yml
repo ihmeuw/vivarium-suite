@@ -52,6 +52,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install .[dev]
+      - name: Lint
+        run: |
+          pip install black==22.3.0 isort
+          black . --check --diff
+          isort . --check --verbose --only-modified --diff
       - name: Test
         run: |
           pytest ./tests
@@ -61,8 +66,3 @@ jobs:
       - name: Doctest
         run: |
           make doctest -C docs/
-      - name: Lint
-        run: |
-          pip install black==22.3.0 isort
-          black . --check --diff
-          isort . --check --verbose --only-modified --diff
