@@ -1,3 +1,7 @@
+**1.3.11 - 09/07/23**
+
+ - Made job failures more prominent in end of jobs logging
+
 **1.3.10 - 07/12/23**
 
  - Allow for specifying random seeds and draws in branches file
