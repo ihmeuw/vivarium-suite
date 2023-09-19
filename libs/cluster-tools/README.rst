@@ -4,8 +4,8 @@ Vivarium Cluster Tools
 .. image:: https://badge.fury.io/py/vivarium-cluster-tools.svg
     :target: https://badge.fury.io/py/vivarium-cluster-tools
 
-.. image:: https://travis-ci.org/ihmeuw/vivarium_cluster_tools.svg?branch=main
-    :target: https://travis-ci.org/ihmeuw/vivarium_cluster_tools
+.. image:: https://github.com/ihmeuw/vivarium_cluster_tools/actions/workflows/build.yml/badge.svg?branch=main
+    :target: https://github.com/ihmeuw/vivarium_cluster_tools
     :alt: Latest Version
 
 .. image:: https://readthedocs.org/projects/vivarium-cluster-tools/badge/?version=latest
