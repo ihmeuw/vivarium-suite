@@ -1,3 +1,7 @@
+**1.3.12 - 09/22/23**
+
+ - Bugfixes for psimulate
+
 **1.3.11 - 09/07/23**
 
  - Made job failures more prominent in end of jobs logging

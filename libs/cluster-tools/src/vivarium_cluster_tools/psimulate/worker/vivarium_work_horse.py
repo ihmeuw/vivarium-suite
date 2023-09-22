@@ -15,6 +15,7 @@ from traceback import format_exc
 import pandas as pd
 from loguru import logger
 from rq import get_current_job
+from vivarium.config_tree import ConfigTree
 from vivarium.framework.engine import SimulationContext
 from vivarium.framework.utilities import collapse_nested_dict
 
@@ -35,34 +36,7 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
     logger.info(f"Starting job: {job_parameters}")
 
     try:
-        configuration = job_parameters.branch_configuration
-        # TODO: Need to test serialization of an empty dict, then this
-        #   can go away.  If you're successfully running code and this
-        #   assert is still here, delete it.
-        assert configuration is not None
-
-        configuration.update(
-            {
-                "run_configuration": {
-                    "run_id": str(get_current_job().id) + "_" + str(time()),
-                    "results_directory": job_parameters.results_path,
-                    "run_key": job_parameters.job_specific,
-                },
-                "randomness": {
-                    "random_seed": job_parameters.random_seed,
-                    "additional_seed": job_parameters.input_draw,
-                },
-                "input_data": {
-                    "input_draw_number": job_parameters.input_draw,
-                },
-            }
-        )
-
-        sim = SimulationContext(
-            job_parameters.model_specification, configuration=configuration
-        )
-        logger.info("Simulation configuration:")
-        logger.info(str(sim.configuration))
+        sim = setup_sim(job_parameters)
 
         start_time = pd.Timestamp(**sim.configuration.time.start.to_dict())
         end_time = pd.Timestamp(**sim.configuration.time.end.to_dict())
@@ -128,6 +102,38 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
         raise
     finally:
         logger.info(f"Exiting job: {job_parameters}")
+
+
+def setup_sim(job_parameters: JobParameters) -> SimulationContext:
+    """Set up a simulation context with the branch/job-specific configuration parameters."""
+    configuration = ConfigTree(
+        job_parameters.branch_configuration, layers=["branch_base", "branch_expanded"]
+    )
+
+    configuration.update(
+        {
+            "run_configuration": {
+                "run_id": str(get_current_job().id) + "_" + str(time()),
+                "results_directory": job_parameters.results_path,
+                "run_key": job_parameters.job_specific,
+            },
+            "randomness": {
+                "random_seed": job_parameters.random_seed,
+                "additional_seed": job_parameters.input_draw,
+            },
+            "input_data": {
+                "input_draw_number": job_parameters.input_draw,
+            },
+        },
+        layer="branch_expanded",
+        source="branch_config",
+    )
+
+    sim = SimulationContext(job_parameters.model_specification, configuration=configuration)
+    logger.info("Simulation configuration:")
+    logger.info(str(sim.configuration))
+
+    return sim
 
 
 def do_sim_epilogue(
