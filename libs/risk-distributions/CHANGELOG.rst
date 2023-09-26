@@ -1,3 +1,7 @@
+**2.0.12 - 09/26/23**
+
+ - Address Pandas 2.1 FutureWarnings
+
 **2.0.11 - 12/27/22**
 
  - Update PR template

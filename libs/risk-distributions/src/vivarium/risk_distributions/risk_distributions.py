@@ -47,7 +47,7 @@ class BaseDistribution:
 
             mean, sd = cast_to_series(mean, sd)
 
-            parameters = pd.DataFrame(0, columns=required_parameters, index=mean.index)
+            parameters = pd.DataFrame(0.0, columns=required_parameters, index=mean.index)
 
             computable = cls.computable_parameter_index(mean, sd)
             parameters.loc[computable, ["x_min", "x_max"]] = cls.compute_min_max(
