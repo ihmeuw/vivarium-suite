@@ -1,3 +1,7 @@
+**2.0.13 - 09/26/23**
+
+ - Increment version number
+
 **2.0.12 - 09/26/23**
 
  - Address Pandas 2.1 FutureWarnings
