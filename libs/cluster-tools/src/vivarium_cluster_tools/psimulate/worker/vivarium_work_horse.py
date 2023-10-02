@@ -111,24 +111,11 @@ def setup_sim(job_parameters: JobParameters) -> SimulationContext:
     )
 
     configuration.update(
-        {
-            "run_configuration": {
-                "run_id": str(get_current_job().id) + "_" + str(time()),
-                "results_directory": job_parameters.results_path,
-                "run_key": job_parameters.job_specific,
-            },
-            "randomness": {
-                "random_seed": job_parameters.random_seed,
-                "additional_seed": job_parameters.input_draw,
-            },
-            "input_data": {
-                "input_draw_number": job_parameters.input_draw,
-            },
-        },
+        parameter_update_format(job_parameters),
         layer="branch_expanded",
         source="branch_config",
     )
-
+    job_parameters.branch_configuration.update(configuration.to_dict())
     sim = SimulationContext(job_parameters.model_specification, configuration=configuration)
     logger.info("Simulation configuration:")
     logger.info(str(sim.configuration))
@@ -170,3 +157,20 @@ def do_sim_epilogue(
         )
     )
     logger.remove(perf_log)
+
+
+def parameter_update_format(job_parameters: JobParameters) -> dict:
+    return {
+        "run_configuration": {
+            "run_id": str(get_current_job().id) + "_" + str(time()),
+            "results_directory": job_parameters.results_path,
+            "run_key": job_parameters.job_specific,
+        },
+        "randomness": {
+            "random_seed": job_parameters.random_seed,
+            "additional_seed": job_parameters.input_draw,
+        },
+        "input_data": {
+            "input_draw_number": job_parameters.input_draw,
+        },
+    }

@@ -1,3 +1,7 @@
+**1.3.13 - 10/02/23**
+
+ - Bugfixes for psimulate introduced by previous bugfix
+
 **1.3.12 - 09/22/23**
 
  - Bugfixes for psimulate
