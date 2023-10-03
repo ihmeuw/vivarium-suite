@@ -20,15 +20,15 @@ from loguru import logger
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
 DEFAULT_NUM_REDIS_DBS = -1
-DEFAULT_JOBS_PER_REDIS_INSTANCE = 1000
+DEFAULT_WORKERS_PER_REDIS_INSTANCE = 1000
 
 
 def launch_redis_processes(
     num_processes: int,
-    num_jobs: int,
+    num_workers: int,
     redis_logging_root: Path,
 ) -> List[Tuple[str, int]]:
-    num_processes = _get_num_redis_dbs(num_processes, num_jobs)
+    num_processes = _get_num_redis_dbs(num_processes, num_workers)
 
     hostname = ENV_VARIABLES.HOSTNAME.value
     redis_ports = []
@@ -42,9 +42,18 @@ def launch_redis_processes(
     return redis_ports
 
 
-def _get_num_redis_dbs(num_processes: int, num_jobs: int) -> int:
+def _get_num_redis_dbs(num_processes: int, num_workers: int) -> int:
     if num_processes == DEFAULT_NUM_REDIS_DBS:
-        num_processes = int(math.ceil(num_jobs / DEFAULT_JOBS_PER_REDIS_INSTANCE))
+        num_processes = int(math.ceil(num_workers / DEFAULT_WORKERS_PER_REDIS_INSTANCE))
+    else:
+        min_workers = _expected_sufficient_workers(num_processes)
+        if num_workers < min_workers:
+            logger.warning(
+                f"With {num_processes} queues, you should have >> {min_workers} workers, "
+                "but you only have {num_workers}. "
+                "Failure to allocate sufficent workers may result in jobs not being processed. "
+                "Consider increasing the number of workers, or decreasing the number of redis queues."
+            )
     return num_processes
 
 
@@ -89,3 +98,9 @@ def _get_random_free_port() -> int:
     port = s.getsockname()[1]
     s.close()
     return port
+
+
+def _expected_sufficient_workers(num_queues) -> int:
+    # Rough estimate of the number of workers needed to ensure that each queue gets
+    # at least one worker. cf. https://w.wiki/7bnb
+    return int(math.ceil(num_queues * (math.log(num_queues) + 0.57)))

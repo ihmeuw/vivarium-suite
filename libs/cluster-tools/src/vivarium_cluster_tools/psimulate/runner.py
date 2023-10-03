@@ -6,6 +6,7 @@ psimulate Runner
 The main process loop for `psimulate` runs.
 
 """
+import math
 from collections import defaultdict
 from pathlib import Path
 from time import sleep, time
@@ -193,11 +194,15 @@ def main(
     else:
         logger.info(f"Found {len(job_parameters)} jobs to run.")
 
+    num_workers = len(job_parameters)
+    if extra_args["max_workers"]:
+        num_workers = min(extra_args["max_workers"], num_workers)
+
     logger.info("Spinning up Redis DBs and connecting to main process.")
     # Spin up the job & result dbs and get back (hostname, port) pairs for all the dbs.
     redis_ports = redis_dbs.launch(
         num_processes=redis_processes,
-        num_jobs=len(job_parameters),
+        num_workers=num_workers,
         redis_logging_root=output_paths.logging_root,
     )
     # Spin up a unified interface to all the redis databases
@@ -221,13 +226,15 @@ def main(
         worker_log_directory=output_paths.worker_logging_root,
     )
     logger.info(f"Submitting redis workers to the cluster.")
-    # Start an rq worker for every job using the cluster scheduler. The workers
-    # will start as soon as they get scheduled and start looking for work. They
-    # run in burst mode which means they shut down if they can't find anything
-    # to do. This means it's critical that we put the jobs on the queue before
-    # the workers land, otherwise they'll just show up and shut down.
+    # Start an rq worker for every job using the cluster scheduler, up to an
+    # optional user-specified limit. The workers will start as soon as they get
+    # scheduled and start looking for work. They run in burst mode which means
+    # they shut down if they can't find anything to do. This means it's
+    # critical that we put the jobs on the queue before the workers land,
+    # otherwise they'll just show up and shut down.
+
     cluster.submit_worker_jobs(
-        num_workers=len(job_parameters),
+        num_workers=num_workers,
         worker_launch_script=worker_launch_script,
         cluster_logging_root=output_paths.cluster_logging_root,
         native_specification=native_specification,

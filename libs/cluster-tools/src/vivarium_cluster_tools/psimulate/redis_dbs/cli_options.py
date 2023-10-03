@@ -9,8 +9,8 @@ Command line options for configuring job/result queue Redis DBs in psimulate run
 import click
 
 from vivarium_cluster_tools.psimulate.redis_dbs.launcher import (
-    DEFAULT_JOBS_PER_REDIS_INSTANCE,
     DEFAULT_NUM_REDIS_DBS,
+    DEFAULT_WORKERS_PER_REDIS_INSTANCE,
 )
 
 with_redis = click.option(
@@ -19,6 +19,6 @@ with_redis = click.option(
     default=DEFAULT_NUM_REDIS_DBS,
     help=(
         f"Number of redis databases to use.  Defaults to a redis instance for every "
-        f"{DEFAULT_JOBS_PER_REDIS_INSTANCE} jobs."
+        f"{DEFAULT_WORKERS_PER_REDIS_INSTANCE} workers."
     ),
 )
