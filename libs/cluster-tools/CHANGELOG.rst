@@ -1,3 +1,8 @@
+**1.4.0 - 10/09/23**
+
+ - Drop support for Python 3.8
+ - Add priorities for draw/seed/branch job groups
+
 **1.3.13 - 10/02/23**
 
  - Bugfixes for psimulate introduced by previous bugfix
