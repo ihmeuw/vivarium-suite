@@ -1,3 +1,7 @@
+**1.4.1 - 10/13/23**
+
+ - Bugfix checking for max_workers arg
+
 **1.4.0 - 10/09/23**
 
  - Drop support for Python 3.8
