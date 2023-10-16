@@ -195,7 +195,7 @@ def main(
         logger.info(f"Found {len(job_parameters)} jobs to run.")
 
     num_workers = len(job_parameters)
-    if "max_workers" in extra_args:
+    if extra_args.get("max_workers", None):
         num_workers = min(extra_args["max_workers"], num_workers)
 
     logger.info("Spinning up Redis DBs and connecting to main process.")
