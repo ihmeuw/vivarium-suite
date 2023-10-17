@@ -32,9 +32,14 @@ all necessary requirements as follows::
   ({{ cookiecutter.package_name }}) :~$ pip install -e .
   ...pip will install vivarium and other requirements...
 
-
 Note the ``-e`` flag that follows pip install. This will install the python
 package in-place, which is important for making the model specifications later.
+
+To install requirements from a provided requirements.txt (e.g. installing an
+archived repository with the exact same requirements it was run with), replace
+`pip install -e .` with the following::
+
+  ({{ cookiecutter.package_name }}) :~$ pip install -r requirements.txt
 
 Cloning the repository should take a fair bit of time as git must fetch
 the data artifact associated with the demo (several GB of data) from the
