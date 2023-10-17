@@ -125,3 +125,6 @@ dmypy.json
 
 # Pycharm project settings
 .idea/
+
+# Version file
+src/*/_version.py

@@ -29,6 +29,8 @@ if __name__ == "__main__":
         "tables",
     ]
 
+    setup_requires = ["setuptools_scm"]
+
     data_requirements = ["vivarium_inputs[data]=={{cookiecutter.vivarium_inputs_version}}"]
     cluster_requirements = ["vivarium_cluster_tools=={{cookiecutter.vivarium_cluster_tools_version}}"]
     test_requirements = ["pytest"]
@@ -36,7 +38,6 @@ if __name__ == "__main__":
 
     setup(
         name=about["__title__"],
-        version=about["__version__"],
         description=about["__summary__"],
         long_description=long_description,
         license=about["__license__"],
@@ -54,6 +55,12 @@ if __name__ == "__main__":
             "dev": test_requirements + cluster_requirements + lint_requirements,
         },
         zip_safe=False,
+        use_scm_version={
+            "write_to": "src/{{cookiecutter.package_name}}/_version.py",
+            "write_to_template": '__version__ = "{version}"\n',
+            "tag_regex": r"^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$",
+        },
+        setup_requires=setup_requires,
         entry_points="""
             [console_scripts]
             make_artifacts={{cookiecutter.package_name}}.tools.cli:make_artifacts

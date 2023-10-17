@@ -105,3 +105,6 @@ venv.bak/
 
 # pycharm
 .idea/
+
+# Version file
+src/vivarium_research_template/_version.py
