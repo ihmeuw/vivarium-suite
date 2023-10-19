@@ -4,7 +4,6 @@ import os
 from setuptools import find_packages, setup
 
 if __name__ == "__main__":
-
     base_dir = os.path.dirname(__file__)
     src_dir = os.path.join(base_dir, "src")
 
@@ -21,6 +20,8 @@ if __name__ == "__main__":
         "scipy",
     ]
 
+    setup_requires = ["setuptools_scm"]
+
     test_requirements = [
         "pytest",
         "pytest-mock",
@@ -33,7 +34,6 @@ if __name__ == "__main__":
 
     setup(
         name=about["__title__"],
-        version=about["__version__"],
         description=about["__summary__"],
         long_description=long_description,
         license=about["__license__"],
@@ -67,4 +67,10 @@ if __name__ == "__main__":
             "docs": doc_requirements,
         },
         zip_safe=False,
+        use_scm_version={
+            "write_to": "src/risk_distributions/_version.py",
+            "write_to_template": '__version__ = "{version}"\n',
+            "tag_regex": r"^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$",
+        },
+        setup_requires=setup_requires,
     )

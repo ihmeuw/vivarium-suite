@@ -1,3 +1,8 @@
+**2.0.14 - 10/19/23**
+
+ - Implement setuptools-scm
+ - Drop support for Python 3.7-3.8; add support for 3.11
+
 **2.0.13 - 09/26/23**
 
  - Increment version number

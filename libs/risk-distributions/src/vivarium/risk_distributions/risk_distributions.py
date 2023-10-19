@@ -226,7 +226,6 @@ class BaseDistribution:
 
 
 class Beta(BaseDistribution):
-
     distribution = stats.beta
     expected_parameters = ("a", "b", "scale", "loc")
 
@@ -251,7 +250,6 @@ class Beta(BaseDistribution):
 
 
 class Exponential(BaseDistribution):
-
     distribution = stats.expon
     expected_parameters = ("scale",)
 
@@ -263,7 +261,6 @@ class Exponential(BaseDistribution):
 
 
 class Gamma(BaseDistribution):
-
     distribution = stats.gamma
     expected_parameters = ("a", "scale")
 
@@ -283,7 +280,6 @@ class Gamma(BaseDistribution):
 
 
 class Gumbel(BaseDistribution):
-
     distribution = stats.gumbel_r
     expected_parameters = ("loc", "scale")
 
@@ -302,7 +298,6 @@ class Gumbel(BaseDistribution):
 
 
 class InverseGamma(BaseDistribution):
-
     distribution = stats.invgamma
     expected_parameters = ("a", "scale")
 
@@ -335,7 +330,6 @@ class InverseGamma(BaseDistribution):
 
 
 class InverseWeibull(BaseDistribution):
-
     distribution = stats.invweibull
     expected_parameters = ("c", "scale")
 
@@ -370,7 +364,6 @@ class InverseWeibull(BaseDistribution):
 
 
 class LogLogistic(BaseDistribution):
-
     distribution = stats.burr12
     expected_parameters = ("c", "d", "scale")
 
@@ -405,7 +398,6 @@ class LogLogistic(BaseDistribution):
 
 
 class LogNormal(BaseDistribution):
-
     distribution = stats.lognorm
     expected_parameters = ("s", "scale")
 
@@ -426,7 +418,6 @@ class LogNormal(BaseDistribution):
 
 
 class MirroredGumbel(BaseDistribution):
-
     distribution = stats.gumbel_r
     expected_parameters = ("loc", "scale")
 
@@ -463,7 +454,6 @@ class MirroredGumbel(BaseDistribution):
 
 
 class MirroredGamma(BaseDistribution):
-
     distribution = stats.gamma
     expected_parameters = ("a", "scale")
 
@@ -498,7 +488,6 @@ class MirroredGamma(BaseDistribution):
 
 
 class Normal(BaseDistribution):
-
     distribution = stats.norm
     expected_parameters = ("loc", "scale")
 
@@ -517,7 +506,6 @@ class Normal(BaseDistribution):
 
 
 class Weibull(BaseDistribution):
-
     distribution = stats.weibull_min
     expected_parameters = ("c", "scale")
 
