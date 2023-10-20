@@ -23,7 +23,7 @@ Once you have all three installed, you should open up your normal shell
 You'll then make an environment, clone this repository, then install
 all necessary requirements as follows::
 
-  :~$ conda create --name={{ cookiecutter.package_name }} python=3.8
+  :~$ conda create --name={{ cookiecutter.package_name }} python=3.11
   ...conda will download python and base dependencies...
   :~$ conda activate {{ cookiecutter.package_name }}
   ({{ cookiecutter.package_name }}) :~$ git clone https://github.com/ihmeuw/{{ cookiecutter.package_name }}.git
@@ -107,20 +107,14 @@ You'll find six directories inside the main
 Running Simulations
 -------------------
 
-With your conda environment active, the first step to running simulations
-is making the model specification files.  A model specification is a
-complete description of a vivarium model. The command to generate model
-specifications is installed with this repository and it can be run
-from any directory.::
+Before running a simulation, you should have a model specification file.
+A model specification is a complete description of a vivarium model in
+a yaml format.  An example model specification is provided with this repository
+in the ``model_specifications`` directory.
 
-  ({{ cookiecutter.package_name }}) :~$ make_specs -v
-  2020-06-18 18:18:28.311 | 0:00:00.679701 | build_model_specifications:48 - Writing model spec(s) to "/REPO_INSTALLATION_DIRECTORY/{{ cookiecutter.package_name }}/src/{{ cookiecutter.package_name }}/model_specifications"
+With this model specification file and your conda environment active, you can then run simulations by, e.g.::
 
-As the log message indicates, the model specifications will be written to
-the ``model_specifications`` subdirectory in this repository. You can then
-run simulations by, e.g.::
-
-   ({{ cookiecutter.package_name }}) :~$ simulate run -v /<REPO_INSTALLATION_DIRECTORY>/{{ cookiecutter.package_name }}/src/{{ cookiecutter.package_name }}/model_specifications/china.yaml
+   ({{ cookiecutter.package_name }}) :~$ simulate run -v /<REPO_INSTALLATION_DIRECTORY>/{{ cookiecutter.package_name }}/src/{{ cookiecutter.package_name }}/model_specifications/model_spec.yaml
 
 The ``-v`` flag will log verbosely, so you will get log messages every time
 step. For more ways to run simulations, see the tutorials at
