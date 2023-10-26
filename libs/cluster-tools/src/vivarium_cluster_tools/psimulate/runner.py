@@ -6,10 +6,10 @@ psimulate Runner
 The main process loop for `psimulate` runs.
 
 """
-import math
 from collections import defaultdict
 from pathlib import Path
 from time import sleep, time
+from typing import Optional
 
 import pandas as pd
 from loguru import logger
@@ -114,6 +114,7 @@ def main(
     command: str,
     input_paths: paths.InputPaths,
     native_specification: cluster.NativeSpecification,
+    max_workers: Optional[int],
     redis_processes: int,
     no_batch: bool,
     extra_args: dict,
@@ -195,8 +196,8 @@ def main(
         logger.info(f"Found {len(job_parameters)} jobs to run.")
 
     num_workers = len(job_parameters)
-    if extra_args.get("max_workers", None):
-        num_workers = min(extra_args["max_workers"], num_workers)
+    if max_workers:
+        num_workers = min(max_workers, num_workers)
 
     logger.info("Spinning up Redis DBs and connecting to main process.")
     # Spin up the job & result dbs and get back (hostname, port) pairs for all the dbs.

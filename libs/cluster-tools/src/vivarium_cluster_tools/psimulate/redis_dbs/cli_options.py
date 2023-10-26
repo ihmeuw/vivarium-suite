@@ -22,3 +22,13 @@ with_redis = click.option(
         f"{DEFAULT_WORKERS_PER_REDIS_INSTANCE} workers."
     ),
 )
+
+with_max_workers = click.option(
+    "--max-workers",
+    "-w",
+    type=click.IntRange(min=1),
+    help=(
+        "The maximum number of workers (and therefore jobs) to run "
+        "concurrently. Defaults to the total number of jobs."
+    ),
+)

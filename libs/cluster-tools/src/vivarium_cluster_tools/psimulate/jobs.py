@@ -65,7 +65,7 @@ def build_job_list(
     number_already_completed = 0
 
     if command in [COMMANDS.run, COMMANDS.restart, COMMANDS.expand]:
-        for (input_draw, random_seed, branch_config) in keyspace:
+        for input_draw, random_seed, branch_config in keyspace:
             parameters = JobParameters(
                 model_specification=str(model_specification_path),
                 branch_configuration=branch_config,

@@ -46,6 +46,7 @@ shared_options = [
     cluster.with_project,
     cluster.with_queue_and_max_runtime,
     cluster.with_peak_memory,
+    redis_dbs.with_max_workers,
     redis_dbs.with_redis,
     results.with_no_batch,
     cli_tools.with_verbose_and_pdb,
@@ -80,12 +81,6 @@ shared_options = [
     "created in this directory with the same name as the "
     "configuration file.",
     callback=cli_tools.coerce_to_full_path,
-)
-@click.option(
-    "--max-workers",
-    type=click.IntRange(min=1),
-    help="The maximum number of workers (and therefore jobs) to run concurrently."
-    "If unset, submit all jobs at once and let the cluster schedule them.",
 )
 @cli_tools.pass_shared_options(shared_options)
 def run(
@@ -132,9 +127,10 @@ def run(
             peak_memory=options["peak_memory"],
             max_runtime=options["max_runtime"],
         ),
+        max_workers=options["max_workers"],
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
-        extra_args={"max_workers": options["max_workers"]},
+        extra_args={},
     )
 
 
@@ -168,6 +164,7 @@ def restart(results_root, **options):
             peak_memory=options["peak_memory"],
             max_runtime=options["max_runtime"],
         ),
+        max_workers=options["max_workers"],
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
         extra_args={},
@@ -218,6 +215,7 @@ def expand(results_root, **options):
             peak_memory=options["peak_memory"],
             max_runtime=options["max_runtime"],
         ),
+        max_workers=options["max_workers"],
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
         extra_args={
@@ -261,6 +259,7 @@ def test(test_type, num_workers, result_directory, **options):
             peak_memory=options["peak_memory"],
             max_runtime=options["max_runtime"],
         ),
+        max_workers=options["max_workers"],
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
         extra_args={

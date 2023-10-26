@@ -1,3 +1,9 @@
+**1.4.3 - 10/25/23**
+
+ - Bugfix implement --max-workers option for psimulate restart, expand, and test
+ - Bugfix update default output directory
+ - Update runtime error message if env is different on restart or expand
+
 **1.4.2 - 10/13/23**
 
  - Bugfix checking for max_workers arg

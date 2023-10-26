@@ -94,7 +94,8 @@ def _compare_environments(current: Dict, original: Dict) -> None:
     if differences:
         differences = "\n".join(differences)
         raise ValueError(
-            f"Differences found between environment used for original run and current environment. "
-            f"In order to successfully run, you should make a new environment using the requirements.txt "
-            f"file found in the output directory. Differences found as follows: {differences}."
+            "Differences found between environment used for original run and current environment. "
+            "In order to successfully run, you should make a new environment using the requirements.txt "
+            "file found in the output directory (or rename/delete the requirements.txt before running "
+            f"if you know what you're doing).\n\nDifferences found as follows: {differences}."
         )

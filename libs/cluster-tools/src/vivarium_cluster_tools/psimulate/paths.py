@@ -13,7 +13,7 @@ from vivarium.interface.utilities import get_output_model_name_string
 from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import COMMANDS
 
-DEFAULT_OUTPUT_DIRECTORY = "/share/costeffectiveness/results"
+DEFAULT_OUTPUT_DIRECTORY = "/mnt/team/simulation_science/costeffectiveness/results"
 
 
 class InputPaths(NamedTuple):
