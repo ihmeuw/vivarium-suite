@@ -20,7 +20,7 @@ class InterventionScenario:
 
 
 class __InterventionScenarios(NamedTuple):
-    BASELINE: InterventionScenario = InterventionScenario('baseline')
+    BASELINE: InterventionScenario = InterventionScenario("baseline")
     # todo add additional intervention scenarios
 
     def __get_item__(self, item):
