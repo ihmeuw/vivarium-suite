@@ -27,6 +27,8 @@ with_max_workers = click.option(
     "--max-workers",
     "-w",
     type=click.IntRange(min=1),
+    default=8000,
+    show_default=True,
     help=(
         "The maximum number of workers (and therefore jobs) to run "
         "concurrently. Defaults to the total number of jobs."

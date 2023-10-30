@@ -1,3 +1,9 @@
+**1.5.0 - 10/27/23**
+
+ - Remove default results directory for 'psimulate run'
+ - Modify default output directory for 'psimulate test'
+ - Add --max-workers default of 8000
+
 **1.4.3 - 10/25/23**
 
  - Bugfix implement --max-workers option for psimulate restart, expand, and test

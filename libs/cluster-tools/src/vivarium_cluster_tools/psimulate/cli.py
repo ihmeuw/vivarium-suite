@@ -75,8 +75,7 @@ shared_options = [
     "--result-directory",
     "-o",
     type=click.Path(file_okay=False),
-    default=paths.DEFAULT_OUTPUT_DIRECTORY,
-    show_default=True,
+    required=True,
     help="The directory to write results to. A folder will be "
     "created in this directory with the same name as the "
     "configuration file.",
@@ -240,7 +239,7 @@ def expand(results_root, **options):
     "--result-directory",
     "-o",
     type=click.Path(file_okay=False),
-    default=f"{paths.DEFAULT_OUTPUT_DIRECTORY}/load_tests",
+    default=paths.DEFAULT_LOAD_TESTS_DIR,
     callback=cli_tools.coerce_to_full_path,
 )
 @cli_tools.pass_shared_options(shared_options)
