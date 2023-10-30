@@ -1,22 +1,36 @@
 # -----------------------------------------------------------------------------
 #   - invoked on push, pull_request, or manual trigger
-#   - test under at least 4 versions of python
+#   - test under all supported versions of Python (python_versions.json)
 # -----------------------------------------------------------------------------
 name: build
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
+  get-python-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Install jq
+        run: sudo apt-get install jq
+      - name: Get Python versions
+        id: set-matrix
+        run: |
+          echo "MATRIX_RESULT=$(jq -c . python_versions.json)" >> $GITHUB_ENV
+    outputs:
+      matrix: ${{ env.MATRIX_RESULT }}
   build:
+    needs: get-python-versions
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ${{ fromJSON(needs.get-python-versions.outputs.matrix) }}
     defaults:
       run:
         shell: bash -l {0}
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python ${{ "{{" }} matrix.python-version {{ "}}" }}
+      - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}

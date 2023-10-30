@@ -32,6 +32,8 @@ all necessary requirements as follows::
   ({{ cookiecutter.package_name }}) :~$ pip install -e .
   ...pip will install vivarium and other requirements...
 
+Supported Python versions: 3.9, 3.10, 3.11
+
 Note the ``-e`` flag that follows pip install. This will install the python
 package in-place, which is important for making the model specifications later.
 
