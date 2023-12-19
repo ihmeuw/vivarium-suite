@@ -39,5 +39,5 @@
     }
   ],
   "access_right": "open",
-  "description": "Archival release of Vivarium Cluster Tools, a Python package that makes running ``vivarium`` simulations at scale on a Univa Grid Engine cluster easy."
+  "description": "Archival release of Vivarium Cluster Tools, a Python package that makes running ``vivarium`` simulations at scale on a Slurm cluster easy."
 }

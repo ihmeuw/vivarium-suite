@@ -13,7 +13,7 @@ Vivarium Cluster Tools
     :alt: Documentation Status
 
 Vivarium cluster tools is a python package that makes running ``vivarium``
-simulations at scale on a Univa Grid Engine cluster easy.
+simulations at scale on a Slurm cluster easy.
 
 Installation
 ------------

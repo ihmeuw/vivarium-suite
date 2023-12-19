@@ -1,3 +1,7 @@
+**1.5.1 - 12/15/23**
+
+ - Add logging documentation for psimulate
+
 **1.5.0 - 10/27/23**
 
  - Remove default results directory for 'psimulate run'
