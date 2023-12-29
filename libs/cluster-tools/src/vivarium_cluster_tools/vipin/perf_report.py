@@ -94,6 +94,13 @@ class PerformanceSummary:
     TELEMETRY_PATTERN = re.compile(r"^{\"host\".+\"job_number\".+}$")
     PERF_LOG_PATTERN = re.compile(r"^perf\.([0-9]+)\.([0-9]+)\.log$")
 
+    def clean_perf_logs(self):
+        """Remove all performance logs from the log_dir (after to_df has been called)"""
+        for log in [
+            f for f in self.log_dir.iterdir() if self.PERF_LOG_PATTERN.fullmatch(f.name)
+        ]:
+            log.unlink()
+
 
 def set_index_scenario_cols(perf_df: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
     """Get the columns useful to index performance data by."""
@@ -211,6 +218,9 @@ def report_performance(
     else:
         out_file = out_file.with_suffix(".csv")
         perf_df.to_csv(out_file)
+
+    # Clean up performance logs
+    perf_summary.clean_perf_logs()
 
     if verbose:
         print_stat_report(perf_df, scenario_cols)

@@ -1,3 +1,7 @@
+**1.5.2 - 12/29/23**
+
+ - Automatically remove duplicative perf logs after log_summary.csv is created
+
 **1.5.1 - 12/15/23**
 
  - Add logging documentation for psimulate
