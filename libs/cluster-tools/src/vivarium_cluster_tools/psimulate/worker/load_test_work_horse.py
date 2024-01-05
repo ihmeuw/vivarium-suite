@@ -22,7 +22,18 @@ LOAD_TEST_WORK_HORSE_IMPORT_PATH = f"{__name__}.work_horse"
 
 
 def get_psimulate_test_dict():
-    return {"sleep": sleep_test, "large_results": large_results_test}
+    return {
+        "sleep": {
+            "function": sleep_test,
+            "peak_memory": 1,
+            "max_runtime": "00:05:00",
+        },
+        "large_results": {
+            "function": large_results_test,
+            "peak_memory": 2,
+            "max_runtime": "00:30:00",
+        },
+    }
 
 
 def sleep_test(job_parameters: JobParameters) -> pd.DataFrame:
@@ -52,7 +63,7 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
     job_parameters = JobParameters(**job_parameters)
 
     test_type = job_parameters.extras["test_type"]
-    test_runner = get_psimulate_test_dict()[test_type]
+    test_runner = get_psimulate_test_dict()[test_type]["function"]
 
     logger.info(f"Launching new job {job} on {node}")
     logger.info(f"Starting job: {job_parameters}")

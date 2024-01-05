@@ -254,6 +254,26 @@ def expand(results_root, **options):
 def test(test_type, num_workers, result_directory, **options):
     logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
+
+    # HACK: warn that we are changing the default as well as any provided
+    # time/memory requests to be of the appropriate size for these tests.
+    peak_memory = get_psimulate_test_dict()[test_type]["peak_memory"]
+    max_runtime = get_psimulate_test_dict()[test_type]["max_runtime"]
+    peak_memory_msg = (
+        f"Manually overriding the peak memory request '{test_type}' test to {peak_memory}GB."
+    )
+    logger.warning(peak_memory_msg) if options[
+        "peak_memory"
+    ] != cluster.PEAK_MEMORY_DEFAULT else logger.info(peak_memory_msg)
+    max_runtime_msg = (
+        f"Manually overriding the max runtime request '{test_type}' test to {max_runtime}."
+    )
+    logger.warning(max_runtime_msg) if options[
+        "max_runtime"
+    ] != cluster.MAX_RUNTIME_DEFAULT else logger.info(max_runtime_msg)
+    options["peak_memory"] = peak_memory
+    options["max_runtime"] = max_runtime
+
     main(
         command=COMMANDS.load_test,
         input_paths=paths.InputPaths.from_entry_point_args(

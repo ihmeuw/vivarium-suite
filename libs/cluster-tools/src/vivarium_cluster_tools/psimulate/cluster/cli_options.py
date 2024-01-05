@@ -12,6 +12,8 @@ from typing import List, Optional
 import click
 
 _RUNTIME_FORMAT = "hh:mm:ss"
+MAX_RUNTIME_DEFAULT = "24:00:00"
+PEAK_MEMORY_DEFAULT = 3  # GB
 
 # https://docs.cluster.ihme.washington.edu/#hpc-execution-host-hardware-specifications
 _AVAILABLE_HARDWARE = [
@@ -68,7 +70,7 @@ with_peak_memory = click.option(
     "--peak-memory",
     "-m",
     type=int,
-    default=3,
+    default=PEAK_MEMORY_DEFAULT,
     show_default=True,
     help=(
         "The estimated maximum memory usage in GB of an individual simulate job. "
@@ -160,7 +162,7 @@ _with_max_runtime = click.option(
     "--max-runtime",
     "-r",
     type=str,
-    default="24:00:00",
+    default=MAX_RUNTIME_DEFAULT,
     show_default=True,
     help=(
         f"The estimated maximum runtime ({_RUNTIME_FORMAT}) of the simulation jobs. "

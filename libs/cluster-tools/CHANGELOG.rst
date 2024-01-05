@@ -1,5 +1,6 @@
 **1.5.3 - 01/04/24**
 
+ - Hard-code psimulate test cluster requirements
  - Implement hardware constraint option for psimulate commands
  - Make -P/--project a psimulate required option
 
