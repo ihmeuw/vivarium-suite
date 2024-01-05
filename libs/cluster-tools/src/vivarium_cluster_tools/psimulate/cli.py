@@ -46,6 +46,7 @@ shared_options = [
     cluster.with_project,
     cluster.with_queue_and_max_runtime,
     cluster.with_peak_memory,
+    cluster.with_hardware,
     redis_dbs.with_max_workers,
     redis_dbs.with_redis,
     results.with_no_batch,
@@ -125,6 +126,7 @@ def run(
             queue=options["queue"],
             peak_memory=options["peak_memory"],
             max_runtime=options["max_runtime"],
+            hardware=options["hardware"],
         ),
         max_workers=options["max_workers"],
         redis_processes=options["redis"],
@@ -162,6 +164,7 @@ def restart(results_root, **options):
             queue=options["queue"],
             peak_memory=options["peak_memory"],
             max_runtime=options["max_runtime"],
+            hardware=options["hardware"],
         ),
         max_workers=options["max_workers"],
         redis_processes=options["redis"],
@@ -180,12 +183,14 @@ def restart(results_root, **options):
     "--add-draws",
     type=int,
     default=0,
+    show_default=True,
     help="The number of input draws to add to a previous run.",
 )
 @click.option(
     "--add-seeds",
     type=int,
     default=0,
+    show_default=True,
     help="The number of random seeds to add to a previous run.",
 )
 @cli_tools.pass_shared_options(shared_options)
@@ -213,6 +218,7 @@ def expand(results_root, **options):
             queue=options["queue"],
             peak_memory=options["peak_memory"],
             max_runtime=options["max_runtime"],
+            hardware=options["hardware"],
         ),
         max_workers=options["max_workers"],
         redis_processes=options["redis"],
@@ -234,12 +240,14 @@ def expand(results_root, **options):
     "-n",
     type=click.INT,
     default=1000,
+    show_default=True,
 )
 @click.option(
     "--result-directory",
     "-o",
     type=click.Path(file_okay=False),
     default=paths.DEFAULT_LOAD_TESTS_DIR,
+    show_default=True,
     callback=cli_tools.coerce_to_full_path,
 )
 @cli_tools.pass_shared_options(shared_options)
@@ -257,6 +265,7 @@ def test(test_type, num_workers, result_directory, **options):
             queue=options["queue"],
             peak_memory=options["peak_memory"],
             max_runtime=options["max_runtime"],
+            hardware=options["hardware"],
         ),
         max_workers=options["max_workers"],
         redis_processes=options["redis"],

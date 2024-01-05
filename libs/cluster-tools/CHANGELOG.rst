@@ -1,3 +1,8 @@
+**1.5.3 - 01/04/24**
+
+ - Implement hardware constraint option for psimulate commands
+ - Make -P/--project a psimulate required option
+
 **1.5.2 - 12/29/23**
 
  - Automatically remove duplicative perf logs after log_summary.csv is created

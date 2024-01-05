@@ -7,9 +7,37 @@ Command line options for configuring the cluster environment in psimulate runs.
 
 """
 
+from typing import List, Optional
+
 import click
 
 _RUNTIME_FORMAT = "hh:mm:ss"
+
+# https://docs.cluster.ihme.washington.edu/#hpc-execution-host-hardware-specifications
+_AVAILABLE_HARDWARE = [
+    "c6320",  # typical
+    "r630",  # high capacity
+    "c6420v1",  # batch 1
+    "c6420v2",  # batch 2
+    "r650",  # high capacity
+    "r650v2",  # high capacity
+    "r650xs",  # high speed
+]
+
+
+def _validate_and_split_hardware(
+    ctx: click.Context, param: click.core.Option, value: Optional[str]
+) -> List[Optional[str]]:
+    hardware = value.split(",") if value else []
+    bad_requests = set(hardware) - set(_AVAILABLE_HARDWARE)
+    if bad_requests:
+        raise click.BadParameter(
+            f"Hardware request(s) {bad_requests} are not supported.\n"
+            f"Supported hardware requests: {_AVAILABLE_HARDWARE}.\n"
+            "Refer to https://docs.cluster.ihme.washington.edu/#hpc-execution-host-hardware-specifications"
+        )
+    return hardware
+
 
 with_project = click.option(
     "--project",
@@ -21,7 +49,7 @@ with_project = click.option(
             "proj_csu",
         ]
     ),
-    default="proj_simscience_prod",
+    required=True,
     help="The cluster project under which to run the simulation.",
 )
 
@@ -41,10 +69,25 @@ with_peak_memory = click.option(
     "-m",
     type=int,
     default=3,
+    show_default=True,
     help=(
         "The estimated maximum memory usage in GB of an individual simulate job. "
         "The simulations will be run with this as a limit."
     ),
+)
+
+
+with_hardware = click.option(
+    "--hardware",
+    "-h",
+    help=(
+        "The (comma-separated) specific hardware to run the jobs on. This can be useful to request "
+        "specifically fast nodes ('-h r650xs') vs high capacity nodes ('-h r630,r650,r650v2'). "
+        "Note that the hardware changes on a roughly annual schedule. "
+        f"The currently-supported options are: {_AVAILABLE_HARDWARE}. "
+        "For details, refer to: https://docs.cluster.ihme.washington.edu/#hpc-execution-host-hardware-specifications"
+    ),
+    callback=_validate_and_split_hardware,
 )
 
 
@@ -118,10 +161,10 @@ _with_max_runtime = click.option(
     "-r",
     type=str,
     default="24:00:00",
+    show_default=True,
     help=(
         f"The estimated maximum runtime ({_RUNTIME_FORMAT}) of the simulation jobs. "
-        "By default, the cluster will terminate jobs after 24h regardless of "
-        "queue. The maximum supported runtime is 3 days. Keep in mind that the "
+        "The maximum supported runtime is 3 days. Keep in mind that the "
         "session you are launching from must be able to live at least as long "
         "as the simulation jobs, and that runtimes by node vary wildly."
     ),
