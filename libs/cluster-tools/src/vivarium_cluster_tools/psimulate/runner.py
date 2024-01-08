@@ -207,7 +207,7 @@ def main(
         redis_logging_root=output_paths.logging_root,
     )
     # Spin up a unified interface to all the redis databases
-    registry_manager = redis_dbs.RegistryManager(redis_ports, num_jobs_completed)
+    registry_manager = redis_dbs.RegistryManager(redis_ports, num_workers, num_jobs_completed)
     logger.info("Enqueuing jobs on Redis queues.")
     # Distribute all the remaining jobs across the job queues
     # in the redis databases.

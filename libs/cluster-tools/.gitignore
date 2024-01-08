@@ -106,6 +106,9 @@ venv.bak/
 # Pycharm project settings
 .idea/
 
+# Vscode project settings
+.vscode/
+
 # Version file
 src/vivarium_cluster_tools/_version.py
 

@@ -9,7 +9,7 @@ def test_allocate_jobs(mocker, num_queues, num_jobs):
     # mock the QueueManager class
     mocker.patch("vivarium_cluster_tools.psimulate.redis_dbs.registry.QueueManager")
     queues = [(f"queue_{i}", i) for i in range(num_queues)]
-    manager = RegistryManager(queues, 0)
+    manager = RegistryManager(queues, num_jobs, 0)
     # create a list of dummy jobs based on a list of integers
     jobs = [{"job": i} for i in range(num_jobs)]
     # make an array of all the jobs in every queue
