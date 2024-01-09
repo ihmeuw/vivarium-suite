@@ -1,3 +1,7 @@
+**2.0.15 - 01/09/24**
+
+ - Update PyPI to 2FA with trusted publisher
+
 **2.0.14 - 10/19/23**
 
  - Implement setuptools-scm
