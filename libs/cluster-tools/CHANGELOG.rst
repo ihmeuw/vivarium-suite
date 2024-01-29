@@ -1,3 +1,7 @@
+**1.5.4 - 01/29/24**
+
+ - Fix broken readthedocs build
+
 **1.5.3 - 01/04/24**
 
  - Hard-code psimulate test cluster requirements
