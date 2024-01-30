@@ -1,3 +1,7 @@
+**2.0.16 - 01/29/24**
+
+ - Fix broken readthedocs build
+
 **2.0.15 - 01/09/24**
 
  - Update PyPI to 2FA with trusted publisher
