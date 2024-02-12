@@ -6,7 +6,9 @@ Performance Reporting
 Tools for summarizing and reporting performance information.
 
 """
+import glob
 import json
+import math
 import re
 from pathlib import Path
 from typing import Tuple, Union
@@ -130,7 +132,7 @@ def add_squid_api_data(perf_df: pd.DataFrame):
             right_on=["squid_api_job_id"],
         )
     except Exception as e:
-        print(f"Squid API request failed with: {e}")
+        logger.warning(f"Squid API request failed with: {e}")
     return perf_df
 
 
@@ -200,6 +202,7 @@ def report_performance(
     perf_summary = PerformanceSummary(input_directory)
 
     perf_df = perf_summary.to_df()
+
     if len(perf_df) < 1:
         logger.warning(f"No performance data found in {input_directory}.")
         return  # nothing left to do
@@ -209,6 +212,8 @@ def report_performance(
 
     # Set index to include branch configuration/scenario columns
     perf_df, scenario_cols = set_index_scenario_cols(perf_df)
+    # preserve copy before updating for stat report
+    original_perf_df = perf_df.copy()
 
     # Write to file
     out_file = output_directory / "log_summary"
@@ -233,4 +238,4 @@ def report_performance(
         f'Performance summary {"hdf" if output_hdf else "csv"} can be found at {out_file}, with '
         f'{perf_df.shape[0]} row{"s" if perf_df.shape[0] > 1 else ""}.'
     )
-    return
+    return original_perf_df

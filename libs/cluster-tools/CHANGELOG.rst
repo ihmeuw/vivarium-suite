@@ -1,3 +1,7 @@
+**1.5.5 - 02/12/24**
+
+ - Add central performance logging and testing
+
 **1.5.4 - 01/29/24**
 
  - Fix broken readthedocs build

@@ -5,6 +5,7 @@ File Path Management
 
 """
 from datetime import datetime
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import NamedTuple, Optional, Union
 
@@ -14,6 +15,9 @@ from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import COMMANDS
 
 DEFAULT_LOAD_TESTS_DIR = "/mnt/team/simulation_science/priv/engineering/load_tests"
+CENTRAL_PERFORMANCE_LOGS_DIRECTORY = Path(
+    "/mnt/team/simulation_science/pub/performance_logs/"
+)
 
 
 class InputPaths(NamedTuple):
@@ -66,6 +70,42 @@ class OutputPaths(NamedTuple):
 
     # outputs
     results: Path
+
+    # will not be reliable if we parallelized across artifacts
+    @property
+    def artifact_name(self) -> str:
+        return self.root.parent.stem
+
+    @property
+    def run_date(self) -> str:
+        runtime_info = self.logging_root.stem
+        run_date = runtime_info[: runtime_info.rindex("_")]
+        return run_date
+
+    @property
+    def run_type(self) -> str:
+        runtime_info = self.logging_root.stem
+        run_type = runtime_info[runtime_info.rindex("_") + 1 :]
+        return run_type
+
+    @property
+    def original_run_date(self) -> str:
+        return self.root.stem
+
+    @property
+    def project_name(self) -> str:
+        if self.logging_to_central_results_directory:
+            return self.root.parents[3].stem
+        else:
+            return self.root.parents[1].stem
+
+    @property
+    def root_path(self) -> str:
+        return self.root.parent
+
+    @property
+    def logging_to_central_results_directory(self) -> bool:
+        return fnmatch(str(self.root), "/mnt/team/simulation_science/pub/models/*/results/*")
 
     @classmethod
     def from_entry_point_args(
