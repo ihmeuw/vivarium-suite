@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import click
 from loguru import logger
 
 
@@ -93,9 +94,11 @@ def _compare_environments(current: Dict, original: Dict) -> None:
 
     if differences:
         differences = "\n".join(differences)
-        raise ValueError(
-            "Differences found between environment used for original run and current environment. "
-            "In order to successfully run, you should make a new environment using the requirements.txt "
-            "file found in the output directory (or rename/delete the requirements.txt before running "
-            f"if you know what you're doing).\n\nDifferences found as follows: {differences}."
+        logger.info(
+            "Differences found between current environment and original environment used for "
+            f" this run. \n\nDifferences found are as follows: {differences}. Would you like to proceed?"
+        )
+        click.confirm(
+            "Would you like to proceed psimulate restart with the new environment?",
+            abort=True,
         )

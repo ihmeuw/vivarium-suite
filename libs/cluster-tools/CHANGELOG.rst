@@ -1,3 +1,7 @@
+**1.5.6 - 02/27/24**
+
+ - Give user option to continue psimulate restart if environment has changed
+
 **1.5.5 - 02/12/24**
 
  - Add central performance logging and testing
