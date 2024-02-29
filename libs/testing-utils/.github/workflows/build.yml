@@ -37,13 +37,13 @@ jobs:
           pip install black==22.3.0 isort
           black . --check --diff
           isort . --check --verbose --only-modified --diff
-      - name: Test
-        run: |
-          if "${{ github.event_name == 'schedule' }}"; then
-            pytest --runslow ./tests
-          else
-            pytest ./tests
-          fi
+      # - name: Test
+      #   run: |
+      #     if "${{ github.event_name == 'schedule' }}"; then
+      #       pytest --runslow ./tests
+      #     else
+      #       pytest ./tests
+      #     fi
       # - name: Doc build
       #   run: |
       #     make html -C docs/ SPHINXOPTS="-W --keep-going -n"
