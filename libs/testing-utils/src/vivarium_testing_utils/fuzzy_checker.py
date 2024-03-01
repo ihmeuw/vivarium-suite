@@ -31,12 +31,12 @@ class FuzzyChecker:
     To use this class, import it and create an instance as a fixture. Example:
 
     @pytest.fixture(scope="session")
-    def fuzzy_checker() -> FuzzyChecker:
+    def fuzzy_checker(output_directory) -> FuzzyChecker:
         checker = FuzzyChecker()
 
         yield checker
 
-        checker.save_diagnostic_output()
+        checker.save_diagnostic_output(output_directory)
     """
 
     def __init__(self) -> None:
@@ -364,15 +364,12 @@ class FuzzyChecker:
             # We return an arbitrarily large penalty to ensure this is never selected as the minimum.
             return np.finfo(float).max
 
-    def save_diagnostic_output(self) -> None:
+    def save_diagnostic_output(self, output_directory) -> None:
         """
+        Note: Users will need to set the output directory by passing it to the fixture.
         Save diagnostics for optional human inspection.
         Can be useful to get more information about warnings, or to prioritize
         areas to be more thorough in manual V&V.
         """
         output = pd.DataFrame(self.proportion_test_diagnostics)
-        output.to_csv(
-            Path(os.path.dirname(__file__))
-            / "v_and_v_output/proportion_test_diagnostics.csv",
-            index=False,
-        )
+        output.to_csv(Path(output_directory), index=False)
