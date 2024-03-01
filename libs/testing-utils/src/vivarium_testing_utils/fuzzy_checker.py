@@ -28,7 +28,13 @@ class FuzzyChecker:
     This is a class so that diagnostics for an entire test run can be tracked,
     and output to a file at the end of the run.
 
-    To use this class, import it and create an instance as a fixture. Example:
+    To use this class, import it and create an instance as a fixture. Note: Users will need
+    to pass a fixture containing the output directory for the diagnostics file to the fixture
+    that instantiates FuzzyChecker. Example:
+
+    @pytest.fixture(scope="session")
+    def output_directory() -> str:
+        return "path/to/output/directory"
 
     @pytest.fixture(scope="session")
     def fuzzy_checker(output_directory) -> FuzzyChecker:
@@ -366,10 +372,12 @@ class FuzzyChecker:
 
     def save_diagnostic_output(self, output_directory) -> None:
         """
-        Note: Users will need to set the output directory by passing it to the fixture.
+        Note: Users will need to set the output directory by creating a fixture with
+        the output directory and passing that fixture to the fixture that instantiates
+        FuzzyChecker.
         Save diagnostics for optional human inspection.
         Can be useful to get more information about warnings, or to prioritize
         areas to be more thorough in manual V&V.
         """
         output = pd.DataFrame(self.proportion_test_diagnostics)
-        output.to_csv(Path(output_directory), index=False)
+        output.to_csv(Path(output_directory) / "proportion_test_diagnostics.csv", index=False)
