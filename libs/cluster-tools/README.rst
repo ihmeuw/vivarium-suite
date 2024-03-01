@@ -104,5 +104,8 @@ for each combination of input draw and random seed to produce 25 * 10 * 5 * 3 =
 3750 unique simulations.
 
 To read about more of the available features and get a better understanding
-of how to correctly write your own branches files, check out the
-`vivarium cluster tools documentation <https://vivarium-cluster-tools.readthedocs.io/en/latest/?badge=latest>`_.
+of how to correctly write your own branches files, 
+
+
+`Check out the docs! <https://vivarium-cluster-tools.readthedocs.io/en/latest/>`_
+---------------------------------------------------------------------------------
