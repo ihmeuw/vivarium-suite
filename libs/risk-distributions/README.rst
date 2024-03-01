@@ -27,3 +27,5 @@ or build it from source with
   ``> python setup.py install``
 
 
+`Check out the docs! <https://risk-distributions.readthedocs.io/en/latest/>`_
+-----------------------------------------------------------------------------
