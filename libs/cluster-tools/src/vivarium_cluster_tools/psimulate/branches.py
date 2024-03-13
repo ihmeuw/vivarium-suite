@@ -16,6 +16,8 @@ from vivarium.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.psimulate.model_specification import FULL_ARTIFACT_PATH_KEY
 
+NUMBER_OF_DRAWS = 500
+
 
 class Keyspace:
     """A representation of a collection of simulation configurations."""
@@ -136,7 +138,7 @@ def calculate_input_draws(
         existing draw numbers.
 
     """
-    max_draw_count = 1000
+    max_draw_count = NUMBER_OF_DRAWS
     if input_draw_count > max_draw_count:
         raise ValueError(f"Input draw count must be less than {max_draw_count}.")
 

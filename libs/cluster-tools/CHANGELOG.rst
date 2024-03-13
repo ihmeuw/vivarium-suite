@@ -1,3 +1,7 @@
+**1.6.0 - 03/12/24**
+
+ - Limit max number of draws to 500.
+
 **1.5.6 - 02/27/24**
 
  - Give user option to continue psimulate restart if environment has changed
