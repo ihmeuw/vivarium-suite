@@ -114,7 +114,7 @@ venv.bak/
 notebooks/
 
 # Version file
-src/vivarium/_version.py
+_version.py
 
 # Ignore Mac DS_Store files
 .DS_Store
