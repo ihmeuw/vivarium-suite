@@ -6,11 +6,7 @@ Config Tree is a configuration structure that supports cascading layers.
 
 **Config Tree requires Python 3.8-3.11 to run**
 
-You can install ``config_tree`` from PyPI with pip:
-
-  ``> pip install config_tree``
-
-or build it from source with
+You can build ``config_tree`` from from source with
 
   ``> git clone https://github.com/ihmeuw/config_tree.git``
 

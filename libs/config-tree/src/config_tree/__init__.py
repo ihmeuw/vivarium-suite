@@ -8,10 +8,4 @@ from config_tree.__about__ import (
     __uri__,
 )
 from config_tree._version import __version__
-from config_tree.config_tree import (
-    ConfigNode,
-    ConfigTree,
-    ConfigurationError,
-    ConfigurationKeyError,
-    DuplicatedConfigurationError,
-)
+from config_tree.config_tree import ConfigNode, ConfigTree

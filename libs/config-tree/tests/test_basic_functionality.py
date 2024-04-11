@@ -4,9 +4,8 @@ import textwrap
 import pytest
 import yaml
 
-from config_tree import (
-    ConfigNode,
-    ConfigTree,
+from config_tree import ConfigNode, ConfigTree
+from config_tree.exceptions import (
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,
