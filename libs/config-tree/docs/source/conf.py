@@ -20,9 +20,9 @@ from pathlib import Path
 from docutils.nodes import Text
 from sphinx.ext.intersphinx import missing_reference
 
-import config_tree
+import layered_config_tree
 
-base_dir = Path(config_tree.__file__).parent
+base_dir = Path(layered_config_tree.__file__).parent
 
 about = {}
 with (base_dir / "__about__.py").open() as f:
@@ -37,9 +37,9 @@ copyright = f'2024, {about["__author__"]}'
 author = about["__author__"]
 
 # The short X.Y version.
-version = config_tree.__version__
+version = layered_config_tree.__version__
 # The full version, including alpha/beta/rc tags.
-release = config_tree.__version__
+release = layered_config_tree.__version__
 
 
 # -- General configuration ------------------------------------------------

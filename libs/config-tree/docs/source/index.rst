@@ -1,7 +1,7 @@
-=========================
-Config Tree Documentation
-=========================
+=================================
+Layered Config Tree Documentation
+=================================
 
-Config Tree is a configuration structure which supports cascading layers.
+Layered Config Tree is a configuration structure which supports cascading layers.
 
 TBD.

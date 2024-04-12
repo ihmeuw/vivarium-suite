@@ -8,9 +8,11 @@ __all__ = [
     "__copyright__",
 ]
 
-__title__ = "config_tree"
-__summary__ = "Config Tree is a configuration structure which supports cascading layers."
-__uri__ = "https://github.com/ihmeuw/config_tree"
+__title__ = "layered_config_tree"
+__summary__ = (
+    "Layered Config Tree is a configuration structure which supports cascading layers."
+)
+__uri__ = "https://github.com/ihmeuw/layered_config_tree"
 
 __author__ = "The vivarium developers"
 __email__ = "vivarium.dev@gmail.com"

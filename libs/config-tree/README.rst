@@ -1,21 +1,21 @@
-===========
-Config Tree
-===========
+===================
+Layered Config Tree
+===================
 
-Config Tree is a configuration structure that supports cascading layers.
+Layered Config Tree is a configuration structure that supports cascading layers.
 
-**Config Tree requires Python 3.8-3.11 to run**
+**Layered Config Tree requires Python 3.8-3.11 to run**
 
-You can build ``config_tree`` from from source with
+You can build ``layered_config_tree`` from from source with
 
-  ``> git clone https://github.com/ihmeuw/config_tree.git``
+  ``> git clone https://github.com/ihmeuw/layered_config_tree.git``
 
-  ``> cd config_tree``
+  ``> cd layered_config_tree``
 
   ``> conda create -n ENVIRONMENT_NAME python=3.11``
 
   ``> pip install .``
 
-This will make the ``config_tree`` library available to python.
+This will make the ``layered_config_tree`` library available to python.
 
 -------------------------------------------------------------------
