@@ -17,5 +17,3 @@ You can build ``layered_config_tree`` from from source with
   ``> pip install .``
 
 This will make the ``layered_config_tree`` library available to python.
-
--------------------------------------------------------------------
