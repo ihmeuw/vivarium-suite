@@ -1,11 +1,11 @@
 """
-===============
-The Config Tree
-===============
+===================
+Layered Config Tree
+===================
 
 A configuration structure that supports cascading layers.
 
-Config Tree allows base configurations to be overridden by multiple layers with
+Layered Config Tree allows base configurations to be overridden by multiple layers with
 cascading priorities. The configuration values are presented as attributes of the
 configuration object and are the value of the keys in the outermost layer of
 configuration where they appear.
@@ -14,7 +14,7 @@ For example:
 
 .. code-block:: python
 
-    >>> config = ConfigTree(layers=['inner_layer', 'middle_layer', 'outer_layer', 'user_overrides'])
+    >>> config = LayeredConfigTree(layers=['inner_layer', 'middle_layer', 'outer_layer', 'user_overrides'])
     >>> config.update({'section_a': {'item1': 'value1', 'item2': 'value2'}, 'section_b': {'item1': 'value3'}}, layer='inner_layer')
     >>> config.update({'section_a': {'item1': 'value4'}, 'section_b': {'item1': 'value5'}}, layer='middle_layer')
     >>> config.update({'section_b': {'item1': 'value6'}}, layer='outer_layer')
@@ -32,7 +32,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import yaml
 
-from config_tree.exceptions import (
+from layered_config_tree.exceptions import (
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,
@@ -63,7 +63,7 @@ class ConfigNode:
     eases debugging and analysis of simulation code.
 
     This class should not be instantiated directly. All interaction should
-    take place by manipulating a :class:`ConfigTree` object.
+    take place by manipulating a :class:`LayeredConfigTree` object.
 
     """
 
@@ -221,7 +221,7 @@ class ConfigNode:
         return f"{layer}: {value}"
 
 
-class ConfigTree:
+class LayeredConfigTree:
     """A container for configuration information.
 
     Each configuration value is exposed as an attribute the value of which
@@ -231,7 +231,7 @@ class ConfigTree:
 
     def __init__(
         self,
-        data: Union[Dict, str, Path, "ConfigTree"] = None,
+        data: Union[Dict, str, Path, "LayeredConfigTree"] = None,
         layers: List[str] = None,
         name: str = "",
     ):
@@ -239,11 +239,11 @@ class ConfigTree:
         Parameters
         ----------
         data
-            The :class:`ConfigTree` accepts many kinds of data:
+            The :class:`LayeredConfigTree` accepts many kinds of data:
 
              - :class:`dict` : Flat or nested dictionaries may be provided.
                Keys of dictionaries at all levels must be strings.
-             - :class:`ConfigTree` : Another :class:`ConfigTree` can be
+             - :class:`LayeredConfigTree` : Another :class:`LayeredConfigTree` can be
                used. All source information will be ignored and the source
                will be set to 'initial_data' and values will be stored at
                the lowest priority level.
@@ -256,7 +256,7 @@ class ConfigTree:
 
             All values will be set with 'initial_data' as the source and
             will use the lowest priority level. If values are set at higher
-            priorities they will be used when the :class:`ConfigTree` is
+            priorities they will be used when the :class:`LayeredConfigTree` is
             accessed.
         layers
             A list of layer names. The order in which layers defined
@@ -271,7 +271,7 @@ class ConfigTree:
         self.update(data, layer=self._layers[0], source="initial data")
 
     def freeze(self):
-        """Causes the ConfigTree to become read only.
+        """Causes the LayeredConfigTree to become read only.
 
         This is useful for loading and then freezing configurations that
         should not be modified at runtime.
@@ -281,7 +281,7 @@ class ConfigTree:
         for child in self.values():
             child.freeze()
 
-    def items(self) -> Iterable[Tuple[str, Union["ConfigTree", ConfigNode]]]:
+    def items(self) -> Iterable[Tuple[str, Union["LayeredConfigTree", ConfigNode]]]:
         """Return an iterable of all (child_name, child) pairs."""
         return self._children.items()
 
@@ -294,7 +294,7 @@ class ConfigTree:
         return self._children.values()
 
     def unused_keys(self) -> List[str]:
-        """Lists all values in the ConfigTree that haven't been accessed."""
+        """Lists all values in the LayeredConfigTree that haven't been accessed."""
         unused = []
         for name, child in self.items():
             if isinstance(child, ConfigNode):
@@ -306,7 +306,7 @@ class ConfigTree:
         return unused
 
     def to_dict(self) -> Dict:
-        """Converts the ConfigTree into a nested dictionary.
+        """Converts the LayeredConfigTree into a nested dictionary.
 
         All metadata is lost in this conversion.
 
@@ -345,20 +345,20 @@ class ConfigTree:
 
     def update(
         self,
-        data: Union[Dict, str, Path, "ConfigTree", None],
+        data: Union[Dict, str, Path, "LayeredConfigTree", None],
         layer: str = None,
         source: str = None,
     ):
-        """Adds additional data into the :class:`ConfigTree`.
+        """Adds additional data into the :class:`LayeredConfigTree`.
 
         Parameters
         ----------
         data
-            :func:`~ConfigTree.update` accepts many types of data.
+            :func:`~LayeredConfigTree.update` accepts many types of data.
 
              - :class:`dict` : Flat or nested dictionaries may be provided.
                Keys of dictionaries at all levels must be strings.
-             - :class:`ConfigTree` : Another :class:`ConfigTree` can be
+             - :class:`LayeredConfigTree` : Another :class:`LayeredConfigTree` can be
                used. All source information will be ignored and the
                provided layer and source will be used to set the metadata.
              - :class:`str` : Strings provided can be yaml formatted strings,
@@ -377,7 +377,7 @@ class ConfigTree:
         Raises
         ------
         ConfigurationError
-            If the :class:`ConfigTree` is frozen or attempting to assign
+            If the :class:`LayeredConfigTree` is frozen or attempting to assign
             an invalid value.
         ConfigurationKeyError
             If the provided layer does not exist.
@@ -399,7 +399,7 @@ class ConfigTree:
 
     @staticmethod
     def _coerce(
-        data: Union[Dict, str, Path, "ConfigTree"], source: Union[str, None]
+        data: Union[Dict, str, Path, "LayeredConfigTree"], source: Union[str, None]
     ) -> Tuple[Dict, Union[str, None]]:
         """Coerces data into dictionary format."""
         if isinstance(data, dict):
@@ -415,11 +415,11 @@ class ConfigTree:
         elif isinstance(data, str):
             data = yaml.full_load(data)
             return data, source
-        elif isinstance(data, ConfigTree):
+        elif isinstance(data, LayeredConfigTree):
             return data.to_dict(), source
         else:
             raise ConfigurationError(
-                f"ConfigTree can only update from dictionaries, strings, paths and ConfigTrees. "
+                f"LayeredConfigTree can only update from dictionaries, strings, paths and LayeredConfigTrees. "
                 f"You passed in {type(data)}",
                 value_name=None,
             )
@@ -445,7 +445,7 @@ class ConfigTree:
         Raises
         ------
         ConfigurationError
-            If the :class:`ConfigTree` is frozen or attempting to assign
+            If the :class:`LayeredConfigTree` is frozen or attempting to assign
             an invalid value.
         ConfigurationKeyError
             If the provided layer does not exist.
@@ -456,12 +456,13 @@ class ConfigTree:
         """
         if self._frozen:
             raise ConfigurationError(
-                f"Frozen ConfigTree {self._name} does not support assignment.", self._name
+                f"Frozen LayeredConfigTree {self._name} does not support assignment.",
+                self._name,
             )
 
         if isinstance(value, dict):
             if name not in self:
-                self._children[name] = ConfigTree(layers=list(self._layers), name=name)
+                self._children[name] = LayeredConfigTree(layers=list(self._layers), name=name)
             if isinstance(self._children[name], ConfigNode):
                 name = f"{self._name}.{name}" if self._name else name
                 raise ConfigurationError(
@@ -470,9 +471,11 @@ class ConfigTree:
         else:
             if name not in self:
                 self._children[name] = ConfigNode(list(self._layers), name=self._name)
-            if isinstance(self._children[name], ConfigTree):
+            if isinstance(self._children[name], LayeredConfigTree):
                 name = f"{self._name}.{name}" if self._name else name
-                raise ConfigurationError(f"Can't assign a value to a ConfigTree.", name)
+                raise ConfigurationError(
+                    f"Can't assign a value to a LayeredConfigTree.", name
+                )
 
         self._children[name].update(value, layer, source)
 
@@ -537,7 +540,7 @@ class ConfigTree:
         return len(self._children)
 
     def __dir__(self):
-        return list(self._children.keys()) + dir(super(ConfigTree, self))
+        return list(self._children.keys()) + dir(super(LayeredConfigTree, self))
 
     def __repr__(self):
         return "\n".join(
