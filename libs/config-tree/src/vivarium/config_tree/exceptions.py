@@ -6,6 +6,7 @@ class ConfigurationError(Exception):
 
     def __init__(self, message: str, value_name: Optional[str]):
         super().__init__(message)
+        self.value_name = value_name
 
 
 class ConfigurationKeyError(ConfigurationError, KeyError):

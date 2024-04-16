@@ -32,7 +32,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import yaml
 
-from layered_config_tree.exceptions import (
+from layered_config_tree import (
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,

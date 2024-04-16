@@ -8,4 +8,9 @@ from layered_config_tree.__about__ import (
     __uri__,
 )
 from layered_config_tree._version import __version__
-from layered_config_tree.main import LayeredConfigTree
+from layered_config_tree.exceptions import (
+    ConfigurationError,
+    ConfigurationKeyError,
+    DuplicatedConfigurationError,
+)
+from layered_config_tree.main import ConfigNode, LayeredConfigTree
