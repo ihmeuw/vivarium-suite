@@ -4,12 +4,13 @@ import textwrap
 import pytest
 import yaml
 
-from layered_config_tree.exceptions import (
+from layered_config_tree import (
+    ConfigNode,
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,
+    LayeredConfigTree,
 )
-from layered_config_tree.main import ConfigNode, LayeredConfigTree
 
 
 @pytest.fixture(params=list(range(1, 5)))
