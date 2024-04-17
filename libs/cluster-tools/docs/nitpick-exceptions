@@ -11,3 +11,5 @@ py:class pandas.core.series.Series
 py:class pandas.core.generic.PandasObject
 # redis
 py:class redis.client.Redis
+# layered-config-tree
+py:class layered_config_tree.main.LayeredConfigTree

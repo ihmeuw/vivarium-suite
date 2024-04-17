@@ -6,6 +6,7 @@ Vivarium Worker
 RQ worker executable for running simulation jobs.
 
 """
+
 import json
 import math
 from pathlib import Path
@@ -13,9 +14,9 @@ from time import time
 from traceback import format_exc
 
 import pandas as pd
+from layered_config_tree import LayeredConfigTree
 from loguru import logger
 from rq import get_current_job
-from vivarium.config_tree import ConfigTree
 from vivarium.framework.engine import SimulationContext
 from vivarium.framework.utilities import collapse_nested_dict
 
@@ -106,7 +107,7 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
 
 def setup_sim(job_parameters: JobParameters) -> SimulationContext:
     """Set up a simulation context with the branch/job-specific configuration parameters."""
-    configuration = ConfigTree(
+    configuration = LayeredConfigTree(
         job_parameters.branch_configuration, layers=["branch_base", "branch_expanded"]
     )
 

@@ -4,19 +4,17 @@ Model specification management
 ==============================
 
 """
+
 import typing
 from pathlib import Path
 from typing import Optional
 
 import yaml
+from layered_config_tree import LayeredConfigTree
+from layered_config_tree.exceptions import ConfigurationError
 from loguru import logger
-from vivarium.config_tree import ConfigurationKeyError
 from vivarium.framework.artifact import parse_artifact_path_config
-from vivarium.framework.configuration import (
-    ConfigTree,
-    ConfigurationError,
-    build_model_specification,
-)
+from vivarium.framework.configuration import build_model_specification
 
 from vivarium_cluster_tools.psimulate import COMMANDS
 
@@ -40,7 +38,7 @@ def parse(
     model_specification_path: Path,
     results_root: Path,
     keyspace: "Keyspace",
-) -> ConfigTree:
+) -> LayeredConfigTree:
     if command in [COMMANDS.restart, COMMANDS.expand]:
         return build_model_specification(model_specification_path)
     if command == COMMANDS.load_test:
@@ -82,7 +80,7 @@ def parse(
 
 
 def persist(
-    model_specification: ConfigTree,
+    model_specification: LayeredConfigTree,
     model_specification_path: Path,
 ) -> None:
     model_specification_path.write_text(
