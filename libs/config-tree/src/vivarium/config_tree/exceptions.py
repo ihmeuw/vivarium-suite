@@ -4,7 +4,7 @@ from typing import Any, Optional
 class ConfigurationError(Exception):
     """Base class for configuration errors."""
 
-    def __init__(self, message: str, value_name: Optional[str]):
+    def __init__(self, message: str, value_name: Optional[str] = None):
         super().__init__(message)
         self.value_name = value_name
 
