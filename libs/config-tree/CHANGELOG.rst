@@ -1,3 +1,8 @@
+**2.0.0 - 05/17/2024**
+
+ - Drop support for Python v3.8
+ - Add type hints
+
 **1.0.2 - 04/26/2024**
 
  - Allow default None argument for ConfigurationError

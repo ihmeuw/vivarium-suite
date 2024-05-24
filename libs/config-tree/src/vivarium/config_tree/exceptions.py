@@ -1,4 +1,6 @@
-from typing import Any, Optional
+from typing import Optional
+
+from layered_config_tree.types import NestedDictValue
 
 
 class ConfigurationError(Exception):
@@ -30,7 +32,12 @@ class DuplicatedConfigurationError(ConfigurationError):
     """
 
     def __init__(
-        self, message: str, name: str, layer: Optional[str], source: Optional[str], value: Any
+        self,
+        message: str,
+        name: str,
+        layer: Optional[str],
+        source: Optional[str],
+        value: NestedDictValue,
     ):
         self.layer = layer
         self.source = source
