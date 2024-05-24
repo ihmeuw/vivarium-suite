@@ -33,14 +33,16 @@ if __name__ == "__main__":
     base_dir = Path(__file__).parent
     src_dir = base_dir / "src"
 
-    about = {}
+    about: dict[str, str] = {}
     with (src_dir / "layered_config_tree" / "__about__.py").open() as f:
         exec(f.read(), about)
 
     with (base_dir / "README.rst").open() as f:
         long_description = f.read()
 
-    install_requirements = ["pyyaml>=5.1"]
+    install_requirements = [
+        "pyyaml>=5.1",
+    ]
     setup_requirements = ["setuptools_scm"]
     test_requirements = [
         "pytest",
@@ -53,6 +55,14 @@ if __name__ == "__main__":
         "IPython",
         "matplotlib",
         "sphinxcontrib-video",
+    ]
+    dev_requirements = [
+        "black==22.3.0",
+        "isort",
+        "mypy",
+        # typing extensions
+        "types-PyYAML",
+        "types-setuptools",
     ]
 
     setup(
@@ -84,7 +94,7 @@ if __name__ == "__main__":
         extras_require={
             "docs": doc_requirements,
             "test": test_requirements,
-            "dev": doc_requirements + test_requirements,
+            "dev": doc_requirements + test_requirements + dev_requirements,
         },
         zip_safe=False,
         use_scm_version={
