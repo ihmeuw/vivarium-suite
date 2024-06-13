@@ -10,6 +10,7 @@ Command line interface for `psimulate`.
    :show-nested:
 
 """
+
 from pathlib import Path
 from typing import Optional
 
@@ -87,7 +88,7 @@ def run(
     model_specification: Path,
     branch_configuration: Path,
     artifact_path: Optional[Path],
-    result_directory: Optional[Path],
+    result_directory: Path,
     **options,
 ) -> None:
     """Run a parallel simulation.
@@ -262,15 +263,19 @@ def test(test_type, num_workers, result_directory, **options):
     peak_memory_msg = (
         f"Manually overriding the peak memory request '{test_type}' test to {peak_memory}GB."
     )
-    logger.warning(peak_memory_msg) if options[
-        "peak_memory"
-    ] != cluster.PEAK_MEMORY_DEFAULT else logger.info(peak_memory_msg)
+    (
+        logger.warning(peak_memory_msg)
+        if options["peak_memory"] != cluster.PEAK_MEMORY_DEFAULT
+        else logger.info(peak_memory_msg)
+    )
     max_runtime_msg = (
         f"Manually overriding the max runtime request '{test_type}' test to {max_runtime}."
     )
-    logger.warning(max_runtime_msg) if options[
-        "max_runtime"
-    ] != cluster.MAX_RUNTIME_DEFAULT else logger.info(max_runtime_msg)
+    (
+        logger.warning(max_runtime_msg)
+        if options["max_runtime"] != cluster.MAX_RUNTIME_DEFAULT
+        else logger.info(max_runtime_msg)
+    )
     options["peak_memory"] = peak_memory
     options["max_runtime"] = max_runtime
 

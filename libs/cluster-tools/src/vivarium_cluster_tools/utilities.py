@@ -6,6 +6,7 @@ vivarium_cluster_tools Utilities
 Making directories is hard.
 
 """
+
 import functools
 import os
 import socket
@@ -90,7 +91,7 @@ def backoff_and_retry(
                     break
                 except Exception as e:
                     log_function(
-                        f"Error trying to write results to hdf, retries remaining {retries}"
+                        f"Error trying to write results, retries remaining {retries}"
                     )
                     time.sleep(backoff_seconds)
                     retries -= 1

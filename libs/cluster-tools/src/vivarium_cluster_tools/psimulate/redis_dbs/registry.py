@@ -6,7 +6,7 @@ Redis Queue and Registry Management
 Unified interface to multiple Redis Databases.
 
 """
-import math
+
 import random
 import time
 from collections import defaultdict
@@ -94,7 +94,7 @@ class QueueManager:
         )
         return results
 
-    def update_and_report(self) -> Dict[str, int]:
+    def update_and_report(self) -> Dict[str, Union[int, float]]:
         self._update_status()
         template = (
             f"Queue {self.name} - Total jobs: {{total}}, % Done: {{done:.2f}}% "
@@ -282,7 +282,7 @@ class RegistryManager:
         return results
 
     def update_and_report(self) -> Dict[str, Union[int, float]]:
-        status = defaultdict(int)
+        status: Dict[str, Union[int, float]] = defaultdict(int)
         for queue in self._queues:
             queue_status = queue.update_and_report()
             for k, v in queue_status.items():

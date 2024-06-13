@@ -4,6 +4,7 @@ psimulate Jobs
 ==============
 
 """
+
 from pathlib import Path
 from typing import List, NamedTuple, Tuple
 
@@ -58,7 +59,7 @@ def build_job_list(
     model_specification_path: Path,
     output_root: Path,
     keyspace: branches.Keyspace,
-    existing_outputs: pd.DataFrame,
+    finished_sim_metadata: pd.DataFrame,
     extras: dict,
 ) -> Tuple[List[dict], int]:
     jobs = []
@@ -75,7 +76,7 @@ def build_job_list(
                 extras={},
             )
 
-            if already_complete(parameters, existing_outputs):
+            if already_complete(parameters, finished_sim_metadata):
                 number_already_completed += 1
             else:
                 jobs.append(parameters.to_dict())
@@ -96,8 +97,10 @@ def build_job_list(
     return jobs, number_already_completed
 
 
-def already_complete(job_parameters: JobParameters, existing_outputs: pd.DataFrame) -> bool:
-    if existing_outputs.empty:
+def already_complete(
+    job_parameters: JobParameters, finished_sim_metadata: pd.DataFrame
+) -> bool:
+    if finished_sim_metadata.empty:
         return False
 
     job_parameter_list = collapse_nested_dict(job_parameters.branch_configuration)
@@ -108,10 +111,10 @@ def already_complete(job_parameters: JobParameters, existing_outputs: pd.DataFra
         ]
     )
 
-    mask = pd.Series(True, index=existing_outputs.index)
+    mask = pd.Series(True, index=finished_sim_metadata.index)
     for k, v in job_parameter_list:
         if isinstance(v, float):
-            mask &= np.isclose(existing_outputs[k], v)
+            mask &= np.isclose(finished_sim_metadata[k], v)
         else:
-            mask &= existing_outputs[k] == v
+            mask &= finished_sim_metadata[k] == v
     return np.any(mask)

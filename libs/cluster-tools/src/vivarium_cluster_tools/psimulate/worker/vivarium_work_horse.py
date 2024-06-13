@@ -12,6 +12,7 @@ import math
 from pathlib import Path
 from time import time
 from traceback import format_exc
+from typing import Dict, Tuple, Union
 
 import pandas as pd
 from layered_config_tree import LayeredConfigTree
@@ -27,7 +28,16 @@ from vivarium_cluster_tools.vipin.perf_counters import CounterSnapshot
 VIVARIUM_WORK_HORSE_IMPORT_PATH = f"{__name__}.work_horse"
 
 
-def work_horse(job_parameters: dict) -> pd.DataFrame:
+class ParallelSimulationContext(SimulationContext):
+    """Identical to SimulationContext except that it does not write out the
+    results to disk in order to allow them to be batch-written.
+    """
+
+    def _write_results(self):
+        pass
+
+
+def work_horse(job_parameters: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
     node = f"{ENV_VARIABLES.HOSTNAME.value}"
     job = f"{ENV_VARIABLES.JOB_ID.value}:{ENV_VARIABLES.TASK_ID.value}"
 
@@ -80,20 +90,19 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
         logger.info(f'Average step length was {exec_time["step_mean_seconds"]:.3f} seconds.')
 
         sim.finalize()
-        metrics = sim.report(print_results=False)
+        sim.report(print_results=False)
         event["end"] = time()
         end_snapshot = CounterSnapshot()
-
         do_sim_epilogue(start_snapshot, end_snapshot, event, exec_time, job_parameters)
 
-        idx = pd.MultiIndex.from_tuples(
-            [(job_parameters.input_draw, job_parameters.random_seed)],
-            names=["input_draw_number", "random_seed"],
-        )
-        output_metrics = pd.DataFrame(metrics, index=idx)
-        for k, v in collapse_nested_dict(job_parameters.branch_configuration):
-            output_metrics[k] = v
-        return output_metrics
+        results = sim.get_results()  # Dict[measure, results dataframe]
+
+        finished_results_metadata = pd.DataFrame(index=[0])
+        for key, val in collapse_nested_dict(job_parameters.branch_configuration):
+            for _metric, df in results.items():
+                df[key] = val
+            finished_results_metadata[key] = val
+        return finished_results_metadata, results
 
     except Exception:
         logger.exception("Unhandled exception in worker")
@@ -105,7 +114,7 @@ def work_horse(job_parameters: dict) -> pd.DataFrame:
         logger.info(f"Exiting job: {job_parameters}")
 
 
-def setup_sim(job_parameters: JobParameters) -> SimulationContext:
+def setup_sim(job_parameters: JobParameters) -> ParallelSimulationContext:
     """Set up a simulation context with the branch/job-specific configuration parameters."""
     configuration = LayeredConfigTree(
         job_parameters.branch_configuration, layers=["branch_base", "branch_expanded"]
@@ -117,7 +126,9 @@ def setup_sim(job_parameters: JobParameters) -> SimulationContext:
         source="branch_config",
     )
     job_parameters.branch_configuration.update(configuration.to_dict())
-    sim = SimulationContext(job_parameters.model_specification, configuration=configuration)
+    sim = ParallelSimulationContext(
+        job_parameters.model_specification, configuration=configuration
+    )
     logger.info("Simulation configuration:")
     logger.info(str(sim.configuration))
 
@@ -160,7 +171,9 @@ def do_sim_epilogue(
     logger.remove(perf_log)
 
 
-def parameter_update_format(job_parameters: JobParameters) -> dict:
+def parameter_update_format(
+    job_parameters: JobParameters,
+) -> Dict[str, Dict[str, Union[str, int, dict]]]:
     return {
         "run_configuration": {
             "run_id": str(get_current_job().id) + "_" + str(time()),
@@ -169,7 +182,7 @@ def parameter_update_format(job_parameters: JobParameters) -> dict:
         },
         "randomness": {
             "random_seed": job_parameters.random_seed,
-            "additional_seed": job_parameters.input_draw,
+            "additional_seed": job_parameters.input_draw,  # <- FIXME: is this a typo?
         },
         "input_data": {
             "input_draw_number": job_parameters.input_draw,

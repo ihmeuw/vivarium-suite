@@ -4,6 +4,7 @@ File Path Management
 ====================
 
 """
+
 from datetime import datetime
 from fnmatch import fnmatch
 from pathlib import Path
@@ -69,7 +70,8 @@ class OutputPaths(NamedTuple):
     branches: Path
 
     # outputs
-    results: Path
+    finished_sim_metadata: Path
+    results_dir: Path
 
     # will not be reliable if we parallelized across artifacts
     @property
@@ -142,11 +144,13 @@ class OutputPaths(NamedTuple):
             model_specification=output_directory / "model_specification.yaml",
             keyspace=output_directory / "keyspace.yaml",
             branches=output_directory / "branches.yaml",
-            results=output_directory / "output.hdf",
+            finished_sim_metadata=output_directory / "finished_sim_metadata.csv",
+            results_dir=output_directory / "results",
         )
         return output_paths
 
     def touch(self) -> None:
-        vct_utils.mkdir(self.root, exists_ok=True, parents=True)
-        for d in [self.logging_root, self.cluster_logging_root, self.worker_logging_root]:
-            vct_utils.mkdir(d, parents=True)
+        for dir in [self.root, self.results_dir]:
+            vct_utils.mkdir(dir, exists_ok=True, parents=True)
+        for dir in [self.logging_root, self.cluster_logging_root, self.worker_logging_root]:
+            vct_utils.mkdir(dir, parents=True)

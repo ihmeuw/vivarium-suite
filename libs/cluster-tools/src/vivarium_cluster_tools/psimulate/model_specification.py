@@ -11,7 +11,7 @@ from typing import Optional
 
 import yaml
 from layered_config_tree import LayeredConfigTree
-from layered_config_tree.exceptions import ConfigurationError
+from layered_config_tree.exceptions import ConfigurationError, ConfigurationKeyError
 from loguru import logger
 from vivarium.framework.artifact import parse_artifact_path_config
 from vivarium.framework.configuration import build_model_specification
