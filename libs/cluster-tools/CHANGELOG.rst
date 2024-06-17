@@ -1,3 +1,7 @@
+**1.6.1 - 06/17/24**
+
+ - Hotfix pin numpy below 2.0
+
 **1.6.0 - 03/12/24**
 
  - Limit max number of draws to 500.
