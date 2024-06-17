@@ -1,3 +1,7 @@
+**2.0.1 - 06/14/2024**
+
+ - Add py.typed marker
+
 **2.0.0 - 05/17/2024**
 
  - Drop support for Python v3.8
