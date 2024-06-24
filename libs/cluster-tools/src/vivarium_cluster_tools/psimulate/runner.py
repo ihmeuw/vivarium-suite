@@ -125,13 +125,15 @@ def report_initial_status(
         logger.info(
             f"{num_jobs_completed} of {total_num_jobs} jobs completed in previous run."
         )
-    if num_jobs_completed != len(finished_sim_metadata):
-        extra_jobs_completed = num_jobs_completed - len(finished_sim_metadata)
-        logger.warning(
+    extra_jobs_completed = num_jobs_completed - len(finished_sim_metadata)
+    # NOTE: there can never be more rows in `finished_sim_metadata` than `num_jobs_completed`
+    # because `num_jobs_completed` was calculated by comparing the keyspace to `finished_sim_metadata`.
+    if extra_jobs_completed:
+        raise RuntimeError(
             f"There are {extra_jobs_completed} jobs from the previous run which would not have been created "
-            "with the configuration saved with the run. That either means that code "
+            "with the configuration saved with that run. That either means that code "
             "has changed between then and now or that the outputs or configuration data "
-            "have been modified. This may represent a serious error so give it some thought."
+            "have been modified."
         )
 
 
