@@ -34,7 +34,7 @@ jobs:
         uses: github/issue-metrics@v3
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SEARCH_QUERY: $${{ env.REPO_LIST }} is:pr closed:${{ env.last_two_weeks }} -reason:"not planned"'
+          SEARCH_QUERY: $${{ env.REPO_LIST }} is:pr closed:${{ env.last_two_weeks }}
 
       - name: Create issue for PRs closed in last sprint
         uses: peter-evans/create-issue-from-file@v4
@@ -53,7 +53,7 @@ jobs:
       - name: Create issue for currently open PRs
         uses: peter-evans/create-issue-from-file@v4
         with:
-          title: Post-Sprint Closed Pull Request Metrics Report (dev)
+          title: Post-Sprint Open Pull Request Metrics Report (dev)
           token: ${{ secrets.GITHUB_TOKEN }}
           content-filepath: ./issue_metrics.md
           assignees: patricktnast
