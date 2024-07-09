@@ -1,0 +1,59 @@
+name: Post-Sprint PR metrics
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: issue metrics
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Set REPO_LIST environment variable
+        run: |
+          echo "REPO_LIST=repo:ihmeuw/vivarium repo:ihmeuw/vivarium_public_health repo:ihmeuw/vivarium_inputs repo:ihmeuw/vivarium_cluster_tools repo:ihmeuw/risk_distributions" >> $GITHUB_ENV
+      - name: Get dates for previous sprint
+        shell: bash
+        run: |
+          # Calculate the date two weeks ago
+          fourteen_days_ago=$(date -d "14 days ago" +%Y-%m-%d)
+          
+          # Calculate yesterday's date
+          yesterday=$(date -d "today" +%Y-%m-%d)
+          
+          # Set an environment variable with the date range
+          echo "$fourteen_days_ago..$yesterday"
+          echo "last_two_weeks=$fourteen_days_ago..$yesterday" >> "$GITHUB_ENV"
+
+      - name: Get issue metrics for PRs closed in last sprint
+        uses: github/issue-metrics@v3
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SEARCH_QUERY: $${{ env.REPO_LIST }} is:pr closed:${{ env.last_two_weeks }}
+
+      - name: Create issue for PRs closed in last sprint
+        uses: peter-evans/create-issue-from-file@v4
+        with:
+          title: Post-Sprint Closed Pull Request Metrics Report (dev)
+          token: ${{ secrets.GITHUB_TOKEN }}
+          content-filepath: ./issue_metrics.md
+          assignees: patricktnast
+          
+      - name: Get issue metrics for currently open PRs
+        uses: github/issue-metrics@v3
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SEARCH_QUERY: '$${{ env.REPO_LIST }} is:pr is:open'
+
+      - name: Create issue for currently open PRs
+        uses: peter-evans/create-issue-from-file@v4
+        with:
+          title: Post-Sprint Open Pull Request Metrics Report (dev)
+          token: ${{ secrets.GITHUB_TOKEN }}
+          content-filepath: ./issue_metrics.md
+          assignees: patricktnast
