@@ -94,14 +94,9 @@ def work_horse(job_parameters: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFra
         event["end"] = time()
         end_snapshot = CounterSnapshot()
         do_sim_epilogue(start_snapshot, end_snapshot, event, exec_time, job_parameters)
-
         results = sim.get_results()  # Dict[measure, results dataframe]
+        finished_results_metadata = format_and_record_details(job_parameters, results)
 
-        finished_results_metadata = pd.DataFrame(index=[0])
-        for key, val in collapse_nested_dict(job_parameters.branch_configuration):
-            for _metric, df in results.items():
-                df[key] = val
-            finished_results_metadata[key] = val
         return finished_results_metadata, results
 
     except Exception:
@@ -133,6 +128,25 @@ def setup_sim(job_parameters: JobParameters) -> ParallelSimulationContext:
     logger.info(str(sim.configuration))
 
     return sim
+
+
+def parameter_update_format(
+    job_parameters: JobParameters,
+) -> Dict[str, Dict[str, Union[str, int, dict]]]:
+    return {
+        "run_configuration": {
+            "run_id": str(get_current_job().id) + "_" + str(time()),
+            "results_directory": job_parameters.results_path,
+            "run_key": job_parameters.job_specific,
+        },
+        "randomness": {
+            "random_seed": job_parameters.random_seed,
+            "additional_seed": job_parameters.input_draw,
+        },
+        "input_data": {
+            "input_draw_number": job_parameters.input_draw,
+        },
+    }
 
 
 def do_sim_epilogue(
@@ -171,20 +185,21 @@ def do_sim_epilogue(
     logger.remove(perf_log)
 
 
-def parameter_update_format(
-    job_parameters: JobParameters,
-) -> Dict[str, Dict[str, Union[str, int, dict]]]:
-    return {
-        "run_configuration": {
-            "run_id": str(get_current_job().id) + "_" + str(time()),
-            "results_directory": job_parameters.results_path,
-            "run_key": job_parameters.job_specific,
-        },
-        "randomness": {
-            "random_seed": job_parameters.random_seed,
-            "additional_seed": job_parameters.input_draw,  # <- FIXME: is this a typo?
-        },
-        "input_data": {
-            "input_draw_number": job_parameters.input_draw,
-        },
-    }
+def format_and_record_details(
+    job_parameters: JobParameters, results: Dict[str, pd.DataFrame]
+) -> pd.DataFrame:
+    """Add finished simulation details to results and metadata."""
+    finished_results_metadata = pd.DataFrame(index=[0])
+    for key, val in collapse_nested_dict(job_parameters.branch_configuration):
+        # Exclude the run_configuration values from branch_configuration
+        # since they are duplicates. Also do not include the additional_seed
+        # value since it is identical to input_draw
+        col_name = key.split(".")[-1]
+        col_name = "input_draw" if col_name == "input_draw_number" else col_name
+        if not (key.startswith("run_configuration") or "additional_seed" in key):
+            for df in results.values():
+                # insert the new columns second from the right and use the
+                # last part of the key as the column name
+                df.insert(df.shape[1] - 1, col_name, val)
+        finished_results_metadata[key] = val
+    return finished_results_metadata
