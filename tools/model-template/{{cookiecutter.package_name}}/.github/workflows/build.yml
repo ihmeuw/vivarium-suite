@@ -1,3 +1,4 @@
+{% raw -%}
 # -----------------------------------------------------------------------------
 #   - invoked on push, pull_request, or manual trigger
 #   - test under all supported versions of Python (python_versions.json)
@@ -103,3 +104,4 @@ jobs:
       - name: Test
         run: |
           pytest ./tests
+{%- endraw %}
