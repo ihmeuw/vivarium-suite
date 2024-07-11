@@ -99,8 +99,8 @@ jobs:
       - name: Lint
         run: |
           pip install black==22.3.0 isort
-          black . --check -v
           isort . --check -v
+          black . --check -v
       - name: Test
         run: |
           pytest ./tests
