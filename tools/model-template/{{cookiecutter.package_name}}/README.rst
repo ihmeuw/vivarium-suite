@@ -10,20 +10,15 @@
 Installation
 ------------
 
-You will need ``git``, ``git-lfs`` and ``conda`` to get this repository
-and install all of its requirements.  You should follow the instructions for
-your operating system at the following places:
+You will need ``conda`` to install all of this repository's requirements.
+We recommend installing `Miniforge <https://github.com/conda-forge/miniforge>`_.
 
-- `git <https://git-scm.com/downloads>`_
-- `git-lfs <https://git-lfs.github.com/>`_
-- `conda <https://docs.conda.io/en/latest/miniconda.html>`_
-
-Once you have all three installed, you should open up your normal shell
+Once you have conda installed, you should open up your normal shell
 (if you're on linux or OSX) or the ``git bash`` shell if you're on windows.
 You'll then make an environment, clone this repository, then install
 all necessary requirements as follows::
 
-  :~$ conda create --name={{ cookiecutter.package_name }} python=3.11
+  :~$ conda create --name={{ cookiecutter.package_name }} python=3.11 git git-lfs
   ...conda will download python and base dependencies...
   :~$ conda activate {{ cookiecutter.package_name }}
   ({{ cookiecutter.package_name }}) :~$ git clone https://github.com/ihmeuw/{{ cookiecutter.package_name }}.git
