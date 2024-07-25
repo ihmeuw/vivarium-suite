@@ -33,7 +33,7 @@ class ParallelSimulationContext(SimulationContext):
     results to disk in order to allow them to be batch-written.
     """
 
-    def _write_results(self):
+    def _write_results(self, results: dict[str, pd.DataFrame]) -> None:
         pass
 
 
