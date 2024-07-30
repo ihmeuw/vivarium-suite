@@ -16,7 +16,10 @@ import click
 from loguru import logger
 
 from {{cookiecutter.package_name}}.constants import data_keys, metadata
-from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink, decode_status
+from {{cookiecutter.package_name}}.tools.app_logging import (
+    add_logging_sink,
+    decode_status
+)
 from {{cookiecutter.package_name}}.utilities import sanitize_location
 
 

@@ -59,7 +59,9 @@ if __name__ == "__main__":
     setup_requires = ["setuptools_scm"]
 
     data_requirements = ["vivarium_inputs[data]=={{cookiecutter.vivarium_inputs_version}}"]
-    cluster_requirements = ["vivarium_cluster_tools=={{cookiecutter.vivarium_cluster_tools_version}}"]
+    cluster_requirements = [
+        "vivarium_cluster_tools=={{cookiecutter.vivarium_cluster_tools_version}}"
+    ]
     test_requirements = ["pytest"]
     lint_requirements = ["black", "isort"]
 
@@ -91,6 +93,5 @@ if __name__ == "__main__":
         entry_points="""
             [console_scripts]
             make_artifacts={{cookiecutter.package_name}}.tools.cli:make_artifacts
-            make_results={{cookiecutter.package_name}}.tools.cli:make_results
         """,
     )
