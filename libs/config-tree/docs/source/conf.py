@@ -35,9 +35,9 @@ copyright = f'2024, {about["__author__"]}'
 author = about["__author__"]
 
 # The short X.Y version.
-version = layered_config_tree.__version__  # type: ignore[attr-defined]
+version = layered_config_tree.__version__
 # The full version, including alpha/beta/rc tags.
-release = layered_config_tree.__version__  # type: ignore[attr-defined]
+release = layered_config_tree.__version__
 
 
 # -- General configuration ------------------------------------------------
