@@ -12,6 +12,7 @@ profile = "black"
 # Avoid changing this!
 strict = true  # See all the enabled flags `mypy --help | grep -A 10 'Strict mode'`
 disallow_any_unimported = false
+implicit_reexport = true
 exclude = [
     "build",
 ]

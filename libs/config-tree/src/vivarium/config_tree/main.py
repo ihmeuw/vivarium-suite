@@ -225,6 +225,23 @@ class ConfigNode:
         return f"{layer}: {value}"
 
 
+class ConfigIterator:
+    """
+    An iterator for a LayeredConfigTree object.
+
+    This iterator is used to iterate over the keys of a LayeredConfigTree object.
+    """
+
+    def __init__(self, config_tree: "LayeredConfigTree"):
+        self._iterator = iter(config_tree._children)
+
+    def __iter__(self) -> "ConfigIterator":
+        return self
+
+    def __next__(self) -> str:
+        return next(self._iterator)
+
+
 class LayeredConfigTree:
     """A container for configuration information.
 
@@ -560,9 +577,9 @@ class LayeredConfigTree:
         """Test if a configuration key exists in any layer."""
         return name in self._children
 
-    def __iter__(self) -> Iterable[str]:
+    def __iter__(self) -> ConfigIterator:
         """Dictionary-like iteration."""
-        return iter(self._children)
+        return ConfigIterator(self)
 
     def __len__(self) -> int:
         return len(self._children)

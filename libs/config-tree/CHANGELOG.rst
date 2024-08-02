@@ -1,3 +1,7 @@
+**2.0.2 - 08/01/2024**
+
+ - Create explicit iterator for LayeredConfigTree
+
 **2.0.1 - 06/14/2024**
 
  - Add py.typed marker
