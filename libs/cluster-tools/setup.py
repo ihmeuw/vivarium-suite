@@ -31,8 +31,11 @@ if __name__ == "__main__":
 
     setup_requires = ["setuptools_scm"]
 
+    lint_requirements = ["black==22.3.0", "isort"]
+
     test_requirements = [
         "pytest",
+        "pytest-cov",
         "pytest-mock",
     ]
 
@@ -63,7 +66,7 @@ if __name__ == "__main__":
         extras_require={
             "docs": doc_requirements,
             "test": test_requirements,
-            "dev": doc_requirements + test_requirements,
+            "dev": doc_requirements + test_requirements + lint_requirements,
         },
         zip_safe=False,
         use_scm_version={
