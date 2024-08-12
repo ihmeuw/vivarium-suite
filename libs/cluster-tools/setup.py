@@ -20,6 +20,7 @@ if __name__ == "__main__":
         "loguru",
         "pyyaml>=5.1",
         "drmaa",
+        "dill",
         "redis",
         "rq",
         "vivarium>=1.2.1",
@@ -27,6 +28,7 @@ if __name__ == "__main__":
         "psutil",
         "requests",
         "layered_config_tree>=1.0.1",
+        "pyarrow",
     ]
 
     setup_requires = ["setuptools_scm"]

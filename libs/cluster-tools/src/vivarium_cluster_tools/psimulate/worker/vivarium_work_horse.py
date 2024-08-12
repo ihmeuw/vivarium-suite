@@ -9,11 +9,13 @@ RQ worker executable for running simulation jobs.
 
 import json
 import math
+import os
 from pathlib import Path
-from time import time
+from time import sleep, time
 from traceback import format_exc
-from typing import Dict, Tuple, Union
+from typing import Dict, Optional, Tuple, Union
 
+import dill
 import pandas as pd
 from layered_config_tree import LayeredConfigTree
 from loguru import logger
@@ -47,36 +49,53 @@ def work_horse(job_parameters: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFra
     logger.info(f"Starting job: {job_parameters}")
 
     try:
-        sim = setup_sim(job_parameters)
-
-        start_time = pd.Timestamp(**sim.configuration.time.start.to_dict())
-        end_time = pd.Timestamp(**sim.configuration.time.end.to_dict())
-        step_size = pd.Timedelta(days=sim.configuration.time.step_size)
-        num_steps = int(math.ceil((end_time - start_time) / step_size))
-
         start_snapshot = CounterSnapshot()
         event = {"start": time()}  # timestamps of application events
         logger.info("Beginning simulation setup.")
-        sim.setup()
-        event["simulant_initialization_start"] = time()
-        exec_time = {
-            "setup_minutes": (event["simulant_initialization_start"] - event["start"]) / 60
-        }  # execution event
-        logger.info(
-            f'Simulation setup completed in {exec_time["setup_minutes"]:.3f} minutes.'
-        )
+        backup = get_backup(job_parameters)
+        if backup:
+            logger.info(f"Restarting simulation from saved backup")
+            sim = backup
+            event["simulation_start"] = time()
+            exec_time = {
+                "setup_minutes": (event["simulation_start"] - event["start"]) / 60
+            }  # execution event
+            logger.info(
+                f'Simulation setup completed in {exec_time["setup_minutes"]:.3f} minutes.'
+            )
+            start_time = sim.current_time
+        else:
+            sim = setup_sim(job_parameters)
+            sim.setup()
+            event["simulant_initialization_start"] = time()
+            exec_time = {
+                "setup_minutes": (event["simulant_initialization_start"] - event["start"])
+                / 60
+            }  # execution event
+            logger.info(
+                f'Simulation setup completed in {exec_time["setup_minutes"]:.3f} minutes.'
+            )
 
-        sim.initialize_simulants()
-        event["simulation_start"] = time()
-        exec_time["simulant_initialization_minutes"] = (
-            event["simulation_start"] - event["simulant_initialization_start"]
-        ) / 60
-        logger.info(
-            f'Simulant initialization completed in {exec_time["simulant_initialization_minutes"]:.3f} minutes.'
-        )
-
+            sim.initialize_simulants()
+            event["simulation_start"] = time()
+            exec_time["simulant_initialization_minutes"] = (
+                event["simulation_start"] - event["simulant_initialization_start"]
+            ) / 60
+            logger.info(
+                f'Simulant initialization completed in {exec_time["simulant_initialization_minutes"]:.3f} minutes.'
+            )
+            start_time = pd.Timestamp(**sim.configuration.time.start.to_dict())
+        end_time = pd.Timestamp(**sim.configuration.time.end.to_dict())
+        step_size = pd.Timedelta(days=sim.configuration.time.step_size)
+        num_steps = int(math.ceil((end_time - start_time) / step_size))
         logger.info(f"Starting main simulation loop with {num_steps} time steps")
-        sim.run()
+        backup_path = (
+            job_parameters.backup_configuration["backup_dir"] / str(get_current_job().id)
+        ).with_suffix(".pkl")
+        sim.run(
+            backup_freq=job_parameters.backup_configuration["backup_freq"],
+            backup_path=backup_path,
+        )
         event["results_start"] = time()
         exec_time["main_loop_minutes"] = (
             event["results_start"] - event["simulation_start"]
@@ -96,6 +115,7 @@ def work_horse(job_parameters: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFra
         do_sim_epilogue(start_snapshot, end_snapshot, event, exec_time, job_parameters)
         results = sim.get_results()  # Dict[measure, results dataframe]
         finished_results_metadata = format_and_record_details(job_parameters, results)
+        remove_backups(backup_path)
 
         return finished_results_metadata, results
 
@@ -203,3 +223,55 @@ def format_and_record_details(
                 df.insert(df.shape[1] - 1, col_name, val)
         finished_results_metadata[key] = val
     return finished_results_metadata
+
+
+def get_backup(job_parameters: JobParameters) -> Optional[SimulationContext]:
+    backup_dir = job_parameters.backup_configuration["backup_dir"]
+    metadata_path = job_parameters.backup_configuration["backup_metadata_path"]
+    try:
+        pickle_metadata = pd.read_csv(metadata_path)
+        query_conditions = f"input_draw == {job_parameters.input_draw} & random_seed == {job_parameters.random_seed}"
+
+        # Add branch parameter conditions to the query
+        for k, v in collapse_nested_dict(job_parameters.branch_configuration):
+            query_conditions += f' & `{k}` == "{v}"'
+
+        # Use the query method to find rows that match the lookup parameters
+        run_ids = pickle_metadata.query(query_conditions)["job_id"].to_list()
+        possible_pickles = [
+            Path(backup_dir / run_id).with_suffix(".pkl") for run_id in run_ids
+        ]
+        existing_pickles = [pickle for pickle in possible_pickles if pickle.exists()]
+        if existing_pickles:
+            last_pickle = max(existing_pickles, key=os.path.getctime)
+            if len(existing_pickles) > 1:
+                logger.warning(
+                    f"Multiple backups found for {job_parameters}. Using the most recent and deleting the rest."
+                )
+                for stale_file in set(existing_pickles) - {last_pickle}:
+                    os.remove(stale_file)
+            with open(last_pickle, "rb") as f:
+                sim = dill.load(f)
+            current_job_id = get_current_job().id
+            logger.info(f"Renaming backup file {last_pickle} to {current_job_id}.pkl")
+            if job_parameters.backup_configuration["backup_freq"] is not None:
+                # Sleep to prevent FS latency when loading the pickle
+                sleep(5)
+                os.rename(last_pickle, (backup_dir / str(current_job_id)).with_suffix(".pkl"))
+            return sim
+    except (OSError, FileNotFoundError):
+        logger.info(
+            "Missing backup or backup directory. Restarting simulation from beginning."
+        )
+        return None
+    except Exception as e:
+        logger.warning(f"Load from backup failed with Exception: {e}")
+        logger.warning("Restarting simulation from beginning.")
+        return None
+
+
+def remove_backups(backup_path: Path) -> None:
+    try:
+        os.remove(backup_path)
+    except FileNotFoundError:
+        pass
