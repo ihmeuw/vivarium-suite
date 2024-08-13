@@ -1,16 +1,21 @@
 **2.0.0 - 08/13/24**
 
+Breaking changes:
  - Implement Vivarium's new results processing
+
+Major changes:
+ - Add ability to back up simulations periodically during runs, and to restart from these backups
+
+Other changes:
  - Use external layered-config-tree package instead of Vivarium ConfigTree class
  - Raise instead of log when there are more jobs than expected from a previous run
  - Stop installing vivarium inside the package directory during github actions
  - Automatically run Jenkins builds on push or pull request
- - Implement simulation backups
 
 **1.6.1 - 06/17/24**
 
  - Hotfix pin numpy below 2.0
- 
+
 **1.6.0 - 03/12/24**
 
  - Limit max number of draws to 500.
