@@ -3,7 +3,7 @@ components:
         population:
             - BasePopulation()
             - Mortality()
-        metrics:
+        results:
             - DisabilityObserver()
             - MortalityObserver()
 
@@ -15,7 +15,7 @@ configuration:
         input_draw_number: 0
     interpolation:
         order: 0
-        extrapolate: False
+        extrapolate: True
     randomness:
         map_size: 1_000_000
         key_columns: ['entrance_time', 'age']
@@ -32,8 +32,9 @@ configuration:
         step_size: 1 # Days
     population:
         population_size: 100
-        age_start: 0
-        age_end: 100
+        initialization_age_min: 0
+        initialization_age_max: 100
+        untracking_age: 100
 
     stratification:
         default:

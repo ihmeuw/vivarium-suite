@@ -43,9 +43,9 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requirements = [
-        "gbd_mapping=={{cookiecutter.gbd_mapping_version}}",
-        "vivarium=={{cookiecutter.vivarium_version}}",
-        "vivarium_public_health=={{cookiecutter.vivarium_public_health_version}}",
+        "gbd_mapping>={{cookiecutter.gbd_mapping_version}}",
+        "vivarium>={{cookiecutter.vivarium_version}}",
+        "vivarium_public_health>={{cookiecutter.vivarium_public_health_version}}",
         "click",
         "jinja2",
         "loguru",
@@ -58,9 +58,9 @@ if __name__ == "__main__":
 
     setup_requires = ["setuptools_scm"]
 
-    data_requirements = ["vivarium_inputs[data]=={{cookiecutter.vivarium_inputs_version}}"]
+    data_requirements = ["vivarium_inputs[data]>={{cookiecutter.vivarium_inputs_version}}"]
     cluster_requirements = [
-        "vivarium_cluster_tools=={{cookiecutter.vivarium_cluster_tools_version}}"
+        "vivarium_cluster_tools>={{cookiecutter.vivarium_cluster_tools_version}}"
     ]
     test_requirements = ["pytest"]
     lint_requirements = ["black", "isort"]
