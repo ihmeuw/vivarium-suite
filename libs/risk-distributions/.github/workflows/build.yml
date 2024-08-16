@@ -53,7 +53,7 @@ jobs:
         run: |
           make doctest -C docs/
       - name: Send mail
-        # Notify when cron job fails
+        # Email notification when cron job fails
         if: (github.event_name == 'schedule' && failure())
         uses: dawidd6/action-send-mail@v2
         with:
@@ -70,4 +70,4 @@ jobs:
           # comma-separated string, send email to
           to: uw_ihme_simulationscience@uw.edu
           # from email name
-          from: Dr Manhattan
+          from: Vivarium Notifications
