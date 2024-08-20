@@ -37,8 +37,8 @@ do
     git checkout "${branch_name_to_check}"
     iterations=$((iterations+1))
   fi
-  done
-  git checkout "${branch_name}"
+done
+git checkout "${branch_name}"
 
 echo "${dependency_name}_branch_name=${dependency_branch_name}" >> "$GITHUB_ENV"
 
