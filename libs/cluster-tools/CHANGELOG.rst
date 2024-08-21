@@ -1,3 +1,7 @@
+**2.0.1 - 08/21/24**
+
+ - Use script to install dependencies in CI
+
 **2.0.0 - 08/13/24**
 
 Breaking changes:
