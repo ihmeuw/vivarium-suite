@@ -123,7 +123,7 @@ if [[ $create_env == 'yes' ]]; then
   # Editable install of repo
   pip install -e .[dev] 
   # Install redis for simulation environments
-  if [$env_type == 'simulation']; then
+  if [ $env_type == 'simulation' ]; then
     conda install redis -y
   fi
 fi
