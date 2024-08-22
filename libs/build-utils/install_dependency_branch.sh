@@ -3,6 +3,7 @@
 # Define variables
 dependency_name=$1
 branch_name=$2
+workflow=$3
 
 root_dir=$(pwd)
 dependency_branch_name='main'
@@ -40,7 +41,9 @@ do
 done
 git checkout "${branch_name}"
 
-echo "${dependency_name}_branch_name=${dependency_branch_name}" >> "$GITHUB_ENV"
+if [ $workflow == "github" ];
+  echo "${dependency_name}_branch_name=${dependency_branch_name}" >> "$GITHUB_ENV"
+fi
 
 if [ "$dependency_branch_name" != "main" ]; then
   echo "Cloning ${dependency_name} branch: ${dependency_branch_name}"
