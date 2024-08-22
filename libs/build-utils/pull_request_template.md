@@ -3,7 +3,7 @@
 
 ### Description
 <!-- For use in commit message, wrap at 72 chars. 72 chars is here: -->
-- *Category*: <!-- one of bugfix, feature, refactor, CI/infrastructure, 
+- *Category*: <!-- one of bugfix, feature, POC, refactor, 
                    revert, test, other/misc -->
 - *JIRA issue*: https://jira.ihme.washington.edu/browse/MIC-XYZ
 
