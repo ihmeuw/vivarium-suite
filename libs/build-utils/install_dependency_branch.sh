@@ -41,7 +41,7 @@ do
 done
 git checkout "${branch_name}"
 
-if [ $workflow == "github" ]; then
+if [ "$workflow" == "github" ]; then
   echo "${dependency_name}_branch_name=${dependency_branch_name}" >> "$GITHUB_ENV"
 fi
 
