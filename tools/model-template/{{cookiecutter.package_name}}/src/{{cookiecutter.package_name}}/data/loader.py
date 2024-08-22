@@ -14,6 +14,7 @@ for an example.
 """
 from typing import List, Optional, Union
 
+import numpy as np
 import pandas as pd
 from gbd_mapping import causes, covariates, risk_factors
 from vivarium.framework.artifact import EntityKey
@@ -105,7 +106,7 @@ def load_standard_data(
     return interface.get_measure(entity, key.measure, location, years).droplevel("location")
 
 
-def load_metadata(key: str, location: str):
+def load_metadata(key: str, location: str, years: Optional[Union[int, str, List[int]]] = None):
     key = EntityKey(key)
     entity = get_entity(key)
     entity_metadata = entity[key.measure]
@@ -114,7 +115,7 @@ def load_metadata(key: str, location: str):
     return entity_metadata
 
 
-def load_categorical_paf(key: str, location: str) -> pd.DataFrame:
+def load_categorical_paf(key: str, location: str, years: Optional[Union[int, str, List[int]]] = None) -> pd.DataFrame:
     try:
         risk = {
             # todo add keys as needed
