@@ -45,6 +45,7 @@ if __name__ == "__main__":
         "sphinx>=4.0",
         "sphinx-rtd-theme",
         "sphinx-click",
+        "sphinx-autodoc-typehints",
         "IPython",
         "matplotlib",
     ]

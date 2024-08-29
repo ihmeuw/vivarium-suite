@@ -19,7 +19,6 @@ from vivarium.framework.configuration import build_model_specification
 from vivarium_cluster_tools.psimulate import COMMANDS
 
 if typing.TYPE_CHECKING:
-    # Cyclic import.
     from vivarium_cluster_tools.psimulate.branches import Keyspace
 
 

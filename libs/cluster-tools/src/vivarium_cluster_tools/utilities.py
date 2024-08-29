@@ -52,7 +52,6 @@ def mkdir(
         If False, raises FileExistsError if the directory already exists.
     parents
         If False, raises FileNotFoundError if the directory's parent doesn't exist.
-
     """
     path = Path(path)
     old_umask = os.umask(umask)
@@ -66,7 +65,7 @@ def backoff_and_retry(
     backoff_seconds: Union[int, float] = 30,
     num_retries: int = 3,
     log_function: Callable[[str], None] = warnings.warn,
-):
+) -> Callable:
     """Adds a retry handler to the decorated function.
 
     Parameters
@@ -79,6 +78,9 @@ def backoff_and_retry(
         A callable used to emit retry messages.  Defaults to emitting
         a standard library warning.
 
+    Returns
+    -------
+        A function that retries the decorated function a specified number of times.
     """
 
     def _wrap(func):

@@ -15,7 +15,8 @@ from vivarium_cluster_tools.utilities import NUM_ROWS_PER_CENTRAL_LOG_FILE
 def transform_perf_df_for_appending(
     perf_df: pd.DataFrame, output_paths: OutputPaths
 ) -> pd.DataFrame:
-    """
+    """Transform performance DataFrame for appending to central logs.
+
     Take performance dataframe from performance report and 1) turn index into columns so
     we can write to csv, 2) add artifact name column, and 3) aggregate scenario information
     into one column.
@@ -26,11 +27,10 @@ def transform_perf_df_for_appending(
         DataFrame pulled from performance report with index values uniquely identifying each child
         job and column values containing their performance data.
     output_paths
-        OutputPaths object from paths.py containing information about the results directory.
+        OutputPaths object containing information about the results directory.
 
     Returns
-    --------
-    DataFrame
+    -------
         The transformed DataFrame which can be directly appended to our central logs. The data now
         has a simple RangeIndex, the index values as columns, a new artifact name column, and a new
         scenario parameters column.
@@ -74,9 +74,8 @@ def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
         DataFrame pulled from transform_perf_df_for_appending.
 
     Returns
-    --------
-    str
-       str of the first file in our central logs containing child job data.
+    -------
+       The first file in our central logs containing child job data.
     """
     log_files = glob.glob(
         CENTRAL_PERFORMANCE_LOGS_DIRECTORY.as_posix() + "/log_summary_*.csv"
@@ -120,11 +119,11 @@ def generate_runner_job_data(
     Parameters
     ----------
     job_number
-        int of job number for our runner job.
+        The job number for our runner job.
     output_paths
-        OutputPaths object from paths.py containing information about the results directory.
+        OutputPaths object containing information about the results directory.
     first_file_with_data
-        str of the first file in our central logs containing child job data
+        The first file in our central logs containing child job data
         launched by our runner job.
     """
     runner_data = pd.DataFrame({"job_number": job_number}, index=[0])
@@ -144,17 +143,18 @@ def generate_runner_job_data(
 def append_perf_data_to_central_logs(
     perf_df: pd.DataFrame, output_paths: OutputPaths
 ) -> None:
-    """Append performance data to the central logs. This consists of child job data
-    and runner data. The child job data will contain performance information and identifying
-    information for each child job and the runner data will contain data about the runner job
-    that launched these child jobs.
+    """Append performance data to the central logs.
+
+    This consists of child job data and runner data. The child job data will contain
+    performance information and identifying information for each child job and the
+    runner data will contain data about the runner job that launched these child jobs.
 
     Parameters
     ----------
     perf_df
         DataFrame pulled from performance report.
     output_paths
-        OutputPaths object from paths.py containing information about the results directory.
+        OutputPaths object containing information about the results directory.
     """
     if not output_paths.logging_to_central_results_directory:
         logger.warning(

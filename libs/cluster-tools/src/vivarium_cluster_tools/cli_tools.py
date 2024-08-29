@@ -4,6 +4,7 @@ Shared CLI tools
 ================
 
 """
+
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -49,6 +50,7 @@ class MinutesOrNone(click.ParamType):
 
     def convert(self, value: str, param: str, ctx: click.Context) -> Optional[float]:
         """Converts the value to float seconds from minutes.
+
         If conversion fails, calls the `fail` method from `click.ParamType`.
         """
         try:

@@ -38,7 +38,6 @@ def psimulate():
 
     You may initiate a new run with the ``run`` sub-command or restart a run
     from where it was stopped by using the ``restart`` sub-command.
-
     """
     pass
 
@@ -109,7 +108,6 @@ def run(
     created with the same name as the MODEL_SPECIFICATION if one does not exist.
     Results will be written to a further subdirectory named after the start time
     of the simulation run.
-
     """
     logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
@@ -146,12 +144,12 @@ def run(
 )
 @cli_tools.pass_shared_options(shared_options)
 def restart(results_root, **options):
-    """Restart a parallel simulation from a previous run at RESULTS_ROOT.
+    """Restart a parallel simulation.
 
+    This restarts a parallel simulation from a previous run at RESULTS_ROOT.
     Restarting will not erase existing results, but will start workers to
     perform the remaining simulations.  RESULTS_ROOT is expected to be an
     output directory from a previous ``psimulate run`` invocation.
-
     """
     logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
@@ -199,14 +197,13 @@ def restart(results_root, **options):
 )
 @cli_tools.pass_shared_options(shared_options)
 def expand(results_root, **options):
-    """Expand a previous run at RESULTS_ROOT by adding input draws and/or
-    random seeds.
+    """Expand a previous run.
 
-    Expanding will not erase existing results, but will start workers to perform
-    the additional simulations determined by the added draws/seeds.
-    RESULTS_ROOT is expected to be an output directory from a previous
-    ``psimulate run`` invocation.
-
+    This expands a previous run at RESULTS_ROOT by adding input draws and/or
+    random seeds. Expanding will not erase existing results, but will start
+    workers to perform the additional simulations determined by the added
+    draws/seeds. RESULTS_ROOT is expected to be an output directory from a
+    previous ``psimulate run`` invocation.
     """
     logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])

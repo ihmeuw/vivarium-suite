@@ -112,3 +112,5 @@ venv.bak/
 # Version file
 src/vivarium_cluster_tools/_version.py
 
+# macOS
+*.DS_Store

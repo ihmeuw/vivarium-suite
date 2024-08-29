@@ -31,8 +31,10 @@ VIVARIUM_WORK_HORSE_IMPORT_PATH = f"{__name__}.work_horse"
 
 
 class ParallelSimulationContext(SimulationContext):
-    """Identical to SimulationContext except that it does not write out the
-    results to disk in order to allow them to be batch-written.
+    """A parallel simulation context.
+
+    This is identical to ``SimulationContext`` except that it does not write out
+    the results to disk in order to allow them to be batch-written.
     """
 
     def _write_results(self, results: dict[str, pd.DataFrame]) -> None:

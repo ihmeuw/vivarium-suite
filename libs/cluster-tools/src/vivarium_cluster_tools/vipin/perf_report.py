@@ -6,9 +6,8 @@ Performance Reporting
 Tools for summarizing and reporting performance information.
 
 """
-import glob
+
 import json
-import math
 import re
 from pathlib import Path
 from typing import Tuple, Union
@@ -37,8 +36,7 @@ EXTRANEOUS_SCENARIO_COLS = [
 
 
 class PerformanceSummary:
-    """
-    A class to implement a getter for data in the workers' performance logs.
+    """A class to implement a getter for data in the workers' performance logs.
 
     Given a Path, a PerformanceSummary class provides a generator to get at each
     entry in the workers' performance logs. The class also provides a method
@@ -49,6 +47,8 @@ class PerformanceSummary:
     ----------
     log_dir
         Path of log_dir
+    errors
+        Number of errors encountered while parsing logs
 
     """
 
@@ -115,7 +115,9 @@ def set_index_scenario_cols(perf_df: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
 
 
 def add_squid_api_data(perf_df: pd.DataFrame):
-    """Given a dataframe from PerformanceSummary.to_df, add Squid API data for the job.
+    """Add Squid API data to the performance dataframe.
+
+    Given a dataframe from PerformanceSummary.to_df, add Squid API data for the job.
     Squid API reference: https://hub.ihme.washington.edu/display/SCKB/How+to+use+Squid+API
     """
     try:
@@ -137,7 +139,10 @@ def add_squid_api_data(perf_df: pd.DataFrame):
 
 
 def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list):
-    """Print some helpful stats from the performance data, grouped by scenario_cols"""
+    """Print some helpful stats from the performance data.
+
+    The stats are grouped by scenario_cols.
+    """
     pd.set_option("display.max_rows", None)
     pd.set_option("display.max_columns", None)
     pd.options.display.float_format = "{:.2f}".format
@@ -197,7 +202,10 @@ def report_performance(
     output_hdf: bool,
     verbose: int,
 ):
-    """Main method for vipin reporting. Gets job performance data, outputs to a file, and logs a report."""
+    """Main method for vipin reporting.
+
+    Gets job performance data, outputs to a file, and logs a report.
+    """
     input_directory, output_directory = Path(input_directory), Path(output_directory)
     perf_summary = PerformanceSummary(input_directory)
 

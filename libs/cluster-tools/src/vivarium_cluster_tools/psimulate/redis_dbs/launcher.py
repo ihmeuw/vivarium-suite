@@ -6,6 +6,7 @@ Redis Database Initialization
 Creates redis databases to store job parameters and results.
 
 """
+
 import atexit
 import math
 import socket
@@ -90,9 +91,14 @@ def _launch_redis(
 
 
 def _get_random_free_port() -> int:
-    # NOTE: this implementation is vulnerable to rare race conditions where some other
-    # process gets the same port after we free our socket but before we use the port
-    # number we got. Should be so rare in practice that it doesn't matter.
+    """Get a random free port number.
+
+    Notes
+    -----
+    This implementation is vulnerable to rare race conditions where some other
+    process gets the same port after we free our socket but before we use the port
+    number we got. Should be so rare in practice that it doesn't matter.
+    """
     s = socket.socket()
     s.bind(("", 0))
     port = s.getsockname()[1]
@@ -101,6 +107,9 @@ def _get_random_free_port() -> int:
 
 
 def _expected_sufficient_workers(num_queues) -> int:
-    # Rough estimate of the number of workers needed to ensure that each queue gets
-    # at least one worker. cf. https://w.wiki/7bnb
+    """Estimate the number of workers needed.
+
+    The intent is to provide a rough estimate of the number of workers needed to
+    ensure that each queue gets at least one worker. cf. https://w.wiki/7bnb
+    """
     return int(math.ceil(num_queues * (math.log(num_queues) + 0.57)))

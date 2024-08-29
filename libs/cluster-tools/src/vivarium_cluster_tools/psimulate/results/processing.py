@@ -28,7 +28,31 @@ def write_results_batch(
 ) -> Tuple[
     pd.DataFrame, List[pd.DataFrame], Dict[str, pd.DataFrame], List[Dict[str, pd.DataFrame]]
 ]:
-    """Write batch of results and finished simulation metadata to disk."""
+    """Write batch of results and finished simulation metadata to disk.
+
+    Parameters
+    ----------
+    output_paths
+        Container class with output filepaths as attributes.
+    existing_metadata
+        Metadata for finished simulations that has already been written to disk.
+    existing_results
+        Results for finished simulations that have already been written to disk.
+    unwritten_metadata
+        Metadata for finished simulations that has not yet been written to disk.
+    unwritten_results
+        Results for finished simulations that have not yet been written to disk.
+    batch_size
+        Number of results to write in this batch.
+
+    Returns
+    -------
+        A tuple of:
+        - The updated metadata that was written to disk as part of this batch.
+        - The updated metadata to write to disk in the next batch.
+        - The updated results that were written to disk as part of this batch.
+        - The updated results to write to disk in the next batch.
+    """
     logger.info(f"Writing batch of {batch_size} results.")
     new_metadata_to_write, unwritten_metadata = (
         unwritten_metadata[:batch_size],
@@ -54,6 +78,7 @@ def write_results_batch(
 def _concat_metadata(
     old_metadata: pd.DataFrame, new_metadata: List[pd.DataFrame]
 ) -> pd.DataFrame:
+    """Concatenate the new metadata to the old."""
     # Skips all the pandas index checking because columns are in the same order.
     start = time.time()
 
@@ -70,6 +95,7 @@ def _concat_metadata(
 def _concat_results(
     old_results: Dict[str, pd.DataFrame], new_results: List[Dict[str, pd.DataFrame]]
 ) -> Dict[str, pd.DataFrame]:
+    """Concatenate the new results to the old."""
     # Skips all the pandas index checking because columns are in the same order.
     start = time.time()
     results = {}
@@ -93,9 +119,11 @@ def _concat_results(
 
 
 def _concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
-    """Concatenate datasets and preserve all ``numpy`` dtypes (but not any
-    pandas-specific dtypes, e.g. categories become objects). We assume that all
-    dataframes in the list have identical columns and dtypes to the first.
+    """Concatenate datasets and preserve all ``numpy`` dtypes.
+
+    This does not preserve any pandas-specific dtypes, e.g. categories become
+    objects). We assume that all dataframes in the list have identical columns
+    and dtypes to the first.
     """
     dtype_mapping = {col: df_list[0][col].dtype for col in df_list[0].columns}
     for df in df_list:
@@ -106,6 +134,20 @@ def _concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
 
 @vct_utils.backoff_and_retry(backoff_seconds=30, num_retries=3, log_function=logger.warning)
 def _safe_write(df: pd.DataFrame, output_path: Path) -> None:
+    """Write a dataframe to disk, retrying if there are any issues.
+
+    Parameters
+    ----------
+    df
+        DataFrame to write to disk.
+    output_path
+        Path to write the DataFrame to.
+
+    Raises
+    ------
+    NotImplementedError
+        If the file extension is not supported.
+    """
     # Writing to some file types over and over balloons the file size so
     # write to new file and move it over to avoid
     temp_output_path = output_path.with_name(

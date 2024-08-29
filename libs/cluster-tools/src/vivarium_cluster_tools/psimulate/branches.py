@@ -6,6 +6,7 @@ Branch and Keyspace Management
 Tools for managing the parameter space of a parallel run.
 
 """
+
 from itertools import product
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple, Union
@@ -120,23 +121,24 @@ class Keyspace:
 def calculate_input_draws(
     input_draw_count: int, existing_draws: List[int] = None
 ) -> List[int]:
-    """Determines a random sample of the GBD input draws to use given a draw
-    count and any existing draws.
+    """Determines a random sample of the GBD input draws to use.
+
+    Notes
+    -----
+    The input draws returned account for the draw count provided and any
+    already-used draws.
 
     Parameters
     ----------
     input_draw_count
         The number of draws to pull.
-
     existing_draws
         Any draws that have already been pulled and should not be pulled again.
 
     Returns
     -------
-    List[int]
         A set of unique input draw numbers, guaranteed not to overlap with any
         existing draw numbers.
-
     """
     max_draw_count = NUMBER_OF_DRAWS
     if input_draw_count > max_draw_count:
@@ -162,21 +164,18 @@ def calculate_input_draws(
 def calculate_random_seeds(
     random_seed_count: int, existing_seeds: List[int] = None
 ) -> List[int]:
-    """Generates random seeds to use given a count of seeds and any existing
-    seeds.
+    """Generates random seeds to use given a count of seeds and any existing seeds.
 
     Parameters
     ----------
     random_seed_count
         The number of random seeds to generate.
-
     existing_seeds
         Any random seeds that have already been generated and should not be
         generated again.
 
     Returns
     -------
-    List[int]
         A set of unique random seeds, guaranteed not to overlap with any
         existing random seeds.
 
@@ -249,7 +248,7 @@ def _check_count_and_values(
     count_name: str,
     values_name: str,
     max_count: int,
-):
+) -> None:
     """Checks input configuration count and values for integers outside of range.
 
     Parameters
@@ -284,7 +283,8 @@ def _check_count_and_values(
 
 
 def expand_branch_templates(templates: Dict) -> List[Dict]:
-    """
+    """Expand branch template lists into individual branches.
+
     Take a list of dictionaries of configuration values (like the ones used in
     experiment branch configurations) and expand it by taking any values which
     are lists and creating a new set of branches which is made up of the
@@ -309,6 +309,14 @@ def expand_branch_templates(templates: Dict) -> List[Dict]:
            {'a': {'b': 2, 'c': 3, 'd': 6}}
        ]
 
+    Parameters
+    ----------
+    templates
+        A dictionary of configuration values that may contain lists.
+
+    Returns
+    -------
+        A list of dictionaries, each representing a single branch configuration.
     """
     expanded_branches = []
 
@@ -351,7 +359,7 @@ def expand_branch_templates(templates: Dict) -> List[Dict]:
     return final_branches
 
 
-def validate_artifact_path(artifact_path: str) -> str:
+def validate_artifact_path(artifact_path: str) -> None:
     """Validates that the path to the data artifact from the branches file exists.
 
     The path specified in the configuration must be absolute
@@ -361,10 +369,13 @@ def validate_artifact_path(artifact_path: str) -> str:
     artifact_path
         The path to the artifact.
 
+    Raises
+    ------
+    FileNotFoundError
+        If the artifact path is not an absolute path or does not exist.
+
     """
     path = Path(artifact_path)
 
     if not path.is_absolute() or not path.exists():
         raise FileNotFoundError(f"Cannot find artifact at path {path}")
-
-    return str(path)
