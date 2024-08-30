@@ -126,9 +126,31 @@ An example may make this clearer, so consider the following model specification.
 
 It combines the two configuration keys we just learned about. Taken separately, the ``input_draw_count`` mapping would
 lead to 100 simulations on 100 draws of input data while the ``random_seed_count`` mapping would lead to ten
-simulations on with identical input data but a different seed for the random number generation. With both specified,
+simulations with identical input data but a different seed for the random number generation. With both specified,
 the result is 1,000 total simulations, one for each member of the Cartesian product of those sets. That is,
 we would run ten simulations with the ten random seeds for each of the 100 input data draws.
+
+Specifying Specific Draws and Seeds
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+By default, Vivarium chooses draws and seeds randomly. However, you can specify the draws and/or seeds you want to
+use by providing a list of integers. For example, to run a simulation using input draws 4 and 8 and random seeds 15, 16,
+23, and 42, you can use the following branch configuration:
+
+.. code-block:: yaml
+    :caption: specific_draws_and_seeds.yaml
+
+    input_draw_count: 2
+    random_seed_count: 4
+
+    input_draws: [4, 8]
+    random_seeds: [15, 16, 23, 42]
+
+It is valid to specify both ``input_draws`` and ``random_seeds`` (as shown above) or only one of them.
+
+.. note::
+
+    The length of ``input_draws``, if provided, must match the value of ``input_draw_count``. Similarly, the length of
+    ``random_seeds``, if provided, must match the value of ``random_seed_count``.
 
 Configuration Variations
 ------------------------

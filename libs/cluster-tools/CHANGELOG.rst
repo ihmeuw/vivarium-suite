@@ -1,3 +1,8 @@
+**2.0.2 - 08/30/24**
+
+ - Strengthen the API documentation
+ - Update existing documentation to include new psimulate options
+
 **2.0.1 - 08/21/24**
 
  - Use script to install dependencies in CI

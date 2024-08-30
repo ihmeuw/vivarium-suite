@@ -73,8 +73,8 @@ with_peak_memory = click.option(
     default=PEAK_MEMORY_DEFAULT,
     show_default=True,
     help=(
-        "The estimated maximum memory usage in GB of an individual simulate job. "
-        "The simulations will be run with this as a limit."
+        "The memory request in GB of each individual simulation job. "
+        "The simulations will be killed if they exceed this limit."
     ),
 )
 
@@ -165,10 +165,10 @@ _with_max_runtime = click.option(
     default=MAX_RUNTIME_DEFAULT,
     show_default=True,
     help=(
-        f"The estimated maximum runtime ({_RUNTIME_FORMAT}) of the simulation jobs. "
+        f"The runtime request ({_RUNTIME_FORMAT}) of each individual simulation job. "
         "The maximum supported runtime is 3 days. Keep in mind that the "
         "session you are launching from must be able to live at least as long "
-        "as the simulation jobs, and that runtimes by node vary wildly."
+        "as the simulation jobs and that runtimes by node vary wildly."
     ),
     callback=_queue_and_runtime_callback,
 )

@@ -6,6 +6,7 @@ Redis DB CLI options
 Command line options for configuring job/result queue Redis DBs in psimulate runs.
 
 """
+
 import click
 
 from vivarium_cluster_tools.psimulate.redis_dbs.launcher import (
@@ -29,8 +30,5 @@ with_max_workers = click.option(
     type=click.IntRange(min=1),
     default=8000,
     show_default=True,
-    help=(
-        "The maximum number of workers (and therefore jobs) to run "
-        "concurrently. Defaults to the total number of jobs."
-    ),
+    help=("The maximum number of workers (and therefore jobs) to run concurrently."),
 )
