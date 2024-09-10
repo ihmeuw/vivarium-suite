@@ -1,3 +1,7 @@
+**2.0.3 - 09/10/24**
+
+ - Bugfix for job_parameters with simulation backups
+
 **2.0.2 - 08/30/24**
 
  - Strengthen the API documentation

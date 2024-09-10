@@ -4,14 +4,15 @@ import pytest
 
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
+    ParallelSimulationContext,
+    add_manager_configurations,
     get_backup,
     parameter_update_format,
     remove_backups,
-    setup_sim,
 )
 
 
-def test_setup_sim(mocker):
+def test_add_manager_configurations(mocker):
     mocker.patch(
         "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.get_current_job",
         return_value=mocker.Mock(id="test_string"),
@@ -20,7 +21,7 @@ def test_setup_sim(mocker):
         "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.time",
         return_value=1337,
     )
-    job_parameters = JobParameters(
+    initial_job_parameters = JobParameters(
         model_specification=None,
         branch_configuration={
             "input_data": {"artifact_path": "~/vivarium.yaml"},
@@ -33,10 +34,15 @@ def test_setup_sim(mocker):
         extras={},
     )
 
-    initial_job_params = job_parameters.branch_configuration.copy()
-    update_dict = parameter_update_format(job_parameters)
-    sim_config = setup_sim(job_parameters).configuration.to_dict()
-    job_config = job_parameters.branch_configuration
+    initial_branch_config = initial_job_parameters.branch_configuration
+    update_dict = parameter_update_format(initial_job_parameters)
+    updated_job_parameters = add_manager_configurations(initial_job_parameters)
+    sim = ParallelSimulationContext(
+        updated_job_parameters.model_specification,
+        configuration=updated_job_parameters.branch_configuration,
+    )
+    sim_config = sim.configuration.to_dict()
+    updated_branch_config = updated_job_parameters.branch_configuration
 
     ## Check that for all nested key, value pairs in ref_dict,
     ## the test dict has that key with the same value.
@@ -47,8 +53,8 @@ def test_setup_sim(mocker):
             else:
                 assert test_dict[k] == v
 
-    for test_dict in [sim_config, job_config]:
-        for ref_dict in [initial_job_params, update_dict]:
+    for test_dict in [sim_config, updated_branch_config]:
+        for ref_dict in [initial_branch_config, update_dict]:
             compare_dicts(test_dict, ref_dict)
 
 

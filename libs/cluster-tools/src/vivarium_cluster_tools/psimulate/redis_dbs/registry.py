@@ -75,7 +75,7 @@ class QueueManager:
             #    system is short lived anyway
             self._queue.enqueue(
                 workhorse_import_path,
-                job_parameters=job,
+                raw_job_parameters_dict=job,
                 ttl=60 * 60 * 24 * 2,
                 result_ttl=60 * 60,
                 job_timeout="7d",
@@ -303,7 +303,7 @@ class RegistryManager:
 
     def get_params_by_job(self) -> dict[str, dict]:
         jobs = list(chain.from_iterable([q._queue.jobs for q in self._queues]))
-        return {job.id: job.kwargs["job_parameters"] for job in jobs}
+        return {job.id: job.kwargs["raw_job_parameters_dict"] for job in jobs}
 
     def __len__(self) -> int:
         return len(self._queues)

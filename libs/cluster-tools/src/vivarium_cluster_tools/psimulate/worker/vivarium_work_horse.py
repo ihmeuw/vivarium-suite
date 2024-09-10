@@ -10,6 +10,7 @@ RQ worker executable for running simulation jobs.
 import json
 import math
 import os
+from copy import deepcopy
 from pathlib import Path
 from time import sleep, time
 from traceback import format_exc
@@ -41,20 +42,21 @@ class ParallelSimulationContext(SimulationContext):
         pass
 
 
-def work_horse(job_parameters: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+def work_horse(raw_job_parameters_dict: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
     node = f"{ENV_VARIABLES.HOSTNAME.value}"
     job = f"{ENV_VARIABLES.JOB_ID.value}:{ENV_VARIABLES.TASK_ID.value}"
 
-    job_parameters = JobParameters(**job_parameters)
+    raw_job_parameters = JobParameters(**raw_job_parameters_dict)
 
     logger.info(f"Launching new job {job} on {node}")
-    logger.info(f"Starting job: {job_parameters}")
+    logger.info(f"Starting job: {raw_job_parameters}")
 
     try:
         start_snapshot = CounterSnapshot()
         event = {"start": time()}  # timestamps of application events
         logger.info("Beginning simulation setup.")
-        backup = get_backup(job_parameters)
+        backup = get_backup(raw_job_parameters)
+        job_parameters = add_manager_configurations(raw_job_parameters)
         if backup:
             logger.info(f"Restarting simulation from saved backup")
             sim = backup
@@ -67,7 +69,12 @@ def work_horse(job_parameters: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFra
             )
             start_time = sim.current_time
         else:
-            sim = setup_sim(job_parameters)
+            sim = ParallelSimulationContext(
+                job_parameters.model_specification,
+                configuration=job_parameters.branch_configuration,
+            )
+            logger.info("Simulation configuration:")
+            logger.info(str(sim.configuration))
             sim.setup()
             event["simulant_initialization_start"] = time()
             exec_time = {
@@ -131,7 +138,7 @@ def work_horse(job_parameters: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFra
         logger.info(f"Exiting job: {job_parameters}")
 
 
-def setup_sim(job_parameters: JobParameters) -> ParallelSimulationContext:
+def add_manager_configurations(job_parameters: JobParameters) -> JobParameters:
     """Set up a simulation context with the branch/job-specific configuration parameters."""
     configuration = LayeredConfigTree(
         job_parameters.branch_configuration, layers=["branch_base", "branch_expanded"]
@@ -142,14 +149,10 @@ def setup_sim(job_parameters: JobParameters) -> ParallelSimulationContext:
         layer="branch_expanded",
         source="branch_config",
     )
-    job_parameters.branch_configuration.update(configuration.to_dict())
-    sim = ParallelSimulationContext(
-        job_parameters.model_specification, configuration=configuration
-    )
-    logger.info("Simulation configuration:")
-    logger.info(str(sim.configuration))
+    updated_job_parameters = deepcopy(job_parameters)
+    updated_job_parameters.branch_configuration.update(configuration.to_dict())
 
-    return sim
+    return updated_job_parameters
 
 
 def parameter_update_format(
