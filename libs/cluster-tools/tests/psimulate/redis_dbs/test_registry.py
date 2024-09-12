@@ -27,7 +27,7 @@ def test_allocate_jobs(mocker, num_queues, num_jobs):
 def create_mock_job(job_id, job_parameters):
     mock_job = MagicMock()
     mock_job.id = job_id
-    mock_job.kwargs = {"raw_job_parameters_dict": job_parameters}
+    mock_job.kwargs = {"job_parameters": job_parameters}
     return mock_job
 
 

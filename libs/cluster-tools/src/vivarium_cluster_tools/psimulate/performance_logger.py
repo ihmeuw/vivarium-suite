@@ -53,11 +53,8 @@ def transform_perf_df_for_appending(
     all_scenario_cols = [
         col for col in central_perf_df.columns if col.startswith("scenario_")
     ]
-    # remove duplicate scenario information
-    unique_scenario_cols = [
-        col for col in all_scenario_cols if not col.startswith("scenario_run_configuration")
-    ]
-    scenario_parameters = central_perf_df[unique_scenario_cols].to_dict(orient="records")
+
+    scenario_parameters = central_perf_df[all_scenario_cols].to_dict(orient="records")
     central_perf_df["scenario_parameters"] = pd.Series(scenario_parameters).apply(json.dumps)
 
     central_perf_df = central_perf_df.drop(all_scenario_cols, axis=1)

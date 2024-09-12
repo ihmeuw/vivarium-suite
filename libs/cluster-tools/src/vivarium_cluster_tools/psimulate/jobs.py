@@ -39,9 +39,23 @@ class JobParameters(NamedTuple):
     def job_specific(self) -> dict:
         """Parameters that vary by job in a psimulate run."""
         return {
+            **self.branch_configuration,
             "input_draw": self.input_draw,
             "random_seed": self.random_seed,
+        }
+
+    @property
+    def sim_config(self) -> dict:
+        """Parameters for the simulation configuration."""
+        return {
             **self.branch_configuration,
+            "randomness": {
+                "random_seed": self.random_seed,
+                "additional_seed": self.input_draw,
+            },
+            "input_data": {
+                "input_draw_number": self.input_draw,
+            },
         }
 
     def to_dict(self) -> dict:
@@ -113,14 +127,7 @@ def already_complete(
     if finished_sim_metadata.empty:
         return False
 
-    job_parameter_list = collapse_nested_dict(job_parameters.branch_configuration)
-    job_parameter_list.extend(
-        [
-            ("run_configuration.run_key.input_draw", job_parameters.input_draw),
-            ("run_configuration.run_key.random_seed", job_parameters.random_seed),
-        ]
-    )
-
+    job_parameter_list = collapse_nested_dict(job_parameters.job_specific)
     mask = pd.Series(True, index=finished_sim_metadata.index)
     for k, v in job_parameter_list:
         if isinstance(v, float):
