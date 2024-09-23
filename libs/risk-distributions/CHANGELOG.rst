@@ -1,3 +1,7 @@
+**2.0.17 - 09/17/24**
+
+- Pin Sphinx below 8.0
+
 **2.0.16 - 01/29/24**
 
  - Fix broken readthedocs build
