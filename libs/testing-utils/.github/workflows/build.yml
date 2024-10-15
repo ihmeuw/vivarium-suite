@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11"]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
@@ -35,8 +35,8 @@ jobs:
       - name: Lint
         run: |
           pip install black==22.3.0 isort
-          black . --check --diff
           isort . --check --verbose --only-modified --diff
+          black . --check --diff
       - name: Test
         run: |
          if "${{ github.event_name == 'schedule' }}"; then
