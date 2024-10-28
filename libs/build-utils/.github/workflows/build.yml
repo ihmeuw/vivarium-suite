@@ -14,6 +14,10 @@ on:
         description: "Boolean to determine if mypy should be run"
         required: True
         type: boolean
+      install_type:
+        description: "String of install type. Typicall dev or test"
+        required: false
+        type: string
 
 jobs:
   build:
@@ -44,7 +48,13 @@ jobs:
           python -m pip install --upgrade pip
       - name: Install dependencies
         run: |
-          pip install .[dev]
+          if [[ -n "${{ inputs.install_type }}" ]] && [[ "${{ inputs.install_type }}" != "dev" ]]; then
+            install_requires="${{ inputs.install_type }}"
+          else
+            install_requires="dev"
+          fi
+          echo "Install requirement is ${install_requires}"
+          pip install .[${install_requires}]
           git checkout ${branch_name}
       - name: Check for dependency branches and install if needed
         run: |
