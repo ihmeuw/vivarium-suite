@@ -10,31 +10,36 @@ on:
         description: "String of comma-separated dependencies to check for upstream branches"
         required: true
         type: string
+      black_version:
+        description: "Black version to use. Default is '22.3.0'"
+        required: false
+        default: "22.3.0"
+        type: string
       skip_mypy:
-        description: "Boolean to determine if mypy should be run"
+        description: "Boolean to determine if mypy should be skipped. Default is false"
         required: false
         default: false
         type: boolean
       install_type:
-        description: "String of install type. Typicall dev or test"
+        description: "String of install type. Default is '[dev]'"
         required: false
-        default: "dev"
+        default: "[dev]"
         type: string
       skip_docs:
-        description: "Boolean to determine if docs should be built"
+        description: "Boolean to determine if docs should be skipped. Default is false"
         required: false
         default: false
         type: boolean
     secrets:
       NOTIFY_EMAIL:
-        description: "Email to send notifications to"
-        required: true
+        description: "Email to send notifications to on cron job failure"
+        required: false
       NOTIFY_PASSWORD:
         description: "Password for email to send notifications to"
-        required: true
+        required: false
 
 jobs:
-  build_template:
+  template_build:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -60,7 +65,7 @@ jobs:
       - name: Install dependencies
         run: |
           echo "Install requirement is ${{ inputs.install_type }}"
-          pip install .[${{ inputs.install_type }}]
+          pip install .${{ inputs.install_type }}
           git checkout ${branch_name}
       - name: Check for dependency branches and install if needed
         run: |
@@ -79,12 +84,12 @@ jobs:
           cat $GITHUB_ENV
       - name: Lint
         run: |
-          pip install black==22.3.0 isort
+          pip install black==${{ inputs.black_version }} isort
           isort . --check --verbose --only-modified --diff
           echo "----------------------------------------"
           black . --check --diff
           echo "----------------------------------------"
-          if "${{ inputs.skip_mypy }}" == "false"; then
+          if "${{ inputs.skip_mypy == false }}"; then
             mypy .
           fi
       - name: Test
@@ -96,12 +101,12 @@ jobs:
           fi
       - name: Doc build
         run: |
-          if "${{ inputs.skip_docs }}" == "false"; then
+          if "${{ inputs.skip_docs == false }}"; then
             make html -C docs/ SPHINXOPTS="-W --keep-going -n"
           fi
       - name: Doctest
         run: |
-          if "${{ inputs.skip_docs }}" == "false"; then
+          if "${{ inputs.skip_docs == false }}"; then
             make doctest -C docs/
           fi
       - name: Send mail
