@@ -10,21 +10,32 @@ on:
         description: "String of comma-separated dependencies to check for upstream branches"
         required: true
         type: string
-      use_mypy:
+      skip_mypy:
         description: "Boolean to determine if mypy should be run"
-        required: True
+        required: false
+        default: false
         type: boolean
       install_type:
         description: "String of install type. Typicall dev or test"
         required: false
+        default: "dev"
         type: string
+      skip_docs:
+        description: "Boolean to determine if docs should be built"
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      NOTIFY_EMAIL:
+        description: "Email to send notifications to"
+        required: true
+      NOTIFY_PASSWORD:
+        description: "Password for email to send notifications to"
+        required: true
 
 jobs:
-  build:
+  build_template:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11"]
     defaults:
       run:
         shell: bash -le {0}
@@ -48,13 +59,8 @@ jobs:
           python -m pip install --upgrade pip
       - name: Install dependencies
         run: |
-          if [[ -n "${{ inputs.install_type }}" ]] && [[ "${{ inputs.install_type }}" != "dev" ]]; then
-            install_requires="${{ inputs.install_type }}"
-          else
-            install_requires="dev"
-          fi
-          echo "Install requirement is ${install_requires}"
-          pip install .[${install_requires}]
+          echo "Install requirement is ${{ inputs.install_type }}"
+          pip install .[${{ inputs.install_type }}]
           git checkout ${branch_name}
       - name: Check for dependency branches and install if needed
         run: |
@@ -78,7 +84,7 @@ jobs:
           echo "----------------------------------------"
           black . --check --diff
           echo "----------------------------------------"
-          if "${{ inputs.use_mypy }}" == "true"; then
+          if "${{ inputs.skip_mypy }}" == "false"; then
             mypy .
           fi
       - name: Test
@@ -90,10 +96,14 @@ jobs:
           fi
       - name: Doc build
         run: |
-          make html -C docs/ SPHINXOPTS="-W --keep-going -n"
+          if "${{ inputs.skip_docs }}" == "false"; then
+            make html -C docs/ SPHINXOPTS="-W --keep-going -n"
+          fi
       - name: Doctest
         run: |
-          make doctest -C docs/
+          if "${{ inputs.skip_docs }}" == "false"; then
+            make doctest -C docs/
+          fi
       - name: Send mail
         # Notify when cron job fails
         if: (github.event_name == 'schedule' && failure())
