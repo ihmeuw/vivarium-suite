@@ -40,7 +40,7 @@ from layered_config_tree import (
     ConfigurationKeyError,
     DuplicatedConfigurationError,
 )
-from layered_config_tree.types import InputData, NestedDict, NestedDictValue, NodeValue
+from layered_config_tree.types import InputData
 
 
 class ConfigNode:
@@ -74,7 +74,7 @@ class ConfigNode:
     def __init__(self, layers: list[str], name: str):
         self._name = name
         self._layers = layers
-        self._values: dict[str, tuple[Optional[str], NodeValue]] = {}
+        self._values: dict[str, tuple[Optional[str], Any]] = {}
         self._frozen = False
         self._accessed = False
 
@@ -89,7 +89,7 @@ class ConfigNode:
         return self._accessed
 
     @property
-    def metadata(self) -> list[dict[str, Union[Optional[str], NodeValue]]]:
+    def metadata(self) -> list[dict[str, Union[Optional[str], Any]]]:
         """Returns all values and associated metadata for this node."""
         result = []
         for layer in self._layers:
@@ -112,7 +112,7 @@ class ConfigNode:
         """
         self._frozen = True
 
-    def get_value(self, layer: Optional[str] = None) -> NodeValue:
+    def get_value(self, layer: Optional[str] = None) -> Any:
         """Returns the value at the specified layer.
 
         If no layer is specified, the outermost (highest priority) layer
@@ -133,7 +133,7 @@ class ConfigNode:
         self._accessed = True
         return value
 
-    def update(self, value: NodeValue, layer: Optional[str], source: Optional[str]) -> None:
+    def update(self, value: Any, layer: Optional[str], source: Optional[str]) -> None:
         """Set a value for a layer with optional metadata about source.
 
         Parameters
@@ -180,7 +180,7 @@ class ConfigNode:
         else:
             self._values[layer] = (source, value)
 
-    def _get_value_with_source(self, layer: Optional[str]) -> tuple[Optional[str], NodeValue]:
+    def _get_value_with_source(self, layer: Optional[str]) -> tuple[Optional[str], Any]:
         """Returns a (source, value) tuple at the specified layer.
 
         If no layer is specified, the outermost (highest priority) layer
@@ -232,10 +232,10 @@ class ConfigIterator:
     This iterator is used to iterate over the keys of a LayeredConfigTree object.
     """
 
-    def __init__(self, config_tree: "LayeredConfigTree"):
+    def __init__(self, config_tree: LayeredConfigTree):
         self._iterator = iter(config_tree._children)
 
-    def __iter__(self) -> "ConfigIterator":
+    def __iter__(self) -> ConfigIterator:
         return self
 
     def __next__(self) -> str:
@@ -252,7 +252,7 @@ class LayeredConfigTree:
 
     # Define type annotations here since they're indirectly defined below
     _layers: list[str]
-    _children: dict[str, Union["LayeredConfigTree", "ConfigNode"]]
+    _children: dict[str, Union[LayeredConfigTree, ConfigNode]]
     _frozen: bool
     _name: str
 
@@ -308,7 +308,7 @@ class LayeredConfigTree:
         for child in self.values():
             child.freeze()
 
-    def items(self) -> Iterable[tuple[str, Union["LayeredConfigTree", ConfigNode]]]:
+    def items(self) -> Iterable[tuple[str, Union[LayeredConfigTree, ConfigNode]]]:
         """Return an iterable of all (child_name, child) pairs."""
         return self._children.items()
 
@@ -332,7 +332,7 @@ class LayeredConfigTree:
                     unused.append(f"{name}.{grandchild_name}")
         return unused
 
-    def to_dict(self) -> NestedDict:
+    def to_dict(self) -> dict[str, Any]:
         """Converts the LayeredConfigTree into a nested dictionary.
 
         All metadata is lost in this conversion.
@@ -343,12 +343,38 @@ class LayeredConfigTree:
             if isinstance(child, ConfigNode):
                 result[name] = child.get_value(layer=None)
             else:
-                result[name] = child.to_dict()  # type: ignore[assignment]
+                result[name] = child.to_dict()
         return result
 
-    def get_from_layer(
-        self, name: str, layer: Optional[str] = None
-    ) -> Union[NodeValue, "LayeredConfigTree"]:
+    def get(self, key: str, default_value: Any = None) -> Any:
+        """Return the LayeredConfigTree or value at the key in the outermost layer of the config tree.
+
+        Parameters
+        ----------
+        key
+            The string to look for in the outermost layer of the config tree.
+        default_value
+            The value to return if key is not found
+        """
+        return self[key] if key in self._children else default_value
+
+    def get_tree(self, key: str) -> LayeredConfigTree:
+        """Return the LayeredConfigTree at the key in the outermost layer of the config tree.
+
+        Parameters
+        ----------
+        key
+            The str we look up in the outermost layer of the config tree.
+        """
+        data = self[key]
+        if isinstance(data, LayeredConfigTree):
+            return data
+        else:
+            raise ConfigurationError(
+                f"The data you accessed using {key} with get_tree was of type {type(data)}, but get_tree must return a LayeredConfigTree."
+            )
+
+    def get_from_layer(self, name: str, layer: Optional[str] = None) -> Any:
         """Get a configuration value from the provided layer.
 
         If no layer is specified, the outermost (highest priority) layer
@@ -420,7 +446,7 @@ class LayeredConfigTree:
             for k, v in data.items():
                 self._set_with_metadata(k, v, layer, source)
 
-    def metadata(self, name: str) -> list[NestedDict]:
+    def metadata(self, name: str) -> list[dict[str, Any]]:
         if name in self:
             return self._children[name].metadata  # type: ignore[return-value]
         name = f"{self._name}.{name}" if self._name else name
@@ -430,7 +456,7 @@ class LayeredConfigTree:
     def _coerce(
         data: InputData,
         source: Optional[str],
-    ) -> tuple[NestedDict, Optional[str]]:
+    ) -> tuple[dict[str, Any], Optional[str]]:
         """Coerces data into dictionary format."""
         if isinstance(data, dict):
             return data, source
@@ -465,7 +491,7 @@ class LayeredConfigTree:
     def _set_with_metadata(
         self,
         name: str,
-        value: Union[NestedDictValue, str, Path, "LayeredConfigTree"],
+        value: Any,
         layer: Optional[str],
         source: Optional[str],
     ) -> None:
@@ -519,9 +545,9 @@ class LayeredConfigTree:
                     f"Can't assign a value to a LayeredConfigTree.", name
                 )
 
-        self._children[name].update(value, layer, source)  # type: ignore[arg-type]
+        self._children[name].update(value, layer, source)
 
-    def __setattr__(self, name: str, value: NestedDictValue) -> None:
+    def __setattr__(self, name: str, value: Any) -> None:
         """Set a value on the outermost layer."""
         if name not in self:
             raise ConfigurationKeyError(
@@ -530,7 +556,7 @@ class LayeredConfigTree:
             )
         self._set_with_metadata(name, value, layer=None, source=None)
 
-    def __setitem__(self, name: str, value: NestedDictValue) -> None:
+    def __setitem__(self, name: str, value: Any) -> None:
         """Set a value on the outermost layer."""
         if name not in self:
             raise ConfigurationKeyError(
@@ -554,14 +580,14 @@ class LayeredConfigTree:
     # * Calling __getattr__ before we have set up the state doesn't work,
     #   because it leads to an infinite loop looking for the module's
     #   actual attributes (not config keys)
-    def __getstate__(self) -> NestedDict:
+    def __getstate__(self) -> dict[str, Any]:
         return self.__dict__
 
-    def __setstate__(self, state: NestedDict) -> None:
+    def __setstate__(self, state: dict[str, Any]) -> None:
         for k, v in state.items():
             self.__dict__[k] = v
 
-    def __getitem__(self, name: str) -> Union[NodeValue, "LayeredConfigTree"]:
+    def __getitem__(self, name: str) -> Any:
         """Get a value from the outermost layer in which it appears."""
         return self.get_from_layer(name)
 
