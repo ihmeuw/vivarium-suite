@@ -1,6 +1,4 @@
-from typing import Optional
-
-from layered_config_tree.types import NestedDictValue
+from typing import Any, Optional
 
 
 class ConfigurationError(Exception):
@@ -37,7 +35,7 @@ class DuplicatedConfigurationError(ConfigurationError):
         name: str,
         layer: Optional[str],
         source: Optional[str],
-        value: NestedDictValue,
+        value: Any,
     ):
         self.layer = layer
         self.source = source
