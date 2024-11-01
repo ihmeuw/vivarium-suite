@@ -20,3 +20,23 @@ line_length = 94
 profile = "black"
 multi_line_output = 3 # Vertical Hanging Indent, see https://pypi.org/project/isort/
 skip_glob = ["*/examples/*", "**/examples/*"]
+
+[tool.mypy]
+# This is the global mypy configuration.
+strict = true  # See all the enabled flags `mypy --help | grep -A 10 'Strict mode'`
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = [
+    "build",
+    "setup.py",
+    "docs/source/conf.py",
+]
+
+# handle mypy errors when 3rd party packages are not typed.
+[[tool.mypy.overrides]]
+module = [
+    "py._path.local",
+    "scipy.*",
+    # "sklearn.*",
+]
+ignore_missing_imports = true

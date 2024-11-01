@@ -1,6 +1,6 @@
 import sys
 
-min_version, max_version = ((3, 8), "3.8"), ((3, 11), "3.11")
+min_version, max_version = ((3, 8), "3.8"), ((3, 12), "3.12")
 
 if not (min_version[0] <= sys.version_info[:2] <= max_version[0]):
     # Python 3.5 does not support f-strings
@@ -39,6 +39,11 @@ if __name__ == "__main__":
         "tables",
         "networkx",
         "loguru",
+        # Type stubs
+        "pandas-stubs",
+        "networkx-stubs",
+        "types-docutils",
+        "types-setuptools",
     ]
 
     setup_requires = ["setuptools_scm"]
@@ -61,6 +66,7 @@ if __name__ == "__main__":
         "sphinx-click",
         "IPython",
         "matplotlib",
+        "docutils",
     ]
 
     lint_requirements = [

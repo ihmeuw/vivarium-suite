@@ -75,6 +75,7 @@ install: # Install setuptools, install this package in editable mode
 format: setup.py pyproject.toml $(MAKE_SOURCES) # Run the code formatter and import sorter
 	black $(LOCATIONS)
 	isort $(LOCATIONS)
+	mypy $(LOCATIONS)
 	@echo "Ignore, Created by Makefile, `date`" > $@
 
 lint: .flake8 .bandit $(MAKE_SOURCES) # Run the code linter and package security vulnerability checker
