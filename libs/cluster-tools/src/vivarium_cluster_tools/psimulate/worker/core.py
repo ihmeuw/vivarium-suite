@@ -13,7 +13,7 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import TextIO, Tuple, Union
+from typing import TextIO
 
 import redis
 from loguru import logger
@@ -58,7 +58,7 @@ def build_launch_script(
     return launcher
 
 
-def _retry_handler(job: Job, *exc_info: Tuple[Union[str, bytes], ...]) -> bool:
+def _retry_handler(job: Job, *exc_info: tuple[str | bytes, ...]) -> bool:
     retries = job.meta.get("remaining_retries", 2)
 
     if retries > 0:

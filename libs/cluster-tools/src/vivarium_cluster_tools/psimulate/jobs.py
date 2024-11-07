@@ -6,7 +6,7 @@ psimulate Jobs
 """
 
 from pathlib import Path
-from typing import List, NamedTuple, Optional, Tuple
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -76,11 +76,11 @@ def build_job_list(
     output_root: Path,
     keyspace: branches.Keyspace,
     finished_sim_metadata: pd.DataFrame,
-    backup_freq: Optional[int],
+    backup_freq: int | None,
     backup_dir: Path,
     backup_metadata_path: Path,
     extras: dict,
-) -> Tuple[List[dict], int]:
+) -> tuple[list[dict], int]:
     jobs = []
     number_already_completed = 0
 

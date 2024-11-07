@@ -7,7 +7,6 @@ Model specification management
 
 import typing
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from layered_config_tree import LayeredConfigTree
@@ -32,8 +31,8 @@ RESULTS_DIRECTORY_KEY = "results_directory"
 
 def parse(
     command: str,
-    input_model_specification_path: Optional[Path],
-    artifact_path: Optional[Path],
+    input_model_specification_path: Path | None,
+    artifact_path: Path | None,
     model_specification_path: Path,
     results_root: Path,
     keyspace: "Keyspace",

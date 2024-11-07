@@ -12,8 +12,9 @@ import os
 import socket
 import time
 import warnings
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Union
+from typing import Any
 
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
@@ -38,7 +39,7 @@ def get_drmaa() -> Any:
 
 
 def mkdir(
-    path: Union[str, Path], umask: int = 0o002, exists_ok: bool = False, parents: bool = False
+    path: str | Path, umask: int = 0o002, exists_ok: bool = False, parents: bool = False
 ) -> None:
     """Utility method to create a directory with specified permissions.
 
@@ -62,7 +63,7 @@ def mkdir(
 
 
 def backoff_and_retry(
-    backoff_seconds: Union[int, float] = 30,
+    backoff_seconds: int | float = 30,
     num_retries: int = 3,
     log_function: Callable[[str], None] = warnings.warn,
 ) -> Callable:

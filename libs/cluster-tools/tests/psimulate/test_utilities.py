@@ -3,7 +3,6 @@ import shutil
 import time
 from pathlib import Path
 from subprocess import PIPE, Popen
-from typing import Dict, List, Optional
 
 import pytest
 
@@ -25,7 +24,7 @@ def permissions_params(request):
     return request.param
 
 
-def test_mkdir_set_permissions(permissions_params: List) -> None:
+def test_mkdir_set_permissions(permissions_params: list) -> None:
     # Get prior umask value
     prior_umask = os.umask(0)
     os.umask(prior_umask)
@@ -37,10 +36,8 @@ def test_mkdir_set_permissions(permissions_params: List) -> None:
     parent_path = cwd / parent_dir_name
     path = parent_path / child_dir_name
 
-    mkdir_params: Dict = permissions_params[0]
-    permissions: Optional[str] = (
-        permissions_params[1] if permissions_params[1] else "drwxrwxr-x"
-    )
+    mkdir_params: dict = permissions_params[0]
+    permissions: str | None = permissions_params[1] if permissions_params[1] else "drwxrwxr-x"
 
     def test_mkdir_permissions():
         mkdir(path, **mkdir_params)

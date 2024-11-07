@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import List, TextIO, Tuple
+from typing import TextIO
 
 from loguru import logger
 
@@ -28,7 +28,7 @@ def launch_redis_processes(
     num_processes: int,
     num_workers: int,
     redis_logging_root: Path,
-) -> List[Tuple[str, int]]:
+) -> list[tuple[str, int]]:
     num_processes = _get_num_redis_dbs(num_processes, num_workers)
 
     hostname = ENV_VARIABLES.HOSTNAME.value

@@ -8,7 +8,7 @@ File Path Management
 from datetime import datetime
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import NamedTuple, Optional, Union
+from typing import NamedTuple
 
 from vivarium.interface.utilities import get_output_model_name_string
 
@@ -29,11 +29,11 @@ class InputPaths(NamedTuple):
 
     """
 
-    model_specification: Optional[Path]
+    model_specification: Path | None
     """The path to the model specification file."""
-    branch_configuration: Optional[Path]
+    branch_configuration: Path | None
     """The path to the branch configuration file."""
-    artifact: Optional[Path]
+    artifact: Path | None
     """The path to the data artifact."""
     result_directory: Path
     """The path to the results directory."""
@@ -42,10 +42,10 @@ class InputPaths(NamedTuple):
     def from_entry_point_args(
         cls,
         *,  # No positional args allowed.
-        result_directory: Union[str, Path],
-        input_model_specification_path: Optional[Union[str, Path]] = None,
-        input_branch_configuration_path: Optional[Union[str, Path]] = None,
-        input_artifact_path: Optional[Union[str, Path]] = None,
+        result_directory: str | Path,
+        input_model_specification_path: str | Path | None = None,
+        input_branch_configuration_path: str | Path | None = None,
+        input_artifact_path: str | Path | None = None,
     ) -> "InputPaths":
         """Create an instance of InputPaths from the arguments passed to the entry point.
 
@@ -75,7 +75,7 @@ class InputPaths(NamedTuple):
         )
 
     @staticmethod
-    def _coerce_path(path: Optional[str]) -> Optional[Path]:
+    def _coerce_path(path: str | None) -> Path | None:
         if path is not None:
             return Path(path)
 
@@ -173,7 +173,7 @@ class OutputPaths(NamedTuple):
         cls,
         *,  # No positional args allowed.
         command: str,
-        input_artifact_path: Optional[Path],
+        input_artifact_path: Path | None,
         result_directory: Path,
         input_model_spec_path: Path,
     ) -> "OutputPaths":

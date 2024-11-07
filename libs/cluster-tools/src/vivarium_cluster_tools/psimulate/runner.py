@@ -12,7 +12,6 @@ import shutil
 from collections import defaultdict
 from pathlib import Path
 from time import sleep, time
-from typing import Dict, Optional, Union
 
 import pandas as pd
 from loguru import logger
@@ -41,14 +40,14 @@ from vivarium_cluster_tools.vipin.perf_report import report_performance
 def process_job_results(
     registry_manager: redis_dbs.RegistryManager,
     existing_metadata: pd.DataFrame,
-    existing_results: Dict[str, pd.DataFrame],
+    existing_results: dict[str, pd.DataFrame],
     output_paths: OutputPaths,
     no_batch: bool,
-) -> Dict[str, Union[int, float]]:
+) -> dict[str, int | float]:
     unwritten_metadata = []
     unwritten_results = []
     batch_size = 0 if no_batch else 200
-    status: Dict[str, Union[int, float]] = defaultdict(int)
+    status: dict[str, int | float] = defaultdict(int)
 
     logger.info("Entering main processing loop.")
     start_time = time()
@@ -110,7 +109,7 @@ def load_existing_output_metadata(metadata_path: Path, restart: bool) -> pd.Data
     return existing_output_metadata
 
 
-def load_existing_results(result_path: Path, restart: bool) -> Dict[str, pd.DataFrame]:
+def load_existing_results(result_path: Path, restart: bool) -> dict[str, pd.DataFrame]:
     filepaths = result_path.glob("*.parquet")
     results = {filepath.stem: pd.read_parquet(filepath) for filepath in filepaths}
     if results and not restart:
@@ -183,7 +182,7 @@ def main(
     command: str,
     input_paths: paths.InputPaths,
     native_specification: cluster.NativeSpecification,
-    max_workers: Optional[int],
+    max_workers: int | None,
     redis_processes: int,
     no_batch: bool,
     backup_freq: int,

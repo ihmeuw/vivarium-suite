@@ -5,8 +5,8 @@ Shared CLI tools
 
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List, Optional
 
 import click
 
@@ -31,7 +31,7 @@ def coerce_to_full_path(ctx: click.Context, param: str, value: str) -> Path:
         return Path(value).resolve()
 
 
-def pass_shared_options(shared_options: List[Decorator]) -> Decorator:
+def pass_shared_options(shared_options: list[Decorator]) -> Decorator:
     """Allows the user to supply a list of click options to apply to a command."""
 
     def _pass_shared_options(func: Callable) -> Callable:
@@ -48,7 +48,7 @@ class MinutesOrNone(click.ParamType):
 
     name = "minutesornone"
 
-    def convert(self, value: str, param: str, ctx: click.Context) -> Optional[float]:
+    def convert(self, value: str, param: str, ctx: click.Context) -> float | None:
         """Converts the value to float seconds from minutes.
 
         If conversion fails, calls the `fail` method from `click.ParamType`.

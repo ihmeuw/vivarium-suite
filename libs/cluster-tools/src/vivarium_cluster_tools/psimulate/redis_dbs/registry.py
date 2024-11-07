@@ -10,8 +10,9 @@ Unified interface to multiple Redis Databases.
 import random
 import time
 from collections import defaultdict
+from collections.abc import Iterator
 from itertools import chain
-from typing import Any, Dict, Iterator, List, Tuple, Union
+from typing import Any
 
 import redis
 import rq
@@ -67,7 +68,7 @@ class QueueManager:
     def jobs_to_finish(self) -> bool:
         return not (self.failed or self.completed)
 
-    def enqueue(self, jobs: List[dict], workhorse_import_path: str) -> None:
+    def enqueue(self, jobs: list[dict], workhorse_import_path: str) -> None:
         self._logger.info(f"Enqueuing jobs in queue {self.name}")
         for job in jobs:
             # TODO: might be nice to have tighter ttls but it's hard to predict
@@ -81,7 +82,7 @@ class QueueManager:
                 job_timeout="7d",
             )
 
-    def get_results(self) -> List:
+    def get_results(self) -> list:
         self._logger.debug(f"Checking queue {self.name}")
         finished_jobs = self._get_finished_jobs()
         start = time.time()
@@ -95,7 +96,7 @@ class QueueManager:
         )
         return results
 
-    def update_and_report(self) -> Dict[str, Union[int, float]]:
+    def update_and_report(self) -> dict[str, int | float]:
         self._update_status()
         template = (
             f"Queue {self.name} - Total jobs: {{total}}, % Done: {{done:.2f}}% "
@@ -163,7 +164,7 @@ class QueueManager:
         else:
             self._mark_failed()
 
-    def _get_finished_jobs(self) -> List[str]:
+    def _get_finished_jobs(self) -> list[str]:
         if self._retries:
             try:
                 return self._finished.get_job_ids()
@@ -188,7 +189,7 @@ class QueueManager:
             self._remove_finished_job(job)
         return result
 
-    def _get_job(self, job_id: str) -> Union[None, Job]:
+    def _get_job(self, job_id: str) -> Job | None:
         if self._retries:
             try:
                 start = time.time()
@@ -248,7 +249,7 @@ class QueueManager:
 class RegistryManager:
     def __init__(
         self,
-        redis_processes: List[Tuple[str, int]],
+        redis_processes: tuple[str, int],
         submitted_workers: int,
         num_already_completed: int,
     ):
@@ -265,25 +266,25 @@ class RegistryManager:
     def jobs_to_finish(self) -> bool:
         return any([q.jobs_to_finish for q in self._queues])
 
-    def enqueue(self, jobs: List[Dict], workhorse_import_path: str) -> None:
+    def enqueue(self, jobs: list[dict], workhorse_import_path: str) -> None:
         for queue, jobs_chunk in zip(self._queues, self.allocate_jobs(jobs)):
             queue.enqueue(jobs_chunk, workhorse_import_path)
 
-    def allocate_jobs(self, jobs: List[Dict]) -> Iterator[List[Dict]]:
+    def allocate_jobs(self, jobs: list[dict]) -> Iterator[list[dict]]:
         """Allocate jobs to queues in a round robin fashion."""
         num_queues = len(self._queues)
         for mod in range(num_queues):
             yield [job for i, job in enumerate(jobs) if i % num_queues == mod]
 
-    def get_results(self) -> List:
+    def get_results(self) -> list:
         to_check = [q for q in self._queues if q.jobs_to_finish]
         results = []
         for queue in to_check:
             results.extend(queue.get_results())
         return results
 
-    def update_and_report(self) -> Dict[str, Union[int, float]]:
-        status: Dict[str, Union[int, float]] = defaultdict(int)
+    def update_and_report(self) -> dict[str, int | float]:
+        status: dict[str, int | float] = defaultdict(int)
         for queue in self._queues:
             queue_status = queue.update_and_report()
             for k, v in queue_status.items():

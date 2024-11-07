@@ -9,7 +9,7 @@ import atexit
 import os
 import shutil
 from pathlib import Path
-from typing import List, NamedTuple, Optional, TextIO
+from typing import NamedTuple, TextIO
 
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.utilities import get_drmaa
@@ -30,7 +30,7 @@ class NativeSpecification(NamedTuple):
     queue: str
     peak_memory: str
     max_runtime: str
-    hardware: List[Optional[str]]
+    hardware: list[str | None]
 
     # Class constant
     NUM_THREADS: int = 1

@@ -14,7 +14,6 @@ from copy import deepcopy
 from pathlib import Path
 from time import sleep, time
 from traceback import format_exc
-from typing import Dict, Optional, Tuple, Union
 
 import dill
 import pandas as pd
@@ -42,7 +41,7 @@ class ParallelSimulationContext(SimulationContext):
         pass
 
 
-def work_horse(job_parameters: dict) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+def work_horse(job_parameters: dict) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     node = f"{ENV_VARIABLES.HOSTNAME.value}"
     job = f"{ENV_VARIABLES.JOB_ID.value}:{ENV_VARIABLES.TASK_ID.value}"
 
@@ -171,7 +170,7 @@ def do_sim_epilogue(
 
 
 def format_and_record_details(
-    job_parameters: JobParameters, results: Dict[str, pd.DataFrame]
+    job_parameters: JobParameters, results: dict[str, pd.DataFrame]
 ) -> pd.DataFrame:
     """Add finished simulation details to results and metadata."""
     finished_results_metadata = pd.DataFrame(index=[0])
@@ -185,7 +184,7 @@ def format_and_record_details(
     return finished_results_metadata
 
 
-def get_backup(job_parameters: JobParameters) -> Optional[SimulationContext]:
+def get_backup(job_parameters: JobParameters) -> SimulationContext | None:
     backup_dir = job_parameters.backup_configuration["backup_dir"]
     metadata_path = job_parameters.backup_configuration["backup_metadata_path"]
     try:

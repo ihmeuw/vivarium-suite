@@ -6,9 +6,6 @@ Cluster CLI options
 Command line options for configuring the cluster environment in psimulate runs.
 
 """
-
-from typing import List, Optional
-
 import click
 
 _RUNTIME_FORMAT = "hh:mm:ss"
@@ -28,8 +25,8 @@ _AVAILABLE_HARDWARE = [
 
 
 def _validate_and_split_hardware(
-    ctx: click.Context, param: click.core.Option, value: Optional[str]
-) -> List[Optional[str]]:
+    ctx: click.Context, param: click.core.Option, value: str | None
+) -> list[str | None]:
     hardware = value.split(",") if value else []
     bad_requests = set(hardware) - set(_AVAILABLE_HARDWARE)
     if bad_requests:

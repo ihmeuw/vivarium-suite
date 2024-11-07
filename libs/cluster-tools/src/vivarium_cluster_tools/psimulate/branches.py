@@ -7,9 +7,9 @@ Tools for managing the parameter space of a parallel run.
 
 """
 
+from collections.abc import Iterator
 from itertools import product
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import yaml
@@ -23,14 +23,12 @@ NUMBER_OF_DRAWS = 500
 class Keyspace:
     """A representation of a collection of simulation configurations."""
 
-    def __init__(self, branches: List[Dict], keyspace: Dict):
+    def __init__(self, branches: list[dict], keyspace: dict):
         self.branches = branches
         self._keyspace = keyspace
 
     @classmethod
-    def from_branch_configuration(
-        cls, branch_configuration_file: Union[str, Path]
-    ) -> "Keyspace":
+    def from_branch_configuration(cls, branch_configuration_file: str | Path) -> "Keyspace":
         """
         Parameters
         ----------
@@ -62,10 +60,10 @@ class Keyspace:
     @classmethod
     def from_entry_point_args(
         cls,
-        input_branch_configuration_path: Optional[Path],
+        input_branch_configuration_path: Path | None,
         keyspace_path: Path,
         branches_path: Path,
-        extras: Dict,
+        extras: dict,
     ) -> "Keyspace":
         if input_branch_configuration_path is not None:
             keyspace = cls.from_branch_configuration(
@@ -98,7 +96,7 @@ class Keyspace:
         """Checks whether the item is present in the Keyspace"""
         return item in self._keyspace
 
-    def __iter__(self) -> Iterator[Tuple[int, int, Dict]]:
+    def __iter__(self) -> Iterator[tuple[int, int, dict]]:
         """Yields and individual simulation configuration from the keyspace."""
         for job_config in product(
             self._keyspace["input_draw"], self._keyspace["random_seed"], self.branches
@@ -119,8 +117,8 @@ class Keyspace:
 
 
 def calculate_input_draws(
-    input_draw_count: int, existing_draws: List[int] = None
-) -> List[int]:
+    input_draw_count: int, existing_draws: list[int] | None = None
+) -> list[int]:
     """Determines a random sample of the GBD input draws to use.
 
     Notes
@@ -162,8 +160,8 @@ def calculate_input_draws(
 
 
 def calculate_random_seeds(
-    random_seed_count: int, existing_seeds: List[int] = None
-) -> List[int]:
+    random_seed_count: int, existing_seeds: list[int] | None = None
+) -> list[int]:
     """Generates random seeds to use given a count of seeds and any existing seeds.
 
     Parameters
@@ -195,7 +193,7 @@ def calculate_random_seeds(
     return possible[:random_seed_count]
 
 
-def calculate_keyspace(branches: List[Dict]) -> Dict:
+def calculate_keyspace(branches: list[dict]) -> dict:
     keyspace = {k: {v} for k, v in collapse_nested_dict(branches[0])}
 
     for branch in branches[1:]:
@@ -212,7 +210,7 @@ def calculate_keyspace(branches: List[Dict]) -> Dict:
 
 def load_branch_configuration(
     path: Path,
-) -> Tuple[List[Dict], int, int, Optional[List[int]], Optional[List[int]]]:
+) -> tuple[list[dict], int, int, list[int] | None, list[int] | None]:
     data = yaml.full_load(path.read_text())
 
     input_draw_count = data.get("input_draw_count", 1)
@@ -242,9 +240,9 @@ def load_branch_configuration(
 
 
 def _check_count_and_values(
-    configuration: Dict,
+    configuration: dict,
     value_count: int,
-    values: List[int],
+    values: list[int],
     count_name: str,
     values_name: str,
     max_count: int,
@@ -282,7 +280,7 @@ def _check_count_and_values(
         raise ValueError(f"{count_name} must be within 1-{max_count}. Given: {value_count}")
 
 
-def expand_branch_templates(templates: Dict) -> List[Dict]:
+def expand_branch_templates(templates: dict) -> list[dict]:
     """Expand branch template lists into individual branches.
 
     Take a list of dictionaries of configuration values (like the ones used in

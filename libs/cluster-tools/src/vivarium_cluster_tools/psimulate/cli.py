@@ -12,7 +12,6 @@ Command line interface for `psimulate`.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import click
 from loguru import logger
@@ -87,7 +86,7 @@ shared_options = [
 def run(
     model_specification: Path,
     branch_configuration: Path,
-    artifact_path: Optional[Path],
+    artifact_path: Path | None,
     result_directory: Path,
     **options,
 ) -> None:

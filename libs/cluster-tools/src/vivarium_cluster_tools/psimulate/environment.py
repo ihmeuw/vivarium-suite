@@ -8,7 +8,8 @@ Environment variables used or created throughout psimulate.
 """
 import os
 import socket
-from typing import Callable, NamedTuple
+from collections.abc import Callable
+from typing import NamedTuple
 
 
 class EnvVariable:

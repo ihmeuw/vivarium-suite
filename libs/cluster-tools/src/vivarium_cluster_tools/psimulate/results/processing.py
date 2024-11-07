@@ -9,7 +9,6 @@ Tools for processing and writing results.
 
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import pandas as pd
 from loguru import logger
@@ -21,12 +20,12 @@ from vivarium_cluster_tools.psimulate.paths import OutputPaths
 def write_results_batch(
     output_paths: OutputPaths,
     existing_metadata: pd.DataFrame,
-    existing_results: Dict[str, pd.DataFrame],
-    unwritten_metadata: List[pd.DataFrame],
-    unwritten_results: List[Dict[str, pd.DataFrame]],
+    existing_results: dict[str, pd.DataFrame],
+    unwritten_metadata: list[pd.DataFrame],
+    unwritten_results: list[dict[str, pd.DataFrame]],
     batch_size: int,
-) -> Tuple[
-    pd.DataFrame, List[pd.DataFrame], Dict[str, pd.DataFrame], List[Dict[str, pd.DataFrame]]
+) -> tuple[
+    pd.DataFrame, list[pd.DataFrame], dict[str, pd.DataFrame], list[dict[str, pd.DataFrame]]
 ]:
     """Write batch of results and finished simulation metadata to disk.
 
@@ -76,7 +75,7 @@ def write_results_batch(
 
 
 def _concat_metadata(
-    old_metadata: pd.DataFrame, new_metadata: List[pd.DataFrame]
+    old_metadata: pd.DataFrame, new_metadata: list[pd.DataFrame]
 ) -> pd.DataFrame:
     """Concatenate the new metadata to the old."""
     # Skips all the pandas index checking because columns are in the same order.
@@ -93,8 +92,8 @@ def _concat_metadata(
 
 
 def _concat_results(
-    old_results: Dict[str, pd.DataFrame], new_results: List[Dict[str, pd.DataFrame]]
-) -> Dict[str, pd.DataFrame]:
+    old_results: dict[str, pd.DataFrame], new_results: list[dict[str, pd.DataFrame]]
+) -> dict[str, pd.DataFrame]:
     """Concatenate the new results to the old."""
     # Skips all the pandas index checking because columns are in the same order.
     start = time.time()
@@ -118,7 +117,7 @@ def _concat_results(
     return results
 
 
-def _concat_preserve_types(df_list: List[pd.DataFrame]) -> pd.DataFrame:
+def _concat_preserve_types(df_list: list[pd.DataFrame]) -> pd.DataFrame:
     """Concatenate datasets and preserve all ``numpy`` dtypes.
 
     This does not preserve any pandas-specific dtypes, e.g. categories become

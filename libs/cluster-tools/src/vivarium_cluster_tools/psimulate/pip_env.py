@@ -9,7 +9,6 @@ Tools to manage and validate reproducible Python environments for simulation run
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import click
 from loguru import logger
@@ -40,7 +39,7 @@ def validate(environment_file: Path) -> None:
         )
 
 
-def _parse_package_version(s: str) -> Tuple[str, str]:
+def _parse_package_version(s: str) -> tuple[str, str]:
     if (
         "no version control" in s
     ):  # installed from non-git controlled source code in editable mode
@@ -57,11 +56,11 @@ def _parse_package_version(s: str) -> Tuple[str, str]:
     return package, version
 
 
-def _convert_pip_list_to_dict(pf_list: List[str]) -> Dict:
+def _convert_pip_list_to_dict(pf_list: list[str]) -> dict:
     return {p: v for p, v in [_parse_package_version(s) for s in pf_list]}
 
 
-def _compare_environments(current: Dict, original: Dict) -> None:
+def _compare_environments(current: dict, original: dict) -> None:
     differences = []
 
     current_packages = set(current.keys())

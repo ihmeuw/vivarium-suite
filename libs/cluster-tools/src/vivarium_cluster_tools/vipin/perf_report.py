@@ -10,7 +10,6 @@ Tools for summarizing and reporting performance information.
 import json
 import re
 from pathlib import Path
-from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -93,7 +92,7 @@ class PerformanceSummary:
             log.unlink()
 
 
-def set_index_scenario_cols(perf_df: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
+def set_index_scenario_cols(perf_df: pd.DataFrame) -> tuple[pd.DataFrame, list]:
     """Get the columns useful to index performance data by."""
     index_cols = BASE_PERF_INDEX_COLS
     scenario_cols = [col for col in perf_df.columns if col.startswith("scenario_")]
@@ -185,8 +184,8 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list):
 
 
 def report_performance(
-    input_directory: Union[Path, str],
-    output_directory: Union[Path, str],
+    input_directory: Path | str,
+    output_directory: Path | str,
     output_hdf: bool,
     verbose: int,
 ):
