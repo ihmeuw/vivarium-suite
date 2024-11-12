@@ -1,5 +1,3 @@
-from typing import Optional, Tuple
-
 import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
@@ -52,10 +50,10 @@ from {{cookiecutter.package_name}}.tools import (
 )
 def make_artifacts(
     location: str,
-    years: Optional[str],
+    years: str | None,
     output_dir: str,
     append: bool,
-    replace_keys: Tuple[str, ...],
+    replace_keys: tuple[str, ...],
     verbose: int,
     with_debugger: bool,
 ) -> None:

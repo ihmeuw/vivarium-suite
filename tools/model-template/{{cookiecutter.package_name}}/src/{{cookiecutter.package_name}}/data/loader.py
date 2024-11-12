@@ -12,8 +12,6 @@ for an example.
 
    No logging is done here. Logging is done in vivarium inputs itself and forwarded.
 """
-from typing import List, Optional, Union
-
 import numpy as np
 import pandas as pd
 from gbd_mapping import causes, covariates, risk_factors
@@ -29,7 +27,7 @@ from {{cookiecutter.package_name}}.constants import data_keys
 
 
 def get_data(
-    lookup_key: str, location: str, years: Optional[Union[int, str, List[int]]] = None
+    lookup_key: str, location: str, years: int | str | list[int] | None = None
 ) -> pd.DataFrame:
     """Retrieves data from an appropriate source.
 
@@ -66,7 +64,7 @@ def get_data(
 
 
 def load_population_location(
-    key: str, location: str, years: Optional[Union[int, str, List[int]]] = None
+    key: str, location: str, years: int | str | list[int] | None = None
 ) -> str:
     if key != data_keys.POPULATION.LOCATION:
         raise ValueError(f"Unrecognized key {key}")
@@ -75,38 +73,38 @@ def load_population_location(
 
 
 def load_population_structure(
-    key: str, location: str, years: Optional[Union[int, str, List[int]]] = None
+    key: str, location: str, years: int | str | list[int] | None = None
 ) -> pd.DataFrame:
     return interface.get_population_structure(location, years)
 
 
 def load_age_bins(
-    key: str, location: str, years: Optional[Union[int, str, List[int]]] = None
+    key: str, location: str, years: int | str | list[int] | None = None
 ) -> pd.DataFrame:
     return interface.get_age_bins()
 
 
 def load_demographic_dimensions(
-    key: str, location: str, years: Optional[Union[int, str, List[int]]] = None
+    key: str, location: str, years: int | str | list[int] | None = None
 ) -> pd.DataFrame:
     return interface.get_demographic_dimensions(location, years)
 
 
 def load_theoretical_minimum_risk_life_expectancy(
-    key: str, location: str, years: Optional[Union[int, str, List[int]]] = None
+    key: str, location: str, years: int | str | list[int] | None = None
 ) -> pd.DataFrame:
     return interface.get_theoretical_minimum_risk_life_expectancy()
 
 
 def load_standard_data(
-    key: str, location: str, years: Optional[Union[int, str, List[int]]] = None
+    key: str, location: str, years: int | str | list[int] | None = None
 ) -> pd.DataFrame:
     key = EntityKey(key)
     entity = get_entity(key)
     return interface.get_measure(entity, key.measure, location, years).droplevel("location")
 
 
-def load_metadata(key: str, location: str, years: Optional[Union[int, str, List[int]]] = None):
+def load_metadata(key: str, location: str, years: int | str | list[int] | None = None):
     key = EntityKey(key)
     entity = get_entity(key)
     entity_metadata = entity[key.measure]
@@ -115,7 +113,7 @@ def load_metadata(key: str, location: str, years: Optional[Union[int, str, List[
     return entity_metadata
 
 
-def load_categorical_paf(key: str, location: str, years: Optional[Union[int, str, List[int]]] = None) -> pd.DataFrame:
+def load_categorical_paf(key: str, location: str, years: int | str | list[int] | None = None) -> pd.DataFrame:
     try:
         risk = {
             # todo add keys as needed
@@ -163,7 +161,7 @@ def _load_em_from_meid(location, meid, measure):
 # TODO - add project-specific data functions here
 
 
-def get_entity(key: Union[str, EntityKey]):
+def get_entity(key: str | EntityKey):
     # Map of entity types to their gbd mappings.
     type_map = {
         "cause": causes,

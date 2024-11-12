@@ -10,7 +10,6 @@ Some degree of verbosity/boilerplate is fine in the interest of transparency.
 
 """
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 from loguru import logger
@@ -50,7 +49,7 @@ def open_artifact(output_path: Path, location: str) -> Artifact:
 
 
 def load_and_write_data(
-    artifact: Artifact, key: str, location: str, years: Optional[str], replace: bool
+    artifact: Artifact, key: str, location: str, years: str | None, replace: bool
 ):
     """Loads data and writes it to the artifact if not already present.
 

@@ -10,7 +10,6 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Optional, Tuple, Union
 
 import click
 from loguru import logger
@@ -30,7 +29,7 @@ def running_from_cluster() -> bool:
 
 
 def check_for_existing(
-    output_dir: Path, location: str, append: bool, replace_keys: Tuple
+    output_dir: Path, location: str, append: bool, replace_keys: tuple
 ) -> None:
     existing_artifacts = set(
         [
@@ -66,7 +65,7 @@ def check_for_existing(
 
 
 def build_single(
-    location: str, years: Optional[str], output_dir: str, replace_keys: Tuple
+    location: str, years: str | None, output_dir: str, replace_keys: tuple
 ) -> None:
     path = Path(output_dir) / f"{sanitize_location(location)}.hdf"
     build_single_location_artifact(path, location, years, replace_keys)
@@ -74,10 +73,10 @@ def build_single(
 
 def build_artifacts(
     location: str,
-    years: Optional[str],
+    years: str | None,
     output_dir: str,
     append: bool,
-    replace_keys: Tuple,
+    replace_keys: tuple,
     verbose: int,
 ) -> None:
     """Main application function for building artifacts.
@@ -196,10 +195,10 @@ def build_all_artifacts(output_dir: Path, verbose: int) -> None:
 
 
 def build_single_location_artifact(
-    path: Union[str, Path],
+    path: str | Path,
     location: str,
-    years: Optional[str],
-    replace_keys: Tuple = (),
+    years: str | None,
+    replace_keys: tuple = (),
     log_to_file: bool = False,
 ) -> None:
     """Builds an artifact for a single location.

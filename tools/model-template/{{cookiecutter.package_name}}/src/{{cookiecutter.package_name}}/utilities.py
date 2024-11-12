@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List, Tuple, Union
 
 import click
 import numpy as np
@@ -11,7 +10,7 @@ from vivarium_public_health.risks.data_transformations import pivot_categorical
 
 from {{cookiecutter.package_name}}.constants import metadata
 
-SeededDistribution = Tuple[str, stats.rv_continuous]
+SeededDistribution = tuple[str, stats.rv_continuous]
 
 
 def len_longest_location() -> int:
@@ -42,7 +41,7 @@ def sanitize_location(location: str):
     return location.replace(" ", "_").replace("'", "_").lower()
 
 
-def delete_if_exists(*paths: Union[Path, List[Path]], confirm=False):
+def delete_if_exists(*paths: Path | list[Path], confirm=False):
     paths = paths[0] if isinstance(paths[0], list) else paths
     existing_paths = [p for p in paths if p.exists()]
     if existing_paths:
@@ -86,7 +85,7 @@ def read_data_by_draw(artifact_path: str, key : str, draw: int) -> pd.DataFrame:
 def get_norm(
         mean: float,
         sd: float = None,
-        ninety_five_pct_confidence_interval: Tuple[float, float] = None
+        ninety_five_pct_confidence_interval: tuple[float, float] = None
 ) -> stats.norm:
     sd = _get_standard_deviation(mean, sd, ninety_five_pct_confidence_interval)
     return stats.norm(loc=mean, scale=sd)
@@ -95,7 +94,7 @@ def get_norm(
 def get_truncnorm(
         mean: float,
         sd: float = None,
-        ninety_five_pct_confidence_interval: Tuple[float, float] = None,
+        ninety_five_pct_confidence_interval: tuple[float, float] = None,
         lower_clip: float = 0.0,
         upper_clip: float = 1.0
 ) -> stats.norm:
@@ -106,7 +105,7 @@ def get_truncnorm(
 
 
 def _get_standard_deviation(
-        mean: float, sd: float, ninety_five_pct_confidence_interval: Tuple[float, float]
+        mean: float, sd: float, ninety_five_pct_confidence_interval: tuple[float, float]
 ) -> float:
     if sd is None and ninety_five_pct_confidence_interval is None:
         raise ValueError("Must provide either a standard deviation or a 95% confidence interval.")
@@ -127,7 +126,7 @@ def _get_standard_deviation(
 
 
 def get_lognorm_from_quantiles(median: float, lower: float, upper: float,
-                               quantiles: Tuple[float, float] = (0.025, 0.975)) -> stats.lognorm:
+                               quantiles: tuple[float, float] = (0.025, 0.975)) -> stats.lognorm:
     """Returns a frozen lognormal distribution with the specified median, such that
     (lower, upper) are approximately equal to the quantiles with ranks
     (quantile_ranks[0], quantile_ranks[1]).
