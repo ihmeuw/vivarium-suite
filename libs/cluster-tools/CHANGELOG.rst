@@ -1,6 +1,6 @@
-**2.0.5 - 11/06/24**
+**2.1.0 - 11/06/24**
 
-  - Drop support for Python 3.8
+  - Drop support for Python 3.9
   - Modernize type hinting
 
 **2.0.4 - 10/07/24**
