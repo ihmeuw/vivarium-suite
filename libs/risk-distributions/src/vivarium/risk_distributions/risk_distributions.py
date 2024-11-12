@@ -1,5 +1,5 @@
 import warnings
-from typing import Callable, Dict, Tuple, Union
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -113,9 +113,7 @@ class BaseDistribution:
         """
         return data
 
-    def pdf(
-        self, x: Union[pd.Series, np.ndarray, float, int]
-    ) -> Union[pd.Series, np.ndarray, float]:
+    def pdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -150,9 +148,7 @@ class BaseDistribution:
             p = p.values
         return p
 
-    def ppf(
-        self, q: Union[pd.Series, np.ndarray, float, int]
-    ) -> Union[pd.Series, np.ndarray, float]:
+    def ppf(self, q: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
 
@@ -187,9 +183,7 @@ class BaseDistribution:
             x = x.values
         return x
 
-    def cdf(
-        self, x: Union[pd.Series, np.ndarray, float, int]
-    ) -> Union[pd.Series, np.ndarray, float]:
+    def cdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -558,7 +552,7 @@ class EnsembleDistribution:
     def __init__(
         self,
         weights: Parameters,
-        parameters: Dict[str, Parameters] = None,
+        parameters: dict[str, Parameters] = None,
         mean: Parameter = None,
         sd: Parameter = None,
     ):
@@ -571,7 +565,7 @@ class EnsembleDistribution:
         parameters: Parameters = None,
         mean: Parameter = None,
         sd: Parameter = None,
-    ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+    ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
         weights = format_data(weights, list(cls._distribution_map.keys()), "weights")
 
         params = {}
@@ -597,9 +591,7 @@ class EnsembleDistribution:
 
         return weights, params
 
-    def pdf(
-        self, x: Union[pd.Series, np.ndarray, float, int]
-    ) -> Union[pd.Series, np.ndarray, float]:
+    def pdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -626,9 +618,9 @@ class EnsembleDistribution:
 
     def ppf(
         self,
-        q: Union[pd.Series, np.ndarray, float, int],
-        q_dist: Union[pd.Series, np.ndarray, float, int],
-    ) -> Union[pd.Series, np.ndarray, float]:
+        q: pd.Series | np.ndarray | float | int,
+        q_dist: pd.Series | np.ndarray | float | int,
+    ) -> pd.Series | np.ndarray | float:
         """Quantile function using 2 propensities.
 
         Parameters
@@ -673,9 +665,7 @@ class EnsembleDistribution:
             x = x.values
         return x
 
-    def cdf(
-        self, x: Union[pd.Series, np.ndarray, float, int]
-    ) -> Union[pd.Series, np.ndarray, float]:
+    def cdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -712,7 +702,7 @@ class NonConvergenceError(Exception):
 
 def _get_optimization_result(
     mean: pd.Series, sd: pd.Series, func: Callable, initial_func: Callable
-) -> Tuple:
+) -> tuple:
     """Finds the shape parameters of distributions which generates mean/sd close to actual mean/sd.
 
     Parameters

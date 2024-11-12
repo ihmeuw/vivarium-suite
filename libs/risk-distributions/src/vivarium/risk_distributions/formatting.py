@@ -1,11 +1,11 @@
-from typing import Any, Dict, List, Tuple, TypeVar, Union
+from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
 
-Parameter = TypeVar("Parameter", np.ndarray, pd.Series, List, Tuple, int, float)
+Parameter = TypeVar("Parameter", np.ndarray, pd.Series, list, tuple, int, float)
 Parameters = TypeVar(
-    "Parameters", np.ndarray, pd.Series, pd.DataFrame, List, Tuple, Dict[str, Parameter]
+    "Parameters", np.ndarray, pd.Series, pd.DataFrame, list, tuple, dict[str, Parameter]
 )
 
 
@@ -42,7 +42,7 @@ def cast_to_series(mean: Parameter, sd: Parameter) -> (pd.Series, pd.Series):
     return mean, sd
 
 
-def format_data(data: Parameters, required_columns: List[Any], measure: str) -> pd.DataFrame:
+def format_data(data: Parameters, required_columns: list[Any], measure: str) -> pd.DataFrame:
     """Formats parameter data into a dataframe."""
     if isinstance(data, np.ndarray):
         data = format_array(data, required_columns, measure)
@@ -58,7 +58,7 @@ def format_data(data: Parameters, required_columns: List[Any], measure: str) -> 
     return data
 
 
-def format_array(data: np.ndarray, required_columns: List[any], measure: str) -> pd.DataFrame:
+def format_array(data: np.ndarray, required_columns: list[Any], measure: str) -> pd.DataFrame:
     """Transforms 1d and 2d arrays into dataframes with columns for the
     parameters and (possibly) rows for each parameter variation."""
     if not data.size:
@@ -111,7 +111,7 @@ def format_array(data: np.ndarray, required_columns: List[any], measure: str) ->
     return data
 
 
-def format_series(data: pd.Series, required_columns: List[Any], measure: str) -> pd.DataFrame:
+def format_series(data: pd.Series, required_columns: list[Any], measure: str) -> pd.DataFrame:
     """Transforms series data into dataframes with columns for the
     parameters and (possibly) rows for each parameter variation."""
     if data.empty:
@@ -134,7 +134,7 @@ def format_series(data: pd.Series, required_columns: List[Any], measure: str) ->
 
 
 def format_data_frame(
-    data: pd.DataFrame, required_columns: List[Any], measure: str
+    data: pd.DataFrame, required_columns: list[Any], measure: str
 ) -> pd.DataFrame:
     """Checks that input data provided as a dataframe is properly formatted."""
     if data.empty:
@@ -155,7 +155,7 @@ def format_data_frame(
 
 
 def format_list_like(
-    data: Union[List, Tuple], required_columns: List[Any], measure: str
+    data: list | tuple, required_columns: list[Any], measure: str
 ) -> pd.DataFrame:
     """Transforms 1d and 2d lists or tuples into dataframes with columns for
     the parameters and (possibly) rows for each parameter variation."""
@@ -164,7 +164,7 @@ def format_list_like(
 
 
 def format_dict(
-    data: Dict[str, Parameter], required_columns: List[Any], measure: str
+    data: dict[str, Parameter], required_columns: list[Any], measure: str
 ) -> pd.DataFrame:
     """Transform dictionaries with scalar or list-like values into dataframes
     with columns for the parameters and (possibly) rows for each parameter

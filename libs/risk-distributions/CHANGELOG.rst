@@ -1,3 +1,8 @@
+**2.1.0 - 11/07/24**
+
+ - Drop support for Python 3.9
+ - Modernize type hinting
+
 **2.0.17 - 09/17/24**
 
 - Pin Sphinx below 8.0
