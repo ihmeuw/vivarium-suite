@@ -1,3 +1,7 @@
+**2.2.0 - 11/21/2024**
+
+ - Drop support for Python 3.9
+
 **2.1.0 - 10/31/2024**
 
  - Add getter methods
