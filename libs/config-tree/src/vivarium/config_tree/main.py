@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import yaml
 
@@ -74,7 +74,7 @@ class ConfigNode:
     def __init__(self, layers: list[str], name: str):
         self._name = name
         self._layers = layers
-        self._values: dict[str, tuple[Optional[str], Any]] = {}
+        self._values: dict[str, tuple[str | None, Any]] = {}
         self._frozen = False
         self._accessed = False
 
@@ -89,7 +89,7 @@ class ConfigNode:
         return self._accessed
 
     @property
-    def metadata(self) -> list[dict[str, Union[Optional[str], Any]]]:
+    def metadata(self) -> list[dict[str, Any | str | None]]:
         """Returns all values and associated metadata for this node."""
         result = []
         for layer in self._layers:
@@ -112,7 +112,7 @@ class ConfigNode:
         """
         self._frozen = True
 
-    def get_value(self, layer: Optional[str] = None) -> Any:
+    def get_value(self, layer: str | None = None) -> Any:
         """Returns the value at the specified layer.
 
         If no layer is specified, the outermost (highest priority) layer
@@ -133,7 +133,7 @@ class ConfigNode:
         self._accessed = True
         return value
 
-    def update(self, value: Any, layer: Optional[str], source: Optional[str]) -> None:
+    def update(self, value: Any, layer: str | None, source: str | None) -> None:
         """Set a value for a layer with optional metadata about source.
 
         Parameters
@@ -180,7 +180,7 @@ class ConfigNode:
         else:
             self._values[layer] = (source, value)
 
-    def _get_value_with_source(self, layer: Optional[str]) -> tuple[Optional[str], Any]:
+    def _get_value_with_source(self, layer: str | None) -> tuple[str | None, Any]:
         """Returns a (source, value) tuple at the specified layer.
 
         If no layer is specified, the outermost (highest priority) layer
@@ -252,13 +252,13 @@ class LayeredConfigTree:
 
     # Define type annotations here since they're indirectly defined below
     _layers: list[str]
-    _children: dict[str, Union[LayeredConfigTree, ConfigNode]]
+    _children: dict[str, LayeredConfigTree | ConfigNode]
     _frozen: bool
     _name: str
 
     def __init__(
         self,
-        data: Optional[InputData] = None,
+        data: InputData | None = None,
         layers: list[str] = [],
         name: str = "",
     ):
@@ -308,7 +308,7 @@ class LayeredConfigTree:
         for child in self.values():
             child.freeze()
 
-    def items(self) -> Iterable[tuple[str, Union[LayeredConfigTree, ConfigNode]]]:
+    def items(self) -> Iterable[tuple[str, LayeredConfigTree | ConfigNode]]:
         """Return an iterable of all (child_name, child) pairs."""
         return self._children.items()
 
@@ -316,7 +316,7 @@ class LayeredConfigTree:
         """Return an Iterable of all child names."""
         return self._children.keys()
 
-    def values(self) -> Iterable[Union[LayeredConfigTree, ConfigNode]]:
+    def values(self) -> Iterable[LayeredConfigTree | ConfigNode]:
         """Return an Iterable of all children."""
         return self._children.values()
 
@@ -374,7 +374,7 @@ class LayeredConfigTree:
                 f"The data you accessed using {key} with get_tree was of type {type(data)}, but get_tree must return a LayeredConfigTree."
             )
 
-    def get_from_layer(self, name: str, layer: Optional[str] = None) -> Any:
+    def get_from_layer(self, name: str, layer: str | None = None) -> Any:
         """Get a configuration value from the provided layer.
 
         If no layer is specified, the outermost (highest priority) layer
@@ -400,9 +400,9 @@ class LayeredConfigTree:
 
     def update(
         self,
-        data: Optional[InputData],
-        layer: Optional[str] = None,
-        source: Optional[str] = None,
+        data: InputData | None,
+        layer: str | None = None,
+        source: str | None = None,
     ) -> None:
         """Adds additional data into the :class:`LayeredConfigTree`.
 
@@ -442,8 +442,8 @@ class LayeredConfigTree:
 
         """
         if data is not None:
-            data, source = self._coerce(data, source)
-            for k, v in data.items():
+            data_dict, source = self._coerce(data, source)
+            for k, v in data_dict.items():
                 self._set_with_metadata(k, v, layer, source)
 
     def metadata(self, name: str) -> list[dict[str, Any]]:
@@ -455,8 +455,8 @@ class LayeredConfigTree:
     @staticmethod
     def _coerce(
         data: InputData,
-        source: Optional[str],
-    ) -> tuple[dict[str, Any], Optional[str]]:
+        source: str | None,
+    ) -> tuple[dict[str, Any], str | None]:
         """Coerces data into dictionary format."""
         if isinstance(data, dict):
             return data, source
@@ -465,13 +465,13 @@ class LayeredConfigTree:
         ):
             source = source if source else str(data)
             with open(data) as f:
-                data = f.read()
-            data = yaml.full_load(data)
-            if not isinstance(data, dict):
+                data_file = f.read()
+            coerced_data = yaml.full_load(data_file)
+            if not isinstance(coerced_data, dict):
                 raise ValueError(
-                    f"Loaded yaml file {data} should be a dictionary but is type {type(data)}"
+                    f"Loaded yaml file {coerced_data} should be a dictionary but is type {type(coerced_data)}"
                 )
-            return data, source
+            return coerced_data, source
         elif isinstance(data, str):
             data = yaml.full_load(data)
             if not isinstance(data, dict):
@@ -492,8 +492,8 @@ class LayeredConfigTree:
         self,
         name: str,
         value: Any,
-        layer: Optional[str],
-        source: Optional[str],
+        layer: str | None,
+        source: str | None,
     ) -> None:
         """Set a value in the named layer with the given source.
 

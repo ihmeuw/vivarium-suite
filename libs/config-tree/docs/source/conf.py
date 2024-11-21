@@ -20,7 +20,6 @@ from pathlib import Path
 import layered_config_tree
 
 base_dir = Path(layered_config_tree.__file__).parent
-from typing import Optional
 
 about: dict[str, str] = {}
 with (base_dir / "__about__.py").open() as f:
@@ -88,7 +87,7 @@ language = "en"
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns: list[Optional[str]] = []
+exclude_patterns: list[str | None] = []
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"

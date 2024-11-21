@@ -1,10 +1,10 @@
-from typing import Any, Optional
+from typing import Any
 
 
 class ConfigurationError(Exception):
     """Base class for configuration errors."""
 
-    def __init__(self, message: str, value_name: Optional[str] = None):
+    def __init__(self, message: str, value_name: str | None = None):
         super().__init__(message)
         self.value_name = value_name
 
@@ -33,8 +33,8 @@ class DuplicatedConfigurationError(ConfigurationError):
         self,
         message: str,
         name: str,
-        layer: Optional[str],
-        source: Optional[str],
+        layer: str | None,
+        source: str | None,
         value: Any,
     ):
         self.layer = layer
