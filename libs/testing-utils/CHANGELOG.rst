@@ -1,3 +1,7 @@
+**0.2.0 - 11/21/24**
+
+ - Drop support for Python 3.9
+
 **0.1.2 - 10/31/24**
 
  - Add mypy type checking
