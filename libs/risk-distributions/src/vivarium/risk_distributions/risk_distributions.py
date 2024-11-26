@@ -437,7 +437,7 @@ class MirroredGumbel(BaseDistribution):
         )
         if process_type in ["pdf_preprocess", "cdf_preprocess"]:
             value = x_max - data
-        elif process_type == "ppf_preprocess":
+        elif process_type in ["ppf_preprocess", "cdf_postprocess"]:
             # noinspection PyTypeChecker
             value = 1 - data
         elif process_type == "ppf_postprocess":
@@ -471,7 +471,7 @@ class MirroredGamma(BaseDistribution):
         )
         if process_type in ["pdf_preprocess", "cdf_preprocess"]:
             value = x_max - data
-        elif process_type == "ppf_preprocess":
+        elif process_type in ["ppf_preprocess", "cdf_postprocess"]:
             # noinspection PyTypeChecker
             value = 1 - data
         elif process_type == "ppf_postprocess":

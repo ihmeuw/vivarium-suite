@@ -1,3 +1,7 @@
+**2.1.1 - 11/26/24**
+
+ - Fix bug in MirroredGamma and MirroredGumbel CDFs.
+
 **2.1.0 - 11/07/24**
 
  - Drop support for Python 3.9

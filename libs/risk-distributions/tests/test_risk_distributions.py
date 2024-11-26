@@ -15,10 +15,9 @@ distributions = [
     risk_distributions.Normal,
     risk_distributions.Weibull,
     risk_distributions.Beta,
+    risk_distributions.MirroredGumbel,
+    risk_distributions.MirroredGamma,
 ]
-
-# FIXME: The following distributions break without updates to the processing functions
-# risk_distributions.MirroredGumbel, risk_distributions.MirroredGamma,
 
 
 @pytest.fixture
@@ -35,7 +34,8 @@ def test_cdf(test_data, distribution):
     test_distribution = distribution(mean=mean, sd=sd)
     x_min, x_max = test_distribution.parameters.x_min, test_distribution.parameters.x_max
 
-    test_x = test_distribution.ppf(test_q)
+    # TODO MIC-5595: Find and fix places where inputs are mutated in-place
+    test_x = test_distribution.ppf(test_q.copy())
 
     #  ppf can generate the value outside of the range(x_min, x_max) which will make nan if we use it in cdf.
     #  thus we only test the value within our range(x_min, x_max)
