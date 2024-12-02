@@ -1,6 +1,7 @@
 **2.1.1 - 11/26/24**
 
  - Fix bug in MirroredGamma and MirroredGumbel CDFs.
+ - Update Deploy to Python 3.11
 
 **2.1.0 - 11/07/24**
 
