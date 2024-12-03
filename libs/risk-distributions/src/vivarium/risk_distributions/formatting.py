@@ -191,9 +191,9 @@ def format_call_data(call_data, parameters):
                 "If providing call_data as a series it must "
                 "be indexed consistently with the parameter data."
             )
-        call_data = pd.Series(call_data, index=parameters.index)
+        call_data = pd.Series(call_data, index=parameters.index, copy=True)
     else:
-        call_data = pd.Series(call_data)
+        call_data = pd.Series(call_data, copy=True)
         parameters = parameters.reindex(call_data.index, method="nearest")
 
     return call_data, parameters

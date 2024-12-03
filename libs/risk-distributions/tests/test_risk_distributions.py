@@ -1,6 +1,9 @@
+import copy
+
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import assert_equal
 
 from risk_distributions import risk_distributions
 
@@ -28,14 +31,47 @@ def test_data():
     return test_mean, test_sd, test_q
 
 
+parameters = [
+    (1, 1),
+    (np.array([1, 2, 3]), np.array([1, 2, 3])),
+    (pd.Series([1, 2, 3]), pd.Series([1, 2, 3])),
+    ([1, 2, 3], [1, 2, 3]),
+    ((1, 2, 3), (1, 2, 3)),
+]
+
+test_qs = [0.1, 4, np.array([0.1, 0.2, 0.3]), pd.Series([0.1, 0.2, 0.3])]
+
+
+@pytest.mark.parametrize("distribution", distributions)
+@pytest.mark.parametrize("mean, sd", parameters)
+@pytest.mark.parametrize("test_q", test_qs)
+def test_no_state_mutations(mean, sd, test_q, distribution):
+    expected_mean, expected_sd, expected_q = copy.deepcopy((mean, sd, test_q))
+    test_distribution = distribution(mean=mean, sd=sd)
+
+    test_distribution.pdf(test_q)
+    assert_equal(mean, expected_mean)
+    assert_equal(sd, expected_sd)
+    assert_equal(test_q, expected_q)
+
+    test_distribution.ppf(test_q)
+    assert_equal(mean, expected_mean)
+    assert_equal(sd, expected_sd)
+    assert_equal(test_q, expected_q)
+
+    test_distribution.cdf(test_q)
+    assert_equal(mean, expected_mean)
+    assert_equal(sd, expected_sd)
+    assert_equal(test_q, expected_q)
+
+
 @pytest.mark.parametrize("distribution", distributions)
 def test_cdf(test_data, distribution):
     mean, sd, test_q = test_data
     test_distribution = distribution(mean=mean, sd=sd)
     x_min, x_max = test_distribution.parameters.x_min, test_distribution.parameters.x_max
 
-    # TODO MIC-5595: Find and fix places where inputs are mutated in-place
-    test_x = test_distribution.ppf(test_q.copy())
+    test_x = test_distribution.ppf(test_q)
 
     #  ppf can generate the value outside of the range(x_min, x_max) which will make nan if we use it in cdf.
     #  thus we only test the value within our range(x_min, x_max)
