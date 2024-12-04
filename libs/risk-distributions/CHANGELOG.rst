@@ -1,3 +1,7 @@
+**2.1.2 - 12/3/24**
+
+ - Fix mutable state bugs in pd Series and Dataframes
+
 **2.1.1 - 11/26/24**
 
  - Fix bug in MirroredGamma and MirroredGumbel CDFs.
