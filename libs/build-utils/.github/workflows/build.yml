@@ -6,6 +6,10 @@ name: build_utils
 on:
   workflow_call:
     inputs:
+      python_version:
+        description: "Python version to use for builds"
+        required: true
+        type: "string"
       dependencies:
         description: "String of comma-separated dependencies to check for upstream branches"
         required: true
@@ -51,7 +55,7 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ inputs.python_version }}
       - name: get upstream branch name
         run: |
           if "${{ github.event_name == 'pull_request' }}" ; then
