@@ -21,6 +21,7 @@ jobs:
       dependencies: ""
       skip_mypy: true
       skip_docs: true
+      python_version: ${{ matrix.python-version }}
     secrets:
       notify_email: ${{ secrets.NOTIFY_EMAIL }}
       NOTIFY_PASSWORD: ${{ secrets.NOTIFY_PASSWORD }}
