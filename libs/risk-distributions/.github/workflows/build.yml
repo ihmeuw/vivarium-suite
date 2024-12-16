@@ -20,6 +20,7 @@ jobs:
     with:
       dependencies: ""
       skip_mypy: true
+      python_version: ${{ matrix.python-version }}
     secrets:
       NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
       NOTIFY_PASSWORD: ${{ secrets.NOTIFY_PASSWORD }}
