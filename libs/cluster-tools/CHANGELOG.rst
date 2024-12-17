@@ -1,3 +1,7 @@
+**2.1.1 - 12/16/24**
+
+  - Defer defining randomness additional seed to RandomnessManager
+
 **2.1.0 - 11/06/24**
 
   - Drop support for Python 3.9

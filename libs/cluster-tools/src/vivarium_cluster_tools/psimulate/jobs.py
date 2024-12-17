@@ -51,7 +51,6 @@ class JobParameters(NamedTuple):
             **self.branch_configuration,
             "randomness": {
                 "random_seed": self.random_seed,
-                "additional_seed": self.input_draw,
             },
             "input_data": {
                 "input_draw_number": self.input_draw,
