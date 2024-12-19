@@ -1,8 +1,8 @@
 {
     "package_name": "",
     "current_year": "",
-    "package_version": "1.0.0",
-    "package_description": "Research repository for the {{cookiecutter.package_name}} project.",
+    "package_version": "0.0.1",
+    "package_description": "Vivarium simulation model for the {{cookiecutter.package_name}} project.",
     "package_url": "https://github.com/ihmeuw/{{cookiecutter.package_name}}",
     "ssh_url": "git@github.com:ihmeuw/{{cookiecutter.package_name}}.git",
     "vivarium_version": "",
