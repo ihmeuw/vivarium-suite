@@ -16,14 +16,14 @@ def get_latest_version(package_name):
 def main():
     """Update cookiecutter context dynamically with current package versions."""
     # Fetch versions for the required packages
-    packages = {
-        "vivarium": "vivarium",
-        "vivarium_public_health": "vivarium-public-health",
-        "vivarium_cluster_tools": "vivarium-cluster-tools",
-        "vivarium_inputs": "vivarium-inputs",
-        "gbd_mapping": "gbd-mapping",
-    }
-    versions = {key: get_latest_version(value) for key, value in packages.items()}
+    packages = [
+        "vivarium",
+        "vivarium_public_health",
+        "vivarium_cluster_tools",
+        "vivarium_inputs",
+        "gbd_mapping",
+    ]
+    versions = {package_name: get_latest_version(package_name) for package_name in packages}
 
     # Update the context dynamically
     context_file = os.path.join(os.getcwd(), "cookiecutter.json")
