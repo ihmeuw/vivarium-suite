@@ -562,7 +562,7 @@ def test_retrieval_behavior() -> None:
     # update the LayeredConfigTree layers in different order and verify that has no effect on
     #  the values retrieved ("outer" is retrieved when no layer is specified regardless of
     #  the initialization order
-    for scenario in [layer_list, reversed(layer_list)]:
+    for scenario in [layer_list, list(reversed(layer_list))]:
         lct = LayeredConfigTree(layers=layer_list)
         for layer in scenario:
             lct.update({default_cfg_value: layer}, layer=layer)
