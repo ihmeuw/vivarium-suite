@@ -1,3 +1,7 @@
+**2.2.1 - 12/27/2024**
+
+ - Bugfix: failing mypy
+
 **2.2.0 - 11/21/2024**
 
  - Drop support for Python 3.9
