@@ -59,6 +59,8 @@ def call(Map config = [:]){
       }
 
       stage("Python version matrix") {
+      // we don't want to go to deployment if any of the matrix branches fail
+      failFast true
         matrix {
           // customWorkspace setting must be ran within a node
           agent {
@@ -92,7 +94,7 @@ def call(Map config = [:]){
             // different branches happen concurrently.
             PYTHON_DEPLOY_VERSION = "3.11"
             CONDA_ENV_NAME = "${conda_env_name}"
-            CONDA_ENV_PATH = "${conda_env_path}"
+            CONDA_ENV_PATH = "${conda_env_path}_${PYTHON_VERSION}"
             // Set the Pip cache.
             XDG_CACHE_HOME = "${shared_path}/pip-cache"
             // Jenkins commands run in separate processes, so need to activate the environment every
