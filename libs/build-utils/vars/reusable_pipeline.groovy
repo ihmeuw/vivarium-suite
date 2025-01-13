@@ -10,6 +10,7 @@ def call(Map config = [:]){
   requires_slurm: Whether the child tasks require the slurm scheduler.
   skip_build: Skips the package and doc building steps.
   skip_doc_build: Only skips the doc build.
+  use_shared_fs: Whether to use the shared filesystem for conda envs.
   */
   task_node = config.requires_slurm ? 'slurm' : 'matrix-tasks'
 
@@ -25,6 +26,10 @@ def call(Map config = [:]){
   if (!test_types.every { ['e2e', 'unit', 'integration'].contains(it) }) {
     throw new IllegalArgumentException("test_types must be a subset of ['e2e', 'unit', 'integration']")
   }
+  // Allow for building conda env on shared fs if required
+  conda_env_name = config.use_shared_fs ? "${env.JOB_NAME.replaceAll('/', '-')}-${BUILD_NUMBER}" : "${env.JOB_NAME}-${BUILD_NUMBER}"
+  conda_env_dir = config.use_shared_fs ? "/mnt/team/simulation_science/priv/engineering/tests/venv" : "/tmp"
+
 
   pipeline {
     // This agent runs as svc-simsci on node simsci-ci-coordinator-01.
@@ -89,8 +94,8 @@ def call(Map config = [:]){
               parallelPythonVersions["Python ${pythonVersion}"] = {
                 node(task_node) {
                   def envVars = [
-                    CONDA_ENV_NAME: "${env.JOB_NAME}-${BUILD_NUMBER}-${pythonVersion}",
-                    CONDA_ENV_PATH: "/tmp/${env.JOB_NAME}-${BUILD_NUMBER}-${pythonVersion}",
+                    CONDA_ENV_NAME: "${conda_env_name}-${pythonVersion}",
+                    CONDA_ENV_PATH: "${conda_env_dir}/${conda_env_name}-${pythonVersion}",
                     SHARED_PATH: "/svc-simsci",
                     BRANCH: sh(script: "echo ${GIT_BRANCH} | rev | cut -d '/' -f1 | rev", returnStdout: true).trim(),
                     TIMESTAMP: sh(script: 'date', returnStdout: true),
@@ -98,7 +103,7 @@ def call(Map config = [:]){
                     CONDA_BIN_PATH: "/svc-simsci/miniconda3/bin",
                     PYTHON_VERSION: pythonVersion,
                     XDG_CACHE_HOME: "/svc-simsci/pip-cache",
-                    ACTIVATE: "source /svc-simsci/miniconda3/bin/activate /tmp/${env.JOB_NAME}-${BUILD_NUMBER}-${pythonVersion} &> /dev/null",
+                    ACTIVATE: "source /svc-simsci/miniconda3/bin/activate ${conda_env_dir}/${conda_env_name}-${pythonVersion} &> /dev/null",
                     ACTIVATE_BASE: "source /svc-simsci/miniconda3/bin/activate &> /dev/null"
                   ]
                   
@@ -136,7 +141,7 @@ def call(Map config = [:]){
                       }
 
                       stage("Install Package - Python ${pythonVersion}") {
-                        sh "${ACTIVATE} && make install"
+                        sh "${ACTIVATE} && make install && pip install ."
                       }
 
                       stage("Format - Python ${pythonVersion}") {
