@@ -40,6 +40,7 @@ def call(Map config = [:]){
     environment {
         IS_CRON = "${currentBuild.buildCauses.toString().contains('TimerTrigger')}"
     }
+
     agent { label "coordinator" }
 
     options {
@@ -60,7 +61,6 @@ def call(Map config = [:]){
         defaultValue: false,
         description: "Whether to deploy despite building a non-default branch. Builds of the default branch are always deployed."
       )
-    parameters {
       booleanParam(
         name: "RUN_SLOW",
         defaultValue: false,

@@ -77,11 +77,11 @@ jobs:
           echo "----------------------------------------"
           echo "Contents of install_dependency_branch.sh"
           echo "----------------------------------------"
-          cat ../vivarium_build_utils/install_dependency_branch.sh
+          cat ../vivarium_build_utils/resources/scripts/install_dependency_branch.sh
           echo "" 
           echo "----------------------------------------"
           for package in $(echo ${{ inputs.dependencies }} | sed "s/,/ /g"); do
-            sh ../vivarium_build_utils/install_dependency_branch.sh ${package} ${branch_name} github
+            sh ../vivarium_build_utils/resources/scripts/install_dependency_branch.sh ${package} ${branch_name} github
           done
       - name: print environment values
         run: |
