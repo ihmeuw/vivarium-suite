@@ -11,6 +11,7 @@ def call(Map config = [:]){
   skip_build: Skips the package and doc building steps.
   skip_doc_build: Only skips the doc build.
   use_shared_fs: Whether to use the shared filesystem for conda envs.
+  upstream_repos: A list of repos to check for upstream changes.
   */
   task_node = config.requires_slurm ? 'slurm' : 'matrix-tasks'
 
@@ -21,15 +22,17 @@ def call(Map config = [:]){
   python_versions = config.python_versions ?: ["3.10", "3.11"]
   PYTHON_DEPLOY_VERSION = "3.11"
 
-  test_types = config.test_types ?: []
+  test_types = config.test_types ?: ['all-tests']
   // raise an error if test_types is not a subset of  ['e2e', 'unit', 'integration']
-  if (!test_types.every { ['e2e', 'unit', 'integration'].contains(it) }) {
-    throw new IllegalArgumentException("test_types must be a subset of ['e2e', 'unit', 'integration']")
+  if (!test_types.every { ['all-tests', 'e2e', 'unit', 'integration'].contains(it) }) {
+    throw new IllegalArgumentException("test_types must be a subset of ['all-tests', 'e2e', 'unit', 'integration']")
   }
   // Allow for building conda env on shared fs if required
   conda_env_name = config.use_shared_fs ? "${env.JOB_NAME.replaceAll('/', '-')}-${BUILD_NUMBER}" : "${env.JOB_NAME}-${BUILD_NUMBER}"
   conda_env_dir = config.use_shared_fs ? "/mnt/team/simulation_science/priv/engineering/tests/venv" : "/tmp"
 
+  // Define the upstream repos to check for changes
+  upstream_repos = config.upstream_repos ?: []
 
   pipeline {
     // This agent runs as svc-simsci on node simsci-ci-coordinator-01.
@@ -110,6 +113,7 @@ def call(Map config = [:]){
                   withEnv(envVars.collect { k, v -> "${k}=${v}" }) {
                     try {
                       checkout scm
+                      load_shared_files()
                       stage("Debug Info - Python ${pythonVersion}") {
                         echo "Jenkins pipeline run timestamp: ${TIMESTAMP}"
                         // Display parameters used.
@@ -143,6 +147,12 @@ def call(Map config = [:]){
                       stage("Install Package - Python ${pythonVersion}") {
                         sh "${ACTIVATE} && make install && pip install ."
                       }
+                      stage("Install Upstream Dependency Branches - Python ${pythonVersion}") {
+                        sh "chmod +x install_dependency_branch.sh"
+                        upstream_repos.each { repo ->
+                          sh "${ACTIVATE} && ./install_dependency_branch.sh ${repo} ${GIT_BRANCH} jenkins"
+                        }
+                      }
 
                       stage("Format - Python ${pythonVersion}") {
                         sh "${ACTIVATE} && make format"
@@ -153,6 +163,8 @@ def call(Map config = [:]){
                           def full_name = { test_type ->
                             if (test_type == 'e2e') {
                                 return "End-to-End"
+                            } else if (test_type == 'all-tests') {
+                              return "All"
                             } else {
                                 return test_type.capitalize()
                             }
