@@ -27,7 +27,7 @@ CONDA_ENV_CREATION_FLAG = $(if $(CONDA_ENV_PATH),-p ${CONDA_ENV_PATH},-n ${CONDA
 MAKE_SOURCES := $(shell find . -type d -name "*" ! -path "./.git*" ! -path "./.vscode" ! -path "./output" ! -path "./output/*" ! -path "./archive" ! -path "./dist" ! -path "./output/htmlcov*" ! -path "**/.pytest_cache*" ! -path "**/__pycache__" ! -path "./output/docs_build*" ! -path "./.pytype*" ! -path "." ! -path "./src/${PACKAGE_NAME}/legacy*" ! -path ./.history ! -path "./.history/*" ! -path "./src/${PACKAGE_NAME}.egg-info" ! -path ./.idea ! -path "./.idea/*" )
 
 # Phony targets don't produce artifacts.
-.PHONY: .list-targets build-env build-doc format integration build-package clean debug deploy-doc deploy-package full help list quick install-upstream-deps
+.PHONY: .list-targets build-env build-doc format integration build-package clean debug deploy-doc deploy-package full help list quick install install-upstream-deps
 
 # List of Make targets is generated dynamically. To add description of target, use a # on the target definition.
 list help: debug .list-targets
@@ -50,6 +50,11 @@ debug: # Print debug information (environment variables)
 	@echo "PYPI_ARTIFACTORY_CREDENTIALS_USR: ${PYPI_ARTIFACTORY_CREDENTIALS_USR} "
 	@echo "Make sources:                     ${MAKE_SOURCES}"
 
+install: ## Install setuptools, package, and build utilities
+	pip install uv
+	uv pip install --upgrade pip setuptools 
+	uv pip install -e .[DEV] --extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match
+
 install-upstream-deps: # Install upstream dependencies
 	@echo "Contents of install_dependency_branch.sh"
 	@echo "----------------------------------------"
@@ -57,6 +62,7 @@ install-upstream-deps: # Install upstream dependencies
 	@echo ""
 	@echo "----------------------------------------"
 	@sh $(UTILS_DIR)/resources/scripts/install_dependency_branch.sh $(DEPENDENCY_NAME) $(BRANCH_NAME) $(WORKFLOW)
+
 build-env: # Make a new conda environment
 	@[ "${CONDA_ENV_NAME}" ] && echo "" > /dev/null || ( echo "CONDA_ENV_NAME is not set"; exit 1 )
 	conda create ${CONDA_ENV_CREATION_FLAG} python=${PYTHON_VERSION} --yes

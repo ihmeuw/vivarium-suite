@@ -55,10 +55,14 @@ do
     # Try to find parent branch using git-merge-base and name-rev
     merge_base=$(git merge-base origin/main HEAD 2>/dev/null)
     if [ $? -eq 0 ] && [ -n "$merge_base" ]; then
+      echo "Merge base: ${merge_base}"
       # Get the parent branch name, removing remotes/origin/ prefix and any ^0 suffix
       branch_name_to_check=$(git name-rev --exclude "tags/*" --refs="refs/remotes/origin/*" --name-only "$merge_base" | \
-                           sed -E 's/^(remotes\/)?origin\///' | \
-                           sed 's/\^[0-9]*$//')
+        sed -E 's/^(remotes\/)?origin\///' | \
+        sed 's/\^[0-9]*$//')
+      if [ "$branch_name_to_check" = "HEAD" ]; then
+        branch_name_to_check="main"
+      fi
     else
       # If merge-base fails, try to get parent from GitHub API if we have a PR number
       pr_number=$(echo "$branch_name_to_check" | grep -o 'PR-[0-9]*' | cut -d'-' -f2)
@@ -85,7 +89,7 @@ do
   fi
 done
 
-if [ "$workflow" == "github" ]; then
+if [ "$workflow" = "github" ]; then
   echo "${dependency_name}_branch_name=${dependency_branch_name}" >> "$GITHUB_ENV"
 fi
 
