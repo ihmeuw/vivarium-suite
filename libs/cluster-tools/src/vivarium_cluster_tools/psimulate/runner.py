@@ -29,7 +29,9 @@ from vivarium_cluster_tools.psimulate import (
     redis_dbs,
 )
 from vivarium_cluster_tools.psimulate import results as psim_results
-from vivarium_cluster_tools.psimulate import worker
+from vivarium_cluster_tools.psimulate import (
+    worker,
+)
 from vivarium_cluster_tools.psimulate.paths import OutputPaths
 from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
