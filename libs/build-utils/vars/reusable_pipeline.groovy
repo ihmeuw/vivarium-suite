@@ -8,6 +8,7 @@ def call(Map config = [:]){
   python_versions: The versions of python to test against.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e']
   requires_slurm: Whether the child tasks require the slurm scheduler.
+  deployable: Whether the package can be deployed by Jenkins.
   skip_build: Skips the package and doc building steps.
   skip_doc_build: Only skips the doc build.
   use_shared_fs: Whether to use the shared filesystem for conda envs.
@@ -143,7 +144,7 @@ def call(Map config = [:]){
                         // The env should have been cleaned out after the last build, but delete it again
                         // here just to be safe.
                         sh "rm -rf ${CONDA_ENV_PATH}"
-                        sh "${ACTIVATE_BASE} && make build-env PYTHON_VERSION=${PYTHON_VERSION}"
+                        sh "${ACTIVATE_BASE} && make create-env PYTHON_VERSION=${PYTHON_VERSION}"
                         // open permissions for test users to create file in workspace
                         sh "chmod 777 ${WORKSPACE}"
                       }
@@ -158,42 +159,42 @@ def call(Map config = [:]){
                         }
                       }
 
-                      stage("Format - Python ${pythonVersion}") {
-                        sh "${ACTIVATE} && make format"
+                      stage("Check Formatting - Python ${pythonVersion}") {
+                        sh "${ACTIVATE} && make lint"
                       }
 
-                    stage("Run Tests - Python ${pythonVersion}") {
-                      script {
-                          def full_name = { test_type ->
-                            if (test_type == 'e2e') {
-                                return "End-to-End"
-                            } else if (test_type == 'all-tests') {
-                              return "All"
-                            } else {
-                                return test_type.capitalize()
+                      stage("Run Tests - Python ${pythonVersion}") {
+                        script {
+                            def full_name = { test_type ->
+                              if (test_type == 'e2e') {
+                                  return "End-to-End"
+                              } else if (test_type == 'all-tests') {
+                                return "All"
+                              } else {
+                                  return test_type.capitalize()
+                              }
                             }
-                          }
-                          def parallelTests = test_types.collectEntries {
-                              ["${full_name(it)} Tests" : {
-                                  stage("Run ${full_name(it)} Tests - Python ${pythonVersion}") {
-                                      sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}"
-                                      publishHTML([
-                                        allowMissing: true,
-                                        alwaysLinkToLastBuild: false,
-                                        keepAll: true,
-                                        reportDir: "output/htmlcov_${it}",
-                                        reportFiles: "index.html",
-                                        reportName: "Coverage Report - ${full_name(it)} tests",
-                                        reportTitles: ''
-                                      ])
-                                  }
-                              }]
-                          }
-                          parallel parallelTests
+                            def parallelTests = test_types.collectEntries {
+                                ["${full_name(it)} Tests" : {
+                                    stage("Run ${full_name(it)} Tests - Python ${pythonVersion}") {
+                                        sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}"
+                                        publishHTML([
+                                          allowMissing: true,
+                                          alwaysLinkToLastBuild: false,
+                                          keepAll: true,
+                                          reportDir: "output/htmlcov_${it}",
+                                          reportFiles: "index.html",
+                                          reportName: "Coverage Report - ${full_name(it)} tests",
+                                          reportTitles: ''
+                                        ])
+                                    }
+                                }]
+                            }
+                            parallel parallelTests
+                        }
                       }
-                    }
 
-                    if ((config?.skip_build != true) && (PYTHON_VERSION == PYTHON_DEPLOY_VERSION)) {
+                      if ((config?.skip_build != true) && (PYTHON_VERSION == PYTHON_DEPLOY_VERSION)) {
                         stage("Build - Python ${pythonVersion}") {
                           if (config?.skip_doc_build != true) {
                             stage("Build Docs - Python ${pythonVersion}") {
@@ -202,6 +203,33 @@ def call(Map config = [:]){
                           }
                           stage("Build Package - Python ${pythonVersion}") {
                             sh "${ACTIVATE} && make build-package"
+                          }
+                        }
+                        
+                        stage("Deploy - Python ${pythonVersion}") {
+                          if ((config?.deployable == true) && 
+                              !env.IS_CRON.toBoolean() && 
+                              (env.BRANCH == "main" || params.DEPLOY_OVERRIDE)) {
+                            
+                            stage("Deploy Docs") {
+                              withEnv(["DOCS_ROOT_PATH=/mnt/team/simulation_science/pub/docs"]) {
+                                sh "${ACTIVATE} && make deploy-doc"
+                              }
+                            }
+
+                            stage("Deploy Package to PyPi") {
+                              withCredentials([usernamePassword(
+                                credentialsId: 'artifactory_simsci',
+                                usernameVariable: 'PYPI_ARTIFACTORY_USERNAME',
+                                passwordVariable: 'PYPI_ARTIFACTORY_PASSWORD'
+                              )]) {
+                                sh "${ACTIVATE} && make deploy-package"
+                              }
+                            }
+
+                            stage("Tagging Version and Pushing") {
+                              sh "${ACTIVATE} && make tag-version"
+                            }
                           }
                         }
                       }

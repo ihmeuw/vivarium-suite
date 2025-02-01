@@ -63,20 +63,48 @@ install-upstream-deps: # Install upstream dependencies
 	@echo "----------------------------------------"
 	@sh $(UTILS_DIR)/resources/scripts/install_dependency_branch.sh $(DEPENDENCY_NAME) $(BRANCH_NAME) $(WORKFLOW)
 
-build-env: # Make a new conda environment
-	@[ "${CONDA_ENV_NAME}" ] && echo "" > /dev/null || ( echo "CONDA_ENV_NAME is not set"; exit 1 )
+create-env: ## Create a new conda environment. Specify env name with CONDA_ENV_NAME. Default env name is PACKAGE_NAME_PYTHON_VERSION.
 	conda create ${CONDA_ENV_CREATION_FLAG} python=${PYTHON_VERSION} --yes
+
+build-env: ## Create environment and install packages. Specify env name with CONDA_ENV_NAME. Default env name is PACKAGE_NAME_PYTHON_VERSION.
+	make create-env CONDA_ENV_NAME=$(CONDA_ENV_NAME)
+	conda run -n $(ENV_NAME) make install
 
 format: setup.py pyproject.toml $(MAKE_SOURCES) # Run the code formatter and import sorter
 	isort $(LOCATIONS)
 	black $(LOCATIONS)
+	@echo "Ignore, Created by Makefile, `date`" > $@
+
+lint: # Check for formatting errors
+	isort $(LOCATIONS) --check --verbose --only-modified --diff
+	black $(LOCATIONS) --check --diff
+
 
 build-doc: $(MAKE_SOURCES) # Build the Sphinx docs
 	$(MAKE) -C docs/ html
+	@echo "Ignore, Created by Makefile, `date`" > $@
+
+deploy-doc: # Deploy the Sphinx docs
+	@[ "${DOCS_ROOT_PATH}" ] && echo "" > /dev/null || ( echo "DOCS_ROOT_PATH is not set"; exit 1 )
+	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
+	cp -R ./output/docs_build/* ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
+	chmod -R 0775 ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
+	cd ${DOCS_ROOT_PATH}/${PACKAGE_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
 
 build-package: $(MAKE_SOURCES) # Build the package as a pip wheel
 	pip install build
 	python -m build
+	@echo "Ignore, Created by Makefile, `date`" > $@
+
+deploy-package-artifactory: # Deploy the package to Artifactory
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set"; exit 1 )
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set"; exit 1 )
+	pip install twine
+	twine upload --repository-url ${IHME_PYPI} -u ${PYPI_ARTIFACTORY_CREDENTIALS_USR} -p ${PYPI_ARTIFACTORY_CREDENTIALS_PSW} dist/*
+
+tag-version: # Tag the version and push
+	git tag -a "v${PACKAGE_VERSION}" -m "Tag automatically generated from Jenkins."
+	git push --tags
 
 clean: # Delete build artifacts and do any custom cleanup such as spinning down services
 	@rm -rf format build-doc build-package integration .pytest_cache
