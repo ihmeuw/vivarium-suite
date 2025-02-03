@@ -19,6 +19,11 @@ on:
         required: false
         default: "22.3.0"
         type: string
+      isort_version:
+        description: "Isort version to use. Default is '5.13.2'"
+        required: false
+        default: "5.13.2"
+        type: string
       skip_mypy:
         description: "Boolean to determine if mypy should be skipped. Default is false"
         required: false
@@ -88,7 +93,7 @@ jobs:
           cat $GITHUB_ENV
       - name: Lint
         run: |
-          pip install black==${{ inputs.black_version }} isort
+          pip install black==${{ inputs.black_version }} isort==${{ inputs.isort_version }} 
           isort . --check --verbose --only-modified --diff
           echo "----------------------------------------"
           black . --check --diff
