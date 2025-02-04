@@ -1,3 +1,7 @@
+**2.1.3 - 02/03/25**
+
+  - Revert change caused by isort version
+
 **2.1.2 - 01/31/25**
 
   - Linting  

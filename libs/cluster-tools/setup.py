@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
     setup_requires = ["setuptools_scm"]
 
-    lint_requirements = ["black==22.3.0", "isort"]
+    lint_requirements = ["black==22.3.0", "isort==5.13.2"]
 
     test_requirements = [
         "pytest",
