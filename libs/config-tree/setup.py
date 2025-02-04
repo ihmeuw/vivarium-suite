@@ -58,7 +58,7 @@ if __name__ == "__main__":
     ]
     dev_requirements = [
         "black==22.3.0",
-        "isort",
+        "isort==5.13.2",
         "mypy",
         # typing extensions
         "types-PyYAML",
