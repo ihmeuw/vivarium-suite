@@ -1,3 +1,7 @@
+**2.1.3 - 01/30/24**
+
+  - Get python versions from python_versions.json
+
 **2.1.2 - 12/3/24**
 
  - Fix mutable state bugs in pd Series and Dataframes
