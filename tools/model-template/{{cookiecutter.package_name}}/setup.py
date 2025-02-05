@@ -62,7 +62,7 @@ if __name__ == "__main__":
     cluster_requirements = [
         "vivarium_cluster_tools>={{cookiecutter.vivarium_cluster_tools_version}}"
     ]
-    test_requirements = ["pytest"]
+    test_requirements = ["pytest", "pytest-cov"]
     lint_requirements = ["black", "isort"]
 
     setup(
