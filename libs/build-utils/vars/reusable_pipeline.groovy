@@ -5,7 +5,6 @@ def call(Map config = [:]){
   -------------
   Configuration options:
   scheduled_branches: The branch names for which to run scheduled nightly builds.
-  python_versions: The versions of python to test against.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e']
   requires_slurm: Whether the child tasks require the slurm scheduler.
   deployable: Whether the package can be deployed by Jenkins.
@@ -19,8 +18,6 @@ def call(Map config = [:]){
   scheduled_branches = config.scheduled_branches ?: [] 
   CRON_SETTINGS = scheduled_branches.contains(BRANCH_NAME) ? 'H H(20-23) * * *' : ''
 
-  // Define Python versions - can be parameterized through config
-  python_versions = config.python_versions ?: ["3.10", "3.11"]
   PYTHON_DEPLOY_VERSION = "3.11"
 
   test_types = config.test_types ?: ['all-tests']
@@ -89,6 +86,7 @@ def call(Map config = [:]){
           script {
             // Use the name of the branch in the build name
             currentBuild.displayName = "#${BUILD_NUMBER} ${GIT_BRANCH}"
+            python_versions = get_python_versions(WORKSPACE, GIT_URL)
           }
         }
       }
