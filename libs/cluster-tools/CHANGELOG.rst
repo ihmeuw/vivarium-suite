@@ -1,3 +1,7 @@
+**2.1.4 - 02/05/24**
+
+  - Get python versions from python_versions.json
+  
 **2.1.3 - 02/03/25**
 
   - Revert change caused by isort version
