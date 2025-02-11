@@ -68,8 +68,8 @@ create-env: ## Create a new conda environment. Specify env name with CONDA_ENV_N
 
 build-env: ## Create environment and install packages. Specify env name with CONDA_ENV_NAME. Default env name is PACKAGE_NAME_PYTHON_VERSION.
 	make create-env CONDA_ENV_NAME=$(CONDA_ENV_NAME)
-	conda run -n $(ENV_NAME) make install
-
+	conda run -n $(CONDA_ENV_NAME) make install
+	
 format: setup.py pyproject.toml $(MAKE_SOURCES) # Run the code formatter and import sorter
 	isort $(LOCATIONS)
 	black $(LOCATIONS)
@@ -78,7 +78,6 @@ format: setup.py pyproject.toml $(MAKE_SOURCES) # Run the code formatter and imp
 lint: # Check for formatting errors
 	isort $(LOCATIONS) --check --verbose --only-modified --diff
 	black $(LOCATIONS) --check --diff
-
 
 build-doc: $(MAKE_SOURCES) # Build the Sphinx docs
 	$(MAKE) -C docs/ html
