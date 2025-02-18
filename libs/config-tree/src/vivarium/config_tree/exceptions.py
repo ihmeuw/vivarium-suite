@@ -15,6 +15,12 @@ class ConfigurationKeyError(ConfigurationError, KeyError):
     pass
 
 
+class ImproperAccessError(ConfigurationError):
+    """Error raised when a configuration value is accessed improperly."""
+
+    pass
+
+
 class DuplicatedConfigurationError(ConfigurationError):
     """Error raised when a configuration value is set more than once.
 

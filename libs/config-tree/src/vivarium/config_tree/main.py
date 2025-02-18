@@ -39,6 +39,7 @@ from layered_config_tree import (
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,
+    ImproperAccessError,
 )
 from layered_config_tree.types import InputData
 
@@ -548,11 +549,25 @@ class LayeredConfigTree:
         self._children[name].update(value, layer, source)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Set a value on the outermost layer."""
+        """Set a value on the outermost layer.
+
+        Notes
+        -----
+        We allow keys that look like dunder attributes, i.e. start and end with
+        "__". However, to avoid conflict with actual dunder methods and attributes,
+        we do not allow setting them via this method and instead require dictionary
+        access (i.e. bracket notation).
+        """
         if name not in self:
             raise ConfigurationKeyError(
                 "New configuration keys can only be created with the update method.",
                 self._name,
+            )
+        if name.startswith("__") and name.endswith("__"):
+            raise ImproperAccessError(
+                "Cannot set an attribute starting and ending with '__' via attribute "
+                "access (i.e. dot notation). Use dictionary access instead "
+                "(i.e. bracket notation)."
             )
         self._set_with_metadata(name, value, layer=None, source=None)
 
@@ -566,10 +581,35 @@ class LayeredConfigTree:
         self._set_with_metadata(name, value, layer=None, source=None)
 
     # FIXME: We expect the return to be a ConfigNode or LayeredConfigTree but
-    # the type checker doesn't know what you're getting back in chained
-    # attribute calls. We return Any as a workaround.
+    # static type checkers don't know what you're getting back in chained
+    # attribute calls. We type hint returning Any as a workaround.
     def __getattr__(self, name: str) -> Any:
-        """Get a value from the outermost layer in which it appears."""
+        """Get a value from the outermost layer in which it appears.
+
+        Notes
+        -----
+        We allow keys that look like dunder attributes, i.e. start and end with
+        "__". However, to avoid conflict with actual dunder methods and attributes,
+        we do not allow getting them via this method and instead require dictionary
+        access (i.e. bracket notation).
+
+        If the requested attribute starts and ends with "__" but *does not* actually
+        exist, it is critical that we raise an AttributeError since some functions
+        specifically handle it, e.g. ``pickle`` and ``copy.deepcopy``.
+        See https://stackoverflow.com/a/50888571/
+
+        One the other hand, if the requested attribute starts and ends with "__"
+        and *does* exist, it is critical that we raise a non-AttributeError exception
+        so as not to conflict with dunder methods and attributes.
+        """
+        if name.startswith("__") and name.endswith("__"):
+            if name not in self:
+                raise AttributeError  # Do not change from AttributeError
+            raise ImproperAccessError(
+                "Cannot get an attribute starting and ending with '__' via attribute "
+                "access (i.e. dot notation). Use dictionary access instead "
+                "(i.e. bracket notation)."
+            )
         return self.get_from_layer(name)
 
     # We need custom definitions of __getstate__ and __setstate__
