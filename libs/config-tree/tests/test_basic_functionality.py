@@ -1,4 +1,5 @@
 import pickle
+import re
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from layered_config_tree import (
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,
+    ImproperAccessError,
     LayeredConfigTree,
 )
 
@@ -343,6 +345,40 @@ def test_dictionary_style_access() -> None:
     assert lct["test_key"] == "test_value"
 
 
+def test_dunder_key_attr_style_access() -> None:
+    lct = LayeredConfigTree({"__dunder_key__": "val"}, layers=["layer1", "layer2"])
+    # lct.update({"__dunder_key__": "val"})
+    assert lct["__dunder_key__"] == "val"
+
+    with pytest.raises(
+        ImproperAccessError,
+        match=re.escape(
+            "Cannot get an attribute starting and ending with '__' via attribute "
+            "access (i.e. dot notation). Use dictionary access instead "
+            "(i.e. bracket notation)."
+        ),
+    ):
+        lct.__dunder_key__
+
+    with pytest.raises(
+        ImproperAccessError,
+        match=re.escape(
+            "Cannot set an attribute starting and ending with '__' via attribute "
+            "access (i.e. dot notation). Use dictionary access instead "
+            "(i.e. bracket notation)."
+        ),
+    ):
+        lct.__dunder_key__ = "val2"
+    assert lct["__dunder_key__"] == "val"
+
+    # check that we can modify the value in a new layer
+    lct["__dunder_key__"] = "val2"
+    assert lct["__dunder_key__"] == "val2"
+
+    with pytest.raises(AttributeError):
+        lct.__non_existent_dunder_key__
+
+
 def test_get_missing_key() -> None:
     lct = LayeredConfigTree()
     with pytest.raises(ConfigurationKeyError):
@@ -351,9 +387,12 @@ def test_get_missing_key() -> None:
 
 def test_set_missing_key() -> None:
     lct = LayeredConfigTree()
-    with pytest.raises(ConfigurationKeyError):
+    error_msg = re.escape(
+        "New configuration keys can only be created with the update method."
+    )
+    with pytest.raises(ConfigurationKeyError, match=error_msg):
         lct.missing_key = "test_value"
-    with pytest.raises(ConfigurationKeyError):
+    with pytest.raises(ConfigurationKeyError, match=error_msg):
         lct["missing_key"] = "test_value"
 
 

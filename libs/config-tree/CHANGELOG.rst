@@ -1,3 +1,7 @@
+**3.0.0 - 02/18/2025**
+
+ - Better handle dunder-style keys
+
 **2.2.1 - 12/27/2024**
 
  - Bugfix: failing mypy

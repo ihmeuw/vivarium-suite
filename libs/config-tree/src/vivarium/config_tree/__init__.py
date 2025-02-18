@@ -12,5 +12,6 @@ from layered_config_tree.exceptions import (
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,
+    ImproperAccessError,
 )
 from layered_config_tree.main import ConfigNode, LayeredConfigTree
