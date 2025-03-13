@@ -8,9 +8,7 @@ LOCATIONS=src tests
 # Unless overridden, build conda environment using the package name.
 SAFE_NAME = $(shell python -c "from pkg_resources import safe_name; print(safe_name(\"$(PACKAGE_NAME)\"))")
 
-setup_file   = $(shell find -name setup.py)
-version_line = $(shell grep "version = " ${setup_file})
-PACKAGE_VERSION = $(shell echo ${version_line} | cut -d "=" -f 2 | xargs)
+PACKAGE_VERSION = $(shell grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
 
 # Use this URL to pull IHME Python packages and deploy this package to PyPi.
 IHME_PYPI := https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/

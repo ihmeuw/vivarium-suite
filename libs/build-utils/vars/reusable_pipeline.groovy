@@ -211,25 +211,25 @@ def call(Map config = [:]){
                             sh "${ACTIVATE} && make build-package"
                           }
                         }
-                        
+
                         stage("Deploy - Python ${pythonVersion}") {
                           if ((config?.deployable == true) && 
-                              !env.IS_CRON.toBoolean() && 
-                              (env.BRANCH == "main" || params.DEPLOY_OVERRIDE)) {
-                            
+                            !env.IS_CRON.toBoolean() && 
+                            (env.BRANCH == "main" || params.DEPLOY_OVERRIDE)) {
+
                             stage("Deploy Docs") {
                               withEnv(["DOCS_ROOT_PATH=/mnt/team/simulation_science/pub/docs"]) {
                                 sh "${ACTIVATE} && make deploy-doc"
                               }
                             }
 
-                            stage("Deploy Package to PyPi") {
+                            stage("Deploy Package to Artifactory") {
                               withCredentials([usernamePassword(
                                 credentialsId: 'artifactory_simsci',
-                                usernameVariable: 'PYPI_ARTIFACTORY_USERNAME',
-                                passwordVariable: 'PYPI_ARTIFACTORY_PASSWORD'
+                                usernameVariable: 'PYPI_ARTIFACTORY_CREDENTIALS_USR',
+                                passwordVariable: 'PYPI_ARTIFACTORY_CREDENTIALS_PSW'
                               )]) {
-                                sh "${ACTIVATE} && make deploy-package"
+                                sh "${ACTIVATE} && make deploy-package-artifactory"
                               }
                             }
 
