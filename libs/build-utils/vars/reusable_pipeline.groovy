@@ -8,7 +8,6 @@ def call(Map config = [:]){
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e']
   requires_slurm: Whether the child tasks require the slurm scheduler.
   deployable: Whether the package can be deployed by Jenkins.
-  skip_build: Skips the package and doc building steps.
   skip_doc_build: Only skips the doc build.
   use_shared_fs: Whether to use the shared filesystem for conda envs.
   upstream_repos: A list of repos to check for upstream changes.
@@ -200,27 +199,24 @@ def call(Map config = [:]){
                         }
                       }
 
-                      if ((config?.skip_build != true) && (PYTHON_VERSION == PYTHON_DEPLOY_VERSION)) {
-                        stage("Build - Python ${pythonVersion}") {
-                          if (config?.skip_doc_build != true) {
+                      if (PYTHON_VERSION == PYTHON_DEPLOY_VERSION) {
+                        if (config?.skip_doc_build != true) {
                             stage("Build Docs - Python ${pythonVersion}") {
                               sh "${ACTIVATE} && make build-doc"
                             }
                           }
-                          stage("Build Package - Python ${pythonVersion}") {
-                            sh "${ACTIVATE} && make build-package"
-                          }
-                        }
 
-                        stage("Deploy - Python ${pythonVersion}") {
+                        stage("Build and Deploy - Python ${pythonVersion}") {
                           if ((config?.deployable == true) && 
                             !env.IS_CRON.toBoolean() && 
                             (env.BRANCH == "main" || params.DEPLOY_OVERRIDE)) {
+                            
+                            stage("Tagging Version and Pushing") {
+                                  sh "${ACTIVATE} && make tag-version"
+                                }
 
-                            stage("Deploy Docs") {
-                              withEnv(["DOCS_ROOT_PATH=/mnt/team/simulation_science/pub/docs"]) {
-                                sh "${ACTIVATE} && make deploy-doc"
-                              }
+                            stage("Build Package - Python ${pythonVersion}") {
+                              sh "${ACTIVATE} && make build-package"
                             }
 
                             stage("Deploy Package to Artifactory") {
@@ -232,9 +228,12 @@ def call(Map config = [:]){
                                 sh "${ACTIVATE} && make deploy-package-artifactory"
                               }
                             }
-
-                            stage("Tagging Version and Pushing") {
-                              sh "${ACTIVATE} && make tag-version"
+                            if (config?.skip_doc_build != true) {
+                              stage("Deploy Docs") {
+                                withEnv(["DOCS_ROOT_PATH=/mnt/team/simulation_science/pub/docs"]) {
+                                  sh "${ACTIVATE} && make deploy-doc"
+                                }
+                              }
                             }
                           }
                         }
