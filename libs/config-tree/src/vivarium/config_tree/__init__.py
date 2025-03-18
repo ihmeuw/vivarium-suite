@@ -14,4 +14,4 @@ from layered_config_tree.exceptions import (
     DuplicatedConfigurationError,
     ImproperAccessError,
 )
-from layered_config_tree.main import ConfigNode, LayeredConfigTree
+from layered_config_tree.main import ConfigNode, LayeredConfigTree, load_yaml

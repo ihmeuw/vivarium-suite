@@ -1,3 +1,7 @@
+**3.1.0 - 03/18/2025**
+
+ - Raise an error if YAML contains duplicate keys within the same level
+
 **3.0.0 - 02/18/2025**
 
  - Better handle dunder-style keys

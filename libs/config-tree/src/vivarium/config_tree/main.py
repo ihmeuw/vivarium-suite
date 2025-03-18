@@ -33,8 +33,6 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from layered_config_tree import (
     ConfigurationError,
     ConfigurationKeyError,
@@ -42,6 +40,7 @@ from layered_config_tree import (
     ImproperAccessError,
 )
 from layered_config_tree.types import InputData
+from layered_config_tree.utilities import load_yaml
 
 
 class ConfigNode:
@@ -461,30 +460,14 @@ class LayeredConfigTree:
         """Coerces data into dictionary format."""
         if isinstance(data, dict):
             return data, source
-        elif (isinstance(data, str) and data.endswith((".yaml", ".yml"))) or isinstance(
-            data, Path
-        ):
-            source = source if source else str(data)
-            with open(data) as f:
-                data_file = f.read()
-            coerced_data = yaml.full_load(data_file)
-            if not isinstance(coerced_data, dict):
-                raise ValueError(
-                    f"Loaded yaml file {coerced_data} should be a dictionary but is type {type(coerced_data)}"
-                )
-            return coerced_data, source
-        elif isinstance(data, str):
-            data = yaml.full_load(data)
-            if not isinstance(data, dict):
-                raise ValueError(
-                    f"Loaded yaml file {data} should be a dictionary but is type {type(data)}"
-                )
-            return data, source
         elif isinstance(data, LayeredConfigTree):
             return data.to_dict(), source
+        elif isinstance(data, (str, Path)):
+            source = source if source else str(data)
+            return load_yaml(data), source
         else:
             raise ConfigurationError(
-                f"LayeredConfigTree can only update from dictionaries, strings, paths and LayeredConfigTrees. "
+                f"LayeredConfigTree can only update from dictionaries, strings, paths, and LayeredConfigTrees. "
                 f"You passed in {type(data)}",
                 value_name=None,
             )

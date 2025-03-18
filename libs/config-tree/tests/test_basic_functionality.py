@@ -14,6 +14,7 @@ from layered_config_tree import (
     DuplicatedConfigurationError,
     ImproperAccessError,
     LayeredConfigTree,
+    load_yaml,
 )
 
 
@@ -500,8 +501,7 @@ def test_to_dict_dict() -> None:
 
 def test_to_dict_yaml(test_spec: Path) -> None:
     lct = LayeredConfigTree(str(test_spec))
-    with test_spec.open() as f:
-        yaml_config = yaml.full_load(f)
+    yaml_config = load_yaml(test_spec)
     assert yaml_config == lct.to_dict()
 
 
