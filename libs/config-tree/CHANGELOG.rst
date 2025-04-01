@@ -1,6 +1,8 @@
-**3.2.0 - 03/31/2025**
+**3.2.0 - 04/02/2025**
 
  - Get nested values from a single 'get' or 'get_tree' call
+ - Move tree.get_from_layer() logic into tree.get() and add deprecation warning. 
+ - Utilize centralized build tools
 
 **3.1.0 - 03/18/2025**
 
