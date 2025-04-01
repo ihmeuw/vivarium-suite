@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 from layered_config_tree import (
     ConfigNode,
@@ -173,16 +172,16 @@ def test_node_get_value_empty(empty_node: ConfigNode) -> None:
 def test_node_get_value(full_node: ConfigNode) -> None:
     assert full_node.get_value() == f"test_value_{len(full_node._layers)}"
     assert full_node.accessed
-    full_node._accessed = False
+    full_node._accessed = False  # reset
 
     assert full_node.get_value(layer=None) == f"test_value_{len(full_node._layers)}"
     assert full_node.accessed
-    full_node._accessed = False
+    full_node._accessed = False  # reset
 
     for i, layer in enumerate(full_node._layers):
         assert full_node.get_value(layer=layer) == f"test_value_{i + 1}"
         assert full_node.accessed
-        full_node._accessed = False
+        full_node._accessed = False  # reset
 
     assert not full_node.accessed
 
@@ -381,10 +380,16 @@ def test_dunder_key_attr_style_access() -> None:
         lct.__non_existent_dunder_key__
 
 
-def test_get_missing_key() -> None:
+def test_get_missing_key_attr_style_access() -> None:
     lct = LayeredConfigTree()
-    with pytest.raises(ConfigurationKeyError):
-        _ = lct.missing_key
+    with pytest.raises(ConfigurationKeyError, match="No value at name missing_key"):
+        lct.missing_key
+
+
+def test_get_missing_key_dict_style_access() -> None:
+    lct = LayeredConfigTree()
+    with pytest.raises(ConfigurationKeyError, match="No value at name missing_key"):
+        lct["missing_key"]
 
 
 def test_set_missing_key() -> None:
@@ -537,6 +542,7 @@ def test_get_chained_tree(nested_dict: dict[str, Any]) -> None:
 
 def test_get_chained_value(nested_dict: dict[str, Any]) -> None:
     lct = LayeredConfigTree(nested_dict)
+    lct.get(["outer_layer_3", "inner_layer_1", "inner_layer_2"])
     assert (
         lct.get("outer_layer_3").get("inner_layer_1").get("inner_layer_2")
         == lct.get(["outer_layer_3", "inner_layer_1", "inner_layer_2"])
@@ -546,13 +552,39 @@ def test_get_chained_value(nested_dict: dict[str, Any]) -> None:
 
 def test_get_chained_default(nested_dict: dict[str, Any]) -> None:
     lct = LayeredConfigTree(nested_dict)
-    lct.get(["outer_layer_3", "missing_key"], "foo") == "foo"
+    assert lct.get(["outer_layer_3", "missing_key"], "foo") == "foo"
     # Check that the default only works for the last key
     with pytest.raises(
         ConfigurationKeyError,
         match=re.escape("No value at key mapping '['outer_layer_3', 'whoops']'."),
     ):
         lct.get(["outer_layer_3", "whoops", "missing_key"], "foo")
+
+
+def test_get_defaults_and_layers() -> None:
+    lct = LayeredConfigTree(layers=["base", "override"])
+    lct.update(
+        {
+            "outer": {
+                "inner": "base-value",
+            }
+        },
+        layer="base",
+    )
+    lct.update(
+        {
+            "outer": {
+                "new-inner": "new-value",
+            }
+        },
+        layer="override",
+    )
+    assert (
+        lct.get(["outer", "new-inner"])
+        == lct.get(["outer", "new-inner"], layer="override")
+        == "new-value"
+    )
+    assert lct.get(["outer", "new-inner"], "missing", layer="base") == "missing"
 
 
 def test_get_tree(nested_dict: dict[str, Any]) -> None:
@@ -633,7 +665,7 @@ def test_freeze() -> None:
         lct.update(data={"configuration": {"time": {"end": {"year": 2001}}}})
 
 
-def test_retrieval_behavior() -> None:
+def test_retrieval_from_layer() -> None:
     layer_inner = "inner"
     layer_middle = "middle"
     layer_outer = "outer"
@@ -648,10 +680,71 @@ def test_retrieval_behavior() -> None:
         lct = LayeredConfigTree(layers=layer_list)
         for layer in scenario:
             lct.update({default_cfg_value: layer}, layer=layer)
-        assert lct.get_from_layer(default_cfg_value) == layer_outer
-        assert lct.get_from_layer(default_cfg_value, layer=layer_outer) == layer_outer
-        assert lct.get_from_layer(default_cfg_value, layer=layer_middle) == layer_middle
-        assert lct.get_from_layer(default_cfg_value, layer=layer_inner) == layer_inner
+        assert lct.get(default_cfg_value) == layer_outer
+        assert lct.get(default_cfg_value, layer=layer_outer) == layer_outer
+        assert lct.get(default_cfg_value, layer=layer_middle) == layer_middle
+        assert lct.get(default_cfg_value, layer=layer_inner) == layer_inner
+
+
+@pytest.fixture()
+def nested_layered_tree() -> LayeredConfigTree:
+    lct = LayeredConfigTree(layers=["base", "override"])
+    lct.update(
+        {
+            "outer": {
+                "inner": {
+                    "one": 1,
+                    "two": 2,
+                },
+            },
+        },
+        layer="base",
+    )
+    lct.update(
+        {
+            "outer": {
+                "inner": {
+                    "one": 100,
+                    "two": 200,
+                },
+                "new": "foo",
+            },
+        },
+        layer="override",
+    )
+    return lct
+
+
+def test_nested_retrieval_default_layer(nested_layered_tree: LayeredConfigTree) -> None:
+    assert nested_layered_tree.get(["outer", "inner", "one"]) == 100
+    assert nested_layered_tree.get(["outer", "inner", "two"]) == 200
+    assert nested_layered_tree.get(["outer", "new"]) == "foo"
+
+
+def test_nested_retrieval_from_layer(nested_layered_tree: LayeredConfigTree) -> None:
+    # override layer
+    assert nested_layered_tree.get(["outer", "inner", "one"], layer="override") == 100
+    assert nested_layered_tree.get(["outer", "inner", "two"], layer="override") == 200
+    assert nested_layered_tree.get(["outer", "new"], layer="override") == "foo"
+    # base layer
+    assert nested_layered_tree.get(["outer", "inner", "one"], layer="base") == 1
+    assert nested_layered_tree.get(["outer", "inner", "two"], layer="base") == 2
+
+
+def test_nested_retrieval_missing_key_returns_default(
+    nested_layered_tree: LayeredConfigTree,
+) -> None:
+    assert (
+        nested_layered_tree.get(["outer", "oops"], "missing-from-override-layer")
+        == nested_layered_tree.get(
+            ["outer", "oops"], "missing-from-override-layer", layer="override"
+        )
+        == "missing-from-override-layer"
+    )
+    assert (
+        nested_layered_tree.get(["outer", "new"], "missing-from-base-layer", layer="base")
+        == "missing-from-base-layer"
+    )
 
 
 def test_repr_display() -> None:
@@ -684,7 +777,18 @@ def test_get_from_layer_deprecation() -> None:
     """Fails if we haven't removed `get_from_layer()` by July 1 2025"""
     import datetime
 
-    lct = LayeredConfigTree({"foo": "bar"}, layers=["base"])
+    lct = LayeredConfigTree()
     if datetime.date.today() > datetime.date(2025, 7, 1):
-        with pytest.raises(ConfigurationKeyError):
-            getattr(lct, "get_from_layer")
+        try:
+            lct.get_from_layer
+            method_exists = True
+        except Exception:
+            method_exists = False
+        if method_exists:
+            assert (
+                False
+            ), "'get_from_layer' should be officially deprecated. Delete it and this test."
+        else:
+            assert (
+                False
+            ), "'get_from_layer' has been deprecated and removed - delete this test"

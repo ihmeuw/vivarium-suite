@@ -29,6 +29,7 @@ For example:
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -125,7 +126,7 @@ class ConfigNode:
 
         Raises
         ------
-        KeyError
+        ConfigurationKeyError
             If no value has been set at any layer.
 
         """
@@ -346,7 +347,9 @@ class LayeredConfigTree:
                 result[name] = child.to_dict()
         return result
 
-    def get(self, keys: str | list[str], default_value: Any = None) -> Any:
+    def get(
+        self, keys: str | list[str], default_value: Any = None, layer: str | None = None
+    ) -> Any:
         """Return the value at the key or key path in the outermost layer.
 
         Parameters
@@ -357,6 +360,8 @@ class LayeredConfigTree:
         default_value
             The value to return if and only if the *final* key in the key path
             does not exist.
+        layer
+            The name of the layer to retrieve the value from.
 
         Notes
         -----
@@ -365,18 +370,35 @@ class LayeredConfigTree:
 
         Returns
         -------
-        The value at the key or nested keys. If the key path exists except for the
-        final value, the ``default_value`` is returned.
+        The value at the key or nested keys and at the requested layer (the outer, by default).
+        ``default_value`` (None, by default) is returned if the full key path *except
+        for the final key* exists at an *explicitly-requested* layer.
+
+        Raises
+        ------
+        TypeError
+            If the ``keys`` parameter is not a string or a list of strings.
         """
         if not isinstance(keys, (str, list)):
             raise TypeError("The 'keys' parameter must be a string or a list of strings.")
 
         if isinstance(keys, str):
-            return self[keys] if keys in self._children else default_value
+            if keys not in self._children:
+                return default_value
+            child = self._children[keys]
+            if isinstance(child, ConfigNode):
+                child_layers = [metadata["layer"] for metadata in child.metadata]
+                return (
+                    child.get_value(layer)
+                    if (layer is None or layer in child_layers)
+                    else default_value
+                )
+            return child
         else:
             # get the second-to-last value (which is by definition a LayeredConfigTree)
-            tree = self.get_tree(keys[:-1])
-            return tree[keys[-1]] if keys[-1] in tree._children else default_value
+            final_key = keys.pop()
+            tree = self.get_tree(keys)
+            return tree.get(final_key, default_value=default_value, layer=layer)
 
     def get_tree(self, keys: str | list[str]) -> LayeredConfigTree:
         """Return the LayeredConfigTree at the key or key path from the outermost layer.
@@ -422,10 +444,13 @@ class LayeredConfigTree:
         return tree
 
     def get_from_layer(self, name: str, layer: str | None = None) -> Any:
-        """Get a configuration value from the provided layer.
+        """(DEPRECATED) Get a configuration value from the provided layer.
 
         If no layer is specified, the outermost (highest priority) layer
         at which a value has been set will be used.
+
+        This method is deprecated as of version 3.2.0 and will be removed in a
+        future version. Use `get()` or `get_tree()` instead.
 
         Parameters
         ----------
@@ -435,6 +460,13 @@ class LayeredConfigTree:
             The name of the layer to retrieve the value from.
 
         """
+        warnings.warn(
+            "'LayeredConfigTree.get_from_layer()' is deprecated and will be removed"
+            "in a future version. Use 'get()' or 'get_tree()' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if name not in self:
             name = f"{self._name}.{name}" if self._name else name
             raise ConfigurationKeyError(f"No value at name {name}.", name)
@@ -616,6 +648,11 @@ class LayeredConfigTree:
     def __getattr__(self, name: str) -> Any:
         """Get a value from the outermost layer in which it appears.
 
+        Raises
+        ------
+        ConfigurationKeyError
+            If the requested attribute does not exist.
+
         Notes
         -----
         We allow keys that look like dunder attributes, i.e. start and end with
@@ -640,7 +677,7 @@ class LayeredConfigTree:
                 "access (i.e. dot notation). Use dictionary access instead "
                 "(i.e. bracket notation)."
             )
-        return self.get_from_layer(name)
+        return self[name]
 
     # We need custom definitions of __getstate__ and __setstate__
     # because of our custom attribute getters/setters.
@@ -658,8 +695,17 @@ class LayeredConfigTree:
             self.__dict__[k] = v
 
     def __getitem__(self, name: str) -> Any:
-        """Get a value from the outermost layer in which it appears."""
-        return self.get_from_layer(name)
+        """Get a value from the outermost layer in which it appears.
+
+        Raises
+        ------
+        ConfigurationKeyError
+            If the requested key does not exist.
+        """
+        if name not in self:
+            name = f"{self._name}.{name}" if self._name else name
+            raise ConfigurationKeyError(f"No value at name {name}.", name)
+        return self.get(name)
 
     def __delattr__(self, name: str) -> None:
         if name in self:
