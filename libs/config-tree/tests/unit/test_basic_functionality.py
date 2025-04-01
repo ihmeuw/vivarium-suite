@@ -678,3 +678,13 @@ def test_repr_display() -> None:
     lct.update({"Key1": "value_ov_1"}, layer="override_1", source="ov1_src")
     lct.update({"Key1": "value_ov_2"}, layer="override_2", source="ov2_src")
     assert repr(lct) == textwrap.dedent(expected_repr)
+
+
+def test_get_from_layer_deprecation() -> None:
+    """Fails if we haven't removed `get_from_layer()` by July 1 2025"""
+    import datetime
+
+    lct = LayeredConfigTree({"foo": "bar"}, layers=["base"])
+    if datetime.date.today() > datetime.date(2025, 7, 1):
+        with pytest.raises(ConfigurationKeyError):
+            getattr(lct, "get_from_layer")
