@@ -13,5 +13,6 @@ from layered_config_tree.exceptions import (
     ConfigurationKeyError,
     DuplicatedConfigurationError,
     ImproperAccessError,
+    MissingLayerError,
 )
 from layered_config_tree.main import ConfigNode, LayeredConfigTree, load_yaml

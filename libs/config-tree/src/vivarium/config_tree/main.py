@@ -39,6 +39,7 @@ from layered_config_tree import (
     ConfigurationKeyError,
     DuplicatedConfigurationError,
     ImproperAccessError,
+    MissingLayerError,
 )
 from layered_config_tree.types import InputData
 from layered_config_tree.utilities import load_yaml
@@ -127,8 +128,9 @@ class ConfigNode:
         Raises
         ------
         ConfigurationKeyError
-            If no value has been set at any layer.
-
+            If no value has been set at any layer (i.e. the ``ConfigNode`` is empty).
+        MissingLayerError
+            If values exist but not at the requested layer.
         """
         value = self._get_value_with_source(layer)[1]
         self._accessed = True
@@ -184,27 +186,41 @@ class ConfigNode:
     def _get_value_with_source(self, layer: str | None) -> tuple[str | None, Any]:
         """Returns a (source, value) tuple at the specified layer.
 
-        If no layer is specified, the outermost (highest priority) layer
-        at which a value has been set will be used.
-
         Parameters
         ----------
         layer
             Name of the layer to retrieve the (source, value) pair from.
 
+        Returns
+        -------
+        The (source, value) tuple at the specified layer or, if no layer is
+        specified, at the outermost (highest priority) layer.
+
         Raises
         ------
-        KeyError
-            If no value has been set at any layer.
+        ConfigurationKeyError
+            If no value has been set at any layer (i.e. the ``ConfigNode`` is empty).
+        MissingLayerError
+            If values exist but not at the requested layer.
 
+        Notes
+        -----
+        We never return a default value at this point; all default value logic
+        is handled upstream in the :meth:`get` method.
         """
-        if layer and layer in self._values:
+        if layer is None:
+            # Return the outermost (highest priority) layer's value
+            for prioritized_layer in reversed(self._layers):
+                if prioritized_layer in self._values:
+                    return self._values[prioritized_layer]
+        elif layer in self._values:
             return self._values[layer]
-
-        for layer in reversed(self._layers):
-            if layer in self._values:
-                return self._values[layer]
-
+        else:
+            # The value does not exist at the user-requested layer
+            raise MissingLayerError(
+                f"No value stored in this ConfigNode {self.name} at layer {layer}.",
+                f"{self.name}.{layer}",
+            )
         raise ConfigurationKeyError(
             f"No value stored in this ConfigNode {self.name}.", self.name
         )
@@ -387,12 +403,7 @@ class LayeredConfigTree:
                 return default_value
             child = self._children[keys]
             if isinstance(child, ConfigNode):
-                child_layers = [metadata["layer"] for metadata in child.metadata]
-                return (
-                    child.get_value(layer)
-                    if (layer is None or layer in child_layers)
-                    else default_value
-                )
+                return child.get_value(layer=layer)
             return child
         else:
             # get the second-to-last value (which is by definition a LayeredConfigTree)
