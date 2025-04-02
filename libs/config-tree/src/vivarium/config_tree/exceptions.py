@@ -15,6 +15,12 @@ class ConfigurationKeyError(ConfigurationError, KeyError):
     pass
 
 
+class MissingLayerError(ConfigurationError):
+    """Error raised when values exist but not at the explicitly-requested layer."""
+
+    pass
+
+
 class ImproperAccessError(ConfigurationError):
     """Error raised when a configuration value is accessed improperly."""
 

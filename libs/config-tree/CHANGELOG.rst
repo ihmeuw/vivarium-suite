@@ -1,5 +1,6 @@
-**3.2.0 - 04/02/2025**
+**3.2.0 - 04/03/2025**
 
+ - Bugfix: Raise a MissingLayerError if a requested value exists but not at the requested layer.
  - Get nested values from a single 'get' or 'get_tree' call
  - Move tree.get_from_layer() logic into tree.get() and add deprecation warning. 
  - Utilize centralized build tools

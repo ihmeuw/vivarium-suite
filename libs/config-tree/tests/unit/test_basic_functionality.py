@@ -13,6 +13,7 @@ from layered_config_tree import (
     DuplicatedConfigurationError,
     ImproperAccessError,
     LayeredConfigTree,
+    MissingLayerError,
     load_yaml,
 )
 
@@ -133,14 +134,27 @@ def test_node_duplicate_update() -> None:
 
 
 def test_node_get_value_with_source_empty(empty_node: ConfigNode) -> None:
-    with pytest.raises(ConfigurationKeyError):
+    with pytest.raises(
+        ConfigurationKeyError, match=f"No value stored in this ConfigNode {empty_node.name}."
+    ):
         empty_node._get_value_with_source(layer=None)
 
     for layer in empty_node._layers:
-        with pytest.raises(ConfigurationKeyError):
+        with pytest.raises(
+            MissingLayerError,
+            match=f"No value stored in this ConfigNode {empty_node.name}.",
+        ):
             empty_node._get_value_with_source(layer=layer)
 
     assert not empty_node.accessed
+
+
+def test_node_get_value_with_source_full_node_missing_layer(full_node: ConfigNode) -> None:
+    with pytest.raises(
+        MissingLayerError,
+        match="No value stored in this ConfigNode test_node at layer non_existent_layer.",
+    ):
+        full_node._get_value_with_source(layer="non_existent_layer")
 
 
 def test_node_get_value_with_source(full_node: ConfigNode) -> None:
@@ -563,28 +577,22 @@ def test_get_chained_default(nested_dict: dict[str, Any]) -> None:
 
 def test_get_defaults_and_layers() -> None:
     lct = LayeredConfigTree(layers=["base", "override"])
-    lct.update(
-        {
-            "outer": {
-                "inner": "base-value",
-            }
-        },
-        layer="base",
-    )
-    lct.update(
-        {
-            "outer": {
-                "new-inner": "new-value",
-            }
-        },
-        layer="override",
-    )
+    lct.update({"outer": {"inner": "base-value"}}, layer="base")
+    lct.update({"outer": {"new-inner": "new-value"}}, layer="override")
     assert (
         lct.get(["outer", "new-inner"])
         == lct.get(["outer", "new-inner"], layer="override")
         == "new-value"
     )
-    assert lct.get(["outer", "new-inner"], "missing", layer="base") == "missing"
+
+
+def test_get_missing_layer_raises(nested_dict: dict[str, Any]) -> None:
+    lct = LayeredConfigTree(nested_dict, layers=["base"], name="test_tree")
+    with pytest.raises(
+        MissingLayerError,
+        match="No value stored in this ConfigNode test_tree at layer this-layer-does-not-exist.",
+    ):
+        lct.get("outer_layer_1", layer="this-layer-does-not-exist")
 
 
 def test_get_tree(nested_dict: dict[str, Any]) -> None:
@@ -689,29 +697,8 @@ def test_retrieval_from_layer() -> None:
 @pytest.fixture()
 def nested_layered_tree() -> LayeredConfigTree:
     lct = LayeredConfigTree(layers=["base", "override"])
-    lct.update(
-        {
-            "outer": {
-                "inner": {
-                    "one": 1,
-                    "two": 2,
-                },
-            },
-        },
-        layer="base",
-    )
-    lct.update(
-        {
-            "outer": {
-                "inner": {
-                    "one": 100,
-                    "two": 200,
-                },
-                "new": "foo",
-            },
-        },
-        layer="override",
-    )
+    lct.update({"outer": {"inner": {"one": 1, "two": 2}}}, layer="base")
+    lct.update({"outer": {"inner": {"one": 100, "two": 200}, "new": "foo"}}, layer="override")
     return lct
 
 
@@ -739,11 +726,10 @@ def test_nested_retrieval_missing_key_returns_default(
         == nested_layered_tree.get(
             ["outer", "oops"], "missing-from-override-layer", layer="override"
         )
+        == nested_layered_tree.get(
+            ["outer", "oops"], "missing-from-override-layer", layer="base"
+        )
         == "missing-from-override-layer"
-    )
-    assert (
-        nested_layered_tree.get(["outer", "new"], "missing-from-base-layer", layer="base")
-        == "missing-from-base-layer"
     )
 
 
