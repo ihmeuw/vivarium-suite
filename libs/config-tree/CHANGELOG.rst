@@ -1,3 +1,7 @@
+**3.2.0 - 03/31/2025**
+
+ - Get nested values from a single 'get' or 'get_tree' call
+
 **3.1.0 - 03/18/2025**
 
  - Raise an error if YAML contains duplicate keys within the same level

@@ -346,33 +346,80 @@ class LayeredConfigTree:
                 result[name] = child.to_dict()
         return result
 
-    def get(self, key: str, default_value: Any = None) -> Any:
-        """Return the LayeredConfigTree or value at the key in the outermost layer of the config tree.
+    def get(self, keys: str | list[str], default_value: Any = None) -> Any:
+        """Return the value at the key or key path in the outermost layer.
 
         Parameters
         ----------
-        key
-            The string to look for in the outermost layer of the config tree.
+        keys
+            The string or ordered list of strings to look for in the tree
+            starting from the outermost layer.
         default_value
-            The value to return if key is not found
-        """
-        return self[key] if key in self._children else default_value
+            The value to return if and only if the *final* key in the key path
+            does not exist.
 
-    def get_tree(self, key: str) -> LayeredConfigTree:
-        """Return the LayeredConfigTree at the key in the outermost layer of the config tree.
+        Notes
+        -----
+        The ``default_value`` will only be used if *final* key in the key path
+        does not exist *but the rest of the key path does*.
+
+        Returns
+        -------
+        The value at the key or nested keys. If the key path exists except for the
+        final value, the ``default_value`` is returned.
+        """
+        if not isinstance(keys, (str, list)):
+            raise TypeError("The 'keys' parameter must be a string or a list of strings.")
+
+        if isinstance(keys, str):
+            return self[keys] if keys in self._children else default_value
+        else:
+            # get the second-to-last value (which is by definition a LayeredConfigTree)
+            tree = self.get_tree(keys[:-1])
+            return tree[keys[-1]] if keys[-1] in tree._children else default_value
+
+    def get_tree(self, keys: str | list[str]) -> LayeredConfigTree:
+        """Return the LayeredConfigTree at the key or key path from the outermost layer.
 
         Parameters
         ----------
-        key
-            The str we look up in the outermost layer of the config tree.
+        keys
+            The key or key path to look up from the outermost layer.
+
+        Returns
+        -------
+        The ``LayeredConfigTree`` located at the key or key path provided starting
+        from the outermost layer.
+
+        Raises
+        ------
+        TypeError
+            If the ``keys`` parameter is not a string or list of strings.
+        ConfigurationKeyError
+            If any of the keys in the key path do not exist in the tree.
+        ConfigurationError
+            If the data at the final key in the key path is not a
+            :class:`LayeredConfigTree`.
         """
-        data = self[key]
-        if isinstance(data, LayeredConfigTree):
-            return data
-        else:
+        if not isinstance(keys, (str, list)):
+            raise TypeError("The 'keys' parameter must be a string or a list of strings.")
+
+        if isinstance(keys, str):
+            keys = [keys]
+
+        tree = self
+        for key in keys:
+            if key not in tree:
+                raise ConfigurationKeyError(
+                    f"No value at key mapping '{keys[:keys.index(key) + 1]}'."
+                )
+            tree = tree[key]
+        if not isinstance(tree, LayeredConfigTree):
             raise ConfigurationError(
-                f"The data you accessed using {key} with get_tree was of type {type(data)}, but get_tree must return a LayeredConfigTree."
+                f"The data you accessed using {keys} with get_tree was of type {type(tree)}, "
+                "but get_tree must return a LayeredConfigTree."
             )
+        return tree
 
     def get_from_layer(self, name: str, layer: str | None = None) -> Any:
         """Get a configuration value from the provided layer.
