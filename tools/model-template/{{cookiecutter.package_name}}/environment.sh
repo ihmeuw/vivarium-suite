@@ -12,15 +12,17 @@ Help()
    echo "h     Print this Help."
    echo "t     Type of conda environment. Either 'simulation' (default) or 'artifact'."
    echo "f     Force creation of a new environment."
+   echo "l     Install git lfs."
 }
 
 # Define variables
 username=$(whoami)
 env_type="simulation"
 make_new="no"
+install_git_lfs="no"
 
 # Process input options
-while getopts ":hft:" option; do
+while getopts ":hflt:" option; do
    case $option in
       h) # display help
          Help
@@ -29,6 +31,8 @@ while getopts ":hft:" option; do
          env_type=$OPTARG;;
       f) # Force creation of a new environment
          make_new="yes";;
+      l) # Install git lfs
+         install_git_lfs="yes";;
      \?) # Invalid option
          echo "Error: Invalid option"
          return;;
@@ -140,6 +144,10 @@ if [[ $create_env == 'yes' ]]; then
   # Install redis for simulation environments
   if [ $env_type == 'simulation' ]; then
     conda install redis -c anaconda -y
+  fi
+  # Install git lfs if requested
+  if [ $install_git_lfs == 'yes' ]; then
+    git lfs install
   fi
 else
   echo "Existing environment validated"
