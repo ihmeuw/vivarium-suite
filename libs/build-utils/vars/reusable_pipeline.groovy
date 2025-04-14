@@ -1,6 +1,6 @@
 def call(Map config = [:]){
   /* This is the funtion called from the repo
-  Example: fhs_standard_pipeline(job_name: JOB_NAME)
+  Example: reusable_pipeline(job_name: JOB_NAME)
   JOB_NAME is a reserved Jenkins var
   -------------
   Configuration options:
@@ -11,10 +11,12 @@ def call(Map config = [:]){
   skip_doc_build: Only skips the doc build.
   use_shared_fs: Whether to use the shared filesystem for conda envs.
   upstream_repos: A list of repos to check for upstream changes.
+  ignored_dirs: A list of directories to ignore; if no changes outside of these, the build is skipped.
   */
+
   task_node = config.requires_slurm ? 'slurm' : 'matrix-tasks'
 
-  scheduled_branches = config.scheduled_branches ?: [] 
+  scheduled_branches = config.scheduled_branches ?: []
   CRON_SETTINGS = scheduled_branches.contains(BRANCH_NAME) ? 'H H(20-23) * * *' : ''
 
   PYTHON_DEPLOY_VERSION = "3.11"
@@ -30,10 +32,13 @@ def call(Map config = [:]){
 
   // Define the upstream repos to check for changes
   upstream_repos = config.upstream_repos ?: []
+  ignored_dirs = config.ignored_dirs ?: []
 
   pipeline {
     // This agent runs as svc-simsci on node simsci-ci-coordinator-01.
     // It has access to standard IHME filesystems and singularity
+    agent { label "coordinator" }
+
     environment {
         IS_CRON = "${currentBuild.buildCauses.toString().contains('TimerTrigger')}"
         // defaults for conda and pip are a local directory /svc-simsci for improved speed.
@@ -52,8 +57,6 @@ def call(Map config = [:]){
         // time we run pip, poetry, etc.
         ACTIVATE_BASE = "source ${CONDA_BIN_PATH}/activate &> /dev/null"
     }
-
-    agent { label "coordinator" }
 
     options {
       // Keep 100 old builds.
@@ -98,6 +101,30 @@ def call(Map config = [:]){
       stage("Initialization") {
         steps {
           script {
+            if (ignored_dirs && !env.IS_CRON.toBoolean() && !currentBuild.rawBuild.getCauses().any { it.toString().contains('UserIdCause') }) {
+              def diffOutput
+              if (env.CHANGE_TARGET) {
+                sh "git fetch origin ${env.CHANGE_TARGET}"
+                diffOutput = sh(
+                  script: "git diff --name-only origin/${env.CHANGE_TARGET}...HEAD",
+                  returnStdout: true
+                ).trim()
+              } else {
+                diffOutput = sh(
+                  script: "git diff --name-only HEAD~1",
+                  returnStdout: true
+                ).trim()
+              }
+              def hasRelevantChange = diffOutput.split("\n").any { file ->
+                !ignored_dirs.any { file.startsWith(it) }
+              }
+              if (!hasRelevantChange) {
+                echo "No relevant changes outside ignored_dirs: ${ignored_dirs}. Skipping build."
+                currentBuild.result = 'NOT_BUILT'
+                return
+              }
+            }
+
             // Use the name of the branch in the build name
             currentBuild.displayName = "#${BUILD_NUMBER} ${GIT_BRANCH}"
             python_versions = get_python_versions(WORKSPACE, GIT_URL)
