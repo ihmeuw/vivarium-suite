@@ -101,6 +101,7 @@ def call(Map config = [:]){
       stage("Initialization") {
         steps {
           script {
+            env.SKIP_BUILD = 'false'
             if (ignored_dirs && !env.IS_CRON.toBoolean() && !currentBuild.rawBuild.getCauses().any { it.toString().contains('UserIdCause') }) {
               def diffOutput
               if (env.CHANGE_TARGET) {
@@ -121,7 +122,7 @@ def call(Map config = [:]){
               if (!hasRelevantChange) {
                 echo "No relevant changes outside ignored_dirs: ${ignored_dirs}. Skipping build."
                 currentBuild.result = 'NOT_BUILT'
-                throw new hudson.AbortException("Skipping build due to only ignored changes.")
+                env.SKIP_BUILD = 'true'
               }
             }
 
@@ -133,6 +134,11 @@ def call(Map config = [:]){
       }
 
       stage("Python Versions") {
+        when {
+          expression {
+            return env.SKIP_BUILD != 'true'
+          }
+        }
         steps {
           script {
             def parallelPythonVersions = [:]
