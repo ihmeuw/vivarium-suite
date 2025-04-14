@@ -121,7 +121,7 @@ def call(Map config = [:]){
               }
               if (!hasRelevantChange) {
                 echo "No relevant changes outside ignored_dirs: ${ignored_dirs}. Skipping build."
-                currentBuild.result = 'NOT_BUILT'
+                currentBuild.result = 'SUCCESS'
                 env.SKIP_BUILD = 'true'
               }
             }
