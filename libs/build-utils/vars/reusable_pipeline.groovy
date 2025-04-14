@@ -104,7 +104,7 @@ def call(Map config = [:]){
             if (ignored_dirs && !env.IS_CRON.toBoolean() && !currentBuild.rawBuild.getCauses().any { it.toString().contains('UserIdCause') }) {
               def diffOutput
               if (env.CHANGE_TARGET) {
-                sh "git fetch origin ${env.CHANGE_TARGET}"
+                sh "git fetch origin +refs/heads/${env.CHANGE_TARGET}:refs/remotes/origin/${env.CHANGE_TARGET}"
                 diffOutput = sh(
                   script: "git diff --name-only origin/${env.CHANGE_TARGET}...HEAD",
                   returnStdout: true
