@@ -96,7 +96,7 @@ def build_job_list(
                     "backup_freq": backup_freq,
                     "backup_metadata_path": backup_metadata_path,
                 },
-                extras={},
+                extras=extras,
             )
 
             if already_complete(parameters, finished_sim_metadata):

@@ -14,9 +14,12 @@ Decorator = Callable[[Callable], Callable]
 
 
 def with_verbose_and_pdb(func: Callable) -> Callable:
-    func = click.option("-v", "verbose", count=True, help="Configure logging verbosity.")(
-        func
-    )
+    func = click.option(
+        "-v",
+        "verbose",
+        count=True,
+        help="Configure logging verbosity of main runner for a parallel simulation.",
+    )(func)
     func = click.option(
         "--pdb",
         "with_debugger",

@@ -82,12 +82,28 @@ shared_options = [
     "configuration file.",
     callback=cli_tools.coerce_to_full_path,
 )
+@click.option(
+    "--sim-verbosity",
+    "-s",
+    type=click.Choice(
+        [
+            "0",
+            "1",
+            "2",
+        ],
+    ),
+    required=False,
+    default="0",
+    show_default=True,
+    help="Logging verbosity level of each individual simulation.",
+)
 @cli_tools.pass_shared_options(shared_options)
 def run(
     model_specification: Path,
     branch_configuration: Path,
     artifact_path: Path | None,
     result_directory: Path,
+    sim_verbosity: str,
     **options,
 ) -> None:
     """Run a parallel simulation.
@@ -131,7 +147,9 @@ def run(
         redis_processes=options["redis"],
         no_batch=options["no_batch"],
         backup_freq=options["backup_freq"],
-        extra_args={},
+        extra_args={
+            "sim_verbosity": int(sim_verbosity),
+        },
     )
 
 

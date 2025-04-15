@@ -69,6 +69,7 @@ def work_horse(job_parameters: dict) -> tuple[pd.DataFrame, dict[str, pd.DataFra
             sim = ParallelSimulationContext(
                 job_parameters.model_specification,
                 configuration=job_parameters.sim_config,
+                logging_verbosity=job_parameters.extras["sim_verbosity"],
             )
             logger.info("Simulation configuration:")
             logger.info(str(sim.configuration))

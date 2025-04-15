@@ -1,4 +1,8 @@
-**2.1.4 - 02/05/24**
+**2.1.5 - 04/15/25**
+
+  - Make logging verbosity for individiual simulations configurable
+
+**2.1.4 - 02/05/25**
 
   - Get python versions from python_versions.json
   
