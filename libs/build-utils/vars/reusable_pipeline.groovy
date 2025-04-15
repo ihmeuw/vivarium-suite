@@ -69,7 +69,7 @@ def call(Map config = [:]){
       // If another commit enters the build queue in this time, the first build will be discarded.
       // However, we re-implement this feature ourselves (see below) in order to allow
       // skips to happen *before* the quiet period.
-      // quietPeriod(60)
+      quietPeriod(0)
 
       // Don't allow multiple builds *on the same branch* to run at once,
       // which avoids race conditions with our custom quietPeriod implemented below.
