@@ -61,13 +61,19 @@ def call(Map config = [:]){
     options {
       // Keep 100 old builds.
       buildDiscarder logRotator(numToKeepStr: "100")
-      
-      // Wait 60 seconds before starting the build.
-      // If another commit enters the build queue in this time, the first build will be discarded.
-      quietPeriod(60)
 
       // Fail immediately if any part of a parallel stage fails
       parallelsAlwaysFailFast()
+
+      // Wait 60 seconds before starting the build.
+      // If another commit enters the build queue in this time, the first build will be discarded.
+      // However, we re-implement this feature ourselves (see below) in order to allow
+      // skips to happen *before* the quiet period.
+      // quietPeriod(60)
+
+      // Don't allow multiple builds *on the same branch* to run at once,
+      // which avoids race conditions with our custom quietPeriod implemented below.
+      disableConcurrentBuilds()
     }
 
     parameters {
@@ -101,24 +107,29 @@ def call(Map config = [:]){
       stage("Initialization") {
         steps {
           script {
+            // Decide whether or not to skip the build.
+            // We don't build when the only changes are in ignored_dirs,
+            // when the pipeline is being run because of a PR.
+            // When it's not run because of a PR (e.g. cron job or manual build)
+            // we never skip it.
             env.SKIP_BUILD = 'false'
-            if (ignored_dirs && !env.IS_CRON.toBoolean() && !currentBuild.rawBuild.getCauses().any { it.toString().contains('UserIdCause') }) {
-              def diffOutput
-              if (env.CHANGE_TARGET) {
-                sh "git fetch origin +refs/heads/${env.CHANGE_TARGET}:refs/remotes/origin/${env.CHANGE_TARGET}"
-                diffOutput = sh(
-                  script: "git diff --name-only origin/${env.CHANGE_TARGET}...HEAD",
-                  returnStdout: true
-                ).trim()
-              } else {
-                diffOutput = sh(
-                  script: "git diff --name-only HEAD~1",
-                  returnStdout: true
-                ).trim()
-              }
+            // env.CHANGE_TARGET set when building a PR
+            if (ignored_dirs && env.CHANGE_TARGET) {
+              // Fetch the CHANGE_TARGET so we can diff against it -- note that we
+              // explicitly set to a refs/remotes/origin/ location because a simple
+              // git fetch origin ${env.CHANGE_TARGET} may not put it there due to a
+              // refspec.
+              sh "git fetch origin +refs/heads/${env.CHANGE_TARGET}:refs/remotes/origin/${env.CHANGE_TARGET}"
+              def diffOutput = sh(
+                script: "git diff --name-only origin/${env.CHANGE_TARGET}...HEAD",
+                returnStdout: true
+              ).trim()
+
+              // Check if diff includes any files *not* in ignored_dirs
               def hasRelevantChange = diffOutput.split("\n").any { file ->
                 !ignored_dirs.any { file.startsWith(it) }
               }
+
               if (!hasRelevantChange) {
                 echo "No relevant changes outside ignored_dirs: ${ignored_dirs}. Skipping build."
                 currentBuild.result = 'SUCCESS'
@@ -129,6 +140,35 @@ def call(Map config = [:]){
             // Use the name of the branch in the build name
             currentBuild.displayName = "#${BUILD_NUMBER} ${GIT_BRANCH}"
             python_versions = get_python_versions(WORKSPACE, GIT_URL)
+          }
+        }
+      }
+      
+      stage('Quiet Period Simulation') {
+        when {
+          expression {
+            return env.SKIP_BUILD != 'true'
+          }
+        }
+        steps {
+          script {
+            def quietPeriodSeconds = 60
+
+            echo "Simulating quiet period of ${quietPeriodSeconds} seconds..."
+            sleep quietPeriodSeconds
+
+            // Get the latest build number for this job
+            def job = Jenkins.instance.getItemByFullName(env.JOB_NAME)
+            def latestBuild = job.getLastBuild()
+
+            // If the latest build is newer than this one, abort this build
+            if (latestBuild.number > currentBuild.number) {
+                echo "Newer build (#${latestBuild.number}) detected. Aborting this build (#${currentBuild.number})."
+                currentBuild.result = 'ABORTED'
+                error("Aborting due to newer build in queue.")
+            }
+
+            echo "No newer builds detected. Continuing execution."
           }
         }
       }
