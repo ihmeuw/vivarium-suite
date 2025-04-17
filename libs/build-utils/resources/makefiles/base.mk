@@ -77,7 +77,10 @@ lint: # Check for formatting errors
 	isort $(LOCATIONS) --check --verbose --only-modified --diff
 	black $(LOCATIONS) --check --diff
 
-build-doc: $(MAKE_SOURCES) # Build the Sphinx docs
+test-doc: $(MAKE_SOURCES) # Test docs
+	$(MAKE) doctest -C docs/
+
+build-doc: $(MAKE_SOURCES) # Build the docs
 	$(MAKE) -C docs/ html
 	@echo "Ignore, Created by Makefile, `date`" > $@
 

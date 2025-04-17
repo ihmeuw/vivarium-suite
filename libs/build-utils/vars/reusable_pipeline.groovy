@@ -207,6 +207,9 @@ def call(Map config = [:]){
                             stage("Build Docs - Python ${pythonVersion}") {
                               sh "${ACTIVATE} && make build-doc"
                             }
+                            stage("Test Docs - Python ${pythonVersion}") {
+                              sh "${ACTIVATE} && make test-doc"
+                            }
                           }
 
                         stage("Build and Deploy - Python ${pythonVersion}") {
