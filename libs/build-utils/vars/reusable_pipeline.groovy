@@ -108,6 +108,8 @@ def call(Map config = [:]){
       stage("Python Versions") {
         steps {
           script {
+            def buildStages = build_stages()
+            
             def parallelPythonVersions = [:]
             
             python_versions.each { pythonVersion ->
@@ -124,135 +126,34 @@ def call(Map config = [:]){
                     try {
                       checkout scm
                       load_shared_files()
-                      stage("Debug Info - Python ${pythonVersion}") {
-                        echo "Jenkins pipeline run timestamp: ${env.TIMESTAMP}"
-                        // Display parameters used.
-                        echo """Parameters:
-                        SKIP_DEPLOY: ${params.SKIP_DEPLOY}
-                        RUN_SLOW: ${params.RUN_SLOW}
-                        SLACK_TO: ${params.SLACK_TO}
-                        DEBUG: ${params.DEBUG}"""
-
-                        // Display environment variables from Jenkins.
-                        echo """Environment:
-                        ACTIVATE:       '${ACTIVATE}'
-                        BUILD_NUMBER:   '${BUILD_NUMBER}'
-                        BRANCH:         '${BRANCH}'
-                        CONDARC:        '${CONDARC}'
-                        CONDA_BIN_PATH: '${CONDA_BIN_PATH}'
-                        CONDA_ENV_NAME: '${CONDA_ENV_NAME}'
-                        CONDA_ENV_PATH: '${CONDA_ENV_PATH}'
-                        GIT_BRANCH:     '${GIT_BRANCH}'
-                        JOB_NAME:       '${JOB_NAME}'
-                        WORKSPACE:      '${WORKSPACE}'
-                        XDG_CACHE_HOME: '${XDG_CACHE_HOME}'"""
-                      }
-
-                      stage("Build Environment - Python ${pythonVersion}") {
-                        // The env should have been cleaned out after the last build, but delete it again
-                        // here just to be safe.
-                        sh "rm -rf ${CONDA_ENV_PATH}"
-                        sh "${ACTIVATE_BASE} && make create-env PYTHON_VERSION=${PYTHON_VERSION}"
-                        // open permissions for test users to create file in workspace
-                        sh "chmod 777 ${WORKSPACE}"
-                      }
-
-                      stage("Install Package - Python ${pythonVersion}") {
-                        sh "${ACTIVATE} && make install && pip install ."
-                      }
-                      stage("Install Upstream Dependency Branches - Python ${pythonVersion}") {
-                        sh "chmod +x install_dependency_branch.sh"
-                        upstream_repos.each { repo ->
-                          sh "${ACTIVATE} && ./install_dependency_branch.sh ${repo} ${GIT_BRANCH} jenkins"
-                        }
-                      }
-
-                      stage("Check Formatting - Python ${pythonVersion}") {
-                        sh "${ACTIVATE} && make lint"
-                      }
-
-                      stage("Run Tests - Python ${pythonVersion}") {
-                        script {
-                            def full_name = { test_type ->
-                              if (test_type == 'e2e') {
-                                  return "End-to-End"
-                              } else if (test_type == 'all-tests') {
-                                return "All"
-                              } else {
-                                  return test_type.capitalize()
-                              }
-                            }
-                            def parallelTests = test_types.collectEntries {
-                                ["${full_name(it)} Tests" : {
-                                    stage("Run ${full_name(it)} Tests - Python ${pythonVersion}") {
-                                        sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}"
-                                        publishHTML([
-                                          allowMissing: true,
-                                          alwaysLinkToLastBuild: false,
-                                          keepAll: true,
-                                          reportDir: "output/htmlcov_${it}",
-                                          reportFiles: "index.html",
-                                          reportName: "Coverage Report - ${full_name(it)} tests",
-                                          reportTitles: ''
-                                        ])
-                                    }
-                                }]
-                            }
-                            parallel parallelTests
-                        }
-                      }
+                      buildStages.runDebugInfo()
+                      buildStages.buildEnvironment()
+                      buildStages.installPackage()
+                      buildStages.installDependencies(upstream_repos)
+                      buildStages.checkFormatting()
+                      buildStages.runTests(test_types)
 
                       if (PYTHON_VERSION == PYTHON_DEPLOY_VERSION) {
                         if (config?.skip_doc_build != true) {
-                            stage("Build Docs - Python ${pythonVersion}") {
-                              sh "${ACTIVATE} && make build-doc"
-                            }
-                            stage("Test Docs - Python ${pythonVersion}") {
-                              sh "${ACTIVATE} && make test-doc"
-                            }
-                          }
-
+                          buildStages.testDocs()
+                        }
+                        
                         stage("Build and Deploy - Python ${pythonVersion}") {
-                          if ((config?.deployable == true) && 
+                          if ((config?.deployable == true) &&
                             !env.IS_CRON.toBoolean() &&
                             !params.SKIP_DEPLOY &&
                             (env.BRANCH == "main")) {
-                            
-                            stage("Tagging Version and Pushing") {
-                                  sh "${ACTIVATE} && make tag-version"
-                                }
+                            buildStages.deployPackage()
 
-                            stage("Build Package - Python ${pythonVersion}") {
-                              sh "${ACTIVATE} && make build-package"
-                            }
-
-                            stage("Deploy Package to Artifactory") {
-                              withCredentials([usernamePassword(
-                                credentialsId: 'artifactory_simsci',
-                                usernameVariable: 'PYPI_ARTIFACTORY_CREDENTIALS_USR',
-                                passwordVariable: 'PYPI_ARTIFACTORY_CREDENTIALS_PSW'
-                              )]) {
-                                sh "${ACTIVATE} && make deploy-package-artifactory"
-                              }
-                            }
                             if (config?.skip_doc_build != true) {
-                              stage("Deploy Docs") {
-                                withEnv(["DOCS_ROOT_PATH=/mnt/team/simulation_science/pub/docs"]) {
-                                  sh "${ACTIVATE} && make deploy-doc"
-                                }
-                              }
+                              buildStages.deployDocs()
                             }
                           }
                         }
                       }
                     } finally {
-                  // Cleanup
-                      sh "${ACTIVATE} && make clean"
-                      sh "rm -rf ${conda_env_path}"
-                      cleanWs()
-                      dir("${WORKSPACE}@tmp") {
-                        deleteDir()
-                      }
+                      // Cleanup
+                      buildStages.cleanup()
                     }
                   }
                 }
