@@ -52,9 +52,10 @@ def buildEnvironment() {
     }
 }
 
-def installPackage() {
+def installPackage(String env_reqs = "") {
+    env_reqs = env_reqs ? "ENV_REQS=${env_reqs}" : ""
     stage("Install Package - Python ${PYTHON_VERSION}") {
-        sh "${ACTIVATE} && make install && pip install ."
+        sh "${ACTIVATE} && make install ${env_reqs} && pip install ."
     }
 }
 

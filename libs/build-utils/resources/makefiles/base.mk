@@ -47,11 +47,12 @@ debug: # Print debug information (environment variables)
 	@echo "PACKAGE_VERSION:                  ${PACKAGE_VERSION}"
 	@echo "PYPI_ARTIFACTORY_CREDENTIALS_USR: ${PYPI_ARTIFACTORY_CREDENTIALS_USR} "
 	@echo "Make sources:                     ${MAKE_SOURCES}"
-
+	
+install: ENV_REQS?=dev
 install: ## Install setuptools, package, and build utilities
 	pip install uv
 	uv pip install --upgrade pip setuptools 
-	uv pip install -e .[DEV] --extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match
+	uv pip install -e .[${ENV_REQS}] --extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match
 
 install-upstream-deps: # Install upstream dependencies
 	@echo "Contents of install_dependency_branch.sh"
