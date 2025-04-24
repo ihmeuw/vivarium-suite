@@ -76,32 +76,34 @@ def checkFormatting() {
 
 def runTests(List test_types) {
     stage("Run Tests - Python ${PYTHON_VERSION}") {
-        def full_name = { test_type ->
-            if (test_type == 'e2e') {
-                return "End-to-End"
-            } else if (test_type == 'all-tests') {
+        script {
+            def full_name = { test_type ->
+                if (test_type == 'e2e') {
+                    return "End-to-End"
+                } else if (test_type == 'all-tests') {
                 return "All"
-            } else {
-                return test_type.capitalize()
-            }
-        }
-        def parallelTests = test_types.collectEntries {
-            ["${full_name(it)} Tests" : {
-                stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
-                    sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}"
-                    publishHTML([
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: false,
-                        keepAll: true,
-                        reportDir: "output/htmlcov_${it}",
-                        reportFiles: "index.html",
-                        reportName: "Coverage Report - ${full_name(it)} tests",
-                        reportTitles: ''
-                    ])
+                } else {
+                    return test_type.capitalize()
                 }
-            }]
+            }
+            def parallelTests = test_types.collectEntries {
+                ["${full_name(it)} Tests" : {
+                    stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
+                        sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}"
+                        publishHTML([
+                            allowMissing: true,
+                            alwaysLinkToLastBuild: false,
+                            keepAll: true,
+                            reportDir: "output/htmlcov_${it}",
+                            reportFiles: "index.html",
+                            reportName: "Coverage Report - ${full_name(it)} tests",
+                            reportTitles: ''
+                        ])
+                    }
+                }]
+            }
+            parallel parallelTests
         }
-        return parallelTests
     }
 }
 
