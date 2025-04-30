@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 import scipy
 from _pytest.logging import LogCaptureFixture
+from scipy.stats._distn_infrastructure import rv_continuous_frozen
 
 if TYPE_CHECKING:
     from py._path.local import LocalPath
@@ -238,7 +239,7 @@ def test_save_diagnostic_output(tmpdir: LocalPath) -> None:
 ###########
 
 
-def _make_beta_distribution(lower_bound: float, upper_bound: float) -> scipy.stats.beta:
+def _make_beta_distribution(lower_bound: float, upper_bound: float) -> rv_continuous_frozen:
     concentration_max = 1e40
     concentration_min = 1e-3
     concentration = np.exp((np.log(concentration_max) + np.log(concentration_min)) / 2)

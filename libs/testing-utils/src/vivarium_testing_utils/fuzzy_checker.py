@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats
 from loguru import logger
+from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_frozen
 
 
 class FuzzyChecker:
@@ -131,7 +132,7 @@ class FuzzyChecker:
         )
 
         if target_lower_bound == target_upper_bound:
-            no_bug_issue_distribution = scipy.stats.binom(
+            no_bug_issue_distribution: rv_discrete_frozen = scipy.stats.binom(
                 p=target_lower_bound, n=observed_denominator
             )
         else:
@@ -200,8 +201,8 @@ class FuzzyChecker:
     def _calculate_bayes_factor(
         self,
         numerator: int,
-        bug_distribution: scipy.stats.rv_discrete,
-        no_bug_distribution: scipy.stats.rv_discrete,
+        bug_distribution: rv_discrete_frozen,
+        no_bug_distribution: rv_discrete_frozen,
     ) -> float:
         # We can be dealing with some _extremely_ unlikely events here, so we have to set numpy to not error
         # if we generate a probability too small to be stored in a floating point number(!), which is known
@@ -346,7 +347,7 @@ class FuzzyChecker:
         return tuple(result)
 
     def _uncertainty_interval_squared_error(
-        self, dist: scipy.stats.rv_continuous, lower_bound: float, upper_bound: float
+        self, dist: rv_continuous_frozen, lower_bound: float, upper_bound: float
     ) -> float:
         squared_error_lower = self._quantile_squared_error(dist, lower_bound, 0.025)
         squared_error_upper = self._quantile_squared_error(dist, upper_bound, 0.975)
@@ -357,7 +358,7 @@ class FuzzyChecker:
             return float("inf")
 
     def _quantile_squared_error(
-        self, dist: scipy.stats.rv_continuous, value: float, intended_quantile: float
+        self, dist: rv_continuous_frozen, value: float, intended_quantile: float
     ) -> float:
         with np.errstate(under="ignore"):
             actual_quantile = dist.cdf(value)
