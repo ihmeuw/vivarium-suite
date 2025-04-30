@@ -145,7 +145,11 @@ def call(Map config = [:]){
                             if ((config?.deployable == true) &&
                               !env.IS_CRON.toBoolean() &&
                               !params.SKIP_DEPLOY &&
-                              (env.BRANCH == "main")) {
+                              (env.BRANCH == "main") &&
+                              has_deployable_change()) {
+                              if (!has_changelog_update()) {
+                                error "Deploy failed: Changelog does not contain a proper version update."
+                              }
                               buildStages.deployPackage()
 
                               if (config?.skip_doc_build != true) {
