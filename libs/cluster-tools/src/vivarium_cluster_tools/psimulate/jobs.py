@@ -79,7 +79,7 @@ def build_job_list(
     backup_dir: Path,
     backup_metadata_path: Path,
     extras: dict,
-) -> tuple[list[dict], int]:
+) -> tuple[list[JobParameters], int]:
     jobs = []
     number_already_completed = 0
 

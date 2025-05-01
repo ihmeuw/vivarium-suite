@@ -1,11 +1,15 @@
+from time import time
+
 import dill
 import pandas as pd
 import pytest
+from vivarium.framework.engine import SimulationContext
 
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
     ParallelSimulationContext,
     get_backup,
+    get_sim_from_backup,
     remove_backups,
 )
 
@@ -108,3 +112,13 @@ def test_remove_backups(tmp_path) -> None:
     # remove the file
     remove_backups(tmp_path / "job_id.pkl")
     assert not (tmp_path / "job_id.pkl").exists()
+
+
+def test_get_sim_from_backup():
+    backup = ParallelSimulationContext()  # returned by get_backup
+    event = {"start": time()}
+    sim, exec_time = get_sim_from_backup(event, backup)
+    assert isinstance(sim, ParallelSimulationContext)
+    assert isinstance(exec_time, dict)
+    assert "setup_minutes" in exec_time.keys()
+    assert backup == sim

@@ -1,18 +1,19 @@
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
-from layered_config_tree.main import LayeredConfigTree
-from vivarium import Component
 
+from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
     ParallelSimulationContext as ParallelSimulationContext_,
 )
+from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import work_horse
 
 
 @pytest.mark.parametrize("log_level", [0, 1, 2])
-def test_logging_level(tmp_path, log_level) -> None:
+def test_logging_level(mocker, tmp_path, log_level) -> None:
 
     input_draw = 1
     random_seed = 2
@@ -33,24 +34,26 @@ def test_logging_level(tmp_path, log_level) -> None:
         },
     )
 
-    class ParallelSimulationContext(ParallelSimulationContext_):
-        """A subclass of ParallelSimulationContext for testing that makes the logging level accessible."""
-
-        def __init__(
-            self,
-            model_specification: str | Path | LayeredConfigTree | None = None,
-            components: list[Component] | dict[str, Any] | LayeredConfigTree | None = None,
-            configuration: dict[str, Any] | LayeredConfigTree | None = None,
-            plugin_configuration: dict[str, Any] | LayeredConfigTree | None = None,
-            sim_name: str | None = None,
-            logging_verbosity: int = 1,
-        ):
-            super().__init__()
-            self._logging_level = logging_verbosity
-
-    sim = ParallelSimulationContext(
-        job_parameters.model_specification,
-        configuration=job_parameters.sim_config,
-        logging_verbosity=job_parameters.extras["sim_verbosity"],
+    mocker.patch(
+        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.ENV_VARIABLES",
     )
-    assert sim._logging_level == log_level
+    mocker.patch(
+        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.get_current_job",
+    )
+    mocker.patch("vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.run_simulation")
+    mocker.patch("vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.remove_backups")
+    mocker.patch(
+        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.get_sim_results"
+    )
+    mocker.patch(
+        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.format_and_record_details"
+    )
+    with patch(
+        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.ParallelSimulationContext"
+    ) as mock_parallel_sim:
+        work_horse(job_parameters.to_dict())
+        mock_parallel_sim.assert_called_once_with(
+            job_parameters.model_specification,
+            configuration=job_parameters.sim_config,
+            logging_verbosity=log_level,
+        )

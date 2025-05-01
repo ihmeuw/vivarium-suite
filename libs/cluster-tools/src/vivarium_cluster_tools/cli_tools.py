@@ -29,6 +29,25 @@ def with_verbose_and_pdb(func: Callable) -> Callable:
     return func
 
 
+def with_sim_verbosity(func: Callable) -> Callable:
+    func = click.option(
+        "--sim-verbosity",
+        "-s",
+        type=click.Choice(
+            [
+                "0",
+                "1",
+                "2",
+            ],
+        ),
+        required=False,
+        default="0",
+        show_default=True,
+        help="Logging verbosity level of each individual simulation.",
+    )(func)
+    return func
+
+
 def coerce_to_full_path(ctx: click.Context, param: str, value: str) -> Path:
     if value is not None:
         return Path(value).resolve()

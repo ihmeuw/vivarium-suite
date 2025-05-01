@@ -1,3 +1,8 @@
+**2.1.6 - 05/01/25**
+
+  - Bugfix: Add sim verbosity click option to restart and expand commands
+  - Refactor: Refactor vivarium_work_horse into smaller units
+
 **2.1.5 - 04/15/25**
 
   - Make logging verbosity for individiual simulations configurable
