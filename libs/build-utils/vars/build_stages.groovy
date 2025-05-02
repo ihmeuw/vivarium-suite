@@ -27,6 +27,8 @@ def runDebugInfo() {
 
         // Display environment variables from Jenkins.
         echo """Environment:
+        NODE_NAME:      '${NODE_NAME}'
+        EXECUTOR_NUMBER: '${EXECUTOR_NUMBER}'
         ACTIVATE:       '${ACTIVATE}'
         BUILD_NUMBER:   '${BUILD_NUMBER}'
         BRANCH:         '${BRANCH}'
