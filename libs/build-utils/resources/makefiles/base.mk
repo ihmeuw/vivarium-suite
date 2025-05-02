@@ -98,14 +98,22 @@ build-package: $(MAKE_SOURCES) # Build the package as a pip wheel
 	@echo "Ignore, Created by Makefile, `date`" > $@
 
 deploy-package-artifactory: # Deploy the package to Artifactory
-	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set"; exit 1 )
-	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set"; exit 1 )
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set, export using simsci artifactory credentials"; exit 1 )
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set, export using simsci artifactory credentials"; exit 1 )
 	pip install twine
 	twine upload --repository-url ${IHME_PYPI} -u ${PYPI_ARTIFACTORY_CREDENTIALS_USR} -p ${PYPI_ARTIFACTORY_CREDENTIALS_PSW} dist/*
 
 tag-version: # Tag the version and push
 	git tag -a "v${PACKAGE_VERSION}" -m "Tag automatically generated from Jenkins."
 	git push --tags
+
+manual-deploy: # Manual deploy to Artifactory
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set, export using simsci artifactory credentials"; exit 1 )
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set, export using simsci artifactory credentials"; exit 1 )
+	make build-env
+	conda run -n $(CONDA_ENV_NAME) make build-package
+	conda run -n $(CONDA_ENV_NAME) make tag-version
+	conda run -n $(CONDA_ENV_NAME) make deploy-package-artifactory
 
 clean: # Delete build artifacts and do any custom cleanup such as spinning down services
 	@rm -rf format build-doc build-package integration .pytest_cache
