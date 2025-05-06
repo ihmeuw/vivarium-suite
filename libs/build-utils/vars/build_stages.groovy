@@ -39,7 +39,9 @@ def runDebugInfo() {
         GIT_BRANCH:     '${GIT_BRANCH}'
         JOB_NAME:       '${JOB_NAME}'
         WORKSPACE:      '${WORKSPACE}'
-        XDG_CACHE_HOME: '${XDG_CACHE_HOME}'"""
+        XDG_CACHE_HOME: '${XDG_CACHE_HOME}'
+        IS_CRON:        '${IS_CRON}'
+        CRON_SCHEDULE:  '${env.CRON_SCHEDULE}'"""
     }
 }
 
