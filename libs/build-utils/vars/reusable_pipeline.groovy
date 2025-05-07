@@ -19,7 +19,6 @@ def call(Map config = [:]){
   stagger_scheduled_builds = config.stagger_scheduled_builds ?: false
 
   if (stagger_scheduled_builds && scheduled_branches.size() > 1) {
-    // If the branch is not in the list, return an empty string
     startHour = 20
     endHour = 23
     minutesRange = (endHour - startHour + 1) * 60
@@ -29,7 +28,7 @@ def call(Map config = [:]){
     int cronMinute = startMinute % 60 as int
     cron_schedule = scheduled_branches.contains(BRANCH_NAME) ? "${cronMinute} ${cronHour} * * *" : ''
   } else {
-    cron_schedule = scheduled_branches.contains(BRANCH_NAME) ? "H 20-23 * * *" : ''
+    cron_schedule = scheduled_branches.contains(BRANCH_NAME) ? "H H(20-23) * * *" : ''
   }
 
   PYTHON_DEPLOY_VERSION = "3.11"
