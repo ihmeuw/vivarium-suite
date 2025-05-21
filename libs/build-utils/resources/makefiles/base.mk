@@ -25,7 +25,7 @@ CONDA_ENV_CREATION_FLAG = $(if $(CONDA_ENV_PATH),-p ${CONDA_ENV_PATH},-n ${CONDA
 MAKE_SOURCES := $(shell find . -type d -name "*" ! -path "./.git*" ! -path "./.vscode" ! -path "./output" ! -path "./output/*" ! -path "./archive" ! -path "./dist" ! -path "./output/htmlcov*" ! -path "**/.pytest_cache*" ! -path "**/__pycache__" ! -path "./output/docs_build*" ! -path "./.pytype*" ! -path "." ! -path "./src/${PACKAGE_NAME}/legacy*" ! -path ./.history ! -path "./.history/*" ! -path "./src/${PACKAGE_NAME}.egg-info" ! -path ./.idea ! -path "./.idea/*" )
 
 # Phony targets don't produce artifacts.
-.PHONY: .list-targets build-env build-doc format integration build-package clean debug deploy-doc deploy-package full help list quick install install-upstream-deps
+.PHONY: .list-targets build-env build-doc format lint mypy integration build-package clean debug deploy-doc deploy-package full help list quick install install-upstream-deps
 
 # List of Make targets is generated dynamically. To add description of target, use a # on the target definition.
 list help: debug .list-targets
@@ -77,6 +77,9 @@ format: setup.py pyproject.toml $(MAKE_SOURCES) # Run the code formatter and imp
 lint: # Check for formatting errors
 	isort $(LOCATIONS) --check --verbose --only-modified --diff
 	black $(LOCATIONS) --check --diff
+
+mypy: # Check for type hinting erros
+	mypy --config-file pyproject.toml .
 
 test-doc: $(MAKE_SOURCES) # Test docs
 	$(MAKE) doctest -C docs/

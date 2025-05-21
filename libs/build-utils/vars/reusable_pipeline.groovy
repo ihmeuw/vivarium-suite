@@ -12,6 +12,7 @@ def call(Map config = [:]){
   skip_doc_build: Only skips the doc build.
   use_shared_fs: Whether to use the shared filesystem for conda envs.
   upstream_repos: A list of repos to check for upstream changes.
+  run_mypy: Whether to run mypy on the package
   */
   task_node = config.requires_slurm ? 'slurm' : 'matrix-tasks'
 
@@ -44,6 +45,8 @@ def call(Map config = [:]){
 
   // Define the upstream repos to check for changes
   upstream_repos = config.upstream_repos ?: []
+  // Define whether to run mypy
+  run_mypy = config.run_mypy != null ? config.run_mypy : true
 
   pipeline {
     // This agent runs as svc-simsci on node simsci-ci-coordinator-01.
@@ -148,7 +151,7 @@ def call(Map config = [:]){
                         buildStages.buildEnvironment()
                         buildStages.installPackage()
                         buildStages.installDependencies(upstream_repos)
-                        buildStages.checkFormatting()
+                        buildStages.checkFormatting(run_mypy)
                         buildStages.runTests(test_types)
 
                         if (PYTHON_VERSION == PYTHON_DEPLOY_VERSION) {
