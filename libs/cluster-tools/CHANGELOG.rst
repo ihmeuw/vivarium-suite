@@ -1,3 +1,7 @@
+**2.1.7 - 05/27/25**
+
+  - Feature: Remove duplicate log messages to main simulation log file
+
 **2.1.6 - 05/01/25**
 
   - Bugfix: Add sim verbosity click option to restart and expand commands

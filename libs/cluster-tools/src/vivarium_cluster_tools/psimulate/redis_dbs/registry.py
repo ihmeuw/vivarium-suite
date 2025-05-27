@@ -96,14 +96,8 @@ class QueueManager:
         )
         return results
 
-    def update_and_report(self) -> dict[str, int | float]:
+    def update(self) -> dict[str, int | float]:
         self._update_status()
-        template = (
-            f"Queue {self.name} - Total jobs: {{total}}, % Done: {{done:.2f}}% "
-            f"Pending: {{pending}}, Running: {{running}}, Failed: {{failed}}, Successful: {{successful}} "
-        )
-        if not (self.completed or self.failed):
-            self._logger.info(template.format(**self._status))
         return self._status
 
     def _update_status(self) -> None:
@@ -286,7 +280,7 @@ class RegistryManager:
     def update_and_report(self) -> dict[str, int | float]:
         status: dict[str, int | float] = defaultdict(int)
         for queue in self._queues:
-            queue_status = queue.update_and_report()
+            queue_status = queue.update()
             for k, v in queue_status.items():
                 status[k] += v
         status["done"] = status["successful"] / status["total"] * 100
