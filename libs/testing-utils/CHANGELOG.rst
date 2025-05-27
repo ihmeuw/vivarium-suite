@@ -1,3 +1,7 @@
+**0.2.2 - 05/27/25**
+
+ - Update pandas stubs package pin
+
 **0.2.1 - 02/05/24**
 
  - Add python versions json

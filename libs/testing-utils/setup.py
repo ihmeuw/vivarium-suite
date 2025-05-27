@@ -53,7 +53,7 @@ if __name__ == "__main__":
         "networkx",
         "loguru",
         # Type stubs
-        "pandas-stubs",
+        "pandas-stubs<=2.2.3.250308",
         "networkx-stubs",
         "types-docutils",
         "types-setuptools",
