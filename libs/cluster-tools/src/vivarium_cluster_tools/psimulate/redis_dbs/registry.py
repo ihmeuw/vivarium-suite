@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 ===================================
 Redis Queue and Registry Management

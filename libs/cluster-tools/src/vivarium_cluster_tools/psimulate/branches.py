@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 ==============================
 Branch and Keyspace Management

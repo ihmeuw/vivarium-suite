@@ -1,3 +1,7 @@
+**2.1.8 - 05/28/25**
+
+  - CI: Enable running mypy
+
 **2.1.7 - 05/27/25**
 
   - Feature: Remove duplicate log messages to main simulation log file

@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 ===================
 Cluster CLI options

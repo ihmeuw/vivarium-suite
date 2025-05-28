@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 ================================
 vivarium_cluster_tools Utilities

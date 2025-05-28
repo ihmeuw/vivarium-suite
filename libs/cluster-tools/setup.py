@@ -61,7 +61,11 @@ if __name__ == "__main__":
 
     setup_requires = ["setuptools_scm"]
 
-    lint_requirements = ["black==22.3.0", "isort==5.13.2"]
+    lint_requirements = [
+        "black==22.3.0",
+        "isort==5.13.2",
+        "mypy",
+    ]
 
     test_requirements = [
         "pytest",
