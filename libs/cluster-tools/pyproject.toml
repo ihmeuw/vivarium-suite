@@ -60,7 +60,6 @@ exclude = [
     "tests/psimulate/test_branches.py",
     "tests/psimulate/test_runner.py",
     "tests/psimulate/test_utilities.py",
-    "tests/conftest.py",
 ]
 
 disable_error_code = []
