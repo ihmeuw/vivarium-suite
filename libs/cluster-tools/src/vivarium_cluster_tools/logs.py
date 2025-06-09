@@ -1,19 +1,20 @@
-# mypy: ignore-errors
 """
 =================
 Logging Utilities
 =================
 
 """
+from __future__ import annotations
+
 import sys
 from pathlib import Path
-from typing import TextIO
+from typing import Any, Mapping, TextIO
 
 from loguru import logger
 
 
 def add_logging_sink(
-    sink: TextIO, verbose: int, colorize: bool = False, serialize: bool = False
+    sink: TextIO | str | Path, verbose: int, colorize: bool = False, serialize: bool = False
 ) -> None:
     message_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -22,7 +23,7 @@ def add_logging_sink(
     )
     if verbose == 0:
 
-        def quiet_filter(record):
+        def quiet_filter(record: Mapping[str, Any]) -> Any:
             return record.get("extra", {}).get("queue", None) == "all"
 
         logger.add(

@@ -1,5 +1,6 @@
 **2.1.10 - 06/09/25**
 
+  - Type-hinting: Fix mypy errors in logs.py
   - Type-hinting: Fix mypy errors in cli_tools.py
 
 **2.1.9 - 05/30/25**
