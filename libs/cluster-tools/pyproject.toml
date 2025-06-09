@@ -48,7 +48,6 @@ exclude = [
     "src/vivarium_cluster_tools/vipin/cli.py",
     "src/vivarium_cluster_tools/vipin/perf_counters.py",
     "src/vivarium_cluster_tools/vipin/perf_report.py",
-    "src/vivarium_cluster_tools/cli_tools.py",
     "src/vivarium_cluster_tools/logs.py",
     "src/vivarium_cluster_tools/utilities.py",
     "tests/psimulate/cluster/test_interface.py",

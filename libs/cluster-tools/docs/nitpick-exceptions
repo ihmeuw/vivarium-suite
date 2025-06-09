@@ -13,3 +13,5 @@ py:class pandas.core.generic.PandasObject
 py:class redis.client.Redis
 # layered-config-tree
 py:class layered_config_tree.main.LayeredConfigTree
+# typing
+py:class vivarium_cluster_tools.cli_tools.R

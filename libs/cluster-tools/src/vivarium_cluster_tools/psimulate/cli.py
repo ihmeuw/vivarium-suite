@@ -86,10 +86,10 @@ shared_options = [
 )
 @cli_tools.pass_shared_options(shared_options)
 def run(
-    model_specification: Path,
-    branch_configuration: Path,
-    artifact_path: Path | None,
-    result_directory: Path,
+    model_specification: str | Path,
+    branch_configuration: str | Path,
+    artifact_path: str | Path | None,
+    result_directory: str | Path,
     **options,
 ) -> None:
     """Run a parallel simulation.
@@ -146,7 +146,7 @@ def run(
     callback=cli_tools.coerce_to_full_path,
 )
 @cli_tools.pass_shared_options(shared_options)
-def restart(results_root, **options):
+def restart(results_root: str | Path, **options):
     """Restart a parallel simulation.
 
     This restarts a parallel simulation from a previous run at RESULTS_ROOT.
@@ -201,7 +201,7 @@ def restart(results_root, **options):
     help="The number of random seeds to add to a previous run.",
 )
 @cli_tools.pass_shared_options(shared_options)
-def expand(results_root, **options):
+def expand(results_root: str | Path, **options):
     """Expand a previous run.
 
     This expands a previous run at RESULTS_ROOT by adding input draws and/or
@@ -259,7 +259,7 @@ def expand(results_root, **options):
     callback=cli_tools.coerce_to_full_path,
 )
 @cli_tools.pass_shared_options(shared_options)
-def test(test_type, num_workers, result_directory, **options):
+def test(test_type, num_workers, result_directory: str | Path, **options):
     logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
