@@ -1,4 +1,9 @@
-**2.1.11 - 06/10/25**
+**2.1.12 - 06/11/25**
+
+  - Move deprecated rtd for redis
+
+
+**2.1.11 - 06/11/25**
 
   - Type-hinting: Fix mypy errors in perf_report.py
 
