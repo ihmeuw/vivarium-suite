@@ -47,7 +47,6 @@ exclude = [
     "src/vivarium_cluster_tools/psimulate/runner.py",
     "src/vivarium_cluster_tools/vipin/cli.py",
     "src/vivarium_cluster_tools/vipin/perf_counters.py",
-    "src/vivarium_cluster_tools/utilities.py",
     "tests/psimulate/cluster/test_interface.py",
     "tests/psimulate/redis_dbs/test_registry.py",
     "tests/psimulate/results/test_processing.py",
@@ -56,12 +55,11 @@ exclude = [
     "tests/psimulate/test_appending_perf_logs.py",
     "tests/psimulate/test_branches.py",
     "tests/psimulate/test_runner.py",
-    "tests/psimulate/test_utilities.py",
 ]
 
 disable_error_code = []
 
 # handle mypy errors when 3rd party packages are not typed.
 [[tool.mypy.overrides]]
-module = []
+module = ["drmaa"]
 ignore_missing_imports = true

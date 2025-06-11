@@ -1,3 +1,7 @@
+**2.1.13 - 06/11/25**
+
+  - Type-hinting: Fix mypy errors in utilities.py
+
 **2.1.12 - 06/11/25**
 
   - Move deprecated rtd for redis

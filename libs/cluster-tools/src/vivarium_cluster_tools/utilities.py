@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 ================================
 vivarium_cluster_tools Utilities
@@ -15,11 +14,14 @@ import time
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 
 NUM_ROWS_PER_CENTRAL_LOG_FILE = 100_000
+
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
 def get_cluster_name() -> str:
@@ -67,7 +69,7 @@ def backoff_and_retry(
     backoff_seconds: int | float = 30,
     num_retries: int = 3,
     log_function: Callable[[str], None] = warnings.warn,
-) -> Callable:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Adds a retry handler to the decorated function.
 
     Parameters
@@ -85,9 +87,9 @@ def backoff_and_retry(
         A function that retries the decorated function a specified number of times.
     """
 
-    def _wrap(func):
+    def _wrap(func: Callable[P, T]) -> Callable[P, T]:
         @functools.wraps(func)
-        def _wrapped(*args, **kwargs):
+        def _wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
             retries = num_retries
             while retries:
                 try:

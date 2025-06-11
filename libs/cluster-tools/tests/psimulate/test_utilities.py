@@ -3,10 +3,20 @@ import shutil
 import time
 from pathlib import Path
 from subprocess import PIPE, Popen
+from typing import Any, TypedDict
 
 import pytest
+from pytest import FixtureRequest
 
 from vivarium_cluster_tools.utilities import backoff_and_retry, mkdir
+
+
+class MkdirParams(TypedDict, total=False):
+    """Parameters for the mkdir function."""
+
+    parents: bool
+    exists_ok: bool
+    umask: int
 
 
 @pytest.fixture(
@@ -20,11 +30,11 @@ from vivarium_cluster_tools.utilities import backoff_and_retry, mkdir
         ({"exists_ok": True, "parents": True}, None),
     ]
 )
-def permissions_params(request):
-    return request.param
+def permissions_params(request: FixtureRequest) -> tuple[MkdirParams, str | None]:
+    return request.param  # type: ignore[no-any-return]
 
 
-def test_mkdir_set_permissions(permissions_params: list) -> None:
+def test_mkdir_set_permissions(permissions_params: tuple[MkdirParams, str | None]) -> None:
     # Get prior umask value
     prior_umask = os.umask(0)
     os.umask(prior_umask)
@@ -36,10 +46,10 @@ def test_mkdir_set_permissions(permissions_params: list) -> None:
     parent_path = cwd / parent_dir_name
     path = parent_path / child_dir_name
 
-    mkdir_params: dict = permissions_params[0]
+    mkdir_params: MkdirParams = permissions_params[0]
     permissions: str | None = permissions_params[1] if permissions_params[1] else "drwxrwxr-x"
 
-    def test_mkdir_permissions():
+    def test_mkdir_permissions() -> None:
         mkdir(path, **mkdir_params)
         proc = Popen(
             f"ls -l | grep '{parent_dir_name}' | grep '{permissions}'",
@@ -76,18 +86,18 @@ def test_mkdir_set_permissions(permissions_params: list) -> None:
         assert prior_umask == os.umask(prior_umask), "umask was changed and not reset"
 
 
-def test_backoff_and_retry():
+def test_backoff_and_retry() -> None:
     class WarningCatcher:
-        def __init__(self):
-            self.caught_warnings = []
+        def __init__(self) -> None:
+            self.caught_warnings: list[str] = []
 
-        def warn(self, message, *args, **kwargs):
+        def warn(self, message: str, *args: Any, **kwargs: Any) -> None:
             self.caught_warnings.append(message)
 
     wc = WarningCatcher()
 
     @backoff_and_retry(log_function=wc.warn)
-    def successful_function():
+    def successful_function() -> bool:
         return True
 
     assert successful_function()
@@ -96,7 +106,7 @@ def test_backoff_and_retry():
     wc = WarningCatcher()
 
     @backoff_and_retry(backoff_seconds=0.1, num_retries=5, log_function=wc.warn)
-    def failing_function():
+    def failing_function() -> None:
         raise ValueError
 
     start = time.time()
