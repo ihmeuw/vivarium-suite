@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 =====================
 Performance Reporting
@@ -11,6 +10,7 @@ Tools for summarizing and reporting performance information.
 import json
 import re
 from pathlib import Path
+from typing import Generator
 
 import numpy as np
 import pandas as pd
@@ -45,7 +45,7 @@ class PerformanceSummary:
         self.log_dir: Path = log_dir
         self.errors: int = 0
 
-    def get_summaries(self) -> dict:
+    def get_summaries(self) -> Generator[pd.DataFrame, None, None]:
         """Generator to get all performance summary log messages in PerformanceSummary"""
         for log in [
             f for f in self.log_dir.iterdir() if self.PERF_LOG_PATTERN.fullmatch(f.name)
@@ -85,7 +85,7 @@ class PerformanceSummary:
     TELEMETRY_PATTERN = re.compile(r"^{\"host\".+\"job_number\".+}$")
     PERF_LOG_PATTERN = re.compile(r"^perf\.([0-9]+)\.([0-9]+)\.log$")
 
-    def clean_perf_logs(self):
+    def clean_perf_logs(self) -> None:
         """Remove all performance logs from the log_dir (after to_df has been called)"""
         for log in [
             f for f in self.log_dir.iterdir() if self.PERF_LOG_PATTERN.fullmatch(f.name)
@@ -93,7 +93,7 @@ class PerformanceSummary:
             log.unlink()
 
 
-def set_index_scenario_cols(perf_df: pd.DataFrame) -> tuple[pd.DataFrame, list]:
+def set_index_scenario_cols(perf_df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     """Get the columns useful to index performance data by."""
     index_cols = BASE_PERF_INDEX_COLS
     scenario_cols = [col for col in perf_df.columns if col.startswith("scenario_")]
@@ -102,7 +102,7 @@ def set_index_scenario_cols(perf_df: pd.DataFrame) -> tuple[pd.DataFrame, list]:
     return perf_df, scenario_cols
 
 
-def add_squid_api_data(perf_df: pd.DataFrame):
+def add_squid_api_data(perf_df: pd.DataFrame) -> pd.DataFrame:
     """Add Squid API data to the performance dataframe.
 
     Given a dataframe from PerformanceSummary.to_df, add Squid API data for the job.
@@ -126,7 +126,7 @@ def add_squid_api_data(perf_df: pd.DataFrame):
     return perf_df
 
 
-def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list):
+def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
     """Print some helpful stats from the performance data.
 
     The stats are grouped by scenario_cols.
@@ -145,7 +145,7 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list):
         )
         perf_df["compound_scenario"] = (
             perf_df[scenario_cols]
-            .to_csv(header=None, index=False, sep="/")
+            .to_csv(header=False, index=False, sep="/")
             .strip("\n")
             .split("\n")
         )
@@ -189,7 +189,7 @@ def report_performance(
     output_directory: Path | str,
     output_hdf: bool,
     verbose: int,
-):
+) -> pd.DataFrame | None:
     """Main method for vipin reporting.
 
     Gets job performance data, outputs to a file, and logs a report.
@@ -201,7 +201,7 @@ def report_performance(
 
     if len(perf_df) < 1:
         logger.warning(f"No performance data found in {input_directory}.")
-        return  # nothing left to do
+        return None  # nothing left to do
 
     # Add jobapi data about the job to dataframe
     perf_df = add_squid_api_data(perf_df)

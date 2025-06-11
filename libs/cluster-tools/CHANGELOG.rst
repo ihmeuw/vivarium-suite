@@ -1,3 +1,7 @@
+**2.1.11 - 06/10/25**
+
+  - Type-hinting: Fix mypy errors in perf_report.py
+
 **2.1.10 - 06/09/25**
 
   - Type-hinting: Fix mypy errors in logs.py

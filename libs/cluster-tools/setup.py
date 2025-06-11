@@ -65,6 +65,7 @@ if __name__ == "__main__":
         "black==22.3.0",
         "isort==5.13.2",
         "mypy",
+        "types-requests",
     ]
 
     test_requirements = [
