@@ -31,7 +31,6 @@ exclude = [
     # You will need to remove the mypy: ignore-errors comment from the file heading as well
     "docs/source/conf.py",
     "setup.py",
-    "src/vivarium_cluster_tools/psimulate/cluster/cli_options.py",
     "src/vivarium_cluster_tools/psimulate/cluster/interface.py",
     "src/vivarium_cluster_tools/psimulate/redis_dbs/launcher.py",
     "src/vivarium_cluster_tools/psimulate/redis_dbs/registry.py",
@@ -61,5 +60,5 @@ disable_error_code = []
 
 # handle mypy errors when 3rd party packages are not typed.
 [[tool.mypy.overrides]]
-module = ["drmaa"]
+module = ["drmaa", "requests"]
 ignore_missing_imports = true
