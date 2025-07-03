@@ -454,40 +454,6 @@ class LayeredConfigTree:
             )
         return tree
 
-    def get_from_layer(self, name: str, layer: str | None = None) -> Any:
-        """(DEPRECATED) Get a configuration value from the provided layer.
-
-        If no layer is specified, the outermost (highest priority) layer
-        at which a value has been set will be used.
-
-        This method is deprecated as of version 3.2.0 and will be removed in a
-        future version. Use `get()` or `get_tree()` instead.
-
-        Parameters
-        ----------
-        name
-            The name of the value to retrieve
-        layer
-            The name of the layer to retrieve the value from.
-
-        """
-        warnings.warn(
-            "'LayeredConfigTree.get_from_layer()' is deprecated and will be removed"
-            "in a future version. Use 'get()' or 'get_tree()' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        if name not in self:
-            name = f"{self._name}.{name}" if self._name else name
-            raise ConfigurationKeyError(f"No value at name {name}.", name)
-
-        child = self._children[name]
-        if isinstance(child, ConfigNode):
-            return child.get_value(layer)
-        else:
-            return child
-
     def update(
         self,
         data: InputData | None,

@@ -757,24 +757,3 @@ def test_repr_display() -> None:
     lct.update({"Key1": "value_ov_1"}, layer="override_1", source="ov1_src")
     lct.update({"Key1": "value_ov_2"}, layer="override_2", source="ov2_src")
     assert repr(lct) == textwrap.dedent(expected_repr)
-
-
-def test_get_from_layer_deprecation() -> None:
-    """Fails if we haven't removed `get_from_layer()` by July 1 2025"""
-    import datetime
-
-    lct = LayeredConfigTree()
-    if datetime.date.today() > datetime.date(2025, 7, 1):
-        try:
-            lct.get_from_layer
-            method_exists = True
-        except Exception:
-            method_exists = False
-        if method_exists:
-            assert (
-                False
-            ), "'get_from_layer' should be officially deprecated. Delete it and this test."
-        else:
-            assert (
-                False
-            ), "'get_from_layer' has been deprecated and removed - delete this test"
