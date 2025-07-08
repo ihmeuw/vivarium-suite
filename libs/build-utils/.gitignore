@@ -114,4 +114,13 @@ venv.bak/
 notebooks/
 
 # Version file
-src/vivarium/_version.py
+_version.py
+
+# macOS
+*.DS_Store
+
+# copilot and AI tools
+.copilot/
+.github/copilot/
+*.copilot
+.copilot-workspace/
