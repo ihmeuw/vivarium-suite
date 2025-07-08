@@ -24,10 +24,10 @@
       "name": "Steve Bachmeier"
     },
     {
-    "orcid": "0009-0008-1094-6293",
-    "affiliation": "Institute for Health Metrics and Evaluation",
-    "name": "Patrick Nast"
-}
+      "orcid": "0009-0008-1094-6293",
+      "affiliation": "Institute for Health Metrics and Evaluation",
+      "name": "Patrick Nast"
+    }
   ],
   "access_right": "open",
   "description": "Vivarium Build Utils contains shared build utilities for Simulation Science projects."
