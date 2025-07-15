@@ -1,6 +1,32 @@
+import shutil
 from pathlib import Path
 
-from setuptools import setup
+from setuptools import find_packages, setup
+from setuptools.command.build_py import build_py
+
+
+class CustomBuildPy(build_py):
+    """Custom build command that copies resources into the package."""
+
+    def run(self):
+        # Run the standard build
+        super().run()
+
+        # Copy resources from repo root to package
+        repo_root = Path(__file__).parent
+        resources_src = repo_root / "resources"
+
+        if resources_src.exists():
+            # Find the built package directory
+            build_lib = Path(self.build_lib)
+            resources_dest = build_lib / "vivarium_build_utils" / "resources"
+
+            if resources_dest.exists():
+                shutil.rmtree(resources_dest)
+
+            shutil.copytree(resources_src, resources_dest)
+            print(f"Copied resources from {resources_src} to {resources_dest}")
+
 
 if __name__ == "__main__":
     base_dir = Path(__file__).parent
@@ -39,11 +65,20 @@ if __name__ == "__main__":
             "Topic :: Software Development :: Libraries",
             "Topic :: Software Development :: Build Tools",
         ],
-        packages=[],  # No Python packages, just for versioning
+        package_dir={"": "src"},
+        packages=find_packages(where="src"),
+        package_data={
+            "vivarium_build_utils": [
+                "resources/**/*",
+            ]
+        },
         include_package_data=True,
+        cmdclass={
+            "build_py": CustomBuildPy,
+        },
         zip_safe=False,
         use_scm_version={
-            "write_to": "_version.py",
+            "write_to": "src/vivarium_build_utils/_version.py",
             "write_to_template": '__version__ = "{version}"\n',
             "tag_regex": r"^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$",
         },

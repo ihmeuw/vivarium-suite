@@ -47,6 +47,8 @@ debug: # Print debug information (environment variables)
 	@echo "PACKAGE_VERSION:                  ${PACKAGE_VERSION}"
 	@echo "PYPI_ARTIFACTORY_CREDENTIALS_USR: ${PYPI_ARTIFACTORY_CREDENTIALS_USR} "
 	@echo "Make sources:                     ${MAKE_SOURCES}"
+	@echo
+	@echo "vivarium_build_utils version:     $(shell python -c "import importlib.metadata; print(importlib.metadata.version('vivarium_build_utils'))" 2>/dev/null || echo "unknown")"
 	
 install: ENV_REQS?=dev
 install: ## Install setuptools, package, and build utilities

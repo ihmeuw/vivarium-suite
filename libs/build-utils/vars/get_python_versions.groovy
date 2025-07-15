@@ -4,6 +4,7 @@ import groovy.json.JsonSlurper
 
 def call(workspace, git_url) {
     // parse the name of the repository from the git url
+
     def repo_name = git_url.tokenize("/")[-1].tokenize(".")[0]
     // raise an error if the file doesn't exist
     def filename = "${workspace}/python_versions.json"
