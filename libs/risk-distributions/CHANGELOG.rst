@@ -1,4 +1,8 @@
-**2.1.3 - 01/30/24**
+ **2.1.4 - 07/16/25**
+
+ - Support pinning of vivarium_build_utils; pin vivarium_build_utils>=1.1.0,<2.0.0
+ 
+ **2.1.3 - 01/30/24**
 
   - Get python versions from python_versions.json
 
