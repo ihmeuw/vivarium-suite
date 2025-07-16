@@ -1,3 +1,7 @@
+**1.1.2 - 7/16/2025**
+
+  - Bugfix: typo in extra-index-url
+
 **1.1.1 - 7/16/2025**
 
   - Bugfix: fix broken pip install --dry-run call in get_vbu_version.py

@@ -26,8 +26,10 @@ def get_resources_path() -> str:
     resources_path = next((path for path in prioritized_candidates if path.exists()), None)
 
     if not resources_path:
-        raise FileNotFoundError(f"Resources directory not found in expected locations: {prioritized_candidates}")
-    
+        raise FileNotFoundError(
+            f"Resources directory not found in expected locations: {prioritized_candidates}"
+        )
+
     return str(resources_path)
 
 

@@ -9,7 +9,9 @@ __all__ = [
 ]
 
 __title__ = "vivarium_build_utils"
-__summary__ = "Shared build utilities and Jenkins pipeline library for Simulation Science projects."
+__summary__ = (
+    "Shared build utilities and Jenkins pipeline library for Simulation Science projects."
+)
 __uri__ = "https://github.com/ihmeuw/vivarium_build_utils"
 
 __author__ = "The vivarium developers"
