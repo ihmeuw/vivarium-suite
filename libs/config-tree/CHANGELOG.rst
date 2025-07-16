@@ -1,3 +1,7 @@
+**4.0.1 - 07/16/2025**
+
+ - Support pinning of vivarium_build_utils; pin vivarium_build_utils>=1.1.0,<2.0.0
+
 **4.0.0 - 07/03/2025**
 
  - Remove get_from_layer() method
