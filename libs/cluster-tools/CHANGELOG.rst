@@ -1,3 +1,7 @@
+**2.1.15 - 07/16/25**
+
+  - Support pinning of vivarium_build_utils; pin vivarium_build_utils>=1.1.0,<2.0.0
+
 **2.1.14 - 06/16/25**
 
   - Type-hinting: Fix mypy errors in psimulate/cluster/cli_options.py
