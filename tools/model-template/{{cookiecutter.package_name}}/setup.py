@@ -43,6 +43,7 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requirements = [
+        "vivarium_build_utils>=1.1.0,<{{cookiecutter.vivarium_build_utils_next_major_version}}",
         "gbd_mapping>={{cookiecutter.gbd_mapping_version}}",
         "vivarium>={{cookiecutter.vivarium_version}}",
         "vivarium_public_health>={{cookiecutter.vivarium_public_health_version}}",
