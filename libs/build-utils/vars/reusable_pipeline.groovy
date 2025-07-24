@@ -6,7 +6,7 @@ def call(Map config = [:]){
   Configuration options:
   scheduled_branches: The branch names for which to run scheduled nightly builds.
   stagger_scheduled_builds: Whether to stagger the scheduled builds.
-  test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e']
+  test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e', 'all']
   requires_slurm: Whether the child tasks require the slurm scheduler.
   deployable: Whether the package can be deployed by Jenkins.
   skip_doc_build: Only skips the doc build.
@@ -34,11 +34,15 @@ def call(Map config = [:]){
 
   PYTHON_DEPLOY_VERSION = "3.11"
 
-  test_types = config.test_types ?: ['all-tests']
+  test_types = config.test_types ?: ['all']
   // raise an error if test_types is not a subset of  ['e2e', 'unit', 'integration']
-  if (!test_types.every { ['all-tests', 'e2e', 'unit', 'integration'].contains(it) }) {
-    throw new IllegalArgumentException("test_types must be a subset of ['all-tests', 'e2e', 'unit', 'integration']")
+  if (!test_types.every { ['all', 'e2e', 'unit', 'integration'].contains(it) }) {
+    throw new IllegalArgumentException("test_types must be a subset of ['all', 'e2e', 'unit', 'integration']")
   }
+  
+  // Transform test type inputs to actual make test target names
+  test_types = test_types.collect { "test-${it}" }
+  
   // Allow for building conda env on shared fs if required
   conda_env_name = config.use_shared_fs ? "${env.JOB_NAME.replaceAll('/', '-')}-${BUILD_NUMBER}" : "${env.JOB_NAME}-${BUILD_NUMBER}"
   conda_env_dir = config.use_shared_fs ? "/mnt/team/simulation_science/priv/engineering/tests/venv" : "/tmp"
@@ -142,13 +146,12 @@ def call(Map config = [:]){
                       checkout scm
                       load_shared_files()
                       buildStages.runDebugInfo()
+                      buildStages.buildEnvironment()
                       if (IS_DOC_ONLY_CHANGE.toBoolean() == true) {
                         echo "This is a doc-only change. Skipping everything except doc build and doc tests."
-                        buildStages.buildEnvironment()
                         buildStages.installPackage("docs")
                         buildStages.testDocs()
                       } else {
-                        buildStages.buildEnvironment()
                         buildStages.installPackage()
                         buildStages.installDependencies(upstream_repos)
                         buildStages.checkFormatting(run_mypy)
@@ -156,6 +159,7 @@ def call(Map config = [:]){
 
                         if (PYTHON_VERSION == PYTHON_DEPLOY_VERSION) {
                           if (config?.skip_doc_build != true) {
+                            buildStages.buildDocs()
                             buildStages.testDocs()
                           }
                           

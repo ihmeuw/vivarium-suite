@@ -22,3 +22,6 @@ This repository provides:
 
 - **`vars/`**: Jenkins shared library functions for continuous integration pipelines
 - **`resources/`**: Shared Makefiles and build scripts for consistent build processes
+
+Note: for help with the Make targets available to any environment with this repository
+installed, run `make help` in the terminal.
