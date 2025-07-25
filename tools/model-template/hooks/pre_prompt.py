@@ -22,6 +22,7 @@ def main():
         "vivarium_cluster_tools",
         "vivarium_inputs",
         "gbd_mapping",
+        "vivarium_build_utils",
     ]
     versions = {package_name: get_latest_version(package_name) for package_name in packages}
 
