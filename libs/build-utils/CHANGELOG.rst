@@ -1,3 +1,7 @@
+**2.0.1 - 7/25/2025**
+
+  - Bugfix: fix broken doc stages in Jenkins pipeline
+
 **2.0.0 - 7/24/2025**
 
   - Clean up and better document Make files

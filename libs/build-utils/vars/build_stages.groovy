@@ -7,6 +7,7 @@ def call() {
         installDependencies: this.&installDependencies,
         checkFormatting: this.&checkFormatting,
         runTests: this.&runTests,
+        buildDocs: this.&buildDocs,
         testDocs: this.&testDocs,
         deployPackage: this.&deployPackage,
         deployDocs: this.&deployDocs,
@@ -118,13 +119,13 @@ def runTests(List test_types) {
 
 def buildDocs() {
     stage("Build Docs - Python ${PYTHON_VERSION}") {
-        sh "${ACTIVATE} && make build-doc"
+        sh "${ACTIVATE} && make build-docs"
     }
 }
 
 def testDocs() {
     stage("Test Docs - Python ${PYTHON_VERSION}") {
-        sh "${ACTIVATE} && make test-doc"
+        sh "${ACTIVATE} && make test-docs"
     }
 }
 
@@ -151,7 +152,7 @@ def deployPackage() {
 def deployDocs() {
     stage("Deploy Docs") {
         withEnv(["DOCS_ROOT_PATH=/mnt/team/simulation_science/pub/docs"]) {
-            sh "${ACTIVATE} && make deploy-doc"
+            sh "${ACTIVATE} && make deploy-docs"
         }
     }
 }
