@@ -43,6 +43,13 @@ if __name__ == "__main__":
             "docutils",
             "types-docutils",
         ],
+        "ipython": ["ipython"],
+        "jupyter": [
+            "vivarium_dependencies[ipython]",
+            "jupyter",
+            "ipywidgets",
+        ],
+        "matplotlib": ["matplotlib"],
         # testing
         "pytest": ["pytest", "pytest-cov", "pytest-mock"],
         # formatting and linting
@@ -61,16 +68,13 @@ if __name__ == "__main__":
         "db_tools": ["db_tools>=1.0.2,<2.0.0"],
         "get_draws": ["get_draws>=5.1.4,<6.0.0"],
         # convenience sets
-        "format": [
+        "lint": [
             "vivarium_dependencies[black]",
             "vivarium_dependencies[isort]",
+            "vivarium_dependencies[mypy]",
         ],
         "interactive": [
-            "vivarium_dependencies[scipy]",
-            "jupyter",
-            "ipython",
-            "ipywidgets",
-            "matplotlib",
+            "vivarium_dependencies[jupyter,scipy,matplotlib]",
             "seaborn",
         ],
         "gbd": [
