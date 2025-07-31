@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     setup_requires = ["setuptools_scm"]
 
-    data_requirements = ["vivarium_inputs[data]>={{cookiecutter.vivarium_inputs_version}}"]
+    data_requirements = ["vivarium_inputs>={{cookiecutter.vivarium_inputs_version}}"]
     cluster_requirements = [
         "vivarium_cluster_tools>={{cookiecutter.vivarium_cluster_tools_version}}"
     ]

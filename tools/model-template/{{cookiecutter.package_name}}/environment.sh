@@ -138,9 +138,11 @@ if [[ $create_env == 'yes' ]]; then
   conda activate $env_name
   # NOTE: update branch name if you update requirements.txt in a branch
   echo "Installing packages for $env_type environment"
-  pip install -r $install_file
+  pip install uv
+  artifactory_url="https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/simple"
+  uv pip install -r $install_file --extra-index-url $artifactory_url --index-strategy unsafe-best-match
   # Editable install of repo
-  pip install -e .[dev] 
+  uv pip install -e .[dev] --extra-index-url $artifactory_url --index-strategy unsafe-best-match
   # Install redis for simulation environments
   if [ $env_type == 'simulation' ]; then
     conda install redis -c anaconda -y
