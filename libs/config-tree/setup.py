@@ -41,29 +41,23 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requirements = [
+        "vivarium_dependencies[pyyaml]",
         "vivarium_build_utils>=2.0.1,<3.0.0",
-        "pyyaml>=5.1",
     ]
     setup_requirements = ["setuptools_scm"]
     test_requirements = [
-        "pytest",
-        "pytest-mock",
-        "pytest-cov",
+        "vivarium_dependencies[pytest]",
     ]
     doc_requirements = [
-        "sphinx>=4.0",
-        "sphinx-rtd-theme",
-        "sphinx-click",
-        "IPython",
-        "matplotlib",
+        "vivarium_dependencies[sphinx,sphinx-click,ipython,matplotlib]",
         "sphinxcontrib-video",
     ]
+    interactive_requirements = [
+        "vivarium_dependencies[interactive]",
+    ]
     dev_requirements = [
-        "black==22.3.0",
-        "isort==5.13.2",
-        "mypy",
+        "vivarium_dependencies[lint]",
         # typing extensions
-        "types-PyYAML",
         "types-setuptools",
     ]
 
@@ -95,8 +89,12 @@ if __name__ == "__main__":
         tests_require=test_requirements,
         extras_require={
             "docs": doc_requirements,
+            "interactive": interactive_requirements,
             "test": test_requirements,
-            "dev": doc_requirements + test_requirements + dev_requirements,
+            "dev": doc_requirements
+            + interactive_requirements
+            + test_requirements
+            + dev_requirements,
         },
         zip_safe=False,
         use_scm_version={
