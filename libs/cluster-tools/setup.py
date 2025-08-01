@@ -42,46 +42,33 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requires = [
+        "vivarium_dependencies[numpy_lt_2,pandas,pyyaml,click,tables,loguru,pyarrow,requests]",
         "vivarium_build_utils>=2.0.1,<3.0.0",
-        "pandas",
-        "numpy<2.0.0",
-        "tables",
-        "loguru",
-        "pyyaml>=5.1",
         "drmaa",
         "dill",
         "redis",
         "rq",
         "vivarium>=3.0.0",
-        "click",
         "psutil",
-        "requests",
-        "layered_config_tree>=1.0.1",
-        "pyarrow",
+        "layered_config_tree",
     ]
 
     setup_requires = ["setuptools_scm"]
 
     lint_requirements = [
-        "black==22.3.0",
-        "isort==5.13.2",
-        "mypy",
-        "types-requests",
+        "vivarium_dependencies[lint]",
     ]
 
     test_requirements = [
-        "pytest",
-        "pytest-cov",
-        "pytest-mock",
+        "vivarium_dependencies[pytest]",
     ]
 
     doc_requirements = [
-        "sphinx>=4.0,<8.0.0",
-        "sphinx-rtd-theme",
-        "sphinx-click",
-        "sphinx-autodoc-typehints",
-        "IPython",
-        "matplotlib",
+        "vivarium_dependencies[sphinx,sphinx-click,ipython,matplotlib]",
+    ]
+
+    interactive_requirements = [
+        "vivarium_dependencies[interactive]",
     ]
 
     setup(
@@ -102,8 +89,12 @@ if __name__ == "__main__":
         install_requires=install_requires,
         extras_require={
             "docs": doc_requirements,
+            "interactive": interactive_requirements,
             "test": test_requirements,
-            "dev": doc_requirements + test_requirements + lint_requirements,
+            "dev": doc_requirements
+            + interactive_requirements
+            + test_requirements
+            + lint_requirements,
         },
         zip_safe=False,
         use_scm_version={
