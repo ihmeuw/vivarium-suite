@@ -43,31 +43,22 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requirements = [
+        "vivarium_dependencies[pandas,numpy,scipy,click,tables,loguru]",
         "vivarium_build_utils>={{cookiecutter.vivarium_build_utils_version}}",
         "gbd_mapping>={{cookiecutter.gbd_mapping_version}}",
         "vivarium>={{cookiecutter.vivarium_version}}",
         "vivarium_public_health>={{cookiecutter.vivarium_public_health_version}}",
-        "click",
         "jinja2",
-        "loguru",
-        "numpy",
-        "pandas",
         "pyyaml",
-        "scipy",
-        "tables",
     ]
 
     setup_requires = ["setuptools_scm"]
 
     data_requirements = ["vivarium_inputs>={{cookiecutter.vivarium_inputs_version}}"]
-    cluster_requirements = [
-        "vivarium_cluster_tools>={{cookiecutter.vivarium_cluster_tools_version}}"
-    ]
-    test_requirements = ["pytest", "pytest-cov"]
-    lint_requirements = [
-        "black==22.3.0",
-        "isort",
-    ]
+    interactive_requirements = ["vivarium_dependencies[interactive]"]
+    cluster_requirements = ["vivarium_cluster_tools>={{cookiecutter.vivarium_cluster_tools_version}}"]
+    test_requirements = ["vivarium_dependencies[pytest]"]
+    lint_requirements = ["vivarium_dependencies[lint]"]
 
     setup(
         name=about["__title__"],
@@ -85,7 +76,11 @@ if __name__ == "__main__":
             "test": test_requirements,
             "cluster": cluster_requirements,
             "data": data_requirements + cluster_requirements,
-            "dev": test_requirements + cluster_requirements + lint_requirements,
+            "interactive": interactive_requirements,
+            "dev": test_requirements
+            + cluster_requirements
+            + lint_requirements
+            + interactive_requirements,
         },
         zip_safe=False,
         use_scm_version={

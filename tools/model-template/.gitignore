@@ -107,4 +107,11 @@ venv.bak/
 .idea/
 
 # Version file
-src/vivarium_research_template/_version.py
+src/*/_version.py
+
+# Copilot instructions
+.github/copilot_instructions.md
+.github/prompts/
+
+# Visual Studio Code project settings
+.vscode/
