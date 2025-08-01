@@ -1,3 +1,7 @@
+**0.2.5 - 08/01/25**
+
+ - Use vivarium_dependencies for common setup constraints
+
 **0.2.4 - 07/25/25**
 
  - Feature: Support new environment creation via 'make build-env'

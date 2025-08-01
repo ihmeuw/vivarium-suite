@@ -44,49 +44,28 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requirements = [
+        "vivarium_dependencies[pandas,numpy,pyyaml,scipy,click,tables,loguru,networkx]",
         "vivarium_build_utils>=2.0.1,<3.0.0",
-        "numpy",
-        "pandas",
-        "pyyaml>=5.1",
-        "scipy",
-        "click",
-        "tables",
-        "networkx",
-        "loguru",
         # Type stubs
-        "pandas-stubs<=2.2.3.250308",
-        "networkx-stubs",
-        "types-docutils",
         "types-setuptools",
     ]
 
     setup_requires = ["setuptools_scm"]
 
     interactive_requirements = [
-        "IPython",
-        "ipywidgets",
-        "jupyter",
+        "vivarium_dependencies[interactive]",
     ]
 
     test_requirements = [
-        "pytest",
-        "pytest-mock",
-        "pytest-cov",
+        "vivarium_dependencies[pytest]",
     ]
 
     doc_requirements = [
-        "sphinx>=4.0",
-        "sphinx-rtd-theme",
-        "sphinx-click",
-        "IPython",
-        "matplotlib",
-        "docutils",
+        "vivarium_dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]",
     ]
 
     lint_requirements = [
-        "black==22.3.0",
-        "isort",
-        "mypy",
+        "vivarium_dependencies[lint]",
     ]
 
     setup(
@@ -132,10 +111,6 @@ if __name__ == "__main__":
             + interactive_requirements
             + lint_requirements,
         },
-        # entry_points="""
-        #         [console_scripts]
-        #         simulate=vivarium.interface.cli:simulate
-        #     """,
         zip_safe=False,
         use_scm_version={
             "write_to": "src/vivarium_testing_utils/_version.py",
