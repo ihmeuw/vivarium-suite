@@ -10,7 +10,6 @@ def call(Map config = [:]){
   requires_slurm: Whether the child tasks require the slurm scheduler.
   deployable: Whether the package can be deployed by Jenkins.
   skip_doc_build: Only skips the doc build.
-  use_shared_fs: Whether to use the shared filesystem for conda envs.
   upstream_repos: A list of repos to check for upstream changes.
   run_mypy: Whether to run mypy on the package
   */
@@ -43,9 +42,8 @@ def call(Map config = [:]){
   // Transform test type inputs to actual make test target names
   test_types = test_types.collect { "test-${it}" }
   
-  // Allow for building conda env on shared fs if required
-  conda_env_name = config.use_shared_fs ? "${env.JOB_NAME.replaceAll('/', '-')}-${BUILD_NUMBER}" : "${env.JOB_NAME}-${BUILD_NUMBER}"
-  conda_env_dir = config.use_shared_fs ? "/mnt/team/simulation_science/priv/engineering/tests/venv" : "/tmp"
+  conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
+  conda_env_dir = "/mnt/team/simulation_science/priv/engineering/jenkins/envs"
 
   // Define the upstream repos to check for changes
   upstream_repos = config.upstream_repos ?: []
@@ -135,10 +133,10 @@ def call(Map config = [:]){
               parallelPythonVersions["Python ${pythonVersion}"] = {
                 node(task_node) {
                   def envVars = [
-                    CONDA_ENV_NAME: "${conda_env_name}-${pythonVersion}",
-                    CONDA_ENV_PATH: "${conda_env_dir}/${conda_env_name}-${pythonVersion}",
+                    CONDA_ENV_NAME: "${conda_env_name_base}-${pythonVersion}",
+                    CONDA_ENV_PATH: "${conda_env_dir}/${conda_env_name_base}-${pythonVersion}",
                     PYTHON_VERSION: pythonVersion,
-                    ACTIVATE: "source /svc-simsci/miniconda3/bin/activate ${conda_env_dir}/${conda_env_name}-${pythonVersion} &> /dev/null",
+                    ACTIVATE: "source /svc-simsci/miniconda3/bin/activate ${conda_env_dir}/${conda_env_name_base}-${pythonVersion} &> /dev/null",
                   ]
                   
                   withEnv(envVars.collect { k, v -> "${k}=${v}" }) {
@@ -234,7 +232,7 @@ def call(Map config = [:]){
             slackMessage += """
               
               Debug was enabled - MANUALLY CLEAN UP WHEN FINISHED.
-              1. Env path: ${conda_env_dir}/${conda_env_name}
+              1. Env path: ${conda_env_dir}/${conda_env_name_base}
               2. Workspace: ${env.WORKSPACE}
               """.stripIndent()
           }

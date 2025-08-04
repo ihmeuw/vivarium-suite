@@ -123,10 +123,11 @@ create-env: # Create a new conda environment
 	@echo
 
 install: ENV_REQS?=dev
+install: UV_FLAGS?=
 install: # Install package and dependencies
 	pip install uv
 	uv pip install --upgrade pip setuptools 
-	uv pip install -e .[${ENV_REQS}] --extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match
+	uv pip install -e .[${ENV_REQS}] --extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match ${UV_FLAGS}
 
 lint: # Check for formatting errors
 # NOTE: This is not actually running isort and black but rather just checking the --diffs.

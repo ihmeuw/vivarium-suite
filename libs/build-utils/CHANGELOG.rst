@@ -1,3 +1,7 @@
+**2.0.2 - 8/4/2025**
+
+  - Create all Jenkins build envs in shared team folder
+
 **2.0.1 - 7/25/2025**
 
   - Bugfix: fix broken doc stages in Jenkins pipeline
