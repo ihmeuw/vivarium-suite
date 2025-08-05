@@ -1,3 +1,7 @@
+**4.0.4 - 08/04/2025**
+
+ - Remove deprecated reusable_pipeline 'use_shared_fs' arg from Jenkinsfile
+
 **4.0.3 - 08/01/2025**
 
  - Use vivarium_dependencies for common setup constraints
