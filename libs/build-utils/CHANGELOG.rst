@@ -1,4 +1,8 @@
-**2.0.3 - 8/5/2025**
+**2.0.4 - 8/6/2025**
+
+  - Revert v2.0.3
+
+**2.0.3 - 8/5/2025** (removed)
 
   - Use Jenkins node /tmp/ dir (reversion from v2.0.2) until permissions get resolved
 

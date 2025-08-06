@@ -43,9 +43,7 @@ def call(Map config = [:]){
   test_types = test_types.collect { "test-${it}" }
   
   conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
-  // TODO - change back to team folder when infra gives all Jenkins nodes permission
-  // conda_env_dir = "/mnt/team/simulation_science/priv/engineering/jenkins/envs"
-  conda_env_dir = env.JOB_NAME.contains("easylink") ? "/mnt/team/simulation_science/priv/engineering/jenkins/envs" : "/tmp"
+  conda_env_dir = "/mnt/team/simulation_science/priv/engineering/jenkins/envs"
 
   // Define the upstream repos to check for changes
   upstream_repos = config.upstream_repos ?: []
