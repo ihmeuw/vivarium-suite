@@ -28,6 +28,6 @@ Note that updating the shared repo will take affect on the next pipeline invocat
 library("vivarium_build_utils@${get_vbu_version()}")
 
 reusable_pipeline(
-    scheduled_branches: ["main"],
+    scheduled_branches: ["main", "epic/auto-validation"],
     skip_doc_build: true
 )
