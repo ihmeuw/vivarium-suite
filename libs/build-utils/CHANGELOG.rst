@@ -1,8 +1,12 @@
+**2.0.5 - 8/8/2025**
+
+  - Create pipeline to clean up Jenkins build directories
+
 **2.0.4 - 8/6/2025**
 
   - Revert v2.0.3
 
-**2.0.3 - 8/5/2025** (removed)
+**2.0.3 - 8/5/2025**
 
   - Use Jenkins node /tmp/ dir (reversion from v2.0.2) until permissions get resolved
 

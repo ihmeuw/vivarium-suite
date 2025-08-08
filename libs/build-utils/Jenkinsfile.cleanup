@@ -1,0 +1,191 @@
+pipeline {
+    agent none // Defined explicitly in each stage
+    
+    environment {
+        DIRS_TO_CLEAN_PER_NODE = '/tmp,/opt/jenkins/workspace'
+        DIRS_TO_CLEAN_SHARED = '/mnt/team/simulation_science/priv/engineering/jenkins/envs'
+        DAYS_OLD = '3'
+    }
+    
+    options {
+        skipDefaultCheckout()
+        timeout(time: 60, unit: 'MINUTES')
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+    
+    stages {
+        stage('Shared Directory Cleanup') {
+            // Can use any node, really
+            agent { node 'simsci-ci-coordinator-01' }
+            steps {
+                script {
+                    cleanDirs("shared")
+                }
+            }
+            post {
+                always {
+                    cleanWs()
+                    dir("${env.WORKSPACE}@tmp") {
+                        deleteDir()
+                    }
+                }
+            }
+        }
+        
+        stage('Coordinator Node Cleanup') {
+            // NOTE: Confusingly, simsci-ci-coordinator-01 is actually simsci-jenkinsagent-ci-p02
+            agent { node 'simsci-ci-coordinator-01' }
+            steps {
+                script {
+                    cleanDirs("per-node")
+                }
+            }
+            post {
+                always {
+                    cleanWs()
+                    dir("${env.WORKSPACE}@tmp") {
+                        deleteDir()
+                    }
+                }
+            }
+        }
+        
+        stage('Jenkins Agent Node Cleanup') {
+            agent { node 'simsci-jenkinsagent-ci-p01' }
+            steps {
+                script {
+                    cleanDirs("per-node")
+                }
+            }
+            post {
+                always {
+                    cleanWs()
+                    dir("${env.WORKSPACE}@tmp") {
+                        deleteDir()
+                    }
+                }
+            }
+        }
+        
+        stage('Slurm Build Node Cleanup') {
+            agent { node 'simsci-slurm-sbuild-p01' }
+            steps {
+                script {
+                    cleanDirs("per-node")
+                }
+            }
+            post {
+                always {
+                    cleanWs()
+                    dir("${env.WORKSPACE}@tmp") {
+                        deleteDir()
+                    }
+                }
+            }
+        }
+        
+        stage('Built-In Node Cleanup') {
+            agent { node 'built-in' }
+            steps {
+                script {
+                    cleanDirs("per-node")
+                }
+            }
+            post {
+                always {
+                    cleanWs()
+                    dir("${env.WORKSPACE}@tmp") {
+                        deleteDir()
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "All node cleanups completed successfully"
+        }
+        failure {
+            echo "Node cleanup failed - check the failed stage logs for details"
+            // Generate a message to send to Slack.
+            script {
+                def channelName = "simsci-ci-status"
+                def slackID = "channel"
+                def slackMessage = """
+                    Job: *${env.JOB_NAME}*
+                    Build number: #${env.BUILD_NUMBER}
+                    Build status: *${currentBuild.result}*
+                    Author: @${slackID}
+                    Build details: <${env.BUILD_URL}/console|See in web console>
+                    """.stripIndent()
+                
+                slackSend channel: "#${channelName}",
+                        message: slackMessage,
+                        teamDomain: "ihme",
+                        tokenCredentialId: "slack"
+            }
+        }
+    }
+}
+
+def cleanDirs(cleanupType) {
+    echo "Starting ${cleanupType} cleanup on node: ${env.NODE_NAME} (${env.NODE_LABELS})"
+    
+    // Determine which directories to clean based on cleanup type
+    def dirsToClean = cleanupType == "shared" ? env.DIRS_TO_CLEAN_SHARED : env.DIRS_TO_CLEAN_PER_NODE
+    
+    // Split the directories and loop through them
+    def dirList = dirsToClean.split(',')
+    
+    // Special case: built-in node doesn't have /opt/jenkins/workspace
+    if (env.NODE_NAME == "built-in" && cleanupType == "per-node") {
+        dirList = dirList.findAll { it != "/opt/jenkins/workspace" }
+    }
+    
+    for (dir in dirList) {
+        sh """
+            #!/bin/bash
+
+            set -e  # Fail fast on errors
+            
+            # Safety checks before attempting cleanup
+            if [ -z "${dir}" ]; then
+                echo "ERROR: Empty directory path, skipping"
+                exit 1
+            fi
+            
+            if [ "${dir}" = "/" ]; then
+                echo "ERROR: Refusing to clean root directory /, skipping"
+                exit 1
+            fi
+            
+            if [ ! -d "${dir}" ]; then
+                echo "ERROR: Directory ${dir} does not exist or is not accessible, skipping"
+                exit 1
+            fi
+
+            echo "----------------------------------------"
+            echo "Running ${cleanupType} cleanup on \$(hostname):${dir}"
+
+            # Remove directories (excluding this build's 'cleanup*' dirs)
+            echo "Listing (non-cleanup) directories in ${dir} older than ${env.DAYS_OLD} days:"
+            find "${dir}" -mindepth 1 -maxdepth 1 -mtime +${env.DAYS_OLD} -type d ! -name 'cleanup*'
+            
+            echo "Deleting (non-cleanup) directories:"
+            find "${dir}" -mindepth 1 -maxdepth 1 -mtime +${env.DAYS_OLD} -type d ! -name 'cleanup*' -exec rm -rf {} + || echo "Some directories could not be deleted due to permissions"
+       
+            # Remove files
+            echo "Listing files in ${dir} older than ${env.DAYS_OLD} days:"
+            find "${dir}" -mindepth 1 -maxdepth 1 -mtime +${env.DAYS_OLD} -type f
+            
+            echo "Deleting files:"
+            find "${dir}" -mindepth 1 -maxdepth 1 -mtime +${env.DAYS_OLD} -type f -exec rm -f {} + || echo "Some files could not be deleted due to permissions"
+            
+            echo "Cleanup completed for ${dir}"
+        """
+    }
+    
+    echo "${cleanupType} cleanup completed successfully on ${env.NODE_NAME}"
+}
