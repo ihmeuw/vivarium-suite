@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e # Exit on error
-
 # Reset OPTIND so help can be invoked multiple times per shell session.
 OPTIND=1
 Help()
