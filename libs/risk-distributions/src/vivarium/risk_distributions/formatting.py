@@ -9,7 +9,7 @@ Parameters = TypeVar(
 )
 
 
-def cast_to_series(mean: Parameter, sd: Parameter) -> (pd.Series, pd.Series):
+def cast_to_series(mean: Parameter, sd: Parameter) -> tuple[pd.Series, pd.Series]:
     """Casts mean and standard deviation data to identically indexed series."""
 
     if (
@@ -174,14 +174,19 @@ def format_dict(
             f"If passing values for {measure} as a dictionary, you "
             f"must supply only keys {required_columns}."
         )
-    data = {key: list(val) for key, val in data.items()}
-    if len(set(len(val) for val in data.values())) != 1:
+    formatted_data = data.copy()
+    for key, val in formatted_data.items():
+        if isinstance(val, (int, float)):
+            formatted_data[key] = [val]
+        else:
+            formatted_data[key] = list(val)
+
+    if len(set(len(val) for val in formatted_data.values())) != 1:
         raise ValueError(
             f"If passing values for {measure} as a dictionary, you "
             "must specify the same number of values for each parameter."
         )
-    data = pd.DataFrame(data)
-    return data
+    return pd.DataFrame(formatted_data)
 
 
 def format_call_data(call_data, parameters):

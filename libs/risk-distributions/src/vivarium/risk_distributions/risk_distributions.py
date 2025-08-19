@@ -552,9 +552,9 @@ class EnsembleDistribution:
     def __init__(
         self,
         weights: Parameters,
-        parameters: dict[str, Parameters] = None,
-        mean: Parameter = None,
-        sd: Parameter = None,
+        parameters: dict[str, Parameters] | None = None,
+        mean: Parameter | None = None,
+        sd: Parameter | None = None,
     ):
         self.weights, self.parameters = self.get_parameters(weights, parameters, mean, sd)
 
