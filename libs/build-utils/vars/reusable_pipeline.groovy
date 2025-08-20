@@ -13,10 +13,37 @@ def call(Map config = [:]){
   upstream_repos: A list of repos to check for upstream changes.
   run_mypy: Whether to run mypy on the package
   */
-  task_node = config.requires_slurm ? 'slurm' : 'matrix-tasks'
+  
+  // Handle config arguments
+  def supportedArgs = [
+    'scheduled_branches',
+    'stagger_scheduled_builds', 
+    'test_types',
+    'requires_slurm',
+    'deployable',
+    'skip_doc_build',
+    'upstream_repos',
+    'run_mypy'
+  ]
+  
+  def scheduled_branches = config.scheduled_branches ?: [] 
+  def stagger_scheduled_builds = config.stagger_scheduled_builds ?: false
+  def test_types = config.test_types ?: ['all']
+  def task_node = config.requires_slurm ? 'slurm' : 'matrix-tasks'
+  def is_deployable = (config?.deployable == true)
+  def skip_doc_build = (config?.skip_doc_build == true)
+  def upstream_repos = config.upstream_repos ?: []
+  def run_mypy = (config.run_mypy != null) ? config.run_mypy : true
 
-  scheduled_branches = config.scheduled_branches ?: [] 
-  stagger_scheduled_builds = config.stagger_scheduled_builds ?: false
+  echo "Configuration constants:"
+  echo "  scheduled_branches: ${scheduled_branches}"
+  echo "  stagger_scheduled_builds: ${stagger_scheduled_builds}"
+  echo "  test_types: ${test_types}"
+  echo "  task_node: ${task_node}"
+  echo "  is_deployable: ${is_deployable}"
+  echo "  skip_doc_build: ${skip_doc_build}"
+  echo "  upstream_repos: ${upstream_repos}"
+  echo "  run_mypy: ${run_mypy}"
 
   if (stagger_scheduled_builds && scheduled_branches.size() > 1) {
     startHour = 20
@@ -32,23 +59,9 @@ def call(Map config = [:]){
   }
 
   PYTHON_DEPLOY_VERSION = "3.11"
-
-  test_types = config.test_types ?: ['all']
-  // raise an error if test_types is not a subset of  ['e2e', 'unit', 'integration']
-  if (!test_types.every { ['all', 'e2e', 'unit', 'integration'].contains(it) }) {
-    throw new IllegalArgumentException("test_types must be a subset of ['all', 'e2e', 'unit', 'integration']")
-  }
-  
-  // Transform test type inputs to actual make test target names
-  test_types = test_types.collect { "test-${it}" }
   
   conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
   conda_env_dir = "/mnt/team/simulation_science/priv/engineering/jenkins/envs"
-
-  // Define the upstream repos to check for changes
-  upstream_repos = config.upstream_repos ?: []
-  // Define whether to run mypy
-  run_mypy = config.run_mypy != null ? config.run_mypy : true
 
   pipeline {
     // This agent runs as svc-simsci on node simsci-ci-coordinator-01.
@@ -112,6 +125,24 @@ def call(Map config = [:]){
     }
 
     stages {
+      stage("Configuration validation") {
+        steps {
+          script {
+            // Validate the configuration arguments
+            def unsupportedArgs = config.keySet() - supportedArgs
+            if (unsupportedArgs) {
+              error(
+                "Unsupported configuration arguments: ${unsupportedArgs.join(', ')}. " +
+                "Supported arguments are: ${supportedArgs.join(', ')}"
+              )
+            }
+            // Validate test_types
+            if (!test_types.every { ['all', 'e2e', 'unit', 'integration'].contains(it) }) {
+              error("test_types must be a subset of ['all', 'e2e', 'unit', 'integration']")
+            }
+          }
+        }
+      }
       stage("Initialization") {
         steps {
           script {
@@ -154,16 +185,18 @@ def call(Map config = [:]){
                         buildStages.installPackage()
                         buildStages.installDependencies(upstream_repos)
                         buildStages.checkFormatting(run_mypy)
-                        buildStages.runTests(test_types)
+                        // Transform test type inputs to actual make test target names
+                        tests = test_types.collect { "test-${it}" }
+                        buildStages.runTests(tests)
 
                         if (PYTHON_VERSION == PYTHON_DEPLOY_VERSION) {
-                          if (config?.skip_doc_build != true) {
+                          if (!skip_doc_build) {
                             buildStages.buildDocs()
                             buildStages.testDocs()
                           }
                           
                           stage("Build and Deploy - Python ${pythonVersion}") {
-                            if ((config?.deployable == true) &&
+                            if (is_deployable &&
                               !env.IS_CRON.toBoolean() &&
                               !params.SKIP_DEPLOY &&
                               (env.BRANCH == "main") &&
@@ -173,7 +206,7 @@ def call(Map config = [:]){
                               }
                               buildStages.deployPackage()
 
-                              if (config?.skip_doc_build != true) {
+                              if (!skip_doc_build) {
                                 buildStages.deployDocs()
                               }
                             }

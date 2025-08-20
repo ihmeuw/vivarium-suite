@@ -1,3 +1,7 @@
+**2.0.6 - 8/20/2025**
+
+  - Validate arguments passed to reusable_pipeline.groovy
+
 **2.0.5 - 8/8/2025**
 
   - Create pipeline to clean up Jenkins build directories
