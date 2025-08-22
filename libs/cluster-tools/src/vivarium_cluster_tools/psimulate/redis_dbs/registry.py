@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 ===================================
 Redis Queue and Registry Management
@@ -15,6 +14,7 @@ from collections.abc import Iterator
 from itertools import chain
 from typing import Any
 
+import pandas as pd
 import redis
 import rq
 from loguru import logger
@@ -69,7 +69,7 @@ class QueueManager:
     def jobs_to_finish(self) -> bool:
         return not (self.failed or self.completed)
 
-    def enqueue(self, jobs: list[dict], workhorse_import_path: str) -> None:
+    def enqueue(self, jobs: list[dict[str, Any]], workhorse_import_path: str) -> None:
         self._logger.info(f"Enqueuing jobs in queue {self.name}")
         for job in jobs:
             # TODO: might be nice to have tighter ttls but it's hard to predict
@@ -83,7 +83,7 @@ class QueueManager:
                 job_timeout="7d",
             )
 
-    def get_results(self) -> list:
+    def get_results(self) -> list[tuple[pd.DataFrame, dict[str, pd.DataFrame]]]:
         self._logger.debug(f"Checking queue {self.name}")
         finished_jobs = self._get_finished_jobs()
         start = time.time()
@@ -162,7 +162,8 @@ class QueueManager:
     def _get_finished_jobs(self) -> list[str]:
         if self._retries:
             try:
-                return self._finished.get_job_ids()
+                finished_job_ids: list[str] = self._finished.get_job_ids()
+                return finished_job_ids
             except redis.exceptions.ConnectionError:
                 self._sleep_on_it()
                 return self._get_finished_jobs()
@@ -170,7 +171,7 @@ class QueueManager:
             self._mark_failed()
             return []
 
-    def _get_result(self, job_id: str) -> Any:
+    def _get_result(self, job_id: str) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]] | None:
         job = self._get_job(job_id)
         result = None
         if job is not None:
@@ -244,7 +245,7 @@ class QueueManager:
 class RegistryManager:
     def __init__(
         self,
-        redis_processes: tuple[str, int],
+        redis_processes: list[tuple[str, int]],
         submitted_workers: int,
         num_already_completed: int,
     ):
@@ -261,19 +262,19 @@ class RegistryManager:
     def jobs_to_finish(self) -> bool:
         return any([q.jobs_to_finish for q in self._queues])
 
-    def enqueue(self, jobs: list[dict], workhorse_import_path: str) -> None:
+    def enqueue(self, jobs: list[dict[str, Any]], workhorse_import_path: str) -> None:
         for queue, jobs_chunk in zip(self._queues, self.allocate_jobs(jobs)):
             queue.enqueue(jobs_chunk, workhorse_import_path)
 
-    def allocate_jobs(self, jobs: list[dict]) -> Iterator[list[dict]]:
+    def allocate_jobs(self, jobs: list[dict[str, Any]]) -> Iterator[list[dict[str, Any]]]:
         """Allocate jobs to queues in a round robin fashion."""
         num_queues = len(self._queues)
         for mod in range(num_queues):
             yield [job for i, job in enumerate(jobs) if i % num_queues == mod]
 
-    def get_results(self) -> list:
+    def get_results(self) -> list[tuple[pd.DataFrame, dict[str, pd.DataFrame]]]:
         to_check = [q for q in self._queues if q.jobs_to_finish]
-        results = []
+        results: list[tuple[pd.DataFrame, dict[str, pd.DataFrame]]] = []
         for queue in to_check:
             results.extend(queue.get_results())
         return results
@@ -297,7 +298,7 @@ class RegistryManager:
         self._logger.info(template.format(**status))
         return status
 
-    def get_params_by_job(self) -> dict[str, dict]:
+    def get_params_by_job(self) -> dict[str, dict[str, Any]]:
         jobs = list(chain.from_iterable([q._queue.jobs for q in self._queues]))
         return {job.id: job.kwargs["job_parameters"] for job in jobs}
 

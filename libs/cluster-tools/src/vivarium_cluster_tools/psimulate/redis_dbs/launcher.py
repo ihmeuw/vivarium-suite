@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 =============================
 Redis Database Initialization
@@ -61,7 +60,7 @@ def _get_num_redis_dbs(num_processes: int, num_workers: int) -> int:
 
 def _launch_redis(
     port: int, stdout: TextIO = sys.stdout, stderr: TextIO = sys.stderr
-) -> subprocess.Popen:
+) -> subprocess.Popen[bytes]:
     stdout.write(f">>>>>>>> Starting log for redis-server on port {port}\n")
     stdout.flush()
     try:
@@ -102,12 +101,12 @@ def _get_random_free_port() -> int:
     """
     s = socket.socket()
     s.bind(("", 0))
-    port = s.getsockname()[1]
+    port: int = s.getsockname()[1]
     s.close()
     return port
 
 
-def _expected_sufficient_workers(num_queues) -> int:
+def _expected_sufficient_workers(num_queues: int) -> int:
     """Estimate the number of workers needed.
 
     The intent is to provide a rough estimate of the number of workers needed to

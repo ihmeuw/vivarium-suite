@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 =========
 vipin CLI
@@ -18,7 +17,11 @@ from vivarium_cluster_tools.vipin import perf_report
 
 
 @click.command()
-@click.argument("logs-directory", type=click.Path(exists=True, file_okay=False))
+@click.argument(
+    "logs-directory",
+    type=click.Path(exists=True, file_okay=False),
+    required=True,
+)
 @click.option(
     "--result-directory",
     "-o",
@@ -27,10 +30,12 @@ from vivarium_cluster_tools.vipin import perf_report
     "Defaults to given logs directory if not given.",
 )
 @click.option(
-    "--hdf/--csv", default=False, help="Choose hdf or csv for output data. Defaults to csv."
+    "--hdf/--csv",
+    default=False,
+    help="Choose hdf or csv for output data. Defaults to csv.",
 )
 @click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
-def vipin(logs_directory, result_directory, hdf, verbose):
+def vipin(logs_directory: str, result_directory: str | None, hdf: bool, verbose: int) -> None:
     """Get performance information from worker_logs from a ``psimulate`` command.
 
     Given a worker logs directory from a previous run, a summary csv will be

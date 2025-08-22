@@ -114,3 +114,7 @@ src/vivarium_cluster_tools/_version.py
 
 # macOS
 *.DS_Store
+
+# Copilot
+.github/prompts/
+.github/copilot_instructions.md

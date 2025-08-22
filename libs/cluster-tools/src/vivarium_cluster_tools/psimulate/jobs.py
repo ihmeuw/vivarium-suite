@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 ==============
 psimulate Jobs
@@ -7,7 +6,7 @@ psimulate Jobs
 """
 
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -20,15 +19,15 @@ class JobParameters(NamedTuple):
     """Parameters for a single distributed simulation job."""
 
     model_specification: str
-    branch_configuration: dict
+    branch_configuration: dict[str, Any]
     input_draw: int
     random_seed: int
     results_path: str
-    backup_configuration: dict
-    extras: dict
+    backup_configuration: dict[str, Any]
+    extras: dict[str, Any]
 
     @property
-    def shared(self) -> dict:
+    def shared(self) -> dict[str, Any]:
         """Parameters shared by all jobs in a psimulate run."""
         return {
             "model_specification": self.model_specification,
@@ -37,7 +36,7 @@ class JobParameters(NamedTuple):
         }
 
     @property
-    def job_specific(self) -> dict:
+    def job_specific(self) -> dict[str, Any]:
         """Parameters that vary by job in a psimulate run."""
         return {
             **self.branch_configuration,
@@ -46,7 +45,7 @@ class JobParameters(NamedTuple):
         }
 
     @property
-    def sim_config(self) -> dict:
+    def sim_config(self) -> dict[str, Any]:
         """Parameters for the simulation configuration."""
         return {
             **self.branch_configuration,
@@ -58,7 +57,7 @@ class JobParameters(NamedTuple):
             },
         }
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         # I will never understand why this is a private
         # method of named tuples.
         return self._asdict()
@@ -79,8 +78,8 @@ def build_job_list(
     backup_freq: int | None,
     backup_dir: Path,
     backup_metadata_path: Path,
-    extras: dict,
-) -> tuple[list[JobParameters], int]:
+    extras: dict[str, Any],
+) -> tuple[list[dict[str, str | int | dict[str, Any]]], int]:
     jobs = []
     number_already_completed = 0
 
@@ -113,11 +112,12 @@ def build_job_list(
                 input_draw=0,
                 random_seed=i,
                 results_path=str(output_root),
+                backup_configuration={},
                 extras={"test_type": extras["test_type"]},
             )
             jobs.append(parameters.to_dict())
 
-    np.random.shuffle(jobs)
+    np.random.shuffle(jobs)  # type: ignore [arg-type]
     return jobs, number_already_completed
 
 
@@ -134,4 +134,4 @@ def already_complete(
             mask &= np.isclose(finished_sim_metadata[k], v)
         else:
             mask &= finished_sim_metadata[k] == v
-    return np.any(mask)
+    return bool(np.any(mask))

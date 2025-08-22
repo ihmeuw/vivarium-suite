@@ -7,7 +7,6 @@ Shared CLI tools
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import TypeVar
 
 import click
 

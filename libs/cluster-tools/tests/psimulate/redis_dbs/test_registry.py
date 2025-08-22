@@ -1,13 +1,15 @@
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pytest_mock import MockerFixture
 
 from vivarium_cluster_tools.psimulate.redis_dbs.registry import RegistryManager
 
 
 @pytest.mark.parametrize("num_queues", [1, 7, 10, 19, 37])
 @pytest.mark.parametrize("num_jobs", [1, 10, 42, 1337, 2023])
-def test_allocate_jobs(mocker, num_queues, num_jobs):
+def test_allocate_jobs(mocker: MockerFixture, num_queues: int, num_jobs: int) -> None:
     # mock the QueueManager class
     mocker.patch("vivarium_cluster_tools.psimulate.redis_dbs.registry.QueueManager")
     queues = [(f"queue_{i}", i) for i in range(num_queues)]
@@ -24,7 +26,7 @@ def test_allocate_jobs(mocker, num_queues, num_jobs):
         assert max(this_layer) < min(next_layer)
 
 
-def create_mock_job(job_id, job_parameters):
+def create_mock_job(job_id: str, job_parameters: dict[str, Any]) -> MagicMock:
     mock_job = MagicMock()
     mock_job.id = job_id
     mock_job.kwargs = {"job_parameters": job_parameters}
@@ -32,19 +34,19 @@ def create_mock_job(job_id, job_parameters):
 
 
 @pytest.fixture
-def mock_registry_manager():
+def mock_registry_manager() -> RegistryManager:
     # Mock the QueueManager used within RegistryManager
     with patch(
         "vivarium_cluster_tools.psimulate.redis_dbs.registry.QueueManager"
     ) as MockQueueManager:
         # Create mock jobs for each QueueManager
         mock_jobs_list_1 = [
-            create_mock_job(1, "parameters1"),
-            create_mock_job(2, "parameters2"),
+            create_mock_job("1", {"input_draw": 1, "random_seed": 123}),
+            create_mock_job("2", {"input_draw": 2, "random_seed": 456}),
         ]
         mock_jobs_list_2 = [
-            create_mock_job(3, "parameters3"),
-            create_mock_job(4, "parameters4"),
+            create_mock_job("3", {"input_draw": 3, "random_seed": 789}),
+            create_mock_job("4", {"input_draw": 4, "random_seed": 101}),
         ]
 
         # Mock instances of QueueManager and their _queue.jobs to return the mock jobs
@@ -66,9 +68,9 @@ def mock_registry_manager():
         return manager
 
 
-def test_registry_manager_get_params_by_job(mock_registry_manager):
+def test_registry_manager_get_params_by_job(mock_registry_manager: RegistryManager) -> None:
     params_by_job = mock_registry_manager.get_params_by_job()
-    assert params_by_job[1] == "parameters1"
-    assert params_by_job[2] == "parameters2"
-    assert params_by_job[3] == "parameters3"
-    assert params_by_job[4] == "parameters4"
+    assert params_by_job["1"] == {"input_draw": 1, "random_seed": 123}
+    assert params_by_job["2"] == {"input_draw": 2, "random_seed": 456}
+    assert params_by_job["3"] == {"input_draw": 3, "random_seed": 789}
+    assert params_by_job["4"] == {"input_draw": 4, "random_seed": 101}

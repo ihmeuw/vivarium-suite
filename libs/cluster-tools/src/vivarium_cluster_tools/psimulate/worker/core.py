@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 ==================
 Distributed Worker
@@ -7,6 +6,8 @@ Distributed Worker
 RQ worker with custom retry handling.
 
 """
+from __future__ import annotations
+
 import atexit
 import os
 import random
@@ -14,7 +15,7 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import TextIO
+from typing import Any
 
 import redis
 from loguru import logger
@@ -29,7 +30,7 @@ from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 def build_launch_script(
     worker_settings_file: Path,
     worker_log_directory: Path,
-) -> TextIO:
+) -> tempfile._TemporaryFileWrapper[str]:
     """Generates a shell file that, on execution, spins up an RQ worker."""
     launcher = tempfile.NamedTemporaryFile(
         mode="w",
@@ -59,14 +60,14 @@ def build_launch_script(
     return launcher
 
 
-def _retry_handler(job: Job, *exc_info: tuple[str | bytes, ...]) -> bool:
+def _retry_handler(job: Job, *exc_info: Any) -> bool:
+    """rq exception handler for test purposes that gets called in the build_launch_script()."""
     retries = job.meta.get("remaining_retries", 2)
 
     if retries > 0:
         retries -= 1
         job.meta["remaining_retries"] = retries
         job.set_status(JobStatus.QUEUED)
-        job.exc_info = exc_info
         job.save()
         q = Queue(name=job.origin, connection=job.connection)
         q.enqueue_job(job)
@@ -75,47 +76,48 @@ def _retry_handler(job: Job, *exc_info: tuple[str | bytes, ...]) -> bool:
         logger.error(f"Failing job {job.id}")
         q = Queue(name=job.origin, connection=job.connection)
         failed_queue = FailedJobRegistry(queue=q)
-        failed_queue.add(job, exc_string=exc_info)
+        exc_string = str(exc_info) if exc_info else "Unknown error"
+        failed_queue.add(job, exc_string=exc_string)
     return False
 
 
 class _ResilientWorker(Worker):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.acceptable_failure_count = 3
         log_name = f"{ENV_VARIABLES.JOB_ID.value}.{ENV_VARIABLES.TASK_ID.value}.log"
         logging_directory = Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
         logger.add(logging_directory / log_name, level="DEBUG")
 
-    def work(self, *args, **kwargs) -> None:
+    def work(self, *args: Any, **kwargs: Any) -> bool:
         kwargs["logging_level"] = "DEBUG"
 
         retries = 0
         while retries < 10:
             try:
-                super(_ResilientWorker, self).work(*args, **kwargs)
-                return
+                return super().work(*args, **kwargs)
             except redis.exceptions.ConnectionError:
                 backoff = random.random() * 60
                 logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
                 retries += 1
                 time.sleep(backoff)
-        logger.error(f"Ran out of retries. Killing worker")
+        logger.error("Ran out of retries. Killing worker.")
+        return False
 
     def main_work_horse(self, job: Job, queue: Queue) -> None:
         retries = 0
         while retries < 10:
             try:
-                super(_ResilientWorker, self).main_work_horse(job, queue)
+                super().main_work_horse(job, queue)
                 return
             except redis.exceptions.ConnectionError:
                 backoff = random.random() * 60
                 logger.error(f"Couldn't connect to redis. Retrying in {backoff}...")
                 retries += 1
                 time.sleep(backoff)
-        logger.error(f"Ran out of retries. Killing work horse")
+        logger.error("Ran out of retries. Killing work horse.")
 
-    def fork_work_horse(self, job: Job, queue: Queue):
+    def fork_work_horse(self, job: Job, queue: Queue) -> None:
         """Spawns a work horse to perform the actual work and passes it a job."""
         child_pid = os.fork()
         ENV_VARIABLES.RQ_WORKER_ID.update(self.name)
@@ -125,4 +127,4 @@ class _ResilientWorker(Worker):
             os._exit(0)  # just in case
         else:
             self._horse_pid = child_pid
-            self.procline("Forked {0} at {1}".format(child_pid, time.time()))
+            self.procline("Forked {0} at {1}".format(child_pid, time.time()))  # type: ignore[no-untyped-call]

@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import glob
 import json
 from pathlib import Path
@@ -98,10 +97,11 @@ def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
                 int(Path(most_recent_file_path).stem.replace("log_summary_", "")) + 1
             )
             formatted_new_file_index = str(new_file_index).zfill(4)
-            most_recent_file_path = (
+            most_recent_file_path = str(
                 CENTRAL_PERFORMANCE_LOGS_DIRECTORY
                 / f"log_summary_{formatted_new_file_index}.csv"
             )
+
             pd.DataFrame(columns=child_job_performance_data.columns).to_csv(
                 most_recent_file_path, index=False
             )

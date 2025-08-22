@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 =====================================
 Reproducible Programming Environments
@@ -57,12 +56,12 @@ def _parse_package_version(s: str) -> tuple[str, str]:
     return package, version
 
 
-def _convert_pip_list_to_dict(pf_list: list[str]) -> dict:
+def _convert_pip_list_to_dict(pf_list: list[str]) -> dict[str, str]:
     return {p: v for p, v in [_parse_package_version(s) for s in pf_list]}
 
 
-def _compare_environments(current: dict, original: dict) -> None:
-    differences = []
+def _compare_environments(current: dict[str, str], original: dict[str, str]) -> None:
+    differences: list[str] = []
 
     current_packages = set(current.keys())
     original_packages = set(original.keys())
@@ -81,7 +80,7 @@ def _compare_environments(current: dict, original: dict) -> None:
             f"environment: {missing_packages}."
         )
 
-    differing_versions = []
+    differing_versions: list[str] = []
     for p in current_packages.intersection(original_packages):
         if current[p] != original[p]:
             differing_versions.append(f"{p}: {original[p]} -> {current[p]}")
@@ -93,10 +92,10 @@ def _compare_environments(current: dict, original: dict) -> None:
         )
 
     if differences:
-        differences = "\n".join(differences)
+        differences_str = "\n".join(differences)
         logger.info(
             "Differences found between current environment and original environment used for "
-            f" this run. \n\nDifferences found are as follows: {differences}. Would you like to proceed?"
+            f" this run. \n\nDifferences found are as follows: {differences_str}. Would you like to proceed?"
         )
         click.confirm(
             "Would you like to proceed psimulate restart with the new environment?",

@@ -6,11 +6,12 @@ Cluster CLI options
 Command line options for configuring the cluster environment in psimulate runs.
 
 """
+
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import click
+
+from vivarium_cluster_tools.cli_tools import CLIFunction
 
 _RUNTIME_FORMAT = "hh:mm:ss"
 MAX_RUNTIME_DEFAULT = "24:00:00"
@@ -29,9 +30,9 @@ _AVAILABLE_HARDWARE = [
 
 
 def _validate_and_split_hardware(
-    ctx: click.Context, param: click.Parameter, value: str | None
+    ctx: click.Context, param: click.core.Option, value: str | None
 ) -> list[str]:
-    hardware = value.split(",") if value else []
+    hardware: list[str] = value.split(",") if value else []
     bad_requests = set(hardware) - set(_AVAILABLE_HARDWARE)
     if bad_requests:
         raise click.BadParameter(
@@ -57,7 +58,7 @@ with_project = click.option(
 )
 
 
-def with_queue_and_max_runtime(func: Callable[..., str]) -> Callable[..., str]:
+def with_queue_and_max_runtime(func: CLIFunction) -> CLIFunction:
     """Provide a single decorator for both queue and max runtime
     since they are tightly coupled.
 
@@ -95,7 +96,7 @@ with_hardware = click.option(
 
 
 def _queue_and_runtime_callback(
-    ctx: click.Context, param: click.Parameter, value: str
+    ctx: click.Context, param: click.core.Parameter, value: str
 ) -> str:
     if param.name == "queue" and "max_runtime" in ctx.params:
         runtime_string, queue = _validate_runtime_and_queue(ctx.params["max_runtime"], value)
@@ -137,15 +138,16 @@ def _validate_runtime_and_queue(runtime_string: str, queue: str | None) -> tuple
     elif queue in max_runtime_map:
         # Things are peachy
         pass
-    else:
+    elif queue is None:
         # We need to set a default based on the runtime.
-        assert queue is None
         # First queue we qualify for.
         queue = [
             q
             for q, max_queue_runtime in max_runtime_map.items()
             if total_hours <= max_queue_runtime
         ][0]
+    else:
+        raise ValueError(f"Unexpected queue {queue} supplied.")
 
     return runtime_string, queue
 

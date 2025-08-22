@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 ================
 psimulate Runner
@@ -13,6 +12,7 @@ import shutil
 from collections import defaultdict
 from pathlib import Path
 from time import sleep, time
+from typing import Any
 
 import pandas as pd
 from loguru import logger
@@ -35,7 +35,7 @@ from vivarium_cluster_tools.psimulate.paths import OutputPaths
 from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
-from vivarium_cluster_tools.vipin.perf_report import report_performance
+from vivarium_cluster_tools.vipin.perf_report import PerformanceSummary, report_performance
 
 
 def process_job_results(
@@ -150,13 +150,14 @@ def try_run_vipin(output_paths: OutputPaths) -> None:
         return
 
     try:
-        append_perf_data_to_central_logs(perf_df, output_paths)
+        if perf_df is not None and len(perf_df) > 0:
+            append_perf_data_to_central_logs(perf_df, output_paths)
     except Exception as e:
         logger.warning(f"Appending performance data to central logs failed with: {e}")
 
 
 def write_backup_metadata(
-    backup_metadata_path: Path, parameters_by_job: dict[str, dict]
+    backup_metadata_path: Path, parameters_by_job: dict[str, dict[str, Any]]
 ) -> None:
     lookup_table = []
     for job_id, params in parameters_by_job.items():
@@ -186,13 +187,19 @@ def main(
     max_workers: int | None,
     redis_processes: int,
     no_batch: bool,
-    backup_freq: int,
-    extra_args: dict,
+    backup_freq: int | None,
+    extra_args: dict[str, Any],
 ) -> None:
     logger.info("Validating cluster environment.")
     cluster.validate_cluster_environment()
 
     # Generate programmatic representation of the output directory structure
+    # FIXME [MIC-6302]: 'psimulate test' is broken.
+    #     This is one place it's broken. psimulate test does NOT require a model
+    #     specification but 'from_entry_point_args' requires one.
+    #     Temporarily add this check for mypy
+    if input_paths.model_specification is None:
+        raise ValueError("Model specification path is required but was None")
     output_paths = paths.OutputPaths.from_entry_point_args(
         command=command,
         input_artifact_path=input_paths.artifact,

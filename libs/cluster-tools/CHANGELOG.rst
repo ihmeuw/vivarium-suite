@@ -1,3 +1,7 @@
+**2.1.18 - 08/22/25**
+
+  - Type-hint entire repository
+
 **2.1.17 - 08/01/25**
 
   - Use vivarium_dependencies for common setup constraints

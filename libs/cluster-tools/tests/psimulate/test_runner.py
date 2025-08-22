@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
@@ -8,7 +10,7 @@ from vivarium_cluster_tools.psimulate.runner import (
 )
 
 
-def test_report_initial_status():
+def test_report_initial_status() -> None:
     number_existing_jobs = 10
     finished_sim_metadata = pd.DataFrame(index=range(number_existing_jobs))
     report_initial_status(number_existing_jobs, finished_sim_metadata, 100)
@@ -16,7 +18,7 @@ def test_report_initial_status():
         report_initial_status(number_existing_jobs + 1, finished_sim_metadata, 100)
 
 
-def test_write_backup_metadata(tmp_path):
+def test_write_backup_metadata(tmp_path: Path) -> None:
     metadata_path = tmp_path / "metadata.csv"
     parameters_by_job = {
         "job": {

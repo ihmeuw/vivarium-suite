@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 ==============================
 Branch and Keyspace Management
@@ -11,6 +10,7 @@ Tools for managing the parameter space of a parallel run.
 from collections.abc import Iterator
 from itertools import product
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import yaml
@@ -24,7 +24,7 @@ NUMBER_OF_DRAWS = 500
 class Keyspace:
     """A representation of a collection of simulation configurations."""
 
-    def __init__(self, branches: list[dict], keyspace: dict):
+    def __init__(self, branches: list[dict[str, Any]], keyspace: dict[str, Any]):
         self.branches = branches
         self._keyspace = keyspace
 
@@ -42,7 +42,7 @@ class Keyspace:
             random_seed_count,
             input_draws,
             random_seeds,
-        ) = load_branch_configuration(branch_configuration_file)
+        ) = load_branch_configuration(Path(branch_configuration_file))
         keyspace = calculate_keyspace(branches)
         keyspace["input_draw"] = (
             input_draws if input_draws else calculate_input_draws(input_draw_count)
@@ -64,7 +64,7 @@ class Keyspace:
         input_branch_configuration_path: Path | None,
         keyspace_path: Path,
         branches_path: Path,
-        extras: dict,
+        extras: dict[str, Any],
     ) -> "Keyspace":
         if input_branch_configuration_path is not None:
             keyspace = cls.from_branch_configuration(
@@ -97,7 +97,7 @@ class Keyspace:
         """Checks whether the item is present in the Keyspace"""
         return item in self._keyspace
 
-    def __iter__(self) -> Iterator[tuple[int, int, dict]]:
+    def __iter__(self) -> Iterator[tuple[int, int, dict[str, Any]]]:
         """Yields and individual simulation configuration from the keyspace."""
         for job_config in product(
             self._keyspace["input_draw"], self._keyspace["random_seed"], self.branches
@@ -194,24 +194,24 @@ def calculate_random_seeds(
     return possible[:random_seed_count]
 
 
-def calculate_keyspace(branches: list[dict]) -> dict:
-    keyspace = {k: {v} for k, v in collapse_nested_dict(branches[0])}
+def calculate_keyspace(branches: list[dict[str, Any]]) -> dict[str, list[Any]]:
+    tmp_keyspace: dict[str, set[Any]] = {k: {v} for k, v in collapse_nested_dict(branches[0])}
 
     for branch in branches[1:]:
         branch = dict(collapse_nested_dict(branch))
-        if set(branch.keys()) != set(keyspace.keys()):
+        if set(branch.keys()) != set(tmp_keyspace.keys()):
             raise ValueError("All branches must have the same keys")
         for k, v in branch.items():
             if k == FULL_ARTIFACT_PATH_KEY:
                 validate_artifact_path(v)
-            keyspace[k].add(v)
-    keyspace = {k: list(v) for k, v in keyspace.items()}
+            tmp_keyspace[k].add(v)
+    keyspace: dict[str, list[Any]] = {k: list(v) for k, v in tmp_keyspace.items()}
     return keyspace
 
 
 def load_branch_configuration(
     path: Path,
-) -> tuple[list[dict], int, int, list[int] | None, list[int] | None]:
+) -> tuple[list[dict[str, Any]], int, int, list[int] | None, list[int] | None]:
     data = yaml.full_load(path.read_text())
 
     input_draw_count = data.get("input_draw_count", 1)
@@ -241,7 +241,7 @@ def load_branch_configuration(
 
 
 def _check_count_and_values(
-    configuration: dict,
+    configuration: dict[str, Any],
     value_count: int,
     values: list[int],
     count_name: str,
@@ -281,7 +281,7 @@ def _check_count_and_values(
         raise ValueError(f"{count_name} must be within 1-{max_count}. Given: {value_count}")
 
 
-def expand_branch_templates(templates: dict) -> list[dict]:
+def expand_branch_templates(templates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Expand branch template lists into individual branches.
 
     Take a list of dictionaries of configuration values (like the ones used in
@@ -319,16 +319,16 @@ def expand_branch_templates(templates: dict) -> list[dict]:
     """
     expanded_branches = []
 
-    for branch in templates:
-        branch = sorted(collapse_nested_dict(branch))
-        branch = [(k, v if isinstance(v, list) else [v]) for k, v in branch]
-        expanded_size = np.product([len(v) for k, v in branch])
+    for branch_template in templates:
+        branch_items = sorted(collapse_nested_dict(branch_template))
+        branch_items = [(k, v if isinstance(v, list) else [v]) for k, v in branch_items]
+        expanded_size = int(np.prod([len(v) for k, v in branch_items]))
         new_branches = []
-        pointers = {k: 0 for k, _ in branch}
+        pointers = {k: 0 for k, _ in branch_items}
         for _ in range(expanded_size):
             new_branch = []
             tick = True
-            for k, v in branch:
+            for k, v in branch_items:
                 new_branch.append((k, v[pointers[k]]))
                 if tick:
                     i = pointers[k] + 1
@@ -341,10 +341,10 @@ def expand_branch_templates(templates: dict) -> list[dict]:
         expanded_branches.extend(new_branches)
 
     final_branches = []
-    for branch in expanded_branches:
-        root = {}
+    for branch_items in expanded_branches:
+        root: dict[str, Any] = {}
         final_branches.append(root)
-        for k, v in branch:
+        for k, v in branch_items:
             current = root
             *ks, k = k.split(".")
             for sub_k in ks:

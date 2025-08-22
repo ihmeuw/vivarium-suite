@@ -1,16 +1,17 @@
-# mypy: ignore-errors
 """
 =================
 Cluster Interface
 =================
 
 """
+from __future__ import annotations
 
 import atexit
 import os
 import shutil
 from pathlib import Path
-from typing import NamedTuple, TextIO
+from tempfile import _TemporaryFileWrapper
+from typing import NamedTuple
 
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.utilities import get_drmaa
@@ -29,14 +30,14 @@ class NativeSpecification(NamedTuple):
     job_name: str
     project: str
     queue: str
-    peak_memory: str
+    peak_memory: int  # Memory in GB
     max_runtime: str
-    hardware: list[str | None]
+    hardware: list[str]
 
     # Class constant
     NUM_THREADS: int = 1
 
-    def to_cli_args(self):
+    def to_cli_args(self) -> str:
         return (
             f"-J {self.job_name} "
             f"-A {self.project} "
@@ -50,7 +51,7 @@ class NativeSpecification(NamedTuple):
 
 def submit_worker_jobs(
     num_workers: int,
-    worker_launch_script: TextIO,
+    worker_launch_script: _TemporaryFileWrapper[str],
     cluster_logging_root: Path,
     native_specification: NativeSpecification,
 ) -> None:

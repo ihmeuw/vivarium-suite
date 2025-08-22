@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 """
 =============
 psimulate CLI
@@ -13,12 +12,14 @@ Command line interface for `psimulate`.
 """
 
 from pathlib import Path
+from typing import Any
 
 import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools import cli_tools, logs
+from vivarium_cluster_tools.cli_tools import Decorator
 from vivarium_cluster_tools.psimulate import (
     COMMANDS,
     cluster,
@@ -33,7 +34,7 @@ from vivarium_cluster_tools.psimulate.worker.load_test_work_horse import (
 
 
 @click.group()
-def psimulate():
+def psimulate() -> None:
     """A command line utility for running many simulations in parallel.
 
     You may initiate a new run with the ``run`` sub-command or restart a run
@@ -42,7 +43,7 @@ def psimulate():
     pass
 
 
-shared_options = [
+shared_options: list[Decorator] = [
     cluster.with_project,
     cluster.with_queue_and_max_runtime,
     cluster.with_peak_memory,
@@ -59,6 +60,7 @@ shared_options = [
 @psimulate.command()
 @click.argument(
     "model_specification",
+    required=True,
     type=click.Path(exists=True, dir_okay=False),
     callback=cli_tools.coerce_to_full_path,
 )
@@ -86,11 +88,11 @@ shared_options = [
 )
 @cli_tools.pass_shared_options(shared_options)
 def run(
-    model_specification: str | Path,
-    branch_configuration: str | Path,
-    artifact_path: str | Path | None,
-    result_directory: str | Path,
-    **options,
+    model_specification: Path,
+    branch_configuration: Path | None,
+    artifact_path: Path | None,
+    result_directory: Path,
+    **options: Any,
 ) -> None:
     """Run a parallel simulation.
 
@@ -144,9 +146,13 @@ def run(
     "results-root",
     type=click.Path(exists=True, file_okay=False, writable=True),
     callback=cli_tools.coerce_to_full_path,
+    required=True,
 )
 @cli_tools.pass_shared_options(shared_options)
-def restart(results_root: str | Path, **options):
+def restart(
+    results_root: Path,
+    **options: Any,
+) -> None:
     """Restart a parallel simulation.
 
     This restarts a parallel simulation from a previous run at RESULTS_ROOT.
@@ -185,6 +191,7 @@ def restart(results_root: str | Path, **options):
     "results-root",
     type=click.Path(exists=True, file_okay=False, writable=True),
     callback=cli_tools.coerce_to_full_path,
+    required=True,
 )
 @click.option(
     "--add-draws",
@@ -201,7 +208,10 @@ def restart(results_root: str | Path, **options):
     help="The number of random seeds to add to a previous run.",
 )
 @cli_tools.pass_shared_options(shared_options)
-def expand(results_root: str | Path, **options):
+def expand(
+    results_root: Path,
+    **options: Any,
+) -> None:
     """Expand a previous run.
 
     This expands a previous run at RESULTS_ROOT by adding input draws and/or
@@ -259,7 +269,12 @@ def expand(results_root: str | Path, **options):
     callback=cli_tools.coerce_to_full_path,
 )
 @cli_tools.pass_shared_options(shared_options)
-def test(test_type, num_workers, result_directory: str | Path, **options):
+def test(
+    test_type: str,
+    num_workers: int,
+    result_directory: Path,
+    **options: Any,
+) -> None:
     logs.configure_main_process_logging_to_terminal(options["verbose"])
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 

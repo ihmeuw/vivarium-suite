@@ -29,36 +29,11 @@ exclude = [
     "build",
     # Files below here should have their errors fixed and then be removed from this list
     # You will need to remove the mypy: ignore-errors comment from the file heading as well
-    "docs/source/conf.py",
-    "setup.py",
-    "src/vivarium_cluster_tools/psimulate/cluster/interface.py",
-    "src/vivarium_cluster_tools/psimulate/redis_dbs/launcher.py",
-    "src/vivarium_cluster_tools/psimulate/redis_dbs/registry.py",
-    "src/vivarium_cluster_tools/psimulate/worker/core.py",
-    "src/vivarium_cluster_tools/psimulate/worker/load_test_work_horse.py",
-    "src/vivarium_cluster_tools/psimulate/worker/vivarium_work_horse.py",
-    "src/vivarium_cluster_tools/psimulate/branches.py",
-    "src/vivarium_cluster_tools/psimulate/cli.py",
-    "src/vivarium_cluster_tools/psimulate/jobs.py",
-    "src/vivarium_cluster_tools/psimulate/paths.py",
-    "src/vivarium_cluster_tools/psimulate/performance_logger.py",
-    "src/vivarium_cluster_tools/psimulate/pip_env.py",
-    "src/vivarium_cluster_tools/psimulate/runner.py",
-    "src/vivarium_cluster_tools/vipin/cli.py",
-    "src/vivarium_cluster_tools/vipin/perf_counters.py",
-    "tests/psimulate/cluster/test_interface.py",
-    "tests/psimulate/redis_dbs/test_registry.py",
-    "tests/psimulate/results/test_processing.py",
-    "tests/psimulate/worker/test_logging.py",
-    "tests/psimulate/worker/test_vivarium_work_horse.py",
-    "tests/psimulate/test_appending_perf_logs.py",
-    "tests/psimulate/test_branches.py",
-    "tests/psimulate/test_runner.py",
 ]
 
 disable_error_code = []
 
 # handle mypy errors when 3rd party packages are not typed.
 [[tool.mypy.overrides]]
-module = ["drmaa", "requests"]
+module = ["dill", "drmaa"]
 ignore_missing_imports = true

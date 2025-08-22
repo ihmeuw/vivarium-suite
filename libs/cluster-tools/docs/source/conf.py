@@ -21,7 +21,7 @@ import vivarium_cluster_tools
 
 base_dir = Path(vivarium_cluster_tools.__file__).parent
 
-about = {}
+about: dict[str, str] = {}
 with (base_dir / "__about__.py").open() as f:
     exec(f.read(), about)
 
@@ -87,7 +87,7 @@ language = "en"
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = []
+exclude_patterns: list[str] = []
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
@@ -136,7 +136,7 @@ htmlhelp_basename = f'{about["__title__"]}doc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
-latex_elements = {
+latex_elements: dict[str, str] = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
