@@ -2,19 +2,29 @@
 
 set -e # exit on error
 
+# Define variables
+username=$(whoami)
+env_type="simulation"
+make_new="no"
+install_git_lfs="no"
+days_until_stale=7 # Number of days until environment is considered stale
+
 # Initialize conda if not already initialized
-for conda_path in "$HOME/miniconda3" "$HOME/anaconda3" "/opt/conda" "/usr/local/miniconda3" "/usr/local/anaconda3"; do
-  if [ -f "$conda_path/etc/profile.d/conda.sh" ]; then
-    echo
-    echo "Initializing conda from $conda_path"
-    source "$conda_path/etc/profile.d/conda.sh"
-    break
-  else
-    echo
-    echo "ERROR: Unable to find conda in expected locations"
-    exit 1
-  fi
-done
+conda_path=$($SHELL -ic 'conda info --base')
+if [ ! -d "$conda_path" ]; then
+  echo
+  echo "ERROR: Conda path $conda_path does not exist"
+  exit 1
+fi
+if [ -f "$conda_path/etc/profile.d/conda.sh" ]; then
+  echo
+  echo "Initializing conda from $conda_path"
+  source "$conda_path/etc/profile.d/conda.sh"
+else
+  echo
+  echo "ERROR: Unable to find conda in expected locations"
+  exit 1
+fi
 
 # Reset OPTIND so help can be invoked multiple times per shell session.
 OPTIND=1
@@ -31,14 +41,6 @@ Help()
    echo "f     Force creation of a new environment."
    echo "l     Install git lfs."
 }
-
-# Define variables
-username=$(whoami)
-env_type="simulation"
-make_new="no"
-install_git_lfs="no"
-days_until_stale=7 # Number of days until environment is considered stale
-
 
 # Process input options
 while getopts ":hflt:" option; do
