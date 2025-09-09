@@ -293,7 +293,8 @@ History/case studies
 Probabilistic record linkage (PRL) synthetic population simulation
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-The PRL synthetic population simulation used an atypical V&V process,
+The :ref:`PRL synthetic population simulation <vivarium_census_prl_synth_data>`
+used an atypical V&V process,
 and was used as a testbed for some of these automation ideas.
 
 Rather than researchers performing V&V in notebooks, V&V for this simulation
