@@ -11,4 +11,4 @@ It is named after our `Vivarium <https://vivarium.readthedocs.io/en/latest/>`_ m
    :maxdepth: 2
 
    self
-   fuzzy_checking/index
+   automated_v_and_v/index
