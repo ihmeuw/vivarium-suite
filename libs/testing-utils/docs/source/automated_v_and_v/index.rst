@@ -298,7 +298,7 @@ We assume that each simulant's continuous value was independently drawn from a n
 (When the draws are not in fact identically distributed, we will ignore our knowledge of this, as in
 the proportions case.)
 When the target is a precise value, we use a normal distribution with the target mean and a weakly informative
-prior on the variance of :math:`\Gamma^-1(2, s_{ref}^2)` where :math:`\Gamma^-1` refers to `the inverse-gamma distribution <https://en.wikipedia.org/wiki/Inverse-gamma_distribution>`_
+prior on the variance of :math:`\Gamma^{-1}(2, s_{ref}^2)` where :math:`\Gamma^{-1}` refers to `the inverse-gamma distribution <https://en.wikipedia.org/wiki/Inverse-gamma_distribution>`_
 and :math:`s_{ref}` is an a priori estimate of the data scale, which defaults to the target mean.
 This prior is used because there is no proper Jeffreys prior for this unbounded parameter,
 and setting the beta parameter using an approximate data scale is much less informative than other heuristics
@@ -315,10 +315,10 @@ The default :math:`s_{ref}` is now set to the midpoint of the target UI.
 Finally, we must specify a distribution in the case where there is a bug/error
 in the simulation.
 Again, since there is no Jeffreys prior, we use a weakly informative prior,
-specifically :math:`N-\Gamma^-1(0, 10^-3, 2, s_{ref}^2)`
-where :math:`N-\Gamma^-1` refers to `the normal-inverse-gamma distribution <https://en.wikipedia.org/wiki/Normal-inverse-gamma_distribution>`
-and `s_{ref}` is set to the target mean or the midpoint of the UI.
-In fact, rather than specifying :math:`10^-3` for the :math:`\lambda` parameter,
+specifically :math:`N\text{-}\Gamma^{-1}(0, 10^{-3}, 2, s_{ref}^2)`
+where :math:`N\text{-}\Gamma^{-1}` refers to `the normal-inverse-gamma distribution <https://en.wikipedia.org/wiki/Normal-inverse-gamma_distribution>`_
+and :math:`s_{ref}` is set to the target mean or the midpoint of the UI.
+In fact, rather than specifying :math:`10^{-3}` for the :math:`\lambda` parameter,
 we specify a default 95% UI, that with all the other defaults, recovers that value,
 which is :math:`(-62 \times s_{ref}, 62 \times s_{ref})`.
 This UI can be customized, which is more interpretable than customizing the :math:`\lambda` directly.
