@@ -297,7 +297,7 @@ class FuzzyChecker:
             observed_values = np.array(observed_values)
             observed_zeroth_moment = len(observed_values)
             observed_first_moment = np.sum(observed_values)
-            observed_second_moment = np.sum(np.array(observed_values))
+            observed_second_moment = np.sum(observed_values ** 2)
 
         assert (
             observed_zeroth_moment is not None
