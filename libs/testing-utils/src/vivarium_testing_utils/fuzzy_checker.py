@@ -294,9 +294,16 @@ class FuzzyChecker:
         )
         assert (observed_first_moment is None) != (observed_values is None)
         if observed_values is not None:
+            observed_values = np.array(observed_values)
             observed_zeroth_moment = len(observed_values)
             observed_first_moment = np.sum(observed_values)
-            observed_second_moment = np.sum(np.square(observed_values))
+            observed_second_moment = np.sum(np.array(observed_values))
+
+        assert (
+            observed_zeroth_moment is not None
+            and observed_first_moment is not None
+            and observed_second_moment is not None
+        )
 
         data_scale = (target_lower_bound + target_upper_bound) / 2
         if beta_prior is None:
@@ -552,12 +559,12 @@ class FuzzyChecker:
     def _compute_continuous_log_likelihood(
         self,
         target_mean: float | tuple[float, float],
-        observed_zeroth_moment,
-        observed_first_moment,
-        observed_second_moment,
-        alpha_prior,
-        beta_prior,
-    ):
+        observed_zeroth_moment: int,
+        observed_first_moment: float,
+        observed_second_moment: float,
+        alpha_prior: float,
+        beta_prior: float,
+    ) -> float:
         """
         Calculates how likely your observed data is under a model where the mean is either fixed or uncertain.
         If target_mean is a tuple, we allow for uncertainty in the mean (using a range). If it's a float, we treat the mean as exact.
@@ -593,8 +600,15 @@ class FuzzyChecker:
             )
 
     def _log_likelihood_normal_inverse_gamma(
-        self, zeroth_moment, first_moment, second_moment, mu0, lambda0, alpha0, beta0
-    ):
+        self,
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        mu0: float,
+        lambda0: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
         """
         Calculates the log-likelihood for your data under a model where the mean is uncertain (not fixed), but centered at mu0 with a certain strength (lambda0).
         This is the standard Bayesian update for a normal distribution with unknown mean and variance, using a normal-inverse-gamma prior.
@@ -616,7 +630,7 @@ class FuzzyChecker:
         alpha_n = alpha0 + n / 2.0
         beta_n = beta0 + 0.5 * (S + (lambda0 * n / lambda_n) * (ybar - mu0) ** 2)
 
-        return (
+        return float(
             -0.5 * n * np.log(2.0 * np.pi)
             + 0.5 * (np.log(lambda0) - np.log(lambda_n))
             + (gammaln(alpha_n) - gammaln(alpha0))
@@ -625,8 +639,14 @@ class FuzzyChecker:
         )
 
     def _log_likelihood_normal_inverse_gamma_fixed_mean(
-        self, zeroth_moment, first_moment, second_moment, mu_star, alpha0, beta0
-    ):
+        self,
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        mu_star: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
         """
         Calculates the log-likelihood for your data under a model where the mean is fixed at mu_star.
         This is the standard Bayesian update for a normal distribution with known mean and unknown variance, using an inverse-gamma prior.
@@ -643,7 +663,7 @@ class FuzzyChecker:
         alpha_n = alpha0 + n / 2.0
         beta_n = beta0 + 0.5 * S_star
 
-        return (
+        return float(
             -0.5 * n * np.log(2.0 * np.pi)
             + (gammaln(alpha_n) - gammaln(alpha0))
             + alpha0 * np.log(beta0)
@@ -651,8 +671,12 @@ class FuzzyChecker:
         )
 
     def _compute_parameters_for_marginal_mu_interval(
-        self, desired_lower, desired_upper, alpha_prior, beta_prior
-    ):
+        self,
+        desired_lower: float,
+        desired_upper: float,
+        alpha_prior: float,
+        beta_prior: float,
+    ) -> tuple[float, float]:
         """
         Compute conjugate prior parameters (mu0, lambda0) so that the *marginal*
         prior for mu (after integrating out sigma^2 under an Inv-Gamma(alpha_prior,beta_prior))
