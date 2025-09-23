@@ -1,3 +1,7 @@
+**2.0.7 - 9/23/2025**
+
+  - Disable dependent branch installs
+
 **2.0.6 - 8/20/2025**
 
   - Validate arguments passed to reusable_pipeline.groovy
