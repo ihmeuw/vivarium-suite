@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 
 import pytest
 from pytest import FixtureRequest
+from pytest_mock import MockerFixture
 
 from vivarium_cluster_tools.utilities import backoff_and_retry, mkdir
 
@@ -86,13 +87,15 @@ def test_mkdir_set_permissions(permissions_params: tuple[MkdirParams, str | None
         assert prior_umask == os.umask(prior_umask), "umask was changed and not reset"
 
 
-def test_backoff_and_retry() -> None:
+def test_backoff_and_retry(mocker: MockerFixture) -> None:
     class WarningCatcher:
         def __init__(self) -> None:
             self.caught_warnings: list[str] = []
 
         def warn(self, message: str, *args: Any, **kwargs: Any) -> None:
             self.caught_warnings.append(message)
+
+    mock_sleep = mocker.patch("vivarium_cluster_tools.utilities.time.sleep")
 
     wc = WarningCatcher()
 
@@ -102,17 +105,23 @@ def test_backoff_and_retry() -> None:
 
     assert successful_function()
     assert len(wc.caught_warnings) == 0
+    # time.sleep should not be called for successful function
+    mock_sleep.assert_not_called()
 
+    # Reset the mock for the next test
+    mock_sleep.reset_mock()
     wc = WarningCatcher()
 
     @backoff_and_retry(backoff_seconds=0.1, num_retries=5, log_function=wc.warn)
     def failing_function() -> None:
         raise ValueError
 
-    start = time.time()
     with pytest.raises(ValueError):
         failing_function()
-    duration = time.time() - start
     # 5 for the retries, 1 for the final fail
     assert len(wc.caught_warnings) == 5 + 1
-    assert abs(duration - 0.1 * 5) < 0.01
+    # time.sleep should be called 5 times (once per retry) with backoff_seconds=0.1
+    assert mock_sleep.call_count == 5
+    # Verify all calls were made with the correct argument
+    expected_calls = [mocker.call(0.1)] * 5
+    mock_sleep.assert_has_calls(expected_calls)

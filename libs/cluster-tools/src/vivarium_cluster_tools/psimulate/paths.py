@@ -203,8 +203,6 @@ class OutputPaths(NamedTuple):
 
         output_directory = result_directory
         if command == COMMANDS.run:
-            if input_artifact_path is None:
-                raise ValueError("Input artifact path is required for run command")
             model_name = get_output_model_name_string(
                 input_artifact_path, input_model_spec_path
             )

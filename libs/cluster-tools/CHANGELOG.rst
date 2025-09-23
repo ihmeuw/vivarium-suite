@@ -1,3 +1,7 @@
+**2.1.19 - 09/23/25**
+
+  - Bugfix: do not raise if artifact path is not provided via command line
+
 **2.1.18 - 08/22/25**
 
   - Type-hint entire repository
@@ -25,7 +29,6 @@
 **2.1.12 - 06/11/25**
 
   - Move deprecated rtd for redis
-
 
 **2.1.11 - 06/11/25**
 
