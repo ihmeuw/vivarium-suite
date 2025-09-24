@@ -1,3 +1,7 @@
+**2.1.20 - 09/24/25**
+
+  - Bugfix: do not overwrite randomness and input_data simulation configuration details
+
 **2.1.19 - 09/23/25**
 
   - Bugfix: do not raise if artifact path is not provided via command line

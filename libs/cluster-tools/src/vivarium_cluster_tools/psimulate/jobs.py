@@ -5,6 +5,7 @@ psimulate Jobs
 
 """
 
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -47,15 +48,10 @@ class JobParameters(NamedTuple):
     @property
     def sim_config(self) -> dict[str, Any]:
         """Parameters for the simulation configuration."""
-        return {
-            **self.branch_configuration,
-            "randomness": {
-                "random_seed": self.random_seed,
-            },
-            "input_data": {
-                "input_draw_number": self.input_draw,
-            },
-        }
+        config = defaultdict(dict, self.branch_configuration)
+        config["randomness"]["random_seed"] = self.random_seed
+        config["input_data"]["input_draw_number"] = self.input_draw
+        return dict(config)
 
     def to_dict(self) -> dict[str, Any]:
         # I will never understand why this is a private
