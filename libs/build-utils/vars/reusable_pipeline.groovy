@@ -183,8 +183,7 @@ def call(Map config = [:]){
                         buildStages.testDocs()
                       } else {
                         buildStages.installPackage()
-                        // FIXME: MIC-6428. Fix dependency installer.
-                        // buildStages.installDependencies(upstream_repos)
+                        buildStages.installDependencies(upstream_repos)
                         buildStages.checkFormatting(run_mypy)
                         // Transform test type inputs to actual make test target names
                         tests = test_types.collect { "test-${it}" }

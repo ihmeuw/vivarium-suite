@@ -66,7 +66,6 @@ def installPackage(String env_reqs = "") {
     }
 }
 
-// FIXME: MIC-6428. Fix dependency installer.
 def installDependencies(List upstream_repos) {
     stage("Install Upstream Dependency Branches - Python ${PYTHON_VERSION}") {
         sh "chmod +x install_dependency_branch.sh"

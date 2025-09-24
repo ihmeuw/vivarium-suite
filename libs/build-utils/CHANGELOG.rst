@@ -1,3 +1,7 @@
+**2.0.8 - 9/24/2025**
+
+  - Revert disabling dependent branch installs (v2.0.7)
+
 **2.0.7 - 9/23/2025**
 
   - Disable dependent branch installs
