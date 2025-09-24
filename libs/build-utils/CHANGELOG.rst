@@ -1,6 +1,7 @@
 **2.0.8 - 9/24/2025**
 
   - Revert disabling dependent branch installs (v2.0.7)
+  - Stop explicit folder deletion in cleanup
 
 **2.0.7 - 9/23/2025**
 

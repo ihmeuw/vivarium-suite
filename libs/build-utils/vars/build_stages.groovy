@@ -159,7 +159,6 @@ def deployDocs() {
 
 def cleanup() {
     sh "${ACTIVATE} && make clean"
-    sh "rm -rf ${CONDA_ENV_PATH}"
     cleanWs()
     dir("${WORKSPACE}@tmp") {
         deleteDir()
