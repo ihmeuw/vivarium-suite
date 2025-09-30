@@ -10,8 +10,6 @@ from vivarium_public_health.risks.data_transformations import pivot_categorical
 
 from {{cookiecutter.package_name}}.constants import metadata
 
-SeededDistribution = tuple[str, stats.rv_continuous]
-
 
 def len_longest_location() -> int:
     """Returns the length of the longest location in the project.
@@ -49,8 +47,10 @@ def delete_if_exists(*paths: Path | list[Path], confirm=False):
             # Assumes all paths have the same root dir
             root = existing_paths[0].parent
             names = [p.name for p in existing_paths]
-            click.confirm(f"Existing files {names} found in directory {root}. Do you want to delete and replace?",
-                          abort=True)
+            click.confirm(
+                f"Existing files {names} found in directory {root}. Do you want to delete and replace?",
+                abort=True,
+            )
         for p in existing_paths:
             logger.info(f'Deleting artifact at {str(p)}.')
             p.unlink()
@@ -78,7 +78,9 @@ def read_data_by_draw(artifact_path: str, key : str, draw: int) -> pd.DataFrame:
     data = pd.concat([index, draw], axis=1)
     data = data.drop(columns='location')
     data = pivot_categorical(data)
-    data[project_globals.LBWSG_MISSING_CATEGORY.CAT] = project_globals.LBWSG_MISSING_CATEGORY.EXPOSURE
+    data[
+        project_globals.LBWSG_MISSING_CATEGORY.CAT
+    ] = project_globals.LBWSG_MISSING_CATEGORY.EXPOSURE
     return data
 
 
@@ -108,9 +110,13 @@ def _get_standard_deviation(
         mean: float, sd: float, ninety_five_pct_confidence_interval: tuple[float, float]
 ) -> float:
     if sd is None and ninety_five_pct_confidence_interval is None:
-        raise ValueError("Must provide either a standard deviation or a 95% confidence interval.")
+        raise ValueError(
+            "Must provide either a standard deviation or a 95% confidence interval."
+        )
     if sd is not None and ninety_five_pct_confidence_interval is not None:
-        raise ValueError("Cannot provide both a standard deviation and a 95% confidence interval.")
+        raise ValueError(
+            "Cannot provide both a standard deviation and a 95% confidence interval."
+        )
     if ninety_five_pct_confidence_interval is not None:
         lower = ninety_five_pct_confidence_interval[0]
         upper = ninety_five_pct_confidence_interval[1]
@@ -125,8 +131,9 @@ def _get_standard_deviation(
     return sd
 
 
-def get_lognorm_from_quantiles(median: float, lower: float, upper: float,
-                               quantiles: tuple[float, float] = (0.025, 0.975)) -> stats.lognorm:
+def get_lognorm_from_quantiles(
+        median: float, lower: float, upper: float, quantiles: tuple[float, float] = (0.025, 0.975)
+    ) -> stats.lognorm:
     """Returns a frozen lognormal distribution with the specified median, such that
     (lower, upper) are approximately equal to the quantiles with ranks
     (quantile_ranks[0], quantile_ranks[1]).
@@ -148,17 +155,23 @@ def get_lognorm_from_quantiles(median: float, lower: float, upper: float,
     norm_quantiles = np.log([lower, upper])
     # standard deviation of Y = log(X) computed from the above quantiles for Y
     # and the corresponding standard normal quantiles
-    sigma = (norm_quantiles[1] - norm_quantiles[0]) / (stdnorm_quantiles[1] - stdnorm_quantiles[0])
+    sigma = (norm_quantiles[1] - norm_quantiles[0]) / (
+        stdnorm_quantiles[1] - stdnorm_quantiles[0]
+    )
     # Frozen lognormal distribution for X = exp(Y)
     # (s=sigma is the shape parameter; the scale parameter is exp(mu), which equals the median)
     return stats.lognorm(s=sigma, scale=median)
 
 
-def get_random_variable_draws(number: int, seeded_distribution: SeededDistribution) -> np.array:
-    return np.array([get_random_variable(x, seeded_distribution) for x in range(number)])
+def get_random_variable_draws(
+        columns: pd.Index, seed: str, distribution: stats.rv_continuous
+    ) -> pd.Series:
+    return pd.Series(
+        [get_random_variable(x, seed, distribution) for x in range(0, columns.size)],
+        index=columns,
+    )
 
 
-def get_random_variable(draw: int, seeded_distribution: SeededDistribution) -> float:
-    seed, distribution = seeded_distribution
-    np.random.seed(get_hash(f'{seed}_draw_{draw}'))
+def get_random_variable(draw: int, seed: str, distribution: stats.rv_continuous) -> float:
+    np.random.seed(get_hash(f"{seed}_draw_{draw}"))
     return distribution.rvs()

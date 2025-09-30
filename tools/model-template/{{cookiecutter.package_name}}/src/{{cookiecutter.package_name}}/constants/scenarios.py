@@ -23,8 +23,8 @@ class __InterventionScenarios(NamedTuple):
     BASELINE: InterventionScenario = InterventionScenario("baseline")
     # todo add additional intervention scenarios
 
-    def __get_item__(self, item):
-        return self._asdict()[item]
+    def __getitem__(self, item) -> InterventionScenario:
+        return self._asdict()[item.upper()]
 
 
 INTERVENTION_SCENARIOS = __InterventionScenarios()
