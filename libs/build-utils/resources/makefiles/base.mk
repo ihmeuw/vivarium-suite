@@ -165,7 +165,7 @@ deploy-package-artifactory: # Deploy the package to Artifactory
 deploy-docs: # Deploy documentation to shared server
 	@[ "${DOCS_ROOT_PATH}" ] && echo "" > /dev/null || ( echo "DOCS_ROOT_PATH is not set"; exit 1 )
 	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
-	cp -R ./output/docs_build/* ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
+	cp -R ./docs/build/html/* ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
 	chmod -R 0775 ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
 	cd ${DOCS_ROOT_PATH}/${PACKAGE_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
 

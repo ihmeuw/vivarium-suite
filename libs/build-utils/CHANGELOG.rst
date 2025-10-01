@@ -1,3 +1,7 @@
+**2.0.9 - 10/1/2025**
+
+  - Bugfix: Change name of doc build directory
+
 **2.0.8 - 9/24/2025**
 
   - Revert disabling dependent branch installs (v2.0.7)
