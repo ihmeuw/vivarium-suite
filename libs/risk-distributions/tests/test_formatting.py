@@ -121,6 +121,13 @@ def test_format_data_frame(data_columns, required_columns, match):
         format_data_frame(data, required_columns, measure="test")
 
 
+@pytest.mark.parametrize("data", ["string", {1, 2, 3}, None])
+def test_format_data_unsupported_types(data):
+    """Test format_data with unsupported data types."""
+    with pytest.raises(TypeError, match="Unsupported data type"):
+        format_data(data, ["param1"], "test")
+
+
 @pytest.mark.parametrize(
     "data, required_columns, expected",
     [

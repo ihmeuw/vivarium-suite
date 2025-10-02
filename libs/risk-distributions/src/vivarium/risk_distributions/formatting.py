@@ -1,3 +1,4 @@
+from functools import singledispatch
 from typing import Any, TypeVar
 
 import numpy as np
@@ -42,22 +43,13 @@ def cast_to_series(mean: Parameter, sd: Parameter) -> tuple[pd.Series, pd.Series
     return mean, sd
 
 
+@singledispatch
 def format_data(data: Parameters, required_columns: list[Any], measure: str) -> pd.DataFrame:
     """Formats parameter data into a dataframe."""
-    if isinstance(data, np.ndarray):
-        data = format_array(data, required_columns, measure)
-    elif isinstance(data, pd.Series):
-        data = format_series(data, required_columns, measure)
-    elif isinstance(data, pd.DataFrame):
-        data = format_data_frame(data, required_columns, measure)
-    elif isinstance(data, (list, tuple)):
-        data = format_list_like(data, required_columns, measure)
-    elif isinstance(data, dict):
-        data = format_dict(data, required_columns, measure)
-
-    return data
+    raise TypeError(f"Unsupported data type {type(data)} for {measure}")
 
 
+@format_data.register
 def format_array(data: np.ndarray, required_columns: list[Any], measure: str) -> pd.DataFrame:
     """Transforms 1d and 2d arrays into dataframes with columns for the
     parameters and (possibly) rows for each parameter variation."""
@@ -111,6 +103,7 @@ def format_array(data: np.ndarray, required_columns: list[Any], measure: str) ->
     return data
 
 
+@format_data.register
 def format_series(data: pd.Series, required_columns: list[Any], measure: str) -> pd.DataFrame:
     """Transforms series data into dataframes with columns for the
     parameters and (possibly) rows for each parameter variation."""
@@ -133,6 +126,7 @@ def format_series(data: pd.Series, required_columns: list[Any], measure: str) ->
     return data
 
 
+@format_data.register
 def format_data_frame(
     data: pd.DataFrame, required_columns: list[Any], measure: str
 ) -> pd.DataFrame:
@@ -154,6 +148,8 @@ def format_data_frame(
     return data
 
 
+@format_data.register(list)
+@format_data.register(tuple)
 def format_list_like(
     data: list | tuple, required_columns: list[Any], measure: str
 ) -> pd.DataFrame:
@@ -163,9 +159,8 @@ def format_list_like(
     return format_array(data, required_columns, measure)
 
 
-def format_dict(
-    data: dict[str, Parameter], required_columns: list[Any], measure: str
-) -> pd.DataFrame:
+@format_data.register
+def format_dict(data: dict, required_columns: list[Any], measure: str) -> pd.DataFrame:
     """Transform dictionaries with scalar or list-like values into dataframes
     with columns for the parameters and (possibly) rows for each parameter
     variation."""

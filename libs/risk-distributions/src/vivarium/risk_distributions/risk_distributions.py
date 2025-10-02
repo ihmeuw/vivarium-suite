@@ -1,3 +1,4 @@
+import copy
 import warnings
 from collections.abc import Callable
 
@@ -566,7 +567,10 @@ class EnsembleDistribution:
         mean: Parameter = None,
         sd: Parameter = None,
     ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
-        weights = format_data(weights, list(cls._distribution_map.keys()), "weights")
+        expected_columns = list(cls._distribution_map.keys())
+
+        weights = cls.fill_missing_weights(weights, expected_columns)
+        weights = format_data(weights, expected_columns, "weights")
 
         params = {}
         for name, dist in cls._distribution_map.items():
@@ -590,6 +594,27 @@ class EnsembleDistribution:
         )
 
         return weights, params
+
+    @staticmethod
+    def fill_missing_weights(weights: Parameters, expected_columns) -> Parameters:
+        weights = copy.deepcopy(weights)
+
+        # Get existing keys/columns/index based on weights type
+        if isinstance(weights, dict):
+            column_names = set(weights.keys())
+        elif isinstance(weights, pd.DataFrame):
+            column_names = set(weights.columns)
+        elif isinstance(weights, pd.Series):
+            column_names = set(weights.index)
+        else:
+            column_names = None  # For list, tuple, np.array, we can't fill missing columns
+
+        # Add missing columns with 0.0 value
+        if column_names and column_names < set(expected_columns):
+            for col in expected_columns:
+                if col not in column_names:
+                    weights[col] = 0.0
+        return weights
 
     def pdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
         single_val = isinstance(x, (float, int))
