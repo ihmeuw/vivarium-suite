@@ -1,3 +1,7 @@
+**2.0.10 - 10/2/2025**
+
+  - Bugfix: Remove Make sources
+
 **2.0.9 - 10/1/2025**
 
   - Bugfix: Change name of doc build directory
