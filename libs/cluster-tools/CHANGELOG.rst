@@ -1,3 +1,7 @@
+**2.1.21 - 10/03/25**
+
+  - Stop logging redis job fetching and deserializing
+
 **2.1.20 - 09/24/25**
 
   - Bugfix: do not overwrite randomness and input_data simulation configuration details

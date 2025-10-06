@@ -175,12 +175,7 @@ class QueueManager:
         job = self._get_job(job_id)
         result = None
         if job is not None:
-            start = time.time()
             result = job.result
-            end = time.time()
-            self._logger.debug(
-                f"Deserialized {job_id} result from queue {self.name} in {end - start:.2f}s."
-            )
             self._status["successful"] += 1
             self._remove_finished_job(job)
         return result
@@ -188,12 +183,7 @@ class QueueManager:
     def _get_job(self, job_id: str) -> Job | None:
         if self._retries:
             try:
-                start = time.time()
                 job = self._queue.fetch_job(job_id)
-                end = time.time()
-                self._logger.debug(
-                    f"Fetched job {job_id} from queue {self.name} in {end - start:.2f}s"
-                )
                 return job
             except redis.exceptions.ConnectionError:
                 self._sleep_on_it()
