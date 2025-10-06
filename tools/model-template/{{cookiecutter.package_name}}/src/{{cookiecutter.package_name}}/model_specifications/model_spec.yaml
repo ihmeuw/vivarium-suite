@@ -41,7 +41,7 @@ configuration:
         default:
             - 'age_group'
             - 'sex'
-            - 'current_year'
+            - 'event_year'
         # disability:
         #     include:
         #     exclude:
