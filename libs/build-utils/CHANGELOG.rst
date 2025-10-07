@@ -1,3 +1,7 @@
+**2.0.11 - 10/7/2025**
+
+  - Stop cacheing secondary uv pip install
+
 **2.0.10 - 10/2/2025**
 
   - Bugfix: Remove Make sources
