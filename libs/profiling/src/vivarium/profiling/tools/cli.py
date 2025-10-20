@@ -4,7 +4,7 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
-from vivarium_profiling.tools.benchmark import expand_model_specs, run_benchmarks
+from vivarium_profiling.tools.run_benchmark import expand_model_specs, run_benchmarks
 
 
 @click.command()
@@ -89,7 +89,7 @@ def make_artifacts(
     is_flag=True,
     help="Drop into python debugger if an error occurs.",
 )
-def benchmark(
+def run_benchmark(
     models: tuple[str, ...],
     model_runs: int,
     baseline_model_runs: int,

@@ -95,6 +95,6 @@ if __name__ == "__main__":
         entry_points="""
             [console_scripts]
             make_artifacts=vivarium_profiling.tools.cli:make_artifacts
-            benchmark=vivarium_profiling.tools.cli:benchmark
+            run_benchmark=vivarium_profiling.tools.cli:run_benchmark
         """,
     )
