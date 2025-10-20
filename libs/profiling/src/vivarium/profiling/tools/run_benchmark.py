@@ -6,7 +6,7 @@ import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 import click
@@ -32,7 +32,7 @@ RESULTS_SUMMARY_COLUMNS = [
 ]
 
 
-def expand_model_specs(model_patterns: List[str]) -> List[str]:
+def expand_model_specs(model_patterns: list[str]) -> list[str]:
     """Expand glob patterns and validate model spec files."""
     models = []
     for pattern in model_patterns:
@@ -53,7 +53,7 @@ def expand_model_specs(model_patterns: List[str]) -> List[str]:
     return models
 
 
-def validate_baseline_model(models: List[str]) -> None:
+def validate_baseline_model(models: list[str]) -> None:
     """Validate that one of the model specs is the baseline."""
     baseline_found = any("model_spec_baseline.yaml" in model for model in models)
     if not baseline_found:
@@ -86,7 +86,7 @@ def run_memory_profiler(spec: str, output_dir: str) -> None:
         raise click.ClickException(f"Memory profiler failed for {spec}")
 
 
-def get_peak_memory() -> Optional[float]:
+def get_peak_memory() -> float | None:
     """Get peak memory usage from memory profiler."""
     try:
         result = subprocess.run(["mprof", "peak"], capture_output=True, text=True, check=True)
@@ -107,7 +107,7 @@ def move_mprof_files(target_dir: str) -> None:
         os.rename(file, destination)
 
 
-def get_latest_results_dir(parent_dir: str) -> Optional[str]:
+def get_latest_results_dir(parent_dir: str) -> str | None:
     """Get the most recent results directory."""
     try:
         dirs = [d for d in glob.glob(os.path.join(parent_dir, "*/")) if os.path.isdir(d)]
@@ -118,7 +118,7 @@ def get_latest_results_dir(parent_dir: str) -> Optional[str]:
     return None
 
 
-def extract_runtime(stats_file_txt: str) -> Optional[float]:
+def extract_runtime(stats_file_txt: str) -> float | None:
     """Extract runtime from the stats file."""
     try:
         with open(stats_file_txt, "r") as f:
@@ -135,7 +135,7 @@ def extract_runtime(stats_file_txt: str) -> Optional[float]:
 
 def parse_function_metrics(
     stats_file_txt: str, pattern: str
-) -> Tuple[Optional[float], Optional[float], Optional[int]]:
+) -> tuple[float | None, float | None, int | None]:
     """Parse cumtime, percall, and ncalls for a specific function pattern."""
     try:
         with open(stats_file_txt, "r") as f:
@@ -177,7 +177,7 @@ def parse_function_metrics(
 
 def run_single_benchmark(
     spec: str, run_number: int, total_runs: int, spec_results_dir: str, model_spec_name: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run a single benchmark iteration."""
     logger.info(f"Run {run_number}/{total_runs} for {spec}...")
 
@@ -243,7 +243,7 @@ def run_single_benchmark(
 
 
 def run_benchmark_loop(
-    model_specs: List[str],
+    model_specs: list[str],
     model_runs: int,
     baseline_model_runs: int,
     output_dir: str = ".",
