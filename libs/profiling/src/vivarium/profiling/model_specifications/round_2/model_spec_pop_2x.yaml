@@ -50,7 +50,7 @@ components:
 configuration:
     input_data:
         input_draw_number: 0
-        artifact_path: '/mnt/share/homes/sbachmei/scratch/profiling/pakistan.hdf'
+        artifact_path: '/mnt/team/simulation_science/pub/simulation_profiling/artifacts/pakistan.hdf'
     interpolation:
         order: 0
         extrapolate: True
@@ -60,7 +60,7 @@ configuration:
         random_seed: 0
     time:
         start:
-            year: 2021
+            year: 2022
             month: 1
             day: 1
         end:
