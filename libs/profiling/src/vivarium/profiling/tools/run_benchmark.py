@@ -62,10 +62,10 @@ def validate_baseline_model(models: List[str]) -> None:
         )
 
 
-def create_results_directory() -> str:
+def create_results_directory(output_dir: str = ".") -> str:
     """Create a timestamped results directory."""
     timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    results_dir = f"profile_{timestamp}"
+    results_dir = os.path.join(output_dir, f"profile_{timestamp}")
     os.makedirs(results_dir, exist_ok=True)
     return results_dir
 
@@ -243,7 +243,11 @@ def run_single_benchmark(
 
 
 def run_benchmarks(
-    model_specs: List[str], model_runs: int, baseline_model_runs: int, verbose: int = 0
+    model_specs: List[str],
+    model_runs: int,
+    baseline_model_runs: int,
+    output_dir: str = ".",
+    verbose: int = 0,
 ) -> str:
     """Main function to run benchmarks on model specifications."""
     configure_logging_to_terminal(verbose)
@@ -252,7 +256,7 @@ def run_benchmarks(
     validate_baseline_model(model_specs)
 
     # Create results directory and initialize results file
-    results_dir = create_results_directory()
+    results_dir = create_results_directory(output_dir)
     results_file = initialize_results_file(results_dir)
 
     logger.info("Running benchmarks:")

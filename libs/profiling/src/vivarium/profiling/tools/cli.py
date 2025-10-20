@@ -82,6 +82,14 @@ def make_artifacts(
     required=True,
     help="Number of runs for baseline model.",
 )
+@click.option(
+    "-o",
+    "--output-dir",
+    default=".",
+    show_default=True,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Directory where the timestamped results directory will be created.",
+)
 @click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
 @click.option(
     "--pdb",
@@ -93,6 +101,7 @@ def run_benchmark(
     models: tuple[str, ...],
     model_runs: int,
     baseline_model_runs: int,
+    output_dir: str,
     verbose: int,
     with_debugger: bool,
 ) -> None:
@@ -109,4 +118,4 @@ def run_benchmark(
 
     # Run benchmarks with error handling
     main = handle_exceptions(run_benchmarks, logger, with_debugger=with_debugger)
-    main(model_specs, model_runs, baseline_model_runs, verbose)
+    main(model_specs, model_runs, baseline_model_runs, output_dir, verbose)
