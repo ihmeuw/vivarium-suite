@@ -1,6 +1,5 @@
 """Benchmarking functionality for profiling Vivarium models."""
 
-import csv
 import glob
 import os
 import re
@@ -9,10 +8,28 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import pandas as pd
 import click
 from loguru import logger
 
 from vivarium_profiling.tools import configure_logging_to_terminal
+
+RESULTS_SUMMARY_NAME = "benchmark_results.csv"
+RESULTS_SUMMARY_COLUMNS = [
+    "model_spec",
+    "run",
+    "rt_s",
+    "mem_mb",
+    "gather_results_cumtime",
+    "gather_results_percall",
+    "gather_results_ncalls",
+    "pipeline_call_cumtime",
+    "pipeline_call_percall",
+    "pipeline_call_ncalls",
+    "population_get_cumtime",
+    "population_get_percall",
+    "population_get_ncalls",
+]
 
 
 def expand_model_specs(model_patterns: List[str]) -> List[str]:
@@ -55,27 +72,9 @@ def create_results_directory() -> str:
 
 def initialize_results_file(results_dir: str) -> str:
     """Initialize the CSV results file with headers."""
-    results_file = os.path.join(results_dir, "benchmark_results.csv")
-    headers = [
-        "model_spec",
-        "run",
-        "rt_s",
-        "mem_mb",
-        "gather_results_cumtime",
-        "gather_results_percall",
-        "gather_results_ncalls",
-        "pipeline_call_cumtime",
-        "pipeline_call_percall",
-        "pipeline_call_ncalls",
-        "population_get_cumtime",
-        "population_get_percall",
-        "population_get_ncalls",
-    ]
-
-    with open(results_file, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(headers)
-
+    results_file = os.path.join(results_dir, RESULTS_SUMMARY_NAME)
+    df = pd.DataFrame(columns=RESULTS_SUMMARY_COLUMNS)
+    df.to_csv(results_file, index=False)
     return results_file
 
 
@@ -243,28 +242,6 @@ def run_single_benchmark(
     return results
 
 
-def write_results_to_csv(results_file: str, results: Dict[str, Any]) -> None:
-    """Write benchmark results to CSV file."""
-    with open(results_file, "a", newline="") as f:
-        writer = csv.writer(f)
-        row = [
-            results["model_spec"],
-            results["run"],
-            results["rt_s"],
-            results["mem_mb"],
-            results["gather_results_cumtime"],
-            results["gather_results_percall"],
-            results["gather_results_ncalls"],
-            results["pipeline_call_cumtime"],
-            results["pipeline_call_percall"],
-            results["pipeline_call_ncalls"],
-            results["population_get_cumtime"],
-            results["population_get_percall"],
-            results["population_get_ncalls"],
-        ]
-        writer.writerow(row)
-
-
 def run_benchmarks(
     model_specs: List[str], model_runs: int, baseline_model_runs: int, verbose: int = 0
 ) -> str:
@@ -303,7 +280,8 @@ def run_benchmarks(
                 results = run_single_benchmark(
                     spec, run, num_runs, spec_specific_results_dir, model_spec_name
                 )
-                write_results_to_csv(results_file, results)
+                result_df = pd.DataFrame([results])
+                result_df.to_csv(results_file, mode="a", header=False, index=False)
             except Exception as e:
                 logger.error(f"Failed to run benchmark {run} for {spec}: {e}")
                 raise
