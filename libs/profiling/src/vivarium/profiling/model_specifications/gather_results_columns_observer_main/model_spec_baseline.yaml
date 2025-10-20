@@ -50,7 +50,7 @@ components:
 configuration:
     input_data:
         input_draw_number: 0
-        artifact_path: '/mnt/team/simulation_science/pub/simulation_profiling/sbachmei/vivarium_profiling/src/vivarium_profiling/data/pakistan.hdf'
+        artifact_path: '/mnt/team/simulation_science/pub/simulation_profiling/artifacts/pakistan.hdf
     interpolation:
         order: 0
         extrapolate: True
