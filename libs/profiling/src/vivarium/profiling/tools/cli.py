@@ -4,6 +4,7 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
+from vivarium_profiling.tools.benchmark import expand_model_specs, run_benchmarks
 
 
 @click.command()
@@ -57,3 +58,55 @@ def make_artifacts(
     configure_logging_to_terminal(verbose)
     main = handle_exceptions(build_artifacts, logger, with_debugger=with_debugger)
     main(location, years, output_dir, append or replace_keys, replace_keys, verbose)
+
+@click.command()
+@click.option(
+    "-m", "--models", 
+    multiple=True,
+    required=True,
+    help="Model specification files (supports glob patterns). Can be specified multiple times."
+)
+@click.option(
+    "-r", "--model-runs",
+    type=int,
+    required=True,
+    help="Number of runs for non-baseline models."
+)
+@click.option(
+    "-b", "--baseline-model-runs",
+    type=int,
+    required=True,
+    help="Number of runs for baseline model."
+)
+@click.option(
+    "-v", "verbose", 
+    count=True, 
+    help="Configure logging verbosity."
+)
+@click.option(
+    "--pdb",
+    "with_debugger",
+    is_flag=True,
+    help="Drop into python debugger if an error occurs.",
+)
+def benchmark(
+    models: tuple[str, ...],
+    model_runs: int,
+    baseline_model_runs: int,
+    verbose: int,
+    with_debugger: bool,
+) -> None:
+    """Run benchmarks on Vivarium model specifications.
+    
+    This command profiles multiple model specifications and collects runtime
+    and memory usage statistics. Results are saved to a timestamped CSV file.
+    
+    Example usage:
+        benchmark -m "model_spec_baseline.yaml" -m "model_spec_*.yaml" -r 10 -b 20
+    """
+    # Expand model patterns
+    model_specs = expand_model_specs(list(models))
+    
+    # Run benchmarks with error handling
+    main = handle_exceptions(run_benchmarks, logger, with_debugger=with_debugger)
+    main(model_specs, model_runs, baseline_model_runs, verbose)
