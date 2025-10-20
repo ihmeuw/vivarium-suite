@@ -1,9 +1,11 @@
-import pandas as pd
 import argparse
 from pathlib import Path
+
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
+import pandas as pd
+import seaborn as sns
+
 """Benchmark summarization and visualization utilities."""
 
 
@@ -15,7 +17,7 @@ BOTTLENECKS = [
 ]
 
 # Set style for better plots
-plt.style.use('default')
+plt.style.use("default")
 sns.set_palette("husl")
 
 
@@ -26,7 +28,7 @@ def extract_simulation_call_times(raw: pd.DataFrame, output_dir: Path) -> pd.Dat
     col_map = {phase: f"rt_{phase}_s" for phase in phase_funcs}
     for col in col_map.values():
         raw[col] = np.nan
-    for model_spec in raw['model_spec'].unique():
+    for model_spec in raw["model_spec"].unique():
         spec_stem = Path(model_spec).stem
         spec_results_dir = output_dir / spec_stem
         if not spec_results_dir.exists():
@@ -35,20 +37,23 @@ def extract_simulation_call_times(raw: pd.DataFrame, output_dir: Path) -> pd.Dat
                 "Please ensure the profiling script has run successfully and generated the expected output directories."
             )
         sorted_stats_files = sorted(
-            file for file in spec_results_dir.rglob(f"{spec_stem}.stats.txt")
+            file
+            for file in spec_results_dir.rglob(f"{spec_stem}.stats.txt")
             if file.is_file()
         )
         for run_number, stats_file in enumerate(sorted_stats_files, start=1):
-            with stats_file.open('r') as fh:
+            with stats_file.open("r") as fh:
                 for line in fh:
                     # All phase calls are from engine.py
-                    if '/vivarium/framework/engine.py:' not in line:
+                    if "/vivarium/framework/engine.py:" not in line:
                         continue
-                    if not any(call in line for call in [f"({phase})" for phase in phase_funcs]):
+                    if not any(
+                        call in line for call in [f"({phase})" for phase in phase_funcs]
+                    ):
                         continue
                     phase_name = line.split()[-1].split("(")[-1].split(")")[0]
                     phase_rt = float(line.split()[3])  # cumtime is the 4th item
-                    mask = (raw['model_spec'] == model_spec) & (raw['run'] == run_number)
+                    mask = (raw["model_spec"] == model_spec) & (raw["run"] == run_number)
                     if mask.sum() == 0:
                         raise RuntimeError(
                             f"No matching run found for model_spec '{model_spec}' and run_number {run_number}. "
@@ -63,12 +68,15 @@ def extract_simulation_call_times(raw: pd.DataFrame, output_dir: Path) -> pd.Dat
 
     return raw
 
+
 def summarize(raw: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
     # extract bottleneck fractions of run() time
     summary = raw.copy()
     summary["rt_non_run_s"] = summary["rt_s"] - summary["rt_run_s"]
     for bottleneck in BOTTLENECKS:
-        summary[f"{bottleneck}_fraction"] = summary[f"{bottleneck}_cumtime"] / summary["rt_run_s"]
+        summary[f"{bottleneck}_fraction"] = (
+            summary[f"{bottleneck}_cumtime"] / summary["rt_run_s"]
+        )
     summary = (
         summary.groupby("model_spec")
         .agg(
@@ -164,38 +172,94 @@ def summarize(raw: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
         .reset_index()
     )
     # Calculate differences from baseline (median values)
-    baseline_mem = summary.loc[summary["model_spec"].str.endswith(BASELINE), "mem_mb_median"].values[0]
-    baseline_rt = summary.loc[summary["model_spec"].str.endswith(BASELINE), "rt_s_median"].values[0]
-    baseline_rt_setup = summary.loc[summary["model_spec"].str.endswith(BASELINE), "rt_setup_s_median"].values[0]
-    baseline_rt_initialize_simulants = summary.loc[summary["model_spec"].str.endswith(BASELINE), "rt_initialize_simulants_s_median"].values[0]
-    baseline_rt_run = summary.loc[summary["model_spec"].str.endswith(BASELINE), "rt_run_s_median"].values[0]
-    baseline_rt_finalize = summary.loc[summary["model_spec"].str.endswith(BASELINE), "rt_finalize_s_median"].values[0]
-    baseline_rt_report = summary.loc[summary["model_spec"].str.endswith(BASELINE), "rt_report_s_median"].values[0]
-    baseline_rt_non_run = summary.loc[summary["model_spec"].str.endswith(BASELINE), "rt_non_run_s_median"].values[0]
-    baseline_gather_results_cumtime = summary.loc[summary["model_spec"].str.endswith(BASELINE), "gather_results_cumtime_median"].values[0]
-    baseline_pipeline_call_cumtime = summary.loc[summary["model_spec"].str.endswith(BASELINE), "pipeline_call_cumtime_median"].values[0]
-    baseline_population_get_cumtime = summary.loc[summary["model_spec"].str.endswith(BASELINE), "population_get_cumtime_median"].values[0]
+    baseline_mem = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "mem_mb_median"
+    ].values[0]
+    baseline_rt = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "rt_s_median"
+    ].values[0]
+    baseline_rt_setup = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "rt_setup_s_median"
+    ].values[0]
+    baseline_rt_initialize_simulants = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "rt_initialize_simulants_s_median"
+    ].values[0]
+    baseline_rt_run = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "rt_run_s_median"
+    ].values[0]
+    baseline_rt_finalize = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "rt_finalize_s_median"
+    ].values[0]
+    baseline_rt_report = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "rt_report_s_median"
+    ].values[0]
+    baseline_rt_non_run = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "rt_non_run_s_median"
+    ].values[0]
+    baseline_gather_results_cumtime = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "gather_results_cumtime_median"
+    ].values[0]
+    baseline_pipeline_call_cumtime = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "pipeline_call_cumtime_median"
+    ].values[0]
+    baseline_population_get_cumtime = summary.loc[
+        summary["model_spec"].str.endswith(BASELINE), "population_get_cumtime_median"
+    ].values[0]
     summary["mem_pdiff"] = (summary["mem_mb_median"] - baseline_mem) / baseline_mem * 100
     summary["rt_pdiff"] = (summary["rt_s_median"] - baseline_rt) / baseline_rt * 100
-    summary["rt_setup_pdiff"] = (summary["rt_setup_s_median"] - baseline_rt_setup) / baseline_rt_setup * 100
-    summary["rt_initialize_simulants_pdiff"] = (summary["rt_initialize_simulants_s_median"] - baseline_rt_initialize_simulants) / baseline_rt_initialize_simulants * 100
-    summary["rt_run_pdiff"] = (summary["rt_run_s_median"] - baseline_rt_run) / baseline_rt_run * 100
-    summary["rt_finalize_pdiff"] = (summary["rt_finalize_s_median"] - baseline_rt_finalize) / baseline_rt_finalize * 100
-    summary["rt_report_pdiff"] = (summary["rt_report_s_median"] - baseline_rt_report) / baseline_rt_report * 100
-    summary["rt_non_run_pdiff"] = (summary["rt_non_run_s_median"] - baseline_rt_non_run) / baseline_rt_non_run * 100
-    summary["gather_results_cumtime_pdiff"] = (summary["gather_results_cumtime_median"] - baseline_gather_results_cumtime) / baseline_gather_results_cumtime * 100
-    summary["pipeline_call_cumtime_pdiff"] = (summary["pipeline_call_cumtime_median"] - baseline_pipeline_call_cumtime) / baseline_pipeline_call_cumtime * 100
-    summary["population_get_cumtime_pdiff"] = (summary["population_get_cumtime_median"] - baseline_population_get_cumtime) / baseline_population_get_cumtime * 100
+    summary["rt_setup_pdiff"] = (
+        (summary["rt_setup_s_median"] - baseline_rt_setup) / baseline_rt_setup * 100
+    )
+    summary["rt_initialize_simulants_pdiff"] = (
+        (summary["rt_initialize_simulants_s_median"] - baseline_rt_initialize_simulants)
+        / baseline_rt_initialize_simulants
+        * 100
+    )
+    summary["rt_run_pdiff"] = (
+        (summary["rt_run_s_median"] - baseline_rt_run) / baseline_rt_run * 100
+    )
+    summary["rt_finalize_pdiff"] = (
+        (summary["rt_finalize_s_median"] - baseline_rt_finalize) / baseline_rt_finalize * 100
+    )
+    summary["rt_report_pdiff"] = (
+        (summary["rt_report_s_median"] - baseline_rt_report) / baseline_rt_report * 100
+    )
+    summary["rt_non_run_pdiff"] = (
+        (summary["rt_non_run_s_median"] - baseline_rt_non_run) / baseline_rt_non_run * 100
+    )
+    summary["gather_results_cumtime_pdiff"] = (
+        (summary["gather_results_cumtime_median"] - baseline_gather_results_cumtime)
+        / baseline_gather_results_cumtime
+        * 100
+    )
+    summary["pipeline_call_cumtime_pdiff"] = (
+        (summary["pipeline_call_cumtime_median"] - baseline_pipeline_call_cumtime)
+        / baseline_pipeline_call_cumtime
+        * 100
+    )
+    summary["population_get_cumtime_pdiff"] = (
+        (summary["population_get_cumtime_median"] - baseline_population_get_cumtime)
+        / baseline_population_get_cumtime
+        * 100
+    )
 
     # Move the baseline row to the top
-    summary = pd.concat([
-        summary.loc[summary["model_spec"].str.endswith(BASELINE)],
-        summary.loc[~summary["model_spec"].str.endswith(BASELINE)]
-    ]).reset_index(drop=True)
+    summary = pd.concat(
+        [
+            summary.loc[summary["model_spec"].str.endswith(BASELINE)],
+            summary.loc[~summary["model_spec"].str.endswith(BASELINE)],
+        ]
+    ).reset_index(drop=True)
 
     # Add model col for readability
     value_cols = [col for col in summary.columns if col != "model_spec"]
-    summary["model"] = summary['model_spec'].str.split('/').str[-1].str.replace(".yaml", "").str.replace("model_spec_", "")
+    summary["model"] = (
+        summary["model_spec"]
+        .str.split("/")
+        .str[-1]
+        .str.replace(".yaml", "")
+        .str.replace("model_spec_", "")
+    )
     summary = summary[["model_spec", "model"] + value_cols]
     summary_path = output_dir / "summary.csv"
     summary.to_csv(summary_path, index=False)
@@ -203,7 +267,14 @@ def summarize(raw: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
     assert not summary.isna().any().any(), "NaNs found in summary data."
     return summary
 
-def create_figures(df: pd.DataFrame, chart_title: str, time_col: str, mem_col: str | None, time_pdiff_col: str) -> None:
+
+def create_figures(
+    df: pd.DataFrame,
+    chart_title: str,
+    time_col: str,
+    mem_col: str | None,
+    time_pdiff_col: str,
+) -> None:
     df = df.copy()
     # Create figure with subplots
     if mem_col:
@@ -215,131 +286,148 @@ def create_figures(df: pd.DataFrame, chart_title: str, time_col: str, mem_col: s
 
     df_sorted = group_models_by_type(df)
     colors = assign_grouped_colors(df_sorted)
-    
+
     # 1. Runtime comparison
-    axes1 = axes[0,0] if mem_col else axes[0]
-    bars1 = axes1.bar(range(len(df_sorted)), df_sorted[f'{time_col}_median'], color=colors)
-    axes1.set_title('Runtime by Model', fontweight='bold')
-    axes1.grid(True, color='lightgray', alpha=0.7, linestyle='-', linewidth=0.5)
+    axes1 = axes[0, 0] if mem_col else axes[0]
+    bars1 = axes1.bar(range(len(df_sorted)), df_sorted[f"{time_col}_median"], color=colors)
+    axes1.set_title("Runtime by Model", fontweight="bold")
+    axes1.grid(True, color="lightgray", alpha=0.7, linestyle="-", linewidth=0.5)
     # axes1.set_xlabel('Model')
-    axes1.set_ylabel('Median Runtime (seconds)')
+    axes1.set_ylabel("Median Runtime (seconds)")
     axes1.set_xticks(range(len(df_sorted)))
-    axes1.set_xticklabels(df_sorted['model'], rotation=45, ha='right')
+    axes1.set_xticklabels(df_sorted["model"], rotation=45, ha="right")
     # Add value labels on bars
     for _, bar in enumerate(bars1):
         height = bar.get_height()
         axes1.text(
-            bar.get_x() + bar.get_width()/2., height,
-            f'{height:.1f}', ha='center', va='bottom', fontsize=8,
+            bar.get_x() + bar.get_width() / 2.0,
+            height,
+            f"{height:.1f}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
         )
-    
+
     # 2. Peak memory comparison
     if mem_col:
-        bars2 = axes[0,1].bar(range(len(df_sorted)), df_sorted[f'{mem_col}_median'], color=colors)
-        axes[0,1].set_title('Peak Memory Usage by Model', fontweight='bold')
-        axes[0,1].grid(True, color='lightgray', alpha=0.7, linestyle='-', linewidth=0.5)
+        bars2 = axes[0, 1].bar(
+            range(len(df_sorted)), df_sorted[f"{mem_col}_median"], color=colors
+        )
+        axes[0, 1].set_title("Peak Memory Usage by Model", fontweight="bold")
+        axes[0, 1].grid(True, color="lightgray", alpha=0.7, linestyle="-", linewidth=0.5)
         # axes[0,1].set_xlabel('Model')
-        axes[0,1].set_ylabel('Median Peak Memory (MB)')
-        axes[0,1].set_xticks(range(len(df_sorted)))
-        axes[0,1].set_xticklabels(df_sorted['model'], rotation=45, ha='right')
+        axes[0, 1].set_ylabel("Median Peak Memory (MB)")
+        axes[0, 1].set_xticks(range(len(df_sorted)))
+        axes[0, 1].set_xticklabels(df_sorted["model"], rotation=45, ha="right")
         # Add value labels on bars
         for _, bar in enumerate(bars2):
             height = bar.get_height()
-            axes[0,1].text(
-                bar.get_x() + bar.get_width()/2., height + 2,
-                f'{height:.0f}MB', ha='center', va='bottom', fontsize=8
+            axes[0, 1].text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height + 2,
+                f"{height:.0f}MB",
+                ha="center",
+                va="bottom",
+                fontsize=8,
             )
-    
+
         # 3. Runtime vs Memory scatter plot with error bars - use grouped colors
         # Add error bars for standard deviations
-        axes[1,0].set_xlabel('Mean Runtime (seconds)')
-        axes[1,0].set_ylabel('Mean Peak Memory (MB)')
-        axes[1,0].set_title('Mean Runtime vs Mean Peak Memory Usage', fontweight='bold')
-        axes[1,0].grid(True, color='lightgray', alpha=0.7, linestyle='-', linewidth=0.5)
+        axes[1, 0].set_xlabel("Mean Runtime (seconds)")
+        axes[1, 0].set_ylabel("Mean Peak Memory (MB)")
+        axes[1, 0].set_title("Mean Runtime vs Mean Peak Memory Usage", fontweight="bold")
+        axes[1, 0].grid(True, color="lightgray", alpha=0.7, linestyle="-", linewidth=0.5)
         for i, row in df_sorted.iterrows():
-            axes[1,0].errorbar(
-                row[f'{time_col}_mean'],
-                row[f'{mem_col}_mean'],
-                xerr=row[f'{time_col}_std'],
-                yerr=row[f'{mem_col}_std'],
-                fmt='o',
+            axes[1, 0].errorbar(
+                row[f"{time_col}_mean"],
+                row[f"{mem_col}_mean"],
+                xerr=row[f"{time_col}_std"],
+                yerr=row[f"{mem_col}_std"],
+                fmt="o",
                 color=colors[i],
                 ecolor=colors[i],
                 elinewidth=1.5,
                 capsize=3,
                 markersize=8,
                 alpha=0.7,
-                linestyle='none'
+                linestyle="none",
             )
             # Add model labels to scatter points
-            axes[1,0].annotate(
-                row['model'],
-                (row[f'{time_col}_mean'], row[f'{mem_col}_mean']),
+            axes[1, 0].annotate(
+                row["model"],
+                (row[f"{time_col}_mean"], row[f"{mem_col}_mean"]),
                 xytext=(5, 5),
-                textcoords='offset points',
+                textcoords="offset points",
                 fontsize=8,
                 alpha=0.8,
-                color='black'
+                color="black",
             )
 
     # 4. Plot runtime percent differences vs scale factor
-    axes4 = axes[1,1] if mem_col else axes[1]
-    axes4.set_title('Runtime % Difference vs Scale Factor', fontweight='bold')
-    axes4.grid(True, color='lightgray', alpha=0.7, linestyle='-', linewidth=0.5)
-    axes4.set_xlabel('Scale Factor')
-    axes4.set_ylabel('Median Runtime % Difference')
-    
+    axes4 = axes[1, 1] if mem_col else axes[1]
+    axes4.set_title("Runtime % Difference vs Scale Factor", fontweight="bold")
+    axes4.grid(True, color="lightgray", alpha=0.7, linestyle="-", linewidth=0.5)
+    axes4.set_xlabel("Scale Factor")
+    axes4.set_ylabel("Median Runtime % Difference")
+
     # Filter to only models with valid scale factors
-    valid_models = df_sorted[df_sorted['scale_factor'].notna()]
-    base_models = valid_models['base_model'].unique()
-    
+    valid_models = df_sorted[df_sorted["scale_factor"].notna()]
+    base_models = valid_models["base_model"].unique()
+
     for base_model in base_models:
-        if base_model == 'baseline':
+        if base_model == "baseline":
             continue  # Skip baseline as it's the origin point
-            
-        model_group = valid_models[valid_models['base_model'] == base_model].sort_values('scale_factor')
-        
+
+        model_group = valid_models[valid_models["base_model"] == base_model].sort_values(
+            "scale_factor"
+        )
+
         # Get color for this model type
-        first_idx = df_sorted[df_sorted['base_model'] == base_model].index[0]
+        first_idx = df_sorted[df_sorted["base_model"] == base_model].index[0]
         line_color = colors[first_idx]
-        
+
         # Prepare data for line plot (include baseline point at (1.0, 0))
-        scale_factors = [1.0] + model_group['scale_factor'].tolist()
+        scale_factors = [1.0] + model_group["scale_factor"].tolist()
         pdiffs = [0.0] + model_group[time_pdiff_col].tolist()
         sorted_indices = np.argsort(scale_factors)
         scale_factors = np.array(scale_factors)[sorted_indices]
         pdiffs = np.array(pdiffs)[sorted_indices]
-        
+
         # Plot line connecting all points for this model type
         axes4.plot(
-            scale_factors, pdiffs, color=line_color, alpha=0.6, linewidth=2,
-            marker='o', markersize=6
+            scale_factors,
+            pdiffs,
+            color=line_color,
+            alpha=0.6,
+            linewidth=2,
+            marker="o",
+            markersize=6,
         )
-        
+
         # Add label at the end of the line with just the base model name
-        last_scale_factor = model_group['scale_factor'].iloc[-1]
+        last_scale_factor = model_group["scale_factor"].iloc[-1]
         last_pdiff = model_group[time_pdiff_col].iloc[-1]
         axes4.annotate(
             base_model,
             (last_scale_factor, last_pdiff),
             xytext=(8, 8),
-            textcoords='offset points',
+            textcoords="offset points",
             fontsize=9,
             alpha=0.9,
-            color='black',
+            color="black",
         )
-    
+
     # Add baseline point at (1.0, 0)
-    axes4.scatter(1.0, 0.0, color='gray', s=100, alpha=0.7, marker='o')
+    axes4.scatter(1.0, 0.0, color="gray", s=100, alpha=0.7, marker="o")
 
     # Add dashed linear reference line: (1.0, 0), (2.0, 100), (4.0, 300)
     ref_x = [1.0, 16.0]
     ref_y = [0, 1500]
-    axes4.plot(ref_x, ref_y, '--', color='gray', alpha=0.8, linewidth=2)
-    
+    axes4.plot(ref_x, ref_y, "--", color="gray", alpha=0.8, linewidth=2)
+
     # save out
     plt.tight_layout()
-    plt.savefig(output_dir / f'{chart_title}.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / f"{chart_title}.png", dpi=300, bbox_inches="tight")
     # plt.show()  # Commented out for headless execution
     print(f"Saved {chart_title}.png'")
 
@@ -353,7 +441,7 @@ def plot_bottleneck_fractions(df: pd.DataFrame, metric: str) -> None:
 
     # Filter to only models with valid scale factors
     df = df[df["scale_factor"].notna()]
-    base_models = df['base_model'].unique()
+    base_models = df["base_model"].unique()
 
     for bottleneck in BOTTLENECKS:
         y_col = f"{bottleneck}_fraction_{metric}"
@@ -362,50 +450,63 @@ def plot_bottleneck_fractions(df: pd.DataFrame, metric: str) -> None:
         ax.set_title(f"{bottleneck} fraction vs scale factor", fontweight="bold")
         ax.set_xlabel("Scale factor")
         ax.set_ylabel(f"{metric.capitalize()} fraction of run_simulation.run()")
-        ax.grid(True, color='lightgray', alpha=0.7, linestyle='-', linewidth=0.5)
+        ax.grid(True, color="lightgray", alpha=0.7, linestyle="-", linewidth=0.5)
 
         for base_model in base_models:
             if base_model == "baseline":
                 continue
-            model_group = df[df['base_model'] == base_model].sort_values('scale_factor')
-            
+            model_group = df[df["base_model"] == base_model].sort_values("scale_factor")
+
             # Get color for this model type
-            first_idx = df[df['base_model'] == base_model].index[0]
+            first_idx = df[df["base_model"] == base_model].index[0]
             line_color = colors[first_idx]
-            
+
             # Prepare data for line plot
-            
-            scale_factors = [1.0] + model_group['scale_factor'].tolist()
-            vals = df.loc[df["base_model"] == "baseline", y_col].tolist() + model_group[y_col].tolist()
+
+            scale_factors = [1.0] + model_group["scale_factor"].tolist()
+            vals = (
+                df.loc[df["base_model"] == "baseline", y_col].tolist()
+                + model_group[y_col].tolist()
+            )
             sorted_indices = np.argsort(scale_factors)
             scale_factors = np.array(scale_factors)[sorted_indices]
             vals = np.array(vals)[sorted_indices]
-            
+
             # Plot line connecting all points for this model type
             ax.plot(
-                scale_factors, vals, color=line_color, alpha=0.6, linewidth=2,
-                marker='o', markersize=6
+                scale_factors,
+                vals,
+                color=line_color,
+                alpha=0.6,
+                linewidth=2,
+                marker="o",
+                markersize=6,
             )
-            
+
             # Add label at the end of the line with just the base model name
-            last_scale_factor = model_group['scale_factor'].iloc[-1]
+            last_scale_factor = model_group["scale_factor"].iloc[-1]
             last_val = model_group[y_col].iloc[-1]
             ax.annotate(
                 base_model,
                 (last_scale_factor, last_val),
                 xytext=(8, 8),
-                textcoords='offset points',
+                textcoords="offset points",
                 fontsize=9,
                 alpha=0.9,
-                color='black',
+                color="black",
             )
 
         # Plot baseline point (scale_factor=1.0) if present
         baseline = df[df["base_model"] == "baseline"]
         if not baseline.empty and y_col in baseline.columns:
             ax.scatter(
-                baseline["scale_factor"], baseline[y_col],
-                color="gray", s=70, marker="o", label="baseline", zorder=3
+                baseline["scale_factor"],
+                baseline[y_col],
+                color="gray",
+                s=70,
+                marker="o",
+                label="baseline",
+                zorder=3,
             )
 
         # Sensible y-limits (fractions should be in [0,1], but leave headroom)
@@ -425,14 +526,15 @@ def plot_bottleneck_fractions(df: pd.DataFrame, metric: str) -> None:
 def group_models_by_type(df: pd.DataFrame) -> pd.DataFrame:
     """Group models by their base type, keeping baseline first."""
     df = df.copy()
-    df["base_model"] = df['model'].str.replace(r'_\d*\.?\d*x.*', '', regex=True)
-    df["scale_factor"] = df["model"].str.extract(r'(\d*\.?\d+)x')[0]
-    df["scale_factor"] = pd.to_numeric(df['scale_factor'], errors='coerce')
+    df["base_model"] = df["model"].str.replace(r"_\d*\.?\d*x.*", "", regex=True)
+    df["scale_factor"] = df["model"].str.extract(r"(\d*\.?\d+)x")[0]
+    df["scale_factor"] = pd.to_numeric(df["scale_factor"], errors="coerce")
     df.loc[df["model"] == "baseline", "scale_factor"] = 1.0
     df = df.sort_values(["base_model", "scale_factor"])
     df = pd.concat([df[df["base_model"] == "baseline"], df[df["base_model"] != "baseline"]])
     df = pd.concat([df[df["scale_factor"].notna()], df[df["scale_factor"].isna()]])
     return df.reset_index(drop=True)
+
 
 def assign_grouped_colors(df: pd.DataFrame) -> list:
     """Assign colors to models, grouping similar types together."""
@@ -442,48 +544,86 @@ def assign_grouped_colors(df: pd.DataFrame) -> list:
     color_mapping = dict(zip(unique_models, model_colors))
     for _, row in df.iterrows():
         if row["base_model"] == "baseline":
-            colors.append('gray')
+            colors.append("gray")
         else:
             colors.append(color_mapping[row["base_model"]])
     return colors
 
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Analyze benchmark results.")
-    parser.add_argument("benchmark_results_filepath", type=str, help="Path to benchmark_results.csv")
+    parser.add_argument(
+        "benchmark_results_filepath", type=str, help="Path to benchmark_results.csv"
+    )
     args = parser.parse_args()
     benchmark_results_filepath = Path(args.benchmark_results_filepath).resolve()
     output_dir = benchmark_results_filepath.parent
     print(f"\nProcessing benchmark results from {benchmark_results_filepath}")
     print(f"Summarizing results to {output_dir}\n")
-    
+
     raw = pd.read_csv(benchmark_results_filepath)
     raw = extract_simulation_call_times(raw, output_dir)
     if not all(raw.notna()):
         raise ValueError("NaNs found in raw data.")
-    
+
     summary = summarize(raw, output_dir)
 
-    bottleneck_cols = [col for col in summary.columns if any(call in col for call in BOTTLENECKS)]
-    benchmark_cols = [col for col in summary.columns if col not in bottleneck_cols and not col.startswith("model")]
+    bottleneck_cols = [
+        col for col in summary.columns if any(call in col for call in BOTTLENECKS)
+    ]
+    benchmark_cols = [
+        col
+        for col in summary.columns
+        if col not in bottleneck_cols and not col.startswith("model")
+    ]
 
     bottlenecks = summary[["model"] + bottleneck_cols]
     benchmarks = summary[["model"] + benchmark_cols]
-    
-    create_figures(benchmarks, "performance_analysis", "rt_s", "mem_mb", "rt_pdiff")
-    
-    create_figures(benchmarks, "runtime_analysis_setup", "rt_setup_s", None, "rt_setup_pdiff")
-    create_figures(benchmarks, "runtime_analysis_initialize_simulants", "rt_initialize_simulants_s", None, "rt_initialize_simulants_pdiff")
-    create_figures(benchmarks, "runtime_analysis_run", "rt_run_s", None, "rt_run_pdiff")
-    create_figures(benchmarks, "runtime_analysis_finalize", "rt_finalize_s", None, "rt_finalize_pdiff")
-    create_figures(benchmarks, "runtime_analysis_report", "rt_report_s", None, "rt_report_pdiff")
-    create_figures(benchmarks, "runtime_analysis_non_run", "rt_non_run_s", None, "rt_non_run_pdiff")
 
-    create_figures(bottlenecks, "bottleneck_runtime_analysis_gather_results", "gather_results_cumtime", None, "gather_results_cumtime_pdiff")
-    create_figures(bottlenecks, "bottleneck_runtime_analysis_pipeline_call", "pipeline_call_cumtime", None, "pipeline_call_cumtime_pdiff")
-    create_figures(bottlenecks, "bottleneck_runtime_analysis_population_get", "population_get_cumtime", None, "population_get_cumtime_pdiff")
+    create_figures(benchmarks, "performance_analysis", "rt_s", "mem_mb", "rt_pdiff")
+
+    create_figures(benchmarks, "runtime_analysis_setup", "rt_setup_s", None, "rt_setup_pdiff")
+    create_figures(
+        benchmarks,
+        "runtime_analysis_initialize_simulants",
+        "rt_initialize_simulants_s",
+        None,
+        "rt_initialize_simulants_pdiff",
+    )
+    create_figures(benchmarks, "runtime_analysis_run", "rt_run_s", None, "rt_run_pdiff")
+    create_figures(
+        benchmarks, "runtime_analysis_finalize", "rt_finalize_s", None, "rt_finalize_pdiff"
+    )
+    create_figures(
+        benchmarks, "runtime_analysis_report", "rt_report_s", None, "rt_report_pdiff"
+    )
+    create_figures(
+        benchmarks, "runtime_analysis_non_run", "rt_non_run_s", None, "rt_non_run_pdiff"
+    )
+
+    create_figures(
+        bottlenecks,
+        "bottleneck_runtime_analysis_gather_results",
+        "gather_results_cumtime",
+        None,
+        "gather_results_cumtime_pdiff",
+    )
+    create_figures(
+        bottlenecks,
+        "bottleneck_runtime_analysis_pipeline_call",
+        "pipeline_call_cumtime",
+        None,
+        "pipeline_call_cumtime_pdiff",
+    )
+    create_figures(
+        bottlenecks,
+        "bottleneck_runtime_analysis_population_get",
+        "population_get_cumtime",
+        None,
+        "population_get_cumtime_pdiff",
+    )
 
     plot_bottleneck_fractions(summary, "median")
-    
+
     print("\n*** FINISHED ***")
-    
