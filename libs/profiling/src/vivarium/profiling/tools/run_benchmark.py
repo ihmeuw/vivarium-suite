@@ -3,6 +3,7 @@
 import glob
 import os
 import re
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -104,7 +105,7 @@ def move_mprof_files(target_dir: str) -> None:
     mprof_files = glob.glob("mprofile_*.dat")
     for file in mprof_files:
         destination = os.path.join(target_dir, file)
-        os.rename(file, destination)
+        shutil.move(file, destination)
 
 
 def get_latest_results_dir(parent_dir: str) -> str | None:
