@@ -1,0 +1,87 @@
+components:
+    vivarium_public_health:
+        population:
+            - BasePopulation()
+            - Mortality()
+            - FertilityCrudeBirthRate()
+        disease:
+            - SIS_fixed_duration("lower_respiratory_infections", "28")
+            # - SIS_fixed_duration("lower_respiratory_infections_2", "28")
+            # - SIS_fixed_duration("lower_respiratory_infections_3", "28")
+            # - SIS_fixed_duration("lower_respiratory_infections_4", "28")
+        risks:
+            # SBP
+            - Risk("risk_factor.high_systolic_blood_pressure")
+            # # NOTE: SBP2-4 are manually-created copies of SBP (they are NOT in the loader)
+            # - Risk("risk_factor.high_systolic_blood_pressure_2")
+            # - Risk("risk_factor.high_systolic_blood_pressure_3")
+            # - Risk("risk_factor.high_systolic_blood_pressure_4")
+            - NonLogLinearRiskEffect("risk_factor.high_systolic_blood_pressure", "cause.lower_respiratory_infections.incidence_rate")
+            # - NonLogLinearRiskEffect("risk_factor.high_systolic_blood_pressure_2", "cause.lower_respiratory_infections.incidence_rate")
+            # - NonLogLinearRiskEffect("risk_factor.high_systolic_blood_pressure_3", "cause.lower_respiratory_infections.incidence_rate")
+            # - NonLogLinearRiskEffect("risk_factor.high_systolic_blood_pressure_4", "cause.lower_respiratory_infections.incidence_rate")
+        
+            # Unsafe water source
+            - Risk("risk_factor.unsafe_water_source")
+            # # NOTE: Unsafe water source 2-4 are manually-created copies of Unsafe water source (they are NOT in the loader)
+            # - Risk("risk_factor.unsafe_water_source_2")
+            # - Risk("risk_factor.unsafe_water_source_3")
+            # - Risk("risk_factor.unsafe_water_source_4")
+            - RiskEffect("risk_factor.unsafe_water_source", "cause.lower_respiratory_infections.incidence_rate")
+            # - RiskEffect("risk_factor.unsafe_water_source_2", "cause.lower_respiratory_infections.incidence_rate")
+            # - RiskEffect("risk_factor.unsafe_water_source_3", "cause.lower_respiratory_infections.incidence_rate")
+            # - RiskEffect("risk_factor.unsafe_water_source_4", "cause.lower_respiratory_infections.incidence_rate")
+        results:
+            - ResultsStratifier()
+            - DisabilityObserver()
+            - MortalityObserver()
+            - DiseaseObserver("lower_respiratory_infections")
+            # - DiseaseObserver("lower_respiratory_infections_2")
+            # - DiseaseObserver("lower_respiratory_infections_3")
+            # - DiseaseObserver("lower_respiratory_infections_4")
+            - CategoricalRiskObserver("unsafe_water_source")
+            # - CategoricalRiskObserver("unsafe_water_source_2")
+            # - CategoricalRiskObserver("unsafe_water_source_3")
+            # - CategoricalRiskObserver("unsafe_water_source_4")
+
+    # Causes an error if left empty. Uncomment when you have components. 
+    # vivarium_profiling.components:
+
+configuration:
+    input_data:
+        input_draw_number: 0
+        artifact_path: '/mnt/team/simulation_science/pub/simulation_profiling/sbachmei/vivarium_profiling/src/vivarium_profiling/data/pakistan.hdf'
+    interpolation:
+        order: 0
+        extrapolate: True
+    randomness:
+        map_size: 1_000_000
+        key_columns: ['entrance_time', 'age']
+        random_seed: 0
+    time:
+        start:
+            year: 2021
+            month: 1
+            day: 1
+        end:
+            year: 2024
+            month: 12
+            day: 31
+        step_size: 28 # Days
+    population:
+        population_size: 10_000
+        initialization_age_min: 0
+        initialization_age_max: 100
+        untracking_age: 110  # hack to prevent untracked stratifications
+
+    stratification:
+        default:
+            - 'age_group'
+            - 'sex'
+            - 'current_year'
+        # disability:
+        #     include:
+        #     exclude:
+        # mortality:
+        #     include:
+        #     exclude:

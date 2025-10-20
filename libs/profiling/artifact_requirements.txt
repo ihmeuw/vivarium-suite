@@ -1,0 +1,20 @@
+# Note: The lines we will return via grep will look like 'package_name>=#.#.#' or will be of the format 
+# 'package_name @ git+https://github.com/ihmeuw/package_name@SOME_BRANCH'
+vivarium>=3.0.0
+vivarium_public_health>=3.0.0
+gbd_mapping>=4.0.0
+click
+jinja2
+loguru
+numpy
+pandas
+pyyaml
+scipy
+tables
+vivarium_inputs>=5.0.0
+vivarium_gbd_access>=4.0.0
+vivarium_cluster_tools>=2.0.0
+black==22.3.0
+isort
+jupyterlab
+matplotlib

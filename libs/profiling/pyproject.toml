@@ -1,0 +1,12 @@
+[build-system]
+requires = ["packaging", "setuptools"]
+
+[tool.black]
+line_length = 94
+
+[tool.isort]
+profile = "black"
+
+# fake git
+[tool.setuptools_scm]
+fallback_version = "0.0.1"
