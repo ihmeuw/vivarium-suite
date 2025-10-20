@@ -242,7 +242,7 @@ def run_single_benchmark(
     return results
 
 
-def run_benchmarks(
+def run_benchmark_loop(
     model_specs: List[str],
     model_runs: int,
     baseline_model_runs: int,

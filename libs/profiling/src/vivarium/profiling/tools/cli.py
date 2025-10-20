@@ -4,7 +4,7 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
-from vivarium_profiling.tools.run_benchmark import expand_model_specs, run_benchmarks
+from vivarium_profiling.tools.run_benchmark import expand_model_specs, run_benchmark_loop
 
 
 @click.command()
@@ -117,5 +117,5 @@ def run_benchmark(
     model_specs = expand_model_specs(list(models))
 
     # Run benchmarks with error handling
-    main = handle_exceptions(run_benchmarks, logger, with_debugger=with_debugger)
+    main = handle_exceptions(run_benchmark_loop, logger, with_debugger=with_debugger)
     main(model_specs, model_runs, baseline_model_runs, output_dir, verbose)
