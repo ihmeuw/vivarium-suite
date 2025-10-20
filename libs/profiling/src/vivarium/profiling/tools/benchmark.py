@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import click
 from loguru import logger
-from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.tools import configure_logging_to_terminal
 
