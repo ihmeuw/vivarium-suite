@@ -250,7 +250,26 @@ def run_benchmark_loop(
     output_dir: str = ".",
     verbose: int = 0,
 ) -> str:
-    """Main function to run benchmarks on model specifications."""
+    """Main function to run benchmarks on model specifications.
+
+    Parameters
+    ----------
+    model_specs
+        List of model specification file paths.
+    model_runs
+        Number of runs for non-baseline models.
+    baseline_model_runs
+        Number of runs for the baseline model.
+    output_dir
+        Directory to save results.
+    verbose
+        Verbosity level for logging.
+
+    Returns
+    -------
+    Path to the results directory.
+
+    """
     configure_logging_to_terminal(verbose)
 
     # Validate inputs
