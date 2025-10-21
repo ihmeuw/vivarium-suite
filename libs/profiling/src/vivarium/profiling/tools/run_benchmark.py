@@ -9,8 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import click
+import pandas as pd
 from loguru import logger
 
 from vivarium_profiling.tools import configure_logging_to_terminal

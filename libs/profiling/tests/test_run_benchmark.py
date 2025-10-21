@@ -2,13 +2,14 @@
 
 import os
 from pathlib import Path
+
 import pandas as pd
 import pytest
 
 from vivarium_profiling.tools.run_benchmark import (
-    run_benchmark_loop,
-    RESULTS_SUMMARY_NAME,
     RESULTS_SUMMARY_COLUMNS,
+    RESULTS_SUMMARY_NAME,
+    run_benchmark_loop,
 )
 
 

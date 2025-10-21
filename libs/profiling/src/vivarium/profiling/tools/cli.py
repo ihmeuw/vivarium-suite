@@ -4,7 +4,10 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
-from vivarium_profiling.tools.run_benchmark import expand_model_specs, run_benchmark_loop
+from vivarium_profiling.tools.run_benchmark import (
+    expand_model_specs,
+    run_benchmark_loop,
+)
 
 
 @click.command()
