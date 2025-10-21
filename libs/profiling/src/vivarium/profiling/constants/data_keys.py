@@ -210,8 +210,12 @@ class __Water(NamedTuple):
     DISTRIBUTION: TargetString = TargetString("risk_factor.unsafe_water_source.distribution")
     EXPOSURE: TargetString = TargetString("risk_factor.unsafe_water_source.exposure")
     CATEGORIES: TargetString = TargetString("risk_factor.unsafe_water_source.categories")
-    RELATIVE_RISK: TargetString = TargetString("risk_factor.unsafe_water_source.relative_risk")
-    PAF: TargetString = TargetString("risk_factor.unsafe_water_source.population_attributable_fraction")
+    RELATIVE_RISK: TargetString = TargetString(
+        "risk_factor.unsafe_water_source.relative_risk"
+    )
+    PAF: TargetString = TargetString(
+        "risk_factor.unsafe_water_source.population_attributable_fraction"
+    )
 
     @property
     def name(self):

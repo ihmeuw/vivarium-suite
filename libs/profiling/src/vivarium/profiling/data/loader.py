@@ -53,7 +53,6 @@ def get_data(
         data_keys.POPULATION.TMRLE: load_theoretical_minimum_risk_life_expectancy,
         data_keys.POPULATION.ACMR: load_standard_data,
         data_keys.POPULATION.LIVE_BIRTH_RATE: load_standard_data,
-
         # Lower Respiratory Infections
         data_keys.LRI.PREVALENCE: load_standard_data,
         data_keys.LRI.INCIDENCE_RATE: load_standard_data,
@@ -62,7 +61,6 @@ def get_data(
         data_keys.LRI.EMR: load_standard_data,
         data_keys.LRI.DISABILITY_WEIGHT: load_standard_data,
         data_keys.LRI.RESTRICTIONS: load_metadata,
-
         # Lower Respiratory Infections 2
         data_keys.LRI2.PREVALENCE: load_standard_data_duplicate_key,
         data_keys.LRI2.INCIDENCE_RATE: load_standard_data_duplicate_key,
@@ -71,7 +69,6 @@ def get_data(
         data_keys.LRI2.EMR: load_standard_data_duplicate_key,
         data_keys.LRI2.DISABILITY_WEIGHT: load_standard_data_duplicate_key,
         data_keys.LRI2.RESTRICTIONS: load_metadata_duplicate_key,
-
         # Lower Respiratory Infections 3
         data_keys.LRI3.PREVALENCE: load_standard_data_duplicate_key,
         data_keys.LRI3.INCIDENCE_RATE: load_standard_data_duplicate_key,
@@ -80,7 +77,6 @@ def get_data(
         data_keys.LRI3.EMR: load_standard_data_duplicate_key,
         data_keys.LRI3.DISABILITY_WEIGHT: load_standard_data_duplicate_key,
         data_keys.LRI3.RESTRICTIONS: load_metadata_duplicate_key,
-
         # Lower Respiratory Infections 4
         data_keys.LRI4.PREVALENCE: load_standard_data_duplicate_key,
         data_keys.LRI4.INCIDENCE_RATE: load_standard_data_duplicate_key,
@@ -89,7 +85,6 @@ def get_data(
         data_keys.LRI4.EMR: load_standard_data_duplicate_key,
         data_keys.LRI4.DISABILITY_WEIGHT: load_standard_data_duplicate_key,
         data_keys.LRI4.RESTRICTIONS: load_metadata_duplicate_key,
-
         # High systolic blood pressure
         data_keys.SBP.DISTRIBUTION: load_metadata,
         data_keys.SBP.EXPOSURE_MEAN: load_standard_data,
@@ -99,10 +94,8 @@ def get_data(
         data_keys.SBP.PAF: load_standard_data,
         data_keys.SBP.TMRED: load_metadata,
         data_keys.SBP.RELATIVE_RISK_SCALAR: load_metadata,
-
         # High systolic blood pressure 2 - 4
         #   copied manually from SBP above in artifact
-
         # Unsafe water source
         data_keys.WATER.DISTRIBUTION: load_metadata,
         data_keys.WATER.EXPOSURE: load_standard_data,
