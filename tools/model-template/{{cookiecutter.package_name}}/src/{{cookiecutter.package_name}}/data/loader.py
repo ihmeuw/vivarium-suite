@@ -50,7 +50,7 @@ def get_data(
         data_keys.POPULATION.AGE_BINS: load_age_bins,
         data_keys.POPULATION.DEMOGRAPHY: load_demographic_dimensions,
         data_keys.POPULATION.TMRLE: load_theoretical_minimum_risk_life_expectancy,
-        data_keys.POPULATION.ACMR: load_standard_data,
+        data_keys.POPULATION.ACMR: interface.load_standard_data,
         # TODO - add appropriate mappings
         # data_keys.DIARRHEA.PREVALENCE: load_standard_data,
         # data_keys.DIARRHEA.INCIDENCE_RATE: load_standard_data,
@@ -96,17 +96,9 @@ def load_theoretical_minimum_risk_life_expectancy(
     return interface.get_theoretical_minimum_risk_life_expectancy()
 
 
-def load_standard_data(
-    key: str, location: str, years: int | str | list[int] | None = None
-) -> pd.DataFrame:
-    key = EntityKey(key)
-    entity = get_entity(key)
-    return interface.get_measure(entity, key.measure, location, years).droplevel("location")
-
-
 def load_metadata(key: str, location: str, years: int | str | list[int] | None = None):
     key = EntityKey(key)
-    entity = get_entity(key)
+    entity = vi_utils.get_entity(key)
     entity_metadata = entity[key.measure]
     if hasattr(entity_metadata, "to_dict"):
         entity_metadata = entity_metadata.to_dict()
@@ -159,15 +151,3 @@ def _load_em_from_meid(location, meid, measure):
 
 
 # TODO - add project-specific data functions here
-
-
-def get_entity(key: str | EntityKey):
-    # Map of entity types to their gbd mappings.
-    type_map = {
-        "cause": causes,
-        "covariate": covariates,
-        "risk_factor": risk_factors,
-        "alternative_risk_factor": alternative_risk_factors,
-    }
-    key = EntityKey(key)
-    return type_map[key.type][key.name]
