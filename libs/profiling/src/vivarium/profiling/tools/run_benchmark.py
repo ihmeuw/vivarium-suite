@@ -32,28 +32,6 @@ RESULTS_SUMMARY_COLUMNS = [
 ]
 
 
-def expand_model_specs(model_patterns: list[str]) -> list[Path]:
-    """Expand glob patterns and validate model spec files."""
-    models = []
-    for pattern in model_patterns:
-        expanded = glob.glob(pattern)
-        if expanded:
-            # Filter to only include files that exist
-            models.extend([Path(f) for f in expanded if Path(f).is_file()])
-        else:
-            # If no glob match, check if it's a direct file path
-            path = Path(pattern)
-            if path.is_file():
-                models.append(path)
-
-    if not models:
-        raise click.ClickException(
-            f"No model specification files found for patterns: {model_patterns}"
-        )
-
-    return models
-
-
 def validate_baseline_model(models: list[Path]) -> None:
     """Validate that one of the model specs is the baseline."""
     baseline_found = "model_spec_baseline.yaml" in [model.name for model in models]

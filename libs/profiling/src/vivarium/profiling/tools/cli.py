@@ -4,10 +4,9 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
-from vivarium_profiling.tools.run_benchmark import (
-    expand_model_specs,
-    run_benchmark_loop,
-)
+from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
+import glob
+from pathlib import Path
 
 
 @click.command()
@@ -117,8 +116,30 @@ def run_benchmark(
         run_benchmark -m "model_spec_baseline.yaml" -m "model_spec_*.yaml" -r 10 -b 20
     """
     # Expand model patterns
-    model_specifications = expand_model_specs(list(model_specifications))
+    model_specifications = _expand_model_specs(list(model_specifications))
 
     # Run benchmarks with error handling
     main = handle_exceptions(run_benchmark_loop, logger, with_debugger=with_debugger)
     main(model_specifications, model_runs, baseline_model_runs, output_dir, verbose)
+
+
+def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
+    """Expand glob patterns and validate model spec files."""
+    models = []
+    for pattern in model_patterns:
+        expanded = glob.glob(pattern)
+        if expanded:
+            # Filter to only include files that exist
+            models.extend([Path(f) for f in expanded if Path(f).is_file()])
+        else:
+            # If no glob match, check if it's a direct file path
+            path = Path(pattern)
+            if path.is_file():
+                models.append(path)
+
+    if not models:
+        raise click.ClickException(
+            f"No model specification files found for patterns: {model_patterns}"
+        )
+
+    return models
