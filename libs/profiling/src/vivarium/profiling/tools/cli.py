@@ -114,7 +114,7 @@ def run_benchmark(
     and memory usage statistics. Results are saved to a timestamped CSV file.
 
     Example usage:
-        benchmark -m "model_spec_baseline.yaml" -m "model_spec_*.yaml" -r 10 -b 20
+        run_benchmark -m "model_spec_baseline.yaml" -m "model_spec_*.yaml" -r 10 -b 20
     """
     # Expand model patterns
     model_specs = expand_model_specs(list(models))
