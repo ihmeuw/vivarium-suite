@@ -245,7 +245,7 @@ def run_single_benchmark(
 
 
 def run_benchmark_loop(
-    model_specs: list[Path],
+    model_specifications: list[Path],
     model_runs: int,
     baseline_model_runs: int,
     output_dir: str = ".",
@@ -274,19 +274,19 @@ def run_benchmark_loop(
     configure_logging_to_terminal(verbose)
 
     # Validate inputs
-    validate_baseline_model(model_specs)
+    validate_baseline_model(model_specifications)
 
     # Create results directory and initialize results file
     results_dir = create_results_directory(output_dir)
     results_file = initialize_results_file(results_dir)
 
     logger.info("Running benchmarks:")
-    logger.info(f"  Model Specs: {model_specs}")
+    logger.info(f"  Model Specs: {model_specifications}")
     logger.info(f"  Runs: {model_runs} ({baseline_model_runs} for baseline)")
     logger.info(f"  Results Directory: {results_dir}")
 
     # Run benchmarks for each specification
-    for spec in model_specs:
+    for spec in model_specifications:
         logger.info(f"Running {spec}...")
 
         model_spec_name = spec.stem

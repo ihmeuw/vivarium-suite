@@ -33,7 +33,7 @@ def test_run_benchmark_loop_integration(test_model_specs: list[Path], tmp_path: 
 
     # Run the benchmark
     results_dir = run_benchmark_loop(
-        model_specs=test_model_specs,
+        model_specifications=test_model_specs,
         model_runs=model_runs,
         baseline_model_runs=baseline_runs,
         output_dir=output_dir,
@@ -99,7 +99,7 @@ def test_run_benchmark_loop_validation_error(test_model_specs: list[Path], tmp_p
         match="Error: One of the model specs must be 'model_spec_baseline.yaml'.",
     ):  # Should raise ClickException about missing baseline
         run_benchmark_loop(
-            model_specs=model_specs,
+            model_specifications=model_specs,
             model_runs=2,
             baseline_model_runs=2,
             output_dir=output_dir,

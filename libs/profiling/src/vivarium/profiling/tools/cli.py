@@ -101,7 +101,7 @@ def make_artifacts(
     help="Drop into python debugger if an error occurs.",
 )
 def run_benchmark(
-    models: tuple[str, ...],
+    model_specifications: tuple[str, ...],
     model_runs: int,
     baseline_model_runs: int,
     output_dir: str,
@@ -117,8 +117,8 @@ def run_benchmark(
         run_benchmark -m "model_spec_baseline.yaml" -m "model_spec_*.yaml" -r 10 -b 20
     """
     # Expand model patterns
-    model_specs = expand_model_specs(list(models))
+    model_specifications = expand_model_specs(list(model_specifications))
 
     # Run benchmarks with error handling
     main = handle_exceptions(run_benchmark_loop, logger, with_debugger=with_debugger)
-    main(model_specs, model_runs, baseline_model_runs, output_dir, verbose)
+    main(model_specifications, model_runs, baseline_model_runs, output_dir, verbose)
