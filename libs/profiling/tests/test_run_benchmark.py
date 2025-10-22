@@ -14,7 +14,7 @@ from vivarium_profiling.tools.run_benchmark import (
 
 
 @pytest.mark.slow
-def test_run_benchmark_loop_integration(test_model_specs: list[str], tmp_path: Path):
+def test_run_benchmark_loop_integration(test_model_specs: list[Path], tmp_path: Path):
     """Integration test for run_benchmark_loop with minimal real model specs.
 
     This test verifies that:
@@ -86,7 +86,7 @@ def test_run_benchmark_loop_integration(test_model_specs: list[str], tmp_path: P
         ), f"Model spec directory {spec_path} should contain results"
 
 
-def test_run_benchmark_loop_validation_error(test_model_specs, tmp_path):
+def test_run_benchmark_loop_validation_error(test_model_specs: list[Path], tmp_path: Path):
     """Test that benchmark fails appropriately when baseline model is missing."""
     output_dir = str(tmp_path / "validation_test")
     Path(output_dir).mkdir(parents=True, exist_ok=True)

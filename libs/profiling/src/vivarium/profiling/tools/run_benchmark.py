@@ -32,18 +32,19 @@ RESULTS_SUMMARY_COLUMNS = [
 ]
 
 
-def expand_model_specs(model_patterns: list[str]) -> list[str]:
+def expand_model_specs(model_patterns: list[str]) -> list[Path]:
     """Expand glob patterns and validate model spec files."""
     models = []
     for pattern in model_patterns:
         expanded = glob.glob(pattern)
         if expanded:
             # Filter to only include files that exist
-            models.extend([f for f in expanded if Path(f).is_file()])
+            models.extend([Path(f) for f in expanded if Path(f).is_file()])
         else:
             # If no glob match, check if it's a direct file path
-            if Path(pattern).is_file():
-                models.append(pattern)
+            path = Path(pattern)
+            if path.is_file():
+                models.append(path)
 
     if not models:
         raise click.ClickException(
@@ -53,9 +54,9 @@ def expand_model_specs(model_patterns: list[str]) -> list[str]:
     return models
 
 
-def validate_baseline_model(models: list[str]) -> None:
+def validate_baseline_model(models: list[Path]) -> None:
     """Validate that one of the model specs is the baseline."""
-    baseline_found = any("model_spec_baseline.yaml" in model for model in models)
+    baseline_found = "model_spec_baseline.yaml" in [model.name for model in models]
     if not baseline_found:
         raise click.ClickException(
             "Error: One of the model specs must be 'model_spec_baseline.yaml'."
@@ -244,7 +245,7 @@ def run_single_benchmark(
 
 
 def run_benchmark_loop(
-    model_specs: list[str],
+    model_specs: list[Path],
     model_runs: int,
     baseline_model_runs: int,
     output_dir: str = ".",
@@ -288,12 +289,12 @@ def run_benchmark_loop(
     for spec in model_specs:
         logger.info(f"Running {spec}...")
 
-        model_spec_name = Path(spec).stem
+        model_spec_name = spec.stem
         spec_specific_results_dir = Path(results_dir) / model_spec_name
         spec_specific_results_dir.mkdir(parents=True, exist_ok=True)
 
         # Determine number of runs
-        if "model_spec_baseline.yaml" in spec:
+        if spec.name == "model_spec_baseline.yaml":
             num_runs = baseline_model_runs
         else:
             num_runs = model_runs
@@ -302,7 +303,7 @@ def run_benchmark_loop(
         for run in range(1, num_runs + 1):
             try:
                 results = run_single_benchmark(
-                    spec, run, num_runs, spec_specific_results_dir, model_spec_name
+                    str(spec), run, num_runs, str(spec_specific_results_dir), model_spec_name
                 )
                 result_df = pd.DataFrame([results])
                 result_df.to_csv(results_file, mode="a", header=False, index=False)

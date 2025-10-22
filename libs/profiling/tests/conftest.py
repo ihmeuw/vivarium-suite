@@ -24,7 +24,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture
-def test_model_specs(tmp_path):
+def test_model_specs(tmp_path) -> list[Path]:
     """Create minimal test model specification files in a temporary directory."""
 
     # Baseline model specification
@@ -58,4 +58,4 @@ configuration:
     baseline_file.write_text(baseline_spec)
     other_spec_file.write_text(other_spec)
 
-    return [str(baseline_file), str(other_spec_file)]
+    return [baseline_file, other_spec_file]
