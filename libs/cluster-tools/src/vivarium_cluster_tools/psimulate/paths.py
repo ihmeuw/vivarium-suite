@@ -179,7 +179,7 @@ class OutputPaths(NamedTuple):
         command: str,
         input_artifact_path: Path | None,
         result_directory: Path,
-        input_model_spec_path: Path,
+        input_model_spec_path: Path | None,
     ) -> "OutputPaths":
         """Create an instance of OutputPaths from the arguments passed to the entry point.
 
@@ -203,6 +203,10 @@ class OutputPaths(NamedTuple):
 
         output_directory = result_directory
         if command == COMMANDS.run:
+            if input_model_spec_path is None:
+                raise ValueError(
+                    "Model specification path must be provided for 'run' command."
+                )
             model_name = get_output_model_name_string(
                 input_artifact_path, input_model_spec_path
             )

@@ -194,12 +194,6 @@ def main(
     cluster.validate_cluster_environment()
 
     # Generate programmatic representation of the output directory structure
-    # FIXME [MIC-6302]: 'psimulate test' is broken.
-    #     This is one place it's broken. psimulate test does NOT require a model
-    #     specification but 'from_entry_point_args' requires one.
-    #     Temporarily add this check for mypy
-    if input_paths.model_specification is None:
-        raise ValueError("Model specification path is required but was None")
     output_paths = paths.OutputPaths.from_entry_point_args(
         command=command,
         input_artifact_path=input_paths.artifact,
