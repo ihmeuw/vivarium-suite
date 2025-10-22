@@ -40,10 +40,10 @@ def expand_model_specs(model_patterns: list[str]) -> list[str]:
         expanded = glob.glob(pattern)
         if expanded:
             # Filter to only include files that exist
-            models.extend([f for f in expanded if os.path.isfile(f)])
+            models.extend([f for f in expanded if Path(f).is_file()])
         else:
             # If no glob match, check if it's a direct file path
-            if os.path.isfile(pattern):
+            if Path(pattern).is_file():
                 models.append(pattern)
 
     if not models:
@@ -66,17 +66,17 @@ def validate_baseline_model(models: list[str]) -> None:
 def create_results_directory(output_dir: str = ".") -> str:
     """Create a timestamped results directory."""
     timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    results_dir = os.path.join(output_dir, f"profile_{timestamp}")
+    results_dir = Path(output_dir) / f"profile_{timestamp}"
     os.makedirs(results_dir, exist_ok=True)
-    return results_dir
+    return str(results_dir)
 
 
 def initialize_results_file(results_dir: str) -> str:
     """Initialize the CSV results file with headers."""
-    results_file = os.path.join(results_dir, RESULTS_SUMMARY_NAME)
+    results_file = Path(results_dir) / RESULTS_SUMMARY_NAME
     df = pd.DataFrame(columns=RESULTS_SUMMARY_COLUMNS)
     df.to_csv(results_file, index=False)
-    return results_file
+    return str(results_file)
 
 
 def run_memory_profiler(spec: str, output_dir: str) -> None:
@@ -104,14 +104,15 @@ def move_mprof_files(target_dir: str) -> None:
     """Move memory profiler data files to the target directory."""
     mprof_files = glob.glob("mprofile_*.dat")
     for file in mprof_files:
-        destination = os.path.join(target_dir, file)
+        destination = Path(target_dir) / file
         shutil.move(file, destination)
 
 
 def get_latest_results_dir(parent_dir: str) -> str | None:
     """Get the most recent results directory."""
     try:
-        dirs = [d for d in glob.glob(os.path.join(parent_dir, "*/")) if os.path.isdir(d)]
+        parent_path = Path(parent_dir)
+        dirs = [str(d) for d in parent_path.glob("*/") if d.is_dir()]
         if dirs:
             return sorted(dirs)[-1]
     except Exception as e:
@@ -197,7 +198,7 @@ def run_single_benchmark(
     move_mprof_files(current_results_dir)
 
     # Get runtime and function metrics
-    stats_file = os.path.join(current_results_dir, f"{model_spec_name}.stats")
+    stats_file = Path(current_results_dir) / f"{model_spec_name}.stats"
     stats_file_txt = f"{stats_file}.txt"
 
     rt_s = extract_runtime(stats_file_txt)
@@ -267,7 +268,7 @@ def run_benchmark_loop(
 
     Returns
     -------
-    Path to the results directory.
+        Path to the results directory.
 
     """
     configure_logging_to_terminal(verbose)
@@ -289,7 +290,7 @@ def run_benchmark_loop(
         logger.info(f"Running {spec}...")
 
         model_spec_name = Path(spec).stem
-        spec_specific_results_dir = os.path.join(results_dir, model_spec_name)
+        spec_specific_results_dir = Path(results_dir) / model_spec_name
         os.makedirs(spec_specific_results_dir, exist_ok=True)
 
         # Determine number of runs
