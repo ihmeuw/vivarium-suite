@@ -1,3 +1,6 @@
+import glob
+from pathlib import Path
+
 import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
@@ -5,8 +8,6 @@ from vivarium.framework.utilities import handle_exceptions
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
 from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
-import glob
-from pathlib import Path
 
 
 @click.command()
