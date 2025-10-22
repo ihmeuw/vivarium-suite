@@ -53,8 +53,15 @@ def configure_logging_to_terminal(verbose: int):
         Verbosity of the logger.
 
     """
-    logger.remove(0)  # Clear default configuration
+    _clear_default_configuration()
     add_logging_sink(sys.stdout, verbose, colorize=True)
+
+
+def _clear_default_configuration() -> None:
+    try:
+        logger.remove(0)  # Clear default configuration
+    except ValueError:
+        pass
 
 
 def decode_status(drmaa, job_status):
