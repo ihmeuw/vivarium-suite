@@ -1,3 +1,7 @@
+**2.1.22 - 10/22/25**
+
+  - Bugfix: Move model spec missing error to only raise for run command
+
 **2.1.21 - 10/03/25**
 
   - Stop logging redis job fetching and deserializing
