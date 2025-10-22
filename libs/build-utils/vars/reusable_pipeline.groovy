@@ -85,6 +85,7 @@ def call(Map config = [:]){
         // time we run pip, poetry, etc.
         ACTIVATE_BASE = "source ${CONDA_BIN_PATH}/activate &> /dev/null"
         IS_DOC_ONLY_CHANGE = "${is_doc_only_change()}"
+        IS_CHANGELOG_ONLY_COMMIT = "${is_changelog_only_commit()}"
     }
 
     agent { label "coordinator" }
@@ -154,8 +155,15 @@ def call(Map config = [:]){
       }
 
       stage("Python Versions") {
+        // Skip builds if this commit only contains changelog changes
+        when {
+          not {
+            environment name: 'IS_CHANGELOG_ONLY_COMMIT', value: 'true'
+          }
+        }
         steps {
           script {
+            
             def buildStages = build_stages()
             
             def parallelPythonVersions = [:]

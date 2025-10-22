@@ -1,3 +1,7 @@
+**2.0.12 - 10/22/2025**
+
+  - Skip Jenkins builds for CHANGELOG-only commits
+
 **2.0.11 - 10/7/2025**
 
   - Stop cacheing secondary uv pip install
