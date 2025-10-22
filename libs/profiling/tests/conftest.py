@@ -44,7 +44,7 @@ configuration:
         end:
             year: 2022
             month: 1
-            day: 2  # Single timestep (28 days)
+            day: 2  # Single timestep (1 days)
         step_size: 1 # Days
     population:
         population_size: 10  # Small population for fast testing
