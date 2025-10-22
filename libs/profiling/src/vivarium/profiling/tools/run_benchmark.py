@@ -1,7 +1,6 @@
 """Benchmarking functionality for profiling Vivarium models."""
 
 import glob
-import os
 import re
 import shutil
 import subprocess
@@ -67,7 +66,7 @@ def create_results_directory(output_dir: str = ".") -> str:
     """Create a timestamped results directory."""
     timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     results_dir = Path(output_dir) / f"profile_{timestamp}"
-    os.makedirs(results_dir, exist_ok=True)
+    results_dir.mkdir(parents=True, exist_ok=True)
     return str(results_dir)
 
 
@@ -291,7 +290,7 @@ def run_benchmark_loop(
 
         model_spec_name = Path(spec).stem
         spec_specific_results_dir = Path(results_dir) / model_spec_name
-        os.makedirs(spec_specific_results_dir, exist_ok=True)
+        spec_specific_results_dir.mkdir(parents=True, exist_ok=True)
 
         # Determine number of runs
         if "model_spec_baseline.yaml" in spec:
