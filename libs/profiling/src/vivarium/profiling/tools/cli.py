@@ -1,9 +1,13 @@
+import glob
+from pathlib import Path
+
 import click
 from loguru import logger
 from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
+from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
 
 
 @click.command()
@@ -57,3 +61,86 @@ def make_artifacts(
     configure_logging_to_terminal(verbose)
     main = handle_exceptions(build_artifacts, logger, with_debugger=with_debugger)
     main(location, years, output_dir, append or replace_keys, replace_keys, verbose)
+
+
+@click.command()
+@click.option(
+    "-m",
+    "--models",
+    multiple=True,
+    required=True,
+    help="Model specification files (supports glob patterns). Can be specified multiple times.",
+)
+@click.option(
+    "-r",
+    "--model-runs",
+    type=int,
+    required=True,
+    help="Number of runs for non-baseline models.",
+)
+@click.option(
+    "-b",
+    "--baseline-model-runs",
+    type=int,
+    required=True,
+    help="Number of runs for baseline model.",
+)
+@click.option(
+    "-o",
+    "--output-dir",
+    default=".",
+    show_default=True,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Directory where the timestamped results directory will be created.",
+)
+@click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
+@click.option(
+    "--pdb",
+    "with_debugger",
+    is_flag=True,
+    help="Drop into python debugger if an error occurs.",
+)
+def run_benchmark(
+    model_specifications: tuple[str, ...],
+    model_runs: int,
+    baseline_model_runs: int,
+    output_dir: str,
+    verbose: int,
+    with_debugger: bool,
+) -> None:
+    """Run benchmarks on Vivarium model specifications.
+
+    This command profiles multiple model specifications and collects runtime
+    and memory usage statistics. Results are saved to a timestamped CSV file.
+
+    Example usage:
+        run_benchmark -m "model_spec_baseline.yaml" -m "model_spec_*.yaml" -r 10 -b 20
+    """
+    # Expand model patterns
+    model_specifications = _expand_model_specs(list(model_specifications))
+
+    # Run benchmarks with error handling
+    main = handle_exceptions(run_benchmark_loop, logger, with_debugger=with_debugger)
+    main(model_specifications, model_runs, baseline_model_runs, output_dir, verbose)
+
+
+def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
+    """Expand glob patterns and validate model spec files."""
+    models = []
+    for pattern in model_patterns:
+        expanded = glob.glob(pattern)
+        if expanded:
+            # Filter to only include files that exist
+            models.extend([Path(f) for f in expanded if Path(f).is_file()])
+        else:
+            # If no glob match, check if it's a direct file path
+            path = Path(pattern)
+            if path.is_file():
+                models.append(path)
+
+    if not models:
+        raise click.ClickException(
+            f"No model specification files found for patterns: {model_patterns}"
+        )
+
+    return models
