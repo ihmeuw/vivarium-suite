@@ -131,12 +131,20 @@ mypy: # Check for type hinting errors
 
 .PHONY: build-docs
 build-docs: # Build documentation
-	rm -rf docs/build/
-	$(MAKE) -C docs/ html SPHINXOPTS="-T -W --keep-going"
+	@if [ -d docs/ ]; then \
+		rm -rf docs/build/; \
+		$(MAKE) -C docs/ html SPHINXOPTS="-T -W --keep-going"; \
+	else \
+		echo "No 'docs/' folder found - skipping."; \
+	fi
 
 .PHONY: test-docs
 test-docs: # Test documentation examples
-	$(MAKE) doctest -C docs/
+	@if [ -d docs/ ]; then \
+		$(MAKE) doctest -C docs/; \
+	else \
+		echo "No 'docs/' folder found - skipping."; \
+	fi
 
 .PHONY: tag-version
 tag-version: # Tag current version and push to git

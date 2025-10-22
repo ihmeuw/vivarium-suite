@@ -1,6 +1,7 @@
 **2.0.12 - 10/22/2025**
 
   - Skip Jenkins builds for CHANGELOG-only commits
+  - Skip doc checks if there is no docs/ directory
 
 **2.0.11 - 10/7/2025**
 
