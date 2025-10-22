@@ -1,6 +1,5 @@
 """Integration test for run_benchmark module."""
 
-import os
 from pathlib import Path
 
 import click
@@ -26,7 +25,7 @@ def test_run_benchmark_loop_integration(test_model_specs: list[str], tmp_path: P
     """
     # Use a temporary directory for output
     output_dir = str(tmp_path / "benchmark_output")
-    os.makedirs(output_dir, exist_ok=True)
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # Test parameters
     model_runs = 2
@@ -41,11 +40,11 @@ def test_run_benchmark_loop_integration(test_model_specs: list[str], tmp_path: P
         verbose=0,  # Minimal logging for tests
     )
 
-    assert os.path.exists(results_dir)
+    assert Path(results_dir).exists()
     assert results_dir.startswith(output_dir)
 
-    results_file = os.path.join(results_dir, RESULTS_SUMMARY_NAME)
-    assert os.path.exists(results_file)
+    results_file = Path(results_dir) / RESULTS_SUMMARY_NAME
+    assert results_file.exists()
 
     results_df = pd.read_csv(results_file)
 
@@ -78,10 +77,10 @@ def test_run_benchmark_loop_integration(test_model_specs: list[str], tmp_path: P
     expected_spec_dirs = ["model_spec_baseline", "model_spec_other"]
 
     for spec_dir in expected_spec_dirs:
-        spec_path = os.path.join(results_dir, spec_dir)
-        assert os.path.exists(spec_path), f"Model spec directory {spec_path} should exist"
+        spec_path = Path(results_dir) / spec_dir
+        assert spec_path.exists(), f"Model spec directory {spec_path} should exist"
 
-        spec_contents = os.listdir(spec_path)
+        spec_contents = list(spec_path.iterdir())
         assert (
             len(spec_contents) > 0
         ), f"Model spec directory {spec_path} should contain results"
@@ -90,7 +89,7 @@ def test_run_benchmark_loop_integration(test_model_specs: list[str], tmp_path: P
 def test_run_benchmark_loop_validation_error(test_model_specs, tmp_path):
     """Test that benchmark fails appropriately when baseline model is missing."""
     output_dir = str(tmp_path / "validation_test")
-    os.makedirs(output_dir, exist_ok=True)
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # Try to run without baseline model - should raise exception
     model_specs = test_model_specs[1:]
