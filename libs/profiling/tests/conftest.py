@@ -49,12 +49,13 @@ configuration:
     population:
         population_size: 10  # Small population for fast testing
 """
+    other_spec = baseline_spec.replace("year: 2022", "year: 2023")
 
     # Create spec files
     baseline_file = tmp_path / "model_spec_baseline.yaml"
     other_spec_file = tmp_path / "model_spec_other.yaml"
 
     baseline_file.write_text(baseline_spec)
-    other_spec_file.write_text(baseline_spec)
+    other_spec_file.write_text(other_spec)
 
     return [str(baseline_file), str(other_spec_file)]
