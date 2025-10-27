@@ -1,3 +1,7 @@
+**2.1.23 - 10/27/25**
+
+  - Bugfix: Deep copy branch_configuration when making sim_config property
+
 **2.1.22 - 10/22/25**
 
   - Bugfix: Move model spec missing error to only raise for run command

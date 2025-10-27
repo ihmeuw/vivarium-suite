@@ -6,6 +6,7 @@ psimulate Jobs
 """
 
 from collections import defaultdict
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -48,7 +49,7 @@ class JobParameters(NamedTuple):
     @property
     def sim_config(self) -> dict[str, Any]:
         """Parameters for the simulation configuration."""
-        config = defaultdict(dict, self.branch_configuration)
+        config = defaultdict(dict, deepcopy(self.branch_configuration))
         config["randomness"]["random_seed"] = self.random_seed
         config["input_data"]["input_draw_number"] = self.input_draw
         return dict(config)
