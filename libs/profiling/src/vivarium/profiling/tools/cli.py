@@ -1,13 +1,147 @@
 import glob
+import pstats
+import subprocess
+from datetime import datetime as dt
 from pathlib import Path
 
 import click
 from loguru import logger
+from vivarium.framework.logging import configure_logging_to_file
 from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
 from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
+
+
+@click.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+@click.argument(
+    "model_specification",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+)
+@click.option(
+    "--results_directory",
+    "-o",
+    type=click.Path(resolve_path=True),
+    default=Path("~/vivarium_results/").expanduser(),
+    show_default=True,
+    help=(
+        "The directory to write results to. A folder will be created "
+        "in this directory with the same name as the configuration file."
+    ),
+)
+@click.option(
+    "--skip_writing",
+    is_flag=True,
+    help=(
+        "Skip writing the simulation results to the output directory; the time spent "
+        "normally writing simulation results to disk will not be included in the profiling "
+        "statistics."
+    ),
+)
+@click.option(
+    "--skip_processing",
+    is_flag=True,
+    help=(
+        "Skip processing the resulting binary file to a human-readable .txt file "
+        "sorted by cumulative runtime; the resulting .stats file can still be read "
+        "and processed later using the pstats module."
+    ),
+)
+@click.option(
+    "--profiler",
+    type=click.Choice(["cprofile", "scalene"]),
+    default="cprofile",
+    show_default=True,
+    help=(
+        "Profiling backend to use. cProfile provides the most detaile function-level"
+        "runtime information, while scalene provides detailed annotation of source"
+        "code that may be the source of bottlenecks."
+    ),
+)
+@click.pass_context
+def profile_sim(
+    ctx: click.Context,
+    model_specification: Path,
+    results_directory: Path,
+    skip_writing: bool,
+    skip_processing: bool,
+    profiler: str,
+) -> None:
+    """Run a simulation based on the provided MODEL_SPECIFICATION and profile the run."""
+    model_specification = Path(model_specification)
+    results_directory = Path(results_directory)
+    results_root = results_directory / f"{dt.now().strftime('%Y_%m_%d_%H_%M_%S')}"
+    configure_logging_to_file(output_directory=results_root)
+
+    if skip_writing:
+        configuration_override = {}
+    else:
+        output_data_root = results_root / "results"
+        output_data_root.mkdir(parents=True, exist_ok=False)
+        configuration_override = {
+            "output_data": {"results_directory": str(output_data_root)},
+        }
+
+    script_path = Path(__file__).parent / "run_profile.py"
+
+    config_str = repr(configuration_override)
+
+    # Get any extra arguments passed to the profiler
+    extra_args = ctx.args
+
+    if profiler == "scalene":
+        out_json_file = results_root / f"{model_specification.name}".replace("yaml", "json")
+        try:
+            cmd = [
+                "scalene",
+                "--json",
+                "--outfile",
+                str(out_json_file),
+                "--off",
+            ]
+            # Add any additional profiler arguments
+            cmd.extend(extra_args)
+            cmd.extend(
+                [
+                    str(script_path),
+                    str(model_specification),
+                    "--config-override",
+                    config_str,
+                ]
+            )
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Scalene profiling failed: {e}")
+            raise
+    elif profiler == "cprofile":
+        out_stats_file = results_root / f"{model_specification.name}".replace("yaml", "stats")
+        try:
+            subprocess.run(
+                [
+                    "python",
+                    str(script_path),
+                    str(model_specification),
+                    "--config-override",
+                    config_str,
+                    "--profiler",
+                    "cprofile",
+                    "--output",
+                    str(out_stats_file),
+                ],
+                check=True,
+            )
+
+            if not skip_processing:
+                out_txt_file = Path(str(out_stats_file) + ".txt")
+                with out_txt_file.open("w") as f:
+                    p = pstats.Stats(str(out_stats_file), stream=f)
+                    p.sort_stats("cumulative")
+                    p.print_stats()
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"cProfile profiling failed: {e}")
+            raise
 
 
 @click.command()
@@ -66,7 +200,7 @@ def make_artifacts(
 @click.command()
 @click.option(
     "-m",
-    "--models",
+    "--model_specifications",
     multiple=True,
     required=True,
     help="Model specification files (supports glob patterns). Can be specified multiple times.",

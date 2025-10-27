@@ -53,6 +53,7 @@ if __name__ == "__main__":
         "memory_profiler",
         "matplotlib",
         "seaborn",
+        "scalene",
     ]
 
     setup_requires = ["setuptools_scm"]
@@ -96,5 +97,6 @@ if __name__ == "__main__":
             [console_scripts]
             make_artifacts=vivarium_profiling.tools.cli:make_artifacts
             run_benchmark=vivarium_profiling.tools.cli:run_benchmark
+            profile_sim=vivarium_profiling.tools.cli:profile_sim
         """,
     )

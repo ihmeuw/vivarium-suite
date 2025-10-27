@@ -59,7 +59,7 @@ def initialize_results_file(results_dir: str) -> str:
 
 def run_memory_profiler(spec: str, output_dir: str) -> None:
     """Run memory profiler on a model specification."""
-    cmd = ["mprof", "run", "-CM", "simulate", "profile", spec, "-o", output_dir]
+    cmd = ["mprof", "run", "-CM", "profile_sim", spec, "-o", output_dir]
     result = subprocess.run(cmd, check=True, capture_output=False)
     if result.returncode != 0:
         raise click.ClickException(f"Memory profiler failed for {spec}")
