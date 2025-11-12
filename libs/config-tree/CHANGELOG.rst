@@ -1,3 +1,7 @@
+**4.0.5 - 11/12/2025**
+
+ - Add API docs and a getting started guide
+
 **4.0.4 - 08/04/2025**
 
  - Remove deprecated reusable_pipeline 'use_shared_fs' arg from Jenkinsfile

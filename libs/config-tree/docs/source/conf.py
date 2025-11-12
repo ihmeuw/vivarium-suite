@@ -50,6 +50,7 @@ needs_sphinx = "4.0"
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx_autodoc_typehints",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
     "sphinx.ext.todo",
@@ -221,9 +222,9 @@ autodoc_typehints = "description"
 nitpicky = True
 
 nitpick_ignore: list[tuple[str, str]] = []
-# for line in open("../nitpick-exceptions"):
-#     if line.strip() == "" or line.startswith("#"):
-#         continue
-#     dtype, target = line.split(None, 1)
-#     target = target.strip()
-#     nitpick_ignore.append((dtype, target))
+for line in open("../nitpick-exceptions"):
+    if line.strip() == "" or line.startswith("#"):
+        continue
+    dtype, target = line.split(None, 1)
+    target = target.strip()
+    nitpick_ignore.append((dtype, target))

@@ -29,7 +29,6 @@ For example:
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -62,7 +61,7 @@ class ConfigNode:
 
     A :class:`ConfigNode` may only have a value set at each layer once.
     Attempts to set a value at the same layer multiple times will result in
-    a :class:`DuplicatedConfigurationError`.
+    a :class:`~layered_config_tree.exceptions.DuplicatedConfigurationError`.
 
     The :class:`ConfigNode` will record all values set and the source they
     are set from.  This sort of provenance with configuration data greatly
@@ -110,7 +109,6 @@ class ConfigNode:
 
         This can be used to create a contract around when the configuration is
         modifiable.
-
         """
         self._frozen = True
 
@@ -158,7 +156,6 @@ class ConfigNode:
         DuplicatedConfigurationError
             If a value has already been set at the provided layer or a value
             is already in the outermost layer and no layer has been provided.
-
         """
         if self._frozen:
             raise ConfigurationError(
@@ -193,8 +190,8 @@ class ConfigNode:
 
         Returns
         -------
-        The (source, value) tuple at the specified layer or, if no layer is
-        specified, at the outermost (highest priority) layer.
+            The (source, value) tuple at the specified layer or, if no layer is
+            specified, at the outermost (highest priority) layer.
 
         Raises
         ------
@@ -247,6 +244,7 @@ class ConfigIterator:
     An iterator for a LayeredConfigTree object.
 
     This iterator is used to iterate over the keys of a LayeredConfigTree object.
+
     """
 
     def __init__(self, config_tree: LayeredConfigTree):
@@ -319,7 +317,6 @@ class LayeredConfigTree:
 
         This is useful for loading and then freezing configurations that
         should not be modified at runtime.
-
         """
         self.__dict__["_frozen"] = True
         for child in self.values():
@@ -353,7 +350,6 @@ class LayeredConfigTree:
         """Converts the LayeredConfigTree into a nested dictionary.
 
         All metadata is lost in this conversion.
-
         """
         result = {}
         for name, child in self.items():
@@ -386,9 +382,9 @@ class LayeredConfigTree:
 
         Returns
         -------
-        The value at the key or nested keys and at the requested layer (the outer, by default).
-        ``default_value`` (None, by default) is returned if the full key path *except
-        for the final key* exists at an *explicitly-requested* layer.
+            The value at the key or nested keys and at the requested layer (the outer, by default).
+            ``default_value`` (None, by default) is returned if the full key path *except
+            for the final key* exists at an *explicitly-requested* layer.
 
         Raises
         ------
@@ -421,8 +417,8 @@ class LayeredConfigTree:
 
         Returns
         -------
-        The ``LayeredConfigTree`` located at the key or key path provided starting
-        from the outermost layer.
+            The ``LayeredConfigTree`` located at the key or key path provided starting
+            from the outermost layer.
 
         Raises
         ------
@@ -495,7 +491,6 @@ class LayeredConfigTree:
         DuplicatedConfigurationError
             If a value has already been set at the provided layer or a value
             is already in the outermost layer and no layer has been provided.
-
         """
         if data is not None:
             data_dict, source = self._coerce(data, source)
@@ -560,7 +555,6 @@ class LayeredConfigTree:
         DuplicatedConfigurationError
             If a value has already been set at the provided layer or a value
             is already in the outermost layer and no layer has been provided.
-
         """
         if self._frozen:
             raise ConfigurationError(

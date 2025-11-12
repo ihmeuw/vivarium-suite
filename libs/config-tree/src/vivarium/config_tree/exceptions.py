@@ -1,3 +1,10 @@
+"""
+==========
+Exceptions
+==========
+
+"""
+
 from typing import Any
 
 

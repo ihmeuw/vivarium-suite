@@ -1,0 +1,4 @@
+py:class InputData
+
+# external references that Sphinx cannot resolve
+py:class yaml.nodes.MappingNode
