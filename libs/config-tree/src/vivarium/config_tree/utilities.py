@@ -61,22 +61,22 @@ class SafeLoader(yaml.SafeLoader):
     """A yaml.SafeLoader that restricts duplicate keys."""
 
     def construct_mapping(
-        self, node: yaml.MappingNode, deep: bool = False
+        self, node: yaml.nodes.MappingNode, deep: bool = False
     ) -> dict[Hashable, Any]:
         """Constructs the standard mapping after checking for duplicates.
 
         Raises
         ------
-        DuplicateKeysInYAMLError
+        DuplicatedConfigurationError
             If duplicate keys within the same level are detected in the YAML file
             being loaded.
 
         Notes
         -----
         A key is considered a duplicate only if it is the same as another key
-        _at the same level in the YAML_.
+        *at the same level in the YAML*.
 
-        This raises upon the _first_ duplicate key found; other duplicates may exist
+        This raises upon the *first* duplicate key found; other duplicates may exist
         (in which case a new error will be raised upon re-loading of the YAML file
         once the duplicate is resolved).
         """
