@@ -1,3 +1,7 @@
+**0.2.6 - 11/20/25**
+
+ - Improve 'make build-env': better handle args and make the env name optional
+
 **0.2.5 - 08/01/25**
 
  - Use vivarium_dependencies for common setup constraints
