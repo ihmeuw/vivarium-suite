@@ -1,3 +1,7 @@
+**2.2.1 - 11/20/25**
+
+ - Improve 'make build-env': better handle args and make the env name optional
+
 **2.2.0 - 10/02/25**
 
  - Allow user to pass incomplete parameter sets to EnsembleDistribution (filled with zeros)
