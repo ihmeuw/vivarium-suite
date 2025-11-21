@@ -1,3 +1,7 @@
+**2.0.13 - 11/21/2025**
+
+  - Bugfix: stop skipping scheduled builds if the last commit was CHANGELOG-only
+
 **2.0.12 - 10/22/2025**
 
   - Skip Jenkins builds for CHANGELOG-only commits

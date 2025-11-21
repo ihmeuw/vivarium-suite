@@ -157,8 +157,11 @@ def call(Map config = [:]){
       stage("Python Versions") {
         // Skip builds if this commit only contains changelog changes
         when {
-          not {
-            environment name: 'IS_CHANGELOG_ONLY_COMMIT', value: 'true'
+          anyOf {
+            environment name: 'IS_CRON', value: 'true'
+            not {
+              environment name: 'IS_CHANGELOG_ONLY_COMMIT', value: 'true'
+            }
           }
         }
         steps {
