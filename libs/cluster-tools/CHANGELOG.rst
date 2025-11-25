@@ -1,3 +1,7 @@
+**2.1.25 - 11/25/25**
+
+  - Select from 250 instead of 500 draws when generating input draws 
+
 **2.1.24 - 11/20/25**
 
   - Improve 'make build-env': better handle args and make the env name optional

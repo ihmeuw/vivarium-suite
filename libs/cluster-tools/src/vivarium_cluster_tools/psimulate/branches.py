@@ -18,7 +18,7 @@ from vivarium.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.psimulate.model_specification import FULL_ARTIFACT_PATH_KEY
 
-NUMBER_OF_DRAWS = 500
+NUMBER_OF_DRAWS = 250
 
 
 class Keyspace:
