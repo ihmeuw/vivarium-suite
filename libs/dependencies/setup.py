@@ -61,7 +61,7 @@ if __name__ == "__main__":
         "sphinx": [
             "sphinx",
             "sphinx-autodoc-typehints",
-            "sphinx-rtd-theme",
+            "sphinx-rtd-theme>=2.0.0",
         ],
         "sphinx-click": ["sphinx-click"],
         # gbd
