@@ -10,6 +10,10 @@ source = ["vivarium_testing_utils"]
 
 [tool.coverage.report]
 show_missing = true
+exclude_also = [
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    ]
 
 [tool.black]
 line_length = 94
@@ -30,7 +34,9 @@ exclude = [
     "build",
     "setup.py",
     "docs/source/conf.py",
+    "src/vivarium_testing_utils/automated_validation/visualization/plot_utils.py", # Only stubbed out currently
 ]
+plugins = ["pandera.mypy"]
 
 # handle mypy errors when 3rd party packages are not typed.
 [[tool.mypy.overrides]]
@@ -38,5 +44,7 @@ module = [
     "py._path.local",
     "scipy.*",
     # "sklearn.*",
+    "vivarium_inputs.*",
+    "gbd_mapping.*",
 ]
 ignore_missing_imports = true

@@ -1,3 +1,7 @@
+**0.3.0 - 12/12/25**
+
+  - Phase 1 Automated Validation, ValidationContext component for simulation validation
+
 **0.2.6 - 11/20/25**
 
  - Improve 'make build-env': better handle args and make the env name optional
