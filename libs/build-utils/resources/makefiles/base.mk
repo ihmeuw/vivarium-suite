@@ -42,6 +42,8 @@ help: # Curated help message
 	echo "install-upstream-deps        Install upstream dependencies"; \
 	echo "format                       Format code (isort and black)"; \
 	echo "manual-deploy-artifactory    Deploy package; only use if Jenkins deploy fails"; \
+	echo "model <command> [args]       Run model lineage tool (e.g., make model tree,"; \
+	echo "                             make model info v24.0)"; \
 	echo; \
 	echo "====================="; \
 	echo "Jenkins build targets"; \
@@ -227,3 +229,18 @@ manual-deploy-artifactory: # Deploy package; only use if Jenkins deploy fails
 	make build-package
 	make tag-version
 	make deploy-package-artifactory
+	
+# Model lineage tool - analyze git tag relationships
+# Usage: make model <command> [args]
+# Commands: list, base, contains, ancestors, check, matrix, tree, info, help
+MODEL_LINEAGE_SCRIPT := $(UTILS_DIR)resources/scripts/model_lineage.sh
+
+# If 'model' is the first goal, capture remaining args and prevent Make from processing them
+ifeq (model,$(firstword $(MAKECMDGOALS)))
+  MODEL_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(MODEL_ARGS):;@:)
+endif
+
+.PHONY: model
+model: # Run model lineage tool (e.g., make model tree, make model info v24.0)
+	@bash $(MODEL_LINEAGE_SCRIPT) $(MODEL_ARGS)

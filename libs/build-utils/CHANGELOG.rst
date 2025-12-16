@@ -1,3 +1,7 @@
+**2.1.0 - 12/16/2025**
+
+  - Feature: Add model lineage analysis utility
+
 **2.0.13 - 11/21/2025**
 
   - Bugfix: stop skipping scheduled builds if the last commit was CHANGELOG-only
