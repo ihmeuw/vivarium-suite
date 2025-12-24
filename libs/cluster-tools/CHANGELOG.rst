@@ -1,3 +1,7 @@
+**2.1.26 - 12/24/25**
+
+  - Fix build failure due to unsafe import of private psutil types
+
 **2.1.25 - 11/25/25**
 
   - Select from 250 instead of 500 draws when generating input draws 

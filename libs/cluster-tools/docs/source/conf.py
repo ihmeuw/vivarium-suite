@@ -220,6 +220,10 @@ autodoc_default_options = {
 
 # Display type hints in the description instead of the signature.
 autodoc_typehints = "description"
+suppress_warnings = [
+    "sphinx_autodoc_typehints.guarded_import",
+    "sphinx_autodoc_typehints.forward_reference",
+]
 
 
 # -- nitpicky mode --------------------------------------------------------

@@ -6,20 +6,25 @@ vipin Performance Counters
 Structs for counting performance metrics.
 
 """
+from __future__ import annotations
+
 import json
 from time import time
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING
 
 import psutil
+
+if TYPE_CHECKING:
+    from psutil import scpufreq, scpustats, sdiskio, snetio  # type: ignore[attr-defined]
 
 
 class CounterSnapshot:
     def __init__(
         self,
-        cpu: psutil._common.scpustats | None = None,
-        disk: psutil._common.sdiskio | None = None,
-        freq: psutil._common.scpufreq | None = None,
-        net: psutil._common.snetio | None = None,
+        cpu: scpustats | None = None,
+        disk: sdiskio | None = None,
+        freq: scpufreq | None = None,
+        net: snetio | None = None,
         timestamp: float | None = None,
     ) -> None:
         self.cpu = psutil.cpu_stats() if cpu is None else cpu

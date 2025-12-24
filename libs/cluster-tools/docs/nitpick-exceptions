@@ -20,8 +20,8 @@ py:class _TemporaryFileWrapper
 py:class layered_config_tree.main.LayeredConfigTree
 # typing
 py:class vivarium_cluster_tools.cli_tools.R
-
-py:class psutil._common.scpustats
-py:class psutil._common.sdiskio
-py:class psutil._common.scpufreq
-py:class psutil._common.snetio
+# psutil
+py:class scpustats
+py:class sdiskio
+py:class scpufreq
+py:class snetio
