@@ -595,6 +595,15 @@ class EnsembleDistribution:
 
         return weights, params
 
+    @classmethod
+    def get_expected_parameters(cls, distribution_name: str) -> list[str]:
+        """Get the expected parameters for a given distribution in the ensemble."""
+        return [
+            *cls._distribution_map[distribution_name].expected_parameters,
+            "x_min",
+            "x_max",
+        ]
+
     @staticmethod
     def fill_missing_weights(weights: Parameters, expected_columns) -> Parameters:
         weights = copy.deepcopy(weights)

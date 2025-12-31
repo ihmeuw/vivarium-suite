@@ -1,3 +1,7 @@
+**2.2.2 - 12/31/25**
+
+ - Create new EnsembleDistribution method to get expected parameters
+
 **2.2.1 - 11/20/25**
 
  - Improve 'make build-env': better handle args and make the env name optional
