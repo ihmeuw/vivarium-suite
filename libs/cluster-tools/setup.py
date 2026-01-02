@@ -59,6 +59,7 @@ if __name__ == "__main__":
         "vivarium_dependencies[lint]",
         "types-setuptools",
         "types-psutil",
+        "pyarrow-stubs",
     ]
 
     test_requirements = [

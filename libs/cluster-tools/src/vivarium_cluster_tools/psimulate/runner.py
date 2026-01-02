@@ -41,14 +41,20 @@ from vivarium_cluster_tools.vipin.perf_report import PerformanceSummary, report_
 def process_job_results(
     registry_manager: redis_dbs.RegistryManager,
     existing_metadata: pd.DataFrame,
-    existing_results: dict[str, pd.DataFrame],
     output_paths: OutputPaths,
+    batch_size: int,
+    output_file_size: int,
     no_batch: bool,
 ) -> dict[str, int | float]:
     unwritten_metadata = []
     unwritten_results = []
-    batch_size = 0 if no_batch else 200
+    batch_size = 0 if no_batch else batch_size
     status: dict[str, int | float] = defaultdict(int)
+
+    # Initialize output file map from any existing results (for restart support)
+    output_file_map = psim_results.OutputFileMap.from_existing_results(
+        output_paths.results_dir, output_file_size
+    )
 
     logger.info("Entering main processing loop.")
     start_time = time()
@@ -63,35 +69,35 @@ def process_job_results(
                 (
                     existing_metadata,
                     unwritten_metadata,
-                    existing_results,
                     unwritten_results,
                 ) = psim_results.write_results_batch(
                     output_paths,
                     existing_metadata,
-                    existing_results,
                     unwritten_metadata,
                     unwritten_results,
                     batch_size,
+                    output_file_map,
+                    output_file_size,
                 )
 
             status = registry_manager.update_and_report()
             logger.info(f"Unwritten results: {len(unwritten_results)}")
             logger.info(f"Elapsed time: {(time() - start_time)/60:.1f} minutes.")
     finally:
-        batch_size = 500
+        # Flush all remaining results
         while unwritten_results:
             (
                 existing_metadata,
                 unwritten_metadata,
-                existing_results,
                 unwritten_results,
             ) = psim_results.write_results_batch(
                 output_paths,
                 existing_metadata,
-                existing_results,
                 unwritten_metadata,
                 unwritten_results,
-                batch_size=batch_size,
+                batch_size=len(unwritten_results),
+                output_file_map=output_file_map,
+                output_file_size=output_file_size,
             )
             logger.info(f"Unwritten results: {len(unwritten_results)}")
             logger.info(f"Elapsed time: {(time() - start_time) / 60:.1f} minutes.")
@@ -108,16 +114,6 @@ def load_existing_output_metadata(metadata_path: Path, restart: bool) -> pd.Data
         existing_output_metadata.empty or restart
     ), "How do you have existing outputs on an initial run?"
     return existing_output_metadata
-
-
-def load_existing_results(result_path: Path, restart: bool) -> dict[str, pd.DataFrame]:
-    filepaths = result_path.glob("*.parquet")
-    results = {filepath.stem: pd.read_parquet(filepath) for filepath in filepaths}
-    if results and not restart:
-        raise RuntimeError(
-            f"This is an initial run but results aready exist at {result_path}"
-        )
-    return results
 
 
 def report_initial_status(
@@ -186,6 +182,8 @@ def main(
     native_specification: cluster.NativeSpecification,
     max_workers: int | None,
     redis_processes: int,
+    batch_size: int,
+    output_file_size: int,
     no_batch: bool,
     backup_freq: int | None,
     extra_args: dict[str, Any],
@@ -329,15 +327,12 @@ def main(
     # Enter the main monitoring and processing loop, which will check on
     # all the queues periodically, report status updates, and gather
     # and write results when they are available.
-    existing_results = load_existing_results(
-        result_path=output_paths.results_dir,
-        restart=command in [COMMANDS.restart, COMMANDS.expand],
-    )
     status = process_job_results(
         registry_manager=registry_manager,
         existing_metadata=finished_sim_metadata,
-        existing_results=existing_results,
         output_paths=output_paths,
+        batch_size=batch_size,
+        output_file_size=output_file_size,
         no_batch=no_batch,
     )
 

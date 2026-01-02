@@ -1,3 +1,7 @@
+**2.2.0 - 01/02/26**
+
+  - Add output data file splitting
+
 **2.1.26 - 12/24/25**
 
   - Fix build failure due to unsafe import of private psutil types
