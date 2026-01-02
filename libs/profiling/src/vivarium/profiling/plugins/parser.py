@@ -5,9 +5,16 @@ from vivarium.framework.components.parser import ParsingError
 from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.disease.models import SIS_fixed_duration
 from vivarium_public_health.results import DiseaseObserver
+from vivarium_public_health.results.risk import CategoricalRiskObserver
+from vivarium_public_health.risks.base_risk import Risk
 
 CAUSE_KEY = "causes"
+RISK_KEY = "risks"
 DEFAULT_SIS_CONFIG = {"duration": 1, "number": 1, "observers": False}
+DEFAULT_RISK_CONFIG = {
+    "number": 1,
+    "observers": False,
+}
 
 
 class MultiComponentParsingErrors(ParsingError):
@@ -69,21 +76,37 @@ class MultiComponentParser(ComponentConfigurationParser):
         """
         components = []
 
-        if CAUSE_KEY in component_config:
-            causes_config = component_config[CAUSE_KEY]
-            self._validate_causes_config(causes_config)
-            components += self._get_multi_disease_components(causes_config)
-
-        # Parse standard components (i.e. not multi components)
+        # Parse standard components first so we can extract disease models for validation
         standard_component_config = component_config.to_dict()
         standard_component_config.pop(CAUSE_KEY, None)
+        standard_component_config.pop(RISK_KEY, None)
         standard_components = (
             self.process_level(standard_component_config, [])
             if standard_component_config
             else []
         )
 
-        return components + standard_components
+        # Extract normally-defined disease causes
+        standard_causes = {
+            cause.name.split(".")[-1]
+            for cause in standard_components
+            if isinstance(cause, DiseaseModel)
+        }
+
+        if CAUSE_KEY in component_config:
+            causes_config = component_config[CAUSE_KEY]
+            self._validate_causes_config(causes_config, standard_causes)
+            components += self._get_multi_disease_components(causes_config)
+
+        if RISK_KEY in component_config:
+            risks_config = component_config[RISK_KEY]
+            self._validate_risks_config(risks_config)
+            components += self._get_multi_risk_components(risks_config)
+
+        # Add standard components last so that we don't setup results before diseases
+        components += standard_components
+
+        return components
 
     def _get_multi_disease_components(
         self, causes_config: LayeredConfigTree
@@ -117,7 +140,9 @@ class MultiComponentParser(ComponentConfigurationParser):
 
         return components
 
-    def _validate_causes_config(self, causes_config: LayeredConfigTree) -> None:
+    def _validate_causes_config(
+        self, causes_config: LayeredConfigTree, standard_causes: set[str]
+    ) -> None:
         """Validates the diseases multi-configuration.
 
         Parameters
@@ -135,6 +160,13 @@ class MultiComponentParser(ComponentConfigurationParser):
 
         # Validate each cause configuration
         for cause_name, cause_config in causes_config.items():
+            if cause_name in standard_causes:
+                error_messages.extend(
+                    [
+                        "Please do not define the same cause in both 'causes' multi-config and as a standard component."
+                    ]
+                )
+
             cause_errors = self._validate_cause_config(cause_name, cause_config)
             if cause_errors:
                 error_messages.extend(
@@ -143,7 +175,6 @@ class MultiComponentParser(ComponentConfigurationParser):
                         for cause_error in cause_errors
                     ]
                 )
-
         if error_messages:
             raise MultiComponentParsingErrors(error_messages)
 
@@ -188,6 +219,71 @@ class MultiComponentParser(ComponentConfigurationParser):
         # Validate observers if provided
         if "observers" in cause_config_dict:
             observers = cause_config_dict["observers"]
+            if not isinstance(observers, bool):
+                error_messages.append("Observers must be a boolean value (True or False)")
+
+        return error_messages
+
+    def _get_multi_risk_components(
+        self,
+        risks_config: LayeredConfigTree,
+    ) -> list[Component]:
+        components: list[Component] = []
+
+        for risk_name, risk_config in risks_config.items():
+            number = int(risk_config.get("number", DEFAULT_RISK_CONFIG["number"]))
+            observers = risk_config.get("observers", DEFAULT_RISK_CONFIG["observers"])
+
+            for i in range(number):
+                suffixed_risk_name = f"{risk_name}_{i + 1}"
+                components.append(Risk(f"risk_factor.{suffixed_risk_name}"))
+
+                if observers:
+                    # Unfortunately, it is problematic to try to determine in advance
+                    # whether a risk is continuous or categorical without instantiating
+                    # the Risk component first. So we always try to add a CategoricalRiskObserver.
+                    # Users must remember to not add observers for continuous risks.
+                    components.append(CategoricalRiskObserver(suffixed_risk_name))
+
+        return components
+
+    def _validate_risks_config(
+        self,
+        risks_config: LayeredConfigTree,
+    ) -> None:
+        error_messages = []
+
+        for risk_name, risk_config in risks_config.items():
+            risk_errors = self._validate_risk_config(risk_name, risk_config)
+            if risk_errors:
+                error_messages.extend(
+                    [
+                        f"Error in risk '{risk_name}': {str(risk_error)}"
+                        for risk_error in risk_errors
+                    ]
+                )
+
+        if error_messages:
+            raise MultiComponentParsingErrors(error_messages)
+
+    def _validate_risk_config(
+        self,
+        risk_name: str,
+        risk_config: LayeredConfigTree,
+    ) -> list[str]:
+        risk_config_dict = risk_config.to_dict()
+        error_messages = []
+
+        if "number" in risk_config_dict:
+            try:
+                number = int(risk_config_dict["number"])
+                if number <= 0:
+                    error_messages.append("Number of components must be positive")
+            except (ValueError, TypeError):
+                error_messages.append("Number of components must be a valid integer")
+
+        if "observers" in risk_config_dict:
+            observers = risk_config_dict["observers"]
             if not isinstance(observers, bool):
                 error_messages.append("Observers must be a boolean value (True or False)")
 
