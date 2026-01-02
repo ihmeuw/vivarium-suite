@@ -15,10 +15,18 @@ components:
         high_systolic_blood_pressure:
             number: 2
             observers: False  # Don't include observers for continuous risks
+            affected_causes:
+                lower_respiratory_infections:
+                    effect_type: nonloglinear
+                    number: 2
 
         unsafe_water_source:
             number: 2
             observers: True
+            affected_causes:
+                lower_respiratory_infections:
+                    effect_type: loglinear
+                    number: 2
 
     vivarium_public_health:
         population:

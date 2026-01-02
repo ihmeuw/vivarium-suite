@@ -5,6 +5,7 @@ from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.results import DiseaseObserver
 from vivarium_public_health.results.risk import CategoricalRiskObserver
 from vivarium_public_health.risks.base_risk import Risk
+from vivarium_public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
 
 from tests.conftest import IS_ON_SLURM, TEST_ARTIFACT_PATH
 from vivarium_profiling.plugins.parser import (
@@ -76,7 +77,7 @@ def test_multi_component_parser():
 
 
 def test_multi_component_parser_risks():
-    """Test multi-risk configuration with observers."""
+    """Test multi-risk configuration with per-cause effect counts and observer rules."""
 
     config_dict = {
         "causes": {
@@ -90,10 +91,22 @@ def test_multi_component_parser_risks():
             "high_systolic_blood_pressure": {
                 "number": 1,
                 "observers": False,  # Continuous risk
+                "affected_causes": {
+                    "lower_respiratory_infections": {
+                        "effect_type": "nonloglinear",
+                        "number": 2,
+                    }
+                },
             },
             "unsafe_water_source": {
                 "number": 2,
                 "observers": True,
+                "affected_causes": {
+                    "lower_respiratory_infections": {
+                        "effect_type": "loglinear",
+                        "number": 2,
+                    }
+                },
             },
         },
     }
@@ -103,19 +116,32 @@ def test_multi_component_parser_risks():
     parser = MultiComponentParser()
     components = parser.parse_component_config(config)
 
-    # Expected counts:
-    # # Causes: 2 disease models
-    # high_sbp: 1 Risk; observers skipped
-    # unsafe_water: 2 Risk + 2 CategoricalRiskObserver
-    assert len(components) == 7
+    # Expected counts
+    # Causes: 2 disease models
+    # high_sbp: 1 Risk + 2 NonLogLinearRiskEffect; observers skipped
+    # unsafe_water: 2 Risk + 4 RiskEffect + 2 CategoricalRiskObserver
+    assert len(components) == 13
 
     risks = [c for c in components if isinstance(c, Risk)]
+    effects = [c for c in components if isinstance(c, (RiskEffect, NonLogLinearRiskEffect))]
     cat_observers = [c for c in components if isinstance(c, CategoricalRiskObserver)]
     disease_models = [c for c in components if isinstance(c, DiseaseModel)]
 
     assert len(disease_models) == 2
     assert len(risks) == 3
+    assert len(effects) == 6
     assert len(cat_observers) == 2
+
+    # Check names for effects map to the correct suffixed causes
+    effect_names = {c.name for c in effects}
+    assert {
+        "non_log_linear_risk_effect.high_systolic_blood_pressure_1_on_cause.lower_respiratory_infections_1.incidence_rate",
+        "non_log_linear_risk_effect.high_systolic_blood_pressure_1_on_cause.lower_respiratory_infections_2.incidence_rate",
+        "risk_effect.unsafe_water_source_1_on_cause.lower_respiratory_infections_1.incidence_rate",
+        "risk_effect.unsafe_water_source_1_on_cause.lower_respiratory_infections_2.incidence_rate",
+        "risk_effect.unsafe_water_source_2_on_cause.lower_respiratory_infections_1.incidence_rate",
+        "risk_effect.unsafe_water_source_2_on_cause.lower_respiratory_infections_2.incidence_rate",
+    } == effect_names
 
     # Continuous risk observer skipped
     assert all("high_systolic_blood_pressure" not in obs.risk for obs in cat_observers)
@@ -123,6 +149,117 @@ def test_multi_component_parser_risks():
     # Categorical observers created for dichotomous risk
     observer_risks = {obs.risk for obs in cat_observers}
     assert observer_risks == {"unsafe_water_source_1", "unsafe_water_source_2"}
+
+
+def test_risk_affects_normally_defined_cause():
+    """Test that risks can affect causes defined normally (not via causes key)."""
+
+    # Create a config with a normally-defined DiseaseModel and risks that affect it
+    config_dict = {
+        "vivarium_public_health": {
+            "disease": ["SIS_fixed_duration('lower_respiratory_infections', '28')"]
+        },
+        "risks": {
+            "high_systolic_blood_pressure": {
+                "number": 1,
+                "observers": False,
+                "affected_causes": {
+                    "lower_respiratory_infections": {
+                        "effect_type": "nonloglinear",
+                        # Should target the normally-defined cause with number: 1
+                    }
+                },
+            }
+        },
+    }
+
+    config = LayeredConfigTree(config_dict)
+    parser = MultiComponentParser()
+    components = parser.parse_component_config(config)
+
+    # Should have: 1 DiseaseModel + 1 Risk + 1 NonLogLinearRiskEffect
+    assert len(components) == 3
+
+    disease_models = [c for c in components if isinstance(c, DiseaseModel)]
+    risks = [c for c in components if isinstance(c, Risk)]
+    effects = [c for c in components if isinstance(c, NonLogLinearRiskEffect)]
+
+    assert len(disease_models) == 1
+    assert len(risks) == 1
+    assert len(effects) == 1
+
+    # The effect should target the normally-defined cause
+    assert (
+        effects[0].name
+        == "non_log_linear_risk_effect.high_systolic_blood_pressure_1_on_cause.lower_respiratory_infections.incidence_rate"
+    )
+
+
+def test_risk_error_when_affected_cause_number_exceeds_available():
+    """Test validation error when affected_causes number exceeds available instances."""
+
+    # Case 1: Multi-config cause with 2 instances, trying to affect 3
+    config_dict = {
+        "causes": {
+            "lower_respiratory_infections": {
+                "number": 2,
+                "duration": "28",
+                "observers": False,
+            }
+        },
+        "risks": {
+            "high_systolic_blood_pressure": {
+                "number": 1,
+                "observers": False,
+                "affected_causes": {
+                    "lower_respiratory_infections": {
+                        "effect_type": "nonloglinear",
+                        "number": 3,  # exceeds available 2
+                    }
+                },
+            }
+        },
+    }
+
+    config = LayeredConfigTree(config_dict)
+    parser = MultiComponentParser()
+
+    with pytest.raises(MultiComponentParsingErrors, match="exceeds available causes"):
+        parser.parse_component_config(config)
+
+
+def test_risk_error_when_affected_cause_undefined():
+    """Test validation error when affected cause doesn't exist anywhere."""
+
+    config_dict = {
+        "causes": {
+            "lower_respiratory_infections": {
+                "number": 2,
+                "duration": "28",
+                "observers": False,
+            }
+        },
+        "risks": {
+            "high_systolic_blood_pressure": {
+                "number": 1,
+                "observers": False,
+                "affected_causes": {
+                    "nonexistent_cause": {  # not in causes, not normally defined
+                        "effect_type": "nonloglinear",
+                        "number": 1,
+                    }
+                },
+            }
+        },
+    }
+
+    config = LayeredConfigTree(config_dict)
+    parser = MultiComponentParser()
+
+    with pytest.raises(
+        MultiComponentParsingErrors, match="nonexistent_cause.*is not defined"
+    ):
+        parser.parse_component_config(config)
 
 
 def test_error_when_cause_defined_in_both_multi_config_and_standard():
@@ -179,6 +316,12 @@ def test_multi_component_parser_simulation():
             "unsafe_water_source": {
                 "number": 1,
                 "observers": True,
+                "affected_causes": {
+                    "lower_respiratory_infections": {
+                        "effect_type": "loglinear",
+                        "number": 1,
+                    }
+                },
             }
         },
         "vivarium_public_health": {
@@ -226,6 +369,14 @@ def test_multi_component_parser_simulation():
     assert "disease_observer.lower_respiratory_infections_1" in component_names
     assert "disease_observer.lower_respiratory_infections_2" in component_names
     assert "risk_factor.unsafe_water_source_1" in component_names
+    assert (
+        "risk_effect.unsafe_water_source_1_on_cause.lower_respiratory_infections_1.incidence_rate"
+        in component_names
+    )
+    assert (
+        "risk_effect.unsafe_water_source_1_on_cause.lower_respiratory_infections_2.incidence_rate"
+        in component_names
+    )
     assert "categorical_risk_observer.unsafe_water_source_1" in component_names
 
     # Run the simulation for a few timesteps
