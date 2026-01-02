@@ -1,8 +1,20 @@
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
 import pytest
+
+
+def is_on_slurm() -> bool:
+    """Returns True if the current environment is a SLURM cluster."""
+    return shutil.which("sbatch") is not None
+
+
+IS_ON_SLURM = is_on_slurm()
+TEST_ARTIFACT_PATH = (
+    "/mnt/team/simulation_science/pub/simulation_profiling/artifacts/pakistan.hdf"
+)
 
 
 def pytest_addoption(parser):
