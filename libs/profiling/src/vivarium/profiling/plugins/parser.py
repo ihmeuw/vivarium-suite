@@ -1,9 +1,9 @@
-import pandas as pd
 from layered_config_tree import LayeredConfigTree
 from vivarium import Component
 from vivarium.framework.components import ComponentConfigurationParser
 from vivarium.framework.components.parser import ParsingError
-from vivarium_public_health.disease import DiseaseModel, DiseaseState, SusceptibleState
+from vivarium_public_health.disease import DiseaseModel
+from vivarium_public_health.disease.models import SIS_fixed_duration
 from vivarium_public_health.results import DiseaseObserver
 
 CAUSE_KEY = "causes"
@@ -110,58 +110,12 @@ class MultiComponentParser(ComponentConfigurationParser):
             observers = cause_config.get("observers", DEFAULT_SIS_CONFIG["observers"])
 
             for i in range(number):
-                components.append(
-                    self._create_sis_fixed_duration(cause_name, duration, i + 1)
-                )
+                components.append(SIS_fixed_duration(f"{cause_name}_{i + 1}", duration))
 
                 if observers:
                     components.append(DiseaseObserver(f"{cause_name}_{i + 1}"))
 
         return components
-
-    def _create_sis_fixed_duration(
-        self, cause_name: str, duration: str, number: int
-    ) -> DiseaseModel:
-        """Creates a SIS fixed duration disease model.
-
-        Parameters
-        ----------
-        cause
-            The name of the cause/disease (with suffix)
-        duration
-            The duration string (in days)
-        base_cause
-            The base cause name (without suffix) for mortality data
-
-        Returns
-        -------
-            An initialized DiseaseModel component
-        """
-        suffixed_cause_name = f"{cause_name}_{number}"
-        duration_td = pd.Timedelta(
-            days=float(duration) // 1, hours=(float(duration) % 1) * 24.0
-        )
-
-        healthy = SusceptibleState(suffixed_cause_name, allow_self_transition=True)
-        infected = DiseaseState(
-            suffixed_cause_name,
-            get_data_functions={"dwell_time": lambda _, __: duration_td},
-            allow_self_transition=True,
-            prevalence=f"cause.{cause_name}.prevalence",
-            disability_weight=f"cause.{cause_name}.disability_weight",
-            excess_mortality_rate=f"cause.{cause_name}.excess_mortality_rate",
-        )
-
-        healthy.add_rate_transition(
-            infected, transition_rate=f"cause.{cause_name}.incidence_rate"
-        )
-        infected.add_dwell_time_transition(healthy)
-
-        return DiseaseModel(
-            suffixed_cause_name,  # This is the suffixed name for the component
-            states=[healthy, infected],
-            cause_specific_mortality_rate=f"cause.{cause_name}.cause_specific_mortality_rate",
-        )
 
     def _validate_causes_config(self, causes_config: LayeredConfigTree) -> None:
         """Validates the diseases multi-configuration.

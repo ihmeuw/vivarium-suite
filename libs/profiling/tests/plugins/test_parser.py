@@ -56,27 +56,12 @@ def test_multi_component_parser():
     ihd_components = [c for c in components if "ischemic_stroke" in c.name]
 
     assert len(lri_components) == 2
-    assert len(lri_observers) == 2
     assert len(ihd_components) == 3
+    assert len(lri_observers) == 2
 
-    for component in lri_components:
+    for component in lri_components + ihd_components:
         assert isinstance(component, DiseaseModel)
-        assert (
-            component._csmr_source
-            == "cause.lower_respiratory_infections.cause_specific_mortality_rate"
-        )
-        disease_state = component.states[1]
-        assert (
-            disease_state._prevalence_source
-            == "cause.lower_respiratory_infections.prevalence"
-        )
 
     for observer in lri_observers:
         assert isinstance(observer, DiseaseObserver)
         assert observer.name.startswith("disease_observer.lower_respiratory_infections")
-
-    for component in ihd_components:
-        assert isinstance(component, DiseaseModel)
-        assert component._csmr_source == "cause.ischemic_stroke.cause_specific_mortality_rate"
-        disease_state = component.states[1]
-        assert disease_state._prevalence_source == "cause.ischemic_stroke.prevalence"

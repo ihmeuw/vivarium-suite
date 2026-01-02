@@ -2,6 +2,8 @@ plugins:
     required:
         component_configuration_parser:
             controller: "vivarium_profiling.plugins.parser.MultiComponentParser"
+        data:
+            controller: "vivarium_profiling.plugins.artifact.ArtifactManager"
 components:
     causes:
         lower_respiratory_infections:
