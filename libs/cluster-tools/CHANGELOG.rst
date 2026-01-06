@@ -1,3 +1,7 @@
+**2.2.2 - 01/06/26**
+
+ - Fail deployment if changelog date does not match current date
+
 **2.2.1 - 01/06/26**
 
   - Fix noisy psimulate output error
