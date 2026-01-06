@@ -42,6 +42,33 @@ def call() {
         }
         
         echo "Found version update in CHANGELOG.rst: from ${previousVersion} to ${currentVersion}"
+        
+        // Validate that the changelog date matches today's date
+        // Extract the date from the first line of the current changelog (format: **VERSION - MM/DD/YY**)
+        def changelogDate = sh(
+            script: """git show ${currentCommit}:CHANGELOG.rst | head -1 | grep -oE '[0-9]{1,2}/[0-9]{1,2}/[0-9]{2}' || echo ''""",
+            returnStdout: true
+        ).trim()
+        
+        if (changelogDate == '') {
+            echo "ERROR: Could not extract date from changelog. Expected format: **VERSION - MM/DD/YY**"
+            return false
+        }
+        
+        // Get today's date in MM/DD/YY format
+        def todayDate = sh(
+            script: "date +'%m/%d/%y'",
+            returnStdout: true
+        ).trim()
+        
+        // Compare the dates
+        if (changelogDate != todayDate) {
+            echo "ERROR: Changelog date (${changelogDate}) does not match today's date (${todayDate})"
+            echo "Please update the changelog date to match the deployment date: ${todayDate}"
+            return false
+        }
+        
+        echo "Changelog date validation passed: ${changelogDate}"
         return true
     } else {
         echo "ERROR: CHANGELOG.rst was not modified in this commit"
