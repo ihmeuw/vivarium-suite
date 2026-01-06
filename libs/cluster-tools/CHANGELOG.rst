@@ -1,3 +1,7 @@
+**2.2.1 - 01/06/26**
+
+  - Fix noisy psimulate output error
+
 **2.2.0 - 01/02/26**
 
   - Add output data file splitting

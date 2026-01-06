@@ -72,19 +72,32 @@ def submit_worker_jobs(
     jt.nativeSpecification = native_specification.to_cli_args()
 
     job_ids = s.runBulkJobs(jt, 1, num_workers, 1)
-    array_job_id = job_ids[0].split(".")[0]
+    array_job_id = job_ids[0].split("_")[0]
 
     def kill_jobs() -> None:
         try:
             s.control(array_job_id, drmaa.JobControlAction.TERMINATE)
-        # FIXME: Hack around issue where drmaa.errors sometimes doesn't
-        #        exist.
         except Exception as e:
-            if "already completing" in str(e) or "Invalid job" in str(e):
-                # This is the case where all our workers have already shut down
-                # on their own, which isn't actually an error.
+            # Check if the job already finished - if so, this error is expected
+            try:
+                status = s.jobStatus(array_job_id)
+                if status in (drmaa.JobState.DONE, drmaa.JobState.FAILED):
+                    return  # Job already finished, nothing to do
+            except Exception:
+                # If we can't get status, fall back to string matching
                 pass
-            else:
+
+            # FIXME: Hack around issue where drmaa.errors sometimes doesn't
+            #        exist.
+            error_msg = str(e)
+            # These errors occur when workers have already shut down on their own,
+            # which isn't actually an error. "Unspecified error" is slurm-drmaa's
+            # poor translation of ESLURM_ALREADY_DONE (errno 2021).
+            expected_errors = [
+                "already completing",
+                "Invalid job",
+            ]
+            if not any(err in error_msg for err in expected_errors):
                 raise
 
     atexit.register(kill_jobs)
