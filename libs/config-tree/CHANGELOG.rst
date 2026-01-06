@@ -1,3 +1,7 @@
+**4.0.7 - 01/06/26**
+
+ - Fail deployment if changelog date does not match current date
+
 **4.0.6 - 11/20/25**
 
  - Improve 'make build-env': better handle args and make the env name optional
