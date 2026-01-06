@@ -1,3 +1,7 @@
+**0.3.1 - 01/06/26**
+
+ - Fail deployment if changelog date does not match current date
+
 **0.3.0 - 12/12/25**
 
   - Phase 1 Automated Validation, ValidationContext component for simulation validation
