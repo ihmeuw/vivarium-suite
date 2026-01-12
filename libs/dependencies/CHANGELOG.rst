@@ -1,3 +1,7 @@
+**1.0.3 - 1/12/26**
+
+ - Pin sphinx<9.0.0
+
 **1.0.2 - 12/10/25**
 
  - Add dependency: sphinx-rtd-theme>=2.0.0
