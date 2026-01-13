@@ -27,7 +27,7 @@ if __name__ == "__main__":
             "pyyaml>=5.1",
             "types-PyYAML",
         ],
-        "scipy": ["scipy"],
+        "scipy": ["scipy<1.17.0"],  # Temporary pin until FuzzyChecker is updated
         "click": ["click"],
         "tables": ["tables"],
         "loguru": ["loguru"],
