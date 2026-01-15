@@ -4,6 +4,10 @@ import pandas as pd
 from loguru import logger
 
 from vivarium_profiling.tools.extraction import ExtractionConfig
+from vivarium_profiling.tools.notebook_generator import (
+    NOTEBOOK_NAME,
+    create_analysis_notebook,
+)
 from vivarium_profiling.tools.plotting import create_figures, plot_bottleneck_fractions
 
 """Benchmark summarization and visualization utilities."""
@@ -109,7 +113,9 @@ def summarize(
 
 
 def run_summarize_analysis(
-    benchmark_results_filepath: Path, config: ExtractionConfig | None = None
+    benchmark_results_filepath: Path,
+    config: ExtractionConfig | None = None,
+    nb: bool = False,
 ) -> None:
     """Main function to run full summarize analysis pipeline.
 
@@ -119,12 +125,17 @@ def run_summarize_analysis(
         Path to benchmark_results.csv file.
     config
         Extraction configuration. If None, uses default.
+    nb
+        Whether to generate a Jupyter notebook for interactive analysis.
+        If True and summary.csv exists, skip summary generation.
 
     """
     if config is None:
         config = ExtractionConfig()
 
     output_dir = benchmark_results_filepath.parent
+    summary_path = output_dir / "summary.csv"
+
     print(f"\nProcessing benchmark results from {benchmark_results_filepath}")
     print(f"Summarizing results to {output_dir}\n")
 
@@ -134,37 +145,46 @@ def run_summarize_analysis(
 
     summary = summarize(raw, output_dir, config)
 
-    # Generate main performance analysis with memory
-    create_figures(
-        summary, output_dir, "performance_analysis", "rt_s", "mem_mb", "rt_s_pdiff"
-    )
+    # Generate Jupyter notebook if requested
+    if nb:
+        notebook_path = output_dir / NOTEBOOK_NAME
+        create_analysis_notebook(benchmark_results_filepath, summary_path, notebook_path)
 
-    # Generate plots for all cumtime metrics from config
-    for pattern in config.patterns:
-        if pattern.extract_cumtime:
-            time_col = pattern.cumtime_col
-            time_pdiff_col = f"{time_col}_pdiff"
-            chart_title = f"runtime_analysis_{pattern.name}"
-            create_figures(
-                summary,
-                output_dir,
-                chart_title,
-                time_col,
-                None,
-                time_pdiff_col,
-            )
+    # Generate static plots
+    else:
+        # Generate main performance analysis with memory
+        create_figures(
+            summary, output_dir, "performance_analysis", "rt_s", "mem_mb", "rt_s_pdiff"
+        )
 
-    # Generate plot for non-run time (computed metric, not in patterns)
-    create_figures(
-        summary,
-        output_dir,
-        "runtime_analysis_non_run",
-        "rt_non_run_s",
-        None,
-        "rt_non_run_s_pdiff",
-    )
+        # Generate plots for all cumtime metrics from config
+        for pattern in config.patterns:
+            if pattern.extract_cumtime:
+                time_col = pattern.cumtime_col
+                time_pdiff_col = f"{time_col}_pdiff"
+                chart_title = f"runtime_analysis_{pattern.name}"
+                create_figures(
+                    summary,
+                    output_dir,
+                    chart_title,
+                    time_col,
+                    None,
+                    time_pdiff_col,
+                )
 
-    # Generate bottleneck fraction plots
-    plot_bottleneck_fractions(summary, output_dir, config)
+        # Generate plot for non-run time (computed metric, not in patterns)
+        create_figures(
+            summary,
+            output_dir,
+            "runtime_analysis_non_run",
+            "rt_non_run_s",
+            None,
+            "rt_non_run_s_pdiff",
+        )
+
+        # Generate bottleneck fraction plots
+        plot_bottleneck_fractions(summary, output_dir, config)
+
+        print(f"\nCreated interactive notebook: {notebook_path}")
 
     print("\n*** FINISHED ***")

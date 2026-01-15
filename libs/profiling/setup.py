@@ -54,6 +54,7 @@ if __name__ == "__main__":
         "matplotlib",
         "seaborn",
         "scalene",
+        "nbformat>=5.0",
     ]
 
     setup_requires = ["setuptools_scm"]

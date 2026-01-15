@@ -293,10 +293,19 @@ def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
     is_flag=True,
     help="Drop into python debugger if an error occurs.",
 )
+@click.option(
+    "--nb",
+    is_flag=True,
+    help=(
+        "Generate a Jupyter notebook for interactive analysis. "
+        "If summary.csv already exists, skip summary generation."
+    ),
+)
 def summarize(
     benchmark_results: str,
     verbose: int,
     with_debugger: bool,
+    nb: bool,
 ) -> None:
     """Summarize benchmark results and create visualizations.
 
@@ -311,10 +320,13 @@ def summarize(
     - bottleneck_runtime_analysis_*.png: Bottleneck cumtime charts
     - bottleneck_fraction_*.png: Bottleneck fraction scaling charts
 
+    If --nb is specified, also creates:
+    - analysis.ipynb: Interactive Jupyter notebook with all plots
+
     Example usage:
         summarize results/profile_2026_01_07/benchmark_results.csv
     """
     configure_logging_to_terminal(verbose)
     benchmark_results_path = Path(benchmark_results)
     main = handle_exceptions(run_summarize_analysis, logger, with_debugger=with_debugger)
-    main(benchmark_results_path)
+    main(benchmark_results_path, nb=nb)

@@ -212,11 +212,12 @@ def _plot_scale_factor(
 
 def create_figures(
     df: pd.DataFrame,
-    output_dir: Path,
+    output_dir: Path | None,
     chart_title: str,
     time_col: str,
     mem_col: str | None,
     time_pdiff_col: str,
+    save: bool = True,
 ) -> None:
     """Create performance analysis figures.
 
@@ -225,17 +226,21 @@ def create_figures(
     df
         Summary DataFrame with aggregated statistics.
     output_dir
-        Directory to save the figures.
+        Directory to save the figures. Required if save=True.
     chart_title
-        Title for the output file.
+        Title for the output file (used only if save=True).
     time_col
         Column name for time metric.
     mem_col
         Column name for memory metric (optional).
     time_pdiff_col
         Column name for time percent difference.
+    save
+        If True, save figure to disk. If False, display with plt.show().
 
     """
+    if save and output_dir is None:
+        raise ValueError("output_dir is required when save=True")
     df = df.copy()
     # Create figure with subplots
     if mem_col:
@@ -260,15 +265,21 @@ def create_figures(
     axes4 = axes[1, 1] if mem_col else axes[1]
     _plot_scale_factor(axes4, df_sorted, time_pdiff_col, colors)
 
-    # save out
+    # save out or display
     plt.tight_layout()
-    plt.savefig(output_dir / f"{chart_title}.png", dpi=300, bbox_inches="tight")
-    # plt.show()  # Commented out for headless execution
-    print(f"Saved {chart_title}.png'")
+    if save:
+        plt.savefig(output_dir / f"{chart_title}.png", dpi=300, bbox_inches="tight")
+        print(f"Saved {chart_title}.png'")
+    else:
+        plt.show()
 
 
 def plot_bottleneck_fractions(
-    df: pd.DataFrame, output_dir: Path, config: ExtractionConfig, metric: str = "median"
+    df: pd.DataFrame,
+    output_dir: Path | None,
+    config: ExtractionConfig,
+    metric: str = "median",
+    save: bool = True,
 ) -> None:
     """Plot bottleneck fractions vs scale factor.
 
@@ -277,13 +288,17 @@ def plot_bottleneck_fractions(
     df
         Summary DataFrame with bottleneck fraction columns.
     output_dir
-        Directory to save the figures.
+        Directory to save the figures. Required if save=True.
     config
         Extraction configuration defining which bottlenecks to plot.
     metric
         Metric to plot (e.g., 'median', 'mean'). Default 'median'.
+    save
+        If True, save figure to disk. If False, display with plt.show().
 
     """
+    if save and output_dir is None:
+        raise ValueError("output_dir is required when save=True")
     df = df.copy()
     # Prepare grouping and scale factors
     df = group_models_by_type(df)
@@ -374,10 +389,13 @@ def plot_bottleneck_fractions(
         # if base_models:
         #     ax.legend(frameon=False, fontsize=8, ncols=2)
 
-        out_path = output_dir / f"bottleneck_fraction_{pattern.name}.png"
-        fig.savefig(out_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
-        print(f"Saved {out_path.name}")
+        if save:
+            out_path = output_dir / f"bottleneck_fraction_{pattern.name}.png"
+            fig.savefig(out_path, dpi=300, bbox_inches="tight")
+            plt.close(fig)
+            print(f"Saved {out_path.name}")
+        else:
+            plt.show()
 
 
 def group_models_by_type(df: pd.DataFrame) -> pd.DataFrame:
