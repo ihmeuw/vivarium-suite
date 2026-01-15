@@ -55,9 +55,9 @@ def call() {
             return false
         }
         
-        // Get today's date in MM/DD/YY format
+        // Get today's date in MM/DD/YY format (PST timezone)
         def todayDate = sh(
-            script: "date +'%m/%d/%y'",
+            script: "TZ='America/Los_Angeles' date +'%m/%d/%y'",
             returnStdout: true
         ).trim()
         

@@ -1,3 +1,7 @@
+**2.1.2 - 01/15/26**
+
+  - Bugfix: use PST timezone for CHANGELOG date validation
+
 **2.1.1 - 01/06/26**
 
   - Fail deployment if CHANGELOG date does not match current date
