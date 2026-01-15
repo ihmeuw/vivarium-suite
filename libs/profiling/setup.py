@@ -98,5 +98,6 @@ if __name__ == "__main__":
             make_artifacts=vivarium_profiling.tools.cli:make_artifacts
             run_benchmark=vivarium_profiling.tools.cli:run_benchmark
             profile_sim=vivarium_profiling.tools.cli:profile_sim
+            summarize=vivarium_profiling.tools.cli:summarize
         """,
     )

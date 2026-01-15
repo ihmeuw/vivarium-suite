@@ -12,6 +12,7 @@ from vivarium.framework.utilities import handle_exceptions
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
 from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
+from vivarium_profiling.tools.summarize import run_summarize_analysis
 
 
 @click.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
@@ -278,3 +279,42 @@ def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
         )
 
     return models
+
+
+@click.command()
+@click.argument(
+    "benchmark_results",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+)
+@click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
+@click.option(
+    "--pdb",
+    "with_debugger",
+    is_flag=True,
+    help="Drop into python debugger if an error occurs.",
+)
+def summarize(
+    benchmark_results: str,
+    verbose: int,
+    with_debugger: bool,
+) -> None:
+    """Summarize benchmark results and create visualizations.
+
+    This command reads a benchmark_results.csv file, calculates summary statistics
+    (mean, median, std, min, max) for all metrics, computes percent differences
+    from baseline, and generates performance analysis figures.
+
+    The following files will be created in the same directory as BENCHMARK_RESULTS:
+    - summary.csv: Aggregated statistics for all model specifications
+    - performance_analysis.png: Runtime and memory usage charts
+    - runtime_analysis_*.png: Individual phase runtime charts
+    - bottleneck_runtime_analysis_*.png: Bottleneck cumtime charts
+    - bottleneck_fraction_*.png: Bottleneck fraction scaling charts
+
+    Example usage:
+        summarize results/profile_2026_01_07/benchmark_results.csv
+    """
+    configure_logging_to_terminal(verbose)
+    benchmark_results_path = Path(benchmark_results)
+    main = handle_exceptions(run_summarize_analysis, logger, with_debugger=with_debugger)
+    main(benchmark_results_path)

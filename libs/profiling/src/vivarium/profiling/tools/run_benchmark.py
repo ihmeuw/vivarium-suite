@@ -17,6 +17,7 @@ from vivarium_profiling.tools.extraction import (
     extract_runtime,
     get_peak_memory,
 )
+from vivarium_profiling.tools.summarize import run_summarize_analysis
 
 RESULTS_SUMMARY_NAME = "benchmark_results.csv"
 
@@ -218,4 +219,13 @@ def run_benchmark_loop(
                 raise
 
     logger.info(f"Benchmark complete! Results saved to {results_file}")
+
+    # Run summarization and create figures
+    logger.info("Running summarization and creating visualizations...")
+    try:
+        run_summarize_analysis(Path(results_file), config)
+    except Exception as e:
+        logger.error(f"Failed to run summarization: {e}")
+        # Don't raise - benchmark data is still valid even if summarization fails
+
     return results_dir
