@@ -6,67 +6,18 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from vivarium_profiling.tools.extraction import DEFAULT_BOTTLENECKS
+
 """Benchmark summarization and visualization utilities."""
 
 
 BASELINE = "model_spec_baseline.yaml"  # Default baseline model spec name
-BOTTLENECKS = [
-    "gather_results",
-    "pipeline_call",
-    "population_get",
-]
+# Use bottleneck names from extraction module
+BOTTLENECKS = [pattern.name for pattern in DEFAULT_BOTTLENECKS]
 
 # Set style for better plots
 plt.style.use("default")
 sns.set_palette("husl")
-
-
-def extract_simulation_call_times(raw: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
-    # We did not extract simulation phase runtimes in original profiling script.
-    #   Add per-phase cProfile cumulative times now.
-    phase_funcs = ["setup", "initialize_simulants", "run", "finalize", "report"]
-    col_map = {phase: f"rt_{phase}_s" for phase in phase_funcs}
-    for col in col_map.values():
-        raw[col] = np.nan
-    for model_spec in raw["model_spec"].unique():
-        spec_stem = Path(model_spec).stem
-        spec_results_dir = output_dir / spec_stem
-        if not spec_results_dir.exists():
-            raise FileNotFoundError(
-                f"Expected results directory '{spec_results_dir}' for model spec '{model_spec}' not found. "
-                "Please ensure the profiling script has run successfully and generated the expected output directories."
-            )
-        sorted_stats_files = sorted(
-            file
-            for file in spec_results_dir.rglob(f"{spec_stem}.stats.txt")
-            if file.is_file()
-        )
-        for run_number, stats_file in enumerate(sorted_stats_files, start=1):
-            with stats_file.open("r") as fh:
-                for line in fh:
-                    # All phase calls are from engine.py
-                    if "/vivarium/framework/engine.py:" not in line:
-                        continue
-                    if not any(
-                        call in line for call in [f"({phase})" for phase in phase_funcs]
-                    ):
-                        continue
-                    phase_name = line.split()[-1].split("(")[-1].split(")")[0]
-                    phase_rt = float(line.split()[3])  # cumtime is the 4th item
-                    mask = (raw["model_spec"] == model_spec) & (raw["run"] == run_number)
-                    if mask.sum() == 0:
-                        raise RuntimeError(
-                            f"No matching run found for model_spec '{model_spec}' and run_number {run_number}. "
-                            "Please check the profiling script output and ensure runs are correctly recorded."
-                        )
-                    if mask.sum() > 1:
-                        raise RuntimeError(
-                            f"Multiple runs found for model_spec '{model_spec}' and run_number {run_number}. "
-                            "This should not happen; please check the profiling script output."
-                        )
-                    raw.loc[mask, col_map[phase_name]] = phase_rt
-
-    return raw
 
 
 def summarize(raw: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
@@ -563,8 +514,7 @@ if __name__ == "__main__":
     print(f"Summarizing results to {output_dir}\n")
 
     raw = pd.read_csv(benchmark_results_filepath)
-    raw = extract_simulation_call_times(raw, output_dir)
-    if not all(raw.notna()):
+    if raw.isna().any().any():
         raise ValueError("NaNs found in raw data.")
 
     summary = summarize(raw, output_dir)
