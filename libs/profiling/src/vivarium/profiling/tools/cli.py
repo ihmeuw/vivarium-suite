@@ -11,6 +11,7 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
+from vivarium_profiling.tools.extraction import ExtractionConfig
 from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
 from vivarium_profiling.tools.summarize import run_summarize_analysis
 
@@ -228,6 +229,11 @@ def make_artifacts(
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     help="Directory where the timestamped results directory will be created.",
 )
+@click.option(
+    "--extraction-config",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    help="Path to YAML file defining extraction patterns. If not provided, uses default patterns.",
+)
 @click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
 @click.option(
     "--pdb",
@@ -240,6 +246,7 @@ def run_benchmark(
     model_runs: int,
     baseline_model_runs: int,
     output_dir: str,
+    extraction_config: str | None,
     verbose: int,
     with_debugger: bool,
 ) -> None:
@@ -256,7 +263,14 @@ def run_benchmark(
 
     # Run benchmarks with error handling
     main = handle_exceptions(run_benchmark_loop, logger, with_debugger=with_debugger)
-    main(model_specifications, model_runs, baseline_model_runs, output_dir, verbose)
+    main(
+        model_specifications,
+        model_runs,
+        baseline_model_runs,
+        output_dir,
+        extraction_config,
+        verbose,
+    )
 
 
 def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
@@ -294,6 +308,11 @@ def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
     help="Drop into python debugger if an error occurs.",
 )
 @click.option(
+    "--extraction-config",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    help="Path to YAML file defining extraction patterns. If not provided, uses default patterns.",
+)
+@click.option(
     "--nb",
     is_flag=True,
     help=(
@@ -305,6 +324,7 @@ def summarize(
     benchmark_results: str,
     verbose: int,
     with_debugger: bool,
+    extraction_config: str | None,
     nb: bool,
 ) -> None:
     """Summarize benchmark results and create visualizations.
@@ -327,6 +347,12 @@ def summarize(
         summarize results/profile_2026_01_07/benchmark_results.csv
     """
     configure_logging_to_terminal(verbose)
+
+    # Parse extraction config if provided
+    config = None
+    if extraction_config is not None:
+        config = ExtractionConfig.from_yaml(extraction_config)
+
     benchmark_results_path = Path(benchmark_results)
     main = handle_exceptions(run_summarize_analysis, logger, with_debugger=with_debugger)
-    main(benchmark_results_path, nb=nb)
+    main(benchmark_results_path, config=config, nb=nb)

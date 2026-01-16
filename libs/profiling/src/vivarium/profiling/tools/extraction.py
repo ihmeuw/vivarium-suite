@@ -13,8 +13,20 @@ import subprocess
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
+from typing import Any
 
+import yaml
 from loguru import logger
+
+# Default values for optional FunctionCallConfiguration fields
+DEFAULT_PATTERN_CONFIG = {
+    "extract_cumtime": True,
+    "extract_percall": False,
+    "extract_ncalls": False,
+    "cumtime_template": "{name}_cumtime",
+    "percall_template": "{name}_percall",
+    "ncalls_template": "{name}_ncalls",
+}
 
 
 @dataclass
@@ -202,6 +214,78 @@ class ExtractionConfig:
         if patterns is None:
             patterns = DEFAULT_BOTTLENECKS + DEFAULT_PHASES
         self.patterns = patterns
+
+    @classmethod
+    def from_yaml(cls, yaml_path: str | Path) -> ExtractionConfig:
+        """Create an ExtractionConfig from a YAML file.
+
+        Parameters
+        ----------
+        yaml_path
+            Path to the YAML configuration file.
+
+        Returns
+        -------
+            ExtractionConfig object with patterns defined in the YAML file.
+
+        Raises
+        ------
+        ValueError
+            If the YAML file is invalid or missing required fields.
+        FileNotFoundError
+            If the YAML file doesn't exist.
+
+        Examples
+        --------
+        YAML format::
+
+            patterns:
+              - name: custom_func
+                filename: my/module.py
+                function_name: my_function
+                extract_cumtime: true
+                extract_percall: true
+                cumtime_template: "custom_{name}_time"
+
+        """
+        yaml_path = Path(yaml_path)
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"YAML config file not found: {yaml_path}")
+
+        with open(yaml_path, "r") as f:
+            config_data = yaml.safe_load(f)
+
+        if not isinstance(config_data, dict) or "patterns" not in config_data:
+            raise ValueError(
+                "YAML file must contain a 'patterns' key with a list of pattern definitions"
+            )
+
+        patterns = []
+        for i, pattern_dict in enumerate(config_data["patterns"]):
+            if not isinstance(pattern_dict, dict):
+                raise ValueError(f"Pattern at index {i} must be a dictionary")
+
+            # Merge defaults with user config
+            merged_config = DEFAULT_PATTERN_CONFIG.copy()
+            merged_config.update(pattern_dict)
+
+            # Validate required fields
+            if "name" not in merged_config:
+                raise ValueError(f"Pattern at index {i} is missing required field 'name'")
+
+            name = merged_config["name"]
+
+            if "filename" not in merged_config or "function_name" not in merged_config:
+                raise ValueError(
+                    f"Pattern '{name}' requires 'filename' and 'function_name' fields"
+                )
+
+            # Create FunctionCallConfiguration from merged config
+            pattern = FunctionCallConfiguration(**merged_config)
+
+            patterns.append(pattern)
+
+        return cls(patterns=patterns)
 
     @property
     def metric_names(self) -> list[str]:

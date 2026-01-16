@@ -148,6 +148,7 @@ def run_benchmark_loop(
     model_runs: int,
     baseline_model_runs: int,
     output_dir: str = ".",
+    extraction_config: str | Path | None = None,
     verbose: int = 0,
 ) -> str:
     """Main function to run benchmarks on model specifications.
@@ -162,17 +163,20 @@ def run_benchmark_loop(
         Number of runs for the baseline model.
     output_dir
         Directory to save results.
+    extraction_config
+        Path to YAML file defining extraction patterns. If None, uses default patterns.
     verbose
         Verbosity level for logging.
-    config
-        Extraction configuration. Defaults to DEFAULT_CONFIG.
 
     Returns
     -------
         Path to the results directory.
 
     """
-    config = ExtractionConfig()
+    if extraction_config is not None:
+        config = ExtractionConfig.from_yaml(extraction_config)
+    else:
+        config = ExtractionConfig()
 
     configure_logging_to_terminal(verbose)
 
