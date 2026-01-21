@@ -20,7 +20,7 @@ if __name__ == "__main__":
         "numpy": ["numpy"],
         "numpy_lt_2": ["numpy<2.0.0"],
         "pandas": [
-            "pandas",
+            "pandas<3.0.0",
             "pandas-stubs<=2.2.3.250308",
         ],
         "pyyaml": [
