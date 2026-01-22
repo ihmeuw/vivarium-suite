@@ -4,6 +4,12 @@
 # is cause sphinx does runtime checks.
 py:class risk_distributions.formatting.Parameter
 py:class risk_distributions.formatting.Parameters
+
 # Need these for python 3.6
 py:class Parameter
 py:class Parameters
+
+# pandas
+py:class pandas.core.frame.DataFrame
+py:class pandas.core.series.Series
+py:class pandas.core.indexes.base.Index
