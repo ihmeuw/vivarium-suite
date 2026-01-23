@@ -1,0 +1,322 @@
+/**
+ * Jenkins Pipeline: Shared Environment Builder
+ * 
+ * This pipeline builds and maintains shared conda environments for model repositories.
+ * It compares new builds against "current" versions and updates only when changes are detected.
+ * 
+ * Environments are stored in a read-only (except by Jenkins) directory accessible to all users.
+ */
+@Library('vivarium_build_utils@pnast/feature/mic-6722-jenkins-env') _
+
+pipeline {
+    agent { node 'simsci-jenkinsagent-ci-p01' }
+    
+    parameters {
+        string(
+            name: 'ACTIVE_MODELS',
+            defaultValue: 'vivarium_gates_mncnh',
+            description: 'Comma-separated list of model repositories to build environments for'
+        )
+        string(
+            name: 'ENV_TYPES',
+            defaultValue: 'simulation,artifact',
+            description: 'Comma-separated list of environment types to build (simulation, artifact)'
+        )
+        string(
+            name: 'SHARED_ENV_DIR',
+            defaultValue: '/mnt/team/simulation_science/priv/engineering/jenkins/shared_envs',
+            description: 'Base directory for shared environments'
+        )
+        booleanParam(
+            name: 'FORCE_REBUILD',
+            defaultValue: false,
+            description: 'Force rebuild and update of all environments, even if no changes detected'
+        )
+    }
+    
+    environment {
+        // Conda configuration
+        SHARED_PATH = '/svc-simsci'
+        CONDARC = "${SHARED_PATH}/miniconda3/.condarc"
+        CONDA_BIN_PATH = "${SHARED_PATH}/miniconda3/bin"
+        XDG_CACHE_HOME = "${SHARED_PATH}/pip-cache"
+        ACTIVATE_BASE = "source ${CONDA_BIN_PATH}/activate &> /dev/null"
+        
+        // GitHub organization for model repos
+        GITHUB_ORG = 'ihmeuw'
+        GITHUB_BRANCH = 'pnast/feature/mic-6772-shared-envs' //'main'
+        
+        // Timestamp for this build
+        BUILD_TIMESTAMP = sh(script: 'date +%Y%m%d_%H%M%S', returnStdout: true).trim()
+    }
+    
+    options {
+        skipDefaultCheckout()
+        timeout(time: 180, unit: 'MINUTES')
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+    
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    // Parse parameters
+                    env.MODEL_LIST = params.ACTIVE_MODELS.split(',').collect { it.trim() }
+                    env.TYPE_LIST = params.ENV_TYPES.split(',').collect { it.trim() }
+                    
+                    echo "=== Shared Environment Builder ==="
+                    echo "Models: ${env.MODEL_LIST}"
+                    echo "Environment Types: ${env.TYPE_LIST}"
+                    echo "Shared Directory: ${params.SHARED_ENV_DIR}"
+                    echo "Build Timestamp: ${env.BUILD_TIMESTAMP}"
+                    echo "Force Rebuild: ${params.FORCE_REBUILD}"
+                    
+                    // Ensure shared directory exists with proper permissions
+                    sh """
+                        mkdir -p ${params.SHARED_ENV_DIR}
+                        chmod 755 ${params.SHARED_ENV_DIR}
+                    """
+                }
+            }
+        }
+        
+        stage('Build Environments') {
+            steps {
+                script {
+                    def models = params.ACTIVE_MODELS.split(',').collect { it.trim() }
+                    def types = params.ENV_TYPES.split(',').collect { it.trim() }
+                    
+                    // Build environments sequentially to avoid conda package cache contention.
+                    // Parallel conda operations sharing the same cache can cause lock conflicts,
+                    // partial writes, and solver resource exhaustion.
+                    for (model in models) {
+                        for (envType in types) {
+                            buildAndCompareEnvironment(model, envType)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+            dir("${env.WORKSPACE}@tmp") {
+                deleteDir()
+            }
+        }
+        success {
+            echo "All shared environments processed successfully"
+        }
+        failure {
+            script {
+                def channelName = "simsci-ci-status-test"
+                def slackMessage = """
+                    Job: *${env.JOB_NAME}*
+                    Build number: #${env.BUILD_NUMBER}
+                    Build status: *${currentBuild.result}*
+                    Build details: <${env.BUILD_URL}/console|See in web console>
+                    """.stripIndent()
+                
+                slackSend channel: "#${channelName}",
+                        message: slackMessage,
+                        teamDomain: "ihme",
+                        tokenCredentialId: "slack"
+            }
+        }
+    }
+}
+
+/**
+ * Build a new environment and compare it against the current version.
+ * Updates the current environment only if changes are detected.
+ */
+def buildAndCompareEnvironment(String model, String envType) {
+    def envName = "${model}_${envType}"
+    def timestampedName = "${envName}_${env.BUILD_TIMESTAMP}"
+    def currentPath = "${params.SHARED_ENV_DIR}/${envName}_current"
+    def timestampedPath = "${params.SHARED_ENV_DIR}/${timestampedName}"
+    
+    stage("Build ${model} - ${envType}") {
+        echo "=== Building environment: ${envName} ==="
+        echo "Timestamped path: ${timestampedPath}"
+        echo "Current path: ${currentPath}"
+        
+        // Clone the repository
+        dir("repos/${model}") {
+            checkout([
+                $class: 'GitSCM',
+                branches: [[name: "*/${env.GITHUB_BRANCH}"]],
+                userRemoteConfigs: [[
+                    url: "https://github.com/${env.GITHUB_ORG}/${model}.git",
+                    credentialsId: 'fad62062-b1f4-447b-997f-005d6b1ea41e'
+                ]]
+            ])
+            
+            // Load shared makefiles from Jenkins shared library
+            load_shared_files()
+            
+            // Build the environment with path argument
+            sh """
+                ${env.ACTIVATE_BASE}
+                make build-env type=${envType} name=${timestampedName} path=${timestampedPath}
+            """
+        }
+    }
+    
+    stage("Compare ${model} - ${envType}") {
+        script {
+            def currentExists = fileExists(currentPath)
+            def shouldUpdate = false
+            
+            if (params.FORCE_REBUILD) {
+                echo "Force rebuild requested - will update environment"
+                shouldUpdate = true
+            } else if (!currentExists) {
+                echo "No current environment exists - will create new current"
+                shouldUpdate = true
+            } else {
+                // Compare environments
+                shouldUpdate = compareEnvironments(timestampedPath, currentPath)
+            }
+            
+            if (shouldUpdate) {
+                promoteEnvironment(timestampedPath, currentPath, envName)
+            } else {
+                echo "No changes detected - keeping current environment"
+                cleanupTimestampedEnvironment(timestampedPath)
+            }
+        }
+    }
+}
+
+/**
+ * Compare two conda environments by examining their installed packages.
+ * Uses both conda list --explicit and pip freeze for thorough comparison.
+ * 
+ * @param newEnvPath Path to the newly built environment
+ * @param currentEnvPath Path to the current environment
+ * @return true if environments differ, false if identical
+ */
+def compareEnvironments(String newEnvPath, String currentEnvPath) {
+    echo "Comparing environments:"
+    echo "  New: ${newEnvPath}"
+    echo "  Current: ${currentEnvPath}"
+    
+    def hasChanges = false
+    
+    try {
+        // Generate lock files for comparison
+        sh """
+            ${env.ACTIVATE_BASE}
+            
+            # Generate conda explicit list for new environment
+            conda list --prefix ${newEnvPath} --explicit > ${WORKSPACE}/new_conda_lock.txt 2>/dev/null || true
+            
+            # Generate conda explicit list for current environment  
+            conda list --prefix ${currentEnvPath} --explicit > ${WORKSPACE}/current_conda_lock.txt 2>/dev/null || true
+            
+            # Generate pip freeze for new environment (filter out local file installs)
+            ${newEnvPath}/bin/pip freeze 2>/dev/null | grep -v 'file:///' | grep -v '^-e ' | sort > ${WORKSPACE}/new_pip_lock.txt || true
+            
+            # Generate pip freeze for current environment
+            ${currentEnvPath}/bin/pip freeze 2>/dev/null | grep -v 'file:///' | grep -v '^-e ' | sort > ${WORKSPACE}/current_pip_lock.txt || true
+        """
+        
+        // Compare conda packages
+        def condaDiff = sh(
+            script: "diff ${WORKSPACE}/current_conda_lock.txt ${WORKSPACE}/new_conda_lock.txt || true",
+            returnStdout: true
+        ).trim()
+        
+        // Compare pip packages
+        def pipDiff = sh(
+            script: "diff ${WORKSPACE}/current_pip_lock.txt ${WORKSPACE}/new_pip_lock.txt || true",
+            returnStdout: true
+        ).trim()
+        
+        if (condaDiff || pipDiff) {
+            hasChanges = true
+            echo "=== CHANGES DETECTED ==="
+            
+            if (condaDiff) {
+                echo "Conda package differences:"
+                echo condaDiff
+            }
+            
+            if (pipDiff) {
+                echo "Pip package differences:"
+                echo pipDiff
+            }
+        } else {
+            echo "No package differences found"
+        }
+        
+    } catch (Exception e) {
+        echo "Error during comparison: ${e.message}"
+        echo "Will update environment to be safe"
+        hasChanges = true
+    }
+    
+    return hasChanges
+}
+
+/**
+ * Promote the timestamped environment to become the new current environment.
+ * Removes the old current and moves the timestamped directory in its place.
+ */
+def promoteEnvironment(String timestampedPath, String currentPath, String envName) {
+    echo "=== Promoting new environment ==="
+    echo "Removing old current: ${currentPath}"
+    echo "Moving ${timestampedPath} -> ${currentPath}"
+    
+    sh """
+        # Remove old current environment if it exists
+        if [ -d "${currentPath}" ]; then
+            rm -rf "${currentPath}"
+            echo "Removed old current environment"
+        fi
+        
+        # Move timestamped to current
+        mv "${timestampedPath}" "${currentPath}"
+        echo "Promoted new environment to current"
+        
+        # Set permissions - readable by all, writable only by Jenkins
+        chmod -R 755 "${currentPath}"
+        
+        # Create a metadata file with build info
+        cat > "${currentPath}/.build_info" << EOF
+Environment: ${envName}
+Built: ${env.BUILD_TIMESTAMP}
+Jenkins Build: ${env.BUILD_NUMBER}
+Job: ${env.JOB_NAME}
+EOF
+        
+        echo "Environment promotion complete"
+    """
+    
+    // Archive the lock files for this promoted environment
+    sh """
+        mkdir -p ${WORKSPACE}/promoted_locks
+        cp ${WORKSPACE}/new_conda_lock.txt ${WORKSPACE}/promoted_locks/${envName}_conda_lock.txt || true
+        cp ${WORKSPACE}/new_pip_lock.txt ${WORKSPACE}/promoted_locks/${envName}_pip_lock.txt || true
+    """
+    
+    archiveArtifacts artifacts: "promoted_locks/${envName}_*.txt", allowEmptyArchive: true
+}
+
+/**
+ * Clean up a timestamped environment that is not needed (no changes detected).
+ */
+def cleanupTimestampedEnvironment(String timestampedPath) {
+    echo "Cleaning up timestamped environment: ${timestampedPath}"
+    
+    sh """
+        if [ -d "${timestampedPath}" ]; then
+            rm -rf "${timestampedPath}"
+            echo "Removed unused timestamped environment"
+        fi
+    """
+}
