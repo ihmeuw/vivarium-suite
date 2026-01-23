@@ -1,3 +1,9 @@
+**v0.3.0 - 01/22/2026**
+
+ - Convert data ETL to click commands
+ - add configurable function call patterns
+ - add notebook support
+
 **v0.2.0 - 01/02/2026**
 
  - Add MultiComponentParser with Causes, Risks, RiskEffects
