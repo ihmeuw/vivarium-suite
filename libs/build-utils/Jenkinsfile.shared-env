@@ -44,7 +44,7 @@ pipeline {
         
         // GitHub organization for model repos
         GITHUB_ORG = 'ihmeuw'
-        GITHUB_BRANCH = 'pnast/feature/mic-6772-shared-envs' //'main'
+        GITHUB_BRANCH = 'epic/shared_model_envs' // 'main'
         
         // Timestamp for this build
         BUILD_TIMESTAMP = sh(script: 'date +%Y%m%d_%H%M%S', returnStdout: true).trim()
