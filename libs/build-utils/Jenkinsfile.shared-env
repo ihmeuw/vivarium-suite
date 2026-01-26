@@ -6,8 +6,7 @@
  * 
  * Environments are stored in a read-only (except by Jenkins) directory accessible to all users.
  */
- // TODO: set this to main before merging epic
-@Library('vivarium_build_utils@epic/shared_model_envs') _
+@Library('vivarium_build_utils') _
 
 import groovy.transform.Field
 
@@ -55,7 +54,7 @@ pipeline {
         
         // GitHub organization for model repos
         GITHUB_ORG = 'ihmeuw'
-        GITHUB_BRANCH = 'epic/shared_model_envs' // 'main'
+        GITHUB_BRANCH = 'main'
         
         // Timestamp for this build
         BUILD_TIMESTAMP = sh(script: 'date +%Y%m%d_%H%M%S', returnStdout: true).trim()
