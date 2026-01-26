@@ -32,6 +32,11 @@ pipeline {
             defaultValue: false,
             description: 'Force rebuild and update of all environments, even if no changes detected'
         )
+        string(
+            name: 'RETENTION_DAYS',
+            defaultValue: '30',
+            description: 'Number of days to retain old timestamped environments before cleanup'
+        )
     }
     
     environment {
@@ -71,6 +76,7 @@ pipeline {
                     echo "Shared Directory: ${params.SHARED_ENV_DIR}"
                     echo "Build Timestamp: ${env.BUILD_TIMESTAMP}"
                     echo "Force Rebuild: ${params.FORCE_REBUILD}"
+                    echo "Retention Days: ${params.RETENTION_DAYS}"
                     
                     // Ensure shared directory exists with proper permissions
                     sh """
@@ -95,6 +101,14 @@ pipeline {
                             buildAndCompareEnvironment(model, envType)
                         }
                     }
+                }
+            }
+        }
+        
+        stage('Cleanup Old Environments') {
+            steps {
+                script {
+                    cleanupOldTimestampedEnvironments()
                 }
             }
         }
@@ -319,4 +333,108 @@ def cleanupTimestampedEnvironment(String timestampedPath) {
             echo "Removed unused timestamped environment"
         fi
     """
+}
+
+/**
+ * Clean up old timestamped environments in parallel for all model/type combinations.
+ * Removes environments older than RETENTION_DAYS while preserving *_current directories.
+ */
+def cleanupOldTimestampedEnvironments() {
+    echo "=== Cleaning up old timestamped environments ==="
+    echo "Retention period: ${params.RETENTION_DAYS} days"
+    
+    def models = params.ACTIVE_MODELS.split(',').collect { it.trim() }
+    def types = params.ENV_TYPES.split(',').collect { it.trim() }
+    
+    def parallelCleanups = [:]
+    
+    models.each { model ->
+        types.each { envType ->
+            def envName = "${model}_${envType}"
+            parallelCleanups["Cleanup ${envName}"] = {
+                cleanupOldEnvironmentsForType(model, envType)
+            }
+        }
+    }
+    
+    parallel parallelCleanups
+}
+
+/**
+ * Clean up old timestamped environments for a specific model and environment type.
+ * Uses find with mtime to identify directories older than the retention period.
+ * 
+ * @param model The model repository name
+ * @param envType The environment type (simulation, artifact, etc.)
+ */
+def cleanupOldEnvironmentsForType(String model, String envType) {
+    def envPattern = "${model}_${envType}_[0-9]*"
+    def baseDir = params.SHARED_ENV_DIR
+    def archiveDir = "${baseDir}/archive/${model}_${envType}"
+    
+    echo "Cleaning up old environments matching: ${envPattern}"
+    
+    try {
+        // Ensure archive directory exists
+        sh """
+            mkdir -p "${archiveDir}"
+            chmod 755 "${archiveDir}"
+        """
+        
+        // Find and list old timestamped directories (excluding archive directory)
+        def oldDirs = sh(
+            script: """
+                find "${baseDir}" -mindepth 1 -maxdepth 1 -type d \\
+                    -name "${envPattern}" \\
+                    ! -name "*_current" \\
+                    ! -path "*/archive" \\
+                    ! -path "*/archive/*" \\
+                    -mtime +${params.RETENTION_DAYS} \\
+                    2>/dev/null || true
+            """,
+            returnStdout: true
+        ).trim()
+        
+        if (oldDirs) {
+            def dirList = oldDirs.split('\n')
+            echo "Found old environments to remove:"
+            dirList.each { dir ->
+                echo "  - ${dir}"
+            }
+            
+            // Archive requirements and remove old directories
+            dirList.each { dir ->
+                def dirName = dir.tokenize('/').last()
+                def requirementsFile = "${archiveDir}/${dirName}_requirements.txt"
+                
+                // Extract conda requirements before deletion
+                sh """
+                    ${env.ACTIVATE_BASE}
+                    
+                    # Create requirements file with timestamp header
+                    echo "# Archived conda environment: ${dirName}" > "${requirementsFile}"
+                    echo "# Archived on: \$(date)" >> "${requirementsFile}"
+                    echo "# Original path: ${dir}" >> "${requirementsFile}"
+                    echo "" >> "${requirementsFile}"
+                    
+                    # Export conda packages in explicit format
+                    conda list --prefix "${dir}" --explicit >> "${requirementsFile}" 2>/dev/null || echo "# Failed to export conda packages" >> "${requirementsFile}"
+                    
+                    echo "Archived requirements to: ${requirementsFile}"
+                """
+                
+                // Remove the old directory
+                sh "rm -rf '${dir}'"
+            }
+            
+            echo "Archived and removed ${dirList.size()} old environment(s) for ${model}_${envType}"
+        } else {
+            echo "No old environments found for ${model}_${envType}"
+        }
+        
+    } catch (Exception e) {
+        // Log warning but don't fail the pipeline
+        echo "WARNING: Failed to cleanup old environments for ${model}_${envType}: ${e.message}"
+        echo "Continuing with pipeline..."
+    }
 }
