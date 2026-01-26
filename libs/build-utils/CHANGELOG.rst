@@ -1,3 +1,7 @@
+**2.2.0 - 01/26/26**
+
+  - Feature: Add shared model environments nightly build
+
 **2.1.2 - 01/15/26**
 
   - Bugfix: use PST timezone for CHANGELOG date validation
