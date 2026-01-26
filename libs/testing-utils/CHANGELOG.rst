@@ -1,3 +1,7 @@
+**0.3.2 - 01/26/26**
+
+  - Feature: Update AgeGroup and AgeGroupSchema to handle subsets 
+
 **0.3.1 - 01/06/26**
 
  - Fail deployment if changelog date does not match current date

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -55,6 +56,8 @@ class AgeGroup:
     def __eq__(self, other: object) -> bool:
         """Define equality between two age groups.
 
+        Uses AGE_TOLERANCE to handle floating-point precision issues.
+
         Parameters
         ----------
         other
@@ -62,11 +65,39 @@ class AgeGroup:
 
         Returns
         -------
-            True if the two age groups have the same start and end ages, False otherwise.
+            True if the two age groups have the same start and end ages (within AGE_TOLERANCE), False otherwise.
         """
         if not isinstance(other, AgeGroup):
             return NotImplemented
-        return (self.start, self.end) == (other.start, other.end)
+        return self.start_matches(other.start) and self.end_matches(other.end)
+
+    def end_matches(self, value: float) -> bool:
+        """Check if the end age matches a value within AGE_TOLERANCE.
+
+        Parameters
+        ----------
+        value
+            The value to compare against.
+
+        Returns
+        -------
+            True if the end age matches the value within AGE_TOLERANCE, False otherwise.
+        """
+        return abs(self.end - value) <= AGE_TOLERANCE
+
+    def start_matches(self, value: float) -> bool:
+        """Check if the start age matches a value within AGE_TOLERANCE.
+
+        Parameters
+        ----------
+        value
+            The value to compare against.
+
+        Returns
+        -------
+            True if the start age matches the value within AGE_TOLERANCE, False otherwise.
+        """
+        return abs(self.start - value) <= AGE_TOLERANCE
 
     def fraction_contained_by(self, other: AgeGroup) -> float:
         """
@@ -108,15 +139,15 @@ class AgeGroup:
         """
         # Special case for "early_neonatal", "late_neonatal", and "95_plus"
         special_age_groups = {
-            "early_neonatal": ("Early Neonatal", 0.0, 7 / 365.0),
-            "late_neonatal": ("Late Neonatal", 7 / 365.0, 28 / 365.0),
+            "early_neonatal": (0.0, 7 / 365.0),
+            "late_neonatal": (7 / 365.0, 28 / 365.0),
             # 1-5 months is not exactly 1 month so it is special cased
-            "1-5_months": ("1-5 months", 28.0 / 365.0, 0.5),
-            "95_plus": ("95 plus", 95.0, 125.0),
+            "1-5_months": (28.0 / 365.0, 0.5),
+            "95_plus": (95.0, 125.0),
         }
         if name in special_age_groups:
-            special_name, start, end = special_age_groups[name]
-            return cls(special_name, start, end)
+            start, end = special_age_groups[name]
+            return cls(name, start, end)
         # Extract numbers and unit from the group name
         pattern = r"(\d+(?:\.\d+)?)(?:_to_|-)(\d+(?:\.\d+)?)(?:_(\w+))?"
         match = re.match(pattern, name.lower())
@@ -265,7 +296,9 @@ class AgeSchema:
         return cls(age_groups)
 
     @classmethod
-    def from_ranges(cls, age_ranges: list[AgeRange]) -> AgeSchema:
+    def from_ranges(
+        cls, age_ranges: list[AgeRange], target_schema: AgeSchema | None = None
+    ) -> AgeSchema:
         """
         Create an AgeSchema from a list of age ranges.
 
@@ -280,7 +313,15 @@ class AgeSchema:
         """
         age_groups = []
         for start, end in age_ranges:
-            age_groups.append(AgeGroup.from_range(start, end))
+            matching_group = AgeGroup.from_range(start, end)
+            # Check if target_schema has an age group with matching start and end ages
+            if target_schema is not None:
+                for group in target_schema.age_groups:
+                    if matching_group == group:
+                        matching_group = group
+                        break
+
+            age_groups.append(matching_group)
         return cls(age_groups)
 
     @classmethod
@@ -303,7 +344,9 @@ class AgeSchema:
         return cls(age_groups)
 
     @classmethod
-    def from_dataframe(cls, df: pd.DataFrame) -> AgeSchema:
+    def from_dataframe(
+        cls, df: pd.DataFrame, target_schema: AgeSchema | None = None
+    ) -> AgeSchema:
         """
         Create an AgeSchema from a DataFrame with age group names.
 
@@ -313,6 +356,8 @@ class AgeSchema:
         ----------
         df
             A DataFrame with age group names and/or their start and end ages.
+        target_schema
+            The target age schema to map age ranges to if only start/end are provided.
 
         Returns
         -------
@@ -346,7 +391,11 @@ class AgeSchema:
                 .reorder_levels(levels)
                 .unique()
             )
-            return cls.from_ranges(age_groups)
+            if target_schema is None:
+                raise ValueError(
+                    "Target schema must be provided when DataFrame has only 'age_start' and 'age_end' index levels."
+                )
+            return cls.from_ranges(age_groups, target_schema)
         # Most simulation dataframes have age group but not start/end
         elif has_age_group:
             levels = [INPUT_DATA_INDEX_NAMES.AGE_GROUP]
@@ -384,14 +433,34 @@ class AgeSchema:
             raise ValueError("No age groups provided.")
 
         for i in range(len(self.age_groups) - 1):
-            if self.age_groups[i].end > self.age_groups[i + 1].start + AGE_TOLERANCE:
-                raise ValueError(
-                    f"Overlapping age groups: {self.age_groups[i]} and {self.age_groups[i + 1]}"
-                )
-            if self.age_groups[i].end < self.age_groups[i + 1].start - AGE_TOLERANCE:
-                raise ValueError(
-                    f"Gap between consecutive age groups: {self.age_groups[i]} and {self.age_groups[i + 1]}"
-                )
+            current_group = self.age_groups[i]
+            next_group = self.age_groups[i + 1]
+
+            # Check if end of current matches start of next (within tolerance)
+            if not current_group.end_matches(next_group.start):
+                # If they don't match, check if there's overlap or a gap
+                if current_group.end > next_group.start:
+                    raise ValueError(
+                        f"Overlapping age groups: {current_group} and {next_group}"
+                    )
+                else:
+                    raise ValueError(
+                        f"Gap between consecutive age groups: {current_group} and {next_group}"
+                    )
+
+    def _span_less_than(self, value: float) -> bool:
+        """Check if the span is less than a value (accounting for tolerance).
+
+        Parameters
+        ----------
+        value
+            The value to compare against.
+
+        Returns
+        -------
+            True if the span is less than the value minus AGE_TOLERANCE, False otherwise.
+        """
+        return self.span < value - AGE_TOLERANCE
 
     def can_coerce_to(self, target: AgeSchema) -> bool:
         """
@@ -410,13 +479,53 @@ class AgeSchema:
         """
         overlap_start = max(self.range[0], target.range[0])
         overlap_end = min(self.range[1], target.range[1])
-        overlap = max(0, overlap_end - overlap_start)
-        if overlap < target.span - AGE_TOLERANCE:
-            return False
-        if self.span < target.span - AGE_TOLERANCE:
+        shared_age_span = max(0, overlap_end - overlap_start)
+
+        does_not_cover_full_target = shared_age_span < target.span - AGE_TOLERANCE
+        if does_not_cover_full_target:
+            # Target's full range is not covered so check if all age group boundaries
+            # align with target boundaries
+            return self.can_coerce_partial_span(target)
+
+        if self._span_less_than(target.span):
             logger.warning(
-                "Warning: Age Groups span different total ranges. This could lead to unexpected results at extreme age ranges."
+                "Warning: Age Groups span different total ranges. "
+                "This could lead to unexpected results at extreme age ranges."
             )
+        return True
+
+    def can_coerce_partial_span(self, target: AgeSchema) -> bool:
+        """
+        Check whether this schema can be coerced to another schema even if it spans a sub-interval.
+        That is, all age groups in this schema are fully contained within age groups in the target schema
+        where the age group boundaries match for all age groups in this schema but the target scehma may
+        have additional age groups outside the range of this schema.
+
+        Parameters
+        ----------
+        target
+            The target age schema to check against.
+        Returns
+        -------
+            True if this schema can be coerced to the other schema, False otherwise.
+
+        """
+        # Collect all unique boundary points from target schema
+        target_boundaries = set()
+        for group in target.age_groups:
+            target_boundaries.add(group.start)
+            target_boundaries.add(group.end)
+
+        # Check if all boundaries of self's age groups exist in target
+        for group in self.age_groups:
+            # Check start boundary
+            if not any(group.start_matches(boundary) for boundary in target_boundaries):
+                return False
+
+            # Check end boundary
+            if not any(group.end_matches(boundary) for boundary in target_boundaries):
+                return False
+
         return True
 
 
@@ -439,7 +548,9 @@ def _format_dataframe(target_schema: AgeSchema, df: pd.DataFrame) -> pd.DataFram
         ValueError
             If the source age schema cannot be coerced to the target schema.
     """
-    source_age_schema = AgeSchema.from_dataframe(df)
+    # Target schema should have age_start, age_end, and age_group (population.age_bins format)
+    # df will have either age_group or age_start and age_end (artifact/gbd vs sim data format)
+    source_age_schema = AgeSchema.from_dataframe(df, target_schema)
     index_names = list(df.index.names)
     for age_group_indices in [
         INPUT_DATA_INDEX_NAMES.AGE_GROUP,
@@ -477,6 +588,7 @@ def _format_dataframe(target_schema: AgeSchema, df: pd.DataFrame) -> pd.DataFram
         data = rebin_count_dataframe(
             target_schema,
             df.droplevel([INPUT_DATA_INDEX_NAMES.AGE_START, INPUT_DATA_INDEX_NAMES.AGE_END]),
+            source_age_schema,
         )
         return data
 
@@ -485,6 +597,7 @@ def _format_dataframe(target_schema: AgeSchema, df: pd.DataFrame) -> pd.DataFram
 def rebin_count_dataframe(
     target_schema: AgeSchema,
     df: pd.DataFrame,
+    source_age_schema: AgeSchema,
 ) -> pd.DataFrame:
     """
     Rebin a DataFrame to match the target age schema.
@@ -498,12 +611,12 @@ def rebin_count_dataframe(
         The target age schema to convert to.
     df
         The DataFrame to rebin.
+    source_age_schema
+        The source age schema of the DataFrame.
     Returns
     -------
         A DataFrame with the target age schema in the index and transformed values.
     """
-    source_age_schema = AgeSchema.from_dataframe(df)
-
     transform_matrix = _get_transform_matrix(source_age_schema, target_schema)
 
     original_index_names = list(df.index.names)
@@ -522,12 +635,29 @@ def rebin_count_dataframe(
         # Perform the dot product
         result_matrix_for_col = unstacked_series.dot(transform_matrix.T)
 
+        # Identify target age groups that are completely outside the source schema's range
+        # These "extra" age groups should be set to NaN to indicate no source data
+        extra_age_groups = []
+        for target_group in target_schema.age_groups:
+            # Check if target group has any overlap with any source group
+            has_overlap = any(
+                source_group.fraction_contained_by(target_group) > 0
+                for source_group in source_age_schema.age_groups
+            )
+            if not has_overlap:
+                extra_age_groups.append(target_group.name)
+
+        # Set only the truly extra age groups to NaN
+        if extra_age_groups:
+            result_matrix_for_col[extra_age_groups] = np.nan
+
         # Name the column GBD_INDEX_NAMES.AGE_GROUP for re-stacking
         result_matrix_for_col.columns.name = INPUT_DATA_INDEX_NAMES.AGE_GROUP
 
         # Stack the new age group columns into the index
+        # Use dropna=False to preserve rows with NaN values for age groups with no source data
         stacked_series_for_col = result_matrix_for_col.stack(
-            level=INPUT_DATA_INDEX_NAMES.AGE_GROUP
+            level=INPUT_DATA_INDEX_NAMES.AGE_GROUP, dropna=False
         )
         stacked_series_for_col.name = val_col
 
@@ -571,6 +701,7 @@ def format_dataframe_from_age_bin_df(
     data: pd.DataFrame, age_bin_df: pd.DataFrame
 ) -> pd.DataFrame:
     """Try to merge the age groups with the data. If it fails, just return the data."""
+    # age_bin_df is expected to have 'age_group', 'age_start', 'age_end' columns (population.age_bins format)
     context_age_schema = AgeSchema.from_dataframe(age_bin_df)
     try:
         return _format_dataframe(context_age_schema, data)
