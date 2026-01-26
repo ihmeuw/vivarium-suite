@@ -6,7 +6,13 @@
  * 
  * Environments are stored in a read-only (except by Jenkins) directory accessible to all users.
  */
-@Library('vivarium_build_utils@pnast/feature/mic-6722-jenkins-env') _
+ // TODO: set this to main before merging epic
+@Library('vivarium_build_utils@epic/shared_model_envs') _
+
+import groovy.transform.Field
+
+// Track updated environments (must be at script level, not in env)
+@Field def UPDATED_ENVIRONMENTS = []
 
 pipeline {
     agent { node 'simsci-jenkinsagent-ci-p01' }
@@ -122,11 +128,38 @@ pipeline {
             }
         }
         success {
-            echo "All shared environments processed successfully"
+            script {
+                echo "All shared environments processed successfully"
+                
+                // Send Slack notification if any environments were updated
+                if (UPDATED_ENVIRONMENTS && UPDATED_ENVIRONMENTS.size() > 0) {
+                    def channelName = "simsci-shared-env-updates"
+                    def envList = UPDATED_ENVIRONMENTS.collect { "  • ${it}" }.join('\n')
+                    def slackMessage = """
+                        *Shared Environment Update*
+                        
+                        The following environments were updated:
+                        ${envList}
+                        
+                        Job: *${env.JOB_NAME}*
+                        Build number: #${env.BUILD_NUMBER}
+                        Build details: <${env.BUILD_URL}/console|See in web console>
+                        """.stripIndent()
+                    
+                    slackSend channel: "#${channelName}",
+                            message: slackMessage,
+                            teamDomain: "ihme",
+                            tokenCredentialId: "slack"
+                    
+                    echo "Sent Slack notification for ${UPDATED_ENVIRONMENTS.size()} updated environment(s)"
+                } else {
+                    echo "No environments were updated - no Slack notification sent"
+                }
+            }
         }
         failure {
             script {
-                def channelName = "simsci-ci-status-test"
+                def channelName = "simsci-shared-env-updates"
                 def slackMessage = """
                     Job: *${env.JOB_NAME}*
                     Build number: #${env.BUILD_NUMBER}
@@ -198,6 +231,8 @@ def buildAndCompareEnvironment(String model, String envType) {
             
             if (shouldUpdate) {
                 promoteEnvironment(timestampedPath, currentPath, envName)
+                // Track this update for the slack notification
+                UPDATED_ENVIRONMENTS.add(envName)
             } else {
                 echo "No changes detected - keeping current environment"
                 cleanupTimestampedEnvironment(timestampedPath)
