@@ -178,7 +178,7 @@ depending on the profiler backend provided. By default, runtime profiling is per
 you can also use ``scalene`` for more detailed call stack analysis.
 
 The ``run_benchmark`` command runs multiple iterations of one or more model specification, in order to compare
-the results. It requires at least one baseline model (specified as ``model_spec_baseline.yaml``) for comparison,
+the results. It requires at least one baseline model for comparison,
 and any other number of 'experiment' models to benchmark against the baseline, which can be passed via glob patterns.
 You can separately configure the sample size of runs for the baseline and experiment models. The command aggregates
 the profiling results and generates summary statistics and visualizations for a default set of important function calls

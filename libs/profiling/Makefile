@@ -19,6 +19,9 @@ endif
 # Set the package name as the last part of this file's parent directory path
 PACKAGE_NAME = $(notdir $(CURDIR))
 
+# Helper function for validating enum arguments
+validate_arg = $(if $(filter-out $(2),$(1)),$(error Error: '$(3)' must be one of: $(2), got '$(1)'))
+
 ifneq ($(MAKE_INCLUDES),) # not empty
 # Include makefiles from vivarium_build_utils
 include $(MAKE_INCLUDES)/base.mk
@@ -35,15 +38,19 @@ help:
 	@echo "make build-env"
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env name=<environment_name> [py=<python_version>]"
+	@echo "  make build-env [type=<environment type>] [name=<environment name>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
-	@echo "  name  [required]  Name of the conda environment to create"
-	@echo "  py    [optional]  Python version (defaults to latest supported)"
-	@echo
-	@echo "EXAMPLE:"
-	@echo "  make build-env name=vivarium_dev"
-	@echo "  make build-env name=vivarium_dev py=3.9"
+	@echo "  type [optional]"
+	@echo "      Type of conda environment. Either 'simulation' (default) or 'artifact'"
+	@echo "  name [optional]"
+	@echo "      Name of the conda environment to create (defaults to <PACKAGE_NAME>_<TYPE>)"
+	@echo "  include_timestamp [optional]"
+	@echo "      Whether to append a timestamp to the environment name. Either 'yes' or 'no' (default)"
+	@echo "  lfs [optional]"
+	@echo "      Whether to install git-lfs in the environment. Either 'yes' or 'no' (default)"
+	@echo "  py [optional]"
+	@echo "      Python version (defaults to latest supported)"
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -52,18 +59,58 @@ help:
 endif
 
 build-env: # Create a new environment with installed packages
-ifndef name
-	@echo "Error: name is required and must be passed in as a keyword argument."
-	@echo "Usage: make build-env name=<ENV_NAME> py=<PYTHON_VERSION>"
-	@exit 1
-endif
-#	Check if py is set, otherwise use the latest supported version
+#	Validate arguments - exit if unsupported arguments are passed
+	@allowed="type name lfs py include_timestamp"; \
+	for arg in $(filter-out build-env,$(MAKECMDGOALS)) $(MAKEFLAGS); do \
+		case $$arg in \
+			*=*) \
+				arg_name=$${arg%%=*}; \
+				if ! echo " $$allowed " | grep -q " $$arg_name "; then \
+					allowed_list=$$(echo $$allowed | sed 's/ /, /g'); \
+					echo "Error: Invalid argument '$$arg_name'. Allowed arguments are: $$allowed_list" >&2; \
+					exit 1; \
+				fi \
+				;; \
+		esac; \
+	done
+	
+#   Handle arguments and set defaults
+#   type
+	@$(eval type ?= simulation)
+	@$(call validate_arg,$(type),simulation artifact,type)
+#	name
+	@$(eval name ?= $(PACKAGE_NAME)_$(type))
+#	timestamp
+	@$(eval include_timestamp ?= no)
+	@$(call validate_arg,$(include_timestamp),yes no,include_timestamp)
+	@$(if $(filter yes,$(include_timestamp)),$(eval override name := $(name)_$(shell date +%Y%m%d_%H%M%S)),)
+#	lfs
+	@$(eval lfs ?= no)
+	@$(call validate_arg,$(lfs),yes no,lfs)
+#	python version
 	@$(eval py ?= $(shell python -c "import json; versions = json.load(open('python_versions.json')); print(max(versions, key=lambda x: tuple(map(int, x.split('.')))))"))
+	
 	conda create -n $(name) python=$(py) --yes
 # 	Bootstrap vivarium_build_utils into the new environment
 	conda run -n $(name) pip install vivarium_build_utils
-	conda run -n $(name) make install
+#	Install packages based on type
+	@if [ "$(type)" = "simulation" ]; then \
+		conda run -n $(name) make install ENV_REQS=dev; \
+		conda install -n $(name) redis -c anaconda -y; \
+	elif [ "$(type)" = "artifact" ]; then \
+		conda run -n $(name) make install ENV_REQS=data; \
+	fi
+	@if [ "$(lfs)" = "yes" ]; then \
+		conda run -n $(name) conda install -c conda-forge git-lfs --yes; \
+		conda run -n $(name) git lfs install; \
+	fi
+
 	@echo
-	@echo "Environment built ($(name))"
+	@echo "Finished building environment"
+	@echo "  name: $(name)"
+	@echo "  type: $(type)"
+	@echo "  git-lfs installed: $(lfs)"
+	@echo "  python version: $(py)"
+	@echo
 	@echo "Don't forget to activate it with: 'conda activate $(name)'"
 	@echo

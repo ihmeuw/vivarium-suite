@@ -22,15 +22,6 @@ from vivarium_profiling.tools.summarize import run_summarize_analysis
 RESULTS_SUMMARY_NAME = "benchmark_results.csv"
 
 
-def validate_baseline_model(models: list[Path]) -> None:
-    """Validate that one of the model specs is the baseline."""
-    baseline_found = "model_spec_baseline.yaml" in [model.name for model in models]
-    if not baseline_found:
-        raise click.ClickException(
-            "Error: One of the model specs must be 'model_spec_baseline.yaml'."
-        )
-
-
 def create_results_directory(output_dir: str = ".") -> str:
     """Create a timestamped results directory."""
     timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -180,9 +171,6 @@ def run_benchmark_loop(
 
     configure_logging_to_terminal(verbose)
 
-    # Validate inputs
-    validate_baseline_model(model_specifications)
-
     # Create results directory and initialize results file
     results_dir = create_results_directory(output_dir)
     results_file = initialize_results_file(results_dir, config)
@@ -193,15 +181,15 @@ def run_benchmark_loop(
     logger.info(f"  Results Directory: {results_dir}")
 
     # Run benchmarks for each specification
-    for spec in model_specifications:
+    for i, spec in enumerate(model_specifications):
         logger.info(f"Running {spec}...")
 
         model_spec_name = spec.stem
         spec_specific_results_dir = Path(results_dir) / model_spec_name
         spec_specific_results_dir.mkdir(parents=True, exist_ok=True)
 
-        # Determine number of runs
-        if spec.name == "model_spec_baseline.yaml":
+        # Determine number of runs - first spec is baseline
+        if i == 0:
             num_runs = baseline_model_runs
         else:
             num_runs = model_runs

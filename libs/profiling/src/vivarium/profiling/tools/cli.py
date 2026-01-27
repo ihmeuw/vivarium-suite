@@ -200,12 +200,16 @@ def make_artifacts(
 
 
 @click.command()
+@click.argument(
+    "model_specification",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+)
 @click.option(
-    "-m",
-    "--model_specifications",
+    "-a",
+    "--additional-model-specifications",
     multiple=True,
-    required=True,
-    help="Model specification files (supports glob patterns). Can be specified multiple times.",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    help="Additional model specification files (supports glob patterns). Can be specified multiple times.",
 )
 @click.option(
     "-r",
@@ -217,8 +221,9 @@ def make_artifacts(
 @click.option(
     "-b",
     "--baseline-model-runs",
+    default=3,
+    show_default=True,
     type=int,
-    required=True,
     help="Number of runs for baseline model.",
 )
 @click.option(
@@ -242,7 +247,8 @@ def make_artifacts(
     help="Drop into python debugger if an error occurs.",
 )
 def run_benchmark(
-    model_specifications: tuple[str, ...],
+    model_specification: str,
+    additional_model_specifications: tuple[str, ...],
     model_runs: int,
     baseline_model_runs: int,
     output_dir: str,
@@ -255,11 +261,21 @@ def run_benchmark(
     This command profiles multiple model specifications and collects runtime
     and memory usage statistics. Results are saved to a timestamped CSV file.
 
+    The baseline model specification is provided as a positional argument.
+    Additional model specifications can be provided with -a.
+
     Example usage:
-        run_benchmark -m "model_spec_baseline.yaml" -m "model_spec_*.yaml" -r 10 -b 20
+        run_benchmark model_spec_baseline.yaml -b 20
+
+        run_benchmark model_spec_baseline.yaml -a model_spec_2x.yaml -a model_spec_4x.yaml -r 10 -b 20
     """
-    # Expand model patterns
-    model_specifications = _expand_model_specs(list(model_specifications))
+    configure_logging_to_terminal(verbose)
+
+    baseline_path = Path(model_specification)
+
+    # Expand additional model specs (supporting glob patterns)
+    additional_paths = _expand_model_specs(list(additional_model_specifications))
+    model_specifications = [str(baseline_path)] + [str(p) for p in additional_paths]
 
     # Run benchmarks with error handling
     main = handle_exceptions(run_benchmark_loop, logger, with_debugger=with_debugger)
@@ -274,7 +290,22 @@ def run_benchmark(
 
 
 def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
-    """Expand glob patterns and validate model spec files."""
+    """Expand glob patterns and validate model spec files.
+
+    Parameters
+    ----------
+    model_patterns
+        List of file paths or glob patterns.
+
+    Returns
+    -------
+        List of resolved Path objects for existing files. Returns empty list
+        if no patterns provided.
+
+    """
+    if not model_patterns:
+        return []
+
     models = []
     for pattern in model_patterns:
         expanded = glob.glob(pattern)
@@ -286,11 +317,6 @@ def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
             path = Path(pattern)
             if path.is_file():
                 models.append(path)
-
-    if not models:
-        raise click.ClickException(
-            f"No model specification files found for patterns: {model_patterns}"
-        )
 
     return models
 

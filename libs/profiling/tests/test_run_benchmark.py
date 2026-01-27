@@ -104,24 +104,3 @@ def test_run_benchmark_loop_integration(test_model_specs: list[Path], tmp_path: 
         assert (
             len(spec_contents) > 0
         ), f"Model spec directory {spec_path} should contain results"
-
-
-def test_run_benchmark_loop_validation_error(test_model_specs: list[Path], tmp_path: Path):
-    """Test that benchmark fails appropriately when baseline model is missing."""
-    output_dir = str(tmp_path / "validation_test")
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    # Try to run without baseline model - should raise exception
-    model_specs = test_model_specs[1:]
-
-    with pytest.raises(
-        click.ClickException,
-        match="Error: One of the model specs must be 'model_spec_baseline.yaml'.",
-    ):  # Should raise ClickException about missing baseline
-        run_benchmark_loop(
-            model_specifications=model_specs,
-            model_runs=2,
-            baseline_model_runs=2,
-            output_dir=output_dir,
-            verbose=0,
-        )

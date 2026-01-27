@@ -1,3 +1,8 @@
+**v0.3.1 - 01/27/2026**
+
+ - Adjust the parameters for run_benchmark command
+ - Update makefile
+
 **v0.3.0 - 01/22/2026**
 
  - Convert data ETL to click commands
