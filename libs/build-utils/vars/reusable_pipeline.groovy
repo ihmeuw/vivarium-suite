@@ -159,9 +159,10 @@ def call(Map config = [:]){
         when {
           anyOf {
             environment name: 'IS_CRON', value: 'true'
-            not {
-              environment name: 'IS_CHANGELOG_ONLY_COMMIT', value: 'true'
-            }
+            // FIXME [MIC-6729]. Commenting out temporarily
+            // not {
+            //   environment name: 'IS_CHANGELOG_ONLY_COMMIT', value: 'true'
+            // }
           }
         }
         steps {

@@ -1,3 +1,7 @@
+**2.2.1 - 01/27/26**
+
+  - Stop skipping builds if CHANGELOG-only commit (temporary)
+
 **2.2.0 - 01/26/26**
 
   - Feature: Add shared model environments nightly build
