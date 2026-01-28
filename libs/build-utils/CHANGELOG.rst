@@ -1,3 +1,7 @@
+**2.2.2 - 01/27/26**
+
+  - Stop skipping any builds (temporary)
+
 **2.2.1 - 01/27/26**
 
   - Stop skipping builds if CHANGELOG-only commit (temporary)
