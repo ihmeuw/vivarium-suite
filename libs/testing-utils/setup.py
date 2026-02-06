@@ -49,6 +49,7 @@ if __name__ == "__main__":
         "vivarium_build_utils>=2.0.1,<3.0.0",
         "pyarrow",
         "seaborn",
+        "layered-config-tree",
         # Type stubs
         "types-setuptools",
     ]
@@ -123,6 +124,9 @@ if __name__ == "__main__":
             + interactive_requirements
             + lint_requirements
             + validation_requirements,
+        },
+        entry_points={
+            "pytest11": ["vivarium_testing_utils = vivarium_testing_utils.pytest_plugin"],
         },
         zip_safe=False,
         use_scm_version={
