@@ -5,11 +5,12 @@ pipeline {
         DIRS_TO_CLEAN_PER_NODE = '/tmp,/opt/jenkins/workspace'
         DIRS_TO_CLEAN_SHARED = '/mnt/team/simulation_science/priv/engineering/jenkins/envs'
         DAYS_OLD = '3'
+        TIMEOUT = '120'  // minutes
     }
     
     options {
         skipDefaultCheckout()
-        timeout(time: 60, unit: 'MINUTES')
+        timeout(time: env.TIMEOUT.toInteger(), unit: 'MINUTES')
         timestamps()
         buildDiscarder(logRotator(numToKeepStr: '30'))
     }
@@ -106,6 +107,28 @@ pipeline {
     post {
         success {
             echo "All node cleanups completed successfully"
+        }
+        aborted {
+            echo "Node cleanup was aborted (likely due to timeout)"
+            // Generate a message to send to Slack.
+            script {
+                def channelName = "simsci-ci-status"
+                def slackID = "channel"
+                def slackMessage = """
+                    Cleanup was aborted (likely due to the ${env.TIMEOUT}-minute timeout).
+                    
+                    Job: *${env.JOB_NAME}*
+                    Build number: #${env.BUILD_NUMBER}
+                    Build status: *${currentBuild.result}*
+                    Author: @${slackID}
+                    Build details: <${env.BUILD_URL}/console|See in web console>
+                    """.stripIndent()
+                
+                slackSend channel: "#${channelName}",
+                        message: slackMessage,
+                        teamDomain: "ihme",
+                        tokenCredentialId: "slack"
+            }
         }
         failure {
             echo "Node cleanup failed - check the failed stage logs for details"

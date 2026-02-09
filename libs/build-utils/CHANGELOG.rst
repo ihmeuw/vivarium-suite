@@ -1,3 +1,8 @@
+**2.2.3 - 02/09/26**
+
+  - Increase the cleanup Jenkins job timeout to 120 minutes
+  - Message the slack channel when the cleanup job is aborted
+
 **2.2.2 - 01/27/26**
 
   - Stop skipping any builds (temporary)
