@@ -5,12 +5,11 @@ pipeline {
         DIRS_TO_CLEAN_PER_NODE = '/tmp,/opt/jenkins/workspace'
         DIRS_TO_CLEAN_SHARED = '/mnt/team/simulation_science/priv/engineering/jenkins/envs'
         DAYS_OLD = '3'
-        TIMEOUT = '120'  // minutes
     }
     
     options {
         skipDefaultCheckout()
-        timeout(time: env.TIMEOUT.toInteger(), unit: 'MINUTES')
+        timeout(time: 120, unit: 'MINUTES')
         timestamps()
         buildDiscarder(logRotator(numToKeepStr: '30'))
     }
@@ -115,7 +114,7 @@ pipeline {
                 def channelName = "simsci-ci-status"
                 def slackID = "channel"
                 def slackMessage = """
-                    Cleanup was aborted (likely due to the ${env.TIMEOUT}-minute timeout).
+                    Cleanup was aborted (likely due to timeout).
                     
                     Job: *${env.JOB_NAME}*
                     Build number: #${env.BUILD_NUMBER}
@@ -158,6 +157,12 @@ def cleanDirs(cleanupType) {
     
     // Determine which directories to clean based on cleanup type
     def dirsToClean = cleanupType == "shared" ? env.DIRS_TO_CLEAN_SHARED : env.DIRS_TO_CLEAN_PER_NODE
+
+    // Set depth based on cleanup type.
+    //   Directories are created directly at the DIRS_TO_CLEAN_PER_NODE level, but 
+    //   the builds on the DIRS_TO_CLEAN_SHARED are created in subdirectories e.g. 
+    //   /mnt/team/simulation_science/priv/engineering/jenkins/envs/{stash,git}_repos/vivarium/<build-to-delete>
+    def depth = cleanupType == "shared" ? "3" : "1"
     
     // Split the directories and loop through them
     def dirList = dirsToClean.split(',')
@@ -194,17 +199,17 @@ def cleanDirs(cleanupType) {
 
             # Remove directories (excluding this build's 'cleanup*' dirs)
             echo "Listing (non-cleanup) directories in ${dir} older than ${env.DAYS_OLD} days:"
-            find "${dir}" -mindepth 1 -maxdepth 1 -mtime +${env.DAYS_OLD} -type d ! -name 'cleanup*'
+            find "${dir}" -mindepth ${depth} -maxdepth ${depth} -mtime +${env.DAYS_OLD} -type d ! -name 'cleanup*'
             
             echo "Deleting (non-cleanup) directories:"
-            find "${dir}" -mindepth 1 -maxdepth 1 -mtime +${env.DAYS_OLD} -type d ! -name 'cleanup*' -exec rm -rf {} + || echo "Some directories could not be deleted due to permissions"
+            find "${dir}" -mindepth ${depth} -maxdepth ${depth} -mtime +${env.DAYS_OLD} -type d ! -name 'cleanup*' -exec rm -rf {} + || echo "Some directories could not be deleted due to permissions"
        
             # Remove files
             echo "Listing files in ${dir} older than ${env.DAYS_OLD} days:"
-            find "${dir}" -mindepth 1 -maxdepth 1 -mtime +${env.DAYS_OLD} -type f
+            find "${dir}" -mindepth ${depth} -maxdepth ${depth} -mtime +${env.DAYS_OLD} -type f
             
             echo "Deleting files:"
-            find "${dir}" -mindepth 1 -maxdepth 1 -mtime +${env.DAYS_OLD} -type f -exec rm -f {} + || echo "Some files could not be deleted due to permissions"
+            find "${dir}" -mindepth ${depth} -maxdepth ${depth} -mtime +${env.DAYS_OLD} -type f -exec rm -f {} + || echo "Some files could not be deleted due to permissions"
             
             echo "Cleanup completed for ${dir}"
         """
