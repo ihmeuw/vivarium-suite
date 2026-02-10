@@ -1,3 +1,7 @@
+**2.2.4 - 02/10/26**
+
+  - Fix doc only / changelog only skipping behavior
+
 **2.2.3 - 02/09/26**
 
   - Increase the cleanup Jenkins job timeout to 120 minutes

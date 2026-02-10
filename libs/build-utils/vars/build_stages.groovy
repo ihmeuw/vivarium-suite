@@ -16,7 +16,7 @@ def call() {
 }
 
 // Individual function implementations
-def runDebugInfo() {
+def runDebugInfo(Map skipEval = [:]) {
     stage("Debug Info - Python ${PYTHON_VERSION}") {
 
         echo "Jenkins pipeline run timestamp: ${env.TIMESTAMP}"
@@ -26,7 +26,8 @@ def runDebugInfo() {
         SKIP_DEPLOY: ${params.SKIP_DEPLOY}
         RUN_SLOW: ${params.RUN_SLOW}
         SLACK_TO: ${params.SLACK_TO}
-        DEBUG: ${params.DEBUG}"""
+        DEBUG: ${params.DEBUG}
+        FORCE_FULL_BUILD: ${params.FORCE_FULL_BUILD}"""
 
         // Display environment variables from Jenkins.
         echo """Environment:
@@ -44,7 +45,22 @@ def runDebugInfo() {
         WORKSPACE:      '${WORKSPACE}'
         XDG_CACHE_HOME: '${XDG_CACHE_HOME}'
         IS_CRON:        '${IS_CRON}'
-        CRON_SCHEDULE:  '${env.CRON_SCHEDULE}'"""
+        CRON_SCHEDULE:  '${env.CRON_SCHEDULE}'
+        GIT_COMMIT:     '${env.GIT_COMMIT}'
+        GIT_PREVIOUS_COMMIT: '${env.GIT_PREVIOUS_COMMIT}'
+        """
+        
+        // Display skip evaluation results (evaluated after checkout)
+        if (skipEval) {
+            echo """Skip Evaluation:
+        previousBuildPassed:   ${skipEval.previousBuildPassed}
+        isDocOnlyChange:       ${skipEval.isDocOnlyChange}
+        isChangelogOnlyChange: ${skipEval.isChangelogOnlyChange}
+        canSkipFullBuild:      ${skipEval.canSkipFullBuild}
+        skipForDocOnly:        ${skipEval.skipForDocOnly}
+        skipForChangelogOnly:  ${skipEval.skipForChangelogOnly}
+        """
+        }
     }
 }
 
@@ -158,7 +174,7 @@ def deployDocs() {
 }
 
 def cleanup() {
-    sh "${ACTIVATE} && make clean"
+    sh "make clean"
     cleanWs()
     dir("${WORKSPACE}@tmp") {
         deleteDir()
