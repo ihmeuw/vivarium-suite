@@ -59,6 +59,9 @@ def _run_pip_dry_run(python_version: str) -> str:
     env_version = python_version.replace(".", "")
 
     # Construct the command to activate conda environment and run pip
+    # NOTE: if updating supported python versions, be sure to create a new
+    # conda environment with the appropriate python version and uv installed
+    # at MINICONDA_DIR/envs/py{env_version}
     cmd = f"""
     source {MINICONDA_DIR}/etc/profile.d/conda.sh
     conda activate py{env_version}
@@ -115,7 +118,7 @@ def main() -> str:
     python_version = _get_max_python_version()
     dry_run_output = _run_pip_dry_run(python_version)
     vbu_version = _extract_vbu_version(dry_run_output)
-    
+
     # NOTE: We must print the vbu_version for Jenkins to capture it!
     print(vbu_version)
     return vbu_version

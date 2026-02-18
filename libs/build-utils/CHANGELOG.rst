@@ -1,3 +1,8 @@
+**2.3.0 - 02/18/26**
+
+  - Feature: Support python 3.13
+  - Command: `make build-env` now defaults to python 3.13
+
 **2.2.4 - 02/10/26**
 
   - Bugfix: fix timeout env variable in jenkinsfile
