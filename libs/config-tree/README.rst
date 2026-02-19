@@ -16,7 +16,7 @@ or build it from from source:
 
   ``> cd layered_config_tree``
 
-  ``> conda create -n ENVIRONMENT_NAME python=3.11``
+  ``> conda create -n ENVIRONMENT_NAME python=3.13``
 
   ``> pip install .``
 
