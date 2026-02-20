@@ -1,3 +1,7 @@
+**2.3.0 - 02/19/26**
+
+ - Add support for Python versions 3.12 and 3.13
+
 **2.2.3 - 01/22/26**
 
  - Add pandas classes to nitpick-exceptions
