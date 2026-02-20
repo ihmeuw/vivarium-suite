@@ -48,9 +48,7 @@ if __name__ == "__main__":
         "dill",
         "redis",
         "rq",
-        # FIXME: Uncomment once Vivarium 4.0.0 is released
-        # "vivarium>=4.0.0",
-        "vivarium @ git+https://github.com/ihmeuw/vivarium.git@release_candidate/v4.0.0",
+        "vivarium>=3.0.0",
         "psutil",
         "layered_config_tree",
     ]

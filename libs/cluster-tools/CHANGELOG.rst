@@ -1,4 +1,4 @@
-**2.3.0 - 02/19/26**
+**2.3.0 - 02/20/26**
 
   - Feature: Add support for python versions 3.12 and 3.13
 
