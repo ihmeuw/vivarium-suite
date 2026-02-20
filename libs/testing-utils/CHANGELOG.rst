@@ -1,3 +1,7 @@
+**0.3.4 - 02/20/26**
+
+  - Feature: Add pytest options and configuration details to pytest plugin
+
 **0.3.3 - 02/06/26**
 
   - Feature: create a pytest plugin with extraction of "no_gbd_cache"

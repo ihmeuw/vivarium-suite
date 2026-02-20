@@ -616,14 +616,6 @@ def reference_weights() -> pd.DataFrame:
     )
 
 
-def is_on_slurm() -> bool:
-    """Returns True if the current environment is a SLURM cluster."""
-    return shutil.which("sbatch") is not None
-
-
-IS_ON_SLURM = is_on_slurm()
-
-
 @pytest.fixture
 def gbd_pop() -> pd.DataFrame:
     """Sample GBD population structure data."""

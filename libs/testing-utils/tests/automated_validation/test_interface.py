@@ -11,11 +11,7 @@ from vivarium.framework.artifact import Artifact
 from vivarium.framework.artifact.artifact import ArtifactException
 from vivarium_inputs import interface
 
-from tests.automated_validation.conftest import (
-    IS_ON_SLURM,
-    get_model_spec,
-    load_exposure_categories,
-)
+from tests.automated_validation.conftest import get_model_spec, load_exposure_categories
 from vivarium_testing_utils.automated_validation.constants import (
     DRAW_INDEX,
     INPUT_DATA_INDEX_NAMES,
@@ -328,6 +324,7 @@ def test_get_frame_different_test_source(test_source: str, sim_result_dir: Path)
     assert set(data.columns) == {"test_rate", "reference_rate", "percent_error"}
 
 
+@pytest.mark.cluster
 @pytest.mark.parametrize(
     "data_key",
     [
@@ -344,8 +341,6 @@ def test_get_frame_different_test_source(test_source: str, sim_result_dir: Path)
 def test_cache_gbd_data(sim_result_dir: Path, data_key: str) -> None:
     """Tests that we can cache custom GBD and retreive it. More importantly, tests that
     GBD data is properly mapped from id columns to value columns upon caching."""
-    if not IS_ON_SLURM:
-        pytest.skip("No access to slurm shared filesystem available for testing.")
 
     context = ValidationContext(sim_result_dir)
     # NOTE: Some of these CSVs are reused but have the same schema. Users will be expected to
@@ -557,14 +552,12 @@ def test_get_frame_filters(mocker: MockFixture, sim_result_dir: Path) -> None:
     ],
 )
 @pytest.mark.slow
+@pytest.mark.cluster
 def test_compare_artifact_and_gbd(
     integration_artifact_data_mapper: dict[str, pd.DataFrame | str],
     tmp_path_factory: TempPathFactory,
     data_key: str,
 ) -> None:
-    if not IS_ON_SLURM:
-        pytest.skip("No cluster access to use GBD data.")
-
     # Create sim output directory
     tmp_path = tmp_path_factory.mktemp("model_run_output")
     # Create the directory structure

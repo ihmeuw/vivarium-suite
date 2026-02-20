@@ -8,7 +8,6 @@ import pytest
 from pytest_mock import MockFixture
 from vivarium_inputs import interface
 
-from tests.automated_validation.conftest import IS_ON_SLURM
 from vivarium_testing_utils.automated_validation.bundle import RatioMeasureDataBundle
 from vivarium_testing_utils.automated_validation.constants import (
     DRAW_INDEX,
@@ -222,10 +221,9 @@ def test_aggregate_reference_stratifications(
 
 
 @pytest.mark.slow
+@pytest.mark.cluster
 def test_data_bundle_gbd_source(sim_result_dir: Path) -> None:
     """Test that GBD data source is handled correctly in RatioMeasureDataBundle."""
-    if not IS_ON_SLURM:
-        pytest.skip("GBD access not available for this test.")
 
     age_bins = interface.get_age_bins()
     age_bins.index.rename({"age_group_name": INPUT_DATA_INDEX_NAMES.AGE_GROUP}, inplace=True)
