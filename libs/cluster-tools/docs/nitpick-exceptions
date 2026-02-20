@@ -11,13 +11,12 @@ py:class pandas.core.series.Series
 py:class pandas.core.generic.PandasObject
 # pathlib
 py:class Path
+py:class pathlib._local.Path
 # redis
 py:class redis.client.Redis
 # tempfile
 py:class tempfile._TemporaryFileWrapper
 py:class _TemporaryFileWrapper
-# layered-config-tree
-py:class layered_config_tree.main.LayeredConfigTree
 # typing
 py:class vivarium_cluster_tools.cli_tools.R
 # psutil
@@ -25,3 +24,8 @@ py:class scpustats
 py:class sdiskio
 py:class scpufreq
 py:class snetio
+# layered_config_tree
+py:class layered_config_tree.main.LayeredConfigTree
+py:class LayeredConfigTree
+# vivarium
+py:class Component
