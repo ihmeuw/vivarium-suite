@@ -118,3 +118,6 @@ src/vivarium_cluster_tools/_version.py
 # Copilot
 .github/prompts/
 .github/copilot_instructions.md
+
+# Claude
+.claude/

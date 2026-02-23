@@ -83,19 +83,19 @@ class QueueManager:
                 job_timeout="7d",
             )
 
-    def get_results(self) -> list[tuple[pd.DataFrame, dict[str, pd.DataFrame]]]:
+    def get_results(self) -> Iterator[tuple[pd.DataFrame, dict[str, pd.DataFrame]]]:
         self._logger.debug(f"Checking queue {self.name}")
         finished_jobs = self._get_finished_jobs()
         start = time.time()
-        results = []
+        count = 0
         for job_id in finished_jobs:
             result = self._get_result(job_id)
             if result is not None:
-                results.append(result)
+                count += 1
+                yield result
         self._logger.debug(
-            f"Retrieved {len(results)} results from queue {self.name} in {time.time() - start:.2f}s"
+            f"Retrieved {count} results from queue {self.name} in {time.time() - start:.2f}s"
         )
-        return results
 
     def update(self) -> dict[str, int | float]:
         self._update_status()
@@ -262,12 +262,10 @@ class RegistryManager:
         for mod in range(num_queues):
             yield [job for i, job in enumerate(jobs) if i % num_queues == mod]
 
-    def get_results(self) -> list[tuple[pd.DataFrame, dict[str, pd.DataFrame]]]:
+    def get_results(self) -> Iterator[tuple[pd.DataFrame, dict[str, pd.DataFrame]]]:
         to_check = [q for q in self._queues if q.jobs_to_finish]
-        results: list[tuple[pd.DataFrame, dict[str, pd.DataFrame]]] = []
         for queue in to_check:
-            results.extend(queue.get_results())
-        return results
+            yield from queue.get_results()
 
     def update_and_report(self) -> dict[str, int | float]:
         status: dict[str, int | float] = defaultdict(int)
