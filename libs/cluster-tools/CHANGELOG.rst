@@ -1,3 +1,7 @@
+**2.3.1 - 02/23/26**
+
+  - Add End-to-end tests
+
 **2.3.0 - 02/20/26**
 
   - Feature: Add support for python versions 3.12 and 3.13
