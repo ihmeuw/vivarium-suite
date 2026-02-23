@@ -1,3 +1,7 @@
+**2.3.1 - 02/23/26**
+
+  - Increase cleanup job timeout
+
 **2.3.0 - 02/18/26**
 
   - Feature: Support python 3.13
