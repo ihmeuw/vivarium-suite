@@ -1,3 +1,7 @@
+**0.3.5 - 02/23/26**
+
+  - Feature: Allow VTU to be installed as a package with python 3.12 and 3.13
+
 **0.3.4 - 02/20/26**
 
   - Feature: Add pytest options and configuration details to pytest plugin

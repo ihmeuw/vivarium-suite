@@ -4,7 +4,7 @@ import sys
 from packaging.version import parse
 from setuptools import find_packages, setup
 
-with open("python_versions.json", "r") as f:
+with open("python_setup_versions.json", "r") as f:
     supported_python_versions = json.load(f)
 
 python_versions = [parse(v) for v in supported_python_versions]
