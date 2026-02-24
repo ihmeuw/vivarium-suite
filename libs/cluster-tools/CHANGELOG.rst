@@ -1,3 +1,7 @@
+**2.3.2 - 02/24/26**
+
+  - Fix name of deaths directory in end-to-end test
+
 **2.3.1 - 02/23/26**
 
   - Add End-to-end tests

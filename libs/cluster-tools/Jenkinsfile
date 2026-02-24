@@ -34,5 +34,6 @@ reusable_pipeline(
       // for subsequent scheduled builds to run.
       "main"
     ],
+    requires_slurm: true, 
     upstream_repos: ["vivarium", "layered_config_tree"],
 )

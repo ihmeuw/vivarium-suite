@@ -49,6 +49,11 @@ help:
 	@echo
 endif
 
+install: ENV_REQS?=dev
+install:
+	$(MAKE) -f $(MAKE_INCLUDES)/base.mk install ENV_REQS=${ENV_REQS}
+	conda install -y redis
+
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
 	@allowed="name py"; \
