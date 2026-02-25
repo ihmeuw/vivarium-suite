@@ -5,6 +5,8 @@ psimulate Jobs
 
 """
 
+import hashlib
+import json
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
@@ -17,6 +19,39 @@ from vivarium.framework.utilities import collapse_nested_dict
 from vivarium_cluster_tools.psimulate import COMMANDS, branches
 
 
+def generate_task_id(
+    input_draw: int, random_seed: int, branch_configuration: dict[str, Any]
+) -> str:
+    """Generate a deterministic task ID from job-specific parameters.
+
+    Uses SHA-256 hash of canonical JSON serialization of the job-specific
+    parameters (input_draw, random_seed, branch_configuration).
+
+    Parameters
+    ----------
+    input_draw
+        The input draw number.
+    random_seed
+        The random seed.
+    branch_configuration
+        The branch configuration dictionary.
+
+    Returns
+    -------
+        A hex string of the first 8 bytes (16 hex chars) of the SHA-256 hash.
+    """
+    canonical = json.dumps(
+        {
+            "input_draw": input_draw,
+            "random_seed": random_seed,
+            "branch_configuration": branch_configuration,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()[:16]
+
+
 class JobParameters(NamedTuple):
     """Parameters for a single distributed simulation job."""
 
@@ -27,6 +62,11 @@ class JobParameters(NamedTuple):
     results_path: str
     backup_configuration: dict[str, Any]
     extras: dict[str, Any]
+
+    @property
+    def task_id(self) -> str:
+        """Deterministic task ID derived from job-specific parameters."""
+        return generate_task_id(self.input_draw, self.random_seed, self.branch_configuration)
 
     @property
     def shared(self) -> dict[str, Any]:
