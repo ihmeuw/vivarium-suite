@@ -1,3 +1,7 @@
+**2.3.2 - 02/25/26**
+
+  - Slack CI channel for failing builds for all scheduled branches
+
 **2.3.1 - 02/23/26**
 
   - Increase cleanup job timeout
