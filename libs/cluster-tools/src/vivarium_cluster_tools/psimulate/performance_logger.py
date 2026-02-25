@@ -83,9 +83,11 @@ def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
 
     while len(child_job_performance_data) != 0:
         child_job_performance_data = child_job_performance_data.reset_index(drop=True)
-        most_recent_data = pd.read_csv(most_recent_file_path)
+        with open(most_recent_file_path) as f:
+            # Subtract 1 for the header row
+            num_existing_rows = sum(1 for _ in f) - 1
 
-        available_rows = NUM_ROWS_PER_CENTRAL_LOG_FILE - len(most_recent_data)
+        available_rows = NUM_ROWS_PER_CENTRAL_LOG_FILE - num_existing_rows
         rows_to_append = min(len(child_job_performance_data), available_rows)
 
         data_to_append = child_job_performance_data[:rows_to_append]
