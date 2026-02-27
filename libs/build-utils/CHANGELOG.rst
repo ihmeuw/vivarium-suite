@@ -1,3 +1,7 @@
+**2.3.3 - 02/27/26**
+
+  - Drop support for python 3.13, support 3.12
+
 **2.3.2 - 02/25/26**
 
   - Slack CI channel for failing builds for all scheduled branches

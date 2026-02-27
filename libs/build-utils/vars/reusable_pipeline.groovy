@@ -58,7 +58,7 @@ def call(Map config = [:]){
     cron_schedule = scheduled_branches.contains(BRANCH_NAME) ? "H H(20-23) * * *" : ''
   }
 
-  PYTHON_DEPLOY_VERSION = "3.13"
+  PYTHON_DEPLOY_VERSION = "3.12"
   
   conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
   conda_env_dir = "/mnt/team/simulation_science/priv/engineering/jenkins/envs"
