@@ -71,6 +71,7 @@ def get_output_paths_from_output_directory(output_directory: Path) -> OutputPath
         root=output_directory,
         **logging_dirs,
         worker_settings=output_directory / "settings.py",
+        metadata_dir=output_directory / "metadata",
         environment_file=output_directory / "requirements.txt",
         model_specification=output_directory / "model_specification.yaml",
         keyspace=output_directory / "keyspace.yaml",

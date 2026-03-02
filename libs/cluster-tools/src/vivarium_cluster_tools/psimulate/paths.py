@@ -104,6 +104,9 @@ class OutputPaths(NamedTuple):
     worker_logging_root: Path
     """The root directory for worker logs."""
 
+    metadata_dir: Path
+    """The directory for task metadata JSON files."""
+
     # Files
     # Environment configuration
     worker_settings: Path
@@ -224,6 +227,7 @@ class OutputPaths(NamedTuple):
         output_paths = OutputPaths(
             root=output_directory,
             **logging_dirs,
+            metadata_dir=output_directory / "metadata",
             worker_settings=output_directory / "settings.py",
             environment_file=output_directory / "requirements.txt",
             model_specification=output_directory / "model_specification.yaml",
@@ -238,7 +242,12 @@ class OutputPaths(NamedTuple):
 
     def touch(self) -> None:
         """Create the required directories."""
-        for dir in [self.root, self.results_dir, self.backup_dir]:
+        for dir in [
+            self.root,
+            self.results_dir,
+            self.backup_dir,
+            self.metadata_dir,
+        ]:
             vct_utils.mkdir(dir, exists_ok=True, parents=True)
         for dir in [self.logging_root, self.cluster_logging_root, self.worker_logging_root]:
             vct_utils.mkdir(dir, parents=True)
