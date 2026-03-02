@@ -1,3 +1,7 @@
+**2.3.4 - 03/02/26**
+
+  - Bugfix: Fix cleanup of environments from Jenkins builds
+
 **2.3.3 - 02/27/26**
 
   - Drop support for python 3.13, support 3.12

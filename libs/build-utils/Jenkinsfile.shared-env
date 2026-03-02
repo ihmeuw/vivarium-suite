@@ -121,10 +121,9 @@ pipeline {
     
     post {
         always {
-            cleanWs()
-            dir("${env.WORKSPACE}@tmp") {
-                deleteDir()
-            }
+            // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
+            // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
+            cleanWs(deleteDirs: true, disableDeferredWipeout: true)
         }
         success {
             script {

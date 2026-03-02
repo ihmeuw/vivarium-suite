@@ -11,7 +11,8 @@ def call() {
         testDocs: this.&testDocs,
         deployPackage: this.&deployPackage,
         deployDocs: this.&deployDocs,
-        cleanup: this.&cleanup
+        cleanup: this.&cleanup,
+        cleanupDebug: this.&cleanupDebug
     ]
 }
 
@@ -116,11 +117,14 @@ def runTests(List test_types) {
                 ["${full_name(it)} Tests" : {
                     stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
                         sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}"
+                        // Map test target names to coverage directory names
+                        // test-all -> htmlcov_tests, test-unit -> htmlcov_unit, etc.
+                        def coverageDir = it == 'test-all' ? 'tests' : it.replace('test-', '')
                         publishHTML([
                             allowMissing: true,
                             alwaysLinkToLastBuild: false,
                             keepAll: true,
-                            reportDir: "output/htmlcov_${it}",
+                            reportDir: "output/htmlcov_${coverageDir}",
                             reportFiles: "index.html",
                             reportName: "Coverage Report - ${full_name(it)} tests",
                             reportTitles: ''
@@ -175,8 +179,15 @@ def deployDocs() {
 
 def cleanup() {
     sh "make clean"
-    cleanWs()
-    dir("${WORKSPACE}@tmp") {
-        deleteDir()
-    }
+    // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
+    // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
+    // Console logs are preserved in Jenkins home, not workspace
+    cleanWs(deleteDirs: true, disableDeferredWipeout: true)
+}
+
+def cleanupDebug() {
+    // When DEBUG is enabled, only clean @tmp to preserve workspace for inspection
+    sh "make clean"
+    // Clean only @tmp directory, preserve main workspace
+    sh "rm -rf '${WORKSPACE}@tmp'"
 }

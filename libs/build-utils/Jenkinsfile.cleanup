@@ -4,7 +4,7 @@ pipeline {
     environment {
         DIRS_TO_CLEAN_PER_NODE = '/tmp,/opt/jenkins/workspace'
         DIRS_TO_CLEAN_SHARED = '/mnt/team/simulation_science/priv/engineering/jenkins/envs'
-        DAYS_OLD = '3'
+        DAYS_OLD = '1'
     }
     
     options {
@@ -25,10 +25,9 @@ pipeline {
             }
             post {
                 always {
-                    cleanWs()
-                    dir("${env.WORKSPACE}@tmp") {
-                        deleteDir()
-                    }
+                    // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
+                    // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
+                    cleanWs(deleteDirs: true, disableDeferredWipeout: true)
                 }
             }
         }
@@ -43,10 +42,9 @@ pipeline {
             }
             post {
                 always {
-                    cleanWs()
-                    dir("${env.WORKSPACE}@tmp") {
-                        deleteDir()
-                    }
+                    // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
+                    // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
+                    cleanWs(deleteDirs: true, disableDeferredWipeout: true)
                 }
             }
         }
@@ -60,10 +58,9 @@ pipeline {
             }
             post {
                 always {
-                    cleanWs()
-                    dir("${env.WORKSPACE}@tmp") {
-                        deleteDir()
-                    }
+                    // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
+                    // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
+                    cleanWs(deleteDirs: true, disableDeferredWipeout: true)
                 }
             }
         }
@@ -77,10 +74,9 @@ pipeline {
             }
             post {
                 always {
-                    cleanWs()
-                    dir("${env.WORKSPACE}@tmp") {
-                        deleteDir()
-                    }
+                    // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
+                    // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
+                    cleanWs(deleteDirs: true, disableDeferredWipeout: true)
                 }
             }
         }
@@ -94,10 +90,9 @@ pipeline {
             }
             post {
                 always {
-                    cleanWs()
-                    dir("${env.WORKSPACE}@tmp") {
-                        deleteDir()
-                    }
+                    // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
+                    // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
+                    cleanWs(deleteDirs: true, disableDeferredWipeout: true)
                 }
             }
         }
