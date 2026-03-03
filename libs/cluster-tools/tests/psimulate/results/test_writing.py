@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from vivarium_cluster_tools.psimulate.jobs import JobParameters
+from tests.psimulate.conftest import make_job_parameters
 from vivarium_cluster_tools.psimulate.results.writing import (
     collect_metadata,
     write_metadata,
@@ -15,40 +15,10 @@ from vivarium_cluster_tools.psimulate.results.writing import (
 )
 
 
-def _make_job_parameters(
-    input_draw: int = 1,
-    random_seed: int = 42,
-    branch_configuration: dict[str, Any] | None = None,
-) -> JobParameters:
-    return JobParameters(
-        model_specification="test_model_spec.yaml",
-        branch_configuration=branch_configuration or {},
-        input_draw=input_draw,
-        random_seed=random_seed,
-        results_path="~/tmp",
-        backup_configuration={},
-        extras={},
-    )
-
-
-@pytest.fixture
-def results_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "results"
-    d.mkdir()
-    return d
-
-
-@pytest.fixture
-def metadata_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "metadata"
-    d.mkdir()
-    return d
-
-
 class TestWriteMetadata:
     def test_creates_json_file(self, metadata_dir: Path) -> None:
         """write_metadata creates a JSON file named after the task_id."""
-        job_params = _make_job_parameters(
+        job_params = make_job_parameters(
             input_draw=3, random_seed=7, branch_configuration={"scenario": "baseline"}
         )
         write_metadata(metadata_dir, job_params)
@@ -67,8 +37,8 @@ class TestWriteMetadata:
 
     def test_different_tasks_different_files(self, metadata_dir: Path) -> None:
         """Different job parameters produce different metadata files."""
-        params_a = _make_job_parameters(input_draw=0, random_seed=0)
-        params_b = _make_job_parameters(input_draw=1, random_seed=0)
+        params_a = make_job_parameters(input_draw=0, random_seed=0)
+        params_b = make_job_parameters(input_draw=1, random_seed=0)
         write_metadata(metadata_dir, params_a)
         write_metadata(metadata_dir, params_b)
 
@@ -80,7 +50,7 @@ class TestWriteTaskResults:
     def test_writes_metric_parquets(self, results_dir: Path) -> None:
         """Write task results and verify parquet files are created correctly."""
         for i in range(3):
-            job_params = _make_job_parameters(input_draw=i, random_seed=i * 10)
+            job_params = make_job_parameters(input_draw=i, random_seed=i * 10)
             results_dict = {
                 "deaths": pd.DataFrame({"value": [i * 100], "year": [2020]}),
             }
@@ -107,7 +77,7 @@ class TestCollectMetadata:
         # Create metadata JSONs for 3 tasks
         all_params = []
         for i in range(3):
-            params = _make_job_parameters(input_draw=i, random_seed=i * 10)
+            params = make_job_parameters(input_draw=i, random_seed=i * 10)
             write_metadata(metadata_dir, params)
             all_params.append(params)
 
@@ -127,7 +97,7 @@ class TestCollectMetadata:
 
     def test_includes_branch_config(self, metadata_dir: Path, results_dir: Path) -> None:
         """Metadata DataFrame includes flattened branch configuration keys."""
-        params = _make_job_parameters(
+        params = make_job_parameters(
             input_draw=5,
             random_seed=99,
             branch_configuration={"scenario": {"treatment": "A"}},

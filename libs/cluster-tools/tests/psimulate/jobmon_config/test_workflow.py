@@ -10,28 +10,13 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 from pytest_mock import MockerFixture
 
+from tests.psimulate.conftest import make_job_parameters
 from vivarium_cluster_tools.psimulate.jobmon_config.workflow import build_workflow
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.psimulate.paths import OutputPaths
 
 if TYPE_CHECKING:
     from jobmon.client.workflow import Workflow
-
-
-def _make_job_parameters(
-    input_draw: int = 0,
-    random_seed: int = 0,
-    branch_configuration: dict[str, Any] | None = None,
-) -> JobParameters:
-    return JobParameters(
-        model_specification="/path/to/model_spec.yaml",
-        branch_configuration=branch_configuration or {},
-        input_draw=input_draw,
-        random_seed=random_seed,
-        results_path="/path/to/results",
-        backup_configuration={},
-        extras={},
-    )
 
 
 FROZEN_TIME = datetime(2025, 1, 1)
@@ -80,8 +65,8 @@ def native_spec() -> MagicMock:
 @pytest.fixture()
 def two_jobs() -> list[JobParameters]:
     return [
-        _make_job_parameters(input_draw=0, random_seed=0),
-        _make_job_parameters(input_draw=0, random_seed=1),
+        make_job_parameters(input_draw=0, random_seed=0),
+        make_job_parameters(input_draw=0, random_seed=1),
     ]
 
 

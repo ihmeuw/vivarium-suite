@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 
+from tests.psimulate.conftest import make_job_parameters
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
     ParallelSimulationContext,
@@ -42,18 +43,16 @@ def test_get_backup(
     random_seed = 2
     branch_configuration = {"branch_key": "branch_value"}
     job_id = "prev_job"
-    job_parameters = JobParameters(
+    job_parameters = make_job_parameters(
         model_specification="dummy",
         branch_configuration=branch_configuration,
         input_draw=input_draw,
         random_seed=random_seed,
-        results_path="~/tmp",
         backup_configuration={
             "backup_freq": 300,
             "backup_dir": tmp_path / "backups",
             "backup_metadata_path": tmp_path / "backups" / "backup_metadata.csv",
         },
-        extras={},
     )
     if make_dir:
         (tmp_path / "backups").mkdir(exist_ok=False)

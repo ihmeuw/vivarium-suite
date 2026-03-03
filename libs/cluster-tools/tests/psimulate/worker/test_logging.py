@@ -4,22 +4,17 @@ from unittest.mock import patch
 import pytest
 from pytest_mock import MockerFixture
 
-from vivarium_cluster_tools.psimulate.jobs import JobParameters
+from tests.psimulate.conftest import make_job_parameters
 from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import work_horse
 
 
 @pytest.mark.parametrize("log_level", [0, 1, 2])
 def test_logging_level(mocker: MockerFixture, tmp_path: Path, log_level: int) -> None:
 
-    input_draw = 1
-    random_seed = 2
-    branch_configuration = {"branch_key": "branch_value"}
-    job_parameters = JobParameters(
-        model_specification="test_model_spec.yaml",
-        branch_configuration=branch_configuration,
-        input_draw=input_draw,
-        random_seed=random_seed,
-        results_path="~/tmp",
+    job_parameters = make_job_parameters(
+        input_draw=1,
+        random_seed=2,
+        branch_configuration={"branch_key": "branch_value"},
         backup_configuration={
             "backup_freq": 300,
             "backup_dir": tmp_path / "backups",
