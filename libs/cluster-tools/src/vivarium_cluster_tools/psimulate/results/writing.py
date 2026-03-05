@@ -80,7 +80,7 @@ def write_task_results(
         df.to_parquet(metric_dir / f"{job_parameters.task_id}.parquet")
 
 
-def _get_completed_task_ids(results_dir: Path) -> set[str]:
+def get_completed_task_ids(results_dir: Path) -> set[str]:
     """Get task IDs that have result parquet files.
 
     Scans all subdirectories of ``results_dir`` for ``.parquet`` files
@@ -126,7 +126,7 @@ def collect_metadata(metadata_dir: Path, results_dir: Path) -> pd.DataFrame:
         Combined metadata DataFrame with flattened job-specific parameters,
         or an empty DataFrame if no completed tasks exist.
     """
-    completed_task_ids = _get_completed_task_ids(results_dir)
+    completed_task_ids = get_completed_task_ids(results_dir)
     if not completed_task_ids:
         return pd.DataFrame()
 

@@ -6,6 +6,7 @@ Reproducible Programming Environments
 Tools to manage and validate reproducible Python environments for simulation runs.
 
 """
+
 import os
 import subprocess
 from pathlib import Path
@@ -25,7 +26,7 @@ def validate(environment_file: Path) -> None:
     _ = os.umask(0o002)
 
     if not environment_file.exists():  # original run
-        logger.info(f"Writing environment file to {str(environment_file)}.")
+        logger.debug(f"Writing environment file to {str(environment_file)}.")
         environment_file.write_text("\n".join(current_environment_list))
     else:  # compare with original
         with environment_file.open() as f:
@@ -33,7 +34,7 @@ def validate(environment_file: Path) -> None:
         current_environment = _convert_pip_list_to_dict(current_environment_list)
         original_environment = _convert_pip_list_to_dict(original_environment_list)
         _compare_environments(current_environment, original_environment)
-        logger.info(
+        logger.debug(
             "Validation of environment successful. All pip installed packages match "
             "original versions. Run can proceed."
         )

@@ -32,6 +32,8 @@ import pandas as pd
 import pytest
 import yaml
 
+from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
+
 _DATA_DIR = Path(__file__).parent / "data"
 _MODEL_SPEC = _DATA_DIR / "e2e_model_spec.yaml"
 _BRANCHES = _DATA_DIR / "e2e_branches.yaml"
@@ -106,9 +108,17 @@ def completed_sim_copy(completed_sim_output: Path) -> Iterator[Path]:
     Tests that mutate the output directory (restart deletes files, expand adds
     jobs) should use this fixture instead of ``completed_sim_output`` directly
     so that each test starts from a pristine completed state.
+
+    The copy directory name includes the original timestamp *and* the unique
+    temp-dir suffix so that Jobmon workflow names (derived from
+    ``output_paths.root.name``) are unique both within a session and across
+    repeated test runs.
     """
     copy_root = _make_shared_tmp_dir()
-    copy_dir = copy_root / "output"
+    # e.g. "2026_02_27_11_01_29_tmp1u9ock2s" — timestamp for readability,
+    # temp suffix for uniqueness across runs.
+    unique_name = f"{completed_sim_output.name}_{copy_root.name}"
+    copy_dir = copy_root / unique_name
     shutil.copytree(completed_sim_output, copy_dir)
     yield copy_dir
     _cleanup_dir(copy_root)
@@ -155,10 +165,53 @@ def _find_output_dir(result_directory: Path) -> Path:
 
 
 def _read_metadata(output_dir: Path) -> pd.DataFrame:
-    """Read the finished simulation metadata CSV from an output directory."""
-    metadata_path = output_dir / "finished_sim_metadata.csv"
-    assert metadata_path.exists(), f"Metadata file not found at {metadata_path}"
-    return pd.read_csv(metadata_path)
+    """Collect metadata for completed tasks from per-task JSON + result parquet files."""
+    metadata_dir = output_dir / "metadata"
+    results_dir = output_dir / "results"
+    assert metadata_dir.exists(), f"Metadata directory not found at {metadata_dir}"
+    assert results_dir.exists(), f"Results directory not found at {results_dir}"
+    metadata = collect_metadata(metadata_dir, results_dir)
+    assert (
+        not metadata.empty
+    ), f"No completed task metadata found in {metadata_dir} / {results_dir}"
+    return metadata
+
+
+def _get_result_task_ids(results_dir: Path) -> dict[str, set[str]]:
+    """Return ``{metric_name: {task_id, ...}}`` from parquet files under *results_dir*.
+
+    Each metric subdirectory (e.g. ``results/dead/``) contains chunked parquet
+    files whose stems encode the output file number (``0000``, ``0001``, …).
+    Within each file, individual task contributions are identified by their
+    unique ``(input_draw, random_seed)`` pair.  We read those two columns
+    and return the set of composite task-id strings per metric so callers can
+    compare counts before and after an operation.
+    """
+    result: dict[str, set[str]] = {}
+    for metric_dir in sorted(results_dir.iterdir()):
+        if not metric_dir.is_dir():
+            continue
+        df = pd.read_parquet(metric_dir, columns=["input_draw", "random_seed"])
+        ids = {
+            f"{row.input_draw}_{row.random_seed}"
+            for row in df[["input_draw", "random_seed"]].drop_duplicates().itertuples()
+        }
+        result[metric_dir.name] = ids
+    return result
+
+
+def _assert_result_task_counts(results_dir: Path, expected: int) -> dict[str, set[str]]:
+    """Assert every metric subdir in *results_dir* has exactly *expected* task IDs.
+
+    Returns the ``{metric: {task_id, ...}}`` dict for further inspection.
+    """
+    task_ids = _get_result_task_ids(results_dir)
+    assert task_ids, f"No metric subdirectories found under {results_dir}"
+    for metric, ids in task_ids.items():
+        assert (
+            len(ids) == expected
+        ), f"Metric '{metric}': expected {expected} task results, got {len(ids)}"
+    return task_ids
 
 
 def _common_slurm_args(slurm_project: str) -> list[str]:
@@ -215,7 +268,6 @@ def _run_basic_simulation(
 class TestPsimulateRun:
     """E2E tests for ``psimulate run``."""
 
-    @pytest.mark.xfail(reason="psimulate jobs on jenkins are not configured")
     def test_basic_run(self, completed_sim_output: Path) -> None:
         """Run a minimal simulation and verify output files are created."""
         output_dir = completed_sim_output
@@ -257,6 +309,9 @@ class TestPsimulateRun:
         results_dir = output_dir / "results"
         assert results_dir.exists()
 
+        # Verify each metric directory has exactly one result per job
+        _assert_result_task_counts(results_dir, _EXPECTED_TOTAL_JOBS)
+
         deaths_dir = results_dir / "dead"
         assert deaths_dir.exists()
 
@@ -282,7 +337,6 @@ class TestPsimulateRun:
             ),
         )
 
-    @pytest.mark.xfail(reason="psimulate jobs on jenkins are not configured")
     def test_run_with_max_workers(self, shared_tmp_path: Path, slurm_project: str) -> None:
         """Verify that --max-workers (-w) is accepted and all jobs still complete."""
         result_dir = shared_tmp_path / "results"
@@ -312,7 +366,6 @@ class TestPsimulateRun:
 class TestPsimulateRestart:
     """E2E tests for ``psimulate restart``."""
 
-    @pytest.mark.xfail(reason="psimulate jobs on jenkins are not configured")
     def test_restart_completes_remaining(
         self, completed_sim_copy: Path, slurm_project: str
     ) -> None:
@@ -323,18 +376,39 @@ class TestPsimulateRestart:
         metadata = _read_metadata(output_dir)
         assert len(metadata) == _EXPECTED_TOTAL_JOBS
 
-        # Simulate a partial run by removing SOME outputs.
-        # Delete metadata file and half of the result files.
-        metadata_path = output_dir / "finished_sim_metadata.csv"
-        metadata_path.unlink()
-
+        # Verify result files before deletion
         results_dir = output_dir / "results"
-        if results_dir.exists():
-            result_files = list(results_dir.iterdir())
-            # Delete half of the result files to simulate partial completion
-            files_to_delete = result_files[: len(result_files) // 2]
-            for f in files_to_delete:
-                f.unlink()
+        assert results_dir.exists()
+        pre_task_ids = _assert_result_task_counts(results_dir, _EXPECTED_TOTAL_JOBS)
+
+        # Pick the same task IDs to delete across all metric directories.
+        # Use the union of all task IDs (they should be identical across metrics).
+        all_task_ids = sorted(set().union(*pre_task_ids.values()))
+        assert len(all_task_ids) == _EXPECTED_TOTAL_JOBS
+        ids_to_delete = set(all_task_ids[: len(all_task_ids) // 2])
+        assert ids_to_delete, "Need at least 2 tasks to delete half"
+        expected_remaining = _EXPECTED_TOTAL_JOBS - len(ids_to_delete)
+
+        # Delete the corresponding rows by rewriting each metric's parquet files
+        # to exclude the targeted task IDs.
+        for metric_dir in results_dir.iterdir():
+            if not metric_dir.is_dir():
+                continue
+            for pf in sorted(metric_dir.glob("*.parquet")):
+                df = pd.read_parquet(pf)
+                mask = df.apply(
+                    lambda r: f"{int(r['input_draw'])}_{int(r['random_seed'])}"
+                    in ids_to_delete,
+                    axis=1,
+                )
+                kept = df[~mask]
+                if kept.empty:
+                    pf.unlink()
+                else:
+                    kept.to_parquet(pf, index=False)
+
+        # Confirm deletion: each metric dir should now have exactly N/2 tasks
+        _assert_result_task_counts(results_dir, expected_remaining)
 
         # Restart -- should re-run only the missing jobs
         proc = _run_psimulate(
@@ -356,11 +430,13 @@ class TestPsimulateRestart:
         draw_seed_pairs = metadata[["input_draw", "random_seed"]].drop_duplicates()
         assert len(draw_seed_pairs) == _EXPECTED_TOTAL_JOBS
 
+        # Verify result files were restored
+        _assert_result_task_counts(results_dir, _EXPECTED_TOTAL_JOBS)
+
 
 class TestPsimulateExpand:
     """E2E tests for ``psimulate expand``."""
 
-    @pytest.mark.xfail(reason="psimulate jobs on jenkins are not configured")
     def test_expand_adds_draws_and_seeds(
         self, completed_sim_copy: Path, slurm_project: str
     ) -> None:
@@ -372,6 +448,10 @@ class TestPsimulateExpand:
         assert len(metadata) == _EXPECTED_TOTAL_JOBS
         initial_draws = set(metadata["input_draw"])
         initial_seeds = set(metadata["random_seed"])
+
+        # Verify initial result files
+        results_dir = output_dir / "results"
+        _assert_result_task_counts(results_dir, _EXPECTED_TOTAL_JOBS)
 
         # Expand by adding 1 draw and 1 seed.
         # New jobs: (1 new draw x 2 old seeds) + (3 total draws x 1 new seed) = 2 + 3 = 5
@@ -419,6 +499,9 @@ class TestPsimulateExpand:
         draw_seed_pairs = metadata[["input_draw", "random_seed"]].drop_duplicates()
         assert len(draw_seed_pairs) == expected_total
 
+        # Verify result files reflect the expanded total
+        _assert_result_task_counts(results_dir, expected_total)
+
 
 class TestPsimulateLoadTest:
     """E2E tests for ``psimulate test``."""
@@ -426,7 +509,6 @@ class TestPsimulateLoadTest:
     # Number of workers to use for the load test
     _NUM_WORKERS = 2
 
-    @pytest.mark.xfail(reason="large_results load test currently failing")
     def test_large_results(self, shared_tmp_path: Path, slurm_project: str) -> None:
         """Run the large_results load test and verify outputs are produced."""
         result_dir = shared_tmp_path / "load_test_results"

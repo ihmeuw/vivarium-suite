@@ -7,6 +7,8 @@ Tools for managing the parameter space of a parallel run.
 
 """
 
+from __future__ import annotations
+
 from collections.abc import Iterator
 from itertools import product
 from pathlib import Path
@@ -29,7 +31,7 @@ class Keyspace:
         self._keyspace = keyspace
 
     @classmethod
-    def from_branch_configuration(cls, branch_configuration_file: str | Path) -> "Keyspace":
+    def from_branch_configuration(cls, branch_configuration_file: str | Path) -> Keyspace:
         """
         Parameters
         ----------
@@ -53,10 +55,32 @@ class Keyspace:
         return Keyspace(branches, keyspace)
 
     @classmethod
-    def from_previous_run(cls, keyspace_path: Path, branches_path: Path) -> "Keyspace":
+    def from_previous_run(cls, keyspace_path: Path, branches_path: Path) -> Keyspace:
         keyspace = yaml.full_load(keyspace_path.read_text())
         branches = yaml.full_load(branches_path.read_text())
         return Keyspace(branches, keyspace)
+
+    @classmethod
+    def for_load_test(cls, num_workers: int) -> Keyspace:
+        """Create a keyspace for load testing.
+
+        Parameters
+        ----------
+        num_workers
+            The number of workers (and thus jobs) to create.
+
+        Returns
+        -------
+            A Keyspace with the specified number of unique random seeds and input draws
+            and an empty branch configuration.
+        """
+        return cls(
+            branches=[{}],
+            keyspace={
+                "input_draw": [0],
+                "random_seed": list(range(num_workers)),
+            },
+        )
 
     @classmethod
     def from_entry_point_args(

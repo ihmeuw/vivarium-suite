@@ -20,14 +20,8 @@ from vivarium.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools import cli_tools, logs
 from vivarium_cluster_tools.cli_tools import Decorator
-from vivarium_cluster_tools.psimulate import (
-    COMMANDS,
-    cluster,
-    paths,
-    redis_dbs,
-    results,
-    runner,
-)
+from vivarium_cluster_tools.psimulate import COMMANDS, cluster, paths, results, runner
+from vivarium_cluster_tools.psimulate.jobmon_config import with_max_workers
 from vivarium_cluster_tools.psimulate.worker.load_test_work_horse import (
     get_psimulate_test_dict,
 )
@@ -48,11 +42,7 @@ shared_options: list[Decorator] = [
     cluster.with_queue_and_max_runtime,
     cluster.with_peak_memory,
     cluster.with_hardware,
-    redis_dbs.with_max_workers,
-    redis_dbs.with_redis,
-    results.with_batch_size,
-    results.with_output_file_size,
-    results.with_no_batch,
+    with_max_workers,
     results.backup_freq,
     cli_tools.with_verbose_and_pdb,
     cli_tools.with_sim_verbosity,
@@ -134,10 +124,6 @@ def run(
             hardware=options["hardware"],
         ),
         max_workers=options["max_workers"],
-        redis_processes=options["redis"],
-        batch_size=options["batch_size"],
-        output_file_size=options["output_file_size"],
-        no_batch=options["no_batch"],
         backup_freq=options["backup_freq"],
         extra_args={
             "sim_verbosity": int(options["sim_verbosity"]),
@@ -181,10 +167,6 @@ def restart(
             hardware=options["hardware"],
         ),
         max_workers=options["max_workers"],
-        redis_processes=options["redis"],
-        batch_size=options["batch_size"],
-        output_file_size=options["output_file_size"],
-        no_batch=options["no_batch"],
         backup_freq=options["backup_freq"],
         extra_args={
             "sim_verbosity": int(options["sim_verbosity"]),
@@ -243,10 +225,6 @@ def expand(
             hardware=options["hardware"],
         ),
         max_workers=options["max_workers"],
-        redis_processes=options["redis"],
-        batch_size=options["batch_size"],
-        output_file_size=options["output_file_size"],
-        no_batch=options["no_batch"],
         backup_freq=options["backup_freq"],
         extra_args={
             "num_draws": options["add_draws"],
@@ -296,7 +274,7 @@ def test(
     (
         logger.warning(peak_memory_msg)
         if options["peak_memory"] != cluster.PEAK_MEMORY_DEFAULT
-        else logger.info(peak_memory_msg)
+        else logger.debug(peak_memory_msg)
     )
     max_runtime_msg = (
         f"Manually overriding the max runtime request '{test_type}' test to {max_runtime}."
@@ -304,7 +282,7 @@ def test(
     (
         logger.warning(max_runtime_msg)
         if options["max_runtime"] != cluster.MAX_RUNTIME_DEFAULT
-        else logger.info(max_runtime_msg)
+        else logger.debug(max_runtime_msg)
     )
     options["peak_memory"] = peak_memory
     options["max_runtime"] = max_runtime
@@ -323,10 +301,6 @@ def test(
             hardware=options["hardware"],
         ),
         max_workers=options["max_workers"],
-        redis_processes=options["redis"],
-        batch_size=options["batch_size"],
-        output_file_size=options["output_file_size"],
-        no_batch=options["no_batch"],
         backup_freq=options["backup_freq"],
         extra_args={
             "test_type": test_type,

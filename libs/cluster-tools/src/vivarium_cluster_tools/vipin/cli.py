@@ -42,7 +42,7 @@ def vipin(logs_directory: str, result_directory: str | None, hdf: bool, verbose:
     created in the ``result_directory`` (which defaults to the given logs
     directory unless otherwise specified).
     """
-    logs.configure_main_process_logging_to_terminal(verbose, process_name="vipin")
+    logs.configure_main_process_logging_to_terminal(verbose)
     if not result_directory:
         result_directory = logs_directory
 

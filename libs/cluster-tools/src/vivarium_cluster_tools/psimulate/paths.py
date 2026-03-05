@@ -215,7 +215,7 @@ class OutputPaths(NamedTuple):
             )
             output_directory = output_directory / model_name / launch_time
         elif command == COMMANDS.load_test:
-            output_directory = output_directory / launch_time
+            output_directory = output_directory / "load_test" / launch_time
 
         logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
         logging_dirs = {

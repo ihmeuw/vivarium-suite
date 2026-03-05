@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate import COMMANDS, branches
+from vivarium_cluster_tools.psimulate import branches
 
 
 def generate_task_id(
@@ -107,7 +107,6 @@ class JobParameters(NamedTuple):
 
 
 def build_job_list(
-    command: str,
     model_specification_path: Path,
     output_root: Path,
     keyspace: branches.Keyspace,
@@ -116,43 +115,29 @@ def build_job_list(
     backup_dir: Path,
     backup_metadata_path: Path,
     extras: dict[str, Any],
-) -> tuple[list[dict[str, str | int | dict[str, Any]]], int]:
-    jobs = []
+) -> tuple[list[JobParameters], int]:
+    jobs: list[JobParameters] = []
     number_already_completed = 0
 
-    if command in [COMMANDS.run, COMMANDS.restart, COMMANDS.expand]:
-        for input_draw, random_seed, branch_config in keyspace:
-            parameters = JobParameters(
-                model_specification=str(model_specification_path),
-                branch_configuration=branch_config,
-                input_draw=int(input_draw),
-                random_seed=int(random_seed),
-                results_path=str(output_root),
-                backup_configuration={
-                    "backup_dir": backup_dir,
-                    "backup_freq": backup_freq,
-                    "backup_metadata_path": backup_metadata_path,
-                },
-                extras=extras,
-            )
+    for input_draw, random_seed, branch_config in keyspace:
+        parameters = JobParameters(
+            model_specification=str(model_specification_path),
+            branch_configuration=branch_config,
+            input_draw=int(input_draw),
+            random_seed=int(random_seed),
+            results_path=str(output_root),
+            backup_configuration={
+                "backup_dir": backup_dir,
+                "backup_freq": backup_freq,
+                "backup_metadata_path": backup_metadata_path,
+            },
+            extras=extras,
+        )
 
-            if already_complete(parameters, finished_sim_metadata):
-                number_already_completed += 1
-            else:
-                jobs.append(parameters.to_dict())
-    else:
-        assert command == COMMANDS.load_test
-        for i in range(extras["num_workers"]):
-            parameters = JobParameters(
-                model_specification=str(model_specification_path),
-                branch_configuration={},
-                input_draw=0,
-                random_seed=i,
-                results_path=str(output_root),
-                backup_configuration={},
-                extras={"test_type": extras["test_type"]},
-            )
-            jobs.append(parameters.to_dict())
+        if already_complete(parameters, finished_sim_metadata):
+            number_already_completed += 1
+        else:
+            jobs.append(parameters)
 
     np.random.shuffle(jobs)  # type: ignore [arg-type]
     return jobs, number_already_completed

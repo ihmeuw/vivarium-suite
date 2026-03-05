@@ -105,7 +105,7 @@ def build_workflow(
 
     workflow.add_tasks(tasks)
 
-    logger.info(
+    logger.debug(
         f"Built Jobmon workflow '{workflow_name}' with {len(tasks)} tasks "
         f"(max {max_workers} concurrent)."
     )

@@ -119,5 +119,5 @@ src/vivarium_cluster_tools/_version.py
 .github/prompts/
 .github/copilot_instructions.md
 
-# Claude
+# Agent files
 .claude/

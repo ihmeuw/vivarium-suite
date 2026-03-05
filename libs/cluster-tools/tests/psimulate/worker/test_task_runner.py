@@ -114,7 +114,7 @@ class TestMainDispatch:
         mock_results = {"some_metric": pd.DataFrame({"a": [1]})}
 
         with (
-            patch(_WORK_HORSE, return_value=(pd.DataFrame(), mock_results)) as work_horse,
+            patch(_WORK_HORSE, return_value=mock_results) as work_horse,
             patch(_LOAD_TEST_WORK_HORSE) as load_test_work_horse,
             patch(_WRITE_TASK_RESULTS) as write,
         ):
@@ -199,7 +199,7 @@ class TestMainLoggingSetup:
         write_metadata(dirs["metadata"], job_params)
 
         with (
-            patch(_WORK_HORSE, return_value=(pd.DataFrame(), {})),
+            patch(_WORK_HORSE, return_value={}),
             patch(_WRITE_TASK_RESULTS),
         ):
             main(
@@ -221,7 +221,7 @@ class TestMainLoggingSetup:
         write_metadata(dirs["metadata"], job_params)
 
         with (
-            patch(_WORK_HORSE, return_value=(pd.DataFrame(), {})),
+            patch(_WORK_HORSE, return_value=({})),
             patch(_WRITE_TASK_RESULTS),
         ):
             main(
