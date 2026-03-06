@@ -12,11 +12,6 @@ py:class pandas.core.generic.PandasObject
 # pathlib
 py:class Path
 py:class pathlib._local.Path
-# redis
-py:class redis.client.Redis
-# tempfile
-py:class tempfile._TemporaryFileWrapper
-py:class _TemporaryFileWrapper
 # typing
 py:class vivarium_cluster_tools.cli_tools.R
 # psutil

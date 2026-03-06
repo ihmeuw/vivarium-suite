@@ -23,8 +23,6 @@ from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.vipin.perf_counters import CounterSnapshot
 
-VIVARIUM_WORK_HORSE_IMPORT_PATH = f"{__name__}.work_horse"
-
 
 class ParallelSimulationContext(SimulationContext):
     """A parallel simulation context.

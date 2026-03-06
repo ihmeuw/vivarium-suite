@@ -35,5 +35,5 @@ disable_error_code = []
 
 # handle mypy errors when 3rd party packages are not typed.
 [[tool.mypy.overrides]]
-module = ["dill", "drmaa"]
+module = ["dill"]
 ignore_missing_imports = true

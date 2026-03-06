@@ -14,9 +14,7 @@ import time
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, ParamSpec, TypeVar
-
-from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
+from typing import ParamSpec, TypeVar
 
 NUM_ROWS_PER_CENTRAL_LOG_FILE = 100_000
 
@@ -27,18 +25,6 @@ T = TypeVar("T")
 def get_cluster_name() -> str:
     """Returns the hostname"""
     return socket.gethostname()
-
-
-def get_drmaa() -> Any:
-    try:
-        import drmaa
-    except (RuntimeError, OSError):
-        if "slurm" in ENV_VARIABLES.HOSTNAME.value:
-            ENV_VARIABLES.DRMAA_LIB_PATH.update("/opt/slurm-drmaa/lib/libdrmaa.so")
-            import drmaa
-        else:
-            drmaa = object()
-    return drmaa
 
 
 def mkdir(

@@ -39,10 +39,6 @@ class __EnvVariables(NamedTuple):
     JOB_ID: EnvVariable
     TASK_ID: EnvVariable
     VIVARIUM_LOGGING_DIRECTORY: EnvVariable
-    RQ_WORKER_ID: EnvVariable
-    RQ_JOB_ID: EnvVariable
-    DRMAA_LIB_PATH: EnvVariable
-    PYTHONPATH: EnvVariable
 
 
 ENV_VARIABLES = __EnvVariables(
@@ -50,8 +46,4 @@ ENV_VARIABLES = __EnvVariables(
     JOB_ID=EnvVariable("SLURM_ARRAY_JOB_ID"),
     TASK_ID=EnvVariable("SLURM_ARRAY_TASK_ID"),
     VIVARIUM_LOGGING_DIRECTORY=EnvVariable("VIVARIUM_LOGGING_DIRECTORY"),
-    RQ_WORKER_ID=EnvVariable("RQ_WORKER_ID"),
-    RQ_JOB_ID=EnvVariable("RQ_JOB_ID"),
-    DRMAA_LIB_PATH=EnvVariable("DRMAA_LIBRARY_PATH"),
-    PYTHONPATH=EnvVariable("PYTHONPATH"),
 )

@@ -18,8 +18,6 @@ from vivarium.framework.randomness import get_hash
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 
-LOAD_TEST_WORK_HORSE_IMPORT_PATH = f"{__name__}.work_horse"
-
 
 def get_psimulate_test_dict() -> (
     dict[str, dict[str, Callable[[JobParameters], pd.DataFrame] | str | int]]

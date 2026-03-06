@@ -45,10 +45,6 @@ output directory with the ``-o`` flag and which project you'd like to run on wit
         - | Report each time step as it occurs during the run.
     *   - | **-\-backup-freq**
         - | The frequency with which to save a backup of the simulation state to disk.
-    *   - | **-\-no-batch**
-        - | Do not write results in batches; write them as they come in.
-    *   - | **-\-redis**
-        - | Number of redis databases to use.
     *   - | **-\-max-workers** or **-w**
         - | The maximum number of workers to run concurrently.
     *   - | **-\-hardware** or **-h**

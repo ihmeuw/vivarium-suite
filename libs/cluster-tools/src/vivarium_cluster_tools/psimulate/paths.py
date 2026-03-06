@@ -109,8 +109,6 @@ class OutputPaths(NamedTuple):
 
     # Files
     # Environment configuration
-    worker_settings: Path
-    """The path to the worker settings file."""
     environment_file: Path
     """The path to the requirements.txt environment file."""
 
@@ -123,8 +121,6 @@ class OutputPaths(NamedTuple):
     """The path to the simulation branches file."""
 
     # outputs
-    finished_sim_metadata: Path
-    """The path to the finished simulation metadata file."""
     results_dir: Path
     """The path to the results directory."""
     backup_dir: Path
@@ -228,12 +224,10 @@ class OutputPaths(NamedTuple):
             root=output_directory,
             **logging_dirs,
             metadata_dir=output_directory / "metadata",
-            worker_settings=output_directory / "settings.py",
             environment_file=output_directory / "requirements.txt",
             model_specification=output_directory / "model_specification.yaml",
             keyspace=output_directory / "keyspace.yaml",
             branches=output_directory / "branches.yaml",
-            finished_sim_metadata=output_directory / "finished_sim_metadata.csv",
             results_dir=output_directory / "results",
             backup_dir=output_directory / "sim_backups",
             backup_metadata_path=output_directory / "sim_backups" / "backup_metadata.csv",

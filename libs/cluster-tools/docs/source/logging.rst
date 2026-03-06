@@ -15,16 +15,15 @@ ever used for the run, there will be only one directory for the run.
 Top-level logs
 ----------------
 At the top-level of the directory, there will be text and JSON-formatted main log files.
-These are the log files for the runner process. There will also be a log file for each
-Redis database process, which will be named ``redis.p<port>.log``. Per-worker logs are
+These are the log files for the runner process. Per-worker logs are
 in ``cluster_logs`` and ``worker_logs`` directories, described below.
 
 Cluster logs
 -------------
 The ``cluster_logs`` directory contains logs from the the array job processes. Each worker job
 has its own file. The contents of these are similar to what you will find in the ``worker_logs``
-directory, but a superset. The logs in the ``cluster_logs`` directory contain information about Redis
-heartbeats and other cluster-related information.
+directory, but a superset. The logs in the ``cluster_logs`` directory contain
+cluster-related information.
 
 Worker logs
 -------------
