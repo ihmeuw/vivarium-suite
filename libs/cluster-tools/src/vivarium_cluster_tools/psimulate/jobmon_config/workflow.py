@@ -51,6 +51,8 @@ def build_workflow(
         SLURM resource specification.
     max_workers
         Maximum number of concurrent tasks.
+    max_attempts
+        Maximum number of attempts Jobmon will make for each task.
 
     Returns
     -------
@@ -69,8 +71,8 @@ def build_workflow(
             "--command {command}"
         ),
         node_args=["task_id"],
-        task_args=["metadata_dir", "results_dir", "worker_log_dir", "command"],
-        op_args=[],
+        task_args=["metadata_dir", "results_dir"],
+        op_args=["worker_log_dir", "command"],
         default_cluster_name="slurm",
         default_compute_resources=native_specification.to_jobmon_spec(
             output_paths.cluster_logging_root
@@ -95,6 +97,7 @@ def build_workflow(
 
         task = task_template.create_task(
             name=f"psim_{job_params.task_id[:12]}",
+            max_attempts=max_attempts,
             task_id=job_params.task_id,
             metadata_dir=str(output_paths.metadata_dir),
             results_dir=str(output_paths.results_dir),

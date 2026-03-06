@@ -36,6 +36,7 @@ from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
 
 _DATA_DIR = Path(__file__).parent / "data"
 _MODEL_SPEC = _DATA_DIR / "e2e_model_spec.yaml"
+_MODEL_SPEC_FAIL_ONCE = _DATA_DIR / "e2e_model_spec_fail_once.yaml"
 _BRANCHES = _DATA_DIR / "e2e_branches.yaml"
 
 # Total jobs produced by the branch config (2 draws x 2 seeds x 1 branch)
@@ -47,7 +48,7 @@ _TIMEOUT = 600
 RESULTS_DIR = "/mnt/team/simulation_science/priv/engineering/tests/output/"
 
 # Don't enforce weekly run requirement during development
-pytestmark = [pytest.mark.cluster, pytest.mark.slow, pytest.mark.weekly]
+pytestmark = [pytest.mark.cluster, pytest.mark.slow]
 
 
 def _make_shared_tmp_dir() -> Path:
@@ -362,55 +363,77 @@ class TestPsimulateRun:
         metadata = _read_metadata(output_dir)
         assert len(metadata) == _EXPECTED_TOTAL_JOBS
 
+    def test_run_with_auto_retry(self, shared_tmp_path: Path, slurm_project: str) -> None:
+        """Verify Jobmon's automatic retry makes fail-once tasks pass.
 
-class TestPsimulateRestart:
-    """E2E tests for ``psimulate restart``."""
+        Uses ``FailOnceComponent`` with the default ``--max-attempts 3``.
+        Every task fails on its first attempt and succeeds on the second
+        (because the sentinel file now exists).  The run should complete
+        successfully without a manual restart.
+        """
+        sentinel_dir = shared_tmp_path / "fail_sentinels"
+        sentinel_dir.mkdir()
 
-    def test_restart_completes_remaining(
-        self, completed_sim_copy: Path, slurm_project: str
-    ) -> None:
-        """Delete partial outputs, restart, and verify only missing jobs re-run."""
-        output_dir = completed_sim_copy
+        result_dir = shared_tmp_path / "results"
+        result_dir.mkdir()
 
-        # Verify initial completion
+        env = {**os.environ, "FAIL_ONCE_SENTINEL_DIR": str(sentinel_dir)}
+        proc = subprocess.run(
+            [
+                "psimulate",
+                "run",
+                str(_MODEL_SPEC_FAIL_ONCE),
+                str(_BRANCHES),
+                "-o",
+                str(result_dir),
+                *_common_slurm_args(slurm_project),
+                "-w",
+                str(_EXPECTED_TOTAL_JOBS),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=_TIMEOUT,
+            env=env,
+        )
+        assert proc.returncode == 0, (
+            f"psimulate run with auto-retry failed.\n"
+            f"STDOUT:\n{proc.stdout}\n"
+            f"STDERR:\n{proc.stderr}"
+        )
+
+        output_dir = _find_output_dir(result_dir)
         metadata = _read_metadata(output_dir)
         assert len(metadata) == _EXPECTED_TOTAL_JOBS
+        _assert_result_task_counts(output_dir / "results", _EXPECTED_TOTAL_JOBS)
 
-        # Verify result files before deletion
-        results_dir = output_dir / "results"
-        assert results_dir.exists()
-        pre_task_ids = _assert_result_task_counts(results_dir, _EXPECTED_TOTAL_JOBS)
 
-        # Pick the same task IDs to delete across all metric directories.
-        # Use the union of all task IDs (they should be identical across metrics).
-        all_task_ids = sorted(set().union(*pre_task_ids.values()))
-        assert len(all_task_ids) == _EXPECTED_TOTAL_JOBS
-        ids_to_delete = set(all_task_ids[: len(all_task_ids) // 2])
-        assert ids_to_delete, "Need at least 2 tasks to delete half"
-        expected_remaining = _EXPECTED_TOTAL_JOBS - len(ids_to_delete)
+class TestPsimulateRestart:
+    """E2E tests for ``psimulate restart``.
 
-        # Delete the corresponding rows by rewriting each metric's parquet files
-        # to exclude the targeted task IDs.
-        for metric_dir in results_dir.iterdir():
-            if not metric_dir.is_dir():
-                continue
-            for pf in sorted(metric_dir.glob("*.parquet")):
-                df = pd.read_parquet(pf)
-                mask = df.apply(
-                    lambda r: f"{int(r['input_draw'])}_{int(r['random_seed'])}"
-                    in ids_to_delete,
-                    axis=1,
-                )
-                kept = df[~mask]
-                if kept.empty:
-                    pf.unlink()
-                else:
-                    kept.to_parquet(pf, index=False)
+    Restart now uses Jobmon's native resume: the workflow is rebuilt with the
+    same ``workflow_args`` and ``workflow.run(resume=True)`` is called.  Jobmon
+    skips tasks that already completed (status DONE) and retries any that
+    failed or were pending.
+    """
 
-        # Confirm deletion: each metric dir should now have exactly N/2 tasks
-        _assert_result_task_counts(results_dir, expected_remaining)
+    def test_restart_of_completed_run_raises(
+        self, completed_sim_output: Path, slurm_project: str
+    ) -> None:
+        """Restart a fully-completed run and verify Jobmon rejects it.
 
-        # Restart -- should re-run only the missing jobs
+        When all tasks already succeeded, Jobmon raises
+        ``WorkflowAlreadyComplete`` rather than silently re-running anything.
+        psimulate should propagate this as a non-zero exit with the
+        distinctive error message in stderr.
+        """
+        output_dir = completed_sim_output
+
+        # Verify initial completion
+        metadata_before = _read_metadata(output_dir)
+        assert len(metadata_before) == _EXPECTED_TOTAL_JOBS
+        _assert_result_task_counts(output_dir / "results", _EXPECTED_TOTAL_JOBS)
+
+        # Restart -- Jobmon should refuse to resume a DONE workflow
         proc = _run_psimulate(
             [
                 "restart",
@@ -420,17 +443,100 @@ class TestPsimulateRestart:
                 str(_EXPECTED_TOTAL_JOBS),
             ]
         )
-        assert proc.returncode == 0, f"psimulate restart failed.\nSTDERR:\n{proc.stderr}"
+        assert proc.returncode != 0, (
+            f"Expected psimulate restart to fail for a completed workflow, "
+            f"but it exited 0.\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
+        assert "WorkflowAlreadyComplete" in proc.stderr, (
+            f"Expected WorkflowAlreadyComplete in stderr.\n"
+            f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
 
-        # Verify all jobs completed (both preserved and re-run)
+    def test_restart_after_total_failure(
+        self, shared_tmp_path: Path, slurm_project: str
+    ) -> None:
+        """Run a simulation where every task fails, then restart to completion.
+
+        Uses ``FailOnceComponent`` which creates a sentinel file per
+        (draw, seed) on first execution and raises ``RuntimeError``.  On the
+        Jobmon-resume restart the sentinels already exist, so every task
+        succeeds.  The ``FAIL_ONCE_SENTINEL_DIR`` env var is set in the test
+        environment and propagated through SLURM to the workers.
+        """
+        sentinel_dir = shared_tmp_path / "fail_sentinels"
+        sentinel_dir.mkdir()
+
+        result_dir = shared_tmp_path / "results"
+        result_dir.mkdir()
+
+        # Initial run with --max-attempts 1: every task fails permanently
+        env = {**os.environ, "FAIL_ONCE_SENTINEL_DIR": str(sentinel_dir)}
+        initial_proc = subprocess.run(
+            [
+                "psimulate",
+                "run",
+                str(_MODEL_SPEC_FAIL_ONCE),
+                str(_BRANCHES),
+                "-o",
+                str(result_dir),
+                *_common_slurm_args(slurm_project),
+                "-w",
+                str(_EXPECTED_TOTAL_JOBS),
+                "--max-attempts",
+                "1",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=_TIMEOUT,
+            env=env,
+        )
+        # Workflow should finish but not with a clean DONE (all tasks failed).
+        output_dir = _find_output_dir(result_dir)
+        results_dir = output_dir / "results"
+
+        # No completed results expected (every task crashed before writing).
+        completed_ids = _get_result_task_ids(results_dir) if results_dir.exists() else {}
+        total_completed = sum(len(ids) for ids in completed_ids.values())
+        assert total_completed == 0, (
+            f"Expected 0 completed tasks after initial all-fail run, "
+            f"got {total_completed}.  STDOUT:\n{initial_proc.stdout}\n"
+            f"STDERR:\n{initial_proc.stderr}"
+        )
+
+        # Sentinel files should exist for every (draw, seed).
+        sentinel_files = list(sentinel_dir.iterdir())
+        assert len(sentinel_files) >= _EXPECTED_TOTAL_JOBS, (
+            f"Expected {_EXPECTED_TOTAL_JOBS} sentinel files, "
+            f"got {len(sentinel_files)}: {sentinel_files}"
+        )
+
+        #  Restart: sentinels exist, so every task now succeeds
+        restart_proc = subprocess.run(
+            [
+                "psimulate",
+                "restart",
+                str(output_dir),
+                *_common_slurm_args(slurm_project),
+                "-w",
+                str(_EXPECTED_TOTAL_JOBS),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=_TIMEOUT,
+            env=env,
+        )
+        assert restart_proc.returncode == 0, (
+            f"psimulate restart failed.\n"
+            f"STDOUT:\n{restart_proc.stdout}\n"
+            f"STDERR:\n{restart_proc.stderr}"
+        )
+
+        # All jobs should now be complete.
         metadata = _read_metadata(output_dir)
-        assert len(metadata) == _EXPECTED_TOTAL_JOBS
-
-        # Verify draw/seed combinations are correct
-        draw_seed_pairs = metadata[["input_draw", "random_seed"]].drop_duplicates()
-        assert len(draw_seed_pairs) == _EXPECTED_TOTAL_JOBS
-
-        # Verify result files were restored
+        assert len(metadata) == _EXPECTED_TOTAL_JOBS, (
+            f"Expected {_EXPECTED_TOTAL_JOBS} completed jobs after restart, "
+            f"got {len(metadata)}"
+        )
         _assert_result_task_counts(results_dir, _EXPECTED_TOTAL_JOBS)
 
 

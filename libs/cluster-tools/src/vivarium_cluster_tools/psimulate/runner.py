@@ -102,6 +102,7 @@ def main(
     input_paths: paths.InputPaths,
     native_specification: cluster.NativeSpecification,
     max_workers: int,
+    max_attempts: int,
     backup_freq: int | None,
     extra_args: dict[str, Any],
 ) -> None:
@@ -169,18 +170,25 @@ def main(
         )
 
     logger.debug("Parsing arguments into worker job parameters.")
-    # Translate the keyspace into the list of jobs to actually run
-    # after accounting for any partially present results.
+    # For restart, we build the full job list (no filtering) and let Jobmon's
+    # native resume skip already-completed tasks.  For other commands, we
+    # filter out completed jobs ourselves.
+    restart = command == COMMANDS.restart
+    job_list_metadata = pd.DataFrame() if restart else finished_sim_metadata
     job_parameters, num_jobs_completed = jobs.build_job_list(
         model_specification_path=output_paths.model_specification,
         output_root=output_paths.root,
         keyspace=keyspace,
-        finished_sim_metadata=finished_sim_metadata,
+        finished_sim_metadata=job_list_metadata,
         backup_freq=backup_freq,
         backup_dir=output_paths.backup_dir,
         backup_metadata_path=output_paths.backup_metadata_path,
         extras=extra_args,
     )
+    # For restart, we know the real completed count from collect_metadata,
+    # not from build_job_list (which saw an empty DataFrame).
+    if restart:
+        num_jobs_completed = len(finished_sim_metadata)
     # Let the user know if something is fishy at this point.
     total_num_jobs = len(keyspace)
     report_initial_status(num_jobs_completed, finished_sim_metadata, total_num_jobs)
@@ -196,8 +204,11 @@ def main(
             job_parameters_list=job_parameters,
         )
 
-    # Build the Jobmon workflow
-    workflow_name = f"psimulate_{command}_{output_paths.root.name}"
+    # Build the Jobmon workflow.
+    # For restart we reuse the original run's workflow_args so Jobmon can
+    # resume the same workflow (skipping already-completed tasks).
+    wf_command = COMMANDS.run if restart else command
+    workflow_name = f"psimulate_{wf_command}_{output_paths.root.name}"
     logger.debug("Building Jobmon workflow.")
     workflow = build_workflow(
         workflow_name=workflow_name,
@@ -206,6 +217,7 @@ def main(
         output_paths=output_paths,
         native_specification=native_specification,
         max_workers=max_workers,
+        max_attempts=max_attempts,
     )
 
     # Bind the workflow to get its ID before running, so we can display the
@@ -221,8 +233,7 @@ def main(
     if monitoring_url:
         logger.info(f"Monitor progress at: {monitoring_url}")
 
-    # Blocks until workflow finishes and returns final workflow status (e.g. "D" for DONE)
-    wf_status = workflow.run()
+    wf_status = workflow.run(resume=restart)
 
     # TODO MIC-6856 Fix Vipin
     # Spit out a performance report for the workers.
@@ -252,7 +263,7 @@ def main(
         shutil.rmtree(output_paths.backup_dir, ignore_errors=True)
 
     logger.info(
-        f"{num_completed_this_run} of {len(job_parameters)} jobs "
+        f"{num_completed_this_run} of {num_jobs_attempted} jobs "
         f"completed successfully from this {command}.\n"
         f"({num_successful} of {total_num_jobs} total jobs completed successfully overall)\n"
         f"Results written to: {str(output_paths.results_dir)}",
