@@ -178,7 +178,8 @@ if [[ $create_env == 'yes' ]]; then
   # Create conda environment
   echo
   echo "Creating new conda environment $env_name"
-  conda create -n $env_name python=3.11 git git-lfs hdf5 -c conda-forge -y
+  
+  conda create -n $env_name python=3.12 git git-lfs hdf5 -c conda-forge -y
   conda activate $env_name
   # NOTE: update branch name if you update requirements.txt in a branch
   echo

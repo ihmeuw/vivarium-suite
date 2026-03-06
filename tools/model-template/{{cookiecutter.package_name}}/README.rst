@@ -50,7 +50,7 @@ are installing and running things in an isolated programming environment
 so it doesn't conflict with other source code and libraries on your
 system.
 
-Supported Python versions: 3.10, 3.11
+Supported Python versions: 3.10, 3.11, 3.12
 
 Making Artifacts
 ----------------
