@@ -2,6 +2,5 @@ input_draw_count: 10
 random_seed_count: 5
 
 branches:
-# TODO change to name of intervention
-  - placeholder_branch_name:
+  - intervention:
       scenario: ['baseline']

@@ -23,6 +23,11 @@ Complete instructions for setting up a new github model repository can be found
 Development
 -----------
 
+First, we recommend creating a conda environment or virtualenv to isolate your development environment.
+Then install the dependencies with ``pip install -r requirements.txt``.
+To test out your changes, you can run ``cookiecutter <repo_dir>`` where repo_dir is the path to your clone of this repository.
+That command will create the instance of the template in the current directory.
+
 Things for the ``Vivarium Developers`` to keep an eye on:
 
 - ``model_specifications/{{cookiecutter.package_name}}.yaml``
