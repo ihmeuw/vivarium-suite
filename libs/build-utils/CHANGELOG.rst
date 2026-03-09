@@ -1,3 +1,7 @@
+**2.3.5 - 03/09/26**
+
+   - Feature: Infer python version for builds and deployment from downstream repos
+
 **2.3.4 - 03/02/26**
 
   - Bugfix: Fix cleanup of environments from Jenkins builds
