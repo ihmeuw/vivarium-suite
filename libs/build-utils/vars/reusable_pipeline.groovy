@@ -151,12 +151,8 @@ def call(Map config = [:]){
             // Use the name of the branch in the build name
             currentBuild.displayName = "#${BUILD_NUMBER} ${GIT_BRANCH}"
             python_versions = get_python_versions(WORKSPACE, GIT_URL)
-            // Derive the deploy/docs version as the highest supported version
-            PYTHON_DEPLOY_VERSION = python_versions.max { a, b ->
-              def aParts = a.tokenize('.').collect { it.toInteger() }
-              def bParts = b.tokenize('.').collect { it.toInteger() }
-              aParts <=> bParts
-            }
+            // Derive the deploy/docs version as the last entry in the list
+            PYTHON_DEPLOY_VERSION = python_versions[-1]
             echo "Python deploy version (inferred): ${PYTHON_DEPLOY_VERSION}"
           }
         }

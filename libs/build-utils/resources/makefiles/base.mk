@@ -16,12 +16,11 @@ IHME_PYPI := https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-s
 # If CONDA_ENV_PATH is set (from a Jenkins build), use the -p flag when making Conda env in
 # order to make env at specific path. Otherwise, make a named env at the default path using
 # the -n flag.
-# Infer the highest supported Python version from python_versions.json if it exists,
+# Use the last Python version from python_versions.json if it exists,
 # otherwise fall back to 3.12.
 _PY_VERSIONS_FILE := $(wildcard python_versions.json)
 PYTHON_VERSION ?= $(if $(_PY_VERSIONS_FILE),$(shell python -c \
-        "import json; v = json.load(open('python_versions.json')); \
-print(max(v, key=lambda x: tuple(int(n) for n in x.split('.'))))"),3.12)
+        "import json; print(json.load(open('python_versions.json'))[-1])"),3.12)
 CONDA_ENV_NAME ?= ${PACKAGE_NAME}_py${PYTHON_VERSION}
 CONDA_ENV_CREATION_FLAG = $(if $(CONDA_ENV_PATH),-p ${CONDA_ENV_PATH},-n ${CONDA_ENV_NAME})
 

@@ -1,3 +1,7 @@
+**2.3.6 - 03/10/26**
+
+    - Bugfix: Fix list parsing and version comparison for python version inference
+
 **2.3.5 - 03/09/26**
 
    - Feature: Infer python version for builds and deployment from downstream repos
