@@ -1,3 +1,7 @@
+**2.3.7 - TBD/TBD/TBD**
+
+   - Validate github repo version prior to deploying
+
 **2.3.6 - 03/10/26**
 
     - Bugfix: Fix list parsing and version comparison for python version inference
