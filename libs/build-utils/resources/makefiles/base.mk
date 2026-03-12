@@ -48,7 +48,6 @@ help: # Curated help message
 	echo "manual-deploy-artifactory     Deploy package; only use if Jenkins deploy fails"; \
 	echo "model <command> [args]        Run model lineage tool (e.g., make model tree,"; \
 	echo "                              make model info v24.0)"; \
-	echo "validate-tag                  Validate that the current git tag matches the CHANGELOG version"; \"
 	echo; \
 	echo "====================="; \
 	echo "Jenkins build targets"; \
@@ -157,10 +156,6 @@ test-docs: # Test documentation examples
 tag-version: # Tag current version and push to git
 	git tag -a "v${PACKAGE_VERSION}" -m "Tag automatically generated from Jenkins."
 	git push --tags
-
-.PHONY: validate-tag
-validate-tag: # Validate that the current git tag matches the CHANGELOG version
-	@bash $(UTILS_DIR)resources/scripts/validate_tag_version.sh
 
 .PHONY: build-package
 build-package: # Build pip wheel package

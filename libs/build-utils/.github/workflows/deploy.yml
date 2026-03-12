@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Validate Tag Matches Changelog Version
-        run: make validate-tag
+        run: bash resources/scripts/validate_tag_version.sh
       - name: Validate Release Date
         run: |
           CHANGELOG_DATE=$(head -n 1 CHANGELOG.rst | grep -oP '\d{2}/\d{2}/\d{2}')          
