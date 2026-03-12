@@ -5,61 +5,87 @@
 # It's particularly important for GitHub repos where tags are created manually.
 #
 # Returns:
-#   0 if versions match and are valid semver
+#   0 if versions match and are valid semver with strict one-step bumping
 #   1 otherwise
 
 set -e
 
+is_strict_semver() {
+    # Enforce major.minor.patch format
+    local version="$1"
+    echo "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+}
+
+is_strict_one_step_bump() {
+    local previous_version="$1"
+    local current_version="$2"
+
+    # Split the dot-seperated versions into major, minor, and patch components
+    IFS='.' read -r prev_major prev_minor prev_patch <<< "$previous_version"
+    IFS='.' read -r curr_major curr_minor curr_patch <<< "$current_version"
+
+    # Patch bump: X.Y.Z -> X.Y.(Z+1)
+    if [ "$curr_major" -eq "$prev_major" ] && [ "$curr_minor" -eq "$prev_minor" ] && [ "$curr_patch" -eq $((prev_patch + 1)) ]; then
+        return 0
+    fi
+
+    # Minor bump: X.Y.Z -> X.(Y+1).0
+    if [ "$curr_major" -eq "$prev_major" ] && [ "$curr_minor" -eq $((prev_minor + 1)) ] && [ "$curr_patch" -eq 0 ]; then
+        return 0
+    fi
+
+    # Major bump: X.Y.Z -> (X+1).0.0
+    if [ "$curr_major" -eq $((prev_major + 1)) ] && [ "$curr_minor" -eq 0 ] && [ "$curr_patch" -eq 0 ]; then
+        return 0
+    fi
+
+    return 1
+}
+
 CHANGELOG_PATH="./CHANGELOG.rst"
-
-
-# Check if CHANGELOG exists
 if [ ! -f "$CHANGELOG_PATH" ]; then
     echo "ERROR: CHANGELOG file not found at $CHANGELOG_PATH"
     exit 1
 fi
 
 # Determine the tag to validate
-TAG="${GITHUB_REF_NAME:-}"
-
-# NOTE: This can be uncommented for debugging purposes in non-GitHub environments
-# if [ -z "$TAG" ]; then
-#     # Try to find a semantic version tag at the current commit.
-#     # If multiple tags exist, find the one matching v#.#.# or #.#.#
-#     TAG=$(git tag --points-at HEAD 2>/dev/null | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || echo "")
-# fi
-
-# If no tag found, fail
-if [ -z "$TAG" ]; then
+RELEASE_TAG="${GITHUB_REF_NAME:-}"
+if [ -z "$RELEASE_TAG" ]; then
     echo "ERROR: No git tag found. Cannot validate version."
     exit 1
 fi
 
 # Extract version from tag (remove 'v' prefix if present)
-TAG_VERSION=$(echo "$TAG" | sed 's/^v//')
-
-# Validate that we got a semantic version from the tag
-if ! echo "$TAG_VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' > /dev/null; then
-    echo "ERROR: Tag '$TAG' does not start with a semantic version (expected format: v#.#.# or #.#.#)"
+RELEASE_VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+if ! is_strict_semver "$RELEASE_VERSION"; then
+    echo "ERROR: Tag '$RELEASE_TAG' must be strict semantic version format vX.Y.Z or X.Y.Z"
     exit 1
 fi
 
-# Extract the first semantic version from CHANGELOG.rst
-CHANGELOG_VERSION=$(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' "$CHANGELOG_PATH" | head -n 1)
+# Extract the version token from the first changelog heading in format: "**..."
+CHANGELOG_HEADING=$(grep -E '^\*\*' "$CHANGELOG_PATH" | head -n 1)
+if [ -z "$CHANGELOG_HEADING" ]; then
+    echo "ERROR: Could not find changelog heading in expected format '**...' in $CHANGELOG_PATH"
+    exit 1
+fi
 
-# Validate that we found a version in the CHANGELOG
+CHANGELOG_VERSION=$(echo "$CHANGELOG_HEADING" | sed -En 's/^\*\*([0-9]+(\.[0-9]+)+)[^0-9.].*/\1/p')
 if [ -z "$CHANGELOG_VERSION" ]; then
-    echo "ERROR: Could not find a semantic version in $CHANGELOG_PATH"
+    echo "ERROR: Could not extract version from latest changelog heading: $CHANGELOG_HEADING"
+    exit 1
+fi
+if ! is_strict_semver "$CHANGELOG_VERSION"; then
+    echo "ERROR: Latest CHANGELOG version '$CHANGELOG_VERSION' is not strict semver (must be X.Y.Z)"
     exit 1
 fi
 
 # Compare versions
-if [ "$TAG_VERSION" != "$CHANGELOG_VERSION" ]; then
+if [ "$RELEASE_VERSION" != "$CHANGELOG_VERSION" ]; then
     echo ""
     echo "========================================"
     echo "ERROR: Version mismatch!"
     echo "========================================"
-    echo "Git tag version:      $TAG_VERSION (from tag: $TAG)"
+    echo "Git tag version:      $RELEASE_VERSION (from tag: $RELEASE_TAG)"
     echo "CHANGELOG version:    $CHANGELOG_VERSION"
     echo ""
     echo "Please ensure the git tag matches the latest CHANGELOG entry."
@@ -68,5 +94,41 @@ if [ "$TAG_VERSION" != "$CHANGELOG_VERSION" ]; then
     exit 1
 fi
 
-echo "INFO: Version validation passed: tag version ($TAG_VERSION) matches CHANGELOG version ($CHANGELOG_VERSION)"
+# Validate one-step bump against the previous released git tag (not changelog order).
+PREVIOUS_RELEASE_VERSION=$( (
+    git tag --list 2>/dev/null | sed 's/^v//'
+    echo "$RELEASE_VERSION"
+) | while IFS= read -r version; do
+    if is_strict_semver "$version"; then
+        echo "$version"
+    fi
+done | sort -Vu | awk -v current="$RELEASE_VERSION" '
+    $0 == current {print prev; found=1; exit}
+    {prev = $0}
+    END {if (!found) exit 1}
+')
+
+if [ -n "$PREVIOUS_RELEASE_VERSION" ]; then
+    if ! is_strict_one_step_bump "$PREVIOUS_RELEASE_VERSION" "$RELEASE_VERSION"; then
+        echo ""
+        echo "========================================"
+        echo "ERROR: Invalid version bump!"
+        echo "========================================"
+        echo "Previous release tag version: $PREVIOUS_RELEASE_VERSION"
+        echo "Current release tag version:  $RELEASE_VERSION"
+        echo ""
+        echo "Expected exactly one semver step:"
+        echo "  - patch bump: X.Y.Z -> X.Y.(Z+1)"
+        echo "  - minor bump: X.Y.Z -> X.(Y+1).0"
+        echo "  - major bump: X.Y.Z -> (X+1).0.0"
+        echo "========================================"
+        echo ""
+        exit 1
+    fi
+
+    echo "INFO: Version validation passed: tag version ($RELEASE_VERSION) matches CHANGELOG version ($CHANGELOG_VERSION) with a valid one-step bump from previous release tag $PREVIOUS_RELEASE_VERSION"
+else
+    echo "INFO: Version validation passed: tag version ($RELEASE_VERSION) matches CHANGELOG version ($CHANGELOG_VERSION). No previous release tag found, so one-step bump check was skipped."
+fi
+
 exit 0

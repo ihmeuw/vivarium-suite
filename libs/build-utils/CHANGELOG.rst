@@ -1,4 +1,4 @@
-**2.3.7 - TBD/TBD/TBD**
+**2.3.7 - 03/12/26**
 
    - Validate github repo version prior to deploying
 
