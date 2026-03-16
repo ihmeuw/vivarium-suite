@@ -1,3 +1,7 @@
+**1.0.6 - 03/16/26**
+ 
+ - Validate version and CHANGELOG date prior to deploying
+
 **1.0.5 - 01/21/26**
  
  - Pin pandas<3.0.0
