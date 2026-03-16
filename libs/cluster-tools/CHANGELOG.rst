@@ -1,3 +1,7 @@
+**2.3.4 - 03/26/26**
+
+  - Bugfix: Update intersphinx mapping for python and pandas
+
 **2.3.3 - 02/25/26**
 
   - Bugfix: read performance log length regardless of column changes
