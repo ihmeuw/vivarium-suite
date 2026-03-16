@@ -194,7 +194,7 @@ texinfo_documents = [
 
 # Other docs we can link to
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/", None),
+    "python": ("https://docs.python.org/3/", None),
 }
 
 
