@@ -236,9 +236,8 @@ def main(
 
     wf_status = workflow.run(resume=restart)
 
-    # TODO MIC-6856 Fix Vipin
     # Spit out a performance report for the workers.
-    # try_run_vipin(output_paths)
+    try_run_vipin(output_paths)
 
     # Count task outcomes from Jobmon's in-memory task statuses
 

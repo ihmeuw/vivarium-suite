@@ -12,7 +12,6 @@ import re
 from pathlib import Path
 from typing import Generator
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
@@ -93,31 +92,10 @@ class PerformanceSummary:
 
 def set_index_scenario_cols(perf_df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     """Get the columns useful to index performance data by."""
-    index_cols = BASE_PERF_INDEX_COLS
     scenario_cols = [col for col in perf_df.columns if col.startswith("scenario_")]
-    index_cols.extend(scenario_cols)
+    index_cols = list(BASE_PERF_INDEX_COLS) + scenario_cols
     perf_df = perf_df.set_index(index_cols)
     return perf_df, scenario_cols
-
-
-def add_squid_api_data(perf_df: pd.DataFrame) -> pd.DataFrame:
-    """Add Squid API data to the performance dataframe.
-
-    Given a dataframe from PerformanceSummary.to_df, add Squid API data for the job.
-    Squid API reference: https://hub.ihme.washington.edu/display/SCKB/How+to+use+Squid+API
-    """
-    try:
-        task_ids = perf_df["jobmon_task_id"].unique()
-        assert len(task_ids) >= 1
-        # Squid API expects SLURM job IDs; Jobmon task IDs may not map directly.
-        # Log a warning and return the dataframe as-is for now.
-        logger.warning(
-            "Squid API integration is not yet updated for Jobmon task IDs. "
-            "Skipping Squid data enrichment."
-        )
-    except Exception as e:
-        logger.warning(f"Squid API request failed with: {e}")
-    return perf_df
 
 
 def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
@@ -145,21 +123,17 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
         )
 
     # Print execution times stats by scenario
-    temp = (
-        perf_df.set_index("compound_scenario" if do_compound else scenario_cols)
-        .filter(like="exec_time_")
-        .stack()
-        .reset_index()
-    )
+    idx = ["compound_scenario"] if do_compound else list(scenario_cols)
+    cols = idx + ["measure", "value"]
 
-    if do_compound:
-        cols = ["compound_scenario", "measure", "value"]
+    if idx:
+        temp = perf_df.set_index(idx).filter(like="exec_time_").stack().reset_index()
     else:
-        cols = scenario_cols
-        cols.extend(["measure", "value"])
+        temp = perf_df.filter(like="exec_time_").stack().reset_index()
+        temp = temp.drop(columns=["level_0"], errors="ignore")
 
     temp.columns = cols
-    cols.remove("value")
+    cols = [c for c in cols if c != "value"]
 
     report_df = temp.groupby(cols).describe()
     report_df.columns = report_df.columns.droplevel()
@@ -196,9 +170,6 @@ def report_performance(
     if len(perf_df) < 1:
         logger.warning(f"No performance data found in {input_directory}.")
         return None  # nothing left to do
-
-    # Add jobapi data about the job to dataframe
-    perf_df = add_squid_api_data(perf_df)
 
     # Set index to include branch configuration/scenario columns
     perf_df, scenario_cols = set_index_scenario_cols(perf_df)
