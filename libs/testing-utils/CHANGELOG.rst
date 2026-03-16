@@ -1,3 +1,7 @@
+**0.3.6 - 03/26/26**
+
+  - Bugfix: Update intersphinx mapping for python and pandas
+
 **0.3.5 - 02/23/26**
 
   - Feature: Allow VTU to be installed as a package with python 3.12 and 3.13
