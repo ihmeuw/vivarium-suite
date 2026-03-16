@@ -62,7 +62,7 @@ help: # Curated help message
 	echo "                                      e2e, all); include RUNSLOW=true if desired"; \
 	echo "  6. build-docs                       Build documentation"; \
 	echo "  7. test-docs                        Test documentation examples"; \
-	echo "  8. Deploy the package (optional)"; \
+	echo "  8. Deploy the package (Artifactory only)"; \
 	echo "     a. tag-version                   Tag current version and push to git"; \
 	echo "     b. build-package                 Build pip wheel package"; \
 	echo "     c. deploy-package-artifactory    Deploy the package to Artifactory"; \
@@ -151,6 +151,11 @@ test-docs: # Test documentation examples
 	else \
 		echo "No 'docs/' folder found - skipping."; \
 	fi
+
+.PHONY: validate-tag
+validate-tag: # Validate that current git tag matches CHANGELOG and is valid semver
+    # This is intended to be used only by github deploy workflows
+	@bash $(UTILS_DIR)resources/scripts/validate_tag_version.sh
 
 .PHONY: tag-version
 tag-version: # Tag current version and push to git

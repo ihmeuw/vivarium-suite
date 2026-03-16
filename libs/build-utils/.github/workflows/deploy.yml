@@ -11,7 +11,9 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v3
-      - name: Validate Tag Matches Changelog Version
+        with:
+          fetch-depth: 0
+      - name: Validate Version
         run: bash resources/scripts/validate_tag_version.sh
       - name: Validate Release Date
         run: |

@@ -1,3 +1,7 @@
+**2.3.8 - 03/16/26**
+
+   - Create a make target for version validation
+
 **2.3.7 - 03/12/26**
 
    - Validate github repo version prior to deploying
