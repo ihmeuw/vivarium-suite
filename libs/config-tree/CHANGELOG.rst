@@ -1,5 +1,6 @@
 **4.1.1 - 03/16/26**
 
+ - Validate version and CHANGELOG date prior to deploying
  - Update python docs url
 
 **4.1.0 - 02/19/26**
