@@ -1,3 +1,7 @@
+**4.1.1 - 03/16/26**
+
+ - Update python docs url
+
 **4.1.0 - 02/19/26**
 
  - Add support for Python versions 3.12 and 3.13
