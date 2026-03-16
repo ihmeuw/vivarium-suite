@@ -23,6 +23,7 @@ def make_job_parameters(**overrides: Any) -> JobParameters:
         "input_draw": 0,
         "random_seed": 0,
         "results_path": "~/tmp",
+        "worker_logging_root": "/tmp/worker_logs",
         "backup_configuration": {},
         "extras": {},
     }

@@ -107,7 +107,7 @@ class TestBuildWorkflow:
         self._call_build_workflow(
             mock_tool_cls, mock_write_metadata, output_paths, native_spec, two_jobs
         )
-        mock_tool_cls.assert_called_once_with(name="vivarium_cluster_tools_psimulate")
+        mock_tool_cls.assert_called_once_with(name="vivarium_cluster_tools")
 
     def test_task_template_args(
         self,
@@ -124,16 +124,13 @@ class TestBuildWorkflow:
         tool_instance = mock_tool_cls.return_value
         tool_instance.get_task_template.assert_called_once()
         kwargs = tool_instance.get_task_template.call_args.kwargs
-        assert kwargs["template_name"] == "psimulate_task"
+        assert kwargs["template_name"] == "psimulate"
         assert kwargs["node_args"] == ["task_id"]
         assert kwargs["task_args"] == [
             "metadata_dir",
             "results_dir",
         ]
-        assert kwargs["op_args"] == [
-            "worker_log_dir",
-            "command",
-        ]
+        assert kwargs["op_args"] == ["command"]
         assert kwargs["default_cluster_name"] == "slurm"
         assert kwargs["default_compute_resources"] == native_spec.to_jobmon_spec.return_value
 
@@ -168,12 +165,21 @@ class TestBuildWorkflow:
         native_spec: MagicMock,
         two_jobs: list[JobParameters],
     ) -> None:
-        """All created tasks are added to the workflow in a single call."""
+        """All created tasks are added to the workflow."""
         self._call_build_workflow(
             mock_tool_cls, mock_write_metadata, output_paths, native_spec, two_jobs
         )
         task_template = mock_tool_cls.return_value.get_task_template.return_value
         workflow = mock_tool_cls.return_value.create_workflow.return_value
 
-        expected_tasks = [task_template.create_task.return_value] * len(two_jobs)
+        # create_tasks (plural) is called once with a list of task_ids
+        task_template.create_tasks.assert_called_once()
+        kwargs = task_template.create_tasks.call_args.kwargs
+        assert kwargs["task_id"] == [jp.task_id for jp in two_jobs]
+        assert kwargs["max_attempts"] == 3  # default
+        assert kwargs["metadata_dir"] == str(output_paths.metadata_dir)
+        assert kwargs["results_dir"] == str(output_paths.results_dir)
+        assert kwargs["command"] == "run"
+
+        expected_tasks = task_template.create_tasks.return_value
         workflow.add_tasks.assert_called_once_with(expected_tasks)

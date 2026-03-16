@@ -14,6 +14,7 @@ def test_branch_config_immutable() -> None:
         results_path="results",
         backup_configuration={},
         extras={},
+        worker_logging_root="/tmp/worker_logs",
     )
     params.sim_config  # This was previously causing branch_config to change
     assert params.branch_configuration == original_branch_config
@@ -73,6 +74,7 @@ class TestJobParametersTaskId:
             results_path="/tmp/results",
             backup_configuration={},
             extras={},
+            worker_logging_root="/tmp/worker_logs",
         )
         expected = generate_task_id(5, 10, {"scenario": "A"})
         assert job_parameters.task_id == expected

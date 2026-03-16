@@ -58,12 +58,17 @@ def large_results_test(job_parameters: JobParameters) -> pd.DataFrame:
 
 def work_horse(job_parameters: JobParameters) -> pd.DataFrame:
     node = f"{ENV_VARIABLES.HOSTNAME.value}"
-    job = f"{ENV_VARIABLES.JOB_ID.value}:{ENV_VARIABLES.TASK_ID.value}"
+    jobmon_task_id = ENV_VARIABLES.JOBMON_TASK_ID.value
+    workflow_run_id = ENV_VARIABLES.JOBMON_WORKFLOW_RUN_ID.value
+    job_hash = job_parameters.task_id
 
     test_type = job_parameters.extras["test_type"]
     test_runner = get_psimulate_test_dict()[test_type]["function"]
 
-    logger.info(f"Launching new job {job} on {node}")
+    logger.info(
+        f"Launching job on {node} | "
+        f"jobmon_task_id={jobmon_task_id} workflow_run_id={workflow_run_id} job_hash={job_hash}"
+    )
     logger.info(f"Starting job: {job_parameters}")
     if not callable(test_runner):
         raise ValueError(f"Test runner for {test_type} is not callable: {test_runner}")

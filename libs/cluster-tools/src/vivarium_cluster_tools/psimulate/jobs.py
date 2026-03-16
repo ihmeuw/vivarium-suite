@@ -60,6 +60,7 @@ class JobParameters(NamedTuple):
     input_draw: int
     random_seed: int
     results_path: str
+    worker_logging_root: str
     backup_configuration: dict[str, Any]
     extras: dict[str, Any]
 
@@ -74,6 +75,7 @@ class JobParameters(NamedTuple):
         return {
             "model_specification": self.model_specification,
             "results_path": self.results_path,
+            "worker_logging_root": self.worker_logging_root,
             "backup_configuration": self.backup_configuration,
         }
 
@@ -114,6 +116,7 @@ def build_job_list(
     backup_freq: int | None,
     backup_dir: Path,
     backup_metadata_path: Path,
+    worker_logging_root: Path,
     extras: dict[str, Any],
 ) -> tuple[list[JobParameters], int]:
     jobs: list[JobParameters] = []
@@ -126,6 +129,7 @@ def build_job_list(
             input_draw=int(input_draw),
             random_seed=int(random_seed),
             results_path=str(output_root),
+            worker_logging_root=str(worker_logging_root),
             backup_configuration={
                 "backup_dir": backup_dir,
                 "backup_freq": backup_freq,

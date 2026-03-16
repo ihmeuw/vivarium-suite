@@ -63,7 +63,6 @@ def get_output_paths_from_output_directory(output_directory: Path) -> OutputPath
     logging_directory = output_directory / "logs" / f"{launch_time}_runtype"
     logging_dirs = {
         "logging_root": logging_directory,
-        "cluster_logging_root": logging_directory / "cluster_logs",
         "worker_logging_root": logging_directory / "worker_logs",
     }
 

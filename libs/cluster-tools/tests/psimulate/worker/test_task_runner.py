@@ -47,8 +47,6 @@ def _build_argv(
         task_id,
         "--results-dir",
         str(results_dir),
-        "--worker-log-dir",
-        str(worker_log_dir),
         "--command",
         command,
     ]
@@ -76,8 +74,6 @@ class TestParseArgs:
             "abc123",
             "--results-dir",
             str(tmp_path / "res"),
-            "--worker-log-dir",
-            str(tmp_path / "logs"),
             "--command",
             "run",
         ]
@@ -85,7 +81,6 @@ class TestParseArgs:
         assert ns.metadata_dir == tmp_path / "meta"
         assert ns.task_id == "abc123"
         assert ns.results_dir == tmp_path / "res"
-        assert ns.worker_log_dir == tmp_path / "logs"
         assert ns.command == "run"
         assert isinstance(ns.metadata_dir, Path)
         assert isinstance(ns.task_id, str)
@@ -191,51 +186,6 @@ class TestMainDispatch:
                         task_id=job_params.task_id,
                     )
                 )
-
-
-class TestMainLoggingSetup:
-    def test_env_var_is_set(self, dirs: dict[str, Path], job_params: JobParameters) -> None:
-        """VIVARIUM_LOGGING_DIRECTORY must be set to the worker-log dir."""
-        write_metadata(dirs["metadata"], job_params)
-
-        with (
-            patch(_WORK_HORSE, return_value={}),
-            patch(_WRITE_TASK_RESULTS),
-        ):
-            main(
-                _build_argv(
-                    dirs["metadata"],
-                    dirs["results"],
-                    dirs["worker_logs"],
-                    command=COMMANDS.run,
-                    task_id=job_params.task_id,
-                )
-            )
-
-        assert os.environ["VIVARIUM_LOGGING_DIRECTORY"] == str(dirs["worker_logs"])
-
-    def test_per_task_log_file_created(
-        self, dirs: dict[str, Path], job_params: JobParameters
-    ) -> None:
-        """Loguru should create a per-task log file in worker_log_dir."""
-        write_metadata(dirs["metadata"], job_params)
-
-        with (
-            patch(_WORK_HORSE, return_value=({})),
-            patch(_WRITE_TASK_RESULTS),
-        ):
-            main(
-                _build_argv(
-                    dirs["metadata"],
-                    dirs["results"],
-                    dirs["worker_logs"],
-                    command=COMMANDS.run,
-                    task_id=job_params.task_id,
-                )
-            )
-
-        log_file = dirs["worker_logs"] / f"{job_params.task_id}.log"
-        assert log_file.exists()
 
 
 class TestMainMissingMetadata:

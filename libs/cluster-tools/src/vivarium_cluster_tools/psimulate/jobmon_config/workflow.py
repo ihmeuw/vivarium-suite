@@ -58,24 +58,23 @@ def build_workflow(
     -------
         A ready-to-run Jobmon Workflow object.
     """
-    tool = Tool(name="vivarium_cluster_tools_psimulate")
+    tool = Tool(name="vivarium_cluster_tools")
     task_template = tool.get_task_template(
-        template_name="psimulate_task",
+        template_name="psimulate",
         command_template=(
             # task runner to come as workhorse wrapper
             f"python -m vivarium_cluster_tools.psimulate.worker.task_runner "
             "--metadata-dir {metadata_dir} "
             "--task-id {task_id} "
             "--results-dir {results_dir} "
-            "--worker-log-dir {worker_log_dir} "
             "--command {command}"
         ),
         node_args=["task_id"],
         task_args=["metadata_dir", "results_dir"],
-        op_args=["worker_log_dir", "command"],
+        op_args=["command"],
         default_cluster_name="slurm",
         default_compute_resources=native_specification.to_jobmon_spec(
-            output_paths.cluster_logging_root
+            output_paths.worker_logging_root
         ),
     )
 
@@ -87,24 +86,21 @@ def build_workflow(
         default_max_attempts=max_attempts,
     )
 
-    # Write job spec metadata and create tasks
-    tasks = []
+    # Write job spec metadata (one JSON per task for the worker to pick up)
     for job_params in job_parameters_list:
         write_metadata(
             metadata_dir=output_paths.metadata_dir,
             job_parameters=job_params,
         )
 
-        task = task_template.create_task(
-            name=f"psim_{job_params.task_id[:12]}",
-            max_attempts=max_attempts,
-            task_id=job_params.task_id,
-            metadata_dir=str(output_paths.metadata_dir),
-            results_dir=str(output_paths.results_dir),
-            worker_log_dir=str(output_paths.worker_logging_root),
-            command=command,
-        )
-        tasks.append(task)
+    # Batch-create all tasks
+    tasks = task_template.create_tasks(
+        max_attempts=max_attempts,
+        task_id=[jp.task_id for jp in job_parameters_list],
+        metadata_dir=str(output_paths.metadata_dir),
+        results_dir=str(output_paths.results_dir),
+        command=command,
+    )
 
     workflow.add_tasks(tasks)
 

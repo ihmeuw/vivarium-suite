@@ -53,10 +53,10 @@ class TestNativeSpecification:
     """Tests for NativeSpecification.to_jobmon_spec and _runtime_to_seconds."""
 
     @pytest.fixture()
-    def cluster_logging_root(self, tmp_path: Path) -> Path:
-        return tmp_path / "cluster_logs"
+    def worker_logging_root(self, tmp_path: Path) -> Path:
+        return tmp_path / "worker_logs"
 
-    def test_to_jobmon_spec_basic_keys(self, cluster_logging_root: Path) -> None:
+    def test_to_jobmon_spec_basic_keys(self, worker_logging_root: Path) -> None:
         """Returned dict has all mandatory Jobmon resource keys."""
         ns = NativeSpecification(
             job_name="test_job",
@@ -66,15 +66,15 @@ class TestNativeSpecification:
             max_runtime="01:00:00",
             hardware=["r650"],
         )
-        spec = ns.to_jobmon_spec(cluster_logging_root)
+        spec = ns.to_jobmon_spec(worker_logging_root)
 
         assert spec["queue"] == "all.q"
         assert spec["project"] == "proj_sim_science"
         assert spec["memory"] == 4.0
         assert spec["runtime"] == 3600
         assert spec["cores"] == ns.NUM_THREADS
-        assert spec["standard_output"] == str(cluster_logging_root)
-        assert spec["standard_error"] == str(cluster_logging_root)
+        assert spec["stdout"] == str(worker_logging_root)
+        assert spec["stderr"] == str(worker_logging_root)
 
     @pytest.mark.parametrize(
         "hardware, expected_constraints",
@@ -88,7 +88,7 @@ class TestNativeSpecification:
     )
     def test_to_jobmon_spec_hardware_constraints(
         self,
-        cluster_logging_root: Path,
+        worker_logging_root: Path,
         hardware: list[str],
         expected_constraints: str | None,
     ) -> None:
@@ -101,7 +101,7 @@ class TestNativeSpecification:
             max_runtime="00:30:00",
             hardware=hardware,
         )
-        spec = ns.to_jobmon_spec(cluster_logging_root)
+        spec = ns.to_jobmon_spec(worker_logging_root)
         if expected_constraints is None:
             assert "constraints" not in spec
         else:

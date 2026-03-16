@@ -6,6 +6,7 @@ Environment Variables
 Environment variables used or created throughout psimulate.
 
 """
+
 import os
 import socket
 from collections.abc import Callable
@@ -36,14 +37,12 @@ class EnvVariable:
 
 class __EnvVariables(NamedTuple):
     HOSTNAME: EnvVariable
-    JOB_ID: EnvVariable
-    TASK_ID: EnvVariable
-    VIVARIUM_LOGGING_DIRECTORY: EnvVariable
+    JOBMON_TASK_ID: EnvVariable
+    JOBMON_WORKFLOW_RUN_ID: EnvVariable
 
 
 ENV_VARIABLES = __EnvVariables(
     HOSTNAME=EnvVariable("HOSTNAME", finder=lambda name: socket.gethostname()),
-    JOB_ID=EnvVariable("SLURM_ARRAY_JOB_ID"),
-    TASK_ID=EnvVariable("SLURM_ARRAY_TASK_ID"),
-    VIVARIUM_LOGGING_DIRECTORY=EnvVariable("VIVARIUM_LOGGING_DIRECTORY"),
+    JOBMON_TASK_ID=EnvVariable("JOBMON_TASK_ID"),
+    JOBMON_WORKFLOW_RUN_ID=EnvVariable("JOBMON_WORKFLOW_RUN_ID"),
 )

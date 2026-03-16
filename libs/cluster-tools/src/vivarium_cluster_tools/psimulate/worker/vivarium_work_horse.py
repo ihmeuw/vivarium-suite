@@ -39,9 +39,14 @@ def work_horse(
     job_parameters: JobParameters,
 ) -> dict[str, pd.DataFrame]:
     node = f"{ENV_VARIABLES.HOSTNAME.value}"
-    job = f"{ENV_VARIABLES.JOB_ID.value}:{ENV_VARIABLES.TASK_ID.value}"
+    jobmon_task_id = ENV_VARIABLES.JOBMON_TASK_ID.value
+    workflow_run_id = ENV_VARIABLES.JOBMON_WORKFLOW_RUN_ID.value
+    job_hash = job_parameters.task_id
 
-    logger.info(f"Launching new job {job} on {node}")
+    logger.info(
+        f"Launching job on {node} | "
+        f"jobmon_task_id={jobmon_task_id} workflow_run_id={workflow_run_id} job_hash={job_hash}"
+    )
     logger.info(f"Starting job: {job_parameters}")
 
     try:
@@ -220,8 +225,7 @@ def do_sim_epilogue(
     logger.info(f'Total simulation run time {exec_time["total_minutes"]:.3f} minutes.')
 
     perf_log = logger.add(
-        Path(ENV_VARIABLES.VIVARIUM_LOGGING_DIRECTORY.value)
-        / f"perf.{ENV_VARIABLES.JOB_ID.value}.{ENV_VARIABLES.TASK_ID.value}.log",
+        Path(parameters.worker_logging_root) / f"perf.{parameters.task_id}.log",
         level="DEBUG",
         serialize=True,
     )
@@ -230,9 +234,9 @@ def do_sim_epilogue(
         json.dumps(
             {
                 "host": ENV_VARIABLES.HOSTNAME.value,
-                "job_number": ENV_VARIABLES.JOB_ID.value,
-                "task_number": ENV_VARIABLES.TASK_ID.value,
-                "run_id": parameters.task_id,
+                "job_number": ENV_VARIABLES.JOBMON_WORKFLOW_RUN_ID.value,  # Now Jobmon Workflow number
+                "task_number": ENV_VARIABLES.JOBMON_TASK_ID.value,  # Now Jobmon task number
+                "job_hash": parameters.task_id,
                 "draw": parameters.input_draw,
                 "seed": parameters.random_seed,
                 "scenario": parameters.branch_configuration,

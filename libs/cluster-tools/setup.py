@@ -48,8 +48,10 @@ if __name__ == "__main__":
         "vivarium>=3.0.0",
         "psutil",
         "layered_config_tree",
-        "jobmon_installer_ihme",
     ]
+    # TODO: Move this to the install requires if we move VCT to stash.
+    if not os.environ.get("READTHEDOCS"):
+        install_requires.append("jobmon_installer_ihme")
 
     setup_requires = ["setuptools_scm"]
 

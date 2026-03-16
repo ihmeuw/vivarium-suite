@@ -99,8 +99,6 @@ class OutputPaths(NamedTuple):
 
     logging_root: Path
     """The parent directory for all logs."""
-    cluster_logging_root: Path
-    """The root directory for cluster logs."""
     worker_logging_root: Path
     """The root directory for worker logs."""
 
@@ -216,7 +214,6 @@ class OutputPaths(NamedTuple):
         logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
         logging_dirs = {
             "logging_root": logging_directory,
-            "cluster_logging_root": logging_directory / "cluster_logs",
             "worker_logging_root": logging_directory / "worker_logs",
         }
 
@@ -243,5 +240,5 @@ class OutputPaths(NamedTuple):
             self.metadata_dir,
         ]:
             vct_utils.mkdir(dir, exists_ok=True, parents=True)
-        for dir in [self.logging_root, self.cluster_logging_root, self.worker_logging_root]:
+        for dir in [self.logging_root, self.worker_logging_root]:
             vct_utils.mkdir(dir, parents=True)

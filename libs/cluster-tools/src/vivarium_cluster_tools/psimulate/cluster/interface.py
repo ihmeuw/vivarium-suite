@@ -33,13 +33,13 @@ class NativeSpecification(NamedTuple):
     # Class constant
     NUM_THREADS: int = 1
 
-    def to_jobmon_spec(self, cluster_logging_root: Path) -> dict[str, Any]:
+    def to_jobmon_spec(self, worker_logging_root: Path) -> dict[str, Any]:
         """Build the Jobmon compute resources dict from this NativeSpecification.
 
         Parameters
         ----------
-        cluster_logging_root
-            Root directory for cluster logs.
+        worker_logging_root
+            Root directory for worker logs.
 
         Returns
         -------
@@ -61,8 +61,8 @@ class NativeSpecification(NamedTuple):
             "memory": self.peak_memory,  # GB – Jobmon converts to MB
             "runtime": self._runtime_to_seconds(self.max_runtime),
             "cores": self.NUM_THREADS,
-            "standard_output": str(cluster_logging_root),
-            "standard_error": str(cluster_logging_root),
+            "stdout": str(worker_logging_root),
+            "stderr": str(worker_logging_root),
         }
         if self.hardware:
             resources["constraints"] = "|".join(self.hardware)

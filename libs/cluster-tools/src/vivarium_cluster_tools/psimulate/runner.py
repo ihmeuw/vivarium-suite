@@ -183,6 +183,7 @@ def main(
         backup_freq=backup_freq,
         backup_dir=output_paths.backup_dir,
         backup_metadata_path=output_paths.backup_metadata_path,
+        worker_logging_root=output_paths.worker_logging_root,
         extras=extra_args,
     )
     # For restart, we know the real completed count from collect_metadata,

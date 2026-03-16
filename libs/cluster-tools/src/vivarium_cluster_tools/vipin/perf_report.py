@@ -14,7 +14,6 @@ from typing import Generator
 
 import numpy as np
 import pandas as pd
-import requests
 from loguru import logger
 
 BASE_PERF_INDEX_COLS = ["host", "job_number", "task_number", "draw", "seed"]
@@ -82,7 +81,7 @@ class PerformanceSummary:
         return perf_df
 
     TELEMETRY_PATTERN = re.compile(r"^{\"host\".+\"job_number\".+}$")
-    PERF_LOG_PATTERN = re.compile(r"^perf\.([0-9]+)\.([0-9]+)\.log$")
+    PERF_LOG_PATTERN = re.compile(r"^perf\.[0-9a-f]{16}\.log$")
 
     def clean_perf_logs(self) -> None:
         """Remove all performance logs from the log_dir (after to_df has been called)"""
@@ -108,17 +107,13 @@ def add_squid_api_data(perf_df: pd.DataFrame) -> pd.DataFrame:
     Squid API reference: https://hub.ihme.washington.edu/display/SCKB/How+to+use+Squid+API
     """
     try:
-        job_numbers = perf_df["job_number"].unique()
-        assert len(job_numbers) == 1
-        squid_api_data = requests.get(
-            f"http://squid.ihme.washington.edu/api/jobs?job_ids={job_numbers[0]}"
-        ).json()
-        squid_api_df = pd.DataFrame(squid_api_data["jobs"]).add_prefix("squid_api_")
-        perf_df = perf_df.astype({"job_number": np.int64})
-        perf_df = perf_df.merge(
-            squid_api_df,
-            left_on=["job_number"],
-            right_on=["squid_api_job_id"],
+        task_ids = perf_df["jobmon_task_id"].unique()
+        assert len(task_ids) >= 1
+        # Squid API expects SLURM job IDs; Jobmon task IDs may not map directly.
+        # Log a warning and return the dataframe as-is for now.
+        logger.warning(
+            "Squid API integration is not yet updated for Jobmon task IDs. "
+            "Skipping Squid data enrichment."
         )
     except Exception as e:
         logger.warning(f"Squid API request failed with: {e}")

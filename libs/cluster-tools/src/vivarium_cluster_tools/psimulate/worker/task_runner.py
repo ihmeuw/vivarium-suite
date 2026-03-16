@@ -13,7 +13,6 @@ Usage::
         --metadata-dir /path/to/metadata \
         --task-id <task_id> \
         --results-dir /path/to/results \
-        --worker-log-dir /path/to/worker_logs
 
 """
 
@@ -55,12 +54,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Directory to write results to.",
     )
     parser.add_argument(
-        "--worker-log-dir",
-        type=Path,
-        required=True,
-        help="Directory for worker log files.",
-    )
-    parser.add_argument(
         "--command",
         type=str,
         required=True,
@@ -72,14 +65,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
-    # Configure worker logging to a per-task log file
-    log_file = args.worker_log_dir / f"{args.task_id}.log"
-    logger.remove()
-    logger.add(sys.stderr, level="INFO")
-    logger.add(log_file, level="DEBUG")
-
-    # Set VIVARIUM_LOGGING_DIRECTORY for performance logging inside work horses
-    os.environ["VIVARIUM_LOGGING_DIRECTORY"] = str(args.worker_log_dir)
+    logger.add(sys.stdout, level="INFO")
+    logger.add(sys.stderr, level="WARNING")
 
     metadata_path = args.metadata_dir / f"{args.task_id}.json"
     logger.info(f"Loading task metadata from {metadata_path}")
