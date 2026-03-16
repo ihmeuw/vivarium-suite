@@ -15,8 +15,8 @@ jobs:
           fetch-depth: 0
       - name: Validate version
         run: |
-          pip install vivarium_build_utils
-          make validate-tag
+          curl -sSLf -o /tmp/validate_tag_version.sh https://raw.githubusercontent.com/ihmeuw/vivarium_build_utils/main/resources/scripts/validate_tag_version.sh
+          bash /tmp/validate_tag_version.sh
       - name: Validate Release Date
         run: |
           CHANGELOG_DATE=$(head -n 1 CHANGELOG.rst | grep -oP '\d{2}/\d{2}/\d{2}')          
