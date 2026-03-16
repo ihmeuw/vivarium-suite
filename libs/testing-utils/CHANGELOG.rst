@@ -1,4 +1,4 @@
-**0.3.6 - 03/26/26**
+**0.3.6 - 03/16/26**
 
   - Validate version prior to deploying
   - Bugfix: Update intersphinx mapping for python and pandas
