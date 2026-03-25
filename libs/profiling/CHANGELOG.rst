@@ -1,3 +1,7 @@
+**v0.3.2 - 03/25/26**
+
+ - Remove upstream_repos from Jenkinsfile
+
 **v0.3.1 - 01/27/2026**
 
  - Adjust the parameters for run_benchmark command
