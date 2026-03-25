@@ -1,3 +1,7 @@
+**2.3.5 - 03/25/26**
+
+ - Remove upstream_repos from Jenkinsfile
+
 **2.3.4 - 03/16/26**
 
   - Validate version prior to deploying
