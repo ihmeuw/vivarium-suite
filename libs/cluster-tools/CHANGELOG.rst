@@ -1,3 +1,53 @@
+**3.0.0 - 03/26/26**
+--------------------
+
+This release migrates psimulate orchestration from redis/RQ/DRMAA to IHME's
+Jobmon and introduces a new task execution and results writing flow.
+
+Breaking changes
+----------------
+
+Orchestration backend migration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Replace redis, RQ, and DRMAA execution with Jobmon workflow/task execution.
+- Remove redis runtime requirements and redis-backed queue management.
+- Remove redis/batching CLI options from psimulate:
+
+  - ``--redis``
+  - ``--batch-size``
+  - ``--output-file-size``
+  - ``--no-batch``
+
+- Add Jobmon retry control via new ``--max-attempts`` option.
+
+Major changes
+-------------
+
+- Add Jobmon workflow builder and psimulate task runner implementation.
+- Write per-task metadata JSON and per-metric parquet outputs directly from each task.
+- Use deterministic task IDs (hash of draw/seed/branch configuration) to improve
+  restart/resume behavior.
+- Update restart behavior to rely on discovered completed outputs with Jobmon
+  workflow resume.
+
+Other changes
+-------------
+
+Results and logging
+~~~~~~~~~~~~~~~~~~~
+
+- Simplify results handling by removing centralized redis-based processing.
+- Clean up worker and cluster logging for the Jobmon execution model.
+
+Tooling and documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Remove redis installation/documentation references.
+- Add/refresh tests for Jobmon workflow construction, task execution, restart,
+  and end-to-end behavior.
+- Refactor and clean up dead code from legacy worker/redis modules.
+
 **2.3.5 - 03/25/26**
 
  - Remove upstream_repos from Jenkinsfile
