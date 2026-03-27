@@ -3,15 +3,90 @@
 #################
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import cache
+from itertools import chain, combinations
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from vivarium_testing_utils.automated_validation.comparison import TargetIntervalConfig
 
 import numpy as np
 import pandas as pd
 import scipy.stats
 from loguru import logger
 from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_frozen
+
+
+@dataclass
+class TestResult:
+
+    """Class to store metadata for individual tests run by FuzzyChecker."""
+
+    name: str
+    """Name of the test proportion being calculated."""
+    name_additional: str
+    """Additional name for test, used for when the same proportion is calculated multiple times."""
+    observed_proportion: float
+    """The observed proportion of a specific event happening."""
+    observed_numerator: int
+    """Observed counts of the event happening."""
+    observed_denominator: int
+    """Total counts of opportunities for the event to happen."""
+    target_lower_bound: float
+    """Lower bound of the target proportion range."""
+    target_upper_bound: float
+    """Upper bound of the target proportion range."""
+    bayes_factor: float
+    """Calculated Bayes factor from the test for the observed proportion."""
+    reject_null: bool
+    """Whether the null hypothesis was rejected."""
+    bug_issue_distribution: tuple[float, float]
+    """The bug/issue distribution used in the test."""
+    no_bug_issue_distribution: rv_discrete_frozen
+    """The no-bug/issue distribution used in the test."""
+    index_info: dict[str, Any] | None = None
+    """Index name mapping for name_additional attribute."""
+    confidence: str = "Conclusive"
+    """Whether the test result is conclusive or inconclusive based on sample size and Bayes factor."""
+    lower_bound_bayes_factor: float | None = None
+    """Bayes factor at numerator=0, used to check if sample size is too small for lower bound detection."""
+    upper_bound_bayes_factor: float | None = None
+    """Bayes factor at numerator=denominator, used to check if sample size is too small for upper bound detection."""
+
+    @property
+    def comparison_to_target(self) -> str:
+        """Describe whether the observed proportion is below, above, or aligned with target."""
+        if not self.reject_null:
+            return "No significant difference"
+
+        if self.observed_proportion < self.target_lower_bound:
+            return "Underestimated"
+
+        if self.observed_proportion > self.target_upper_bound:
+            return "Overestimated"
+
+        return "No significant difference"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary of the main metadata for this TestResult, including index info if present."""
+        results_dict = {
+            "name": self.name,
+            "name_additional": self.name_additional,
+            "observed_proportion": self.observed_proportion,
+            "observed_numerator": self.observed_numerator,
+            "observed_denominator": self.observed_denominator,
+            "target_lower_bound": self.target_lower_bound,
+            "target_upper_bound": self.target_upper_bound,
+            "bayes_factor": self.bayes_factor,
+            "reject_null": self.reject_null,
+            "comparison_to_target": self.comparison_to_target,
+            "confidence": self.confidence,
+        }
+        if self.index_info is not None:
+            results_dict["index_info"] = self.index_info
+        return results_dict
 
 
 class FuzzyChecker:
@@ -47,7 +122,7 @@ class FuzzyChecker:
     """
 
     def __init__(self) -> None:
-        self.proportion_test_diagnostics: list[dict[str, Any]] = []
+        self.proportion_test_diagnostics: list[TestResult] = []
 
     def fuzzy_assert_proportion(
         self,
@@ -114,6 +189,65 @@ class FuzzyChecker:
             Useful for e.g. specifying the timestep when an assertion happened.
 
         """
+        test_proportion = self.test_proportion(
+            name=name,
+            name_additional=name_additional,
+            target_proportion=target_proportion,
+            observed_numerator=observed_numerator,
+            observed_denominator=observed_denominator,
+            bug_issue_beta_distribution_parameters=bug_issue_beta_distribution_parameters,
+            fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+            inconclusive_bayes_factor_cutoff=inconclusive_bayes_factor_cutoff,
+        )
+
+        if test_proportion.reject_null:
+            if test_proportion.observed_proportion < test_proportion.target_lower_bound:
+                raise AssertionError(
+                    f"{name} value {test_proportion.observed_proportion:g} is significantly less than expected, bayes factor = {test_proportion.bayes_factor:g}"
+                )
+            else:
+                raise AssertionError(
+                    f"{name} value {test_proportion.observed_proportion:g} is significantly greater than expected, bayes factor = {test_proportion.bayes_factor:g}"
+                )
+
+        if test_proportion.confidence == "Inconclusive":
+            if (
+                test_proportion.lower_bound_bayes_factor is not None
+                and test_proportion.lower_bound_bayes_factor < fail_bayes_factor_cutoff
+            ):
+                logger.warning(
+                    f"Sample size too small to ever find that the simulation's '{name}' value is less than expected."
+                )
+
+            if (
+                test_proportion.upper_bound_bayes_factor is not None
+                and test_proportion.upper_bound_bayes_factor < fail_bayes_factor_cutoff
+            ):
+                logger.warning(
+                    f"Sample size too small to ever find that the simulation's '{name}' value is greater than expected."
+                )
+
+            if (
+                fail_bayes_factor_cutoff
+                > test_proportion.bayes_factor
+                > inconclusive_bayes_factor_cutoff
+            ):
+                logger.warning(f"Bayes factor for '{name}' is not conclusive.")
+
+        self.proportion_test_diagnostics.append(test_proportion)
+
+    def test_proportion(
+        self,
+        name: str = "",
+        name_additional: str = "",
+        target_proportion: float | tuple[float, float] = 0.1,
+        observed_numerator: int = 0,
+        observed_denominator: int = 0,
+        bug_issue_beta_distribution_parameters: tuple[float, float] = (0.5, 0.5),
+        fail_bayes_factor_cutoff: float = 100.0,
+        inconclusive_bayes_factor_cutoff: float = 0.1,
+    ) -> TestResult:
+        """Convert a dictionary representation of a test result to a TestResult object."""
         if isinstance(target_proportion, tuple):
             target_lower_bound, target_upper_bound = target_proportion
         else:
@@ -150,53 +284,324 @@ class FuzzyChecker:
 
         observed_proportion = observed_numerator / observed_denominator
         reject_null = bayes_factor > fail_bayes_factor_cutoff
-        self.proportion_test_diagnostics.append(
-            {
-                "name": name,
-                "name_addl": name_additional,
-                "observed_proportion": observed_proportion,
-                "observed_numerator": observed_numerator,
-                "observed_denominator": observed_denominator,
-                "target_lower_bound": target_lower_bound,
-                "target_upper_bound": target_upper_bound,
-                "bayes_factor": bayes_factor,
-                "reject_null": reject_null,
-            }
+
+        (
+            confidence,
+            lower_bound_bayes_factor,
+            upper_bound_bayes_factor,
+        ) = self._determine_confidence(
+            target_lower_bound=target_lower_bound,
+            target_upper_bound=target_upper_bound,
+            observed_denominator=observed_denominator,
+            bayes_factor=bayes_factor,
+            fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+            inconclusive_bayes_factor_cutoff=inconclusive_bayes_factor_cutoff,
+            bug_issue_distribution=bug_issue_distribution,
+            no_bug_issue_distribution=no_bug_issue_distribution,
         )
 
-        if reject_null:
-            if observed_proportion < target_lower_bound:
-                raise AssertionError(
-                    f"{name} value {observed_proportion:g} is significantly less than expected, bayes factor = {bayes_factor:g}"
+        return TestResult(
+            name=name,
+            name_additional=name_additional,
+            observed_proportion=observed_proportion,
+            observed_numerator=observed_numerator,
+            observed_denominator=observed_denominator,
+            target_lower_bound=target_lower_bound,
+            target_upper_bound=target_upper_bound,
+            bayes_factor=bayes_factor,
+            reject_null=reject_null,
+            bug_issue_distribution=bug_issue_distribution,
+            no_bug_issue_distribution=no_bug_issue_distribution,
+            confidence=confidence,
+            lower_bound_bayes_factor=lower_bound_bayes_factor,
+            upper_bound_bayes_factor=upper_bound_bayes_factor,
+        )
+
+    @staticmethod
+    def _get_stratification_combinations(
+        index_names: list[str],
+    ) -> list[tuple[str, ...]]:
+        """Return all strict sub-combinations of index_names.
+
+        Generates combinations of sizes len(index_names)-1 down to 1,
+        excluding the full set (already tested per-row) and the empty
+        set (already tested as the overall population-level check).
+        """
+        return list(
+            chain.from_iterable(
+                combinations(index_names, row) for row in range(len(index_names) - 1, 0, -1)
+            )
+        )
+
+    def _apply_target_interval_config(
+        self,
+        target_val: float,
+        index_info: dict[str, Any],
+        config: TargetIntervalConfig | None = None,
+    ) -> float | tuple[float, float]:
+        """Check if a group matches the target interval config and return the
+        (possibly updated) target value.
+
+        Parameters
+        ----------
+        target_val
+            The original target proportion value.
+        index_info
+            A mapping of stratification names to their values for the current row.
+        config
+            Optional configuration for applying a relative error to specific groups based on their index values.
+
+        Returns
+        -------
+            The original target_val if no config or no match, or a
+            (lower_bound, upper_bound) tuple if the config matches.
+
+        """
+        if config is None:
+            return target_val
+
+        update_target = True
+        index_names = set(index_info.keys())
+        for strat_name, filter_value in config.stratifications.items():
+            if filter_value == "all" and strat_name in index_names:
+                # "all" means the stratification must NOT be present
+                update_target = False
+                break
+            elif filter_value == "specific" and strat_name not in index_names:
+                # "specific" means the stratification must be present
+                update_target = False
+                break
+            elif filter_value not in ("all", "specific") and (
+                strat_name not in index_names or index_info.get(strat_name) != filter_value
+            ):
+                # A specific value: stratification must be present with this exact value
+                update_target = False
+                break
+
+        if update_target:
+            # All conditions matched — apply the relative error interval
+            lower = target_val * (1 - config.relative_error)
+            upper = target_val * (1 + config.relative_error)
+            clipped_lower = max(0.0, lower)
+            clipped_upper = min(1.0, upper)
+            if clipped_lower != lower or clipped_upper != upper:
+                logger.warning(
+                    f"Target interval clipped to [{clipped_lower}, {clipped_upper}] "
+                    f"(original: [{lower}, {upper}]) due to target_interval_configuration."
                 )
+            return (clipped_lower, clipped_upper)
+        else:
+            return target_val
+
+    def _test_all_groups(
+        self,
+        data: pd.DataFrame,
+        index_names: list[str],
+        name: str,
+        bug_issue_beta_distribution_parameters: tuple[float, float],
+        fail_bayes_factor_cutoff: float,
+        target_interval_config: TargetIntervalConfig | None = None,
+    ) -> None:
+        """Run test_proportion for each row in data and append results to diagnostics.
+
+        Parameters
+        ----------
+        data
+            DataFrame with columns "numerator", "denominator", and "target".
+        index_names
+            The index column names corresponding to the data's index levels.
+        name
+            The name of the proportion being tested.
+        bug_issue_beta_distribution_parameters
+            The parameters of the beta distribution characterizing the bug/issue hypothesis.
+        fail_bayes_factor_cutoff
+            The Bayes factor cutoff for rejecting the null hypothesis.
+        target_interval_config
+            Optional configuration for applying a relative error to specific groups based on their index values.
+        """
+        for idx, row in data.iterrows():
+            numerator_val = row["numerator"]
+            denominator_val = row["denominator"]
+
+            if denominator_val == 0:
+                if numerator_val > 0:
+                    raise ValueError(
+                        f"Group {idx} has a numerator of {numerator_val} but a denominator of 0."
+                    )
+                continue
+
+            target_val = float(row["target"])
+
+            if isinstance(idx, tuple):
+                index_info = dict(zip(index_names, idx))
+            elif index_names and index_names[0] is not None:
+                index_info = {index_names[0]: idx}
             else:
-                raise AssertionError(
-                    f"{name} value {observed_proportion:g} is significantly greater than expected, bayes factor = {bayes_factor:g}"
+                raise ValueError(
+                    "Index must be a tuple or a single value with a named index level"
                 )
 
-        if (
-            target_lower_bound > 0
-            and self._calculate_bayes_factor(
+            target_proportion = self._apply_target_interval_config(
+                target_val, index_info, target_interval_config
+            )
+
+            result = self.test_proportion(
+                name=name,
+                name_additional=str(idx),
+                observed_numerator=numerator_val,
+                observed_denominator=denominator_val,
+                target_proportion=target_proportion,
+                bug_issue_beta_distribution_parameters=bug_issue_beta_distribution_parameters,
+                fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+            )
+            result.index_info = index_info
+            self.proportion_test_diagnostics.append(result)
+
+    def test_proportion_vectorized(
+        self,
+        observed_numerator: pd.DataFrame,
+        observed_denominator: pd.DataFrame,
+        target_proportion: pd.DataFrame,
+        name: str = "",
+        bug_issue_beta_distribution_parameters: tuple[float, float] = (0.5, 0.5),
+        fail_bayes_factor_cutoff: float = 100.0,
+        target_interval_config: TargetIntervalConfig | None = None,
+    ) -> None:
+        """Vectorized version of test_proportion that operates on DataFrames.
+
+        Performs test_proportion for each row/index group in the input data structures,
+        enabling efficient batch testing of multiple proportions.
+
+        Parameters:
+        -----------
+        observed_numerator
+            A DataFrame with a single column named "value" containing the observed number
+            of events for each group. Values should represent counts
+        observed_denominator
+            A DataFrame with a single column named "value" containing the number of opportunities
+            for events for each group. Values should represent counts
+        target_proportion
+            A DataFrame with a single column named "value" containing the target proportion
+            for each group. Values should be floats between 0 and 1
+        name
+            The name of the proportion being tested
+        bug_issue_beta_distribution_parameters
+            The parameters of the beta distribution characterizing the bug/issue hypothesis.
+        fail_bayes_factor_cutoff
+            The Bayes factor above which a hypothesis test is considered to favor a bug/issue.
+        target_interval_config
+            Optional configuration for applying a relative error to specific groups based on their index values.
+
+        """
+
+        # Reorder index levels to match target_proportion for proper alignment
+        target_index_order = target_proportion.index.names
+        if isinstance(observed_numerator.index, pd.MultiIndex):
+            observed_numerator = observed_numerator.reorder_levels(target_index_order)
+        if isinstance(observed_denominator.index, pd.MultiIndex):
+            observed_denominator = observed_denominator.reorder_levels(target_index_order)
+
+        # NOTE: Use inner join to keep only rows where all three DataFrames have matching indices
+        # Observed numerator and denominator should have the same indices, and target_proportion
+        # might have additional levels where verification would be unnecessary
+        combined_data = pd.concat(
+            [
+                observed_numerator["value"].rename("numerator"),
+                observed_denominator["value"].rename("denominator"),
+                target_proportion["value"].rename("target"),
+            ],
+            axis=1,
+            join="inner",
+        )
+
+        # Test proportion for each group at the most granular level
+        index_names = list(combined_data.index.names)
+        self._test_all_groups(
+            data=combined_data,
+            index_names=index_names,
+            name=name,
+            bug_issue_beta_distribution_parameters=bug_issue_beta_distribution_parameters,
+            fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+            target_interval_config=target_interval_config,
+        )
+
+        # Test sub-stratification combinations
+        combined_data["weighted_target"] = (
+            combined_data["target"] * combined_data["denominator"]
+        )
+        for stratifications in self._get_stratification_combinations(index_names):
+            group_cols = list(stratifications)
+            grouped = combined_data.groupby(group_cols, sort=False, observed=True)
+            agg_data = grouped[["numerator", "denominator", "weighted_target"]].sum()
+            agg_data["target"] = agg_data["weighted_target"] / agg_data["denominator"]
+
+            self._test_all_groups(
+                data=agg_data,
+                index_names=group_cols,
+                name=name,
+                bug_issue_beta_distribution_parameters=bug_issue_beta_distribution_parameters,
+                fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+                target_interval_config=target_interval_config,
+            )
+
+        # Test population level proportion
+        # Calculate weighted average of target proportions (weighted by denominator)
+        weighted_target = (
+            combined_data["weighted_target"].sum() / combined_data["denominator"].sum()
+        )
+
+        # Apply target interval config to overall test - this would require "all" for all stratifications
+        overall_target: float | tuple[float, float] = self._apply_target_interval_config(
+            target_val=weighted_target,
+            index_info={},
+            config=target_interval_config,
+        )
+
+        overall = self.test_proportion(
+            name=name,
+            name_additional="overall",
+            observed_numerator=combined_data["numerator"].sum(),
+            observed_denominator=combined_data["denominator"].sum(),
+            target_proportion=overall_target,
+            bug_issue_beta_distribution_parameters=bug_issue_beta_distribution_parameters,
+            fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+        )
+        self.proportion_test_diagnostics.append(overall)
+
+    def _determine_confidence(
+        self,
+        target_lower_bound: float,
+        target_upper_bound: float,
+        observed_denominator: int,
+        bayes_factor: float,
+        fail_bayes_factor_cutoff: float,
+        inconclusive_bayes_factor_cutoff: float,
+        bug_issue_distribution: rv_discrete_frozen,
+        no_bug_issue_distribution: rv_discrete_frozen,
+    ) -> tuple[str, float | None, float | None]:
+        """Determine confidence level and compute edge Bayes factors."""
+        confidence = "Conclusive"
+        lower_bound_bayes_factor = None
+        upper_bound_bayes_factor = None
+
+        if target_lower_bound > 0:
+            lower_bound_bayes_factor = self._calculate_bayes_factor(
                 0, bug_issue_distribution, no_bug_issue_distribution
             )
-            < fail_bayes_factor_cutoff
-        ):
-            logger.warning(
-                f"Sample size too small to ever find that the simulation's '{name}' value is less than expected."
-            )
+            if lower_bound_bayes_factor < fail_bayes_factor_cutoff:
+                confidence = "Inconclusive"
 
-        if target_upper_bound < 1 and (
-            self._calculate_bayes_factor(
+        if target_upper_bound < 1:
+            upper_bound_bayes_factor = self._calculate_bayes_factor(
                 observed_denominator, bug_issue_distribution, no_bug_issue_distribution
             )
-            < fail_bayes_factor_cutoff
-        ):
-            logger.warning(
-                f"Sample size too small to ever find that the simulation's '{name}' value is greater than expected."
-            )
+            if upper_bound_bayes_factor < fail_bayes_factor_cutoff:
+                confidence = "Inconclusive"
 
         if fail_bayes_factor_cutoff > bayes_factor > inconclusive_bayes_factor_cutoff:
-            logger.warning(f"Bayes factor for '{name}' is not conclusive.")
+            confidence = "Inconclusive"
+
+        return confidence, lower_bound_bayes_factor, upper_bound_bayes_factor
 
     def _calculate_bayes_factor(
         self,

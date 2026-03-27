@@ -13,6 +13,7 @@ from vivarium_testing_utils.automated_validation.constants import DRAW_INDEX, SE
 from vivarium_testing_utils.automated_validation.data_loader import DataSource
 from vivarium_testing_utils.automated_validation.visualization.plot_utils import (
     _append_condition_to_title,
+    _drop_missing_groups,
     _get_combined_data,
     _get_unconditioned_index_names,
     _line_plot,
@@ -96,7 +97,7 @@ def sample_comparison(
 
     # Set up measure
     mock_comparison.measure = mocker.Mock()
-    mock_comparison.measure.measure_key = "measure.test_measure"
+    mock_comparison.comparison_key = "measure.test_measure"
     mock_comparison.measure.title = test_title
 
     # Type narrow for mypy
@@ -431,3 +432,24 @@ class TestHelperFunctions:
     ) -> None:
         """Test that empty condition dict returns original title unchanged."""
         assert _append_condition_to_title(condition_dict, "Original Title") == expected
+
+
+def test__drop_missing_groups() -> None:
+    age_categories = pd.CategoricalIndex(
+        ["Early Neonatal", "Late Neonatal", "Adult"],
+        categories=["Early Neonatal", "Late Neonatal", "Adult"],
+        ordered=True,
+        name="age_group",
+    )
+    index = pd.MultiIndex.from_product(
+        [["Sim", "Artifact"], age_categories, ["Male", "Female"]],
+        names=["source", "age_group", "sex"],
+    )
+    combined_data = pd.DataFrame({"value": np.arange(len(index), dtype=float)}, index=index)
+
+    adult_mask = combined_data.index.get_level_values("age_group") == "Adult"
+    combined_data.loc[adult_mask, "value"] = np.nan
+
+    assert "Adult" in combined_data.index.get_level_values("age_group")
+    filtered_data = _drop_missing_groups(combined_data, "age_group")
+    assert "Adult" not in filtered_data.index.get_level_values("age_group")

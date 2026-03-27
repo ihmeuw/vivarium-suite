@@ -11,8 +11,12 @@ from pytest_mock import MockFixture
 from vivarium_inputs import interface
 
 from vivarium_testing_utils.automated_validation.bundle import RatioMeasureDataBundle
-from vivarium_testing_utils.automated_validation.comparison import FuzzyComparison
+from vivarium_testing_utils.automated_validation.comparison import (
+    FuzzyComparison,
+    TargetIntervalConfig,
+)
 from vivarium_testing_utils.automated_validation.constants import (
+    DAYS_PER_YEAR,
     DRAW_INDEX,
     INPUT_DATA_INDEX_NAMES,
     SEED_INDEX,
@@ -24,6 +28,7 @@ from vivarium_testing_utils.automated_validation.data_transformation.measures im
     Incidence,
     RatioMeasure,
 )
+from vivarium_testing_utils.fuzzy_checker import TestResult
 
 
 @pytest.fixture
@@ -270,17 +275,6 @@ def test_fuzzy_comparison_get_frame_parametrized(
     assert set(data.columns) == expected_columns
 
 
-def test_fuzzy_comparison_verify_not_implemented(
-    test_bundle: RatioMeasureDataBundle,
-    reference_bundle: RatioMeasureDataBundle,
-) -> None:
-    """ "FuzzyComparison.verify() is not implemented."""
-    comparison = FuzzyComparison(test_bundle, reference_bundle)
-
-    with pytest.raises(NotImplementedError):
-        comparison.verify()
-
-
 def test_fuzzy_comparison_align_datasets_calculation(
     test_bundle: RatioMeasureDataBundle,
     reference_bundle: RatioMeasureDataBundle,
@@ -360,3 +354,58 @@ def test_get_frame_default_rows(
 
     non_default = comparison.get_frame(num_rows=2)
     assert len(non_default) == 2
+
+
+def test_comparison_verify(
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+) -> None:
+    """Test the verify method of the FuzzyComparison class."""
+    comparison = FuzzyComparison(test_bundle, reference_bundle)
+    step_size = 28 / DAYS_PER_YEAR
+    comparison.verify(step_size=step_size)
+    assert set(["overall", "stratified"]) == set(comparison.proportion_test_results.keys())
+    # Reference bundle has 3 rows (groups) that would be validated between the two bundles
+    stratified_results = comparison.proportion_test_results["stratified"]
+    assert isinstance(stratified_results, dict)
+    # Index levels are age, sex, year. (age, sex, year), (age, sex), (age, year), (sex, year)
+    # and each index of the 3 index levels
+    assert len(stratified_results.keys()) == 7
+    overall_result = comparison.proportion_test_results["overall"]
+    assert isinstance(overall_result, TestResult)
+    assert not any(
+        result.reject_null for result in stratified_results[("year", "sex", "age")].values()
+    )
+    assert not overall_result.reject_null
+
+
+def test_target_interval_configuration_default_none(
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+) -> None:
+    """Test that a new FuzzyComparison has target_interval_configuration as None."""
+    comparison = FuzzyComparison(test_bundle, reference_bundle)
+    assert comparison.target_interval_configuration is None
+
+
+def test_target_interval_configuration_setter(
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+) -> None:
+    """Test that target_interval_configuration can be set with a TargetIntervalConfig."""
+    comparison = FuzzyComparison(test_bundle, reference_bundle)
+    config = TargetIntervalConfig(stratifications={"sex": "all"}, relative_error=0.1)
+    comparison.target_interval_configuration = config
+    assert comparison.target_interval_configuration is config
+    assert comparison.target_interval_configuration.stratifications == {"sex": "all"}
+    assert comparison.target_interval_configuration.relative_error == 0.1
+
+    # Test overwrite with a new config
+    new_config = TargetIntervalConfig(stratifications={"age": "specific"}, relative_error=0.2)
+    comparison.target_interval_configuration = new_config
+    assert comparison.target_interval_configuration is new_config
+    assert comparison.target_interval_configuration.stratifications == {"age": "specific"}
+
+    # Test setting back to None
+    comparison.target_interval_configuration = None
+    assert comparison.target_interval_configuration is None

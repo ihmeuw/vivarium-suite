@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import yaml
 from gbd_mapping import causes, covariates, risk_factors
+from layered_config_tree import LayeredConfigTree
 from vivarium import Artifact
 from vivarium.framework.artifact import EntityKey
 from vivarium_inputs import interface
@@ -32,6 +32,7 @@ class DataLoader:
         self._cache_size_mb = cache_size_mb
 
         self._results_dir = self._sim_output_dir / "results"
+        self.model_spec = self._load_model_spec(self._sim_output_dir)
         self._raw_data_cache: dict[
             DataSource, dict[str, pd.DataFrame | dict[str, str] | str]
         ] = {data_source: {} for data_source in DataSource}
@@ -40,7 +41,7 @@ class DataLoader:
             DataSource.GBD: self._load_from_gbd,
             DataSource.ARTIFACT: self._load_from_artifact,
         }
-        self._artifact = self._load_artifact(self._sim_output_dir)
+        self._artifact = self._load_artifact()
 
         # Initialize derived dataset person time total
         person_time_total = self._create_person_time_total_dataset()
@@ -82,8 +83,17 @@ class DataLoader:
     def get_sim_outputs(self) -> list[str]:
         """Get a list of the datasets in the given simulation output directory.
         Only return the filename, not the extension."""
+        # Old structure: flat parquet files in results/
+        flat_parquets = set(str(file.stem) for file in self._results_dir.glob("*.parquet"))
+        # New structure: subdirectories containing numbered parquet files
+        subdirectory_parquets = set(
+            subdir.name
+            for subdir in self._results_dir.iterdir()
+            if subdir.is_dir() and any(subdir.glob("*.parquet"))
+        )
         return list(
-            set(str(f.stem) for f in self._results_dir.glob("*.parquet"))
+            flat_parquets
+            | subdirectory_parquets
             | set(self._raw_data_cache[DataSource.SIM].keys())
         )
 
@@ -171,7 +181,19 @@ class DataLoader:
     @utils.check_io(out=SimOutputData)
     def _load_from_sim(self, data_key: str) -> pd.DataFrame:
         """Load the data from the simulation output directory and set the non-value columns as indices."""
-        sim_data = pd.read_parquet(self._results_dir / f"{data_key}.parquet")
+        single_file = self._results_dir / f"{data_key}.parquet"
+        subdir = self._results_dir / data_key
+        if single_file.exists():
+            sim_data = pd.read_parquet(single_file)
+        elif subdir.is_dir():
+            parquet_files = sorted(subdir.glob("*.parquet"))
+            if not parquet_files:
+                raise FileNotFoundError(f"No parquet files found in directory {subdir}")
+            sim_data = pd.read_parquet(subdir)
+        else:
+            raise FileNotFoundError(
+                f"No data found for '{data_key}': neither {single_file} nor {subdir}/ exists."
+            )
         if "value" not in sim_data.columns:
             raise ValueError(f"{data_key}.parquet requires a column labeled 'value'.")
         multi_index_df = sim_data.set_index(sim_data.columns.drop("value").tolist())
@@ -193,13 +215,19 @@ class DataLoader:
         )
         return multi_index_df
 
-    @staticmethod
-    def _load_artifact(results_dir: Path) -> Artifact:
-        model_spec_path = results_dir / "model_specification.yaml"
-        artifact_path = yaml.safe_load(model_spec_path.open("r"))["configuration"][
-            "input_data"
-        ]["artifact_path"]
+    def _load_artifact(self) -> Artifact:
+        artifact_path = self.model_spec["configuration"]["input_data"]["artifact_path"]
         return Artifact(artifact_path)
+
+    @staticmethod
+    def _load_model_spec(results_dir: Path) -> LayeredConfigTree:
+        """Load the model specification from the results directory."""
+        model_spec_path = results_dir / "model_specification.yaml"
+        if not model_spec_path.exists():
+            raise FileNotFoundError(
+                f"Model specification file not found at {model_spec_path}"
+            )
+        return LayeredConfigTree(model_spec_path)
 
     def _load_from_artifact(self, data_key: str) -> Any:
         """Load data directly from artifact, assuming correctly formatted data."""

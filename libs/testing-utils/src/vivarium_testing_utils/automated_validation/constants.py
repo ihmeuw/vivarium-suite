@@ -7,6 +7,7 @@ DRAW_PREFIX = "draw_"
 
 DRAW_INDEX = "input_draw"
 SEED_INDEX = "random_seed"
+DAYS_PER_YEAR = 365.0
 
 
 class DataSource(Enum):

@@ -4,7 +4,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vivarium_testing_utils.automated_validation.constants import INPUT_DATA_INDEX_NAMES
+from vivarium_testing_utils.automated_validation.constants import (
+    DAYS_PER_YEAR,
+    INPUT_DATA_INDEX_NAMES,
+)
 from vivarium_testing_utils.automated_validation.data_transformation.age_groups import (
     AgeGroup,
     AgeRange,
@@ -54,7 +57,7 @@ def test_age_group_eq() -> None:
     [
         ("0_to_4_years", (0, 5)),
         ("0_to_5_months", (0, 0.5)),
-        ("0_to_6_days", (0, 7 / 365.0)),
+        ("0_to_6_days", (0, 7 / DAYS_PER_YEAR)),
         ("14_to_16", (14, 17)),
     ],
 )
@@ -372,14 +375,22 @@ def test_resolve_special_age_groups() -> None:
             ],
             INPUT_DATA_INDEX_NAMES.AGE_START: [
                 0.0,
-                7 / 365.0,
-                28 / 365.0,
+                7 / DAYS_PER_YEAR,
+                28 / DAYS_PER_YEAR,
                 0.5,
                 1.0,
                 2.0,
                 5.0,
             ],
-            INPUT_DATA_INDEX_NAMES.AGE_END: [7 / 365.0, 28 / 365.0, 0.5, 1.0, 2.0, 5.0, 10.0],
+            INPUT_DATA_INDEX_NAMES.AGE_END: [
+                7 / DAYS_PER_YEAR,
+                28 / DAYS_PER_YEAR,
+                0.5,
+                1.0,
+                2.0,
+                5.0,
+                10.0,
+            ],
         }
     )
     age_bins = age_bins.set_index(
@@ -537,8 +548,12 @@ def test_age_schema_from_df_with_target_schema() -> None:
                 "Late Neonatal",
                 "1-5 months",
             ],
-            INPUT_DATA_INDEX_NAMES.AGE_START: [0.0, 7.0 / 365.0, 28.0 / 365.0],
-            INPUT_DATA_INDEX_NAMES.AGE_END: [7.0 / 365.0, 28.0 / 365.0, 0.5],
+            INPUT_DATA_INDEX_NAMES.AGE_START: [
+                0.0,
+                7.0 / DAYS_PER_YEAR,
+                28.0 / DAYS_PER_YEAR,
+            ],
+            INPUT_DATA_INDEX_NAMES.AGE_END: [7.0 / DAYS_PER_YEAR, 28.0 / DAYS_PER_YEAR, 0.5],
         }
     ).set_index(
         [
@@ -556,9 +571,9 @@ def test_age_schema_from_df_with_target_schema() -> None:
         },
         index=pd.MultiIndex.from_tuples(
             [
-                ("cause", "disease", 0.0, 7.0 / 365.0),
-                ("cause", "disease", 7.0 / 365.0, 28.0 / 365.0),
-                ("cause", "disease", 28.0 / 365.0, 0.5),
+                ("cause", "disease", 0.0, 7.0 / DAYS_PER_YEAR),
+                ("cause", "disease", 7.0 / DAYS_PER_YEAR, 28.0 / DAYS_PER_YEAR),
+                ("cause", "disease", 28.0 / DAYS_PER_YEAR, 0.5),
             ],
             names=[
                 "measure",
@@ -584,8 +599,8 @@ def test_age_schema_from_df_with_target_missing_age_group() -> None:
                 "Early Neonatal",
                 "Late Neonatal",
             ],
-            INPUT_DATA_INDEX_NAMES.AGE_START: [0.0, 7.0 / 365.0],
-            INPUT_DATA_INDEX_NAMES.AGE_END: [7.0 / 365.0, 28.0 / 365.0],
+            INPUT_DATA_INDEX_NAMES.AGE_START: [0.0, 7.0 / DAYS_PER_YEAR],
+            INPUT_DATA_INDEX_NAMES.AGE_END: [7.0 / DAYS_PER_YEAR, 28.0 / DAYS_PER_YEAR],
         }
     ).set_index(
         [
@@ -603,9 +618,9 @@ def test_age_schema_from_df_with_target_missing_age_group() -> None:
         },
         index=pd.MultiIndex.from_tuples(
             [
-                ("cause", "disease", 0.0, 7.0 / 365.0),
-                ("cause", "disease", 7.0 / 365.0, 28.0 / 365.0),
-                ("cause", "disease", 28.0 / 365.0, 0.5),
+                ("cause", "disease", 0.0, 7.0 / DAYS_PER_YEAR),
+                ("cause", "disease", 7.0 / DAYS_PER_YEAR, 28.0 / DAYS_PER_YEAR),
+                ("cause", "disease", 28.0 / DAYS_PER_YEAR, 0.5),
             ],
             names=[
                 "measure",
@@ -617,6 +632,6 @@ def test_age_schema_from_df_with_target_missing_age_group() -> None:
     )
     source_schema = AgeSchema.from_dataframe(df, target_schema)
     assert len(source_schema.age_groups) == 3
-    start = 28.0 / 365.0
+    start = 28.0 / DAYS_PER_YEAR
     expected_names = {"Early Neonatal", "Late Neonatal", f"{start}_to_0.5"}
     assert set([group.name for group in source_schema.age_groups]) == expected_names

@@ -1,5 +1,6 @@
 import shutil
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pandas as pd
@@ -9,6 +10,7 @@ from pytest import TempPathFactory
 from vivarium.framework.artifact import Artifact
 
 from vivarium_testing_utils.automated_validation.constants import (
+    DAYS_PER_YEAR,
     DRAW_INDEX,
     INPUT_DATA_INDEX_NAMES,
     LOCATION_ARTIFACT_KEY,
@@ -270,13 +272,71 @@ def sim_result_dir(
     return tmp_path
 
 
-def get_model_spec(artifact_path: Path) -> dict[str, dict[str, dict[str, str]]]:
+@pytest.fixture(scope="session")
+def sim_result_dir_new_structure(
+    tmp_path_factory: TempPathFactory, _artifact_keys_mapper: dict[str, pd.DataFrame]
+) -> Path:
+    """Create a temporary directory for simulation outputs using the new directory structure
+    where each measure is a subdirectory containing numbered parquet files."""
+    tmp_path = tmp_path_factory.mktemp("sim_data_new")
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+
+    _transition_count_data = _create_transition_count_data()
+    _person_time_data = _create_person_time_data()
+    _deaths_data = _create_deaths_data()
+    _risk_state_person_time_data = _create_risk_state_person_time_data()
+
+    # Save each dataset as a subdirectory with numbered parquet files
+    for name, data in [
+        ("transition_count_disease", _transition_count_data),
+        ("person_time_disease", _person_time_data),
+        ("deaths", _deaths_data),
+        ("person_time_child_stunting", _risk_state_person_time_data),
+    ]:
+        subdir = results_dir / name
+        subdir.mkdir()
+        reset_data = data.reset_index()
+        mid = len(reset_data) // 2
+        reset_data.iloc[:mid].to_parquet(subdir / "000.parquet")
+        reset_data.iloc[mid:].to_parquet(subdir / "001.parquet")
+
+    # Create Artifact
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir(exist_ok=True)
+    artifact_path = artifact_dir / "artifact.hdf"
+    artifact = Artifact(artifact_path)
+    for key, data in _artifact_keys_mapper.items():
+        artifact.write(key, data)
+
+    # Save model specification
+    with open(tmp_path / "model_specification.yaml", "w") as f:
+        yaml.dump(get_model_spec(artifact_path), f)
+
+    return tmp_path
+
+
+def get_model_spec(artifact_path: Path) -> dict[str, Any]:
     """Sample model specification for testing."""
     return {
         "configuration": {
             "input_data": {
                 "artifact_path": str(artifact_path),
-            }
+            },
+            "time": {
+                "start": {
+                    "year": 2020,
+                    "month": 1,
+                    "day": 1,
+                },
+                "end": {
+                    "year": 2025,
+                    "month": 12,
+                    "day": 31,
+                },
+                "step_size": 1,
+            },
         }
     }
 
@@ -639,8 +699,8 @@ def integration_artifact_data() -> pd.DataFrame:
     data = pd.DataFrame(
         {
             "sex": ["Male"] * 2 + ["Female"] * 2,
-            "age_start": [0, round(7 / 365.0, 8)] * 2,
-            "age_end": [round(7 / 365.0, 8), round(28 / 365.0, 8)] * 2,
+            "age_start": [0, round(7 / DAYS_PER_YEAR, 8)] * 2,
+            "age_end": [round(7 / DAYS_PER_YEAR, 8), round(28 / DAYS_PER_YEAR, 8)] * 2,
             "year_start": [2023] * 4,
             "year_end": [2024] * 4,
             "draw_0": [0.1, 0.2, 0.3, 0.4],
@@ -664,8 +724,8 @@ def load_integration_age_bins() -> pd.DataFrame:
         {
             "age_group_id": [2, 3],
             "age_group_name": ["Early Neonatal", "Late Neonatal"],
-            "age_start": [0, round(7 / 365.0, 8)],
-            "age_end": [round(7 / 365.0, 8), round(28 / 365.0, 8)],
+            "age_start": [0, round(7 / DAYS_PER_YEAR, 8)],
+            "age_end": [round(7 / DAYS_PER_YEAR, 8), round(28 / DAYS_PER_YEAR, 8)],
         }
     )
     data = data.set_index(

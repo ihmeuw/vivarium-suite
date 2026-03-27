@@ -8,5 +8,5 @@ include README.rst
 recursive-include docs *
 prune docs/_build
 
-recursive-include src/vivarium_testing_utils *.py *.yaml
+recursive-include src/vivarium_testing_utils *.py *.yaml *.html
 recursive-include tests *.py *txt *.yaml

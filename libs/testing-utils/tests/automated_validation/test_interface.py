@@ -1,4 +1,8 @@
+import io
+from collections import defaultdict
 from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -9,19 +13,20 @@ from pytest import TempPathFactory
 from pytest_mock import MockFixture
 from vivarium.framework.artifact import Artifact
 from vivarium.framework.artifact.artifact import ArtifactException
-from vivarium_inputs import interface
+from vivarium_inputs import get_age_bins
 
-from tests.automated_validation.conftest import get_model_spec, load_exposure_categories
+from tests.automated_validation.conftest import get_model_spec
+from vivarium_testing_utils.automated_validation.comparison import (
+    FuzzyComparison,
+    TargetIntervalConfig,
+)
 from vivarium_testing_utils.automated_validation.constants import (
     DRAW_INDEX,
     INPUT_DATA_INDEX_NAMES,
+    DataSource,
 )
 from vivarium_testing_utils.automated_validation.data_loader import DataLoader
-from vivarium_testing_utils.automated_validation.data_transformation import (
-    age_groups,
-    calculations,
-    utils,
-)
+from vivarium_testing_utils.automated_validation.data_transformation import age_groups, utils
 from vivarium_testing_utils.automated_validation.data_transformation.data_schema import (
     SingleNumericColumn,
 )
@@ -37,6 +42,7 @@ from vivarium_testing_utils.automated_validation.data_transformation.rate_aggreg
     population_weighted,
 )
 from vivarium_testing_utils.automated_validation.interface import ValidationContext
+from vivarium_testing_utils.fuzzy_checker import TestResult
 
 MEASURE_DATA_MAPPER = {
     "risk_factor.child_wasting.exposure": "exposure",
@@ -156,9 +162,9 @@ def test_add_comparison(
     context = ValidationContext(sim_result_dir)
     context.add_comparison(measure_key, "sim", "artifact")
     assert measure_key in context.comparisons
-    comparison = context.comparisons[measure_key]
+    comparison = context.comparisons[measure_key]["sim_artifact"]
 
-    assert comparison.measure.measure_key == measure_key  # type: ignore [attr-defined]
+    assert comparison.comparison_key == measure_key
 
     # Test that test_data is now a dictionary with numerator and denominator
     assert isinstance(comparison.test_bundle.datasets, dict)
@@ -199,7 +205,7 @@ def test_get_frame(sim_result_dir: Path) -> None:
     measure_key = "cause.disease.incidence_rate"
     context = ValidationContext(sim_result_dir)
     context.add_comparison(measure_key, "sim", "artifact")
-    data = context.get_frame(measure_key)
+    data = context.get_frame(measure_key, "sim", "artifact")
     assert isinstance(data, pd.DataFrame)
     assert not data.empty
     assert set(data.index.names) == {
@@ -212,7 +218,9 @@ def test_get_frame(sim_result_dir: Path) -> None:
 
     # Test stratification works - there are only two columns and we do not remove input draw
     # so this will return the same dataframe
-    data2 = context.get_frame(measure_key, stratifications=["common_stratify_column"])
+    data2 = context.get_frame(
+        measure_key, "sim", "artifact", stratifications=["common_stratify_column"]
+    )
     assert isinstance(data2, pd.DataFrame)
     assert not data2.empty
     assert set(data2.index.names) == {
@@ -238,7 +246,7 @@ def test_metadata(sim_result_dir: Path, mocker: MockFixture) -> None:
         "vivarium_testing_utils.automated_validation.interface.os.path.getmtime",
         return_value=1735718340,  # Represents Dec 31 23:59
     )
-    metadata = context.metadata(measure_key)
+    metadata = context.metadata(measure_key, "sim", "artifact")
 
     assert set(metadata.index) == {
         "Measure Key",
@@ -274,7 +282,12 @@ def test_plot_comparison(sim_result_dir: Path, mocker: MockFixture) -> None:
     condition = {"sex": "male"}
     x_axis = "age_group"
     result = context.plot_comparison(
-        comparison_key=measure_key, type=plot_type, condition=condition, x_axis=x_axis
+        comparison_key=measure_key,
+        test_source="sim",
+        ref_source="artifact",
+        type=plot_type,
+        condition=condition,
+        x_axis=x_axis,
     )
 
     # Assert plot_utils.plot_comparison was called with correct arguments
@@ -282,7 +295,7 @@ def test_plot_comparison(sim_result_dir: Path, mocker: MockFixture) -> None:
     args, kwargs = mock_plot_comparison.call_args
 
     # Check arguments
-    assert args[0] == context.comparisons[measure_key]  # comparison object
+    assert args[0] == context.comparisons[measure_key]["sim_artifact"]  # comparison object
     assert args[1] == plot_type  # type
     assert args[2] == condition  # condition
     assert kwargs["x_axis"] == x_axis  # additional kwargs
@@ -300,9 +313,9 @@ def test_add_comparison_different_test_source(
     context = ValidationContext(sim_result_dir)
     context.add_comparison(measure_key, test_source, "artifact")
     assert measure_key in context.comparisons
-    comparison = context.comparisons[measure_key]
+    comparison = context.comparisons[measure_key][f"{test_source}_artifact"]
 
-    assert comparison.measure.measure_key == measure_key  # type: ignore [attr-defined]
+    assert comparison.comparison_key == measure_key
 
     # Test that test_data is now a dictionary with numerator and denominator
     assert isinstance(comparison.test_bundle.datasets, dict)
@@ -318,7 +331,7 @@ def test_get_frame_different_test_source(test_source: str, sim_result_dir: Path)
     measure_key = "cause.disease.incidence_rate"
     context = ValidationContext(sim_result_dir)
     context.add_comparison(measure_key, test_source, "artifact")
-    data = context.get_frame(measure_key)
+    data = context.get_frame(measure_key, test_source, "artifact")
     assert isinstance(data, pd.DataFrame)
     assert not data.empty
     assert set(data.columns) == {"test_rate", "reference_rate", "percent_error"}
@@ -524,16 +537,16 @@ def test_get_frame_filters(mocker: MockFixture, sim_result_dir: Path) -> None:
     )
     # Patch the instance method after the comparison is created
     mocker.patch.object(
-        context.comparisons[measure_key],
+        context.comparisons[measure_key]["sim_artifact"],
         "get_frame",
         return_value=data,
     )
 
     # Default is no filters
-    assert len(context.get_frame(measure_key)) == 4
+    assert len(context.get_frame(measure_key, "sim", "artifact")) == 4
 
     filtered = context.get_frame(
-        measure_key, filters={INPUT_DATA_INDEX_NAMES.AGE_START: "10"}
+        measure_key, "sim", "artifact", filters={INPUT_DATA_INDEX_NAMES.AGE_START: "10"}
     )
     assert len(filtered) == 2
     assert all(filtered.index.get_level_values(INPUT_DATA_INDEX_NAMES.AGE_START) == "10")
@@ -598,7 +611,7 @@ def test_compare_artifact_and_gbd(
         )
         data_key += ".diarrheal_diseases.incidence_rate"
 
-    diff = vc.get_frame(data_key)
+    diff = vc.get_frame(data_key, "artifact", "gbd")
     assert not diff.empty
     assert diff.notna().all().all()
 
@@ -640,6 +653,406 @@ def test_add_new_measure(sim_result_dir: Path) -> None:
     )
 
 
+def test_verify(sim_result_dir: Path) -> None:
+    context = ValidationContext(sim_result_dir)
+    measure_key = "cause.disease.incidence_rate"
+    context.add_comparison(measure_key, "sim", "artifact")
+    context.verify(measure_key, test_source="sim", ref_source="artifact")
+
+
+def test_set_target_interval_updates_comparison(sim_result_dir: Path) -> None:
+    """Test that set_target_interval stores a TargetIntervalConfig on the comparison."""
+    context = ValidationContext(sim_result_dir)
+    measure_key = "cause.disease.incidence_rate"
+    context.add_comparison(measure_key, "sim", "artifact")
+    context.set_target_interval(
+        measure_key,
+        test_source="sim",
+        ref_source="artifact",
+        stratifications={"sex": "all"},
+        relative_error=0.1,
+    )
+    comparison = context.comparisons[measure_key]["sim_artifact"]
+    assert isinstance(comparison, FuzzyComparison)
+    assert comparison.target_interval_configuration is not None
+    assert isinstance(comparison.target_interval_configuration, TargetIntervalConfig)
+    assert comparison.target_interval_configuration.stratifications == {"sex": "all"}
+    assert comparison.target_interval_configuration.relative_error == 0.1
+
+
+def test_set_target_interval_overwrites(sim_result_dir: Path) -> None:
+    """Test that calling set_target_interval again replaces the previous config."""
+    context = ValidationContext(sim_result_dir)
+    measure_key = "cause.disease.incidence_rate"
+    context.add_comparison(measure_key, "sim", "artifact")
+    context.set_target_interval(
+        measure_key,
+        test_source="sim",
+        ref_source="artifact",
+        stratifications={"sex": "all"},
+        relative_error=0.1,
+    )
+    context.set_target_interval(
+        measure_key,
+        test_source="sim",
+        ref_source="artifact",
+        stratifications={"age": "specific"},
+        relative_error=0.2,
+    )
+    comparison = context.comparisons[measure_key]["sim_artifact"]
+    assert isinstance(comparison, FuzzyComparison)
+    assert comparison.target_interval_configuration is not None
+    assert comparison.target_interval_configuration.stratifications == {"age": "specific"}
+    assert comparison.target_interval_configuration.relative_error == 0.2
+
+
+@pytest.mark.parametrize("status", ["pass", "fail", "stratification", "overall"])
+def test_verify_all(status: str, sim_result_dir: Path, mocker: MockFixture) -> None:
+    # Create a full mock of TestResult class that makes all tests pass
+    mock_result = mocker.MagicMock(spec=TestResult)
+    mock_result.reject_null = False
+    mock_result.name = "mock_result"
+    mock_result.name_additional = "fake_group"
+    mock_bad_result = mocker.MagicMock(spec=TestResult)
+    mock_bad_result.reject_null = True
+    mock_bad_result.name = "mock_bad_result"
+    mock_bad_result.name_additional = "fake_group"
+
+    # Create mock comparisons to avoid data loading issues
+    mock_proportion_test_results_passing = {
+        "overall": mock_result,
+        "stratified": {"stratification_1": {"group1": mock_result, "group2": mock_result}},
+    }
+    mock_proportion_test_results_2 = {
+        "overall": mock_bad_result if status == "overall" else mock_result,
+        "stratified": {
+            "stratification_1": {
+                "group1": mock_result,
+                "group2": mock_bad_result if status == "fail" else mock_result,
+            },
+            "stratification_2": {
+                "group1": mock_bad_result if status == "stratification" else mock_result,
+                "group2": mock_result,
+            },
+        },
+    }
+    mock_comparison_1 = mocker.MagicMock()
+    mock_comparison_1.proportion_test_results = mock_proportion_test_results_passing
+    mock_comparison_1.verified = True
+    mock_comparison_2 = mocker.MagicMock()
+    mock_comparison_2.proportion_test_results = mock_proportion_test_results_2
+    mock_comparison_2.verified = status == "pass"
+
+    # Manually add comparisons to context to avoid data loading
+    context = ValidationContext(sim_result_dir)
+    context.comparisons["cause.disease.incidence_rate"] = defaultdict(
+        lambda: mock_comparison_1.__class__
+    )
+    context.comparisons["cause.disease.incidence_rate"]["sim_artifact"] = mock_comparison_1
+    context.comparisons["cause.disease_2.incidence_rate"] = defaultdict(
+        lambda: mock_comparison_2.__class__
+    )
+    context.comparisons["cause.disease_2.incidence_rate"]["sim_artifact"] = mock_comparison_2
+
+    assert context.verify_all() if status == "pass" else not context.verify_all()
+    passing_count = sum(len(inner) for inner in context.verifications.passing.values())
+    failing_count = sum(len(inner) for inner in context.verifications.failing.values())
+    assert passing_count == 2 if status == "pass" else 1
+    assert failing_count == 0 if status == "pass" else failing_count == 1
+
+
+def test_plot_all(sim_result_dir: Path, mocker: MockFixture) -> None:
+    # Setup
+    mock_figure = mocker.Mock(spec=plt.Figure)
+    mock_plot_comparison = mocker.patch(
+        "vivarium_testing_utils.automated_validation.visualization.plot_utils.plot_comparison",
+        return_value=mock_figure,
+    )
+
+    # Create a context and add real comparisons using existing fixture data
+    context = ValidationContext(sim_result_dir)
+    context.add_comparison("cause.disease.incidence_rate", "sim", "artifact")
+    context.add_comparison("cause.disease.prevalence", "sim", "artifact")
+    context.add_comparison("risk_factor.child_stunting.exposure", "sim", "artifact")
+
+    # Get the actual comparison objects for verification
+    comparison_1 = context.comparisons["cause.disease.incidence_rate"]["sim_artifact"]
+    comparison_2 = context.comparisons["cause.disease.prevalence"]["sim_artifact"]
+    comparison_3 = context.comparisons["risk_factor.child_stunting.exposure"]["sim_artifact"]
+
+    # Call plot_all and verify interactions
+    result = context.plot_all(type="line")
+
+    # Verify that plot_comparison was called for each comparison with the correct arguments
+    # plot_utils.plot_comparison receives: comparison_object, type, condition, stratifications
+    mock_plot_comparison.assert_any_call(
+        comparison_1,
+        "line",
+        {},
+        "all",
+    )
+    mock_plot_comparison.assert_any_call(
+        comparison_2,
+        "line",
+        {},
+        "all",
+    )
+    mock_plot_comparison.assert_any_call(
+        comparison_3,
+        "line",
+        {},
+        "all",
+    )
+
+    assert isinstance(result, dict)
+    assert len(result) == 3
+    for val in result.values():
+        assert all(isinstance(fig, plt.Figure) for fig in val)
+
+
+def test_figures_to_base64_dict(sim_result_dir: Path, mocker: MockFixture) -> None:
+    context = ValidationContext(sim_result_dir)
+
+    figure_1 = mocker.Mock(spec=plt.Figure)
+    figure_2 = mocker.Mock(spec=plt.Figure)
+
+    def _savefig_1(buffer: io.BytesIO, *_args: Any, **_kwargs: Any) -> None:
+        buffer.write(b"fake_png_1")
+
+    def _savefig_2(buffer: io.BytesIO, *_args: Any, **_kwargs: Any) -> None:
+        buffer.write(b"fake_png_2")
+
+    figure_1.savefig.side_effect = _savefig_1
+    figure_2.savefig.side_effect = _savefig_2
+
+    mock_close = mocker.patch(
+        "vivarium_testing_utils.automated_validation.interface.plt.close"
+    )
+
+    figures_dict = {
+        ("cause.disease.incidence_rate", "sim", "artifact"): [figure_1, figure_2],
+    }
+    plot_images = context._figures_to_base64_dict(figures_dict)
+
+    assert set(plot_images.keys()) == set(figures_dict.keys())
+    images = plot_images[("cause.disease.incidence_rate", "sim", "artifact")]
+    assert len(images) == 2
+    assert all(isinstance(image, str) and image for image in images)
+    assert images == ["ZmFrZV9wbmdfMQ==", "ZmFrZV9wbmdfMg=="]
+    assert mock_close.call_count == 2
+
+
+class TestDataLattice:
+    """Tests for the lattice drill-down algorithm that powers the 3rd Test Result tab.
+
+    Each test adds two comparisons to a ValidationContext:
+    - Comparison 1 always fully passes (contributes nothing to the 3rd tab).
+    - Comparison 2 is configured per scenario to test different filtering outcomes.
+    """
+
+    @staticmethod
+    def _build_context_with_comparisons(
+        sim_result_dir: Path,
+        comp2_overall_fail: bool,
+        comp2_child_results: list[dict[str, Any]],
+    ) -> ValidationContext:
+        """Build a ValidationContext with 2 mock comparisons injected.
+
+        Parameters
+        ----------
+        sim_result_dir
+            Path to the test simulation result directory fixture.
+        comp2_overall_fail
+            Whether comparison 2's overall result should reject the null.
+        comp2_child_results
+            List of dicts with keys 'name_additional', 'reject_null', 'bayes_factor',
+            and 'index_info' for each child node of comparison 2.
+        """
+        context = ValidationContext(sim_result_dir)
+
+        # Comparison 1: fully passing
+        comp1 = _make_mock_comparison(
+            measure_key="comp1.measure",
+            proportion_test_results={
+                "overall": _make_test_result(
+                    name="comp1.measure", name_additional="overall", reject_null=False
+                ),
+                "stratified": {
+                    ("sex",): {
+                        "sex_Male": _make_test_result(
+                            name="comp1.measure",
+                            name_additional="sex_Male",
+                            index_info={"sex": "Male"},
+                        ),
+                        "sex_Female": _make_test_result(
+                            name="comp1.measure",
+                            name_additional="sex_Female",
+                            index_info={"sex": "Female"},
+                        ),
+                    }
+                },
+            },
+        )
+
+        # Comparison 2: configured per test scenario
+        stratified_children: dict[str, TestResult] = {}
+        for child in comp2_child_results:
+            stratified_children[child["name_additional"]] = _make_test_result(
+                name="comp2.measure",
+                name_additional=child["name_additional"],
+                reject_null=child["reject_null"],
+                bayes_factor=child["bayes_factor"],
+                index_info=child["index_info"],
+            )
+
+        comp2 = _make_mock_comparison(
+            measure_key="comp2.measure",
+            proportion_test_results={
+                "overall": _make_test_result(
+                    name="comp2.measure",
+                    name_additional="overall",
+                    reject_null=comp2_overall_fail,
+                    bayes_factor=10.0,
+                ),
+                "stratified": {("sex",): stratified_children},
+            },
+        )
+
+        # Inject mock comparisons into context
+        context.comparisons["comp1.measure"] = {"sim_artifact": comp1}
+        context.comparisons["comp2.measure"] = {"sim_artifact": comp2}
+
+        return context
+
+    def test_overall_fail_no_children_fail(self, sim_result_dir: Path) -> None:
+        """Comparison 2 has overall fail with no child failures.
+
+        The lattice algorithm should display only the 'overall' TestResult
+        because it failed and has no failing descendants.
+        """
+        context = self._build_context_with_comparisons(
+            sim_result_dir,
+            comp2_overall_fail=True,
+            comp2_child_results=[
+                {
+                    "name_additional": "sex_Male",
+                    "reject_null": False,
+                    "bayes_factor": 1.0,
+                    "index_info": {"sex": "Male"},
+                },
+                {
+                    "name_additional": "sex_Female",
+                    "reject_null": False,
+                    "bayes_factor": 1.0,
+                    "index_info": {"sex": "Female"},
+                },
+            ],
+        )
+
+        filtered = context._gather_filtered_test_results()
+
+        assert len(filtered) == 1
+        assert filtered[0]["name_additional"] == "overall"
+        assert filtered[0]["name"] == "comp2.measure"
+
+    def test_single_child_fail(self, sim_result_dir: Path) -> None:
+        """Comparison 2 has overall pass but one child fails.
+
+        The lattice algorithm should recurse past the passing overall node
+        and display only the single failing child.
+        """
+        context = self._build_context_with_comparisons(
+            sim_result_dir,
+            comp2_overall_fail=False,
+            comp2_child_results=[
+                {
+                    "name_additional": "sex_Male",
+                    "reject_null": True,
+                    "bayes_factor": 15.0,
+                    "index_info": {"sex": "Male"},
+                },
+                {
+                    "name_additional": "sex_Female",
+                    "reject_null": False,
+                    "bayes_factor": 1.0,
+                    "index_info": {"sex": "Female"},
+                },
+            ],
+        )
+
+        filtered = context._gather_filtered_test_results()
+
+        assert len(filtered) == 1
+        assert filtered[0]["name_additional"] == "sex_Male"
+        assert filtered[0]["index_info"] == {"sex": "Male"}
+
+    def test_two_children_fail(self, sim_result_dir: Path) -> None:
+        """Comparison 2 has overall pass but two children fail.
+
+        The lattice algorithm should display both failing children,
+        sorted by bayes_factor descending (Female=30.0 first, Male=20.0 second).
+        """
+        context = self._build_context_with_comparisons(
+            sim_result_dir,
+            comp2_overall_fail=False,
+            comp2_child_results=[
+                {
+                    "name_additional": "sex_Male",
+                    "reject_null": True,
+                    "bayes_factor": 20.0,
+                    "index_info": {"sex": "Male"},
+                },
+                {
+                    "name_additional": "sex_Female",
+                    "reject_null": True,
+                    "bayes_factor": 30.0,
+                    "index_info": {"sex": "Female"},
+                },
+            ],
+        )
+
+        filtered = context._gather_filtered_test_results()
+
+        assert len(filtered) == 2
+        # Sorted by bayes_factor descending
+        assert filtered[0]["name_additional"] == "sex_Female"
+        assert filtered[0]["bayes_factor"] == 30.0
+        assert filtered[1]["name_additional"] == "sex_Male"
+        assert filtered[1]["bayes_factor"] == 20.0
+
+    def test_overall_fail_two_children_fail(self, sim_result_dir: Path) -> None:
+        """Comparison 2 has overall fail and both children also fail.
+
+        Because failures span multiple children, the lattice algorithm should
+        display only the overall node (not recurse into individual children).
+        """
+        context = self._build_context_with_comparisons(
+            sim_result_dir,
+            comp2_overall_fail=True,
+            comp2_child_results=[
+                {
+                    "name_additional": "sex_Male",
+                    "reject_null": True,
+                    "bayes_factor": 20.0,
+                    "index_info": {"sex": "Male"},
+                },
+                {
+                    "name_additional": "sex_Female",
+                    "reject_null": True,
+                    "bayes_factor": 30.0,
+                    "index_info": {"sex": "Female"},
+                },
+            ],
+        )
+
+        filtered = context._gather_filtered_test_results()
+
+        assert len(filtered) == 1
+        assert filtered[0]["name_additional"] == "overall"
+        assert filtered[0]["name"] == "comp2.measure"
+        assert filtered[0]["bayes_factor"] == 10.0
+
+
 ###########
 # Helpers #
 ###########
@@ -660,3 +1073,54 @@ def load_gbd_data(data_key: str) -> pd.DataFrame:
     if data_key in measure_mapper:
         gbd = gbd.loc[gbd["measure_id"] == measure_mapper[data_key]]
     return gbd
+
+
+def _make_test_result(
+    name: str = "test_measure",
+    name_additional: str = "overall",
+    reject_null: bool = False,
+    bayes_factor: float = 1.0,
+    index_info: dict[str, Any] | None = None,
+) -> TestResult:
+    """Factory to create a TestResult with sensible defaults for lattice tests."""
+    return TestResult(
+        name=name,
+        name_additional=name_additional,
+        observed_proportion=0.5,
+        observed_numerator=50,
+        observed_denominator=100,
+        target_lower_bound=0.4,
+        target_upper_bound=0.6,
+        bayes_factor=bayes_factor,
+        reject_null=reject_null,
+        bug_issue_distribution=(0.5, 0.5),
+        no_bug_issue_distribution=MagicMock(),
+        index_info=index_info,
+    )
+
+
+def _make_mock_comparison(
+    measure_key: str,
+    proportion_test_results: dict[str, Any],
+) -> MagicMock:
+    """Create a mock Comparison with the given proportion_test_results."""
+    mock = MagicMock()
+    mock.comparison_key = measure_key
+    mock.test_bundle.source = DataSource.SIM
+    mock.reference_bundle.source = DataSource.ARTIFACT
+    mock.proportion_test_results = proportion_test_results
+
+    # Compute verified from the test results (mirrors Comparison.verified logic)
+    overall = proportion_test_results.get("overall")
+    if overall is None:
+        mock.verified = None
+    else:
+        reject_nulls = [overall.reject_null]
+        stratified = proportion_test_results.get("stratified", {})
+        if isinstance(stratified, dict):
+            for group in stratified.values():
+                for tr in group.values():
+                    reject_nulls.append(tr.reject_null)
+        mock.verified = not any(reject_nulls)
+
+    return mock

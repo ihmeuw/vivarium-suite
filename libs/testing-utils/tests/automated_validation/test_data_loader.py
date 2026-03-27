@@ -118,7 +118,8 @@ def test__load_artifact(
     sim_result_dir: Path, _artifact_keys_mapper: dict[str, pd.DataFrame | str]
 ) -> None:
     """Ensure that we can load the artifact itself"""
-    artifact = DataLoader._load_artifact(sim_result_dir)
+    data_loader = DataLoader(sim_result_dir)
+    artifact = data_loader._load_artifact()
     assert set(artifact.keys) == set(
         list(_artifact_keys_mapper.keys()) + ["metadata.keyspace"]
     )
@@ -197,6 +198,27 @@ def test__convert_to_total_pt(person_time_data: pd.DataFrame) -> None:
     expected_total_value = person_time_data["value"].sum()
     actual_total_value = result["value"].sum()
     assert actual_total_value == expected_total_value
+
+
+def test_get_sim_outputs_new_structure(sim_result_dir_new_structure: Path) -> None:
+    """Test we detect sim outputs from the new subdirectory-based structure."""
+    data_loader = DataLoader(sim_result_dir_new_structure)
+    assert set(data_loader.get_sim_outputs()) == {
+        "deaths",
+        "person_time_disease",
+        "transition_count_disease",
+        "person_time_child_stunting",
+        "person_time_total",
+    }
+
+
+def test__load_from_sim_new_structure(
+    sim_result_dir_new_structure: Path, deaths_data: pd.DataFrame
+) -> None:
+    """Test loading sim data from the new subdirectory-based structure."""
+    data_loader = DataLoader(sim_result_dir_new_structure)
+    deaths = data_loader._load_from_sim("deaths")
+    assert deaths.equals(deaths_data)
 
 
 def test___get_raw_data_from_source(

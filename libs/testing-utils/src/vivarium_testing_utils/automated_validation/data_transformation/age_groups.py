@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from vivarium_testing_utils.automated_validation.constants import INPUT_DATA_INDEX_NAMES
+from vivarium_testing_utils.automated_validation.constants import (
+    DAYS_PER_YEAR,
+    INPUT_DATA_INDEX_NAMES,
+)
 
 AgeTuple = tuple[str, int | float, int | float]
 AgeRange = tuple[int | float, int | float]
@@ -139,10 +142,10 @@ class AgeGroup:
         """
         # Special case for "early_neonatal", "late_neonatal", and "95_plus"
         special_age_groups = {
-            "early_neonatal": (0.0, 7 / 365.0),
-            "late_neonatal": (7 / 365.0, 28 / 365.0),
+            "early_neonatal": (0.0, 7 / DAYS_PER_YEAR),
+            "late_neonatal": (7 / DAYS_PER_YEAR, 28 / DAYS_PER_YEAR),
             # 1-5 months is not exactly 1 month so it is special cased
-            "1-5_months": (28.0 / 365.0, 0.5),
+            "1-5_months": (28.0 / DAYS_PER_YEAR, 0.5),
             "95_plus": (95.0, 125.0),
         }
         if name in special_age_groups:

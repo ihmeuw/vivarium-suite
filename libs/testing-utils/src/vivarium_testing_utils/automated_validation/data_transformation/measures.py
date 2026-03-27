@@ -294,7 +294,7 @@ class PopulationStructure(RatioMeasure):
 
     @property
     def rate_aggregation_weights(self) -> RateAggregationWeights:
-        """This will be implemented when we refactor and implement DataBundle Mic-6241."""
+        # TODO: MIC-6804
         raise NotImplementedError
 
     def __init__(self, scenario_columns: list[str]):
