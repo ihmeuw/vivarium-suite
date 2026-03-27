@@ -1,4 +1,4 @@
-**3.0.0 - 03/26/26**
+**3.0.0 - 03/27/26**
 --------------------
 
 This release migrates psimulate orchestration from redis/RQ/DRMAA to IHME's
