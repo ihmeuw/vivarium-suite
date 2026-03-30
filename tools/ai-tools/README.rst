@@ -29,7 +29,7 @@ To register this as a local plugin in VS Code, add this path to ``chat.pluginLoc
 
    {
      "chat.pluginLocations": {
-       "/home/pnast/repos/vivarium_ai_tools": true
+       "/your/path/to/vivarium_ai_tools": true
      }
    }
 
