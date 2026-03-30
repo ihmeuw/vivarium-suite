@@ -216,16 +216,6 @@ check: # Run development checks
 	@echo
 	@echo "*** All checks passed successfully! ***"
 
-.PHONY: install-upstream-deps
-install-upstream-deps: # Install upstream dependencies
-	@echo "Contents of install_dependency_branch.sh"
-	@echo "----------------------------------------"
-	@cat $(UTILS_DIR)/resources/scripts/install_dependency_branch.sh
-	@echo
-	@echo "----------------------------------------"
-	@sh $(UTILS_DIR)/resources/scripts/install_dependency_branch.sh $(DEPENDENCY_NAME) $(BRANCH_NAME) $(WORKFLOW)
-	@echo
-
 .PHONY: format
 format: # Format code (isort and black)
 	isort $(LOCATIONS)

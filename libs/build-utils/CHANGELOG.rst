@@ -1,3 +1,7 @@
+**3.0.0 - 03/30/26**
+
+   - Remove installDependencies stage and upstream_repos config option
+
 **2.3.8 - 03/16/26**
 
    - Create a make target for version validation

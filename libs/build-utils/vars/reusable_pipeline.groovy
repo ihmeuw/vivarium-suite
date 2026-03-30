@@ -10,7 +10,6 @@ def call(Map config = [:]){
   requires_slurm: Whether the child tasks require the slurm scheduler.
   deployable: Whether the package can be deployed by Jenkins.
   skip_doc_build: Only skips the doc build.
-  upstream_repos: A list of repos to check for upstream changes.
   run_mypy: Whether to run mypy on the package
   */
   
@@ -22,7 +21,6 @@ def call(Map config = [:]){
     'requires_slurm',
     'deployable',
     'skip_doc_build',
-    'upstream_repos',
     'run_mypy'
   ]
   
@@ -32,7 +30,6 @@ def call(Map config = [:]){
   def task_node = config.requires_slurm ? 'slurm' : 'matrix-tasks'
   def is_deployable = (config?.deployable == true)
   def skip_doc_build = (config?.skip_doc_build == true)
-  def upstream_repos = config.upstream_repos ?: []
   def run_mypy = (config.run_mypy != null) ? config.run_mypy : true
 
   echo "Configuration constants:"
@@ -42,7 +39,6 @@ def call(Map config = [:]){
   echo "  task_node: ${task_node}"
   echo "  is_deployable: ${is_deployable}"
   echo "  skip_doc_build: ${skip_doc_build}"
-  echo "  upstream_repos: ${upstream_repos}"
   echo "  run_mypy: ${run_mypy}"
 
   if (stagger_scheduled_builds && scheduled_branches.size() > 1) {
@@ -219,7 +215,6 @@ def call(Map config = [:]){
                         buildStages.runDebugInfo(skipEval)
                         buildStages.buildEnvironment()
                         buildStages.installPackage()
-                        buildStages.installDependencies(upstream_repos)
                         buildStages.checkFormatting(run_mypy)
                         // Transform test type inputs to actual make test target names
                         tests = test_types.collect { "test-${it}" }

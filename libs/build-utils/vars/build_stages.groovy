@@ -4,7 +4,6 @@ def call() {
         runDebugInfo: this.&runDebugInfo,
         buildEnvironment: this.&buildEnvironment,
         installPackage: this.&installPackage,
-        installDependencies: this.&installDependencies,
         checkFormatting: this.&checkFormatting,
         runTests: this.&runTests,
         buildDocs: this.&buildDocs,
@@ -80,15 +79,6 @@ def installPackage(String env_reqs = "") {
     env_reqs = env_reqs ? "ENV_REQS=${env_reqs}" : ""
     stage("Install Package - Python ${PYTHON_VERSION}") {
         sh "${ACTIVATE} && make install ${env_reqs} UV_FLAGS='--no-cache' && uv pip install . --extra-index-url https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/simple/ --index-strategy unsafe-best-match --no-cache"
-    }
-}
-
-def installDependencies(List upstream_repos) {
-    stage("Install Upstream Dependency Branches - Python ${PYTHON_VERSION}") {
-        sh "chmod +x install_dependency_branch.sh"
-        upstream_repos.each { repo ->
-            sh "${ACTIVATE} && ./install_dependency_branch.sh ${repo} ${GIT_BRANCH} jenkins"
-        }
     }
 }
 
