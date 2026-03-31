@@ -1,5 +1,5 @@
 ---
-name: review_documentation
+name: _review_documentation
 description: "Use when: reviewing code for documentation quality, including docstrings, comments, README/changelog updates, and public API documentation accuracy."
 tools: [read, search, github/*]
 user-invocable: false

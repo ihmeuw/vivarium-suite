@@ -1,7 +1,6 @@
 {
     "name": "vivarium-ai-tools",
     "displayName": "Vivarium AI Tools",
-    "description": "Agent plugin with Python code review specialists for maintainability, DRY, design, tests, and documentation.",
-    "version": "0.1.0",
+    "description": "Custom agent workflows for vivarium development.",
     "publisher": "ihmeuw"
 }
