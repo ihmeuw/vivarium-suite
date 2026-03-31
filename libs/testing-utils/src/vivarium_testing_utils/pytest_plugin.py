@@ -4,6 +4,7 @@ This module is automatically loaded by pytest when vivarium_testing_utils is ins
 via the pytest11 entry point defined in setup.py.
 """
 
+import os
 import shutil
 from datetime import datetime
 
@@ -14,6 +15,14 @@ from layered_config_tree import LayeredConfigTree
 from pytest_mock import MockerFixture
 
 SLOW_TEST_DAY = "Sunday"
+
+
+def is_on_slurm() -> bool:
+    """Returns True if the current environment is a SLURM cluster."""
+    return shutil.which("sbatch") is not None
+
+
+IS_ON_SLURM = is_on_slurm()
 
 
 def pytest_addoption(parser: argparsing.Parser) -> None:
@@ -40,7 +49,7 @@ def pytest_collection_modifyitems(config: Config, items: list[Function]) -> None
             if "slow" in item.keywords:
                 item.add_marker(skip_slow)
 
-    if not is_on_slurm():
+    if not IS_ON_SLURM:
         skip_cluster = pytest.mark.skip(reason="not running on SLURM cluster")
         for item in items:
             if "cluster" in item.keywords:
@@ -56,9 +65,27 @@ def pytest_collection_modifyitems(config: Config, items: list[Function]) -> None
                 item.add_marker(skip_weekly)
 
 
-def is_on_slurm() -> bool:
-    """Returns True if the current environment is a SLURM cluster."""
-    return shutil.which("sbatch") is not None
+def pytest_xdist_auto_num_workers(config: Config) -> int:
+    """Automatically determine the number of workers for pytest-xdist.
+
+    - On SLURM: Use CPUs allocated to the job (via SLURM environment variables)
+    - Not on SLURM: Return 1 (no parallelization by default)
+    - Users can override by explicitly passing -n flag to pytest
+    """
+    cpus = 1
+    if IS_ON_SLURM:
+        # Check SLURM environment variables in order of preference
+        slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK") or os.environ.get(
+            "SLURM_CPUS_ON_NODE"
+        )
+        if slurm_cpus:
+            cpus = int(slurm_cpus)
+        # Fallback: use the number of CPUs actually available to this process
+        # (respects cgroup constraints set by SLURM)
+        else:
+            cpus = len(os.sched_getaffinity(0))
+
+    return cpus
 
 
 def is_slow_test_day(slow_test_day: str = SLOW_TEST_DAY) -> bool:

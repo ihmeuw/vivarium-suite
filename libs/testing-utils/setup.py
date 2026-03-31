@@ -50,6 +50,7 @@ if __name__ == "__main__":
         "pyarrow",
         "seaborn",
         "layered-config-tree",
+        "pytest-xdist",
         # Type stubs
         "types-setuptools",
     ]
