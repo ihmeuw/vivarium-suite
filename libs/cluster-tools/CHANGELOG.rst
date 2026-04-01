@@ -1,3 +1,7 @@
+**3.0.2 - 04/01/26**
+
+  - Hash result folder in job name to deduplicate simultaneous runs
+
 **3.0.1 - 04/01/26**
 
   - Remove timeouts from e2e test jobs

@@ -7,6 +7,7 @@ The main process loop for `psimulate` runs.
 
 """
 
+import hashlib
 import os
 import shutil
 from pathlib import Path
@@ -209,7 +210,10 @@ def main(
     # For restart we reuse the original run's workflow_args so Jobmon can
     # resume the same workflow (skipping already-completed tasks).
     wf_command = COMMANDS.run if restart else command
-    workflow_name = f"psimulate_{wf_command}_{output_paths.root.name}"
+    # Include a hash of the full output path to avoid workflow_args collisions
+    # between concurrent pipelines that happen to share the same timestamp.
+    root_hash = hashlib.md5(str(output_paths.root).encode()).hexdigest()[:8]
+    workflow_name = f"psimulate_{wf_command}_{output_paths.root.name}_{root_hash}"
     logger.debug("Building Jobmon workflow.")
     workflow = build_workflow(
         workflow_name=workflow_name,
