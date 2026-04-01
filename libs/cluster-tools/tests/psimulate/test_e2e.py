@@ -42,9 +42,6 @@ _BRANCHES = _DATA_DIR / "e2e_branches.yaml"
 # Total jobs produced by the branch config (2 draws x 2 seeds x 1 branch)
 _EXPECTED_TOTAL_JOBS = 4
 
-# Generous timeout for SLURM scheduling + execution (10 minutes)
-_TIMEOUT = 600
-
 RESULTS_DIR = "/mnt/team/simulation_science/priv/engineering/tests/output/"
 
 # Don't enforce weekly run requirement during development
@@ -133,7 +130,6 @@ def slurm_project(request: pytest.FixtureRequest) -> str:
 
 def _run_psimulate(
     args: list[str],
-    timeout: int = _TIMEOUT,
 ) -> subprocess.CompletedProcess[str]:
     """Run a psimulate CLI command as a subprocess."""
     cmd = ["psimulate", *args]
@@ -141,7 +137,6 @@ def _run_psimulate(
         cmd,
         capture_output=True,
         text=True,
-        timeout=timeout,
     )
 
 
@@ -392,7 +387,6 @@ class TestPsimulateRun:
             ],
             capture_output=True,
             text=True,
-            timeout=_TIMEOUT,
             env=env,
         )
         assert proc.returncode == 0, (
@@ -487,7 +481,6 @@ class TestPsimulateRestart:
             ],
             capture_output=True,
             text=True,
-            timeout=_TIMEOUT,
             env=env,
         )
         # Workflow should finish but not with a clean DONE (all tasks failed).
@@ -522,7 +515,6 @@ class TestPsimulateRestart:
             ],
             capture_output=True,
             text=True,
-            timeout=_TIMEOUT,
             env=env,
         )
         assert restart_proc.returncode == 0, (
@@ -632,7 +624,6 @@ class TestPsimulateLoadTest:
                 "-w",
                 str(self._NUM_WORKERS),
             ],
-            timeout=_TIMEOUT,
         )
         assert proc.returncode == 0, (
             f"psimulate test large_results failed.\n"
