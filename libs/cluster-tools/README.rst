@@ -60,7 +60,6 @@ your original model specification looked something like
       vivarium_public_health:
         population:
           - BasePopulation()
-          - Mortality()
         disease.models:
           - SIS('lower_respiratory_infections')
       my_lri_intervention:

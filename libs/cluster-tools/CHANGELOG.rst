@@ -1,3 +1,7 @@
+**3.0.3 - 04/06/26**
+
+  - Bugfix: Remove mortality component from test model specifications.
+
 **3.0.2 - 04/01/26**
 
   - Hash result folder in job name to deduplicate simultaneous runs

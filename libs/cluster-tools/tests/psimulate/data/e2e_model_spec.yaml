@@ -6,8 +6,6 @@ components:
     vivarium.examples.disease_model:
         population:
             - BasePopulation()
-        mortality:
-            - Mortality()
         observer:
             - DeathsObserver()
 configuration:

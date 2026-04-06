@@ -9,8 +9,6 @@ components:
     vivarium.examples.disease_model:
         population:
             - BasePopulation()
-        mortality:
-            - Mortality()
         observer:
             - DeathsObserver()
     vivarium_cluster_tools.testing.fail_once_component:
