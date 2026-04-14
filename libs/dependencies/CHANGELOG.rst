@@ -1,3 +1,7 @@
+**1.0.7 - 04/14/26**
+ 
+ - Add vbu pin
+
 **1.0.6 - 03/16/26**
  
  - Validate version and CHANGELOG date prior to deploying

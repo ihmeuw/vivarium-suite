@@ -51,6 +51,9 @@ if __name__ == "__main__":
             "ipywidgets",
         ],
         "matplotlib": ["matplotlib"],
+        "vivarium_build_utils": [
+            "vivarium_build_utils>=3.0.1,<4.0.0",
+        ],
         # testing
         "pytest": ["pytest", "pytest-cov", "pytest-mock"],
         # formatting and linting
