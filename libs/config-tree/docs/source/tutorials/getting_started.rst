@@ -4,303 +4,318 @@
 Getting Started
 ===============
 
-.. todo::
+This tutorial introduces :class:`~layered_config_tree.main.LayeredConfigTree`, a 
+configuration data structure where values can be set at multiple priority layers. 
+By default, reading a value returns the one from the highest-priority layer that 
+has it defined.
 
-    MIC-6169. Below is a copy/paste from a slack thread that should be revised and
-    improved upon.
+Creating a Tree
+===============
 
-To highlight how ``.get()`` works, let's make a two-layer tree of cats and their colors.
-
-.. code-block:: python
-
-    from layered_config_tree import LayeredConfigTree
-    tree = LayeredConfigTree(layers=["base", "override"])
-
-    # Add whipper with the incorrect color to the base layer
-    tree.update({"pet": {"cat": {"whipper": "black"}}}, layer="base")
-
-    # Update whipper's color and add burt macklin to the override layer
-    tree.update({"pet": {"cat": {"whipper": "gray", "burt_macklin": "tuxedo"}}}, layer="override")
-
-    tree
-
-::
-
-    pet:
-        cat:
-            whipper:
-                override: gray
-                    source: None
-                base: black
-                    source: None
-            burt_macklin:
-                override: tuxedo
-                    source: None
+At its simplest, a tree can be created from a dictionary:
 
 .. testcode::
-    :hide:
-   
+
     from layered_config_tree import LayeredConfigTree
 
+    print(LayeredConfigTree({"greeting": "hello"}))
+
+.. testoutput::
+
+    greeting:
+        base: hello
+
+Note in the example above that by default a single `"base"` layer is used. You can 
+also specify layers in order from lowest to highest priority. For more on layers and
+priority, see :ref:`layers_and_priority_tutorial`.
+
+.. note::
+
+    Layers only pertain to values, not to sub-trees.
+
+Adding Data
+===========
+
+Use :meth:`~layered_config_tree.main.LayeredConfigTree.update` to add data at a
+specific layer. Data is provided as a (possibly nested) dictionary:
+
+.. testcode::
+
     tree = LayeredConfigTree(layers=["base", "override"])
-    tree.update({"pet": {"cat": {"whipper": "black"}}}, layer="base")
-    tree.update({"pet": {"cat": {"whipper": "gray", "burt_macklin": "tuxedo"}}}, layer="override")
+    tree.update(
+        {"name": "some_service", "database": {"host": "localhost", "port": 5432}},
+        layer="base",
+        source="defaults.yaml",
+    )
+    tree.update(
+        {"database": {"host": "prod-server"}},
+        layer="override",
+        source="environment",
+    )
+
+The ``source`` parameter is optional metadata that records *where* a value came
+from, which is useful for debugging.
+
+In addition to calling the ``update()`` method, you can update an existing key using
+direct assignment (``=``). This sets the value at the highest-priority layer available
+for that key and records the source as ``None``:
+
+.. testcode::
+
+    t = LayeredConfigTree({"x": 1}, layers=["base", "override"])
+    t.x = 99
+    print(repr(t))
+
+.. testoutput::
+
+    x:
+        override: 99
+            source: None
+        base: 1
+            source: initial data
+
+If a value has already been set for that key at the highest priority level, a ``DuplicatedConfigurationError``
+is raised:
+
+.. testcode::
+
+    try:
+        t.x = 88
+    except Exception as e:
+        print(type(e).__name__)
+    
+.. testoutput::
+
+    DuplicatedConfigurationError
+
+New keys **cannot** be created via assignment — you must use :meth:`~layered_config_tree.main.LayeredConfigTree.update`
+for that:
+
+.. testcode::
+
+    try:
+        t.new_key = 5
+    except Exception as e:
+        print(type(e).__name__)
+
+.. testoutput::
+
+    ConfigurationKeyError
+
+In additional to providing data directly, you can initialize or update a tree from 
+YAML strings or a path to a YAML file.
+
+.. testcode::
+
+    print(LayeredConfigTree("server:\n  host: localhost\n  port: 8080\n"))
+
+.. testoutput::
+
+    server:
+        host:
+            base: localhost
+        port:
+            base: 8080
+
+Reading Values
+==============
+
+There are four ways to read from a ``LayeredConfigTree``, each with different behavior.
+
+.. note::
+
+    All four access methods can be chained together and/or mixed and matched as desired.
+
+Dot and bracket notation
+------------------------
+
+Both dot access (``tree.key``) and bracket notation (``tree["key"]``) return the 
+child of the highest-priority layer:
+
+.. testcode::
+
+    print(tree.name)
+    print(tree["database"])
+
+.. testoutput::
+
+    some_service
+    host:
+        override: prod-server
+    port:
+        base: 5432
+
+Notice that ``host`` returns ``"prod-server"`` (from the ``override`` layer), not
+``"localhost"`` (from the ``base`` layer). The ``port`` value was only set at the
+``base`` layer, so that value is returned.
+
+A ``ConfigurationKeyError`` will be raised of the requested key does not exist at any layer.
+
+.. note::
+
+    Keys that look like Python dunder attributes (starting and ending with double
+    underscores __) can only be accessed via bracket notation to avoid conflicting
+    with Python’s internal attribute machinery:
+
+    .. testcode::
+
+        answer = LayeredConfigTree({"__special__": 42})
+
+        # Bracket notation works
+        print(answer["__special__"])
+
+        # Dot notation raises an error
+        try:
+            answer.__special__
+        except Exception as e:
+            print(type(e).__name__)
+
+    .. testoutput::
+
+        42
+        ImproperAccessError
+
+.. note::
+
+    Keys that are not valid Python variable names (e.g. those containing spaces or
+    special characters) can also only be accessed via bracket notation:
+    
+    .. testcode::
+
+        weird = LayeredConfigTree({"space key": "foo", "dash-key": "bar"})
+
+        # Bracket notation works
+        print(weird["space key"])
+        print(weird["dash-key"])
+
+    .. testoutput::
+
+        foo
+        bar
+
+    Dot notation will not work for these keys. ``weird.space key`` is a
+    ``SyntaxError`` (Python cannot parse it at all), and ``weird.dash-key`` is
+    interpreted as ``weird.dash - key``, which raises a ``ConfigurationKeyError``
+    because ``"dash"`` is not a key in the tree.
+
+    .. testcode::
+
+        try:
+            print(weird.dash-key)
+        except Exception as e:
+            print(type(e).__name__)
+
+    .. testoutput::
+
+        ConfigurationKeyError
+
+get() method access
+-------------------
+
+:meth:`~layered_config_tree.main.LayeredConfigTree.get` works like :meth:`dict.get` 
+and returns a default value (``None`` by default) when the key is missing instead of 
+raising an error. It also accepts a list of keys for nested lookups and supports a 
+``layer`` parameter to read from a specific layer:
+
+.. testcode::
+
+    print(tree.get("name"))                                 # same as dot access
+    print(tree.get("missing"))                              # returns None
+    print(tree.get("missing", default_value="fallback"))    # custom default
+    print(tree.get(["database", "host"]))                   # nested lookup
+    print(tree.database.get("host", layer="base"))          # specific layer
+
+.. testoutput::
+
+    some_service
+    None
+    fallback
+    prod-server
+    localhost
+       
+get_tree() method access
+------------------------
+
+:meth:`~layered_config_tree.main.LayeredConfigTree.get_tree` *guarantees* the result 
+is a sub-tree. Note that it does *not* support a ``layer`` argument or return a default
+value like :meth:`~layered_config_tree.main.LayeredConfigTree.get`.
+
+.. testcode::
+
+    print(tree.get_tree("database"))  # OK — returns a sub-tree
+
+.. testoutput::
+
+    host:
+        override: prod-server
+    port:
+        base: 5432
+
+If the value at the key path is a leaf, it raises ``ConfigurationError``:
+
+.. testcode::
+
+    try:
+        tree.get_tree("name")
+    except Exception as e:
+        print(type(e).__name__)
+
+.. testoutput::
+
+    ConfigurationError
+
+Printing a Tree
+===============
+
+Printing a tree (``str``) shows each value at its highest-priority layer:
+
+.. testcode::
+
     print(tree)
 
 .. testoutput::
 
-    pet:
-        cat:
-            whipper:
-                override: gray
-            burt_macklin:
-                override: tuxedo
+    name:
+        base: some_service
+    database:
+        host:
+            override: prod-server
+        port:
+            base: 5432
 
-We can chain ``.get()`` calls to retrieve sub-trees.
-
-.. code-block:: python
-
-    tree.get("pet").get("cat")
-
-::
-
-    whipper:
-        override: gray
-            source: None
-        base: black
-            source: None
-    burt_macklin:
-        override: tuxedo
-            source: None
-
-Even better, we can pass a list to ``.get()`` to retrieve nested sub-trees in one call.
-
-.. code-block:: python
-
-    tree.get(["pet", "cat"])
-
-::
-
-    whipper:
-        override: gray
-            source: None
-        base: black
-            source: None
-    burt_macklin:
-        override: tuxedo
-            source: None
-
-This also works for ``.get_tree()``.
-
-.. code-block:: python
-
-    tree.get_tree(["pet", "cat"])
-
-::
-
-    whipper:
-        override: gray
-            source: None
-        base: black
-            source: None
-    burt_macklin:
-        override: tuxedo
-            source: None
+Meanwhile, the ``repr`` shows *all* layers along with source information:
 
 .. testcode::
-    :hide:
 
-    print(tree.get("pet").get("cat"))
-    print(tree.get(["pet", "cat"]))
-    print(tree.get_tree(["pet", "cat"]))
+    print(repr(tree))
 
 .. testoutput::
 
-    whipper:
-        override: gray
-    burt_macklin:
-        override: tuxedo
-    whipper:
-        override: gray
-    burt_macklin:
-        override: tuxedo
-    whipper:    
-        override: gray
-    burt_macklin:
-        override: tuxedo
+    name:
+        base: some_service
+            source: defaults.yaml
+    database:
+        host:
+            override: prod-server
+                source: environment
+            base: localhost
+                source: defaults.yaml
+        port:
+            base: 5432
+                source: defaults.yaml
 
-Note that calling ``get_tree()``  will raise an error if the thing being returned
-isn't actually a tree.
+Converting to a Dictionary
+==========================
 
-.. code-block:: python
-
-    tree.get_tree(["pet", "cat", "whipper"])
-
-::
-
-    Traceback (most recent call last):
-    File "<stdin>", line 1, in <module>
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 451, in get_tree
-        raise ConfigurationError(
-    layered_config_tree.exceptions.ConfigurationError: The data you accessed using ['pet', 'cat', 'whipper'] with get_tree was of type <class 'str'>, but get_tree must return a LayeredConfigTree.
-
-``get()`` is designed to work like dict.get(), i.e. it will return a default 
-(None by default) if the value doesn't exist.
-
-.. code-block:: python
-
-    # get burt_macklin's color
-    tree.get(["pet", "cat", "burt_macklin"], default_value="oops")
-    # get garfield's color - but garfield doesn't exist
-    tree.get(["pet", "cat", "garfield"], default_value="oops")
-
-::
-
-    tuxedo
-    oops
-
-This works when using ``.get()`` to return a sub-tree as well.
-
-.. code-block:: python
-
-    # get the entire cat tree (hah)
-    tree.get(["pet", "cat"], default_value="oops")
-    # get the non-existing dog tree
-    tree.get(["pet", "dog"], default_value="oops")
-    
-::
-
-    whipper:
-        override: gray
-            source: None
-        base: black
-            source: None
-    burt_macklin:
-        override: tuxedo
-            source: None
-    oops
+Use :meth:`~layered_config_tree.main.LayeredConfigTree.to_dict` to extract a plain
+dictionary of highest priority information. 
 
 .. testcode::
-    :hide:
 
-    print(tree.get(["pet", "cat", "burt_macklin"], default_value="oops"))
-    print(tree.get(["pet", "cat", "garfield"], default_value="oops"))
-    print(tree.get(["pet", "cat"], default_value="oops"))
-    print(tree.get(["pet", "dog"], default_value="oops"))
+    print(tree.to_dict())
 
 .. testoutput::
 
-    tuxedo
-    oops
-    whipper:
-        override: gray
-    burt_macklin:
-        override: tuxedo
-    oops
+    {'name': 'some_service', 'database': {'host': 'prod-server', 'port': 5432}}
 
-Also note that ``.get_tree()`` does *not* have this functionality, i.e. there is 
-no default_value arg to that method!
-
-You can also request a specific layer from the tree using the ``layer`` argument.
-
-.. code-block:: python
-
-    # get whipper's color from the default layer (outermost)
-    tree.get(["pet", "cat", "whipper"])
-    # get whipper's color from the base layer
-    tree.get(["pet", "cat", "whipper"], layer="base")
-
-::
-
-    gray
-    black
-
-.. testcode::
-    :hide:
-
-    print(tree.get(["pet", "cat", "whipper"]))
-    print(tree.get(["pet", "cat", "whipper"], layer="base"))
-
-.. testoutput::
-
-    gray
-    black
-
-Note that this call will raise if the layer doesn't actually exist for a given 
-sub-tree. For example, we are able to retrieve Whipper's color at the "base" layer:
-
-.. code-block:: python
-
-    tree.get(["pet", "cat", "whipper"], layer="base")
-
-::
-
-    gray
-
-But trying to get Burt Macklin's color at the "base" layer will raise an error
-since that layer doesn't exist for him:
-
-.. code-block:: python
-
-    tree.get(["pet", "cat", "burt_macklin"], layer="base")
-
-::
-
-    Traceback (most recent call last):
-    File "<stdin>", line 1, in <module>
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 412, in get
-        return tree.get(final_key, default_value=default_value, layer=layer)
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 406, in get
-        return child.get_value(layer=layer)
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 135, in get_value
-        value = self._get_value_with_source(layer)[1]
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 220, in _get_value_with_source
-        raise MissingLayerError(
-    layered_config_tree.exceptions.MissingLayerError: No value stored in this ConfigNode cat at layer base.
-
-One final note. The interaction between default_value and layer may sometimes be 
-a cause of confusion. The default_value will only be returned when also providing 
-a specific layer if and only if the requested value doesn't exist at all. If the value does 
-exist, just not at the requested layer, then you'll get the MissingLayerError.
-
-For example, let's get Garfield's color at the "base" layer (noting that Garfield
-does not exist in the tree) and provide a default return value of "foo":
-
-.. code-block:: python
-
-    tree.get(["pet", "cat", "garfield"], default_value="foo", layer="base")
-
-::
-
-    foo
-
-.. testcode::
-    :hide:
-
-    print(tree.get(["pet", "cat", "garfield"], default_value="foo", layer="base"))
-
-.. testoutput::
-
-    foo
-
-Now let's do the same thing for Burt Macklin (who *does* exist in the tree but does
-not have a "base" layer defined):
-
-.. code-block:: python
-
-    tree.get(["pet", "cat", "burt_macklin"], default_value="foo", layer="base")
-
-::
-
-    Traceback (most recent call last):
-    File "<stdin>", line 1, in <module>
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 412, in get
-        return tree.get(final_key, default_value=default_value, layer=layer)
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 406, in get
-        return child.get_value(layer=layer)
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 135, in get_value
-        value = self._get_value_with_source(layer)[1]
-    File "/mnt/share/homes/sbachmei/repos/layered_config_tree/src/layered_config_tree/main.py", line 220, in _get_value_with_source
-        raise MissingLayerError(
-    layered_config_tree.exceptions.MissingLayerError: No value stored in this ConfigNode cat at layer base.
-
+Note that all layer and source metadata is discarded.

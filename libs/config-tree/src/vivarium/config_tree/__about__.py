@@ -1,3 +1,5 @@
+"""Package metadata for layered_config_tree."""
+
 __all__ = [
     "__title__",
     "__summary__",

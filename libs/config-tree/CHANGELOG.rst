@@ -1,3 +1,7 @@
+**4.1.2 - 04/14/26**
+
+ - Strengthen documentation
+
 **4.1.1 - 03/16/26**
 
  - Validate version and CHANGELOG date prior to deploying

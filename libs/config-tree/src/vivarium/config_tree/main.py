@@ -48,14 +48,14 @@ class ConfigNode:
     """A priority based configuration value.
 
     A :class:`ConfigNode` represents a single configuration value with
-    priority-based layers.  The intent is to allow a value to be set from
+    priority-based layers. The intent is to allow a value to be set from
     sources with different priorities and to record what the value was set
     to and from where.
 
     For example, a simulation may need certain values to always exist, and so
     it will set them up at a "base" layer. Components in the simulation may
     have a different set of priorities and so override the "base" value at
-    a "component" level.  Finally a user may want to override the simulation
+    a "component" level. Finally a user may want to override the simulation
     and component defaults with values at the command line or interactively,
     and so those values will be set in a final "user" layer.
 
@@ -64,7 +64,7 @@ class ConfigNode:
     a :class:`~layered_config_tree.exceptions.DuplicatedConfigurationError`.
 
     The :class:`ConfigNode` will record all values set and the source they
-    are set from.  This sort of provenance with configuration data greatly
+    are set from. This sort of provenance with configuration data greatly
     eases debugging and analysis of simulation code.
 
     This class should not be instantiated directly. All interaction should
@@ -73,6 +73,15 @@ class ConfigNode:
     """
 
     def __init__(self, layers: list[str], name: str):
+        """Initialize a ``ConfigNode``.
+
+        Parameters
+        ----------
+        layers
+            Ordered list of layer names from lowest to highest priority.
+        name
+            The name of the parent tree node that owns this value.
+        """
         self._name = name
         self._layers = layers
         self._values: dict[str, tuple[str | None, Any]] = {}
@@ -86,12 +95,12 @@ class ConfigNode:
 
     @property
     def accessed(self) -> bool:
-        """Returns whether this node has been accessed."""
+        """Whether or not this node has been accessed."""
         return self._accessed
 
     @property
     def metadata(self) -> list[dict[str, Any | str | None]]:
-        """Returns all values and associated metadata for this node."""
+        """All values and associated metadata for this node."""
         result = []
         for layer in self._layers:
             if layer in self._values:
@@ -105,7 +114,7 @@ class ConfigNode:
         return result
 
     def freeze(self) -> None:
-        """Causes the :class:`ConfigNode` node to become read only.
+        """Convert the ``ConfigNode`` to read-only.
 
         This can be used to create a contract around when the configuration is
         modifiable.
@@ -113,7 +122,7 @@ class ConfigNode:
         self._frozen = True
 
     def get_value(self, layer: str | None = None) -> Any:
-        """Returns the value at the specified layer.
+        """Return the value at the specified layer.
 
         If no layer is specified, the outermost (highest priority) layer
         at which a value has been set will be used.
@@ -181,12 +190,17 @@ class ConfigNode:
             self._values[layer] = (source, value)
 
     def _get_value_with_source(self, layer: str | None) -> tuple[str | None, Any]:
-        """Returns a (source, value) tuple at the specified layer.
+        """Return a (source, value) tuple at the specified layer.
 
         Parameters
         ----------
         layer
             Name of the layer to retrieve the (source, value) pair from.
+
+        Notes
+        -----
+        We never return a default value at this point; all default value logic
+        is handled upstream in the :meth:`get` method.
 
         Returns
         -------
@@ -199,11 +213,6 @@ class ConfigNode:
             If no value has been set at any layer (i.e. the ``ConfigNode`` is empty).
         MissingLayerError
             If values exist but not at the requested layer.
-
-        Notes
-        -----
-        We never return a default value at this point; all default value logic
-        is handled upstream in the :meth:`get` method.
         """
         if layer is None:
             # Return the outermost (highest priority) layer's value
@@ -223,9 +232,11 @@ class ConfigNode:
         )
 
     def __bool__(self) -> bool:
+        """Return True if a value has been set at any layer."""
         return bool(self._values)
 
     def __repr__(self) -> str:
+        """Return a detailed string showing values at all layers with sources."""
         out = []
         for m in reversed(self.metadata):
             layer, source, value = m.values()
@@ -233,6 +244,7 @@ class ConfigNode:
         return "\n".join(out)
 
     def __str__(self) -> str:
+        """Return a string showing the value at the outermost layer."""
         if not self:
             return ""
         layer, _, value = self.metadata[-1].values()
@@ -240,12 +252,7 @@ class ConfigNode:
 
 
 class ConfigIterator:
-    """
-    An iterator for a LayeredConfigTree object.
-
-    This iterator is used to iterate over the keys of a LayeredConfigTree object.
-
-    """
+    """An iterator over the keys of a :class:`LayeredConfigTree`."""
 
     def __init__(self, config_tree: LayeredConfigTree):
         self._iterator = iter(config_tree._children)
@@ -277,15 +284,16 @@ class LayeredConfigTree:
         layers: list[str] = [],
         name: str = "",
     ):
-        """
+        """Initialize a ``LayeredConfigTree``.
+
         Parameters
         ----------
         data
-            The :class:`LayeredConfigTree` accepts many kinds of data:
+            The ``LayeredConfigTree`` accepts many kinds of data:
 
              - :class:`dict` : Flat or nested dictionaries may be provided.
                Keys of dictionaries at all levels must be strings.
-             - :class:`LayeredConfigTree` : Another :class:`LayeredConfigTree` can be
+             - ``LayeredConfigTree`` : Another ``LayeredConfigTree`` can be
                used. All source information will be ignored and the source
                will be set to 'initial_data' and values will be stored at
                the lowest priority level.
@@ -298,12 +306,15 @@ class LayeredConfigTree:
 
             All values will be set with 'initial_data' as the source and
             will use the lowest priority level. If values are set at higher
-            priorities they will be used when the :class:`LayeredConfigTree` is
+            priorities they will be used when the ``LayeredConfigTree`` is
             accessed.
         layers
             A list of layer names. The order in which layers defined
-            determines their priority.  Later layers override the values from
+            determines their priority. Later layers override the values from
             earlier ones.
+        name
+            The name of the parent tree node that owns this tree. This is used
+            for error messages and metadata.
 
         """
         self.__dict__["_layers"] = layers if layers else ["base"]
@@ -313,7 +324,7 @@ class LayeredConfigTree:
         self.update(data, layer=self._layers[0], source="initial data")
 
     def freeze(self) -> None:
-        """Causes the LayeredConfigTree to become read only.
+        """Convert the ``LayeredConfigTree`` to read only.
 
         This is useful for loading and then freezing configurations that
         should not be modified at runtime.
@@ -335,7 +346,7 @@ class LayeredConfigTree:
         return self._children.values()
 
     def unused_keys(self) -> list[str]:
-        """Lists all values in the LayeredConfigTree that haven't been accessed."""
+        """List all values in the ``LayeredConfigTree`` that haven't been accessed."""
         unused = []
         for name, child in self.items():
             if isinstance(child, ConfigNode):
@@ -347,7 +358,7 @@ class LayeredConfigTree:
         return unused
 
     def to_dict(self) -> dict[str, Any]:
-        """Converts the LayeredConfigTree into a nested dictionary.
+        """Convert the ``LayeredConfigTree`` to a nested dictionary.
 
         All metadata is lost in this conversion.
         """
@@ -408,7 +419,7 @@ class LayeredConfigTree:
             return tree.get(final_key, default_value=default_value, layer=layer)
 
     def get_tree(self, keys: str | list[str]) -> LayeredConfigTree:
-        """Return the LayeredConfigTree at the key or key path from the outermost layer.
+        """Return the ``LayeredConfigTree`` at the key or key path from the outermost layer.
 
         Parameters
         ----------
@@ -427,8 +438,7 @@ class LayeredConfigTree:
         ConfigurationKeyError
             If any of the keys in the key path do not exist in the tree.
         ConfigurationError
-            If the data at the final key in the key path is not a
-            :class:`LayeredConfigTree`.
+            If the data at the final key in the key path is not a ``LayeredConfigTree``.
         """
         if not isinstance(keys, (str, list)):
             raise TypeError("The 'keys' parameter must be a string or a list of strings.")
@@ -456,12 +466,12 @@ class LayeredConfigTree:
         layer: str | None = None,
         source: str | None = None,
     ) -> None:
-        """Adds additional data into the :class:`LayeredConfigTree`.
+        """Add additional data into the ``LayeredConfigTree``.
 
         Parameters
         ----------
         data
-            :func:`~LayeredConfigTree.update` accepts many types of data.
+            The data used to update the ``LayeredConfigTree``.
 
              - :class:`dict` : Flat or nested dictionaries may be provided.
                Keys of dictionaries at all levels must be strings.
@@ -471,11 +481,11 @@ class LayeredConfigTree:
                and the file will be read in and parsed.
              - :class:`pathlib.Path` : A path object to a yaml file will
                be interpreted the same as a string representation.
-             - :class:`LayeredConfigTree` : Another :class:`LayeredConfigTree` can be
+             - ``LayeredConfigTree`` : Another ``LayeredConfigTree`` can be
                used. All source information will be ignored and the
                provided layer and source will be used to set the metadata.
         layer
-            The name of the layer to store the value in.  If no layer is
+            The name of the layer to store the value in. If no layer is
             provided, the value will be set in the outermost (highest priority)
             layer.
         source
@@ -484,7 +494,7 @@ class LayeredConfigTree:
         Raises
         ------
         ConfigurationError
-            If the :class:`LayeredConfigTree` is frozen or attempting to assign
+            If the ``LayeredConfigTree`` is frozen or attempting to assign
             an invalid value.
         ConfigurationKeyError
             If the provided layer does not exist.
@@ -498,6 +508,23 @@ class LayeredConfigTree:
                 self._set_with_metadata(k, v, layer, source)
 
     def metadata(self, name: str) -> list[dict[str, Any]]:
+        """Return all values and associated metadata for the named child.
+
+        Parameters
+        ----------
+        name
+            The name of the child to retrieve metadata for.
+
+        Returns
+        -------
+            A list of dictionaries, each containing 'layer', 'source', and 'value'
+            keys for every layer at which the child has a value set.
+
+        Raises
+        ------
+        ConfigurationKeyError
+            If no child with the given name exists.
+        """
         if name in self:
             return self._children[name].metadata  # type: ignore[return-value]
         name = f"{self._name}.{name}" if self._name else name
@@ -508,7 +535,27 @@ class LayeredConfigTree:
         data: InputData,
         source: str | None,
     ) -> tuple[dict[str, Any], str | None]:
-        """Coerces data into dictionary format."""
+        """Coerce input data into dictionary format.
+
+        Parameters
+        ----------
+        data
+            The input data to coerce. Accepts dictionaries, ``LayeredConfigTree``
+            objects, YAML strings, and file paths.
+        source
+            The source to attribute the data to. If ``data`` is a string or
+            Path and ``source`` is None, the string representation of ``data``
+            is used as the source.
+
+        Returns
+        -------
+            A tuple of (data_dict, source).
+
+        Raises
+        ------
+        ConfigurationError
+            If ``data`` is not a supported type.
+        """
         if isinstance(data, dict):
             return data, source
         elif isinstance(data, LayeredConfigTree):
@@ -539,7 +586,7 @@ class LayeredConfigTree:
         value
             The value to store.
         layer
-            The name of the layer to store the value in.  If no layer is
+            The name of the layer to store the value in. If no layer is
             provided, the value will be set in the outermost (highest priority)
             layer.
         source
@@ -548,7 +595,7 @@ class LayeredConfigTree:
         Raises
         ------
         ConfigurationError
-            If the :class:`LayeredConfigTree` is frozen or attempting to assign
+            If the ``LayeredConfigTree`` is frozen or attempting to assign
             an invalid value.
         ConfigurationKeyError
             If the provided layer does not exist.
@@ -619,11 +666,6 @@ class LayeredConfigTree:
     def __getattr__(self, name: str) -> Any:
         """Get a value from the outermost layer in which it appears.
 
-        Raises
-        ------
-        ConfigurationKeyError
-            If the requested attribute does not exist.
-
         Notes
         -----
         We allow keys that look like dunder attributes, i.e. start and end with
@@ -639,6 +681,12 @@ class LayeredConfigTree:
         One the other hand, if the requested attribute starts and ends with "__"
         and *does* exist, it is critical that we raise a non-AttributeError exception
         so as not to conflict with dunder methods and attributes.
+
+        Raises
+        ------
+        ConfigurationKeyError
+            If the requested attribute does not exist.
+
         """
         if name.startswith("__") and name.endswith("__"):
             if name not in self:
@@ -659,9 +707,18 @@ class LayeredConfigTree:
     #   because it leads to an infinite loop looking for the module's
     #   actual attributes (not config keys)
     def __getstate__(self) -> dict[str, Any]:
+        """Return picklable state.
+
+        Notes
+        -----
+        Custom definitions of ``__getstate__`` and ``__setstate__`` are
+        needed because the custom ``__getattr__`` and ``__setattr__``
+        interfere with the default pickle protocol.
+        """
         return self.__dict__
 
     def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore state from a pickle."""
         for k, v in state.items():
             self.__dict__[k] = v
 
@@ -679,10 +736,12 @@ class LayeredConfigTree:
         return self.get(name)
 
     def __delattr__(self, name: str) -> None:
+        """Delete a child by name using attribute syntax."""
         if name in self:
             del self._children[name]
 
     def __delitem__(self, name: str) -> None:
+        """Delete a child by name using bracket syntax."""
         if name in self:
             del self._children[name]
 
@@ -695,12 +754,15 @@ class LayeredConfigTree:
         return ConfigIterator(self)
 
     def __len__(self) -> int:
+        """Return the number of children in the tree."""
         return len(self._children)
 
     def __dir__(self) -> list[str]:
-        return list(self._children.keys()) + dir(super(LayeredConfigTree, self))
+        """List child names along with standard object attributes."""
+        return list(self._children.keys()) + dir(super())
 
     def __repr__(self) -> str:
+        """Return a detailed multi-line string of all children and their values."""
         return "\n".join(
             [
                 "{}:\n    {}".format(name, repr(c).replace("\n", "\n    "))
@@ -709,6 +771,7 @@ class LayeredConfigTree:
         )
 
     def __str__(self) -> str:
+        """Return a human-readable summary of all children at their outermost layer."""
         return "\n".join(
             [
                 "{}:\n    {}".format(name, str(c).replace("\n", "\n    "))
@@ -717,4 +780,11 @@ class LayeredConfigTree:
         )
 
     def __eq__(self, other: object) -> bool:
+        """Equality comparison is not supported.
+
+        Raises
+        ------
+        NotImplementedError
+            Always.
+        """
         raise NotImplementedError

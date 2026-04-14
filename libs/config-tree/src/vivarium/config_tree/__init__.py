@@ -1,3 +1,5 @@
+"""Layered Config Tree: a configuration structure supporting cascading layers."""
+
 from layered_config_tree.__about__ import (
     __author__,
     __copyright__,

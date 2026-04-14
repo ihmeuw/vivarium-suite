@@ -9,7 +9,15 @@ from typing import Any
 
 
 class ConfigurationError(Exception):
-    """Base class for configuration errors."""
+    """Base class for configuration errors.
+
+    Parameters
+    ----------
+    message
+        The error message.
+    value_name
+        The name of the configuration value that caused the error, if applicable.
+    """
 
     def __init__(self, message: str, value_name: str | None = None):
         super().__init__(message)
@@ -29,7 +37,12 @@ class MissingLayerError(ConfigurationError):
 
 
 class ImproperAccessError(ConfigurationError):
-    """Error raised when a configuration value is accessed improperly."""
+    """Error raised when a configuration value is accessed improperly.
+
+    For example, attempting to access keys that look like dunder attributes
+    (starting and ending with ``__``) via dot notation rather than bracket
+    notation.
+    """
 
     pass
 
@@ -56,6 +69,21 @@ class DuplicatedConfigurationError(ConfigurationError):
         source: str | None,
         value: Any,
     ):
+        """Initialize a ``DuplicatedConfigurationError``.
+
+        Parameters
+        ----------
+        message
+            The error message.
+        name
+            The name of the configuration value that was duplicated.
+        layer
+            The configuration layer at which the duplicate was detected.
+        source
+            The original source of the configuration value.
+        value
+            The original configuration value.
+        """
         self.layer = layer
         self.source = source
         self.value = value

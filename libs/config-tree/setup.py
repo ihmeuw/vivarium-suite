@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     install_requirements = [
         "vivarium_dependencies[pyyaml]",
-        "vivarium_build_utils>=2.0.1,<3.0.0",
+        "vivarium_build_utils>=3.0.1,<4.0.0",
     ]
     setup_requirements = ["setuptools_scm"]
     test_requirements = [
