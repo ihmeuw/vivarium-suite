@@ -1,3 +1,7 @@
+**4.1.3 - 04/14/26**
+
+ - Use vivarium_dependencies for vbu pins
+
 **4.1.2 - 04/14/26**
 
  - Strengthen documentation
