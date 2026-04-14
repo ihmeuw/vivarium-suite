@@ -169,6 +169,10 @@ def deployDocs() {
 
 def cleanup() {
     sh "make clean"
+    // Remove the conda environment immediately to conserve local disk space.
+    // Envs are built on local node storage, not shared NFS, so they must be
+    // cleaned up by the build that created them.
+    sh "${env.ACTIVATE_BASE} && conda env remove -p ${CONDA_ENV_PATH} --yes || rm -rf ${CONDA_ENV_PATH}"
     // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
     // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
     // Console logs are preserved in Jenkins home, not workspace

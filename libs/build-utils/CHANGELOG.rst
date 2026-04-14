@@ -1,3 +1,7 @@
+**3.0.1 - 04/14/26**
+
+   - Move environment building back to /svc-simsci scratch spaces on jenkins nodes.
+
 **3.0.0 - 03/30/26**
 
    - Remove installDependencies stage and upstream_repos config option

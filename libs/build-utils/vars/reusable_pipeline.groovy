@@ -55,7 +55,7 @@ def call(Map config = [:]){
   }
 
   conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
-  conda_env_dir = "/mnt/team/simulation_science/priv/engineering/jenkins/envs"
+  conda_env_dir = "/svc-simsci/envs"
 
   pipeline {
     // This agent runs as svc-simsci on node simsci-ci-coordinator-01.
@@ -297,7 +297,7 @@ def call(Map config = [:]){
             slackMessage += """
               
               Debug was enabled - MANUALLY CLEAN UP WHEN FINISHED.
-              1. Env path: ${conda_env_dir}/${conda_env_name_base}
+              1. Env path: ${conda_env_dir}/${conda_env_name_base} (on ${task_node} node)
               2. Workspace: ${env.WORKSPACE}
               """.stripIndent()
           }
