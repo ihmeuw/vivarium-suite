@@ -18,7 +18,7 @@ from layered_config_tree import DuplicatedConfigurationError
 
 
 def load_yaml(data: str | Path) -> dict[str, Any]:
-    """Loads a YAML filepath or string into a dictionary.
+    """Load a YAML filepath or string into a dictionary.
 
     Parameters
     ----------
@@ -26,14 +26,14 @@ def load_yaml(data: str | Path) -> dict[str, Any]:
         The YAML content to load. This can be a file path to a YAML file or a string
         containing YAML-formatted text.
 
+    Returns
+    -------
+        A dictionary representation of the loaded YAML content.
+
     Raises
     ------
     ValueError
         If the loaded YAML content is not a dictionary.
-
-    Returns
-    -------
-        A dictionary representation of the loaded YAML content.
 
     Notes
     -----
@@ -63,7 +63,7 @@ class SafeLoader(yaml.SafeLoader):
     def construct_mapping(
         self, node: yaml.nodes.MappingNode, deep: bool = False
     ) -> dict[Hashable, Any]:
-        """Constructs the standard mapping after checking for duplicates.
+        """Construct the standard mapping after checking for duplicates.
 
         Raises
         ------

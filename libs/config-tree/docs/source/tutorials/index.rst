@@ -3,10 +3,13 @@
 =========
 Tutorials
 =========
-Here you'll find a set of tutorials to introduce you to layered config trees
+
+These tutorials introduce the core concepts and features of Layered Config Tree.
 
 .. toctree::
    :maxdepth: 2
-   :glob:
 
-   *
+   getting_started
+   layers_and_priority
+   sources_and_metadata
+   advanced_usage
