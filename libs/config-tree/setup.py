@@ -41,7 +41,8 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requirements = [
-        "vivarium_dependencies[pyyaml,vivarium_build_utils]",
+        "vivarium_dependencies[pyyaml]",
+        "vivarium_build_utils>=3.0.1,<4.0.0",
     ]
     setup_requirements = ["setuptools_scm"]
     test_requirements = [

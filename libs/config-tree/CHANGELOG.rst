@@ -1,4 +1,8 @@
-**4.1.3 - 04/14/26**
+**4.1.4 - 04/14/26**
+
+ - Go back to explicit vbu pin (revert change from v4.1.3)
+
+**4.1.3 - 04/14/26** (YANKED)
 
  - Use vivarium_dependencies for vbu pins
 
