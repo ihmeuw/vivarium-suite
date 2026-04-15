@@ -46,7 +46,7 @@ if __name__ == "__main__":
     install_requirements = [
         "vivarium_dependencies[numpy,pyyaml,scipy,click,tables,loguru,networkx]",
         "pandas",
-        "vivarium_build_utils>=2.0.1,<3.0.0",
+        "vivarium_build_utils>=2.0.0,<4.0.0",
         "pyarrow",
         "seaborn",
         "layered-config-tree",
