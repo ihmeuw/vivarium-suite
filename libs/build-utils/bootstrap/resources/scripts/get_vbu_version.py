@@ -19,7 +19,7 @@ import re
 import subprocess
 import sys
 
-MINICONDA_DIR = "/svc-simsci/miniconda3"
+MINICONDA_DIR = "/svc-simsci/vbu_bootstrap_envs/miniconda3"
 IHME_PYPI = "https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/"
 
 

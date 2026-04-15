@@ -58,13 +58,11 @@ def call(Map config = [:]){
   conda_env_dir = "/svc-simsci/envs"
 
   pipeline {
-    // This agent runs as svc-simsci on node simsci-ci-coordinator-01.
-    // It has access to standard IHME filesystems and singularity
     environment {
         IS_CRON = "${currentBuild.buildCauses.toString().contains('TimerTrigger')}"
         CRON_SCHEDULE = "${cron_schedule}"
-        // defaults for conda and pip are a local directory /svc-simsci for improved speed.
-        // In the past, we used /ihme/code/* on the NFS (which is slower)
+        // defaults for conda and pip are a local scratch directory /svc-simsci for improved speed.
+        // In the past, we used the cluster filesystem which is much slower.
         shared_path="/svc-simsci"
         // Get the branch being built and strip everything but the text after the last "/"
         BRANCH = sh(script: "echo ${GIT_BRANCH} | rev | cut -d '/' -f1 | rev", returnStdout: true).trim()
@@ -80,6 +78,8 @@ def call(Map config = [:]){
         ACTIVATE_BASE = "source ${CONDA_BIN_PATH}/activate &> /dev/null"
     }
 
+    // This agent runs as svc-simsci on node simsci-ci-coordinator-01.
+    // It has access to standard IHME filesystems and singularity
     agent { label "coordinator" }
 
     options {

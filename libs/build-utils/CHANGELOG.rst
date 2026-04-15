@@ -1,3 +1,7 @@
+**3.0.2 - 04/15/26**
+
+   - Change the vbu-version bootstrapping to use Jenkins coordinator node
+
 **3.0.1 - 04/14/26**
 
    - Move environment building back to /svc-simsci scratch spaces on jenkins nodes.
