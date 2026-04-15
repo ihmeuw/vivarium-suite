@@ -1,3 +1,8 @@
+**2.3.3 - 04/15/26**
+
+ - Add computability bound argument to Distribution class
+ - Make x_min and x_max less strict due to computability bound changes
+
 **2.3.2 - 04/15/26**
 
  - Update vivarium_build_utils pin

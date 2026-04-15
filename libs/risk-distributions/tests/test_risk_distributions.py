@@ -69,7 +69,10 @@ def test_no_state_mutations(mean, sd, test_q, distribution):
 def test_cdf(test_data, distribution):
     mean, sd, test_q = test_data
     test_distribution = distribution(mean=mean, sd=sd)
-    x_min, x_max = test_distribution.parameters.x_min, test_distribution.parameters.x_max
+    x_min, x_max = (
+        test_distribution.parameters.computability_min,
+        test_distribution.parameters.computability_max,
+    )
 
     test_x = test_distribution.ppf(test_q)
 

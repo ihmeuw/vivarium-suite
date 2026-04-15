@@ -22,15 +22,26 @@ class BaseDistribution:
     expected_parameters = ()
 
     def __init__(
-        self, parameters: Parameters = None, mean: Parameter = None, sd: Parameter = None
+        self,
+        parameters: Parameters = None,
+        mean: Parameter = None,
+        sd: Parameter = None,
+        computability_bound: float = 0.001,
     ):
-        self.parameters = self.get_parameters(parameters, mean, sd)
+        self.parameters = self.get_parameters(parameters, mean, sd, computability_bound)
+        self.computability_bound = computability_bound
 
     @classmethod
     def get_parameters(
-        cls, parameters: Parameters = None, mean: Parameter = None, sd: Parameter = None
+        cls,
+        parameters: Parameters = None,
+        mean: Parameter = None,
+        sd: Parameter = None,
+        computability_bound: float = 0.001,
     ) -> pd.DataFrame:
-        required_parameters = list(cls.expected_parameters + ("x_min", "x_max"))
+        required_parameters = list(
+            cls.expected_parameters + ("computability_min", "computability_max")
+        )
         if parameters is not None:
             if not (mean is None and sd is None):
                 raise ValueError(
@@ -51,9 +62,7 @@ class BaseDistribution:
             parameters = pd.DataFrame(0.0, columns=required_parameters, index=mean.index)
 
             computable = cls.computable_parameter_index(mean, sd)
-            parameters.loc[computable, ["x_min", "x_max"]] = cls.compute_min_max(
-                mean.loc[computable], sd.loc[computable]
-            )
+
             # The scipy.stats distributions run optimization routines that handle FloatingPointErrors,
             # transforming them into RuntimeWarnings. This gets noisy in our logs.
             with warnings.catch_warnings():
@@ -61,11 +70,11 @@ class BaseDistribution:
                 parameters.loc[
                     computable, list(cls.expected_parameters)
                 ] = cls._get_parameters(
-                    mean.loc[computable],
-                    sd.loc[computable],
-                    parameters.loc[computable, "x_min"],
-                    parameters.loc[computable, "x_max"],
+                    mean.loc[computable], sd.loc[computable], computability_bound
                 )
+            parameters.loc[
+                computable, ["computability_min", "computability_max"]
+            ] = cls.get_computability_bounds(parameters.loc[computable], computability_bound)
 
         return parameters
 
@@ -73,20 +82,21 @@ class BaseDistribution:
     def computable_parameter_index(mean: pd.Series, sd: pd.Series) -> pd.Index:
         return mean[(mean != 0) & ~np.isnan(mean) & (sd != 0) & ~np.isnan(sd)].index
 
-    @staticmethod
-    def compute_min_max(mean: pd.Series, sd: pd.Series) -> pd.DataFrame:
-        """Gets the upper and lower bounds of the distribution support."""
-        # noinspection PyTypeChecker
-        alpha = 1 + sd**2 / mean**2
-        scale = mean / np.sqrt(alpha)
-        s = np.sqrt(np.log(alpha))
-        x_min = stats.lognorm(s=s, scale=scale).ppf(0.001)
-        x_max = stats.lognorm(s=s, scale=scale).ppf(0.999)
-        return pd.DataFrame({"x_min": x_min, "x_max": x_max}, index=mean.index)
+    @classmethod
+    def get_computability_bounds(
+        cls, parameters: pd.DataFrame, computability_bound: float
+    ) -> pd.DataFrame:
+        kwargs = {parameter: parameters[parameter] for parameter in cls.expected_parameters}
+        compatability_min = cls.distribution(**kwargs).ppf(computability_bound)
+        compatability_max = cls.distribution(**kwargs).ppf(1 - computability_bound)
+        return pd.DataFrame(
+            {"computability_min": compatability_min, "computability_max": compatability_max},
+            index=parameters.index,
+        )
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         raise NotImplementedError()
 
@@ -123,8 +133,8 @@ class BaseDistribution:
         computable = parameters[
             (parameters.sum(axis=1) != 0)
             & ~np.isnan(x)
-            & (parameters["x_min"] <= x)
-            & (x <= parameters["x_max"])
+            & (parameters["computability_min"] <= x)
+            & (x <= parameters["computability_max"])
         ].index
 
         x.loc[computable] = self.process(
@@ -158,8 +168,8 @@ class BaseDistribution:
         computable = parameters[
             (parameters.sum(axis=1) != 0)
             & ~np.isnan(q)
-            & (0.001 <= q.values)
-            & (q.values <= 0.999)
+            & (self.computability_bound <= q.values)
+            & (q.values <= 1 - self.computability_bound)
         ].index
 
         q.loc[computable] = self.process(
@@ -193,8 +203,8 @@ class BaseDistribution:
         computable = parameters[
             (parameters.sum(axis=1) != 0)
             & ~np.isnan(x)
-            & (parameters["x_min"] <= x)
-            & (x <= parameters["x_max"])
+            & (parameters["computability_min"] <= x)
+            & (x <= parameters["computability_max"])
         ].index
 
         x.loc[computable] = self.process(
@@ -220,14 +230,60 @@ class BaseDistribution:
         return c
 
 
+class MirroredDistribution(BaseDistribution):
+    def __init__(
+        self,
+        parameters: Parameters = None,
+        mean: Parameter = None,
+        sd: Parameter = None,
+        computability_bound: float = 0.001,
+    ):
+        super().__init__(parameters, mean, sd, computability_bound)
+        # Match index of mean/sd to parameters for ease of use in mirror point calculation
+        mean, sd = cast_to_series(mean, sd)
+        self.mirror_point = self.compute_mirror_point(mean, sd, computability_bound)
+
+    @staticmethod
+    def compute_mirror_point(
+        mean: pd.Series, sd: pd.Series, computability_bound: float
+    ) -> pd.Series:
+        """Computes the point around which the distribution is mirrored.
+
+        NOTE: In the corresponding GBD code, this is called 'x_max'.
+        """
+        alpha = 1 + sd**2 / mean**2
+        scale = mean / np.sqrt(alpha)
+        s = np.sqrt(np.log(alpha))
+        return pd.Series(
+            stats.lognorm(s=s, scale=scale).ppf(1 - computability_bound),
+            index=mean.index,
+        )
+
+
 class Beta(BaseDistribution):
     distribution = stats.beta
     expected_parameters = ("a", "b", "scale", "loc")
 
     @staticmethod
-    def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+    def compute_scaling_bounds(
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
+        """Gets the upper and lower bounds of the distribution support."""
+        # noinspection PyTypeChecker
+        alpha = 1 + sd**2 / mean**2
+        scale = mean / np.sqrt(alpha)
+        s = np.sqrt(np.log(alpha))
+        x_min = stats.lognorm(s=s, scale=scale).ppf(computability_bound)
+        x_max = stats.lognorm(s=s, scale=scale).ppf(1 - computability_bound)
+        return pd.DataFrame({"x_min": x_min, "x_max": x_max}, index=mean.index)
+
+    @staticmethod
+    def _get_parameters(
+        mean: pd.Series, sd: pd.Series, computability_bound: float
+    ) -> pd.DataFrame:
+        x_bounds = Beta.compute_scaling_bounds(mean, sd, computability_bound)
+        x_min = x_bounds["x_min"]
+        x_max = x_bounds["x_max"]
         scale = x_max - x_min
         a = 1 / scale * (mean - x_min)
         # noinspection PyTypeChecker
@@ -250,7 +306,7 @@ class Exponential(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         return pd.DataFrame({"scale": mean}, index=mean.index)
 
@@ -261,7 +317,7 @@ class Gamma(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         # noinspection PyTypeChecker
         params = pd.DataFrame(
@@ -280,7 +336,7 @@ class Gumbel(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         params = pd.DataFrame(
             {
@@ -298,7 +354,7 @@ class InverseGamma(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         def target_function(guess, m, s):
             alpha, beta = np.abs(guess)
@@ -330,7 +386,7 @@ class InverseWeibull(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         # moments from  Stat Papers (2011) 52: 591. https://doi.org/10.1007/s00362-009-0271-3
         # it is much faster than using stats.invweibull.mean/var
@@ -364,7 +420,7 @@ class LogLogistic(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         def target_function(guess, m, s):
             shape, scale = np.abs(guess)
@@ -398,7 +454,7 @@ class LogNormal(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         # noinspection PyTypeChecker
         alpha = 1 + sd**2 / mean**2
@@ -412,17 +468,19 @@ class LogNormal(BaseDistribution):
         return params
 
 
-class MirroredGumbel(BaseDistribution):
+class MirroredGumbel(MirroredDistribution):
     distribution = stats.gumbel_r
     expected_parameters = ("loc", "scale")
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         params = pd.DataFrame(
             {
-                "loc": x_max - mean - (np.euler_gamma * np.sqrt(6) / np.pi * sd),
+                "loc": MirroredGumbel.compute_mirror_point(mean, sd, computability_bound)
+                - mean
+                - (np.euler_gamma * np.sqrt(6) / np.pi * sd),
                 "scale": np.sqrt(6) / np.pi * sd,
             },
             index=mean.index,
@@ -432,33 +490,33 @@ class MirroredGumbel(BaseDistribution):
     def process(
         self, data: pd.Series, parameters: pd.DataFrame, process_type: str
     ) -> pd.Series:
-        x_min, x_max = (
-            parameters.loc[data.index, "x_min"],
-            parameters.loc[data.index, "x_max"],
-        )
         if process_type in ["pdf_preprocess", "cdf_preprocess"]:
-            value = x_max - data
+            value = self.mirror_point - data
         elif process_type in ["ppf_preprocess", "cdf_postprocess"]:
             # noinspection PyTypeChecker
             value = 1 - data
         elif process_type == "ppf_postprocess":
-            value = x_max - data
+            value = self.mirror_point - data
         else:
             value = super().process(data, parameters, process_type)
         return value
 
 
-class MirroredGamma(BaseDistribution):
+class MirroredGamma(MirroredDistribution):
     distribution = stats.gamma
     expected_parameters = ("a", "scale")
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         # noinspection PyTypeChecker
+        mirror_point = MirroredGamma.compute_mirror_point(mean, sd, computability_bound)
         params = pd.DataFrame(
-            {"a": ((x_max - mean) / sd) ** 2, "scale": sd**2 / (x_max - mean)},
+            {
+                "a": ((mirror_point - mean) / sd) ** 2,
+                "scale": sd**2 / (mirror_point - mean),
+            },
             index=mean.index,
         )
         return params
@@ -466,17 +524,13 @@ class MirroredGamma(BaseDistribution):
     def process(
         self, data: pd.Series, parameters: pd.DataFrame, process_type: str
     ) -> pd.Series:
-        x_min, x_max = (
-            parameters.loc[data.index, "x_min"],
-            parameters.loc[data.index, "x_max"],
-        )
         if process_type in ["pdf_preprocess", "cdf_preprocess"]:
-            value = x_max - data
+            value = self.mirror_point - data
         elif process_type in ["ppf_preprocess", "cdf_postprocess"]:
             # noinspection PyTypeChecker
             value = 1 - data
         elif process_type == "ppf_postprocess":
-            value = x_max - data
+            value = self.mirror_point - data
         else:
             value = super().process(data, parameters, process_type)
         return value
@@ -488,7 +542,7 @@ class Normal(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         params = pd.DataFrame(
             {
@@ -506,7 +560,7 @@ class Weibull(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, x_min: pd.Series, x_max: pd.Series
+        mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
         def target_function(guess, m, s):
             shape, scale = np.abs(guess)
@@ -556,8 +610,11 @@ class EnsembleDistribution:
         parameters: dict[str, Parameters] | None = None,
         mean: Parameter | None = None,
         sd: Parameter | None = None,
+        computability_bound: float = 0.001,
     ):
-        self.weights, self.parameters = self.get_parameters(weights, parameters, mean, sd)
+        self.weights, self.parameters = self.get_parameters(
+            weights, parameters, mean, sd, computability_bound
+        )
 
     @classmethod
     def get_parameters(
@@ -566,6 +623,7 @@ class EnsembleDistribution:
         parameters: Parameters = None,
         mean: Parameter = None,
         sd: Parameter = None,
+        computability_bound: float = 0.001,
     ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
         expected_columns = list(cls._distribution_map.keys())
 
@@ -576,7 +634,7 @@ class EnsembleDistribution:
         for name, dist in cls._distribution_map.items():
             try:
                 param = parameters[name] if parameters else None
-                params[name] = dist.get_parameters(param, mean, sd)
+                params[name] = dist.get_parameters(param, mean, sd, computability_bound)
             except NonConvergenceError:
                 if weights[name].max() < 0.05:
                     weights.loc[name, :] = 0
