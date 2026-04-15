@@ -1,3 +1,7 @@
+**4.1.5 - 04/15/26**
+
+ - Update vivarium_build_utils pin
+
 **4.1.4 - 04/14/26**
 
  - Go back to explicit vbu pin (revert change from v4.1.3)
