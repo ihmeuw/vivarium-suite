@@ -1,3 +1,7 @@
+**3.0.4 - 04/15/26**
+
+  - Update vivarium_build_utils pin
+
 **3.0.3 - 04/06/26**
 
   - Bugfix: Remove mortality component from test model specifications.
