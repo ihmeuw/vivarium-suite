@@ -3,6 +3,7 @@
 - Tighten vivarium_build_utils pin
 - Add support for configuration file for psimulate run/restart/expand
 - Positional arguments for psimulate run/restart/expand are now keyword arguments
+- Write out requested resources and configuration details for psimulate commands
 
 
 **3.0.0 - 04/15/26**
