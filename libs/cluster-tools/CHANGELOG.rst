@@ -1,20 +1,4 @@
-**3.0.4 - 04/15/26**
-
-  - Update vivarium_build_utils pin
-
-**3.0.3 - 04/06/26**
-
-  - Bugfix: Remove mortality component from test model specifications.
-
-**3.0.2 - 04/01/26**
-
-  - Hash result folder in job name to deduplicate simultaneous runs
-
-**3.0.1 - 04/01/26**
-
-  - Remove timeouts from e2e test jobs
-
-**3.0.0 - 03/27/26**
+**3.0.0 - 04/15/26**
 --------------------
 
 This release migrates psimulate orchestration from redis/RQ/DRMAA to IHME's
@@ -63,6 +47,7 @@ Tooling and documentation
 - Add/refresh tests for Jobmon workflow construction, task execution, restart,
   and end-to-end behavior.
 - Refactor and clean up dead code from legacy worker/redis modules.
+- Update vivarium_build_utils pin
 
 **2.3.5 - 03/25/26**
 
