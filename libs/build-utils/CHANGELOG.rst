@@ -1,3 +1,7 @@
+**3.0.3 - 04/16/26**
+
+   - Use --no-cache when running pip install dryrun for getting vbu version
+
 **3.0.2 - 04/15/26**
 
    - Change the vbu-version bootstrapping to use Jenkins coordinator node

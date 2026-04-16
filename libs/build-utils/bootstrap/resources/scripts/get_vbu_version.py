@@ -65,7 +65,7 @@ def _run_pip_dry_run(python_version: str) -> str:
     cmd = f"""
     source {MINICONDA_DIR}/etc/profile.d/conda.sh
     conda activate py{env_version}
-    uv pip install --dry-run . --extra-index-url {IHME_PYPI}simple/ --index-strategy unsafe-best-match
+    uv pip install --dry-run . --extra-index-url {IHME_PYPI}simple/ --index-strategy unsafe-best-match --no-cache
     """
 
     try:
