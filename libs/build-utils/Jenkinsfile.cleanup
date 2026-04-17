@@ -2,7 +2,7 @@ pipeline {
     agent none // Defined explicitly in each stage
     
     environment {
-        DIRS_TO_CLEAN_PER_NODE = '/tmp,/opt/jenkins/workspace,/svc-simsci/envs'
+        DIRS_TO_CLEAN_PER_NODE = '/tmp,/opt/jenkins/workspace'
         DIRS_TO_CLEAN_SHARED = '/mnt/team/simulation_science/priv/engineering/jenkins/envs'
         DAYS_OLD = '1'
     }
@@ -19,8 +19,10 @@ pipeline {
             // Can use any node, really
             agent { node 'simsci-ci-coordinator-01' }
             steps {
-                script {
-                    cleanDirs("shared")
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    script {
+                        cleanDirs("shared")
+                    }
                 }
             }
             post {
@@ -36,8 +38,10 @@ pipeline {
             // NOTE: Confusingly, simsci-ci-coordinator-01 is actually simsci-jenkinsagent-ci-p02
             agent { node 'simsci-ci-coordinator-01' }
             steps {
-                script {
-                    cleanDirs("per-node")
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    script {
+                        cleanDirs("per-node")
+                    }
                 }
             }
             post {
@@ -52,8 +56,10 @@ pipeline {
         stage('Jenkins Agent Node Cleanup') {
             agent { node 'simsci-jenkinsagent-ci-p01' }
             steps {
-                script {
-                    cleanDirs("per-node")
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    script {
+                        cleanDirs("per-node")
+                    }
                 }
             }
             post {
@@ -68,8 +74,10 @@ pipeline {
         stage('Slurm Build Node Cleanup') {
             agent { node 'simsci-slurm-sbuild-p01' }
             steps {
-                script {
-                    cleanDirs("per-node")
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    script {
+                        cleanDirs("per-node")
+                    }
                 }
             }
             post {
@@ -84,8 +92,10 @@ pipeline {
         stage('Built-In Node Cleanup') {
             agent { node 'built-in' }
             steps {
-                script {
-                    cleanDirs("per-node")
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    script {
+                        cleanDirs("per-node")
+                    }
                 }
             }
             post {
@@ -164,7 +174,11 @@ def cleanDirs(cleanupType) {
     
     // Special case: built-in node doesn't have /opt/jenkins/workspace
     if (env.NODE_NAME == "built-in" && cleanupType == "per-node") {
-        dirList = dirList.findAll { it != "/opt/jenkins/workspace" }
+        dirList = dirList - "/opt/jenkins/workspace"
+    }
+    // Special case: jenkins-agent node also has a /svc-simsci/envs dir that needs cleaning
+    if (env.NODE_NAME == "simsci-jenkinsagent-ci-p01" && cleanupType == "per-node") {
+        dirList = dirList + "/svc-simsci/envs"
     }
     
     for (dir in dirList) {

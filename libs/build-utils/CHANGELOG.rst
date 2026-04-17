@@ -1,3 +1,8 @@
+**3.0.4 - 04/17/26**
+
+   - Bugfix: Only clean up /svc-simsci/envs on the node that actually has it
+   - Feature: Catch errors so that we run through all stages rather than aborting on first failure
+
 **3.0.3 - 04/16/26**
 
    - Use --no-cache when running pip install dryrun for getting vbu version
