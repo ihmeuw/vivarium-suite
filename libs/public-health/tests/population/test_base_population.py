@@ -833,7 +833,6 @@ def get_test_location(builder: Builder) -> str:
     return "ModuleFunctionLand"
 
 
-@pytest.mark.xfail(reason="New lifecycle ordering not yet implemented", strict=True)
 def test_fertility_before_aging(base_config, base_plugins):
     """Test that fertility happens before aging so newborns are aged during the same step.
 
