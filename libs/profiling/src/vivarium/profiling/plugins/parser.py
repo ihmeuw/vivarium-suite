@@ -5,7 +5,7 @@ from vivarium.framework.components.parser import ParsingError
 from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.disease.models import SIS_fixed_duration
 from vivarium_public_health.results import DiseaseObserver
-from vivarium_public_health.results.risk import CategoricalRiskObserver
+from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
 from vivarium_public_health.risks.base_risk import Risk
 
 from vivarium_profiling.components.risks.effect import (

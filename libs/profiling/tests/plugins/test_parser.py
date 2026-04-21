@@ -3,7 +3,7 @@ from layered_config_tree import LayeredConfigTree
 from vivarium.interface.interactive import InteractiveContext
 from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.results import DiseaseObserver
-from vivarium_public_health.results.risk import CategoricalRiskObserver
+from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
 from vivarium_public_health.risks.base_risk import Risk
 from vivarium_public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
 
@@ -144,10 +144,12 @@ def test_multi_component_parser_risks():
     } == effect_names
 
     # Continuous risk observer skipped
-    assert all("high_systolic_blood_pressure" not in obs.risk for obs in cat_observers)
+    assert all(
+        "high_systolic_blood_pressure" not in obs.causal_factor for obs in cat_observers
+    )
 
     # Categorical observers created for dichotomous risk
-    observer_risks = {obs.risk for obs in cat_observers}
+    observer_risks = {obs.causal_factor for obs in cat_observers}
     assert observer_risks == {"unsafe_water_source_1", "unsafe_water_source_2"}
 
 

@@ -1,3 +1,7 @@
+**v0.3.5 - 04/21/26**
+
+ - Update for VPH v5
+
 **v0.3.4 - 04/16/26**
 
  - Tighten vivarium_build_utils pin
