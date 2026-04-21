@@ -1,3 +1,7 @@
+**6.4.0 - TBD/TBD/26**
+
+- Update when population characteristics happen in lifecycle methods
+
 **6.3.2 - 07/01/26**
 
 - Reduce population size in test suites to improve runtime
