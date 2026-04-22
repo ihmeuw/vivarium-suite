@@ -7,11 +7,13 @@ The main process loop for `psimulate` runs.
 
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import yaml
@@ -36,7 +38,92 @@ from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
 from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
+from vivarium_cluster_tools.psimulate.workflow_config.builder import WorkflowBuilder
+from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
 from vivarium_cluster_tools.vipin.perf_report import report_performance
+
+if TYPE_CHECKING:
+    from jobmon.client.workflow import Workflow
+
+
+def _bind_and_run_workflow(
+    workflow: Workflow,
+    output_root: Path,
+    *,
+    resume: bool = False,
+) -> str:
+    """Bind a Jobmon workflow, log the monitoring URL, and run it.
+
+    Parameters
+    ----------
+    workflow
+        The Jobmon workflow to submit.
+    output_root
+        Output directory to mention in log messages.
+    resume
+        Whether to resume a previously started workflow.
+
+    Returns
+    -------
+    str
+        The workflow status string from Jobmon (e.g. ``"D"`` for DONE).
+    """
+    workflow.bind()
+
+    gui_url = JobmonConfig().get("http", "gui_url")
+    monitoring_url = f"{gui_url}/#/workflow/{workflow.workflow_id}" if gui_url else ""
+
+    logger.info(f"Submitting Jobmon workflow. Results will be written to {output_root}")
+    if monitoring_url:
+        logger.info(f"Monitor progress at: {monitoring_url}")
+
+    # Match the workflow timeout to the remaining time on the SLURM runner
+    # node so jobmon doesn't outlive (or underuse) the allocation.
+    seconds_until_timeout = cluster.get_workflow_timeout_seconds()
+    run_kwargs: dict[str, Any] = {"resume": resume}
+    if seconds_until_timeout is not None:
+        run_kwargs["seconds_until_timeout"] = seconds_until_timeout
+    wf_status = workflow.run(**run_kwargs)
+    if wf_status is None:
+        raise RuntimeError("Jobmon workflow.run() returned None unexpectedly.")
+    return wf_status
+
+
+def workflow_main(
+    workflow_config: WorkflowConfig,
+    verbose: int = 0,
+) -> None:
+    """Entry point for the psimulate workflow subcommand.
+
+    Parameters
+    ----------
+    workflow_config
+        The parsed and validated workflow configuration (with CLI overrides applied).
+    verbose
+        Verbosity level.
+    """
+    logger.info(f"Starting workflow: {workflow_config.name}")
+
+    # Create output directory if it doesn't exist
+    output_root = workflow_config.output_directory
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    # Write the requested configuration to output directory
+    write_workflow_configuration(output_root, workflow_config)
+
+    # Build the workflow
+    logger.debug("Building workflow.")
+    builder = WorkflowBuilder(workflow_config)
+    workflow = builder.build()
+
+    wf_status = _bind_and_run_workflow(workflow, output_root)
+
+    if wf_status != "D":
+        logger.warning(
+            f"Workflow finished with status '{wf_status}' (expected 'D' for DONE)."
+        )
+    else:
+        logger.info(f"Workflow completed successfully. Results in {output_root}")
 
 
 def report_initial_status(
@@ -97,6 +184,25 @@ def write_backup_metadata(
         mode="a",
         header=not os.path.exists(backup_metadata_path),
     )
+
+
+def write_workflow_configuration(output_root: Path, workflow_config: WorkflowConfig) -> None:
+    """Write workflow configuration to a YAML file in the output directory.
+
+    Creates a ``configuration.yaml`` that can be reused directly with
+    ``psimulate workflow -c configuration.yaml``.
+
+    Parameters
+    ----------
+    output_root
+        The root output directory for the workflow.
+    workflow_config
+        The parsed and validated workflow configuration.
+    """
+    config: dict[str, Any] = {"workflow": workflow_config.to_dict()}
+    config_file = output_root / "configuration.yaml"
+    config_file.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
+    logger.info(f"Run configuration written to {config_file}")
 
 
 def write_configuration(
@@ -321,26 +427,7 @@ def main(
         max_attempts=max_attempts,
     )
 
-    # Bind the workflow to get its ID before running, so we can display the
-    # monitoring URL immediately rather than waiting for run() to finish.
-    workflow.bind()
-
-    gui_url = JobmonConfig().get("http", "gui_url")
-    monitoring_url = f"{gui_url}/#/workflow/{workflow.workflow_id}" if gui_url else ""
-
-    logger.info(
-        f"Submitting Jobmon workflow. Results will be written to {str(output_paths.root)}",
-    )
-    if monitoring_url:
-        logger.info(f"Monitor progress at: {monitoring_url}")
-
-    # Match the workflow timeout to the remaining time on the SLURM runner
-    # node so jobmon doesn't outlive (or underuse) the allocation.
-    seconds_until_timeout = cluster.get_workflow_timeout_seconds()
-    run_kwargs: dict[str, Any] = {"resume": restart}
-    if seconds_until_timeout is not None:
-        run_kwargs["seconds_until_timeout"] = seconds_until_timeout
-    wf_status = workflow.run(**run_kwargs)
+    wf_status = _bind_and_run_workflow(workflow, output_paths.root, resume=restart)
 
     # Spit out a performance report for the workers.
     try_run_vipin(output_paths)

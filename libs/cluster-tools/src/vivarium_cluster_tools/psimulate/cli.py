@@ -25,6 +25,7 @@ from vivarium_cluster_tools.psimulate.jobmon_config import with_max_attempts, wi
 from vivarium_cluster_tools.psimulate.worker.load_test_work_horse import (
     get_psimulate_test_dict,
 )
+from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
 
 
 @click.group()
@@ -411,4 +412,67 @@ def test(
             "test_type": test_type,
             "num_workers": num_workers,
         },
+    )
+
+
+@psimulate.command()
+@cli_tools.with_workflow_config
+@click.option(
+    "--project",
+    "-P",
+    default=None,
+    help="Override project from config file.",
+)
+@click.option(
+    "--queue",
+    "-q",
+    default=None,
+    help="Override queue from config file.",
+)
+@click.option(
+    "--output-directory",
+    "-o",
+    type=click.Path(file_okay=False),
+    default=None,
+    help="Override output directory from config file.",
+    callback=cli_tools.coerce_to_full_path,
+)
+@click.option(
+    "--max-attempts",
+    "-m",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Override maximum Jobmon task attempts from config file.",
+)
+@cli_tools.with_verbose_and_pdb
+def workflow(
+    config_path: Path,
+    output_directory: Path | None,
+    **options: Any,
+) -> None:
+    """Run a multi-step Jobmon workflow.
+
+    The workflow is defined in a workflow configuration YAML file
+    specified via the -c/--config option. The config file specifies
+    all workflow steps, compute resources, and execution order.
+
+    Top-level options like project, queue, and output_directory can
+    be provided in the config file and/or overridden from the command line.
+    """
+    logs.configure_main_process_logging_to_terminal(options["verbose"])
+
+    # Parse the workflow configuration, merging CLI overrides
+    workflow_config = WorkflowConfig.from_yaml_with_cli_overrides(
+        config_path,
+        project=options.get("project"),
+        queue=options.get("queue"),
+        output_directory=output_directory,
+        max_attempts=options.get("max_attempts"),
+    )
+
+    main = handle_exceptions(runner.workflow_main, logger, options["with_debugger"])
+
+    main(
+        workflow_config=workflow_config,
+        verbose=options["verbose"],
     )
