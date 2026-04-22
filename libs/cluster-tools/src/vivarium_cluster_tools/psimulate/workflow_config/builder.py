@@ -49,7 +49,8 @@ class WorkflowBuilder:
         workflow = self._tool.create_workflow(
             name=self.config.name,
             default_cluster_name="slurm",
-            default_max_attempts=3,
+            default_max_attempts=self.config.max_attempts,
+            max_concurrently_running=1,  # Workflow steps are sequential
         )
 
         tasks = []

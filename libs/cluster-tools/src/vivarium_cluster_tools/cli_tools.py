@@ -210,6 +210,20 @@ def with_run_config(func: CLIFunction) -> CLIFunction:
     )(func)
 
 
+def with_workflow_config(func: CLIFunction) -> CLIFunction:
+    """Decorator that adds the ``--config/-c`` option for workflow YAML files."""
+    return click.option(
+        "--config",
+        "-c",
+        "config_path",
+        type=click.Path(exists=True, dir_okay=False),
+        required=True,
+        callback=coerce_to_full_path,
+        is_eager=True,
+        help="Path to the workflow configuration YAML file.",
+    )(func)
+
+
 def resolve_deprecated_positional(
     positional_value: Any,
     option_value: Any,
