@@ -1,3 +1,7 @@
+**3.2.0 - TBD/TBD/TBD**
+
+- Implement serial workflows via "psimulate workflow" command
+
 **4.1.0 - 06/04/26**
 
 - Standardize CLI logging verbosity on the shared ``vivarium.engine`` convention

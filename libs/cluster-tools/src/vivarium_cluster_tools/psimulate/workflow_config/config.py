@@ -26,7 +26,7 @@ class ResourceConfig:
     memory_gb: int
     """Memory in GB."""
     runtime: str = "01:00:00"
-    """Maximum runtime in 'hh:mm:ss' format."""
+    """Maximum runtime in 'hh:mm:ss' format. Default is '01:00:00'."""
     cores: int = 1
     """Number of CPU cores to request. Default is 1."""
 
@@ -39,11 +39,12 @@ class ResourceConfig:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ResourceConfig:
         """Create a ResourceConfig from a dictionary."""
-        return cls(
-            memory_gb=data["memory_gb"],
-            runtime=data.get("runtime", "01:00:00"),
-            cores=data.get("cores", 1),
-        )
+        kwargs: dict[str, Any] = {"memory_gb": data["memory_gb"]}
+        if "runtime" in data:
+            kwargs["runtime"] = data["runtime"]
+        if "cores" in data:
+            kwargs["cores"] = data["cores"]
+        return cls(**kwargs)
 
 
 @dataclass
@@ -83,7 +84,7 @@ class WorkflowConfig:
     default_environment: str | None
     """Default environment to use for steps that do not specify one."""
     steps: list[StepConfig]
-    """List of steps in the workflow."""
+    """List of sequential steps in the workflow."""
 
     @classmethod
     def from_yaml(cls, path: Path) -> WorkflowConfig:
