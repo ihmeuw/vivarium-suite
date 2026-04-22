@@ -1,3 +1,9 @@
+**3.1.0 - 04/22/26**
+
+   - Refactor shared environment pipeline: archive current env with conda-pack before
+     rebuild, rebuild in-place, diff packages, and notify Slack with package diffs.
+     Add archive retention cleanup (default 7 days).
+     
 **3.0.4 - 04/17/26**
 
    - Bugfix: Only clean up /svc-simsci/envs on the node that actually has it

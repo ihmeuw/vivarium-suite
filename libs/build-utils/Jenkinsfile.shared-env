@@ -1,21 +1,28 @@
 /**
  * Jenkins Pipeline: Shared Environment Builder
- * 
+ *
  * This pipeline builds and maintains shared conda environments for model repositories.
- * It compares new builds against "current" versions and updates only when changes are detected.
- * 
+ * Each run archives the current environment (via conda-pack), rebuilds it fresh in-place,
+ * and notifies Slack if packages changed.
+ *
  * Environments are stored in a read-only (except by Jenkins) directory accessible to all users.
+ * Archives are portable .tar.gz files that can restore a previous environment:
+ *   mkdir /tmp/restore && tar xzf <archive>.tar.gz -C /tmp/restore && /tmp/restore/bin/conda-unpack
  */
 @Library('vivarium_build_utils') _
 
 import groovy.transform.Field
 
-// Track updated environments (must be at script level, not in env)
+// Track updated environments for Slack notification (must be at script level, not in env).
+// Each entry is a map with 'name' and 'diff' keys.
 @Field def UPDATED_ENVIRONMENTS = []
+
+// Slack channel for environment update notifications
+@Field final String SLACK_CHANNEL = 'simsci-shared-env-updates'
 
 pipeline {
     agent { node 'simsci-jenkinsagent-ci-p01' }
-    
+
     parameters {
         string(
             name: 'ACTIVE_MODELS',
@@ -32,18 +39,13 @@ pipeline {
             defaultValue: '/mnt/team/simulation_science/priv/engineering/jenkins/shared_envs',
             description: 'Base directory for shared environments'
         )
-        booleanParam(
-            name: 'FORCE_REBUILD',
-            defaultValue: false,
-            description: 'Force rebuild and update of all environments, even if no changes detected'
-        )
         string(
             name: 'RETENTION_DAYS',
-            defaultValue: '30',
-            description: 'Number of days to retain old timestamped environments before cleanup'
+            defaultValue: '7',
+            description: 'Number of days to retain conda-pack archives before cleanup'
         )
     }
-    
+
     environment {
         // Conda configuration
         SHARED_PATH = '/svc-simsci'
@@ -51,74 +53,69 @@ pipeline {
         CONDA_BIN_PATH = "${SHARED_PATH}/miniconda3/bin"
         XDG_CACHE_HOME = "${SHARED_PATH}/pip-cache"
         ACTIVATE_BASE = "source ${CONDA_BIN_PATH}/activate &> /dev/null"
-        
+
         // GitHub organization for model repos
         GITHUB_ORG = 'ihmeuw'
         GITHUB_BRANCH = 'main'
-        
+
         // Timestamp for this build
         BUILD_TIMESTAMP = sh(script: 'date +%Y%m%d_%H%M%S', returnStdout: true).trim()
     }
-    
+
     options {
         skipDefaultCheckout()
         timeout(time: 180, unit: 'MINUTES')
         timestamps()
         buildDiscarder(logRotator(numToKeepStr: '30'))
     }
-    
+
     stages {
         stage('Initialize') {
             steps {
                 script {
-                    // Parse parameters
-                    env.MODEL_LIST = params.ACTIVE_MODELS.split(',').collect { it.trim() }
-                    env.TYPE_LIST = params.ENV_TYPES.split(',').collect { it.trim() }
-                    
                     echo "=== Shared Environment Builder ==="
-                    echo "Models: ${env.MODEL_LIST}"
-                    echo "Environment Types: ${env.TYPE_LIST}"
+                    echo "Models: ${params.ACTIVE_MODELS}"
+                    echo "Environment Types: ${params.ENV_TYPES}"
                     echo "Shared Directory: ${params.SHARED_ENV_DIR}"
                     echo "Build Timestamp: ${env.BUILD_TIMESTAMP}"
-                    echo "Force Rebuild: ${params.FORCE_REBUILD}"
                     echo "Retention Days: ${params.RETENTION_DAYS}"
-                    
+
                     // Ensure shared directory exists with proper permissions
                     sh """
-                        mkdir -p ${params.SHARED_ENV_DIR}
-                        chmod 755 ${params.SHARED_ENV_DIR}
+                        mkdir -p '${params.SHARED_ENV_DIR}'
+                        chmod 755 '${params.SHARED_ENV_DIR}'
                     """
                 }
             }
         }
-        
+
         stage('Build Environments') {
             steps {
                 script {
                     def models = params.ACTIVE_MODELS.split(',').collect { it.trim() }
                     def types = params.ENV_TYPES.split(',').collect { it.trim() }
-                    
+
                     // Build environments sequentially to avoid conda package cache contention.
                     // Parallel conda operations sharing the same cache can cause lock conflicts,
                     // partial writes, and solver resource exhaustion.
                     for (model in models) {
                         for (envType in types) {
-                            buildAndCompareEnvironment(model, envType)
+                            buildEnvironment(model, envType)
                         }
                     }
                 }
             }
         }
-        
-        stage('Cleanup Old Environments') {
+
+        stage('Cleanup Old Archives') {
             steps {
                 script {
-                    cleanupOldTimestampedEnvironments()
+                    cleanupOldArchives()
                 }
             }
         }
     }
-    
+
     post {
         always {
             // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
@@ -128,44 +125,50 @@ pipeline {
         success {
             script {
                 echo "All shared environments processed successfully"
-                
-                // Send Slack notification if any environments were updated
+
+                // Send Slack notification if any environments had package changes
                 if (UPDATED_ENVIRONMENTS && UPDATED_ENVIRONMENTS.size() > 0) {
-                    def channelName = "simsci-shared-env-updates"
-                    def envList = UPDATED_ENVIRONMENTS.collect { "  • ${it}" }.join('\n')
+                    def envSections = UPDATED_ENVIRONMENTS.collect { entry ->
+                        def diffBlock = entry.diff ? "\n```\n${entry.diff}\n```" : ""
+                        "  • *${entry.name}*${diffBlock}"
+                    }.join('\n')
                     def slackMessage = """
                         *Shared Environment Update*
-                        
-                        The following environments were updated:
-                        ${envList}
-                        
+
+                        The following environments had package changes:
+                        ${envSections}
+
                         Job: *${env.JOB_NAME}*
                         Build number: #${env.BUILD_NUMBER}
                         Build details: <${env.BUILD_URL}/console|See in web console>
                         """.stripIndent()
-                    
-                    slackSend channel: "#${channelName}",
+
+                    slackSend channel: "#${SLACK_CHANNEL}",
                             message: slackMessage,
                             teamDomain: "ihme",
                             tokenCredentialId: "slack"
-                    
+
                     echo "Sent Slack notification for ${UPDATED_ENVIRONMENTS.size()} updated environment(s)"
                 } else {
-                    echo "No environments were updated - no Slack notification sent"
+                    echo "No package changes detected - no Slack notification sent"
                 }
             }
         }
         failure {
             script {
-                def channelName = "simsci-shared-env-updates"
+                def archiveHint = "Check ${params.SHARED_ENV_DIR}/archive/ for conda-pack archives to restore a previous environment."
                 def slackMessage = """
+                    *Shared Environment Build Failed*
+
                     Job: *${env.JOB_NAME}*
                     Build number: #${env.BUILD_NUMBER}
                     Build status: *${currentBuild.result}*
                     Build details: <${env.BUILD_URL}/console|See in web console>
+
+                    ${archiveHint}
                     """.stripIndent()
-                
-                slackSend channel: "#${channelName}",
+
+                slackSend channel: "#${SLACK_CHANNEL}",
                         message: slackMessage,
                         teamDomain: "ihme",
                         tokenCredentialId: "slack"
@@ -175,20 +178,45 @@ pipeline {
 }
 
 /**
- * Build a new environment and compare it against the current version.
- * Updates the current environment only if changes are detected.
+ * Archive the current environment, rebuild it fresh in-place, and detect changes.
+ *
+ * The workflow is:
+ *   1. Snapshot current lock files (conda list --explicit, pip freeze)
+ *   2. Archive current env with conda-pack
+ *   3. Remove current env
+ *   4. Rebuild fresh at the _current path
+ *   5. Generate new lock files and diff against step 1
+ *   6. If packages changed, track for Slack notification
  */
-def buildAndCompareEnvironment(String model, String envType) {
+def buildEnvironment(String model, String envType) {
     def envName = "${model}_${envType}"
-    def timestampedName = "${envName}_${env.BUILD_TIMESTAMP}"
-    def currentPath = "${params.SHARED_ENV_DIR}/${envName}_current"
-    def timestampedPath = "${params.SHARED_ENV_DIR}/${timestampedName}"
-    
+    def currentName = "${envName}_current"
+    def currentPath = "${params.SHARED_ENV_DIR}/${currentName}"
+    def archiveDir = "${params.SHARED_ENV_DIR}/archive/${envName}"
+
+    // Track the archive file path so we can remove it if no packages changed
+    def archiveFile = null
+
+    stage("Archive ${model} - ${envType}") {
+        script {
+            def currentExists = fileExists(currentPath)
+
+            if (currentExists) {
+                // Snapshot lock files from the current environment before touching it
+                snapshotLockFiles(currentPath, envName)
+
+                // Archive with conda-pack, then remove
+                archiveFile = archiveEnvironment(currentPath, archiveDir, envName)
+            } else {
+                echo "No current environment at ${currentPath} — first build, skipping archive"
+            }
+        }
+    }
+
     stage("Build ${model} - ${envType}") {
         echo "=== Building environment: ${envName} ==="
-        echo "Timestamped path: ${timestampedPath}"
-        echo "Current path: ${currentPath}"
-        
+        echo "Path: ${currentPath}"
+
         // Clone the repository
         dir("repos/${model}") {
             checkout([
@@ -199,275 +227,267 @@ def buildAndCompareEnvironment(String model, String envType) {
                     credentialsId: 'fad62062-b1f4-447b-997f-005d6b1ea41e'
                 ]]
             ])
-            
+
             // Load shared makefiles from Jenkins shared library
             load_shared_files()
-            
-            // Build the environment with path argument
+
+            // Build the environment directly at the _current path.
             sh """
                 ${env.ACTIVATE_BASE}
-                make build-env type=${envType} name=${timestampedName} path=${timestampedPath}
+                make build-env type=${envType} name=${currentName} path=${currentPath}
             """
         }
-    }
-    
-    stage("Compare ${model} - ${envType}") {
-        script {
-            def currentExists = fileExists(currentPath)
-            def shouldUpdate = false
-            
-            if (params.FORCE_REBUILD) {
-                echo "Force rebuild requested - will update environment"
-                shouldUpdate = true
-            } else if (!currentExists) {
-                echo "No current environment exists - will create new current"
-                shouldUpdate = true
-            } else {
-                // Compare environments
-                shouldUpdate = compareEnvironments(timestampedPath, currentPath)
-            }
-            
-            if (shouldUpdate) {
-                promoteEnvironment(timestampedPath, currentPath, envName)
-                // Track this update for the slack notification
-                UPDATED_ENVIRONMENTS.add(envName)
-            } else {
-                echo "No changes detected - keeping current environment"
-                cleanupTimestampedEnvironment(timestampedPath)
-            }
-        }
-    }
-}
 
-/**
- * Compare two conda environments by examining their installed packages.
- * Uses both conda list --explicit and pip freeze for thorough comparison.
- * 
- * @param newEnvPath Path to the newly built environment
- * @param currentEnvPath Path to the current environment
- * @return true if environments differ, false if identical
- */
-def compareEnvironments(String newEnvPath, String currentEnvPath) {
-    echo "Comparing environments:"
-    echo "  New: ${newEnvPath}"
-    echo "  Current: ${currentEnvPath}"
-    
-    def hasChanges = false
-    
-    try {
-        // Generate lock files for comparison
+        // Set permissions - readable by all, writable only by Jenkins
+        sh "chmod -R 755 '${currentPath}'"
+
+        // Write build metadata
         sh """
-            ${env.ACTIVATE_BASE}
-            
-            # Generate conda explicit list for new environment
-            conda list --prefix ${newEnvPath} --explicit > ${WORKSPACE}/new_conda_lock.txt 2>/dev/null || true
-            
-            # Generate conda explicit list for current environment  
-            conda list --prefix ${currentEnvPath} --explicit > ${WORKSPACE}/current_conda_lock.txt 2>/dev/null || true
-            
-            # Generate pip freeze for new environment (filter out local file installs)
-            ${newEnvPath}/bin/pip freeze 2>/dev/null | grep -v 'file:///' | grep -v '^-e ' | sort > ${WORKSPACE}/new_pip_lock.txt || true
-            
-            # Generate pip freeze for current environment
-            ${currentEnvPath}/bin/pip freeze 2>/dev/null | grep -v 'file:///' | grep -v '^-e ' | sort > ${WORKSPACE}/current_pip_lock.txt || true
-        """
-        
-        // Compare conda packages
-        def condaDiff = sh(
-            script: "diff ${WORKSPACE}/current_conda_lock.txt ${WORKSPACE}/new_conda_lock.txt || true",
-            returnStdout: true
-        ).trim()
-        
-        // Compare pip packages
-        def pipDiff = sh(
-            script: "diff ${WORKSPACE}/current_pip_lock.txt ${WORKSPACE}/new_pip_lock.txt || true",
-            returnStdout: true
-        ).trim()
-        
-        if (condaDiff || pipDiff) {
-            hasChanges = true
-            echo "=== CHANGES DETECTED ==="
-            
-            if (condaDiff) {
-                echo "Conda package differences:"
-                echo condaDiff
-            }
-            
-            if (pipDiff) {
-                echo "Pip package differences:"
-                echo pipDiff
-            }
-        } else {
-            echo "No package differences found"
-        }
-        
-    } catch (Exception e) {
-        echo "Error during comparison: ${e.message}"
-        echo "Will update environment to be safe"
-        hasChanges = true
-    }
-    
-    return hasChanges
-}
-
-/**
- * Promote the timestamped environment to become the new current environment.
- * Removes the old current and moves the timestamped directory in its place.
- */
-def promoteEnvironment(String timestampedPath, String currentPath, String envName) {
-    echo "=== Promoting new environment ==="
-    echo "Removing old current: ${currentPath}"
-    echo "Moving ${timestampedPath} -> ${currentPath}"
-    
-    sh """
-        # Remove old current environment if it exists
-        if [ -d "${currentPath}" ]; then
-            rm -rf "${currentPath}"
-            echo "Removed old current environment"
-        fi
-        
-        # Move timestamped to current
-        mv "${timestampedPath}" "${currentPath}"
-        echo "Promoted new environment to current"
-        
-        # Set permissions - readable by all, writable only by Jenkins
-        chmod -R 755 "${currentPath}"
-        
-        # Create a metadata file with build info
-        cat > "${currentPath}/.build_info" << EOF
+            cat > '${currentPath}/.build_info' << EOF
 Environment: ${envName}
 Built: ${env.BUILD_TIMESTAMP}
 Jenkins Build: ${env.BUILD_NUMBER}
 Job: ${env.JOB_NAME}
 EOF
-        
-        echo "Environment promotion complete"
-    """
-    
-    // Archive the lock files for this promoted environment
-    sh """
-        mkdir -p ${WORKSPACE}/promoted_locks
-        cp ${WORKSPACE}/new_conda_lock.txt ${WORKSPACE}/promoted_locks/${envName}_conda_lock.txt || true
-        cp ${WORKSPACE}/new_pip_lock.txt ${WORKSPACE}/promoted_locks/${envName}_pip_lock.txt || true
-    """
-    
-    archiveArtifacts artifacts: "promoted_locks/${envName}_*.txt", allowEmptyArchive: true
+        """
+    }
+
+    stage("Diff ${model} - ${envType}") {
+        script {
+            def hasChanges = detectChanges(currentPath, envName)
+
+            // If the rebuilt env is identical to the archived one, the archive is
+            // redundant — the current env is already an exact copy. Remove it so
+            // we only keep distinct archives.
+            if (!hasChanges && archiveFile) {
+                sh "rm -f '${archiveFile}'"
+                echo "Removed redundant archive (no package changes): ${archiveFile}"
+            }
+        }
+    }
 }
 
 /**
- * Clean up a timestamped environment that is not needed (no changes detected).
+ * Generate conda and pip lock files for an environment.
+ *
+ * @param envPath  Absolute path to the conda environment
+ * @param envName  Logical name used in filenames (e.g. vivarium_gates_mncnh_simulation)
+ * @param tag      Filename tag — 'old' for pre-rebuild snapshot, 'new' for post-rebuild
  */
-def cleanupTimestampedEnvironment(String timestampedPath) {
-    echo "Cleaning up timestamped environment: ${timestampedPath}"
-    
+def generateLockFiles(String envPath, String envName, String tag) {
     sh """
-        if [ -d "${timestampedPath}" ]; then
-            rm -rf "${timestampedPath}"
-            echo "Removed unused timestamped environment"
-        fi
+        ${env.ACTIVATE_BASE}
+
+        # Conda explicit list
+        conda list --prefix '${envPath}' --explicit \
+            > '${WORKSPACE}/${envName}_${tag}_conda_lock.txt' 2>/dev/null || true
+
+        # Pip freeze (filter out local/editable installs — these are irrelevant
+        # in the shared env since the venv overlay replaces them)
+        '${envPath}/bin/pip' freeze 2>/dev/null \
+            | grep -v 'file:///' | grep -v '^-e ' | grep -v '^# Editable install' | sort \
+            > '${WORKSPACE}/${envName}_${tag}_pip_lock.txt' || true
     """
 }
 
 /**
- * Clean up old timestamped environments in parallel for all model/type combinations.
- * Removes environments older than RETENTION_DAYS while preserving *_current directories.
+ * Snapshot conda and pip lock files for the current environment.
+ * These are used later to diff against the newly built environment.
  */
-def cleanupOldTimestampedEnvironments() {
-    echo "=== Cleaning up old timestamped environments ==="
+def snapshotLockFiles(String envPath, String envName) {
+    echo "Snapshotting lock files for ${envName}"
+    generateLockFiles(envPath, envName, 'old')
+}
+
+/**
+ * Archive the current environment using conda-pack, then remove it.
+ *
+ * conda-pack is installed into the base conda environment and invoked with --prefix
+ * so that the archive is a faithful snapshot of the environment as it was running.
+ * The --ignore-editable-packages flag handles the editable install of the model
+ * package, which is irrelevant in the shared env (the venv overlay re-installs
+ * from the user's checkout).
+ *
+ * If conda-pack fails (e.g. corrupted env), the error is logged but the build
+ * continues — the environment was going to be replaced anyway.
+ *
+ * @return The archive file path if created, or null if archiving was skipped/failed.
+ */
+def archiveEnvironment(String currentPath, String archiveDir, String envName) {
+    // Use the environment's original creation timestamp from .build_info (if available)
+    // so the archive filename reflects when the env was built, not when it was archived.
+    def createdTimestamp = sh(
+        script: "grep '^Built:' '${currentPath}/.build_info' 2>/dev/null | awk '{print \$2}'",
+        returnStdout: true
+    ).trim() ?: env.BUILD_TIMESTAMP
+
+    def archiveFile = "${archiveDir}/${envName}_${createdTimestamp}.tar.gz"
+
+    echo "Archiving current environment to ${archiveFile}"
+
+    sh "mkdir -p '${archiveDir}' && chmod 755 '${archiveDir}'"
+
+    try {
+        sh """
+            ${env.ACTIVATE_BASE}
+
+            # Install conda-pack into the base env (not the target) to avoid polluting the archive
+            pip install conda-pack
+
+            # Pack the environment
+            conda-pack \
+                --prefix '${currentPath}' \
+                --ignore-editable-packages \
+                --output '${archiveFile}' \
+                --force
+            echo "Archive created: ${archiveFile}"
+        """
+    } catch (Exception e) {
+        echo "WARNING: conda-pack failed: ${e.message}"
+        echo "Continuing with rebuild — the environment will be replaced anyway."
+        archiveFile = null
+    }
+
+    // Remove the old environment now that it has been archived (or archive was attempted)
+    sh """
+        rm -rf '${currentPath}'
+        echo "Removed old environment at ${currentPath}"
+    """
+
+    return archiveFile
+}
+
+/**
+ * Generate new lock files, diff against the pre-build snapshot, and track changes.
+ * Lock files are archived as Jenkins artifacts regardless of whether changes occurred.
+ *
+ * @return true if packages changed (or first build), false if identical.
+ */
+def detectChanges(String envPath, String envName) {
+    echo "Generating lock files and checking for changes"
+
+    // Generate new lock files (same format as snapshotLockFiles)
+    generateLockFiles(envPath, envName, 'new')
+
+    // Archive lock files for this build
+    sh """
+        mkdir -p '${WORKSPACE}/lock_files'
+        cp '${WORKSPACE}/${envName}_new_conda_lock.txt' \
+           '${WORKSPACE}/lock_files/${envName}_conda_lock.txt'
+        cp '${WORKSPACE}/${envName}_new_pip_lock.txt' \
+           '${WORKSPACE}/lock_files/${envName}_pip_lock.txt'
+    """
+    archiveArtifacts artifacts: "lock_files/${envName}_*.txt", allowEmptyArchive: true
+
+    // Diff against old snapshot (if it exists — won't exist on first build).
+    // Both old lock files are always created by snapshotLockFiles (possibly empty).
+    def oldCondaLock = "${WORKSPACE}/${envName}_old_conda_lock.txt"
+    def oldPipLock = "${WORKSPACE}/${envName}_old_pip_lock.txt"
+
+    if (!fileExists(oldCondaLock)) {
+        echo "No previous snapshot found — first build, nothing to diff"
+        UPDATED_ENVIRONMENTS.add([name: envName, diff: "(first build)"])
+        return true
+    }
+
+    def condaDiff = sh(
+        script: "diff '${oldCondaLock}' '${WORKSPACE}/${envName}_new_conda_lock.txt' || true",
+        returnStdout: true
+    ).trim()
+
+    def pipDiff = sh(
+        script: "diff '${oldPipLock}' '${WORKSPACE}/${envName}_new_pip_lock.txt' || true",
+        returnStdout: true
+    ).trim()
+
+    if (condaDiff || pipDiff) {
+        echo "=== CHANGES DETECTED ==="
+        def diffSummary = ""
+
+        if (condaDiff) {
+            echo "Conda package differences:"
+            echo condaDiff
+            diffSummary += "Conda:\n${condaDiff}"
+        }
+        if (pipDiff) {
+            echo "Pip package differences:"
+            echo pipDiff
+            if (diffSummary) { diffSummary += "\n\n" }
+            diffSummary += "Pip:\n${pipDiff}"
+        }
+
+        // Truncate diff for Slack (keep it readable)
+        if (diffSummary.length() > 2000) {
+            diffSummary = diffSummary.take(2000) + "\n... (truncated, see build console for full diff)"
+        }
+
+        UPDATED_ENVIRONMENTS.add([name: envName, diff: diffSummary])
+        return true
+    } else {
+        echo "No package differences found"
+        return false
+    }
+}
+
+/**
+ * Clean up old conda-pack archives in parallel for all model/type combinations.
+ * Removes .tar.gz files older than RETENTION_DAYS.
+ */
+def cleanupOldArchives() {
+    echo "=== Cleaning up old conda-pack archives ==="
     echo "Retention period: ${params.RETENTION_DAYS} days"
-    
+
     def models = params.ACTIVE_MODELS.split(',').collect { it.trim() }
     def types = params.ENV_TYPES.split(',').collect { it.trim() }
-    
+
     def parallelCleanups = [:]
-    
+
     models.each { model ->
         types.each { envType ->
             def envName = "${model}_${envType}"
             parallelCleanups["Cleanup ${envName}"] = {
-                cleanupOldEnvironmentsForType(model, envType)
+                cleanupArchivesForType(model, envType)
             }
         }
     }
-    
+
     parallel parallelCleanups
 }
 
 /**
- * Clean up old timestamped environments for a specific model and environment type.
- * Uses find with mtime to identify directories older than the retention period.
- * 
- * @param model The model repository name
- * @param envType The environment type (simulation, artifact, etc.)
+ * Clean up old conda-pack archives for a specific model and environment type.
+ * Uses find with mtime to identify .tar.gz files older than the retention period.
  */
-def cleanupOldEnvironmentsForType(String model, String envType) {
-    def envPattern = "${model}_${envType}_[0-9]*"
-    def baseDir = params.SHARED_ENV_DIR
-    def archiveDir = "${baseDir}/archive/${model}_${envType}"
-    
-    echo "Cleaning up old environments matching: ${envPattern}"
-    
+def cleanupArchivesForType(String model, String envType) {
+    def envName = "${model}_${envType}"
+    def archiveDir = "${params.SHARED_ENV_DIR}/archive/${envName}"
+
+    echo "Cleaning up old archives in: ${archiveDir}"
+
     try {
-        // Ensure archive directory exists
-        sh """
-            mkdir -p "${archiveDir}"
-            chmod 755 "${archiveDir}"
-        """
-        
-        // Find and list old timestamped directories (excluding archive directory)
-        def oldDirs = sh(
+        def deletedFiles = sh(
             script: """
-                find "${baseDir}" -mindepth 1 -maxdepth 1 -type d \\
-                    -name "${envPattern}" \\
-                    ! -name "*_current" \\
-                    ! -path "*/archive" \\
-                    ! -path "*/archive/*" \\
-                    -mtime +${params.RETENTION_DAYS} \\
-                    2>/dev/null || true
+                find '${archiveDir}' -maxdepth 1 -type f \
+                    -name '${envName}_*.tar.gz' \
+                    -mtime +${params.RETENTION_DAYS} \
+                    -print -delete 2>/dev/null || true
             """,
             returnStdout: true
         ).trim()
-        
-        if (oldDirs) {
-            def dirList = oldDirs.split('\n')
-            echo "Found old environments to remove:"
-            dirList.each { dir ->
-                echo "  - ${dir}"
+
+        if (deletedFiles) {
+            def fileList = deletedFiles.split('\n')
+            echo "Removed ${fileList.size()} old archive(s) for ${envName}:"
+            fileList.each { f ->
+                echo "  - ${f}"
             }
-            
-            // Archive requirements and remove old directories
-            dirList.each { dir ->
-                def dirName = dir.tokenize('/').last()
-                def requirementsFile = "${archiveDir}/${dirName}_requirements.txt"
-                
-                // Extract conda requirements before deletion
-                sh """
-                    ${env.ACTIVATE_BASE}
-                    
-                    # Create requirements file with timestamp header
-                    echo "# Archived conda environment: ${dirName}" > "${requirementsFile}"
-                    echo "# Archived on: \$(date)" >> "${requirementsFile}"
-                    echo "# Original path: ${dir}" >> "${requirementsFile}"
-                    echo "" >> "${requirementsFile}"
-                    
-                    # Export conda packages in explicit format
-                    conda list --prefix "${dir}" --explicit >> "${requirementsFile}" 2>/dev/null || echo "# Failed to export conda packages" >> "${requirementsFile}"
-                    
-                    echo "Archived requirements to: ${requirementsFile}"
-                """
-                
-                // Remove the old directory
-                sh "rm -rf '${dir}'"
-            }
-            
-            echo "Archived and removed ${dirList.size()} old environment(s) for ${model}_${envType}"
         } else {
-            echo "No old environments found for ${model}_${envType}"
+            echo "No old archives found for ${envName}"
         }
-        
+
     } catch (Exception e) {
         // Log warning but don't fail the pipeline
-        echo "WARNING: Failed to cleanup old environments for ${model}_${envType}: ${e.message}"
+        echo "WARNING: Failed to cleanup old archives for ${envName}: ${e.message}"
         echo "Continuing with pipeline..."
     }
 }
