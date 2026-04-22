@@ -1,3 +1,7 @@
+**3.2.0 - TBD/TBD/TBD**
+
+- Implement serial workflows via "psimulate workflow" command
+
 **3.1.4 - 05/18/26**
 
 - Fix mypy error for generic ParamType in cli_tools

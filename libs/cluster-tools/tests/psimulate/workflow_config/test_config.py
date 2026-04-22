@@ -184,6 +184,10 @@ class TestResourceConfigValidation:
         with pytest.raises(ValueError, match="hh:mm:ss"):
             ResourceConfig(memory_gb=1, runtime="1:00:00")
 
+    def test_uses_default_runtime(self) -> None:
+        rc = ResourceConfig(memory_gb=1)
+        assert rc.runtime == "01:00:00"
+
     def test_from_dict_defaults(self) -> None:
         rc = ResourceConfig.from_dict({"memory_gb": 4})
         assert rc is not None
