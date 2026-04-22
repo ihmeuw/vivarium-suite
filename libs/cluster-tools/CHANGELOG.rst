@@ -1,3 +1,7 @@
+**3.2.0 - TBD/TBD/TBD**
+
+- Implement serial workflows via "psimulate workflow" command
+
 **4.0.1 - 06/04/26**
 
 - Bugfix: Use ``np.random.default_rng`` instead of the global numpy random state when shuffling draws, seeds, and jobs
