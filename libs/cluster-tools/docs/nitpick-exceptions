@@ -24,3 +24,5 @@ py:class layered_config_tree.main.LayeredConfigTree
 py:class LayeredConfigTree
 # vivarium
 py:class Component
+# jobmon
+py:class jobmon.client.workflow.Workflow

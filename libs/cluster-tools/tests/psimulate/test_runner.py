@@ -16,6 +16,7 @@ from vivarium_cluster_tools.psimulate.runner import (
     report_initial_status,
     write_backup_metadata,
     write_configuration,
+    write_workflow_configuration,
 )
 
 _RUNNER_MAIN = "vivarium_cluster_tools.psimulate.runner.main"
@@ -354,3 +355,99 @@ def test_reuse_configuration_yaml(tmp_path: Path) -> None:
     assert call_kwargs["max_workers"] == 500
     assert call_kwargs["max_attempts"] == 5
     assert call_kwargs["extra_args"]["sim_verbosity"] == 1
+
+
+def test_write_configuration_workflow_command(tmp_path: Path) -> None:
+    """Verify that write_workflow_configuration works for the 'workflow' command."""
+    output_dir = tmp_path / "workflow_output"
+    output_dir.mkdir()
+
+    # Create a mock WorkflowConfig to simulate workflow input
+    from vivarium_cluster_tools.psimulate.workflow_config.config import (
+        ResourceConfig,
+        StepConfig,
+        WorkflowConfig,
+    )
+
+    workflow_config = WorkflowConfig(
+        name="test_workflow",
+        project="proj_simscience",
+        queue="all.q",
+        output_directory=output_dir,
+        default_environment=None,
+        steps=[
+            StepConfig(
+                name="test_step",
+                command="pytest tests/",
+                resources=ResourceConfig(memory_gb=4, runtime="01:00:00"),
+            )
+        ],
+    )
+
+    write_workflow_configuration(output_dir, workflow_config)
+
+    config = _read_configuration_yaml(output_dir)
+    assert config["workflow"]["name"] == "test_workflow"
+    assert config["workflow"]["project"] == "proj_simscience"
+    assert config["workflow"]["queue"] == "all.q"
+    assert config["workflow"]["output_directory"] == str(output_dir)
+    assert config["workflow"]["max_attempts"] == 2
+    # Verify steps are included
+    assert len(config["workflow"]["steps"]) == 1
+    assert config["workflow"]["steps"][0]["name"] == "test_step"
+    assert config["workflow"]["steps"][0]["command"] == "pytest tests/"
+
+
+def test_workflow_configuration_includes_cli_overrides(tmp_path: Path) -> None:
+    """Verify that CLI overrides are reflected in the written configuration.yaml."""
+    output_dir = tmp_path / "workflow_output"
+    output_dir.mkdir()
+
+    pipeline_yaml = tmp_path / "pipeline.yaml"
+    pipeline_yaml.write_text(
+        yaml.dump(
+            {
+                "workflow": {
+                    "name": "test_workflow",
+                    "project": "proj_simscience",
+                    "queue": "all.q",
+                    "output_directory": str(output_dir),
+                    "steps": [
+                        {
+                            "name": "test_step",
+                            "command": "echo test",
+                            "resources": {"memory_gb": 4},
+                        }
+                    ],
+                }
+            }
+        )
+    )
+
+    cli_runner = CliRunner()
+    with patch("vivarium_cluster_tools.psimulate.runner.workflow_main") as mock_workflow_main:
+        # Mock workflow_main to call write_workflow_configuration
+        def mock_impl(**kwargs: Any) -> None:
+            write_workflow_configuration(output_dir, kwargs["workflow_config"])
+
+        mock_workflow_main.side_effect = mock_impl
+
+        result = cli_runner.invoke(
+            psimulate,
+            [
+                "workflow",
+                "-c",
+                str(pipeline_yaml),
+                "-P",
+                "proj_simscience_prod",
+                "-q",
+                "long.q",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+
+    config = _read_configuration_yaml(output_dir)
+    # CLI overrides should be in the written config
+    assert config["workflow"]["project"] == "proj_simscience_prod"
+    assert config["workflow"]["queue"] == "long.q"
