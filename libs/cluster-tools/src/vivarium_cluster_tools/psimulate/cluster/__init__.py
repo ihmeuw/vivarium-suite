@@ -16,5 +16,6 @@ from vivarium_cluster_tools.psimulate.cluster.cli_options import (
 )
 from vivarium_cluster_tools.psimulate.cluster.interface import (
     NativeSpecification,
+    get_workflow_timeout_seconds,
     validate_cluster_environment,
 )

@@ -334,7 +334,10 @@ def main(
     if monitoring_url:
         logger.info(f"Monitor progress at: {monitoring_url}")
 
-    wf_status = workflow.run(resume=restart)
+    # Match the workflow timeout to the remaining time on the SLURM runner
+    # node so jobmon doesn't outlive (or underuse) the allocation.
+    seconds_until_timeout = cluster.get_workflow_timeout_seconds()
+    wf_status = workflow.run(resume=restart, seconds_until_timeout=seconds_until_timeout)
 
     # Spit out a performance report for the workers.
     try_run_vipin(output_paths)

@@ -1,3 +1,7 @@
+**3.1.2 - 04/27/26**
+
+- Dynamically determine jobmon workflow timeout from time remaining on runner node
+
 **3.1.1 - 04/22/26**
 
 - Remove hanging redis install in makefile
