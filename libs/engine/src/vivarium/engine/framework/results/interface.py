@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Sequence, Union
 import pandas as pd
 from pandas.core.groupby.generic import DataFrameGroupBy
 
+from vivarium.engine.component import DEFAULT_EVENT_PRIORITY
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results.observation import (
@@ -202,6 +203,7 @@ class ResultsInterface(Interface):
         pop_filter: str = "",
         include_untracked: bool = False,
         when: str = lifecycle_states.COLLECT_METRICS,
+        priority: int = DEFAULT_EVENT_PRIORITY,
         requires_attributes: list[str] = [],
         results_updater: ResultsUpdater = _required_function_placeholder,
         results_formatter: ResultsFormatter = _default_stratified_observation_formatter,
@@ -226,6 +228,9 @@ class ResultsInterface(Interface):
         when
             Name of the lifecycle phase the observation should happen. Valid values are:
             "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
+        priority
+            The priority level of this observation within its lifecycle phase.
+            Observations with lower priority values are observed first.
         requires_attributes
             The population attributes that are required by the `aggregator`.
         results_updater
@@ -256,6 +261,7 @@ class ResultsInterface(Interface):
             name=name,
             population_filter=PopulationFilter(pop_filter, include_untracked),
             when=when,
+            priority=priority,
             requires_attributes=requires_attributes,
             results_updater=results_updater,
             results_formatter=results_formatter,
@@ -272,6 +278,7 @@ class ResultsInterface(Interface):
         pop_filter: str = "",
         include_untracked: bool = False,
         when: str = lifecycle_states.COLLECT_METRICS,
+        priority: int = DEFAULT_EVENT_PRIORITY,
         requires_attributes: list[str] = [],
         results_gatherer: ResultsGatherer = _required_function_placeholder,
         results_updater: ResultsUpdater = _required_function_placeholder,
@@ -293,6 +300,9 @@ class ResultsInterface(Interface):
         when
             Name of the lifecycle phase the observation should happen. Valid values are:
             "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
+        priority
+            The priority level of this observation within its lifecycle phase.
+            Observations with lower priority values are observed first.
         requires_attributes
             The population attributes that are required by the `results_gatherer`.
         results_gatherer
@@ -319,6 +329,7 @@ class ResultsInterface(Interface):
             name=name,
             population_filter=PopulationFilter(pop_filter, include_untracked),
             when=when,
+            priority=priority,
             requires_attributes=requires_attributes,
             results_updater=results_updater,
             results_gatherer=results_gatherer,
@@ -332,6 +343,7 @@ class ResultsInterface(Interface):
         pop_filter: str = "",
         include_untracked: bool = False,
         when: str = lifecycle_states.COLLECT_METRICS,
+        priority: int = DEFAULT_EVENT_PRIORITY,
         requires_attributes: list[str] = [],
         results_formatter: ResultsFormatter = _default_stratified_observation_formatter,
         additional_stratifications: list[str] = [],
@@ -362,6 +374,9 @@ class ResultsInterface(Interface):
         when
             Name of the lifecycle phase the observation should happen. Valid values are:
             "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
+        priority
+            The priority level of this observation within its lifecycle phase.
+            Observations with lower priority values are observed first.
         requires_attributes
             The population attributes that are required by the `aggregator`.
         results_formatter
@@ -384,6 +399,7 @@ class ResultsInterface(Interface):
             name=name,
             population_filter=PopulationFilter(pop_filter, include_untracked),
             when=when,
+            priority=priority,
             requires_attributes=requires_attributes,
             results_formatter=results_formatter,
             additional_stratifications=additional_stratifications,
@@ -399,6 +415,7 @@ class ResultsInterface(Interface):
         pop_filter: str = "",
         include_untracked: bool = False,
         when: str = lifecycle_states.COLLECT_METRICS,
+        priority: int = DEFAULT_EVENT_PRIORITY,
         requires_attributes: list[str] = [],
         results_formatter: ResultsFormatter = _default_unstratified_observation_formatter,
         to_observe: Callable[[Event], bool] = lambda event: True,
@@ -425,6 +442,9 @@ class ResultsInterface(Interface):
         when
             Name of the lifecycle phase the observation should happen. Valid values are:
             "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
+        priority
+            The priority level of this observation within its lifecycle phase.
+            Observations with lower priority values are observed first.
         requires_attributes
             The population attributes that are required by the `aggregator`.
         results_formatter
@@ -437,6 +457,7 @@ class ResultsInterface(Interface):
             name=name,
             population_filter=PopulationFilter(pop_filter, include_untracked),
             when=when,
+            priority=priority,
             requires_attributes=requires_attributes,
             results_formatter=results_formatter,
             to_observe=to_observe,
