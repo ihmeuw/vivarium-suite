@@ -30,6 +30,7 @@ import pandas as pd
 from pandas.api.types import CategoricalDtype
 from pandas.core.groupby.generic import DataFrameGroupBy
 
+from vivarium.engine.component import DEFAULT_EVENT_PRIORITY
 from vivarium.engine.exceptions import VivariumError
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.results.stratification import (
@@ -87,7 +88,7 @@ class Observation(ABC):
     """Method or function that determines whether to perform an observation on this Event."""
     stratifications: tuple[Stratification, ...] | None = None
     """Optional tuple of the Stratifications this observation should use."""
-    priority: int = 5
+    priority: int = DEFAULT_EVENT_PRIORITY
     """The priority level of this observation. Observations with lower priority levels are observed first."""
 
     def observe(
@@ -158,6 +159,7 @@ class UnstratifiedObservation(Observation):
         results_updater: Callable[[pd.DataFrame, pd.DataFrame], pd.DataFrame],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
         to_observe: Callable[[Event], bool] = lambda event: True,
+        priority: int = DEFAULT_EVENT_PRIORITY,
     ):
         def _wrap_results_gatherer(
             df: pd.DataFrame | DataFrameGroupBy[tuple[str, ...] | str, bool],
@@ -180,6 +182,7 @@ class UnstratifiedObservation(Observation):
             results_updater=results_updater,
             results_formatter=results_formatter,
             to_observe=to_observe,
+            priority=priority,
         )
 
     @classmethod
@@ -243,6 +246,7 @@ class StratifiedObservation(Observation):
         aggregator_sources: list[str] | None,
         aggregator: Callable[[pd.DataFrame], float | pd.Series[float]],
         to_observe: Callable[[Event], bool] = lambda event: True,
+        priority: int = DEFAULT_EVENT_PRIORITY,
     ):
         super().__init__(
             name=name,
@@ -254,6 +258,7 @@ class StratifiedObservation(Observation):
             results_updater=results_updater,
             results_formatter=results_formatter,
             to_observe=to_observe,
+            priority=priority,
         )
         self.aggregator_sources = aggregator_sources
         self.aggregator = aggregator
@@ -450,6 +455,7 @@ class AddingObservation(StratifiedObservation):
         aggregator_sources: list[str] | None,
         aggregator: Callable[[pd.DataFrame], float | pd.Series[float]],
         to_observe: Callable[[Event], bool] = lambda event: True,
+        priority: int = DEFAULT_EVENT_PRIORITY,
     ):
         super().__init__(
             name=name,
@@ -461,6 +467,7 @@ class AddingObservation(StratifiedObservation):
             aggregator_sources=aggregator_sources,
             aggregator=aggregator,
             to_observe=to_observe,
+            priority=priority,
         )
 
     @staticmethod
@@ -533,6 +540,7 @@ class ConcatenatingObservation(UnstratifiedObservation):
         requires_attributes: list[str],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
         to_observe: Callable[[Event], bool] = lambda event: True,
+        priority: int = DEFAULT_EVENT_PRIORITY,
     ):
         requires_attributes = ["event_time"] + requires_attributes
         super().__init__(
@@ -544,6 +552,7 @@ class ConcatenatingObservation(UnstratifiedObservation):
             results_updater=self.concatenate_results,
             results_formatter=results_formatter,
             to_observe=to_observe,
+            priority=priority,
         )
 
     def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
