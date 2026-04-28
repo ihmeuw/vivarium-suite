@@ -25,7 +25,7 @@ jobs:
             HEAD_REF="${{ github.event.pull_request.head.sha }}"
             git fetch origin "$BASE_REF"
             CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_REF}")
-          else
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
             BASE="${{ github.event.before }}"
             HEAD="${{ github.event.after }}"
             # Initial push has no 'before' commit; github sets to 40x 0s.
@@ -33,6 +33,9 @@ jobs:
               BASE=$(git rev-list --max-parents=0 HEAD)
             fi
             CHANGED=$(git diff --name-only "$BASE" "$HEAD")
+          else
+            git fetch origin main
+            CHANGED=$(git diff --name-only "origin/main...HEAD")
           fi
           echo "Changed files:"
           echo "$CHANGED"
