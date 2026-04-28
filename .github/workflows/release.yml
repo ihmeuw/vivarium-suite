@@ -30,10 +30,22 @@ jobs:
 
       - name: Detect packages to release
         id: detect
+        env:
+          PACKAGE: ${{ github.event.inputs.package }}
+          VERSION: ${{ github.event.inputs.version }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PACKAGE="${{ github.event.inputs.package }}"
-            VERSION="${{ github.event.inputs.version }}"
+            if [ ! -d "libs/${PACKAGE}" ]; then
+              echo "Package directory 'libs/${PACKAGE}' does not exist"
+              exit 1
+            fi
+
+            TAG="vivarium-${PACKAGE}-v${VERSION}"
+            if git tag -l "$TAG" | grep -q .; then
+              echo "Tag $TAG already exists"
+              exit 1
+            fi
+
             echo "matrix={\"include\":[{\"library\":\"${PACKAGE}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
             echo "has-releases=true" >> $GITHUB_OUTPUT
           else
@@ -51,8 +63,13 @@ jobs:
               [ -z "$changelog" ] && continue
               LIB=$(echo "$changelog" | sed 's|libs/||; s|/CHANGELOG.rst||')
               VERSION=$(head -1 "libs/${LIB}/CHANGELOG.rst" | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-              TAG="vivarium-${LIB}-v${VERSION}"
 
+              if [ -z "$VERSION" ]; then
+                echo "Could not parse version from libs/${LIB}/CHANGELOG.rst"
+                exit 1
+              fi
+
+              TAG="vivarium-${LIB}-v${VERSION}"
               if git tag -l "$TAG" | grep -q .; then
                 echo "Tag $TAG already exists, skipping"
                 continue
@@ -89,15 +106,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Python and uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.11"
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Validate CHANGELOG date
         if: github.event_name == 'push'

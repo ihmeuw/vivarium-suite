@@ -11,11 +11,6 @@ strict = true
 disallow_any_unimported = false
 implicit_reexport = true
 exclude = ["build"]
-disable_error_code = []
-
-[[tool.mypy.overrides]]
-module = []
-ignore_missing_imports = true
 
 [tool.uv.workspace]
 members = ["libs/*"]

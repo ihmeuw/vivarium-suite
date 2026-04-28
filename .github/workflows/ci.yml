@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -43,7 +44,7 @@ jobs:
           ALL_LIBS=$(find libs -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
 
           # Root-level changes to shared config or workflows rebuild everything
-          if echo "$CHANGED" | grep -qE "^(pyproject\.toml|Makefile)$|^\.github/"; then
+          if echo "$CHANGED" | grep -qE "^(pyproject\.toml|Makefile)$|^\.github/workflows/"; then
             echo "Root-level changes detected - testing all packages"
             CHANGED_LIBS=($ALL_LIBS)
           else
@@ -90,15 +91,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Python and uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install vivarium_build_utils
         # FIXME[MIC-7015]: Update to main once poc-monorepo is merged

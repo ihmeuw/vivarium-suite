@@ -27,7 +27,7 @@ pipeline {
         stage('Multi-Multibranch Pipeline') {
             steps {
                 script {
-                    def jenkinsfiles = findFiles(glob: '**/*/Jenkinsfile').collect { it.path }
+                    def jenkinsfiles = findFiles(glob: 'libs/*/Jenkinsfile').collect { it.path }
                     monorepo(jenkinsfiles: jenkinsfiles)
                 }
             }
