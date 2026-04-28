@@ -139,13 +139,7 @@ def collect_metadata(metadata_dir: Path, results_dir: Path) -> pd.DataFrame:
             )
             continue
         with open(metadata_path) as f:
-            job_params = json.load(f)
-        # Build flattened job_specific dict matching what already_complete() expects
-        job_specific = {
-            **job_params.get("branch_configuration", {}),
-            "input_draw": job_params["input_draw"],
-            "random_seed": job_params["random_seed"],
-        }
-        row = dict(utilities.collapse_nested_dict(job_specific))
+            job_params = JobParameters(**json.load(f))
+        row = dict(utilities.collapse_nested_dict(job_params.job_specific))
         rows.append(row)
     return pd.DataFrame(rows)

@@ -444,6 +444,12 @@ def test(
     default=None,
     help="Override maximum Jobmon task attempts from config file.",
 )
+@click.option(
+    "--resume",
+    is_flag=True,
+    default=False,
+    help="Resume a previously failed workflow, skipping completed tasks.",
+)
 @cli_tools.with_verbose_and_pdb
 def workflow(
     config_path: Path,
@@ -475,4 +481,5 @@ def workflow(
     main(
         workflow_config=workflow_config,
         verbose=options["verbose"],
+        resume=options["resume"],
     )

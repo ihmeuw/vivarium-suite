@@ -15,17 +15,6 @@ from typing import Any, NamedTuple
 
 from loguru import logger
 
-from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
-
-
-def validate_cluster_environment() -> None:
-    if "slurm" not in ENV_VARIABLES.HOSTNAME.value:
-        raise RuntimeError("This tool must be run from the IHME cluster.")
-
-    submit_host_marker = "slogin"
-    if submit_host_marker in ENV_VARIABLES.HOSTNAME.value:
-        raise RuntimeError("This tool must not be run from a submit host.")
-
 
 class NativeSpecification(NamedTuple):
     job_name: str

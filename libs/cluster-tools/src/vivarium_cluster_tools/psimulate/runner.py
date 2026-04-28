@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -38,7 +39,10 @@ from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
 from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
-from vivarium_cluster_tools.psimulate.workflow_config.builder import WorkflowBuilder
+from vivarium_cluster_tools.psimulate.workflow_config.builder import (
+    WORKFLOW_ARGS_FILENAME,
+    WorkflowBuilder,
+)
 from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
 from vivarium_cluster_tools.vipin.perf_report import report_performance
 
@@ -92,6 +96,7 @@ def _bind_and_run_workflow(
 def workflow_main(
     workflow_config: WorkflowConfig,
     verbose: int = 0,
+    resume: bool = False,
 ) -> None:
     """Entry point for the psimulate workflow subcommand.
 
@@ -101,6 +106,8 @@ def workflow_main(
         The parsed and validated workflow configuration (with CLI overrides applied).
     verbose
         Verbosity level.
+    resume
+        Whether to resume a previously started workflow.
     """
     logger.info(f"Starting workflow: {workflow_config.name}")
 
@@ -108,15 +115,30 @@ def workflow_main(
     output_root = workflow_config.output_directory
     output_root.mkdir(parents=True, exist_ok=True)
 
+    workflow_args_path = output_root / WORKFLOW_ARGS_FILENAME
+
+    if resume:
+        workflow_args = workflow_args_path.read_text().strip()
+        logger.info(f"Resuming workflow with args: {workflow_args}")
+    else:
+        # Generate a unique workflow_args using a timestamp so each fresh
+        # run is distinct even with the same config and output directory.
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_hash = hashlib.md5(str(output_root).encode()).hexdigest()[:8]
+        workflow_args = f"workflow_{workflow_config.name}_{output_hash}_{timestamp}"
+
     # Write the requested configuration to output directory
     write_workflow_configuration(output_root, workflow_config)
 
     # Build the workflow
     logger.debug("Building workflow.")
     builder = WorkflowBuilder(workflow_config)
-    workflow = builder.build()
+    workflow = builder.build(workflow_args=workflow_args)
 
-    wf_status = _bind_and_run_workflow(workflow, output_root)
+    # Persist workflow_args before running so --resume can find it
+    workflow_args_path.write_text(workflow_args)
+
+    wf_status = _bind_and_run_workflow(workflow, output_root, resume=resume)
 
     if wf_status != "D":
         logger.warning(
