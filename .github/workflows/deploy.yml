@@ -1,0 +1,77 @@
+name: deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to deploy'
+        required: true
+        type: choice
+        options:
+        - core
+        - public-health
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Set package variables
+        run: |
+          # Determine package name from release tag or workflow dispatch input
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Extract package name from tag by stripping version (core-v1.0.0 -> core, public-health-v1.0.0 -> public-health)
+            TAG_NAME="${{ github.event.release.tag_name }}"
+            # Remove -v* suffix to get package name, then convert hyphens to underscores for public_health
+            PACKAGE_INPUT="${TAG_NAME%-v*}"
+            PACKAGE_NAME="${PACKAGE_INPUT//-/_}"
+          else
+            # Use input directly for workflow_dispatch
+            PACKAGE_INPUT="${{ github.event.inputs.package }}"
+            PACKAGE_NAME="${PACKAGE_INPUT//-/_}"  # Convert hyphens to underscores for paths
+          fi
+          
+          # Transform package name to path and tag pattern using string manipulation
+          PACKAGE_PATH="libs/${PACKAGE_NAME}"
+          TAG_PATTERN="${PACKAGE_INPUT}-v"  # public_health -> public-health-v, core -> core-v
+          
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "PACKAGE_PATH=$PACKAGE_PATH" >> $GITHUB_ENV
+          echo "TAG_PATTERN=$TAG_PATTERN" >> $GITHUB_ENV
+          echo "Deploying package: $PACKAGE_NAME from path: $PACKAGE_PATH with tag pattern: $TAG_PATTERN"
+      
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for setuptools_scm
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Fetch git tags for package
+        run: |
+          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+          echo "Available ${PACKAGE_INPUT} tags:"
+          git tag --list "${TAG_PATTERN}*" | head -10
+          echo "Current git describe for ${PACKAGE_INPUT} tags:"
+          git describe --tags --match "${TAG_PATTERN}*" || echo "No ${PACKAGE_INPUT} tags found"
+          echo "Git log --oneline (last 5):"
+          git log --oneline -5
+      - name: Install dependencies
+        run: |
+          python --version
+          uv pip install --system setuptools wheel build
+      - name: Build package
+        run: |
+          cd ${PACKAGE_PATH}
+          python -m build
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ env.PACKAGE_PATH }}/dist/

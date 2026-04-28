@@ -1,0 +1,76 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.2.3)'
+        required: true
+        type: string
+      package:
+        description: 'Package to release'
+        required: true
+        type: choice
+        options:
+        - core
+        - public-health
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Needed for setuptools_scm
+          
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Version must be in format 1.2.3"
+            exit 1
+          fi
+          
+      - name: Set package variables
+        run: |
+          PACKAGE="${{ github.event.inputs.package }}"
+          VERSION="${{ github.event.inputs.version }}"
+          
+          # Convert package name for different formats
+          PACKAGE_TITLE=$(echo "$PACKAGE" | sed 's/-/ /g' | sed 's/\b\w/\u&/g')  # public-health -> Public Health
+          
+          echo "TAG_NAME=${PACKAGE}-v${VERSION}" >> $GITHUB_ENV
+          echo "RELEASE_NAME=${PACKAGE_TITLE} Release v${VERSION}" >> $GITHUB_ENV
+          echo "PYPI_NAME=sim-sci-test-monorepo-${PACKAGE}" >> $GITHUB_ENV
+          
+      - name: Create and push tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          echo "Creating tag: $TAG_NAME"
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: ${{ env.RELEASE_NAME }}
+          body: |
+            ${{ env.RELEASE_NAME }}
+            
+            ## Package Released
+            - ${{ env.PYPI_NAME }}
+            
+            ## Installation
+            ```bash
+            uv pip install ${{ env.PYPI_NAME }}==${{ github.event.inputs.version }}
+            ```
+          draft: false
+          prerelease: false

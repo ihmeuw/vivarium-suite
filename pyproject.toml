@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sim-sci-test-monorepo"
+version = "0.1.0"
+description = "A monorepo for simulation science testing with core and public health libraries"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = ["vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@poc-monorepo"]
+
+[project.optional-dependencies]
+core = ["sim-sci-test-monorepo-core"]
+public-health = ["sim-sci-test-monorepo-public-health"]
+all = [
+    "sim-sci-test-monorepo-core",
+    "sim-sci-test-monorepo-public-health",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+]
+
+[tool.black]
+line-length = 94
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 94
