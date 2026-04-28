@@ -1,138 +1,165 @@
-name: release
+name: Release
 
 on:
+  push:
+    branches: [main]
+    paths: ['libs/*/CHANGELOG.rst']
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version number (e.g., 1.2.3)'
+      package:
+        description: 'Package directory under libs/ (e.g. core, config-tree)'
         required: true
         type: string
-      package:
-        description: 'Package to release'
+      version:
+        description: 'Version to release (e.g. 4.1.0)'
         required: true
-        type: choice
-        options:
-        - core
-        - public-health
+        type: string
 
 jobs:
-  create-release:
+  detect:
+    name: Detect Packages to Release
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has-releases: ${{ steps.detect.outputs.has-releases }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0  # Needed for setuptools_scm
-          
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-          
-      - name: Validate version format
-        run: |
-          if [[ ! "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Error: Version must be in format 1.2.3"
-            exit 1
-          fi
-          
-      - name: Set package variables
-        run: |
-          PACKAGE="${{ github.event.inputs.package }}"
-          VERSION="${{ github.event.inputs.version }}"
-          
-          # Convert package name for different formats
-          PACKAGE_TITLE=$(echo "$PACKAGE" | sed 's/-/ /g' | sed 's/\b\w/\u&/g')  # public-health -> Public Health
-          
-          echo "TAG_NAME=${PACKAGE}-v${VERSION}" >> $GITHUB_ENV
-          echo "RELEASE_NAME=${PACKAGE_TITLE} Release v${VERSION}" >> $GITHUB_ENV
-          echo "PYPI_NAME=sim-sci-test-monorepo-${PACKAGE}" >> $GITHUB_ENV
-          
-      - name: Create and push tag
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          echo "Creating tag: $TAG_NAME"
-          git tag $TAG_NAME
-          git push origin $TAG_NAME
-          
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: ${{ env.RELEASE_NAME }}
-          body: |
-            ${{ env.RELEASE_NAME }}
-            
-            ## Package Released
-            - ${{ env.PYPI_NAME }}
-            
-            ## Installation
-            ```bash
-            uv pip install ${{ env.PYPI_NAME }}==${{ github.event.inputs.version }}
-            ```
-          draft: false
-          prerelease: false
+          fetch-depth: 0
 
-  deploy:
+      - name: Detect packages to release
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PACKAGE="${{ github.event.inputs.package }}"
+            VERSION="${{ github.event.inputs.version }}"
+            echo "matrix={\"include\":[{\"library\":\"${PACKAGE}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
+            echo "has-releases=true" >> $GITHUB_OUTPUT
+          else
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.event.after }}"
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              BEFORE=$(git rev-list --max-parents=0 HEAD)
+            fi
+
+            CHANGED_CHANGELOGS=$(git diff --name-only "$BEFORE" "$AFTER" | grep '^libs/.*/CHANGELOG\.rst$' || true)
+
+            MATRIX_INCLUDE="["
+            FIRST=true
+            while IFS= read -r changelog; do
+              [ -z "$changelog" ] && continue
+              LIB=$(echo "$changelog" | sed 's|libs/||; s|/CHANGELOG.rst||')
+              VERSION=$(head -1 "libs/${LIB}/CHANGELOG.rst" | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+              TAG="vivarium-${LIB}-v${VERSION}"
+
+              if git tag -l "$TAG" | grep -q .; then
+                echo "Tag $TAG already exists, skipping"
+                continue
+              fi
+
+              [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
+              MATRIX_INCLUDE+="{\"library\":\"${LIB}\",\"version\":\"${VERSION}\"}"
+            done <<< "$CHANGED_CHANGELOGS"
+            MATRIX_INCLUDE+="]"
+
+            if [ "$MATRIX_INCLUDE" = "[]" ]; then
+              echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+              echo "has-releases=false" >> $GITHUB_OUTPUT
+            else
+              echo "matrix={\"include\":${MATRIX_INCLUDE}}" >> $GITHUB_OUTPUT
+              echo "has-releases=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  release:
+    name: Release ${{ matrix.library }} v${{ matrix.version }}
+    needs: detect
+    if: needs.detect.outputs.has-releases == 'true'
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
     steps:
-      - name: Set package variables
-        run: |
-          # Determine package name from release tag or workflow dispatch input
-          if [ "${{ github.event_name }}" = "release" ]; then
-            # Extract package name from tag by stripping version (core-v1.0.0 -> core, public-health-v1.0.0 -> public-health)
-            TAG_NAME="${{ github.event.release.tag_name }}"
-            # Remove -v* suffix to get package name, then convert hyphens to underscores for public_health
-            PACKAGE_INPUT="${TAG_NAME%-v*}"
-            PACKAGE_NAME="${PACKAGE_INPUT//-/_}"
-          else
-            # Use input directly for workflow_dispatch
-            PACKAGE_INPUT="${{ github.event.inputs.package }}"
-            PACKAGE_NAME="${PACKAGE_INPUT//-/_}"  # Convert hyphens to underscores for paths
-          fi
-          
-          # Transform package name to path and tag pattern using string manipulation
-          PACKAGE_PATH="libs/${PACKAGE_NAME}"
-          TAG_PATTERN="${PACKAGE_INPUT}-v"  # public_health -> public-health-v, core -> core-v
-          
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "PACKAGE_PATH=$PACKAGE_PATH" >> $GITHUB_ENV
-          echo "TAG_PATTERN=$TAG_PATTERN" >> $GITHUB_ENV
-          echo "Deploying package: $PACKAGE_NAME from path: $PACKAGE_PATH with tag pattern: $TAG_PATTERN"
-      
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Needed for setuptools_scm
+          fetch-depth: 0
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - name: Fetch git tags for package
+
+      - name: Validate CHANGELOG date
+        if: github.event_name == 'push'
         run: |
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
-          echo "Available ${PACKAGE_INPUT} tags:"
-          git tag --list "${TAG_PATTERN}*" | head -10
-          echo "Current git describe for ${PACKAGE_INPUT} tags:"
-          git describe --tags --match "${TAG_PATTERN}*" || echo "No ${PACKAGE_INPUT} tags found"
-          echo "Git log --oneline (last 5):"
-          git log --oneline -5
-      - name: Install dependencies
+          CHANGELOG_DATE=$(head -1 "libs/${{ matrix.library }}/CHANGELOG.rst" | grep -oP '\d{2}/\d{2}/\d{2}')
+          TODAY=$(TZ='America/Los_Angeles' date +%m/%d/%y)
+          if [ "$CHANGELOG_DATE" != "$TODAY" ]; then
+            echo "CHANGELOG date ($CHANGELOG_DATE) does not match today ($TODAY)"
+            exit 1
+          fi
+
+      - name: Validate version format
         run: |
-          python --version
-          uv pip install --system setuptools wheel build
-      - name: Build package
-        run: |
-          cd ${PACKAGE_PATH}
-          python -m build
-      - name: Publish package to PyPI
+          if ! echo "${{ matrix.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Version '${{ matrix.version }}' is not valid semver (X.Y.Z)"
+            exit 1
+          fi
+
+      - name: Install vivarium_build_utils
+        # FIXME[MIC-7015]: Update to main once poc-monorepo is merged
+        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@poc-monorepo"
+
+      - name: Install ${{ matrix.library }}
+        run: uv pip install --system -e "libs/${{ matrix.library }}[dev]"
+
+      - name: Run tests
+        run: cd libs/${{ matrix.library }} && make test-all
+
+      - name: Build
+        run: cd libs/${{ matrix.library }} && python -m build
+
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ${{ env.PACKAGE_PATH }}/dist/
+          packages-dir: libs/${{ matrix.library }}/dist/
+
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if ! git tag -l "$TAG" | grep -q .; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+          gh release view "$TAG" 2>/dev/null || gh release create "$TAG" \
+            --title "vivarium-${{ matrix.library }} v${{ matrix.version }}" \
+            --generate-notes
+
+      - name: Send failure notification
+        if: failure()
+        uses: dawidd6/action-send-mail@v2
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.NOTIFY_EMAIL }}
+          password: ${{ secrets.NOTIFY_PASSWORD }}
+          subject: ${{ github.job }} job of ${{ github.repository }} has ${{ job.status }}
+          body: ${{ github.job }} job in workflow ${{ github.workflow }} of ${{ github.repository }} has ${{ job.status }}
+          to: uw_ihme_simulationscience@uw.edu
+          from: Vivarium Notifications
