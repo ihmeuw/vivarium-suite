@@ -1,6 +1,10 @@
 from copy import deepcopy
 
-from vivarium_cluster_tools.psimulate.jobs import JobParameters, generate_task_id
+from vivarium_cluster_tools.psimulate.jobs import (
+    BackupConfiguration,
+    JobParameters,
+    generate_task_id,
+)
 
 
 def test_branch_config_immutable() -> None:
@@ -12,7 +16,9 @@ def test_branch_config_immutable() -> None:
         input_draw=0,
         random_seed=1,
         results_path="results",
-        backup_configuration={},
+        backup_configuration=BackupConfiguration(
+            backup_dir="", backup_freq=None, backup_metadata_path=""
+        ),
         extras={},
         worker_logging_root="/tmp/worker_logs",
     )
@@ -72,7 +78,9 @@ class TestJobParametersTaskId:
             input_draw=5,
             random_seed=10,
             results_path="/tmp/results",
-            backup_configuration={},
+            backup_configuration=BackupConfiguration(
+                backup_dir="", backup_freq=None, backup_metadata_path=""
+            ),
             extras={},
             worker_logging_root="/tmp/worker_logs",
         )

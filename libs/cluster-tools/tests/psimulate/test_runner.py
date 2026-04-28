@@ -10,7 +10,11 @@ from pandas.testing import assert_frame_equal
 
 from vivarium_cluster_tools.psimulate.cli import psimulate
 from vivarium_cluster_tools.psimulate.cluster.interface import NativeSpecification
-from vivarium_cluster_tools.psimulate.jobs import JobParameters, generate_task_id
+from vivarium_cluster_tools.psimulate.jobs import (
+    BackupConfiguration,
+    JobParameters,
+    generate_task_id,
+)
 from vivarium_cluster_tools.psimulate.paths import InputPaths
 from vivarium_cluster_tools.psimulate.runner import (
     report_initial_status,
@@ -92,7 +96,9 @@ def test_write_backup_metadata(tmp_path: Path) -> None:
             random_seed=42,
             results_path="~/tmp",
             worker_logging_root="/tmp/worker_logs",
-            backup_configuration={},
+            backup_configuration=BackupConfiguration(
+                backup_dir="", backup_freq=None, backup_metadata_path=""
+            ),
             extras={},
         ),
     ]
@@ -120,7 +126,9 @@ def test_write_backup_metadata(tmp_path: Path) -> None:
             random_seed=43,
             results_path="~/tmp",
             worker_logging_root="/tmp/worker_logs",
-            backup_configuration={},
+            backup_configuration=BackupConfiguration(
+                backup_dir="", backup_freq=None, backup_metadata_path=""
+            ),
             extras={},
         ),
     ]
@@ -364,8 +372,8 @@ def test_write_configuration_workflow_command(tmp_path: Path) -> None:
 
     # Create a mock WorkflowConfig to simulate workflow input
     from vivarium_cluster_tools.psimulate.workflow_config.config import (
+        CommandStepConfig,
         ResourceConfig,
-        StepConfig,
         WorkflowConfig,
     )
 
@@ -376,10 +384,13 @@ def test_write_configuration_workflow_command(tmp_path: Path) -> None:
         output_directory=output_dir,
         default_environment=None,
         steps=[
-            StepConfig(
+            CommandStepConfig(
                 name="test_step",
                 command="pytest tests/",
-                resources=ResourceConfig(memory_gb=4, runtime="01:00:00"),
+                resources=ResourceConfig(
+                    memory_gb=4, runtime="01:00:00", project="proj_simscience", queue="all.q"
+                ),
+                output_directory=output_dir,
             )
         ],
     )
