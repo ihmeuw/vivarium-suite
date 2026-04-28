@@ -6,13 +6,13 @@ from unittest.mock import patch
 
 import pytest
 
-from vivarium_cluster_tools.psimulate.cluster import validate_cluster_environment
 from vivarium_cluster_tools.psimulate.cluster.interface import (
     _SLURM_TIMEOUT_BUFFER_SECONDS,
     NativeSpecification,
     _parse_slurm_time,
     get_workflow_timeout_seconds,
 )
+from vivarium_cluster_tools.psimulate.cluster.validation import validate_cluster_environment
 
 
 @pytest.fixture(

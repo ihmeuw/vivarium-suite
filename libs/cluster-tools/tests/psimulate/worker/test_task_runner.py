@@ -35,7 +35,6 @@ def job_params() -> JobParameters:
 def _build_argv(
     metadata_dir: Path,
     results_dir: Path,
-    worker_log_dir: Path,
     command: str,
     task_id: str,
 ) -> list[str]:
@@ -91,9 +90,7 @@ class TestParseArgs:
             parse_args(["--metadata-dir", str(tmp_path)])
 
     def test_unknown_arg_raises_system_exit(self, tmp_path: Path) -> None:
-        argv = _build_argv(tmp_path, tmp_path, tmp_path, command="run", task_id="x") + [
-            "--bogus"
-        ]
+        argv = _build_argv(tmp_path, tmp_path, command="run", task_id="x") + ["--bogus"]
         with pytest.raises(SystemExit):
             parse_args(argv)
 
@@ -117,7 +114,6 @@ class TestMainDispatch:
                 _build_argv(
                     dirs["metadata"],
                     dirs["results"],
-                    dirs["worker_logs"],
                     command=command,
                     task_id=job_params.task_id,
                 )
@@ -154,7 +150,6 @@ class TestMainDispatch:
                 _build_argv(
                     dirs["metadata"],
                     dirs["results"],
-                    dirs["worker_logs"],
                     command=COMMANDS.load_test,
                     task_id=job_params.task_id,
                 )
@@ -181,7 +176,6 @@ class TestMainDispatch:
                     _build_argv(
                         dirs["metadata"],
                         dirs["results"],
-                        dirs["worker_logs"],
                         command="bogus_command",
                         task_id=job_params.task_id,
                     )
@@ -196,7 +190,6 @@ class TestMainMissingMetadata:
                 _build_argv(
                     dirs["metadata"],
                     dirs["results"],
-                    dirs["worker_logs"],
                     command=COMMANDS.run,
                     task_id="nonexistent",
                 )

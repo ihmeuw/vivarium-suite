@@ -177,6 +177,7 @@ class OutputPaths(NamedTuple):
         input_artifact_path: Path | None,
         result_directory: Path,
         input_model_spec_path: Path | None,
+        launch_time: str | None = None,
     ) -> "OutputPaths":
         """Create an instance of OutputPaths from the arguments passed to the entry point.
 
@@ -190,13 +191,19 @@ class OutputPaths(NamedTuple):
             The path to the results directory.
         input_model_spec_path
             The path to the model specification file.
+        launch_time
+            Optional timestamp string (``YYYY_MM_DD_HH_MM_SS``). When provided,
+            this timestamp is used for directory naming instead of generating a
+            new one from ``datetime.now()``. This ensures that all steps in a
+            workflow share the same timestamp, and that resume builds produce
+            identical paths.
 
         Returns
         -------
             An instance of OutputPaths.
 
         """
-        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        launch_time = launch_time or datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
         output_directory = result_directory
         if command == COMMANDS.run:
