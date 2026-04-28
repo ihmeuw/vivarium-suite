@@ -1,192 +1,149 @@
-name: PR Checks
+name: CI
 
 on:
+  push:
   pull_request:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'libs/**'
-      - '.github/workflows/pr-checks.yml'
 
 jobs:
   detect-changes:
-    name: Detect Changed Libraries
+    name: Detect Changed Packages
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      has-changes: ${{ steps.set-matrix.outputs.has-changes }}
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has-changes: ${{ steps.detect.outputs.has-changes }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for accurate change detection
-      
-      - name: Detect changed libraries
-        id: set-matrix
+          fetch-depth: 0
+
+      - name: Detect changed packages
+        id: detect
         run: |
-          # Get the base branch (main or develop)
-          BASE_REF="${{ github.event.pull_request.base.ref }}"
-          HEAD_REF="${{ github.event.pull_request.head.sha }}"
-          
-          echo "Comparing changes between origin/${BASE_REF} and ${HEAD_REF}"
-          
-          # Fetch the base branch
-          git fetch origin ${BASE_REF}
-          
-          # Get list of changed files
-          CHANGED_FILES=$(git diff --name-only origin/${BASE_REF}...${HEAD_REF})
-          
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-          
-          # Initialize array to track changed libraries
-          CHANGED_LIBS=()
-          # Get all directories under libs/
-          ALL_LIBS=$(find libs -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)
-          echo "All libraries found: $ALL_LIBS"
-          
-          # Check for root-level changes that affect all libraries
-          if echo "$CHANGED_FILES" | grep -qE "^(pyproject.toml|Makefile|setup.sh)$"; then
-            echo "✓ Root-level files changed, testing all libraries"
-            CHANGED_LIBS=($ALL_LIBS)
-            else
-              for lib in $ALL_LIBS; do
-                if echo "$CHANGED_FILES" | grep -q "^libs/${lib}/"; then
-                  echo "✓ Library '${lib}' has changes"
-                  CHANGED_LIBS+=("${lib}")
-                fi
-              done
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.ref }}"
+            HEAD_REF="${{ github.event.pull_request.head.sha }}"
+            git fetch origin "$BASE_REF"
+            CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_REF}")
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.event.after }}"
+            # Initial push has no 'before' commit; github sets to 40x 0s.
+            if [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              BASE=$(git rev-list --max-parents=0 HEAD)
+            fi
+            CHANGED=$(git diff --name-only "$BASE" "$HEAD")
           fi
-          
-          # Create matrix JSON with library and python-version combinations
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          ALL_LIBS=$(find libs -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+
+          # Root-level changes to shared config or workflows rebuild everything
+          if echo "$CHANGED" | grep -qE "^(pyproject\.toml|Makefile)$|^\.github/"; then
+            echo "Root-level changes detected - testing all packages"
+            CHANGED_LIBS=($ALL_LIBS)
+          else
+            CHANGED_LIBS=()
+            for lib in $ALL_LIBS; do
+              if echo "$CHANGED" | grep -q "^libs/${lib}/"; then
+                echo "Changes detected in ${lib}"
+                CHANGED_LIBS+=("$lib")
+              fi
+            done
+          fi
+
           if [ ${#CHANGED_LIBS[@]} -eq 0 ]; then
-            echo "No library changes detected"
+            echo "No package changes detected"
             echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
             echo "has-changes=false" >> $GITHUB_OUTPUT
           else
-            
-            echo "Building matrix for libraries: ${CHANGED_LIBS[@]}"
-            
-            # Build matrix with library and python-version combinations
+            echo "Building matrix for: ${CHANGED_LIBS[*]}"
             MATRIX_INCLUDE="["
             FIRST=true
             for lib in "${CHANGED_LIBS[@]}"; do
-              # Read python versions from the library's python_versions.json
-              PYTHON_VERSIONS=$(cat "libs/${lib}/python_versions.json" | jq -r '.[]')
-              
-              for py_version in $PYTHON_VERSIONS; do
-                if [ "$FIRST" = true ]; then
-                  FIRST=false
-                else
-                  MATRIX_INCLUDE+=","
-                fi
-                MATRIX_INCLUDE+="{\"library\":\"${lib}\",\"python-version\":\"${py_version}\"}"
+              VERSIONS=$(python3 -c "import json; [print(v) for v in json.load(open('libs/${lib}/python_versions.json'))]")
+              for py in $VERSIONS; do
+                [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
+                MATRIX_INCLUDE+="{\"library\":\"${lib}\",\"python-version\":\"${py}\"}"
               done
             done
             MATRIX_INCLUDE+="]"
-            
-            MATRIX_JSON="{\"include\":${MATRIX_INCLUDE}}"
-            echo "Matrix JSON: ${MATRIX_JSON}"
-            echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+            echo "matrix={\"include\":${MATRIX_INCLUDE}}" >> $GITHUB_OUTPUT
             echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
 
   build-and-test:
-    name: Build ${{ matrix.library }} (Python ${{ matrix.python-version }})
+    name: ${{ matrix.library }} (Python ${{ matrix.python-version }})
     needs: detect-changes
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Needed for setuptools_scm versioning
-      
+          fetch-depth: 0
+
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
+
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      
+
       - name: Install vivarium_build_utils
+        # FIXME[MIC-7015]: Update to main once poc-monorepo is merged
+        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@poc-monorepo"
+
+      - name: Install ${{ matrix.library }}
+        run: cd libs/${{ matrix.library }} && uv pip install --system -e ".[dev]"
+
+      - name: Lint ${{ matrix.library }}
+        run: cd libs/${{ matrix.library }} && make lint
+
+      - name: Mypy ${{ matrix.library }}
         run: |
-          uv pip install --system vivarium_build_utils
-      
-      - name: Install dependencies for ${{ matrix.library }}
-        run: |
-          cd libs/${{ matrix.library }}
-          # Install the package with dev dependencies
-          uv pip install --system -e ".[dev]"
-      
-      - name: Linting ${{ matrix.library }}
-        run: |
-          cd libs/${{ matrix.library }}
-          echo "Running linting..."
-          make lint
-      
-      - name: Running mypy for ${{ matrix.library }}
-        run: |
-          cd libs/${{ matrix.library }}
-          if [ -f "src/${{ matrix.library }}/py.typed" ]; then
-            echo "Running mypy..."
-            make mypy
+          if find "libs/${{ matrix.library }}/src" -name "py.typed" | grep -q .; then
+            cd libs/${{ matrix.library }} && make mypy
           else
-            echo "Library is untyped. Skipping mypy."
+            echo "Untyped package, skipping mypy"
           fi
-      
-      - name: Running tests for ${{ matrix.library }}
+
+      - name: Test ${{ matrix.library }}
+        run: cd libs/${{ matrix.library }} && make test-all
+
+      - name: Build docs for ${{ matrix.library }}
         run: |
-          cd libs/${{ matrix.library }}
-          echo "Running fast tests..."
-          make test-all
-      
-      - name: Building docs for ${{ matrix.library }}
-        run: |
-          if [ ${{ matrix.python-version }} = "3.11" ]; then
-            cd libs/${{ matrix.library }}
-            echo "Building documentation"
-            make build-docs
+          if [ "${{ matrix.python-version }}" = "3.11" ]; then
+            cd libs/${{ matrix.library }} && make build-docs
           else
-            echo "Skipping documentation build (Python $$PYTHON_VERSION, only builds on 3.11)"
+            echo "Skipping docs build (only runs on 3.11)"
           fi
-      
-      - name: Running doctest for ${{ matrix.library }}
-        run: |
-          if [ ${{ matrix.python-version }} = "3.11" ]; then
-            cd libs/${{ matrix.library }}
-            echo "Running doctest..."
-            make test-docs
-          else
-            echo "Skipping doctests (Python $$PYTHON_VERSION, only builds on 3.11)"
-          fi
-          
-  pr-status-check:
-    name: PR Status Check
+
+  ci-status:
+    name: CI Status
     needs: [detect-changes, build-and-test]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check build status
+      - name: Check status
         run: |
-          if [ "${{ needs.detect-changes.outputs.has-changes }}" == "false" ]; then
-            echo "✓ No library changes detected - PR checks passed"
+          if [ "${{ needs.detect-changes.outputs.has-changes }}" = "false" ]; then
+            echo "No package changes - CI passed"
             exit 0
-          elif [ "${{ needs.build-and-test.result }}" == "success" ]; then
-            echo "✓ All library builds passed"
+          elif [ "${{ needs.build-and-test.result }}" = "success" ]; then
+            echo "All builds passed"
             exit 0
-          elif [ "${{ needs.build-and-test.result }}" == "skipped" ]; then
-            echo "✓ No libraries to build"
+          elif [ "${{ needs.build-and-test.result }}" = "skipped" ]; then
+            echo "No packages to build"
             exit 0
           else
-            echo "✗ Some library builds failed"
+            echo "Some builds failed"
             exit 1
           fi
