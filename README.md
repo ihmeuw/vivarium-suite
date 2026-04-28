@@ -32,7 +32,11 @@ To install a package into an already-active environment:
 
 ```bash
 pip install -e "libs/core[dev]"
+# or with uv:
+uv pip install -e "libs/core[dev]"
 ```
+
+CI uses [uv](https://docs.astral.sh/uv/) as the package manager.
 
 ## CI
 
@@ -41,4 +45,6 @@ pip install -e "libs/core[dev]"
 
 ## Releasing
 
-Releases are triggered automatically when a `CHANGELOG.rst` is updated on `main`. See `.github/workflows/release.yml`.
+Releases are triggered automatically when a `CHANGELOG.rst` is updated on `main`. A release can
+also be triggered manually via `workflow_dispatch` on `.github/workflows/release.yml` (useful for
+recovery or retries). See that file for details.

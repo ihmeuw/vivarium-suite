@@ -112,10 +112,12 @@ jobs:
           python-version: "3.11"
 
       - name: Validate CHANGELOG date
+        # Skipped for workflow_dispatch: manual releases are for recovery/retries where date check is irrelevant
         if: github.event_name == 'push'
         run: |
-          CHANGELOG_DATE=$(head -1 "libs/${{ matrix.library }}/CHANGELOG.rst" | grep -oP '\d{2}/\d{2}/\d{2}')
-          TODAY=$(TZ='America/Los_Angeles' date +%m/%d/%y)
+          # Date is checked against Pacific time to match IHME's release conventions
+          CHANGELOG_DATE=$(head -1 "libs/${{ matrix.library }}/CHANGELOG.rst" | grep -oP '\d{2}/\d{2}/\d{4}')
+          TODAY=$(TZ='America/Los_Angeles' date +%m/%d/%Y)
           if [ "$CHANGELOG_DATE" != "$TODAY" ]; then
             echo "CHANGELOG date ($CHANGELOG_DATE) does not match today ($TODAY)"
             exit 1

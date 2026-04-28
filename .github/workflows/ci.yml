@@ -41,7 +41,11 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED"
 
-          ALL_LIBS=$(find libs -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+          ALL_LIBS=$(find libs -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | sort)
+
+          if [ -z "$ALL_LIBS" ]; then
+            echo "Warning: no package directories found under libs/"
+          fi
 
           # Root-level changes to shared config or workflows rebuild everything
           if echo "$CHANGED" | grep -qE "^(pyproject\.toml|Makefile)$|^\.github/workflows/"; then
@@ -66,6 +70,10 @@ jobs:
             MATRIX_INCLUDE="["
             FIRST=true
             for lib in "${CHANGED_LIBS[@]}"; do
+              if [ ! -f "libs/${lib}/python_versions.json" ]; then
+                echo "::error::libs/${lib}/python_versions.json not found"
+                exit 1
+              fi
               VERSIONS=$(python3 -c "import json; [print(v) for v in json.load(open('libs/${lib}/python_versions.json'))]")
               for py in $VERSIONS; do
                 [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
@@ -119,6 +127,7 @@ jobs:
 
       - name: Build docs for ${{ matrix.library }}
         run: |
+          # 3.11 is the minimum version all packages support; use it as the canonical docs build
           if [ "${{ matrix.python-version }}" = "3.11" ]; then
             cd libs/${{ matrix.library }} && make build-docs
           else
