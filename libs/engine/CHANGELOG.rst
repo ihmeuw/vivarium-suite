@@ -1,3 +1,7 @@
+**5.2.0 - 06/12/26**
+
+- Add support for observations to specify priority for lifecycle events
+
 **5.1.4 - 06/11/26**
 
 - Update vivarium_testing_utils imports to vivarium.testing_utils
