@@ -116,8 +116,9 @@ jobs:
         if: github.event_name == 'push'
         run: |
           # Date is checked against Pacific time to match IHME's release conventions
-          CHANGELOG_DATE=$(head -1 "libs/${{ matrix.library }}/CHANGELOG.rst" | grep -oP '\d{2}/\d{2}/\d{4}')
-          TODAY=$(TZ='America/Los_Angeles' date +%m/%d/%Y)
+          # CHANGELOG format is "X.Y.Z - MM/DD/YY" (2-digit year)
+          CHANGELOG_DATE=$(head -1 "libs/${{ matrix.library }}/CHANGELOG.rst" | grep -oP '\d{2}/\d{2}/\d{2}')
+          TODAY=$(TZ='America/Los_Angeles' date +%m/%d/%y)
           if [ "$CHANGELOG_DATE" != "$TODAY" ]; then
             echo "CHANGELOG date ($CHANGELOG_DATE) does not match today ($TODAY)"
             exit 1
@@ -141,7 +142,9 @@ jobs:
         run: cd libs/${{ matrix.library }} && make test-all
 
       - name: Build
-        run: cd libs/${{ matrix.library }} && python -m build
+        run: |
+          uv pip install --system build
+          cd libs/${{ matrix.library }} && python -m build
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
