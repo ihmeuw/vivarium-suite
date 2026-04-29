@@ -1,0 +1,16 @@
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3
+
+[tool.mypy]
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = ["build"]
+
+[tool.uv.workspace]
+members = ["libs/*"]
