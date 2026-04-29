@@ -1,3 +1,5 @@
+# Expected CHANGELOG.rst first-line format: "**X.Y.Z - MM/DD/YY**"
+# Both the detect job (version parsing) and the release job (date validation) depend on this.
 name: Release
 
 on:
@@ -117,7 +119,8 @@ jobs:
         run: |
           # Date is checked against Pacific time to match IHME's release conventions
           # CHANGELOG format is "X.Y.Z - MM/DD/YY" (2-digit year)
-          CHANGELOG_DATE=$(head -1 "libs/${{ matrix.library }}/CHANGELOG.rst" | grep -oP '\d{2}/\d{2}/\d{2}')
+          # (?!\d) prevents partial match if a CHANGELOG still uses a 4-digit year
+          CHANGELOG_DATE=$(head -1 "libs/${{ matrix.library }}/CHANGELOG.rst" | grep -oP '\d{2}/\d{2}/\d{2}(?!\d)')
           TODAY=$(TZ='America/Los_Angeles' date +%m/%d/%y)
           if [ "$CHANGELOG_DATE" != "$TODAY" ]; then
             echo "CHANGELOG date ($CHANGELOG_DATE) does not match today ($TODAY)"
@@ -136,15 +139,13 @@ jobs:
         run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@poc-monorepo"
 
       - name: Install ${{ matrix.library }}
-        run: uv pip install --system -e "libs/${{ matrix.library }}[dev]"
+        run: uv pip install --system build -e "libs/${{ matrix.library }}[dev]"
 
       - name: Run tests
         run: cd libs/${{ matrix.library }} && make test-all
 
       - name: Build
-        run: |
-          uv pip install --system build
-          cd libs/${{ matrix.library }} && python -m build
+        run: cd libs/${{ matrix.library }} && python -m build
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
