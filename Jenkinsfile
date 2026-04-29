@@ -29,7 +29,7 @@ pipeline {
             steps {
                 script {
                     def jenkinsfiles = findFiles(glob: 'libs/*/Jenkinsfile').collect { it.path }
-                    monorepo(jenkinsfiles: jenkinsfiles)
+                    monorepo(jenkinsfiles: jenkinsfiles, folderPrefix: 'Public')
                 }
             }
         }
