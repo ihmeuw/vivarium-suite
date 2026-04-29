@@ -145,9 +145,7 @@ jobs:
         run: cd libs/${{ matrix.library }} && make test-all
 
       - name: Build
-        run: |
-          uv pip install --system build
-          cd libs/${{ matrix.library }} && python -m build
+        run: cd libs/${{ matrix.library }} && python -m build
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
