@@ -25,6 +25,7 @@ pipeline {
 
     stages {
         stage('Multi-Multibranch Pipeline') {
+            when { branch 'main' }
             steps {
                 script {
                     def jenkinsfiles = findFiles(glob: 'libs/*/Jenkinsfile').collect { it.path }
