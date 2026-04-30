@@ -135,8 +135,8 @@ jobs:
           fi
 
       - name: Install vivarium_build_utils
-        # FIXME: Update to main once develop/monorepo is merged
-        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@develop/monorepo"
+        # FIXME: Update to main once epic/monorepo is merged
+        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
 
       - name: Install ${{ matrix.library }}
         run: uv pip install --system build -e "libs/${{ matrix.library }}[dev]"
