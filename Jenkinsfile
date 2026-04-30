@@ -29,6 +29,7 @@ pipeline {
             steps {
                 script {
                     def jenkinsfiles = findFiles(glob: 'libs/*/Jenkinsfile').collect { it.path }
+                    // 'Public' targets the Jenkins folder where public monorepo jobs are provisioned
                     monorepo(jenkinsfiles: jenkinsfiles, folderPrefix: 'Public')
                 }
             }

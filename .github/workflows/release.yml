@@ -135,7 +135,7 @@ jobs:
           fi
 
       - name: Install vivarium_build_utils
-        # FIXME[MIC-7015]: Update to main once develop/monorepo is merged
+        # FIXME: Update to main once develop/monorepo is merged
         run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@develop/monorepo"
 
       - name: Install ${{ matrix.library }}
