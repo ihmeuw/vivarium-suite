@@ -9,12 +9,10 @@
    Adding a new package under libs/ is picked up automatically on the next run.
 */
 
-// Load the get_vbu_version function from vivarium_build_utils/bootstrap/
-// (the directory to load from is defined in the Jenkins shared library configuration)
-@Library("get_vbu_version") _
-
 // Load the full vivarium_build_utils library at the expected version
-library("vivarium_build_utils@${get_vbu_version()}")
+// Note that vivarium-suite is not a python package and so we do not attempt to
+// determine a non-main specific version of vivarium_build_utils.
+library("vivarium_build_utils@main")
 
 pipeline {
     agent any
