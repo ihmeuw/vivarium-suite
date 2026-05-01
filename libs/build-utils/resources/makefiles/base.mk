@@ -43,7 +43,6 @@ help: # Curated help message
 	echo "build-env                     Create a new environment with installed packages"; \
 	echo "check                         Run development checks"; \
 	echo "                              (isort, black, mypy, tests, docs)"; \
-	echo "install-upstream-deps         Install upstream dependencies"; \
 	echo "format                        Format code (isort and black)"; \
 	echo "manual-deploy-artifactory     Deploy package; only use if Jenkins deploy fails"; \
 	echo "model <command> [args]        Run model lineage tool (e.g., make model tree,"; \

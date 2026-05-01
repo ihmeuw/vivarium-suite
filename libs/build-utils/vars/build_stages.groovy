@@ -2,6 +2,7 @@ def call() {
     // Return a map of functions that can be accessed
     return [
         runDebugInfo: this.&runDebugInfo,
+        loadSharedFiles: this.&loadSharedFiles,
         buildEnvironment: this.&buildEnvironment,
         installPackage: this.&installPackage,
         checkFormatting: this.&checkFormatting,
@@ -65,30 +66,59 @@ def runDebugInfo(Map skipEval = [:]) {
     }
 }
 
+/**
+ * Runs a closure in the package subdirectory for monorepo builds, or "." for single-repo builds.
+ * Derives the subdirectory from JOB_NAME via get_package_subdir().
+ */
+def withWorkingDirectory(Closure body) {
+    def subdir = get_package_subdir()
+    dir(subdir ?: '.') {
+        body()
+    }
+}
+
+def loadSharedFiles() {
+    stage("Load Shared Files") {
+        withWorkingDirectory {
+            load_shared_files()
+        }
+    }
+}
+
 def buildEnvironment() {
     stage("Build Environment - Python ${PYTHON_VERSION}") {
-        // The env should have been cleaned out after the last build, but delete it again
-        // here just to be safe.
-        sh "rm -rf ${CONDA_ENV_PATH}"
-        sh "${env.ACTIVATE_BASE} && make create-env PYTHON_VERSION=${PYTHON_VERSION}"
-        // open permissions for test users to create file in workspace
-        sh "chmod 777 ${WORKSPACE}"
+        withWorkingDirectory {
+            if (params.DEBUG) {
+                echo "working directory: ${pwd()}"
+                sh 'ls -la'
+            }
+            // The env should have been cleaned out after the last build, but delete it again
+            // here just to be safe.
+            sh "rm -rf ${CONDA_ENV_PATH}"
+            sh "${env.ACTIVATE_BASE} && make create-env PYTHON_VERSION=${PYTHON_VERSION}"
+            // open permissions for test users to create file in workspace
+            sh "chmod 777 ${WORKSPACE}"
+        }
     }
 }
 
 def installPackage(String env_reqs = "") {
     env_reqs = env_reqs ? "ENV_REQS=${env_reqs}" : ""
     stage("Install Package - Python ${PYTHON_VERSION}") {
-        sh "${ACTIVATE} && make install ${env_reqs} UV_FLAGS='--no-cache' && uv pip install . --extra-index-url https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/simple/ --index-strategy unsafe-best-match --no-cache"
+        withWorkingDirectory {
+            sh "${ACTIVATE} && make install ${env_reqs} UV_FLAGS='--no-cache' && uv pip install . --extra-index-url https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/simple/ --index-strategy unsafe-best-match --no-cache"
+        }
     }
 }
 
 def checkFormatting(Boolean run_mypy) {
     stage("Check Formatting - Python ${PYTHON_VERSION}") {
-        script {
-            sh "${ACTIVATE} && make lint"
-            if (run_mypy == true) {
-                sh "${ACTIVATE} && make mypy"
+        withWorkingDirectory {
+            script {
+                sh "${ACTIVATE} && make lint"
+                if (run_mypy == true) {
+                    sh "${ACTIVATE} && make mypy"
+                }
             }
         }
     }
@@ -96,93 +126,106 @@ def checkFormatting(Boolean run_mypy) {
 
 def runTests(List test_types, boolean runWeekly) {
     stage("Run Tests - Python ${PYTHON_VERSION}") {
-        script {
-            def full_name = { test_type ->
-                if (test_type == 'e2e') {
-                    return "End-to-End"
-                } else {
-                    return test_type.capitalize()
-                }
-            }
-            def parallelTests = test_types.collectEntries {
-                ["${full_name(it)} Tests" : {
-                    stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
-                        sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}${runWeekly ? ' RUNWEEKLY=1' : ''}"
-                        // Map test target names to coverage directory names
-                        // test-all -> htmlcov_tests, test-unit -> htmlcov_unit, etc.
-                        def coverageDir = it == 'test-all' ? 'tests' : it.replace('test-', '')
-                        publishHTML([
-                            allowMissing: true,
-                            alwaysLinkToLastBuild: false,
-                            keepAll: true,
-                            reportDir: "output/htmlcov_${coverageDir}",
-                            reportFiles: "index.html",
-                            reportName: "Coverage Report - ${full_name(it)} tests",
-                            reportTitles: ''
-                        ])
+        withWorkingDirectory {
+            script {
+                def full_name = { test_type ->
+                    if (test_type == 'e2e') {
+                        return "End-to-End"
+                    } else {
+                        return test_type.capitalize()
                     }
-                }]
+                }
+                def parallelTests = test_types.collectEntries {
+                    ["${full_name(it)} Tests" : {
+                        stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
+                            sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}${runWeekly ? ' RUNWEEKLY=1' : ''}"
+                            // Map test target names to coverage directory names
+                            // test-all -> htmlcov_tests, test-unit -> htmlcov_unit, etc.
+                            def coverageDir = it == 'test-all' ? 'tests' : it.replace('test-', '')
+                            publishHTML([
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: false,
+                                keepAll: true,
+                                reportDir: "output/htmlcov_${coverageDir}",
+                                reportFiles: "index.html",
+                                reportName: "Coverage Report - ${full_name(it)} tests",
+                                reportTitles: ''
+                            ])
+                        }
+                    }]
+                }
+                parallel parallelTests
             }
-            parallel parallelTests
         }
     }
 }
 
 def buildDocs() {
     stage("Build Docs - Python ${PYTHON_VERSION}") {
-        sh "${ACTIVATE} && make build-docs"
+        withWorkingDirectory {
+            sh "${ACTIVATE} && make build-docs"
+        }
     }
 }
 
 def testDocs() {
     stage("Test Docs - Python ${PYTHON_VERSION}") {
-        sh "${ACTIVATE} && make test-docs"
+        withWorkingDirectory {
+            sh "${ACTIVATE} && make test-docs"
+        }
     }
 }
 
 def deployPackage() {
     stage("Tagging Version and Pushing") {
-        sh "${ACTIVATE} && make tag-version"
+        withWorkingDirectory {
+            sh "${ACTIVATE} && make tag-version"
+        }
     }
 
     stage("Build Package - Python ${PYTHON_VERSION}") {
-        sh "${ACTIVATE} && make build-package"
+        withWorkingDirectory {
+            sh "${ACTIVATE} && make build-package"
+        }
     }
 
     stage("Deploy Package to Artifactory") {
-        withCredentials([usernamePassword(
-            credentialsId: 'artifactory_simsci',
-            usernameVariable: 'PYPI_ARTIFACTORY_CREDENTIALS_USR',
-            passwordVariable: 'PYPI_ARTIFACTORY_CREDENTIALS_PSW'
-        )]) {
-            sh "${ACTIVATE} && make deploy-package-artifactory"
+        withWorkingDirectory {
+            withCredentials([usernamePassword(
+                credentialsId: 'artifactory_simsci',
+                usernameVariable: 'PYPI_ARTIFACTORY_CREDENTIALS_USR',
+                passwordVariable: 'PYPI_ARTIFACTORY_CREDENTIALS_PSW'
+            )]) {
+                sh "${ACTIVATE} && make deploy-package-artifactory"
+            }
         }
     }
 }
 
 def deployDocs() {
     stage("Deploy Docs") {
-        withEnv(["DOCS_ROOT_PATH=/mnt/team/simulation_science/pub/docs"]) {
-            sh "${ACTIVATE} && make deploy-docs"
+        withWorkingDirectory {
+            withEnv(["DOCS_ROOT_PATH=/mnt/team/simulation_science/pub/docs"]) {
+                sh "${ACTIVATE} && make deploy-docs"
+            }
         }
     }
 }
 
 def cleanup() {
-    sh "make clean"
+    withWorkingDirectory { sh "make clean" }
     // Remove the conda environment immediately to conserve local disk space.
     // Envs are built on local node storage, not shared NFS, so they must be
     // cleaned up by the build that created them.
     sh "${env.ACTIVATE_BASE} && conda env remove -p ${CONDA_ENV_PATH} --yes || rm -rf ${CONDA_ENV_PATH}"
-    // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned
-    // disableDeferredWipeout: true forces immediate deletion instead of background cleanup
-    // Console logs are preserved in Jenkins home, not workspace
+    // cleanWs must run outside withWorkingDirectory: deleting the workspace while dir() is
+    // still inside it causes a FileNotFoundException when dir() tries to restore its context.
+    // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned.
     cleanWs(deleteDirs: true, disableDeferredWipeout: true)
 }
 
 def cleanupDebug() {
     // When DEBUG is enabled, only clean @tmp to preserve workspace for inspection
-    sh "make clean"
-    // Clean only @tmp directory, preserve main workspace
+    withWorkingDirectory { sh "make clean" }
     sh "rm -rf '${WORKSPACE}@tmp'"
 }

@@ -155,7 +155,7 @@ def call(Map config = [:]){
           script {
             // Use the name of the branch in the build name
             currentBuild.displayName = "#${BUILD_NUMBER} ${GIT_BRANCH}"
-            python_versions = get_python_versions(WORKSPACE, GIT_URL)
+            python_versions = get_python_versions(WORKSPACE, GIT_URL, get_package_subdir())
             // Derive the deploy/docs version as the last entry in the list
             PYTHON_DEPLOY_VERSION = python_versions[-1]
             echo "Python deploy version (inferred): ${PYTHON_DEPLOY_VERSION}"
@@ -203,7 +203,7 @@ def call(Map config = [:]){
                   withEnv(envVars.collect { k, v -> "${k}=${v}" }) {
                     try {
                       checkout scm
-                      load_shared_files()
+                      buildStages.loadSharedFiles()
                       
                       // Evaluate skip conditions after checkout (GIT_PREVIOUS_COMMIT is now available)
                       def previousBuildPassed = previous_build_passed()
