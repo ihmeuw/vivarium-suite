@@ -65,7 +65,7 @@ class _CompatFinder(importlib.abc.MetaPathFinder):
             return None
 
         old_prefix, new_prefix = match
-        new_name = new_prefix + fullname[len(old_prefix):]
+        new_name = new_prefix + fullname[len(old_prefix) :]
 
         if fullname in sys.modules:
             # Already loaded under the old name — return a spec that resolves to it.

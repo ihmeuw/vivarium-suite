@@ -10,7 +10,12 @@ requires-python = ">=3.10"
 # No dependencies — the hook redirects imports, it does not depend on them.
 
 [project.optional-dependencies]
-dev = []
+dev = [
+    "black",
+    "isort",
+    "pytest",
+    "pytest-cov",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
