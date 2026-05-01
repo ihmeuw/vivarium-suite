@@ -110,8 +110,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install vivarium_build_utils
-        # FIXME[MIC-7015]: Update to main once poc-monorepo is merged
-        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@poc-monorepo"
+        # FIXME: Update to main once epic/monorepo is merged
+        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
 
       - name: Install ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && uv pip install --system -e ".[dev]"
