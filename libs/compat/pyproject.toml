@@ -9,6 +9,9 @@ description = "Backward-compatible import redirects for the vivarium monorepo mi
 requires-python = ">=3.10"
 # No dependencies — the hook redirects imports, it does not depend on them.
 
+[project.optional-dependencies]
+dev = []
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
