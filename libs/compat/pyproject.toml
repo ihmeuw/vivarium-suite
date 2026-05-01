@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "vivarium-compat"
 version = "0.1.0"
 description = "Backward-compatible import redirects for the vivarium monorepo migration."
 requires-python = ">=3.10"
-# No dependencies — the hook redirects imports, it does not depend on them.
+# No dependencies; the hook redirects imports, it does not depend on them.
 
 [project.optional-dependencies]
 dev = [
@@ -17,10 +17,11 @@ dev = [
     "pytest-cov",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/vivarium"]
 
-[tool.setuptools.data-files]
-# Installs vivarium_compat.pth to the site-packages root so Python executes
-# it at interpreter startup, before any user code runs.
-"" = ["vivarium_compat.pth"]
+# force-include places vivarium_compat.pth at the site-packages root so Python
+# executes it at interpreter startup, before any user code runs.
+# (setuptools data-files with "" destination goes to sys.prefix, not site-packages.)
+[tool.hatch.build.targets.wheel.force-include]
+"vivarium_compat.pth" = "vivarium_compat.pth"

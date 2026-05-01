@@ -17,6 +17,7 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 | `libs/profiling/` | `vivarium-profiling` | `import vivarium.profiling` |
 | `libs/build-utils/` | `vivarium-build-utils` | `import vivarium.build_utils` |
 | `libs/dependencies/` | `vivarium-dependencies` | *(meta-package)* |
+| `libs/compat/` | `vivarium-compat` | *(import compatibility shim — temporary)* |
 
 ## Local development
 
