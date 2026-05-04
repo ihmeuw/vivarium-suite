@@ -27,16 +27,29 @@ def call(Map config = [:]){
   def scheduled_branches = config.scheduled_branches ?: [] 
   def stagger_scheduled_builds = config.stagger_scheduled_builds ?: false
   def test_types = config.test_types ?: ['all']
-  def task_node = config.requires_slurm ? 'slurm' : 'matrix-tasks'
+  def requires_slurm = config.requires_slurm ?: false
   def is_deployable = (config?.deployable == true)
   def skip_doc_build = (config?.skip_doc_build == true)
   def run_mypy = (config.run_mypy != null) ? config.run_mypy : true
+
+  // Resolve task_node and conda_env_dir based on requires_slurm.
+  // "weekly" means only use SLURM + shared env on the slow-test day (Sunday).
+  def use_slurm
+  if (requires_slurm == "weekly") {
+    def dayOfWeek = new Date().format('EEEE')
+    use_slurm = (dayOfWeek == 'Sunday')
+  } else {
+    use_slurm = requires_slurm ? true : false
+  }
+  def task_node = use_slurm ? 'slurm' : 'matrix-tasks'
+  conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
+  conda_env_dir = use_slurm ? "/mnt/team/simulation_science/priv/engineering/jenkins/envs" : "/svc-simsci/envs"
 
   echo "Configuration constants:"
   echo "  scheduled_branches: ${scheduled_branches}"
   echo "  stagger_scheduled_builds: ${stagger_scheduled_builds}"
   echo "  test_types: ${test_types}"
-  echo "  task_node: ${task_node}"
+  echo "  requires_slurm: ${requires_slurm}"
   echo "  is_deployable: ${is_deployable}"
   echo "  skip_doc_build: ${skip_doc_build}"
   echo "  run_mypy: ${run_mypy}"
@@ -53,9 +66,6 @@ def call(Map config = [:]){
   } else {
     cron_schedule = scheduled_branches.contains(BRANCH_NAME) ? "H H(20-23) * * *" : ''
   }
-
-  conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
-  conda_env_dir = "/svc-simsci/envs"
 
   pipeline {
     environment {

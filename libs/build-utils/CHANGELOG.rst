@@ -1,3 +1,7 @@
+**3.1.1 - 05/04/26**
+
+   - Use NFS to build conda env on jobs that require slurm
+
 **3.1.0 - 04/22/26**
 
    - Refactor shared environment pipeline: archive current env with conda-pack before
