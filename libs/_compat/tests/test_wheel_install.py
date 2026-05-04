@@ -58,7 +58,7 @@ def test_hook_active_at_startup_after_wheel_install(tmp_path):
             str(python),
             "-c",
             "import sys; "
-            "from vivarium._compat import _CompatFinder; "
+            "from vivarium._compat._compat import _CompatFinder; "
             "print(any(isinstance(f, _CompatFinder) for f in sys.meta_path))",
         ],
         capture_output=True,

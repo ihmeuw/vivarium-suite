@@ -4,7 +4,12 @@ import warnings as warnings_module
 from types import ModuleType
 
 import pytest
-from vivarium._compat import _CompatFinder, _CompatLoader, _resolving, install_compat_finder
+from vivarium._compat._compat import (
+    _CompatFinder,
+    _CompatLoader,
+    _resolving,
+    install_compat_finder,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +27,7 @@ def restore_import_state():
 @pytest.fixture
 def patched_redirects(monkeypatch):
     """Patch _REDIRECTS with a stdlib target and reinstall the finder."""
-    monkeypatch.setattr("vivarium._compat._REDIRECTS", {"_test_old_json": "json"})
+    monkeypatch.setattr("vivarium._compat._compat._REDIRECTS", {"_test_old_json": "json"})
     sys.meta_path[:] = [f for f in sys.meta_path if not isinstance(f, _CompatFinder)]
     install_compat_finder()
 
@@ -98,7 +103,8 @@ def test_circular_guard_cleans_up_on_success():
 
 def test_error_when_target_does_not_exist(monkeypatch):
     monkeypatch.setattr(
-        "vivarium._compat._REDIRECTS", {"_nonexistent_old": "_nonexistent_new_xyz_abc"}
+        "vivarium._compat._compat._REDIRECTS",
+        {"_nonexistent_old": "_nonexistent_new_xyz_abc"},
     )
     sys.meta_path[:] = [f for f in sys.meta_path if not isinstance(f, _CompatFinder)]
     install_compat_finder()

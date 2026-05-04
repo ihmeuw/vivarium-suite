@@ -11,7 +11,7 @@ The package has three layers:
 **1. Bootstrap (`vivarium_compat.pth`)**
 
 Installed to `site-packages` root. Python's `site` module executes every `.pth` file 
-at interpreter startup, before any user code runs. This file calls `vivarium._compat.install()`,
+at interpreter startup, before any user code runs. This file calls `vivarium._compat._compat.install_compat_finder()`,
 inserting the import hook into `sys.meta_path`.
 
 **2. Import machinery (`sys.meta_path`)**
@@ -31,7 +31,7 @@ the old and new names resolve to the same object.
 ## Adding a redirect
 
 When a package migrates into the monorepo, uncomment its entry in `_REDIRECTS` in
-`src/vivarium/_compat.py` and bump the patch version in `pyproject.toml`:
+`src/vivarium/_compat/_compat.py` and bump the patch version in `pyproject.toml`:
 
 ```python
 _REDIRECTS: dict[str, str] = {
