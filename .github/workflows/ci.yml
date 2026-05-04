@@ -104,10 +104,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python and uv
-        uses: astral-sh/setup-uv@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
 
       - name: Install vivarium_build_utils
         # FIXME: Update to main once epic/monorepo is merged
