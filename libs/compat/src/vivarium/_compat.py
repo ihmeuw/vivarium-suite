@@ -42,7 +42,7 @@ _REDIRECTS: dict[str, str] = {
     # "vivarium_helpers": "vivarium.helpers",
     # "risk_distributions": "vivarium.risk_distributions",
     # "gbd_mapping": "vivarium.gbd_mapping",
-    # "layered_config_tree": "vivarium.config_tree",
+    "layered_config_tree": "vivarium.config_tree",
 }
 
 # Tracks which old names are currently being resolved to prevent infinite
@@ -105,9 +105,6 @@ class _CompatLoader(importlib.abc.Loader):
     def __init__(self, old_name: str, new_name: str) -> None:
         self._old_name = old_name
         self._new_name = new_name
-
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> ModuleType | None:
-        return None  # Use default semantics.
 
     def exec_module(self, module: ModuleType) -> None:
         if self._old_name in _resolving:
