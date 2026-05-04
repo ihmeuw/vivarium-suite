@@ -47,6 +47,6 @@ Do not enable an entry before its target package is released; the hook will rais
 
 Once all downstream packages have released versions using the new import paths:
 
-1. Delete `libs/compat/`
+1. Delete `libs/_compat/`
 2. Remove `vivarium-compat` from any `dev` dependencies that reference it
 3. Remove the row from the root `README.md`
