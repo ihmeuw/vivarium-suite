@@ -1,9 +1,10 @@
 import importlib
 import sys
 import warnings as warnings_module
+from types import ModuleType
 
 import pytest
-from vivarium._compat import _CompatFinder, install
+from vivarium._compat import _CompatFinder, _CompatLoader, _resolving, install
 
 
 @pytest.fixture(autouse=True)
@@ -72,6 +73,27 @@ def test_prefix_does_not_match_superstring(patched_redirects):
     finder = _CompatFinder()
     assert finder.find_spec("_test_old_json_extra", None) is None
     assert finder.find_spec("_test_old_json2", None) is None
+
+
+def test_circular_redirect_raises_import_error():
+    """Guard prevents infinite recursion when a redirect target re-triggers the old name."""
+    loader = _CompatLoader("_test_circular", "_test_circular_target")
+    _resolving.add("_test_circular")
+    try:
+        with pytest.raises(
+            ImportError,
+            match="Circular redirect detected: '_test_circular' -> '_test_circular_target'",
+        ):
+            loader.exec_module(ModuleType("_test_circular"))
+    finally:
+        _resolving.discard("_test_circular")
+
+
+def test_circular_guard_cleans_up_on_success():
+    """_resolving must not retain entries after a successful redirect."""
+    loader = _CompatLoader("_test_clean_old", "json")
+    loader.exec_module(ModuleType("_test_clean_old"))
+    assert "_test_clean_old" not in _resolving
 
 
 def test_error_when_target_does_not_exist(monkeypatch):
