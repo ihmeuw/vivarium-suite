@@ -4,7 +4,7 @@ import warnings as warnings_module
 from types import ModuleType
 
 import pytest
-from vivarium._compat import _CompatFinder, _CompatLoader, _resolving, install
+from vivarium._compat import _CompatFinder, _CompatLoader, _resolving, install_compat_finder
 
 
 @pytest.fixture(autouse=True)
@@ -24,12 +24,12 @@ def patched_redirects(monkeypatch):
     """Patch _REDIRECTS with a stdlib target and reinstall the finder."""
     monkeypatch.setattr("vivarium._compat._REDIRECTS", {"_test_old_json": "json"})
     sys.meta_path[:] = [f for f in sys.meta_path if not isinstance(f, _CompatFinder)]
-    install()
+    install_compat_finder()
 
 
 def test_install_is_idempotent():
-    install()
-    install()
+    install_compat_finder()
+    install_compat_finder()
     assert sum(1 for f in sys.meta_path if isinstance(f, _CompatFinder)) == 1
 
 
@@ -101,7 +101,7 @@ def test_error_when_target_does_not_exist(monkeypatch):
         "vivarium._compat._REDIRECTS", {"_nonexistent_old": "_nonexistent_new_xyz_abc"}
     )
     sys.meta_path[:] = [f for f in sys.meta_path if not isinstance(f, _CompatFinder)]
-    install()
+    install_compat_finder()
 
     with pytest.raises(ModuleNotFoundError):
         with pytest.warns(DeprecationWarning):

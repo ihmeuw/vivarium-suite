@@ -128,7 +128,7 @@ class _CompatLoader(importlib.abc.Loader):
             _resolving.discard(self._old_name)
 
 
-def install() -> None:
+def install_compat_finder() -> None:
     """Install the compat finder into sys.meta_path (idempotent)."""
     if not any(isinstance(f, _CompatFinder) for f in sys.meta_path):
         sys.meta_path.insert(0, _CompatFinder())
