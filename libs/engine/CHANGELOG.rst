@@ -1,4 +1,4 @@
-**5.2.0 - 06/12/26**
+**5.2.0 - TBD/TBD/26**
 
 - Add support for observations to specify priority for lifecycle events
 - Added priority attribute to `Event`
