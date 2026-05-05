@@ -34,6 +34,7 @@ from vivarium_cluster_tools.psimulate import (
     pip_env,
 )
 from vivarium_cluster_tools.psimulate.jobmon_config.workflow import build_workflow
+from vivarium_cluster_tools.psimulate.notifications import send_slack_notification
 from vivarium_cluster_tools.psimulate.paths import OutputPaths
 from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
@@ -55,7 +56,7 @@ def _bind_and_run_workflow(
     output_root: Path,
     *,
     resume: bool = False,
-) -> str:
+) -> tuple[str, str]:
     """Bind a Jobmon workflow, log the monitoring URL, and run it.
 
     Parameters
@@ -69,8 +70,9 @@ def _bind_and_run_workflow(
 
     Returns
     -------
-    str
-        The workflow status string from Jobmon (e.g. ``"D"`` for DONE).
+        A ``(wf_status, monitoring_url)`` tuple.  *wf_status* is the
+        workflow status string from Jobmon (e.g. ``"D"`` for DONE).
+        *monitoring_url* is the Jobmon GUI URL (may be empty).
     """
     workflow.bind()
 
@@ -90,7 +92,7 @@ def _bind_and_run_workflow(
     wf_status = workflow.run(**run_kwargs)
     if wf_status is None:
         raise RuntimeError("Jobmon workflow.run() returned None unexpectedly.")
-    return wf_status
+    return wf_status, monitoring_url
 
 
 def workflow_main(
@@ -138,7 +140,14 @@ def workflow_main(
     # Persist workflow_args before running so --resume can find it
     workflow_args_path.write_text(workflow_args)
 
-    wf_status = _bind_and_run_workflow(workflow, output_root, resume=resume)
+    wf_status, monitoring_url = _bind_and_run_workflow(workflow, output_root, resume=resume)
+
+    send_slack_notification(
+        workflow_name=workflow_config.name,
+        status=wf_status,
+        monitoring_url=monitoring_url,
+        results_dir=str(output_root),
+    )
 
     if wf_status != "D":
         logger.warning(
@@ -449,7 +458,16 @@ def main(
         max_attempts=max_attempts,
     )
 
-    wf_status = _bind_and_run_workflow(workflow, output_paths.root, resume=restart)
+    wf_status, monitoring_url = _bind_and_run_workflow(
+        workflow, output_paths.root, resume=restart
+    )
+
+    send_slack_notification(
+        workflow_name=workflow_name,
+        status=wf_status,
+        monitoring_url=monitoring_url,
+        results_dir=str(output_paths.root),
+    )
 
     # Spit out a performance report for the workers.
     try_run_vipin(output_paths)

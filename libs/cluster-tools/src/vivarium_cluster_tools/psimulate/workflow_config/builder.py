@@ -65,6 +65,7 @@ class WorkflowBuilder:
         # On resume, reuse the timestamp from the previous build so that
         # steps produce identical output paths.
         build_timestamp = self._get_or_create_build_timestamp()
+        is_resume = self._is_resume()
 
         previous_step_tasks: list[Task] = []
         all_tasks: list[Task] = []
@@ -86,6 +87,7 @@ class WorkflowBuilder:
                 self._tool,
                 env=env,
                 build_timestamp=build_timestamp,
+                is_resume=is_resume,
             )
 
             # Wire sequential dependencies: every task in this step
@@ -100,6 +102,15 @@ class WorkflowBuilder:
         workflow.add_tasks(all_tasks)
 
         return workflow
+
+    def _is_resume(self) -> bool:
+        """Check whether this is a resumed workflow build.
+
+        Returns True if the build timestamp file already exists in the
+        output directory, indicating a previous build has run.
+        """
+        timestamp_path = self.config.output_directory / BUILD_TIMESTAMP_FILENAME
+        return timestamp_path.exists()
 
     def _get_or_create_build_timestamp(self) -> str:
         """Return a stable build timestamp, persisting it for resume support.
