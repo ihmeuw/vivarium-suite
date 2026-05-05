@@ -546,6 +546,7 @@ class TestSimulationStepConfig:
                 result_directory=Path("/tmp/results"),
                 input_model_spec_path=valid_model_spec_file,
                 launch_time=build_ts,
+                is_resume=False,
             )
             mock_output_paths.touch.assert_called_once()
 

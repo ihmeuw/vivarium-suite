@@ -262,6 +262,7 @@ class BaseStepConfig(ABC):
         *,
         env: str,
         build_timestamp: str,
+        is_resume: bool = False,
     ) -> list[Task]:
         """Create Jobmon Tasks for this step.
 
@@ -283,6 +284,9 @@ class BaseStepConfig(ABC):
             Stable timestamp string (``YYYY_MM_DD_HH_MM_SS``) generated once
             per workflow build. Steps that create output directories should
             use this to ensure paths are deterministic across resume builds.
+        is_resume
+            Whether this is a resumed workflow build. When True, simulation
+            steps generate a fresh logging directory timestamp.
 
         Returns
         -------
@@ -337,6 +341,7 @@ class CommandStepConfig(BaseStepConfig):
         *,
         env: str,
         build_timestamp: str,
+        is_resume: bool = False,
     ) -> list[Task]:
         """Create a single Jobmon Task for this command step."""
         task_template = tool.get_task_template(
@@ -483,6 +488,7 @@ class SimulationStepConfig(BaseStepConfig):
         *,
         env: str,
         build_timestamp: str,
+        is_resume: bool = False,
     ) -> list[Task]:
         """Create parallel simulation Jobmon Tasks.
 
@@ -501,6 +507,7 @@ class SimulationStepConfig(BaseStepConfig):
             result_directory=self.output_directory,
             input_model_spec_path=self.model_specification,
             launch_time=build_timestamp,
+            is_resume=is_resume,
         )
         output_paths.touch()
 
