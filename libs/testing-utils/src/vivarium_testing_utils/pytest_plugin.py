@@ -46,13 +46,13 @@ def pytest_collection_modifyitems(config: Config, items: list[Function]) -> None
     if not config.getoption("--runslow"):
         skip_slow = pytest.mark.skip(reason="need --runslow option to run")
         for item in items:
-            if "slow" in item.keywords:
+            if item.get_closest_marker("slow"):
                 item.add_marker(skip_slow)
 
     if not IS_ON_SLURM:
         skip_cluster = pytest.mark.skip(reason="not running on SLURM cluster")
         for item in items:
-            if "cluster" in item.keywords:
+            if item.get_closest_marker("cluster"):
                 item.add_marker(skip_cluster)
 
     # Weekly tests also require it to be the slow test day
@@ -61,7 +61,7 @@ def pytest_collection_modifyitems(config: Config, items: list[Function]) -> None
             reason="not the designated slow test day for weekly tests"
         )
         for item in items:
-            if "weekly" in item.keywords:
+            if item.get_closest_marker("weekly"):
                 item.add_marker(skip_weekly)
 
 
