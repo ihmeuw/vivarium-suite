@@ -1,3 +1,7 @@
+**3.1.2 - 05/05/26**
+
+   - Feature: Add setup-slack make target to support sending Slack notifications from Slurm
+
 **3.1.1 - 05/04/26**
 
    - Use NFS to build conda env on jobs that require slurm
