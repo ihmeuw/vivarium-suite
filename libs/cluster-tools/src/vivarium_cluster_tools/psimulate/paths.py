@@ -178,6 +178,7 @@ class OutputPaths(NamedTuple):
         result_directory: Path,
         input_model_spec_path: Path | None,
         launch_time: str | None = None,
+        is_resume: bool = False,
     ) -> "OutputPaths":
         """Create an instance of OutputPaths from the arguments passed to the entry point.
 
@@ -197,6 +198,10 @@ class OutputPaths(NamedTuple):
             new one from ``datetime.now()``. This ensures that all steps in a
             workflow share the same timestamp, and that resume builds produce
             identical paths.
+        is_resume
+            If True, generates a fresh timestamp for the logging directory so
+            that each resume attempt gets its own logs, mirroring ``psimulate
+            restart`` behavior. The output root still uses ``launch_time``.
 
         Returns
         -------
@@ -218,7 +223,10 @@ class OutputPaths(NamedTuple):
         elif command == COMMANDS.load_test:
             output_directory = output_directory / "load_test" / launch_time
 
-        logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
+        logging_timestamp = (
+            datetime.now().strftime("%Y_%m_%d_%H_%M_%S") if is_resume else launch_time
+        )
+        logging_directory = output_directory / "logs" / f"{logging_timestamp}_{command}"
         logging_dirs = {
             "logging_root": logging_directory,
             "worker_logging_root": logging_directory / "worker_logs",
