@@ -1,3 +1,8 @@
+**v0.3.6 - 05/05/26**
+
+Archive notice: this package is archived and no longer maintained. Please use the 
+vivarium-suite monorepo for future development. Refer to the README for more details.
+
 **v0.3.5 - 04/21/26**
 
  - Update for VPH v5
