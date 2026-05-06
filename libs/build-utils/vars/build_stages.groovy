@@ -25,6 +25,7 @@ def runDebugInfo(Map skipEval = [:]) {
         echo """Parameters:
         SKIP_DEPLOY: ${params.SKIP_DEPLOY}
         RUN_SLOW: ${params.RUN_SLOW}
+        RUN_WEEKLY: ${params.RUN_WEEKLY}
         SLACK_TO: ${params.SLACK_TO}
         DEBUG: ${params.DEBUG}
         FORCE_FULL_BUILD: ${params.FORCE_FULL_BUILD}"""
@@ -106,7 +107,7 @@ def runTests(List test_types) {
             def parallelTests = test_types.collectEntries {
                 ["${full_name(it)} Tests" : {
                     stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
-                        sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}"
+                        sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}${(env.IS_CRON.toBoolean() || params.RUN_WEEKLY) ? ' RUNWEEKLY=1' : ''}"
                         // Map test target names to coverage directory names
                         // test-all -> htmlcov_tests, test-unit -> htmlcov_unit, etc.
                         def coverageDir = it == 'test-all' ? 'tests' : it.replace('test-', '')

@@ -32,18 +32,11 @@ def call(Map config = [:]){
   def skip_doc_build = (config?.skip_doc_build == true)
   def run_mypy = (config.run_mypy != null) ? config.run_mypy : true
 
-  // Resolve task_node and conda_env_dir based on requires_slurm.
-  // "weekly" means only use SLURM + shared env on the slow-test day (Sunday).
-  def use_slurm
-  if (requires_slurm == "weekly") {
-    def dayOfWeek = new Date().format('EEEE')
-    use_slurm = (dayOfWeek == 'Sunday')
-  } else {
-    use_slurm = requires_slurm ? true : false
-  }
-  def task_node = use_slurm ? 'slurm' : 'matrix-tasks'
+  // task_node and conda_env_dir are resolved in the Initialization stage
+  // after user parameters are available (needed for RUN_WEEKLY override).
+  def task_node
+  def conda_env_dir
   conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
-  conda_env_dir = use_slurm ? "/mnt/team/simulation_science/priv/engineering/jenkins/envs" : "/svc-simsci/envs"
 
   echo "Configuration constants:"
   echo "  scheduled_branches: ${scheduled_branches}"
@@ -112,6 +105,11 @@ def call(Map config = [:]){
         description: "Whether to run slow tests as part of pytest suite."
       )
       booleanParam(
+        name: "RUN_WEEKLY",
+        defaultValue: false,
+        description: "Whether to run weekly tests (overrides slow test day check)."
+      )
+      booleanParam(
         name: "FORCE_FULL_BUILD",
         defaultValue: false,
         description: "Force a complete build regardless of change type (overrides doc-only and changelog-only skip logic)."
@@ -160,6 +158,20 @@ def call(Map config = [:]){
             // Derive the deploy/docs version as the last entry in the list
             PYTHON_DEPLOY_VERSION = python_versions[-1]
             echo "Python deploy version (inferred): ${PYTHON_DEPLOY_VERSION}"
+
+            // Resolve task_node and conda_env_dir based on requires_slurm.
+            // "weekly" means only use SLURM + shared env on the slow-test day
+            // (Sunday) or when the user explicitly requests weekly tests.
+            def use_slurm
+            if (requires_slurm == "weekly") {
+              def dayOfWeek = new Date().format('EEEE')
+              use_slurm = (dayOfWeek == 'Sunday' || params.RUN_WEEKLY)
+            } else {
+              use_slurm = requires_slurm ? true : false
+            }
+            task_node = use_slurm ? 'slurm' : 'matrix-tasks'
+            conda_env_dir = use_slurm ? "/mnt/team/simulation_science/priv/engineering/jenkins/envs" : "/svc-simsci/envs"
+            echo "Resolved task_node: ${task_node}, conda_env_dir: ${conda_env_dir}"
           }
         }
       }
