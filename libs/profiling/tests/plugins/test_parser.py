@@ -1,6 +1,5 @@
 import pytest
 from layered_config_tree import LayeredConfigTree
-from tests.conftest import IS_ON_SLURM, TEST_ARTIFACT_PATH
 from vivarium.interface.interactive import InteractiveContext
 from vivarium_profiling.plugins.parser import (
     MultiComponentParser,
@@ -11,6 +10,8 @@ from vivarium_public_health.results import DiseaseObserver
 from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
 from vivarium_public_health.risks.base_risk import Risk
 from vivarium_public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
+
+from tests.conftest import IS_ON_SLURM, TEST_ARTIFACT_PATH
 
 
 def test_multi_component_parser():
@@ -59,9 +60,7 @@ def test_multi_component_parser():
         c for c in components if "disease_model.lower_respiratory_infections" in c.name
     ]
     lri_observers = [
-        c
-        for c in components
-        if "disease_observer.lower_respiratory_infections" in c.name
+        c for c in components if "disease_observer.lower_respiratory_infections" in c.name
     ]
     ihd_components = [c for c in components if "ischemic_stroke" in c.name]
 
@@ -124,9 +123,7 @@ def test_multi_component_parser_risks():
     assert len(components) == 13
 
     risks = [c for c in components if isinstance(c, Risk)]
-    effects = [
-        c for c in components if isinstance(c, (RiskEffect, NonLogLinearRiskEffect))
-    ]
+    effects = [c for c in components if isinstance(c, (RiskEffect, NonLogLinearRiskEffect))]
     cat_observers = [c for c in components if isinstance(c, CategoricalRiskObserver)]
     disease_models = [c for c in components if isinstance(c, DiseaseModel)]
 
@@ -296,9 +293,7 @@ def test_error_when_cause_defined_in_both_multi_config_and_standard():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    not IS_ON_SLURM, reason="Integration test requires SLURM environment"
-)
+@pytest.mark.skipif(not IS_ON_SLURM, reason="Integration test requires SLURM environment")
 def test_multi_component_parser_simulation():
     """Integration test that instantiates a SimulationContext and runs a few timesteps."""
 
@@ -307,9 +302,7 @@ def test_multi_component_parser_simulation():
             "component_configuration_parser": {
                 "controller": "vivarium_profiling.plugins.parser.MultiComponentParser"
             },
-            "data": {
-                "controller": "vivarium_profiling.plugins.artifact.ArtifactManager"
-            },
+            "data": {"controller": "vivarium_profiling.plugins.artifact.ArtifactManager"},
         }
     }
 

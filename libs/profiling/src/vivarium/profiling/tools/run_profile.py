@@ -24,9 +24,7 @@ def run_profile_cprofile(sim: SimulationContext, output_file: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run Vivarium simulation for profiling"
-    )
+    parser = argparse.ArgumentParser(description="Run Vivarium simulation for profiling")
     parser.add_argument("model_specification", help="Path to model specification file")
     parser.add_argument(
         "--config-override",
@@ -52,9 +50,7 @@ def main():
         print(f"Error parsing config override: {e}", file=sys.stderr)
         sys.exit(1)
 
-    sim = SimulationContext(
-        args.model_specification, configuration=configuration_override
-    )
+    sim = SimulationContext(args.model_specification, configuration=configuration_override)
 
     if args.profiler == "scalene":
         run_profile_scalene(sim)

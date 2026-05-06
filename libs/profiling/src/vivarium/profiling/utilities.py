@@ -141,9 +141,7 @@ def get_lognorm_from_quantiles(
 def get_random_variable_draws(
     number: int, seeded_distribution: SeededDistribution
 ) -> np.array:
-    return np.array(
-        [get_random_variable(x, seeded_distribution) for x in range(number)]
-    )
+    return np.array([get_random_variable(x, seeded_distribution) for x in range(number)])
 
 
 def get_random_variable(draw: int, seeded_distribution: SeededDistribution) -> float:

@@ -231,9 +231,7 @@ def build_single_location_artifact(
         logger.info(f"Loading and writing {key_group.log_name} data")
         for key in key_group:
             logger.info(f"   - Loading and writing {key} data")
-            builder.load_and_write_data(
-                artifact, key, location, years, key in replace_keys
-            )
+            builder.load_and_write_data(artifact, key, location, years, key in replace_keys)
 
     logger.info(f"**Done building -- {location}**")
 

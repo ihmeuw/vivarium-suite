@@ -18,3 +18,11 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["vivarium.profiling*"]
+
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3

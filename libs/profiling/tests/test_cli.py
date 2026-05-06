@@ -43,9 +43,7 @@ def run_profile_sim_command(
     assert result.exit_code == 0
 
 
-def test_profile_sim_scalene(
-    mocker, runner: CliRunner, model_spec: str, results_dir: Path
-):
+def test_profile_sim_scalene(mocker, runner: CliRunner, model_spec: str, results_dir: Path):
     """Test profile_sim with scalene profiler (default)."""
     # Mock successful subprocess run
     mock_subprocess_run = mocker.patch("subprocess.run")

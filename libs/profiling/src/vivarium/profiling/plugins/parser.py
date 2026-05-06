@@ -1,16 +1,14 @@
 from layered_config_tree import LayeredConfigTree
-from vivarium import Component
 from vivarium.framework.components import ComponentConfigurationParser
 from vivarium.framework.components.parser import ParsingError
-from vivarium_profiling.components.risks.effect import (
-    NonLogLinearRiskEffect,
-    RiskEffect,
-)
+from vivarium_profiling.components.risks.effect import NonLogLinearRiskEffect, RiskEffect
 from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.disease.models import SIS_fixed_duration
 from vivarium_public_health.results import DiseaseObserver
 from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
 from vivarium_public_health.risks.base_risk import Risk
+
+from vivarium import Component
 
 CAUSE_KEY = "causes"
 RISK_KEY = "risks"
@@ -58,9 +56,7 @@ class MultiComponentParser(ComponentConfigurationParser):
     And if observers: True, it will also create corresponding DiseaseObserver components.
     """
 
-    def parse_component_config(
-        self, component_config: LayeredConfigTree
-    ) -> list[Component]:
+    def parse_component_config(self, component_config: LayeredConfigTree) -> list[Component]:
         """Parses the component configuration and returns a list of components.
 
         This method looks for a `causes` key that contains multi-configuration
@@ -230,9 +226,7 @@ class MultiComponentParser(ComponentConfigurationParser):
         if "observers" in cause_config_dict:
             observers = cause_config_dict["observers"]
             if not isinstance(observers, bool):
-                error_messages.append(
-                    "Observers must be a boolean value (True or False)"
-                )
+                error_messages.append("Observers must be a boolean value (True or False)")
 
         return error_messages
 
@@ -352,15 +346,11 @@ class MultiComponentParser(ComponentConfigurationParser):
         if "observers" in risk_config_dict:
             observers = risk_config_dict["observers"]
             if not isinstance(observers, bool):
-                error_messages.append(
-                    "Observers must be a boolean value (True or False)"
-                )
+                error_messages.append("Observers must be a boolean value (True or False)")
 
         affected_causes = risk_config_dict.get("affected_causes", {})
         if not isinstance(affected_causes, dict):
-            error_messages.append(
-                "affected_causes must be a dictionary of cause configs"
-            )
+            error_messages.append("affected_causes must be a dictionary of cause configs")
             return error_messages
 
         for cause_name, cause_config in affected_causes.items():
@@ -396,9 +386,7 @@ class MultiComponentParser(ComponentConfigurationParser):
                         f"Number of affected causes for '{cause_name}' must be a valid integer"
                     )
 
-            if "measure" in cause_config and not isinstance(
-                cause_config["measure"], str
-            ):
+            if "measure" in cause_config and not isinstance(cause_config["measure"], str):
                 error_messages.append(
                     f"Measure for affected cause '{cause_name}' must be a string if provided"
                 )
@@ -423,9 +411,7 @@ class MultiComponentParser(ComponentConfigurationParser):
 
         return (
             {
-                cause_name: int(
-                    cause_config.get("number", DEFAULT_SIS_CONFIG["number"])
-                )
+                cause_name: int(cause_config.get("number", DEFAULT_SIS_CONFIG["number"]))
                 for cause_name, cause_config in causes_config.items()
             }
             if causes_config

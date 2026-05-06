@@ -15,9 +15,7 @@ from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
 from vivarium_profiling.tools.summarize import run_summarize_analysis
 
 
-@click.command(
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
-)
+@click.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 @click.argument(
     "model_specification",
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
@@ -94,9 +92,7 @@ def profile_sim(
     extra_args = ctx.args
 
     if profiler == "scalene":
-        out_json_file = results_root / f"{model_specification.name}".replace(
-            "yaml", "json"
-        )
+        out_json_file = results_root / f"{model_specification.name}".replace("yaml", "json")
         try:
             cmd = [
                 "scalene",
@@ -120,9 +116,7 @@ def profile_sim(
             logger.error(f"Scalene profiling failed: {e}")
             raise
     elif profiler == "cprofile":
-        out_stats_file = results_root / f"{model_specification.name}".replace(
-            "yaml", "stats"
-        )
+        out_stats_file = results_root / f"{model_specification.name}".replace("yaml", "stats")
         try:
             subprocess.run(
                 [
@@ -388,7 +382,5 @@ def summarize(
         config = ExtractionConfig.from_yaml(extraction_config)
 
     benchmark_results_path = Path(benchmark_results)
-    main = handle_exceptions(
-        run_summarize_analysis, logger, with_debugger=with_debugger
-    )
+    main = handle_exceptions(run_summarize_analysis, logger, with_debugger=with_debugger)
     main(benchmark_results_path, config=config, nb=nb)
