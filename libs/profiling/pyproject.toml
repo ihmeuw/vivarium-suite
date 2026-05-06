@@ -1,26 +1,63 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
 
-# FIXME [MIC-7017]: This is the minimal config to make profiling pip-installable on main
-# during the monorepo migration window.
 [project]
 name = "vivarium-profiling"
-version = "0.0.0"
+description = "Vivarium simulation model for the vivarium_profiling project."
+readme = "README.rst"
 requires-python = ">=3.10"
+license = {text = "BSD 3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+dependencies = [
+    "vivarium_dependencies[pandas,numpy,scipy,click,tables,loguru]",
+    "vivarium_build_utils>=3.0.2,<4.0.0",
+    "gbd_mapping>=4.1.6",
+    "vivarium>=4.1.2",
+    "vivarium_public_health>=5.0.0",
+    "jinja2",
+    "pyyaml",
+    "memory_profiler",
+    "matplotlib",
+    "seaborn",
+    "scalene",
+    "nbformat>=5.0",
+]
 
 [project.optional-dependencies]
+test = ["vivarium_dependencies[pytest]"]
+cluster = ["vivarium_cluster_tools>=2.1.17"]
+data = [
+    "vivarium_inputs>=5.2.6",
+    "vivarium-profiling[cluster]",
+]
+interactive = ["vivarium_dependencies[interactive]"]
 dev = [
+    "vivarium-profiling[test,cluster,interactive]",
     "vivarium_dependencies[lint]",
-    "vivarium_dependencies[pytest]",
 ]
 # FIXME: Clean these up when ready
 ci_github = ["vivarium-profiling[dev]"]
 ci_jenkins = ["vivarium-profiling[dev]"]
 
+[project.scripts]
+make_artifacts = "vivarium.profiling.tools.cli:make_artifacts"
+run_benchmark = "vivarium.profiling.tools.cli:run_benchmark"
+profile_sim = "vivarium.profiling.tools.cli:profile_sim"
+summarize = "vivarium.profiling.tools.cli:summarize"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["vivarium.profiling*"]
+
+[tool.setuptools_scm]
+root = "../.."
+write_to = "src/vivarium/profiling/_version.py"
+write_to_template = '__version__ = "{version}"\n'
+tag_regex = '^vivarium-profiling-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-profiling-v*"'
+fallback_version = "0.0.1"
 
 [tool.black]
 line-length = 94
