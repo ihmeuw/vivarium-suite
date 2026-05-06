@@ -11,10 +11,8 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
-    "black",
-    "isort",
-    "pytest",
-    "pytest-cov",
+    "vivarium_dependencies[lint]",
+    "vivarium_dependencies[pytest]",
 ]
 
 [tool.hatch.version]
