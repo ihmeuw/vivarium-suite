@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-
 from vivarium_profiling.tools.extraction import (
     ExtractionConfig,
     FunctionCallConfiguration,

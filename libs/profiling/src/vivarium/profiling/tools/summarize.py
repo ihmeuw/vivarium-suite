@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 from loguru import logger
-
 from vivarium_profiling.tools.extraction import ExtractionConfig
 from vivarium_profiling.tools.notebook_generator import (
     NOTEBOOK_NAME,
@@ -82,7 +81,9 @@ def summarize(
     for median_col in median_cols:
         baseline_value = summary.loc[baseline_mask, median_col].values[0]
         pdiff_col = median_col.replace("_median", "_pdiff")
-        summary[pdiff_col] = (summary[median_col] - baseline_value) / baseline_value * 100
+        summary[pdiff_col] = (
+            (summary[median_col] - baseline_value) / baseline_value * 100
+        )
 
     # Move the baseline row to the top
     summary = pd.concat(
@@ -148,7 +149,9 @@ def run_summarize_analysis(
     # Generate Jupyter notebook if requested
     if nb:
         notebook_path = output_dir / NOTEBOOK_NAME
-        create_analysis_notebook(benchmark_results_filepath, summary_path, notebook_path)
+        create_analysis_notebook(
+            benchmark_results_filepath, summary_path, notebook_path
+        )
 
     # Generate static plots
     else:

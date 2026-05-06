@@ -2,7 +2,6 @@
 
 import pandas as pd
 import pytest
-
 from vivarium_profiling.tools.extraction import (
     ExtractionConfig,
     FunctionCallConfiguration,

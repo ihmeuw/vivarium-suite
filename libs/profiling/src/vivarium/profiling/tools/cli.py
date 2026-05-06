@@ -8,7 +8,6 @@ import click
 from loguru import logger
 from vivarium.framework.logging import configure_logging_to_file
 from vivarium.framework.utilities import handle_exceptions
-
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
 from vivarium_profiling.tools.extraction import ExtractionConfig
@@ -16,7 +15,9 @@ from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
 from vivarium_profiling.tools.summarize import run_summarize_analysis
 
 
-@click.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+@click.command(
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+)
 @click.argument(
     "model_specification",
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
@@ -93,7 +94,9 @@ def profile_sim(
     extra_args = ctx.args
 
     if profiler == "scalene":
-        out_json_file = results_root / f"{model_specification.name}".replace("yaml", "json")
+        out_json_file = results_root / f"{model_specification.name}".replace(
+            "yaml", "json"
+        )
         try:
             cmd = [
                 "scalene",
@@ -117,7 +120,9 @@ def profile_sim(
             logger.error(f"Scalene profiling failed: {e}")
             raise
     elif profiler == "cprofile":
-        out_stats_file = results_root / f"{model_specification.name}".replace("yaml", "stats")
+        out_stats_file = results_root / f"{model_specification.name}".replace(
+            "yaml", "stats"
+        )
         try:
             subprocess.run(
                 [
@@ -175,7 +180,10 @@ def profile_sim(
     help="Specify an output directory. Directory must exist.",
 )
 @click.option(
-    "-a", "--append", is_flag=True, help="Append to the artifact instead of overwriting."
+    "-a",
+    "--append",
+    is_flag=True,
+    help="Append to the artifact instead of overwriting.",
 )
 @click.option("-r", "--replace-keys", multiple=True, help="Specify keys to overwrite")
 @click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
@@ -380,5 +388,7 @@ def summarize(
         config = ExtractionConfig.from_yaml(extraction_config)
 
     benchmark_results_path = Path(benchmark_results)
-    main = handle_exceptions(run_summarize_analysis, logger, with_debugger=with_debugger)
+    main = handle_exceptions(
+        run_summarize_analysis, logger, with_debugger=with_debugger
+    )
     main(benchmark_results_path, config=config, nb=nb)

@@ -140,7 +140,9 @@ def bottleneck_config(
 
 
 def phase_config(
-    name: str, filename: str = "/vivarium/framework/engine.py", line_number: int | None = None
+    name: str,
+    filename: str = "/vivarium/framework/engine.py",
+    line_number: int | None = None,
 ) -> FunctionCallConfiguration:
     """Create a FunctionCallConfiguration for a simulation phase (extracts cumtime only).
 
@@ -271,7 +273,9 @@ class ExtractionConfig:
 
             # Validate required fields
             if "name" not in merged_config:
-                raise ValueError(f"Pattern at index {i} is missing required field 'name'")
+                raise ValueError(
+                    f"Pattern at index {i} is missing required field 'name'"
+                )
 
             name = merged_config["name"]
 
@@ -303,7 +307,9 @@ class ExtractionConfig:
         base_columns = ["model_spec", "run", "rt_s", "mem_mb"]
         return base_columns + self.metric_columns
 
-    def extract_metrics(self, stats_file_txt: str | Path) -> dict[str, float | int | None]:
+    def extract_metrics(
+        self, stats_file_txt: str | Path
+    ) -> dict[str, float | int | None]:
         """Extract metrics for all configured items from a stats file.
 
         Parameters
@@ -321,7 +327,9 @@ class ExtractionConfig:
 
         results: dict[str, float | int | None] = {}
         for pattern in self.patterns:
-            cumtime, percall, ncalls = parse_function_metrics(stats_file_txt, pattern.pattern)
+            cumtime, percall, ncalls = parse_function_metrics(
+                stats_file_txt, pattern.pattern
+            )
             if pattern.extract_cumtime:
                 results[pattern.cumtime_col] = cumtime
             if pattern.extract_percall:
@@ -344,7 +352,9 @@ def get_peak_memory() -> float | None:
 
     """
     try:
-        result = subprocess.run(["mprof", "peak"], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["mprof", "peak"], capture_output=True, text=True, check=True
+        )
         # Extract the first decimal number from the output
         match = re.search(r"(\d+\.\d+)", result.stdout)
         if match:

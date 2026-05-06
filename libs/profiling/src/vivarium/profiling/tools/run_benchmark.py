@@ -10,7 +10,6 @@ from typing import Any
 import click
 import pandas as pd
 from loguru import logger
-
 from vivarium_profiling.tools import configure_logging_to_terminal
 from vivarium_profiling.tools.extraction import (
     ExtractionConfig,

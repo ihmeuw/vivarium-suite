@@ -5,7 +5,6 @@ from pathlib import Path
 import click
 import pandas as pd
 import pytest
-
 from vivarium_profiling.tools.run_benchmark import (
     RESULTS_SUMMARY_NAME,
     run_benchmark_loop,
@@ -79,7 +78,9 @@ def test_run_benchmark_loop_integration(test_model_specs: list[Path], tmp_path: 
     baseline_rows = results_df[results_df["model_spec"].str.contains("baseline")]
     other_rows = results_df[results_df["model_spec"].str.contains("other")]
 
-    assert len(baseline_rows) == baseline_runs, f"Expected {baseline_runs} baseline rows"
+    assert (
+        len(baseline_rows) == baseline_runs
+    ), f"Expected {baseline_runs} baseline rows"
     assert len(other_rows) == model_runs, f"Expected {model_runs} non-baseline rows"
 
     # Verify run numbering is correct

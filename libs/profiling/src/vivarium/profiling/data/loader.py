@@ -22,7 +22,6 @@ from vivarium_inputs import interface
 from vivarium_inputs import utilities as vi_utils
 from vivarium_inputs import utility_data
 from vivarium_inputs.mapping_extension import alternative_risk_factors
-
 from vivarium_profiling.constants import data_keys
 
 
@@ -125,7 +124,8 @@ def _modify_affected_entities(data: str | pd.DataFrame, key: str) -> str | pd.Da
         )
         # subset to only affected_entity == key.name
         data = data[
-            data.index.get_level_values("affected_entity") == "lower_respiratory_infections"
+            data.index.get_level_values("affected_entity")
+            == "lower_respiratory_infections"
         ]
     return data
 
@@ -168,7 +168,9 @@ def load_standard_data(
 ) -> pd.DataFrame:
     key = EntityKey(key)
     entity = get_entity(key)
-    return interface.get_measure(entity, key.measure, location, years).droplevel("location")
+    return interface.get_measure(entity, key.measure, location, years).droplevel(
+        "location"
+    )
 
 
 def load_standard_data_duplicate_key(
@@ -237,8 +239,12 @@ def _load_em_from_meid(location, meid, measure):
     data = data.filter(vi_globals.DEMOGRAPHIC_COLUMNS + vi_globals.DRAW_COLUMNS)
     data = vi_utils.reshape(data)
     data = vi_utils.scrub_gbd_conventions(data, location)
-    data = vi_utils.split_interval(data, interval_column="age", split_column_prefix="age")
-    data = vi_utils.split_interval(data, interval_column="year", split_column_prefix="year")
+    data = vi_utils.split_interval(
+        data, interval_column="age", split_column_prefix="age"
+    )
+    data = vi_utils.split_interval(
+        data, interval_column="year", split_column_prefix="year"
+    )
     return vi_utils.sort_hierarchical_data(data).droplevel("location")
 
 

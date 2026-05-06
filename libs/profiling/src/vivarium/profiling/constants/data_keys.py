@@ -33,7 +33,9 @@ POPULATION = __Population()
 class __LRI(NamedTuple):
 
     # Keys that will be loaded into the artifact. must have a colon type declaration
-    PREVALENCE: TargetString = TargetString("cause.lower_respiratory_infections.prevalence")
+    PREVALENCE: TargetString = TargetString(
+        "cause.lower_respiratory_infections.prevalence"
+    )
     INCIDENCE_RATE: TargetString = TargetString(
         "cause.lower_respiratory_infections.incidence_rate"
     )
@@ -68,7 +70,9 @@ LRI = __LRI()
 class __LRI2(NamedTuple):
 
     # Keys that will be loaded into the artifact. must have a colon type declaration
-    PREVALENCE: TargetString = TargetString("cause.lower_respiratory_infections_2.prevalence")
+    PREVALENCE: TargetString = TargetString(
+        "cause.lower_respiratory_infections_2.prevalence"
+    )
     INCIDENCE_RATE: TargetString = TargetString(
         "cause.lower_respiratory_infections_2.incidence_rate"
     )
@@ -103,7 +107,9 @@ LRI2 = __LRI2()
 class __LRI3(NamedTuple):
 
     # Keys that will be loaded into the artifact. must have a colon type declaration
-    PREVALENCE: TargetString = TargetString("cause.lower_respiratory_infections_3.prevalence")
+    PREVALENCE: TargetString = TargetString(
+        "cause.lower_respiratory_infections_3.prevalence"
+    )
     INCIDENCE_RATE: TargetString = TargetString(
         "cause.lower_respiratory_infections_3.incidence_rate"
     )
@@ -138,7 +144,9 @@ LRI3 = __LRI3()
 class __LRI4(NamedTuple):
 
     # Keys that will be loaded into the artifact. must have a colon type declaration
-    PREVALENCE: TargetString = TargetString("cause.lower_respiratory_infections_4.prevalence")
+    PREVALENCE: TargetString = TargetString(
+        "cause.lower_respiratory_infections_4.prevalence"
+    )
     INCIDENCE_RATE: TargetString = TargetString(
         "cause.lower_respiratory_infections_4.incidence_rate"
     )
@@ -207,9 +215,13 @@ SBP = __SBP()
 
 
 class __Water(NamedTuple):
-    DISTRIBUTION: TargetString = TargetString("risk_factor.unsafe_water_source.distribution")
+    DISTRIBUTION: TargetString = TargetString(
+        "risk_factor.unsafe_water_source.distribution"
+    )
     EXPOSURE: TargetString = TargetString("risk_factor.unsafe_water_source.exposure")
-    CATEGORIES: TargetString = TargetString("risk_factor.unsafe_water_source.categories")
+    CATEGORIES: TargetString = TargetString(
+        "risk_factor.unsafe_water_source.categories"
+    )
     RELATIVE_RISK: TargetString = TargetString(
         "risk_factor.unsafe_water_source.relative_risk"
     )

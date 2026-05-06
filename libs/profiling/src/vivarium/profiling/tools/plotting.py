@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-
 from vivarium_profiling.tools.extraction import ExtractionConfig
 
 """Benchmark visualization utilities."""
@@ -14,7 +13,9 @@ plt.style.use("default")
 sns.set_palette("husl")
 
 
-def _plot_runtime_bars(ax: plt.Axes, df: pd.DataFrame, time_col: str, colors: list) -> None:
+def _plot_runtime_bars(
+    ax: plt.Axes, df: pd.DataFrame, time_col: str, colors: list
+) -> None:
     """Plot runtime bar chart.
 
     Parameters
@@ -48,7 +49,9 @@ def _plot_runtime_bars(ax: plt.Axes, df: pd.DataFrame, time_col: str, colors: li
         )
 
 
-def _plot_memory_bars(ax: plt.Axes, df: pd.DataFrame, mem_col: str, colors: list) -> None:
+def _plot_memory_bars(
+    ax: plt.Axes, df: pd.DataFrame, mem_col: str, colors: list
+) -> None:
     """Plot memory bar chart.
 
     Parameters
@@ -162,9 +165,9 @@ def _plot_scale_factor(
         if base_model == "baseline":
             continue  # Skip baseline as it's the origin point
 
-        model_group = valid_models[valid_models["base_model"] == base_model].sort_values(
-            "scale_factor"
-        )
+        model_group = valid_models[
+            valid_models["base_model"] == base_model
+        ].sort_values("scale_factor")
 
         # Get color for this model type
         first_idx = df[df["base_model"] == base_model].index[0]
@@ -418,7 +421,9 @@ def group_models_by_type(df: pd.DataFrame) -> pd.DataFrame:
     df["scale_factor"] = pd.to_numeric(df["scale_factor"], errors="coerce")
     df.loc[df["model"] == "baseline", "scale_factor"] = 1.0
     df = df.sort_values(["base_model", "scale_factor"])
-    df = pd.concat([df[df["base_model"] == "baseline"], df[df["base_model"] != "baseline"]])
+    df = pd.concat(
+        [df[df["base_model"] == "baseline"], df[df["base_model"] != "baseline"]]
+    )
     df = pd.concat([df[df["scale_factor"].notna()], df[df["scale_factor"].isna()]])
     return df.reset_index(drop=True)
 
