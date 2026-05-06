@@ -1,3 +1,7 @@
+**0.5.4 - 05/06/26**
+
+  - Feature: Add option to manually run "weekly" tests
+
 **0.5.3 - 05/05/26**
 
   - Bugfix: Only skip for explicit marker calls with pytest plugin
