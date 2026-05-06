@@ -1,12 +1,12 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "vivarium-compat"
-version = "0.1.0"
 description = "Backward-compatible import redirects for the vivarium monorepo migration."
 requires-python = ">=3.10"
+dynamic = ["version"]
 # No dependencies; the hook redirects imports, it does not depend on them.
 
 [project.optional-dependencies]
@@ -17,8 +17,28 @@ dev = [
     "pytest-cov",
 ]
 
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+# Resolve the git root from the monorepo, not this lib directory.
+root = "../.."
+# Match only this lib's tags so other libs' tags don't drive our version.
+tag_regex = '^vivarium-compat-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-compat-v*"'
+fallback_version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/vivarium/_compat/_version.py"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/vivarium"]
+# Ship only the _compat subpackage at the correct namespace path. We do NOT
+# ship vivarium/__init__.py because the namespace owner (standalone vivarium
+# today, vivarium-core post-monorepo-migration) ships the canonical one with
+# backward-compat re-exports. only-include preserves the vivarium/_compat/
+# layout in the wheel.
+sources = ["src"]
+only-include = ["src/vivarium/_compat"]
 
 # force-include places vivarium_compat.pth at the site-packages root so Python
 # executes it at interpreter startup, before any user code runs.
