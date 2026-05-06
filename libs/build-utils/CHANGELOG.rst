@@ -1,3 +1,7 @@
+**tbd**
+
+   - Search recursively for py.typed markers
+
 **3.2.2 - 05/07/26**
 
    - Bugfix: Make "run_weekly" parameter available to all stages.

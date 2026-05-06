@@ -211,8 +211,11 @@ clean: # Clean build artifacts and temporary files
 .PHONY: check
 check: # Run development checks
 	make lint
-# 	Run mypy if the py.typed file exists
-	@if [ -f "src/$(PACKAGE_NAME)/py.typed" ]; then \
+# 	Run mypy if any py.typed marker exists under src/
+# 	Use 'find' command rather than a hardcoded src/$(PACKAGE_NAME)/py.typed path so
+#	this works for both flat layouts (src/<pkg>/py.typed) and namespace layouts under
+#	monorepo (src/vivarium/<pkg>/py.typed).
+	@if find src -name py.typed 2>/dev/null | grep -q .; then \
 		echo; \
 		echo "Running mypy"; \
 		make mypy; \
