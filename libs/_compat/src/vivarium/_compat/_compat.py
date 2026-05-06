@@ -96,7 +96,9 @@ class _CompatFinder(importlib.abc.MetaPathFinder):
         # and exec_module replaces sys.modules[fullname] with the real module (which already
         # has the correct __path__). Setting it to [] would be a no-op at best and misleading
         # at worst since we don't know at spec-creation time whether the target is a package.
-        return importlib.machinery.ModuleSpec(fullname, _CompatLoader(fullname, new_name))
+        return importlib.machinery.ModuleSpec(
+            fullname, _CompatLoader(fullname, new_name)
+        )
 
 
 class _CompatLoader(importlib.abc.Loader):
