@@ -49,6 +49,12 @@ summarize = "vivarium.profiling.tools.cli:summarize"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+# Only include vivarium.profiling and its subpackages. Excluding vivarium itself
+# means the wheel does not ship vivarium/__init__.py. The "namespace owner"
+# (standalone vivarium today, vivarium-core post-monorepo-migration) ships the
+# canonical vivarium/__init__.py with backward-compat re-exports. If we shipped
+# our own here, pip would overwrite the canonical one and break imports like
+# `from vivarium import Component`.
 include = ["vivarium.profiling*"]
 
 [tool.setuptools_scm]
