@@ -12,7 +12,7 @@
 // Load the full vivarium_build_utils library at the expected version
 // Note that vivarium-suite is not a python package and so we do not attempt to
 // determine a non-main specific version of vivarium_build_utils.
-library("vivarium_build_utils@main")
+library("vivarium_build_utils@epic/monorepo")
 
 pipeline {
     agent any
@@ -23,7 +23,6 @@ pipeline {
 
     stages {
         stage('Multi-Multibranch Pipeline') {
-            when { branch 'main' }
             steps {
                 script {
                     def jenkinsfiles = findFiles(glob: 'libs/*/Jenkinsfile').collect { it.path }
