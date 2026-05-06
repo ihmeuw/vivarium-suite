@@ -1,5 +1,6 @@
-**tbd**
+**x.x.x - tbd**
 
+   - Add support for monorepo
    - Search recursively for py.typed markers
 
 **3.2.2 - 05/07/26**
