@@ -1,12 +1,17 @@
 [build-system]
-requires = ["packaging", "setuptools"]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
-[tool.black]
-line_length = 94
+# FIXME [MIC-7017]: This is the minimal config to make profiling pip-installable on main
+# during the monorepo migration window.
+[project]
+name = "vivarium-profiling"
+version = "0.0.0"
+requires-python = ">=3.10"
 
-[tool.isort]
-profile = "black"
+[project.optional-dependencies]
+dev = []
 
-# fake git
-[tool.setuptools_scm]
-fallback_version = "0.0.1"
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["vivarium.profiling*"]
