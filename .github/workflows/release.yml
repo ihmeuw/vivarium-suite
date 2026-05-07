@@ -150,24 +150,10 @@ jobs:
             exit 1
           fi
 
-      - name: Validate version format
-        run: |
-          if ! echo "${{ matrix.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Version '${{ matrix.version }}' is not valid semver (X.Y.Z)"
-            exit 1
-          fi
-
       - name: Install vivarium_build_utils
+        # Install early so `make validate-tag` is available
         # FIXME: Update to main once epic/monorepo is merged
         run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
-
-      - name: Install ${{ matrix.library }}
-        run: |
-          cd libs/${{ matrix.library }} && make install UV_FLAGS=--system
-          uv pip install --system build
-
-      - name: Run tests
-        run: cd libs/${{ matrix.library }} && make test-all
 
       - name: Create and push tag
         env:
@@ -181,6 +167,17 @@ jobs:
             git tag "$TAG"
             git push origin "$TAG"
           fi
+
+      - name: Validate tag
+        run: cd libs/${{ matrix.library }} && make validate-tag
+
+      - name: Install ${{ matrix.library }}
+        run: |
+          cd libs/${{ matrix.library }} && make install UV_FLAGS=--system
+          uv pip install --system build
+
+      - name: Run tests
+        run: cd libs/${{ matrix.library }} && make test-all
 
       - name: Build
         run: cd libs/${{ matrix.library }} && python -m build
