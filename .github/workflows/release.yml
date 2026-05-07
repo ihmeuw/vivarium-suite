@@ -16,6 +16,8 @@ on:
         description: 'Version to release (e.g. 4.1.0)'
         required: true
         type: string
+  release:
+    types: [published]
 
 jobs:
   detect:
@@ -36,13 +38,39 @@ jobs:
           PACKAGE: ${{ github.event.inputs.package }}
           VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Tag was created by the GitHub UI release. Parse it to find the lib and version.
+            # Tag format: "vivarium-<public-name>-v<X.Y.Z>" where public-name may contain hyphens.
+            TAG_NAME="${{ github.event.release.tag_name }}"
+            if [[ ! "$TAG_NAME" =~ ^vivarium-(.+)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              echo "Tag '${TAG_NAME}' does not match 'vivarium-<lib>-v<X.Y.Z>'"
+              exit 1
+            fi
+            PUBLIC_LIB="${BASH_REMATCH[1]}"
+            VERSION="${BASH_REMATCH[2]}"
+
+            # Lib directory may have a leading underscore (e.g. _compat) that the public
+            # name strips. Try the public name first, then fall back to underscore-prefixed.
+            if [ -d "libs/${PUBLIC_LIB}" ]; then
+              LIBRARY="${PUBLIC_LIB}"
+            elif [ -d "libs/_${PUBLIC_LIB}" ]; then
+              LIBRARY="_${PUBLIC_LIB}"
+            else
+              echo "Could not find lib directory for '${PUBLIC_LIB}'"
+              exit 1
+            fi
+
+            echo "matrix={\"include\":[{\"library\":\"${LIBRARY}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
+            echo "has-releases=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             if [ ! -d "libs/${PACKAGE}" ]; then
               echo "Package directory 'libs/${PACKAGE}' does not exist"
               exit 1
             fi
 
-            TAG="vivarium-${PACKAGE}-v${VERSION}"
+            # Strip leading underscore from internal-prefixed lib dirs (e.g. _compat -> compat)
+            # so the tag uses the public PyPI name pattern.
+            TAG="vivarium-${PACKAGE#_}-v${VERSION}"
             if git tag -l "$TAG" | grep -q .; then
               echo "Tag $TAG already exists"
               exit 1
@@ -71,7 +99,9 @@ jobs:
                 exit 1
               fi
 
-              TAG="vivarium-${LIB}-v${VERSION}"
+              # Strip leading underscore from internal-prefixed lib dirs (e.g. _compat -> compat)
+              # so the tag uses the public PyPI name pattern.
+              TAG="vivarium-${LIB#_}-v${VERSION}"
               if git tag -l "$TAG" | grep -q .; then
                 echo "Tag $TAG already exists, skipping"
                 continue
@@ -151,7 +181,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
+          # Strip leading underscore from internal-prefixed lib dirs (e.g. _compat -> compat)
+          # so the tag uses the public PyPI name pattern.
+          LIB="${{ matrix.library }}"
+          TAG="vivarium-${LIB#_}-v${{ matrix.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -172,9 +205,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
+          # Strip leading underscore from internal-prefixed lib dirs (e.g. _compat -> compat)
+          # so the tag and release title use the public PyPI name pattern.
+          LIB="${{ matrix.library }}"
+          PUBLIC="${LIB#_}"
+          TAG="vivarium-${PUBLIC}-v${{ matrix.version }}"
           gh release view "$TAG" 2>/dev/null || gh release create "$TAG" \
-            --title "vivarium-${{ matrix.library }} v${{ matrix.version }}" \
+            --title "vivarium-${PUBLIC} v${{ matrix.version }}" \
             --generate-notes
 
       - name: Send failure notification
