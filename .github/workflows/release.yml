@@ -63,6 +63,7 @@ jobs:
             echo "matrix={\"include\":[{\"library\":\"${LIBRARY}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
             echo "has-releases=true" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual release.yml dispatch. Validate inputs and use them directly.
             if [ ! -d "libs/${PACKAGE}" ]; then
               echo "Package directory 'libs/${PACKAGE}' does not exist"
               exit 1
@@ -79,6 +80,7 @@ jobs:
             echo "matrix={\"include\":[{\"library\":\"${PACKAGE}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
             echo "has-releases=true" >> $GITHUB_OUTPUT
           else
+            # Push to main. Detect all changed CHANGELOG.rst files and parse versions.
             BEFORE="${{ github.event.before }}"
             AFTER="${{ github.event.after }}"
             if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
