@@ -23,9 +23,8 @@ class NativeSpecification(NamedTuple):
     peak_memory: float  # Memory in GB
     max_runtime: str
     hardware: list[str]
-
-    # Class constant
-    NUM_THREADS: int = 1
+    cores: int = 1
+    """Number of CPU cores to request from SLURM. Default is 1."""
 
     def to_jobmon_spec(self, worker_logging_root: Path) -> dict[str, Any]:
         """Build the Jobmon compute resources dict from this NativeSpecification.
@@ -54,7 +53,7 @@ class NativeSpecification(NamedTuple):
             "project": self.project,
             "memory": self.peak_memory,  # GB – Jobmon converts to MB
             "runtime": self._runtime_to_seconds(self.max_runtime),
-            "cores": self.NUM_THREADS,
+            "cores": self.cores,
             "stdout": str(worker_logging_root),
             "stderr": str(worker_logging_root),
         }

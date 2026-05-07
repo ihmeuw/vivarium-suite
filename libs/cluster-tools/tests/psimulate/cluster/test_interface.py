@@ -79,7 +79,7 @@ class TestNativeSpecification:
         assert spec["project"] == "proj_sim_science"
         assert spec["memory"] == 4.0
         assert spec["runtime"] == 3600
-        assert spec["cores"] == ns.NUM_THREADS
+        assert spec["cores"] == 1  # default
         assert spec["stdout"] == str(worker_logging_root)
         assert spec["stderr"] == str(worker_logging_root)
 

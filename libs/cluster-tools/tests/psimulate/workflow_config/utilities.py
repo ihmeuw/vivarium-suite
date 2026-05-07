@@ -132,3 +132,24 @@ def write_psimulate_config(
     config_path = tmp_path / "psimulate_config.yaml"
     config_path.write_text(yaml.dump(config, sort_keys=False))
     return config_path
+
+
+def make_pytest_step_dict(**overrides: Any) -> dict[str, Any]:
+    """Create a minimal valid pytest step dict with sensible defaults.
+
+    Returns a dict suitable for inclusion in a workflow's steps list.
+    Override any field or provide additional args.
+    """
+    defaults: dict[str, Any] = {
+        "name": "run_tests",
+        "type": "pytest",
+        "resources": {
+            "memory_gb": 4,
+            "runtime": "01:00:00",
+        },
+        "args": {
+            "path": "tests/",
+        },
+    }
+    defaults.update(overrides)
+    return defaults

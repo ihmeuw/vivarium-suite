@@ -48,6 +48,7 @@ if __name__ == "__main__":
         "vivarium>=3.0.0",
         "psutil",
         "layered_config_tree",
+        "pytest-xdist",
     ]
     # TODO: Move this to the install requires if we move VCT to stash.
     if not os.environ.get("READTHEDOCS"):
