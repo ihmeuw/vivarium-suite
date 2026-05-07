@@ -1,3 +1,7 @@
+**0.1.3 - 05/07/26**
+
+- Remove unnecessary iniit file from vivarium._compat subpackage.
+
 **0.1.2 - 05/07/26**
 
 - Add vivarium_profiling redirect
