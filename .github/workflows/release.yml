@@ -162,7 +162,9 @@ jobs:
         run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
 
       - name: Install ${{ matrix.library }}
-        run: uv pip install --system build -e "libs/${{ matrix.library }}[dev]"
+        run: |
+          cd libs/${{ matrix.library }} && make install UV_FLAGS=--system
+          uv pip install --system build
 
       - name: Run tests
         run: cd libs/${{ matrix.library }} && make test-all

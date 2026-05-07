@@ -117,13 +117,7 @@ jobs:
         run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
 
       - name: Install ${{ matrix.library }}
-        # IHME artifactory hosts internal packages (e.g. jobmon-installer-ihme)
-        # that newer versions of vivarium-cluster-tools depend on. Without it,
-        # the resolver falls back to incompatible older versions.
-        run: |
-          cd libs/${{ matrix.library }} && uv pip install --system -e ".[dev]" \
-            --extra-index-url https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/simple/ \
-            --index-strategy unsafe-best-match
+        run: cd libs/${{ matrix.library }} && make install UV_FLAGS=--system
 
       - name: Lint ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make lint
