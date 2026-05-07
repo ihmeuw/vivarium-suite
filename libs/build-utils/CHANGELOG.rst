@@ -1,3 +1,7 @@
+**3.2.1 - 05/07/26**
+
+   - Fix bug in manual override for "weekly" cluster tests.
+
 **3.2.0 - 05/06/26**
 
    - Add manual override for "weekly" cluster tests.

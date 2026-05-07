@@ -94,7 +94,7 @@ def checkFormatting(Boolean run_mypy) {
     }
 }
 
-def runTests(List test_types) {
+def runTests(List test_types, boolean runWeekly) {
     stage("Run Tests - Python ${PYTHON_VERSION}") {
         script {
             def full_name = { test_type ->
@@ -107,7 +107,7 @@ def runTests(List test_types) {
             def parallelTests = test_types.collectEntries {
                 ["${full_name(it)} Tests" : {
                     stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
-                        sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}${(env.IS_CRON.toBoolean() || params.RUN_WEEKLY) ? ' RUNWEEKLY=1' : ''}"
+                        sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}${runWeekly ? ' RUNWEEKLY=1' : ''}"
                         // Map test target names to coverage directory names
                         // test-all -> htmlcov_tests, test-unit -> htmlcov_unit, etc.
                         def coverageDir = it == 'test-all' ? 'tests' : it.replace('test-', '')
