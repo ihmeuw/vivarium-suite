@@ -13,9 +13,10 @@ from pathlib import Path
 
 import click
 from loguru import logger
-from vivarium_profiling.constants import data_keys, metadata
-from vivarium_profiling.tools.app_logging import add_logging_sink, decode_status
-from vivarium_profiling.utilities import sanitize_location
+
+from vivarium.profiling.constants import data_keys, metadata
+from vivarium.profiling.tools.app_logging import add_logging_sink, decode_status
+from vivarium.profiling.utilities import sanitize_location
 
 
 def running_from_cluster() -> bool:
@@ -222,7 +223,7 @@ def build_single_location_artifact(
         add_logging_sink(log_file, verbose=2)
 
     # Local import to avoid data dependencies
-    from vivarium_profiling.data import builder
+    from vivarium.profiling.data import builder
 
     logger.info(f"Building artifact for {location} at {str(path)}.")
     artifact = builder.open_artifact(path, location)

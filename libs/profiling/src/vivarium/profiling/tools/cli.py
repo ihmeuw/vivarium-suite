@@ -8,11 +8,12 @@ import click
 from loguru import logger
 from vivarium.framework.logging import configure_logging_to_file
 from vivarium.framework.utilities import handle_exceptions
-from vivarium_profiling.constants import metadata, paths
-from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
-from vivarium_profiling.tools.extraction import ExtractionConfig
-from vivarium_profiling.tools.run_benchmark import run_benchmark_loop
-from vivarium_profiling.tools.summarize import run_summarize_analysis
+
+from vivarium.profiling.constants import metadata, paths
+from vivarium.profiling.tools import build_artifacts, configure_logging_to_terminal
+from vivarium.profiling.tools.extraction import ExtractionConfig
+from vivarium.profiling.tools.run_benchmark import run_benchmark_loop
+from vivarium.profiling.tools.summarize import run_summarize_analysis
 
 
 @click.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})

@@ -22,7 +22,8 @@ from vivarium_inputs import interface
 from vivarium_inputs import utilities as vi_utils
 from vivarium_inputs import utility_data
 from vivarium_inputs.mapping_extension import alternative_risk_factors
-from vivarium_profiling.constants import data_keys
+
+from vivarium.profiling.constants import data_keys
 
 
 def get_data(

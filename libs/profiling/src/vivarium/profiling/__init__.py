@@ -1,5 +1,5 @@
-"""vivarium_profiling
+"""vivarium.profiling
 
-Vivarium simulation model for the vivarium_profiling project.
+Vivarium simulation model for the vivarium.profiling project.
 
 """

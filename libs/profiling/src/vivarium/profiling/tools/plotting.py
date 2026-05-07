@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from vivarium_profiling.tools.extraction import ExtractionConfig
+
+from vivarium.profiling.tools.extraction import ExtractionConfig
 
 """Benchmark visualization utilities."""
 
