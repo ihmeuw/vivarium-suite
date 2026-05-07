@@ -147,15 +147,7 @@ jobs:
       - name: Run tests
         run: cd libs/${{ matrix.library }} && make test-all
 
-      - name: Build
-        run: cd libs/${{ matrix.library }} && python -m build
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: libs/${{ matrix.library }}/dist/
-
-      - name: Create tag and GitHub Release
+      - name: Create and push tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -168,6 +160,19 @@ jobs:
             git push origin "$TAG"
           fi
 
+      - name: Build
+        run: cd libs/${{ matrix.library }} && python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: libs/${{ matrix.library }}/dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
           gh release view "$TAG" 2>/dev/null || gh release create "$TAG" \
             --title "vivarium-${{ matrix.library }} v${{ matrix.version }}" \
             --generate-notes
