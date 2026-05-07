@@ -1,3 +1,7 @@
+**0.1.2 - 05/07/26**
+
+- Add vivarium_profiling redirect
+
 **0.1.1 - 05/07/26**
 
 - Add Jenkinsfile for overnight builds
