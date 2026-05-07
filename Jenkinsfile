@@ -23,6 +23,12 @@ pipeline {
 
     stages {
         stage('Multi-Multibranch Pipeline') {
+            // Only provision Jenkins items from main builds. Skip on PR builds (where
+            // env.CHANGE_ID is set) to avoid race conditions between pr-head/pr-merge
+            // sub-jobs both trying to create or update the same items.
+            when {
+                not { changeRequest() }
+            }
             steps {
                 script {
                     def jenkinsfiles = findFiles(glob: 'libs/*/Jenkinsfile').collect { it.path }
