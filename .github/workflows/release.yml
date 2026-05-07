@@ -172,15 +172,13 @@ jobs:
         run: cd libs/${{ matrix.library }} && make validate-tag
 
       - name: Install ${{ matrix.library }}
-        run: |
-          cd libs/${{ matrix.library }} && make install UV_FLAGS=--system
-          uv pip install --system build
+        run: cd libs/${{ matrix.library }} && make install UV_FLAGS=--system
 
       - name: Run tests
         run: cd libs/${{ matrix.library }} && make test-all
 
       - name: Build
-        run: cd libs/${{ matrix.library }} && python -m build
+        run: cd libs/${{ matrix.library }} && make build-package
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
