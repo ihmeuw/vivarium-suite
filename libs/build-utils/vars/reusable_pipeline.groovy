@@ -32,10 +32,11 @@ def call(Map config = [:]){
   def skip_doc_build = (config?.skip_doc_build == true)
   def run_mypy = (config.run_mypy != null) ? config.run_mypy : true
 
-  // task_node and conda_env_dir are resolved in the Initialization stage
-  // after user parameters are available (needed for RUN_WEEKLY override).
+  // task_node, conda_env_dir, and run_weekly are resolved in the Initialization
+  // stage after user parameters are available (needed for RUN_WEEKLY override).
   def task_node
   def conda_env_dir
+  def run_weekly
   conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
 
   echo "Configuration constants:"
@@ -162,7 +163,7 @@ def call(Map config = [:]){
             // Determine whether to run weekly tests. Weekly tests only apply
             // when requires_slurm is "weekly" — triggered on Sundays (for cron)
             // or when the user explicitly sets the RUN_WEEKLY parameter.
-            def run_weekly = false
+            run_weekly = false
             def use_slurm
             // HACK MIC-7083: We are conflating "run weekly tests" with "use slurm weekly" here,
             // even though you could conceivably have weekly tests that do not require slurm.

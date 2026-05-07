@@ -1,3 +1,7 @@
+**3.2.2 - 05/07/26**
+
+   - Bugfix: Make "run_weekly" parameter available to all stages.
+
 **3.2.1 - 05/07/26**
 
    - Fix bug in manual override for "weekly" cluster tests.
