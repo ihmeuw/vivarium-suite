@@ -140,7 +140,9 @@ def bottleneck_config(
 
 
 def phase_config(
-    name: str, filename: str = "/vivarium/framework/engine.py", line_number: int | None = None
+    name: str,
+    filename: str = "/vivarium/framework/engine.py",
+    line_number: int | None = None,
 ) -> FunctionCallConfiguration:
     """Create a FunctionCallConfiguration for a simulation phase (extracts cumtime only).
 

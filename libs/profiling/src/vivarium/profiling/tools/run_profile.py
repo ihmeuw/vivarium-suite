@@ -27,7 +27,9 @@ def main():
     parser = argparse.ArgumentParser(description="Run Vivarium simulation for profiling")
     parser.add_argument("model_specification", help="Path to model specification file")
     parser.add_argument(
-        "--config-override", default="{}", help="Configuration override as JSON/dict string"
+        "--config-override",
+        default="{}",
+        help="Configuration override as JSON/dict string",
     )
     parser.add_argument(
         "--profiler",

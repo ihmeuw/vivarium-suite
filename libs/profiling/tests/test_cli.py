@@ -3,7 +3,6 @@ from typing import List
 
 import pytest
 from click.testing import CliRunner
-
 from vivarium_profiling.tools.cli import profile_sim
 
 
@@ -146,7 +145,10 @@ def test_profile_sim_extra_args(
     mock_subprocess_run = mocker.patch("subprocess.run")
 
     run_profile_sim_command(
-        runner, model_spec, results_dir, ["--profiler", "scalene", "--cpu-only", "--html"]
+        runner,
+        model_spec,
+        results_dir,
+        ["--profiler", "scalene", "--cpu-only", "--html"],
     )
 
     # Verify extra arguments were passed to scalene

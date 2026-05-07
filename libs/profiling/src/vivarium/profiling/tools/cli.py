@@ -8,7 +8,6 @@ import click
 from loguru import logger
 from vivarium.framework.logging import configure_logging_to_file
 from vivarium.framework.utilities import handle_exceptions
-
 from vivarium_profiling.constants import metadata, paths
 from vivarium_profiling.tools import build_artifacts, configure_logging_to_terminal
 from vivarium_profiling.tools.extraction import ExtractionConfig
@@ -175,7 +174,10 @@ def profile_sim(
     help="Specify an output directory. Directory must exist.",
 )
 @click.option(
-    "-a", "--append", is_flag=True, help="Append to the artifact instead of overwriting."
+    "-a",
+    "--append",
+    is_flag=True,
+    help="Append to the artifact instead of overwriting.",
 )
 @click.option("-r", "--replace-keys", multiple=True, help="Specify keys to overwrite")
 @click.option("-v", "verbose", count=True, help="Configure logging verbosity.")

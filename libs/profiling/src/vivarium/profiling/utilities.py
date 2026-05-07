@@ -6,7 +6,6 @@ import pandas as pd
 from loguru import logger
 from scipy import stats
 from vivarium.framework.randomness import get_hash
-
 from vivarium_profiling.constants import metadata
 
 SeededDistribution = tuple[str, stats.rv_continuous]
@@ -105,7 +104,10 @@ def _get_standard_deviation(
 
 
 def get_lognorm_from_quantiles(
-    median: float, lower: float, upper: float, quantiles: tuple[float, float] = (0.025, 0.975)
+    median: float,
+    lower: float,
+    upper: float,
+    quantiles: tuple[float, float] = (0.025, 0.975),
 ) -> stats.lognorm:
     """Returns a frozen lognormal distribution with the specified median, such that
     (lower, upper) are approximately equal to the quantiles with ranks

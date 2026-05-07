@@ -1,9 +1,6 @@
 from pathlib import Path
 
-from vivarium_profiling.tools.run_profile import (
-    run_profile_cprofile,
-    run_profile_scalene,
-)
+from vivarium_profiling.tools.run_profile import run_profile_cprofile, run_profile_scalene
 
 
 def test_run_profile_scalene_uses_correct_context_manager(mocker):

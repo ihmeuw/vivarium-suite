@@ -36,11 +36,19 @@ def add_logging_sink(
         )
     elif verbose == 1:
         logger.add(
-            sink, colorize=colorize, level="INFO", format=message_format, serialize=serialize
+            sink,
+            colorize=colorize,
+            level="INFO",
+            format=message_format,
+            serialize=serialize,
         )
     elif verbose >= 2:
         logger.add(
-            sink, colorize=colorize, level="DEBUG", format=message_format, serialize=serialize
+            sink,
+            colorize=colorize,
+            level="DEBUG",
+            format=message_format,
+            serialize=serialize,
         )
 
 

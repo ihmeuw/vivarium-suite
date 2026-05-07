@@ -13,7 +13,6 @@ from pathlib import Path
 
 import click
 from loguru import logger
-
 from vivarium_profiling.constants import data_keys, metadata
 from vivarium_profiling.tools.app_logging import add_logging_sink, decode_status
 from vivarium_profiling.utilities import sanitize_location

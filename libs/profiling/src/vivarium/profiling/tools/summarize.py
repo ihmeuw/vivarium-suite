@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 from loguru import logger
-
 from vivarium_profiling.tools.extraction import ExtractionConfig
 from vivarium_profiling.tools.notebook_generator import (
     NOTEBOOK_NAME,

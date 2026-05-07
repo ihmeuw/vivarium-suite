@@ -4,7 +4,6 @@ from pathlib import Path
 
 import nbformat as nbf
 from loguru import logger
-
 from vivarium_profiling.templates import ANALYSIS_NOTEBOOK_TEMPLATE
 
 NOTEBOOK_NAME = "analysis.ipynb"
