@@ -16,6 +16,8 @@ on:
         description: 'Version to release (e.g. 4.1.0)'
         required: true
         type: string
+  release:
+    types: [published]
 
 jobs:
   detect:
@@ -36,7 +38,26 @@ jobs:
           PACKAGE: ${{ github.event.inputs.package }}
           VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Tag was created by the GitHub UI release. Parse it to find the lib and version.
+            # Tag format: "vivarium-<lib>-v<X.Y.Z>" where <lib> matches the libs/<lib>/ dir.
+            TAG_NAME="${{ github.event.release.tag_name }}"
+            if [[ ! "$TAG_NAME" =~ ^vivarium-(.+)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              echo "Tag '${TAG_NAME}' does not match 'vivarium-<lib>-v<X.Y.Z>'"
+              exit 1
+            fi
+            LIBRARY="${BASH_REMATCH[1]}"
+            VERSION="${BASH_REMATCH[2]}"
+
+            if [ ! -d "libs/${LIBRARY}" ]; then
+              echo "Could not find lib directory 'libs/${LIBRARY}'"
+              exit 1
+            fi
+
+            echo "matrix={\"include\":[{\"library\":\"${LIBRARY}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
+            echo "has-releases=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual release.yml dispatch. Validate inputs and use them directly.
             if [ ! -d "libs/${PACKAGE}" ]; then
               echo "Package directory 'libs/${PACKAGE}' does not exist"
               exit 1
@@ -51,6 +72,7 @@ jobs:
             echo "matrix={\"include\":[{\"library\":\"${PACKAGE}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
             echo "has-releases=true" >> $GITHUB_OUTPUT
           else
+            # Push to main. Detect all changed CHANGELOG.rst files and parse versions.
             BEFORE="${{ github.event.before }}"
             AFTER="${{ github.event.after }}"
             if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
