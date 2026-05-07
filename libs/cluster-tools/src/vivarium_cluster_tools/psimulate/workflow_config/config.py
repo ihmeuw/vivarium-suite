@@ -10,12 +10,14 @@ Parse and validate workflow YAML configuration files.
 from __future__ import annotations
 
 import re
+import shlex
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import yaml
+from loguru import logger
 
 from vivarium_cluster_tools.psimulate import COMMANDS, branches
 from vivarium_cluster_tools.psimulate.cluster.interface import NativeSpecification
@@ -146,6 +148,7 @@ class ResourceConfig:
             peak_memory=float(self.memory_gb),
             max_runtime=self.runtime,
             hardware=self.hardware or [],
+            cores=self.cores,
         )
 
 
@@ -165,6 +168,10 @@ class BaseStepConfig(ABC):
     resources: ResourceConfig
     output_directory: Path
     environment: str | None
+
+    _SUPPORTED_ARGS: ClassVar[set[str] | None] = None
+    """Arguments supported in the 'args' section of the step configuration. Arguments not 
+    in this set will be rejected with a validation error."""
 
     def __post_init__(self) -> None:
         """Common validation for all step types, then call subclass validation.
@@ -204,7 +211,7 @@ class BaseStepConfig(ABC):
         """
         pass
 
-    @abstractmethod
+    @property
     def supported_arguments(self) -> set[str] | None:
         """Return the set of argument names valid in the 'args' section.
 
@@ -215,16 +222,13 @@ class BaseStepConfig(ABC):
         that can appear in the 'args' section. These correspond to CLI options
         users can pass to that step type's command.
 
-        The _validate() method should check that any provided args are in this
-        set (for typed steps) or that no args are provided (for command steps).
-
         Returns
         -------
             None for command-based steps, or set of supported argument names
             for typed steps (e.g., {"config", "model_specification",
             "branch_configuration", "artifact_path", "hardware", ...}).
         """
-        pass
+        return self._SUPPORTED_ARGS
 
     @classmethod
     @abstractmethod
@@ -255,7 +259,6 @@ class BaseStepConfig(ABC):
         """
         pass
 
-    @abstractmethod
     def get_tasks(
         self,
         tool: Tool,
@@ -266,13 +269,9 @@ class BaseStepConfig(ABC):
     ) -> list[Task]:
         """Create Jobmon Tasks for this step.
 
-        Returns one or more tasks to add to the workflow. Command steps
-        return a single task; simulation steps return one task per
-        (draw, seed, branch) combination.
-
-        Resources (including project and queue) are read from
-        ``self.resources``, which has workflow-level defaults resolved
-        at construction time via :meth:`ResourceConfig.from_dict`.
+        The default implementation creates a single task by calling
+        ``_build_command``.  Subclasses that need multiple tasks
+        (e.g. simulation steps) should override this method.
 
         Parameters
         ----------
@@ -292,7 +291,53 @@ class BaseStepConfig(ABC):
         -------
             A list of Jobmon Task instances ready to be added to a workflow.
         """
+        return [
+            self._create_single_command_task(tool, env=env, command=self._build_command())
+        ]
+
+    @abstractmethod
+    def _build_command(self) -> str:
+        """Build the command string for this step.
+
+        Returns
+        -------
+            The shell command to execute.
+        """
         pass
+
+    def _create_single_command_task(self, tool: Tool, *, env: str, command: str) -> Task:
+        """Create a single Jobmon task that runs a command under conda.
+
+        Parameters
+        ----------
+        tool
+            The Jobmon Tool instance to create task templates from.
+        env
+            Conda environment name to wrap the command with.
+        command
+            The command string to execute.
+
+        Returns
+        -------
+            A Jobmon Task instance.
+        """
+        task_template = tool.get_task_template(
+            template_name="workflow_command_step",
+            command_template="conda run --no-capture-output -n {env} {command}",
+            node_args=["command"],
+            task_args=[],
+            op_args=["env"],
+            default_cluster_name="slurm",
+        )
+        compute_resources = self.native_specification.to_jobmon_spec(
+            worker_logging_root=self.output_directory,
+        )
+        return task_template.create_task(
+            name=self.name,
+            compute_resources=compute_resources,
+            env=env,
+            command=command,
+        )
 
     @abstractmethod
     def to_dict(self) -> dict[str, Any]:
@@ -331,38 +376,9 @@ class CommandStepConfig(BaseStepConfig):
         if not self.command:
             raise ValueError(f"Step '{self.name}': 'command' is required.")
 
-    def supported_arguments(self) -> set[str] | None:
-        """Command-based steps don't have an 'args' section."""
-        return None
-
-    def get_tasks(
-        self,
-        tool: Tool,
-        *,
-        env: str,
-        build_timestamp: str,
-        is_resume: bool = False,
-    ) -> list[Task]:
-        """Create a single Jobmon Task for this command step."""
-        task_template = tool.get_task_template(
-            template_name="workflow_command_step",
-            command_template="conda run --no-capture-output -n {env} {command}",
-            node_args=["command"],
-            task_args=[],
-            op_args=["env"],
-            default_cluster_name="slurm",
-        )
-        native_spec = self.native_specification
-        compute_resources = native_spec.to_jobmon_spec(
-            worker_logging_root=self.output_directory,
-        )
-        task = task_template.create_task(
-            name=self.name,
-            compute_resources=compute_resources,
-            env=env,
-            command=self.command,
-        )
-        return [task]
+    def _build_command(self) -> str:
+        """Return the raw command string."""
+        return self.command
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a dictionary, omitting None values."""
@@ -478,9 +494,11 @@ class SimulationStepConfig(BaseStepConfig):
                 f"Step '{self.name}': simulation type requires 'branch_configuration'."
             )
 
-    def supported_arguments(self) -> set[str]:
-        """Return valid keys for the 'args' section of simulation steps."""
-        return self._SUPPORTED_ARGS
+    def _build_command(self) -> str:
+        """Not used -- simulation steps override get_tasks directly."""
+        raise NotImplementedError(
+            "SimulationStepConfig does not use _build_command. " "Use get_tasks() instead."
+        )
 
     def get_tasks(
         self,
@@ -602,12 +620,151 @@ class SimulationStepConfig(BaseStepConfig):
 
 
 @dataclass
+class PytestStepConfig(BaseStepConfig):
+    """Configuration for a pytest-based workflow step.
+
+    This step type constructs a ``pytest`` command from structured arguments
+    and runs it as a single Jobmon task.
+
+    Examples
+    --------
+    YAML configuration::
+
+        steps:
+          - name: unit_tests
+            type: pytest
+            resources:
+              memory_gb: 8
+              runtime: "01:00:00"
+              cores: 4
+            args:
+              path: tests/
+              k: "test_foo"
+              runslow: true
+
+    Multiple paths::
+
+        steps:
+          - name: unit_and_integration
+            type: pytest
+            resources:
+              memory_gb: 8
+              runtime: "01:00:00"
+            args:
+              path:
+                - tests/unit
+                - tests/integration
+    """
+
+    _SUPPORTED_ARGS: ClassVar[set[str]] = {
+        "path",
+        "k",
+        "runslow",
+    }
+
+    name: str
+    """Unique name for this step within the workflow."""
+    resources: ResourceConfig
+    """Compute resources for this step."""
+    output_directory: Path
+    """Output directory for this step. Inherited from the workflow's output_directory."""
+    environment: str | None = None
+    """Optional environment name to use for this step."""
+    path: str | list[str] | None = None
+    """Test path(s) (file or directory) to pass to pytest. Can be a single string
+    or a list of strings. At least one of ``path`` or ``k`` is required."""
+    k: str | None = None
+    """Pytest ``-k`` expression to filter tests by name. At least one of ``path`` or ``k`` is required."""
+    runslow: bool = False
+    """Whether to pass --runslow flag."""
+
+    def _validate(self) -> None:
+        """Validate pytest step configuration."""
+        if not self.path and not self.k:
+            raise ValueError(
+                f"Step '{self.name}': pytest type requires at least one of 'path' or 'k'."
+            )
+
+    def _build_command(self) -> str:
+        """Build the pytest command string from structured arguments."""
+        parts = ["pytest"]
+        if self.path:
+            if isinstance(self.path, list):
+                parts.extend(shlex.quote(p) for p in self.path)
+            else:
+                parts.append(shlex.quote(self.path))
+        if self.k:
+            parts.append(f"-k {shlex.quote(self.k)}")
+        if self.runslow:
+            parts.append("--runslow")
+        if self.resources.cores > 1:
+            parts.append(f"--numprocesses {self.resources.cores}")
+        return " ".join(parts)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a dictionary with type: pytest."""
+        result: dict[str, Any] = {
+            "name": self.name,
+            "type": "pytest",
+            "resources": self.resources.to_dict(),
+        }
+        if self.environment is not None:
+            result["environment"] = self.environment
+
+        args: dict[str, Any] = {}
+        if self.path is not None:
+            args["path"] = self.path  # str or list[str]
+        if self.k is not None:
+            args["k"] = self.k
+        if self.runslow:
+            args["runslow"] = True
+
+        result["args"] = args
+        return result
+
+    @classmethod
+    def from_dict(
+        cls, data: dict[str, Any], output_directory: Path, *, project: str, queue: str
+    ) -> PytestStepConfig:
+        """Create a PytestStepConfig from a dictionary."""
+        args = data.get("args", {}) or {}
+
+        # Validate that only supported arguments are in args
+        unsupported = set(args) - cls._SUPPORTED_ARGS
+        if unsupported:
+            step_name = data.get("name", "<unnamed>")
+            raise ValueError(
+                f"Step '{step_name}': unsupported args {sorted(unsupported)}. "
+                f"Supported args: {sorted(cls._SUPPORTED_ARGS)}."
+            )
+
+        kwargs: dict[str, Any] = {
+            "name": data["name"],
+            "resources": ResourceConfig.from_dict(
+                data["resources"], workflow_project=project, workflow_queue=queue
+            ),
+            "output_directory": output_directory,
+        }
+        if "environment" in data:
+            kwargs["environment"] = data["environment"]
+        if "path" in args:
+            kwargs["path"] = args["path"]
+        if "k" in args:
+            kwargs["k"] = args["k"]
+        if "runslow" in args:
+            kwargs["runslow"] = args["runslow"]
+
+        return cls(**kwargs)
+
+
+@dataclass
 class WorkflowConfig:
     """Parsed and validated workflow configuration."""
 
     # Step type mappings - add new step types here as they are implemented
     SUPPORTED_STEP_TYPES: ClassVar[dict[str, type[BaseStepConfig]]] = {
         "simulation": SimulationStepConfig,
+        "pytest": PytestStepConfig,
     }
 
     name: str

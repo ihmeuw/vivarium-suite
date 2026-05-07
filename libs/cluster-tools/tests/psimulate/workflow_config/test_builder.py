@@ -173,7 +173,7 @@ class TestResourceDefaults:
         call_kwargs = template_mock.create_task.call_args[1]
         assert call_kwargs["compute_resources"]["memory"] == 16.0
         assert call_kwargs["compute_resources"]["runtime"] == 14400
-        assert call_kwargs["compute_resources"]["cores"] == 1
+        assert call_kwargs["compute_resources"]["cores"] == 8
 
 
 class TestEnvironmentResolution:
