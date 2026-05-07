@@ -1,16 +1,14 @@
 from layered_config_tree import LayeredConfigTree
-from vivarium import Component
 from vivarium.framework.components import ComponentConfigurationParser
 from vivarium.framework.components.parser import ParsingError
-from vivarium.profiling.components.risks.effect import (
-    NonLogLinearRiskEffect,
-    RiskEffect,
-)
 from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.disease.models import SIS_fixed_duration
 from vivarium_public_health.results import DiseaseObserver
 from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
 from vivarium_public_health.risks.base_risk import Risk
+
+from vivarium import Component
+from vivarium.profiling.components.risks.effect import NonLogLinearRiskEffect, RiskEffect
 
 CAUSE_KEY = "causes"
 RISK_KEY = "risks"
