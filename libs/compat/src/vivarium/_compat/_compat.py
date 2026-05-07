@@ -27,7 +27,7 @@ from types import ModuleType
 # enable an entry before its target package is released.
 _REDIRECTS: dict[str, str] = {
     # Renamed top-level packages (enable when each package migrates)
-    # "vivarium_profiling": "vivarium.profiling",
+    "vivarium_profiling": "vivarium.profiling",
     # "vivarium_public_health": "vivarium.public_health",
     # "vivarium_cluster_tools": "vivarium.cluster_tools",
     # "vivarium_testing_utils": "vivarium.testing_utils",
