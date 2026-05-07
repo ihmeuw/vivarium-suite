@@ -11,6 +11,7 @@ license = {text = "BSD 3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
+    "vivarium-compat",
     "vivarium_dependencies[pandas,numpy,scipy,click,tables,loguru]",
     "vivarium_build_utils>=3.0.2,<4.0.0",
     "gbd_mapping>=4.1.6",
