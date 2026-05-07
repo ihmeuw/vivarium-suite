@@ -139,8 +139,6 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Validate CHANGELOG date
-        # Skipped for workflow_dispatch: manual releases are for recovery/retries where date check is irrelevant
-        if: github.event_name == 'push'
         run: |
           # Date is checked against Pacific time to match IHME's release conventions
           # CHANGELOG format is "X.Y.Z - MM/DD/YY" (2-digit year)
