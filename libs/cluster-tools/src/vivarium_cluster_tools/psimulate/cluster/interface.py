@@ -94,7 +94,7 @@ class NativeSpecification(NamedTuple):
 _SLURM_TIMEOUT_BUFFER_SECONDS = 120
 
 
-def get_workflow_timeout_seconds() -> int:
+def get_workflow_timeout_seconds() -> int | None:
     """Get jobmon workflow's timeout in seconds.
 
     The result includes a small buffer so that the workflow can shut down
@@ -102,20 +102,24 @@ def get_workflow_timeout_seconds() -> int:
 
     Returns
     -------
-        Remaining time in seconds (with buffer subtracted).
+        Remaining time in seconds (with buffer subtracted), or ``None`` if
+        there is no SLURM allocation (in which case Jobmon's built-in default
+        timeout is used).
 
     Raises
     ------
     RuntimeError
-        If ``SLURM_JOB_ID`` is not set, the remaining time is less than the safety
+        If the remaining time is less than the safety
         buffer, or the remaining time cannot be determined from ``squeue``.
     """
     job_id = os.environ.get("SLURM_JOB_ID")
     if job_id is None:
-        raise RuntimeError(
-            "SLURM_JOB_ID is not set. psimulate must be run from within a "
-            "SLURM allocation (e.g. via srun)."
+        logger.info(
+            "SLURM_JOB_ID is unset. The workflow is likely being run "
+            "from a SLURM-capable host without an explicit resource allocation "
+            "e.g. Jenkins. Deferring to Jobmon's default timeout."
         )
+        return None
 
     try:
         # squeue -h -j <job_id> -o %L gives the remaining time as D-HH:MM:SS

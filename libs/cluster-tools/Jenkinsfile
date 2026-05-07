@@ -34,5 +34,5 @@ reusable_pipeline(
       // for subsequent scheduled builds to run.
       "main"
     ],
-    requires_slurm: true, 
+    requires_slurm: "weekly", 
 )

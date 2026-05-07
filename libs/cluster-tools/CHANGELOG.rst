@@ -1,3 +1,7 @@
+**3.1.3 - 05/07/26**
+
+- Set VCT to run E2E tests on slurm weekly
+
 **3.1.2 - 04/27/26**
 
 - Dynamically determine jobmon workflow timeout from time remaining on runner node

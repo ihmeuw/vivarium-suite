@@ -178,10 +178,9 @@ class TestGetRunnerNodeRemainingSeconds:
         monkeypatch.setenv("SLURM_JOB_ID", "12345")
 
     def test_no_slurm_job_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Raise when not inside a SLURM allocation."""
+        """Return None when not inside a SLURM allocation."""
         monkeypatch.delenv("SLURM_JOB_ID")
-        with pytest.raises(RuntimeError, match="SLURM_JOB_ID is not set"):
-            get_workflow_timeout_seconds()
+        assert get_workflow_timeout_seconds() is None
 
     def test_returns_remaining_minus_buffer(self) -> None:
         """Return remaining seconds minus the safety buffer."""
