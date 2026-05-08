@@ -169,6 +169,14 @@ jobs:
           fi
 
       - name: Validate tag
+        # `make validate-tag` reads GITHUB_REF_NAME as the tag. In a
+        # workflow triggered by a CHANGELOG push, GITHUB_REF_NAME is "main"
+        # (the branch), so we override it here with the tag we just created.
+        # TAG_PREFIX tells the script to strip the lib-prefix before semver
+        # parsing and to scope the previous-tag lookup to this lib's tags.
+        env:
+          GITHUB_REF_NAME: vivarium-${{ matrix.library }}-v${{ matrix.version }}
+          TAG_PREFIX: vivarium-${{ matrix.library }}-
         run: cd libs/${{ matrix.library }} && make validate-tag
 
       - name: Install ${{ matrix.library }}
