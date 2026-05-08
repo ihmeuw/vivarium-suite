@@ -150,22 +150,10 @@ jobs:
             exit 1
           fi
 
-      - name: Validate version format
-        run: |
-          if ! echo "${{ matrix.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Version '${{ matrix.version }}' is not valid semver (X.Y.Z)"
-            exit 1
-          fi
-
       - name: Install vivarium_build_utils
+        # Install early so `make validate-tag` is available
         # FIXME: Update to main once epic/monorepo is merged
         run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
-
-      - name: Install ${{ matrix.library }}
-        run: uv pip install --system build -e "libs/${{ matrix.library }}[dev]"
-
-      - name: Run tests
-        run: cd libs/${{ matrix.library }} && make test-all
 
       - name: Create and push tag
         env:
@@ -180,8 +168,20 @@ jobs:
             git push origin "$TAG"
           fi
 
+      - name: Validate tag
+        run: cd libs/${{ matrix.library }} && make validate-tag
+
+      - name: Install ${{ matrix.library }}
+        # IHME_PYPI= disables the artifactory extra-index since the runner can't
+        # reach it (firewalled). Libs that need artifactory-only packages
+        # are tested/released via Jenkins.
+        run: cd libs/${{ matrix.library }} && make install UV_FLAGS=--system IHME_PYPI=
+
+      - name: Run tests
+        run: cd libs/${{ matrix.library }} && make test-all
+
       - name: Build
-        run: cd libs/${{ matrix.library }} && python -m build
+        run: cd libs/${{ matrix.library }} && make build-package
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

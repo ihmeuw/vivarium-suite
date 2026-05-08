@@ -117,7 +117,12 @@ jobs:
         run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
 
       - name: Install ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && uv pip install --system -e ".[dev]"
+        # UV_FLAGS=--system installs into the runner's system Python (no venv).
+        # IHME_PYPI= disables the artifactory extra-index, since IHME's
+        # artifactory is firewalled and unreachable from GH-hosted runners.
+        # Libs that depend on artifactory-only packages won't fully install in
+        # this environment by design - those are tested via Jenkins.
+        run: cd libs/${{ matrix.library }} && make install UV_FLAGS=--system IHME_PYPI=
 
       - name: Lint ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make lint
