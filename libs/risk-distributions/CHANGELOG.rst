@@ -1,3 +1,7 @@
+**2.3.4 - 05/07/26**
+
+ - Bugfix: Persist mirror_point in parameters so MirroredDistribution can be instantiated without mean/sd
+
 **2.3.3 - 04/15/26**
 
  - Add computability bound argument to Distribution class

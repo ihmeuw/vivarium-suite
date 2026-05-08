@@ -203,3 +203,18 @@ def test_individual_distribution_get_params(i, mean, sd):
     for dist in expected.keys():
         for params in expected[dist].keys():
             assert np.isclose(expected[dist][params][i], generated[dist][params])
+
+
+@pytest.mark.parametrize(
+    "distribution",
+    [risk_distributions.MirroredGumbel, risk_distributions.MirroredGamma],
+)
+def test_mirrored_distribution_from_parameters_only(distribution):
+    """Regression test: MirroredDistribution must be instantiable with only parameters."""
+    mean = pd.Series([10, 20, 30])
+    sd = pd.Series([1, 3, 5])
+    params = distribution.get_parameters(mean=mean, sd=sd)
+    dist = distribution(parameters=params)
+    assert not dist.mirror_point.isna().any()
+    result = dist.ppf(pd.Series([0.5, 0.5, 0.5]))
+    assert not np.isnan(result).any()

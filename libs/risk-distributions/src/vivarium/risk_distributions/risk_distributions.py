@@ -20,6 +20,7 @@ class BaseDistribution:
 
     distribution = None
     expected_parameters = ()
+    _extra_parameters = ()
 
     def __init__(
         self,
@@ -40,7 +41,9 @@ class BaseDistribution:
         computability_bound: float = 0.001,
     ) -> pd.DataFrame:
         required_parameters = list(
-            cls.expected_parameters + ("computability_min", "computability_max")
+            cls.expected_parameters
+            + cls._extra_parameters
+            + ("computability_min", "computability_max")
         )
         if parameters is not None:
             if not (mean is None and sd is None):
@@ -68,7 +71,7 @@ class BaseDistribution:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 parameters.loc[
-                    computable, list(cls.expected_parameters)
+                    computable, list(cls.expected_parameters + cls._extra_parameters)
                 ] = cls._get_parameters(
                     mean.loc[computable], sd.loc[computable], computability_bound
                 )
@@ -231,6 +234,8 @@ class BaseDistribution:
 
 
 class MirroredDistribution(BaseDistribution):
+    _extra_parameters = ("mirror_point",)
+
     def __init__(
         self,
         parameters: Parameters = None,
@@ -239,9 +244,12 @@ class MirroredDistribution(BaseDistribution):
         computability_bound: float = 0.001,
     ):
         super().__init__(parameters, mean, sd, computability_bound)
-        # Match index of mean/sd to parameters for ease of use in mirror point calculation
-        mean, sd = cast_to_series(mean, sd)
-        self.mirror_point = self.compute_mirror_point(mean, sd, computability_bound)
+        # When called from EnsembleDistribution.ppf, only parameters are provided.
+        if mean is not None and sd is not None:
+            mean, sd = cast_to_series(mean, sd)
+            self.mirror_point = self.compute_mirror_point(mean, sd, computability_bound)
+        else:
+            self.mirror_point = self.parameters["mirror_point"]
 
     @staticmethod
     def compute_mirror_point(
@@ -476,12 +484,13 @@ class MirroredGumbel(MirroredDistribution):
     def _get_parameters(
         mean: pd.Series, sd: pd.Series, computability_bound: float
     ) -> pd.DataFrame:
+        # Persist mirror_point in params so it's available when re-instantiated with only parameters.
+        mirror_point = MirroredGumbel.compute_mirror_point(mean, sd, computability_bound)
         params = pd.DataFrame(
             {
-                "loc": MirroredGumbel.compute_mirror_point(mean, sd, computability_bound)
-                - mean
-                - (np.euler_gamma * np.sqrt(6) / np.pi * sd),
+                "loc": mirror_point - mean - (np.euler_gamma * np.sqrt(6) / np.pi * sd),
                 "scale": np.sqrt(6) / np.pi * sd,
+                "mirror_point": mirror_point,
             },
             index=mean.index,
         )
@@ -516,6 +525,7 @@ class MirroredGamma(MirroredDistribution):
             {
                 "a": ((mirror_point - mean) / sd) ** 2,
                 "scale": sd**2 / (mirror_point - mean),
+                "mirror_point": mirror_point,
             },
             index=mean.index,
         )
