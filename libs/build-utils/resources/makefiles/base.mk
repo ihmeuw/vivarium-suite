@@ -117,7 +117,7 @@ install: ENV_REQS?=dev
 install: UV_FLAGS?=
 install: # Install package and dependencies
 	pip install uv
-	uv pip install --upgrade pip setuptools 
+	uv pip install --upgrade pip setuptools ${UV_FLAGS}
 	uv pip install -e .[${ENV_REQS}] --extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match ${UV_FLAGS}
 	@$(MAKE) setup-slack
 
