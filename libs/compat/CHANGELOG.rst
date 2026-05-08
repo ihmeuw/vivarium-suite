@@ -1,6 +1,6 @@
 **0.1.3 - 05/07/26**
 
-- Remove unnecessary iniit file from vivarium._compat subpackage.
+- Remove unnecessary init file from vivarium._compat subpackage.
 
 **0.1.2 - 05/07/26**
 
