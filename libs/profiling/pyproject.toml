@@ -38,9 +38,11 @@ dev = [
     "vivarium-profiling[test,cluster,interactive]",
     "vivarium_dependencies[lint]",
 ]
-# FIXME: Clean these up when ready
-ci_github = ["vivarium-profiling[dev]"]
-ci_jenkins = ["vivarium-profiling[dev]"]
+ci_github = [
+    "vivarium-profiling[test]",
+    "vivarium_dependencies[lint]",
+]
+ci_jenkins = ["vivarium-profiling[ci_github,cluster]"]
 
 [project.scripts]
 make_artifacts = "vivarium.profiling.tools.cli:make_artifacts"
