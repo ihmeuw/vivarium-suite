@@ -11,7 +11,13 @@ SAFE_NAME = $(shell python -c "from pkg_resources import safe_name; print(safe_n
 PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
 
 # Use this URL to pull IHME Python packages and deploy this package to PyPi.
-IHME_PYPI := https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/
+# Override with `make ... IHME_PYPI=` (empty) when running in environments that
+# can't reach the artifactory (e.g. GitHub Actions runners outside the IHME network).
+IHME_PYPI ?= https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/
+
+# Conditionally include extra-index flags so an empty IHME_PYPI yields a clean
+# command rather than `--extra-index-url simple/` which would be a broken URL.
+EXTRA_INDEX_FLAGS = $(if $(IHME_PYPI),--extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match,)
 
 # If CONDA_ENV_PATH is set (from a Jenkins build), use the -p flag when making Conda env in
 # order to make env at specific path. Otherwise, make a named env at the default path using
@@ -118,7 +124,7 @@ install: UV_FLAGS?=
 install: # Install package and dependencies
 	pip install uv
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
-	uv pip install -e .[${ENV_REQS}] --extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match ${UV_FLAGS}
+	uv pip install -e .[${ENV_REQS}] ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
 	@$(MAKE) setup-slack
 
 # Path to shared Slack bot token on the team filesystem.

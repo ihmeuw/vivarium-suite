@@ -2,6 +2,7 @@
 
    - Add support for monorepo
    - Search recursively for py.typed markers
+   - Make the artifactory extra-index URL configurable via Make variable
 
 **3.2.2 - 05/07/26**
 
