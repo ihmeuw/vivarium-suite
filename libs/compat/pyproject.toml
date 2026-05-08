@@ -14,6 +14,8 @@ dev = [
     "vivarium_dependencies[lint]",
     "vivarium_dependencies[pytest]",
 ]
+ci_github = ["vivarium-compat[dev]"]
+ci_jenkins = ["vivarium-compat[dev]"]
 
 [tool.hatch.version]
 source = "vcs"
