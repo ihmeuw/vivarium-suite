@@ -48,6 +48,10 @@ if [ ! -f "$CHANGELOG_PATH" ]; then
     exit 1
 fi
 
+# Optional tag prefix for monorepo libs whose tags look like
+# "vivarium-<lib>-vX.Y.Z" rather than "vX.Y.Z". Empty for standalone repos.
+TAG_PREFIX="${TAG_PREFIX:-}"
+
 # Determine the tag to validate
 RELEASE_TAG="${GITHUB_REF_NAME:-}"
 if [ -z "$RELEASE_TAG" ]; then
@@ -55,10 +59,11 @@ if [ -z "$RELEASE_TAG" ]; then
     exit 1
 fi
 
-# Extract version from tag (remove 'v' prefix if present)
-RELEASE_VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+# Extract version from tag: strip optional TAG_PREFIX, then optional 'v'.
+RELEASE_VERSION="${RELEASE_TAG#$TAG_PREFIX}"
+RELEASE_VERSION="${RELEASE_VERSION#v}"
 if ! is_strict_semver "$RELEASE_VERSION"; then
-    echo "ERROR: Tag '$RELEASE_TAG' must be strict semantic version format vX.Y.Z or X.Y.Z"
+    echo "ERROR: Tag '$RELEASE_TAG' must be strict semantic version format ${TAG_PREFIX}vX.Y.Z or ${TAG_PREFIX}X.Y.Z"
     exit 1
 fi
 
@@ -95,8 +100,9 @@ if [ "$RELEASE_VERSION" != "$CHANGELOG_VERSION" ]; then
 fi
 
 # Validate one-step bump against the previous released git tag (not changelog order).
+# When TAG_PREFIX is set, only tags matching the prefix participate.
 PREVIOUS_RELEASE_VERSION=$( (
-    git tag --list 2>/dev/null | sed 's/^v//'
+    git tag --list "${TAG_PREFIX}*" 2>/dev/null | sed "s|^${TAG_PREFIX}||" | sed 's/^v//'
     echo "$RELEASE_VERSION"
 ) | while IFS= read -r version; do
     if is_strict_semver "$version"; then
