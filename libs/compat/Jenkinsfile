@@ -32,4 +32,5 @@ reusable_pipeline(
     scheduled_branches: ['main'],
     skip_doc_build: true,
     run_mypy: false,
+    env_reqs: 'ci_jenkins',
 )
