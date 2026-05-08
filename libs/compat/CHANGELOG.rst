@@ -1,3 +1,7 @@
+**0.1.4 - 05/08/26**
+
+- Add github and jenkins CI dependencies
+
 **0.1.3 - 05/08/26**
 
 - Remove unnecessary init file from vivarium._compat subpackage.

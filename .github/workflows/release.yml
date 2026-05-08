@@ -175,7 +175,7 @@ jobs:
         # IHME_PYPI= disables the artifactory extra-index since the runner can't
         # reach it (firewalled). Libs that need artifactory-only packages
         # are tested/released via Jenkins.
-        run: cd libs/${{ matrix.library }} && make install UV_FLAGS=--system IHME_PYPI=
+        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=
 
       - name: Run tests
         run: cd libs/${{ matrix.library }} && make test-all
