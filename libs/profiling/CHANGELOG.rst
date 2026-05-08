@@ -1,4 +1,4 @@
-**v0.4.0 - 05/08/26**
+**v0.4.0 - 05/11/26**
 
 - Initial release to vivarium-suite monorepo
 
