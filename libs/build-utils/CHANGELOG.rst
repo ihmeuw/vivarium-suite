@@ -3,6 +3,7 @@
    - Add support for monorepo
    - Search recursively for py.typed markers
    - Make the artifactory extra-index URL configurable via Make variable
+   - Add 'env_reqs' parameter to reusable_pipeline.groovy for specifying CI build install extras
 
 **3.2.2 - 05/07/26**
 

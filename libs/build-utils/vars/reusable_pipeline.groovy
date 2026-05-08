@@ -11,26 +11,30 @@ def call(Map config = [:]){
   deployable: Whether the package can be deployed by Jenkins.
   skip_doc_build: Only skips the doc build.
   run_mypy: Whether to run mypy on the package
+  env_reqs: The pyproject.toml extras to install with `make install` (e.g. "ci_jenkins").
+            Empty/omitted leaves base.mk's default ("dev"), which is correct for standalone repos.
   */
-  
+
   // Handle config arguments
   def supportedArgs = [
     'scheduled_branches',
-    'stagger_scheduled_builds', 
+    'stagger_scheduled_builds',
     'test_types',
     'requires_slurm',
     'deployable',
     'skip_doc_build',
-    'run_mypy'
+    'run_mypy',
+    'env_reqs'
   ]
-  
-  def scheduled_branches = config.scheduled_branches ?: [] 
+
+  def scheduled_branches = config.scheduled_branches ?: []
   def stagger_scheduled_builds = config.stagger_scheduled_builds ?: false
   def test_types = config.test_types ?: ['all']
   def requires_slurm = config.requires_slurm ?: false
   def is_deployable = (config?.deployable == true)
   def skip_doc_build = (config?.skip_doc_build == true)
   def run_mypy = (config.run_mypy != null) ? config.run_mypy : true
+  def env_reqs = config.env_reqs ?: ""
 
   // task_node, conda_env_dir, and run_weekly are resolved in the Initialization
   // stage after user parameters are available (needed for RUN_WEEKLY override).
@@ -47,6 +51,7 @@ def call(Map config = [:]){
   echo "  is_deployable: ${is_deployable}"
   echo "  skip_doc_build: ${skip_doc_build}"
   echo "  run_mypy: ${run_mypy}"
+  echo "  env_reqs: ${env_reqs}"
 
   if (stagger_scheduled_builds && scheduled_branches.size() > 1) {
     startHour = 20
@@ -243,7 +248,7 @@ def call(Map config = [:]){
                       } else {
                         buildStages.runDebugInfo(skipEval)
                         buildStages.buildEnvironment()
-                        buildStages.installPackage()
+                        buildStages.installPackage(env_reqs)
                         buildStages.checkFormatting(run_mypy)
                         // Transform test type inputs to actual make test target names
                         tests = test_types.collect { "test-${it}" }
