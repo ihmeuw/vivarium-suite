@@ -99,7 +99,7 @@ def _write_workflow_config(
     """Write a 3-step workflow YAML config.
 
     Steps (each a different type):
-      1. ``init``    (shell)   – creates ``step_1_init.txt``
+      1. ``init``    (command) – creates ``step_1_init.txt``
       2. ``process`` (python)  – verifies step 1, creates ``step_2_process.txt``
       3. ``report``  (command) – verifies step 2, creates ``step_3_report.txt``
     """
@@ -112,15 +112,16 @@ def _write_workflow_config(
             "steps": [
                 {
                     "name": "init",
-                    "type": "shell",
-                    "path": str(scripts["init"]),
-                    "resources": {"memory": 1, "runtime": "00:05:00"},
+                    "command": str(scripts["init"]),
+                    "resources": {"memory_gb": 1, "runtime": "00:05:00"},
                 },
                 {
                     "name": "process",
                     "type": "python",
-                    "path": str(scripts["process"]),
-                    "resources": {"memory": 1, "runtime": "00:05:00"},
+                    "resources": {"memory_gb": 1, "runtime": "00:05:00"},
+                    "args": {
+                        "path": str(scripts["process"]),
+                    },
                 },
                 {
                     "name": "report",
@@ -130,7 +131,7 @@ def _write_workflow_config(
                         f"&& echo step_3_complete > {output_dir}/step_3_report.txt"
                         f"'"
                     ),
-                    "resources": {"memory": 1, "runtime": "00:05:00"},
+                    "resources": {"memory_gb": 1, "runtime": "00:05:00"},
                 },
             ],
         }

@@ -9,15 +9,16 @@ Parse and validate workflow YAML configuration files.
 
 from __future__ import annotations
 
+import copy
 import re
 import shlex
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import yaml
-from loguru import logger
+from typing_extensions import Self
 
 from vivarium_cluster_tools.psimulate import COMMANDS, branches
 from vivarium_cluster_tools.psimulate.cluster.interface import NativeSpecification
@@ -194,8 +195,8 @@ class BaseStepConfig(ABC):
                 "configured. Set them at the step level or provide workflow-level defaults."
             )
 
-        # Call subclass-specific validation
         self._validate()
+        self._validate_required_paths()
 
         # Build the Jobmon-facing resource specification once at construction.
         self.native_specification = self.resources.to_native_specification(self.name)
@@ -210,6 +211,21 @@ class BaseStepConfig(ABC):
         set returned by supported_arguments().
         """
         pass
+
+    @property
+    def required_paths(self) -> list[Path]:
+        """Return paths that must exist for this step to run.
+
+        Subclasses override this to return their step-specific paths.
+        The base implementation returns an empty list.
+        """
+        return []
+
+    def _validate_required_paths(self) -> None:
+        """Check that all required paths exist."""
+        for path in self.required_paths:
+            if not path.exists():
+                raise FileNotFoundError(f"Step '{self.name}': path does not exist: {path}")
 
     @property
     def supported_arguments(self) -> set[str] | None:
@@ -231,7 +247,18 @@ class BaseStepConfig(ABC):
         return self._SUPPORTED_ARGS
 
     @classmethod
-    @abstractmethod
+    def _check_supported_args(cls, args: dict[str, Any], step_name: str) -> None:
+        """Raise ValueError if args contains keys not in _SUPPORTED_ARGS."""
+        if cls._SUPPORTED_ARGS is None:
+            return
+        unsupported = set(args) - cls._SUPPORTED_ARGS
+        if unsupported:
+            raise ValueError(
+                f"Step '{step_name}': unsupported args {sorted(unsupported)}. "
+                f"Supported args: {sorted(cls._SUPPORTED_ARGS)}."
+            )
+
+    @classmethod
     def from_dict(
         cls,
         data: dict[str, Any],
@@ -239,8 +266,11 @@ class BaseStepConfig(ABC):
         *,
         project: str,
         queue: str,
-    ) -> BaseStepConfig:
+    ) -> Self:
         """Create a step config from a raw YAML dictionary.
+
+        Performs common validation (unsupported args check), then delegates
+        to subclass-specific ``_build_from_dict`` for construction.
 
         Parameters
         ----------
@@ -256,6 +286,25 @@ class BaseStepConfig(ABC):
         Returns
         -------
             A new step config instance.
+        """
+        # CommandStepConfig does not have 'args'
+        args = data.get("args", {})
+        cls._check_supported_args(args, data.get("name", "<unnamed>"))
+        return cls._build_from_dict(data, output_directory, project=project, queue=queue)
+
+    @classmethod
+    @abstractmethod
+    def _build_from_dict(
+        cls,
+        data: dict[str, Any],
+        output_directory: Path,
+        *,
+        project: str,
+        queue: str,
+    ) -> Self:
+        """Subclass-specific construction from a raw YAML dictionary.
+
+        Called by ``from_dict`` after common validation has passed.
         """
         pass
 
@@ -395,26 +444,10 @@ class CommandStepConfig(BaseStepConfig):
         return result
 
     @classmethod
-    def from_dict(
+    def _build_from_dict(
         cls, data: dict[str, Any], output_directory: Path, *, project: str, queue: str
     ) -> CommandStepConfig:
-        """Create a CommandStepConfig from a dictionary.
-
-        Parameters
-        ----------
-        data
-            Dictionary from workflow YAML (a step dict without 'type' field).
-        output_directory
-            Workflow-level output directory.
-        project
-            Workflow-level project for resource resolution.
-        queue
-            Workflow-level queue for resource resolution.
-
-        Returns
-        -------
-            A new CommandStepConfig instance.
-        """
+        """Create a CommandStepConfig from a dictionary."""
         return cls(
             name=data["name"],
             resources=ResourceConfig.from_dict(
@@ -471,13 +504,16 @@ class SimulationStepConfig(BaseStepConfig):
     output_directory: Path
     """Output directory for this step. Inherited from the workflow's output_directory."""
     model_specification: Path
-    """Path to model specification YAML file."""
+    """Path to model specification YAML file. Both relative and absolute paths are
+    accepted."""
     branch_configuration: Path
-    """Path to branch configuration YAML file."""
+    """Path to branch configuration YAML file. Both relative and absolute paths are
+    accepted."""
     environment: str | None = None
     """Optional environment name to use for this step."""
     artifact_path: Path | None = None
-    """Optional path to artifact file."""
+    """Optional path to artifact file. Both relative and absolute paths are
+    accepted."""
     backup_freq: float | None = DEFAULT_BACKUP_FREQ_SECONDS
     """Backup frequency in seconds, or ``None`` to disable. Default is 30 minutes."""
     sim_verbosity: int = 0
@@ -493,6 +529,14 @@ class SimulationStepConfig(BaseStepConfig):
             raise ValueError(
                 f"Step '{self.name}': simulation type requires 'branch_configuration'."
             )
+
+    @property
+    def required_paths(self) -> list[Path]:
+        """Return paths that must exist for simulation steps."""
+        paths = [self.model_specification, self.branch_configuration]
+        if self.artifact_path is not None:
+            paths.append(self.artifact_path)
+        return paths
 
     def _build_command(self) -> str:
         """Not used -- simulation steps override get_tasks directly."""
@@ -584,20 +628,11 @@ class SimulationStepConfig(BaseStepConfig):
         return result
 
     @classmethod
-    def from_dict(
+    def _build_from_dict(
         cls, data: dict[str, Any], output_directory: Path, *, project: str, queue: str
     ) -> SimulationStepConfig:
         """Create a SimulationStepConfig from a dictionary."""
         args = data.get("args", {}) or {}
-
-        # Validate that only supported arguments are in args
-        unsupported = set(args) - cls._SUPPORTED_ARGS
-        if unsupported:
-            step_name = data.get("name", "<unnamed>")
-            raise ValueError(
-                f"Step '{step_name}': unsupported args {sorted(unsupported)}. "
-                f"Supported args: {sorted(cls._SUPPORTED_ARGS)}."
-            )
 
         kwargs: dict[str, Any] = {
             "name": data["name"],
@@ -606,11 +641,11 @@ class SimulationStepConfig(BaseStepConfig):
             ),
             "output_directory": output_directory,
             "environment": data.get("environment"),
-            "model_specification": Path(args["model_specification"]),
-            "branch_configuration": Path(args["branch_configuration"]),
+            "model_specification": Path(args["model_specification"]).resolve(),
+            "branch_configuration": Path(args["branch_configuration"]).resolve(),
         }
         if "artifact_path" in args:
-            kwargs["artifact_path"] = Path(args["artifact_path"])
+            kwargs["artifact_path"] = Path(args["artifact_path"]).resolve()
         if "backup_freq" in args:
             kwargs["backup_freq"] = args["backup_freq"]
         if "sim_verbosity" in args:
@@ -672,7 +707,8 @@ class PytestStepConfig(BaseStepConfig):
     """Optional environment name to use for this step."""
     path: str | list[str] | None = None
     """Test path(s) (file or directory) to pass to pytest. Can be a single string
-    or a list of strings. At least one of ``path`` or ``k`` is required."""
+    or a list of strings. Both relative and absolute paths are accepted.
+    At least one of ``path`` or ``k`` is required."""
     k: str | None = None
     """Pytest ``-k`` expression to filter tests by name. At least one of ``path`` or ``k`` is required."""
     runslow: bool = False
@@ -684,6 +720,14 @@ class PytestStepConfig(BaseStepConfig):
             raise ValueError(
                 f"Step '{self.name}': pytest type requires at least one of 'path' or 'k'."
             )
+
+    @property
+    def required_paths(self) -> list[Path]:
+        """Return paths that must exist for pytest steps."""
+        if self.path is None:
+            return []
+        paths = self.path if isinstance(self.path, list) else [self.path]
+        return [Path(p) for p in paths]
 
     def _build_command(self) -> str:
         """Build the pytest command string from structured arguments."""
@@ -723,20 +767,11 @@ class PytestStepConfig(BaseStepConfig):
         return result
 
     @classmethod
-    def from_dict(
+    def _build_from_dict(
         cls, data: dict[str, Any], output_directory: Path, *, project: str, queue: str
     ) -> PytestStepConfig:
         """Create a PytestStepConfig from a dictionary."""
         args = data.get("args", {}) or {}
-
-        # Validate that only supported arguments are in args
-        unsupported = set(args) - cls._SUPPORTED_ARGS
-        if unsupported:
-            step_name = data.get("name", "<unnamed>")
-            raise ValueError(
-                f"Step '{step_name}': unsupported args {sorted(unsupported)}. "
-                f"Supported args: {sorted(cls._SUPPORTED_ARGS)}."
-            )
 
         kwargs: dict[str, Any] = {
             "name": data["name"],
@@ -748,13 +783,194 @@ class PytestStepConfig(BaseStepConfig):
         if "environment" in data:
             kwargs["environment"] = data["environment"]
         if "path" in args:
-            kwargs["path"] = args["path"]
+            raw_path = args["path"]
+            if isinstance(raw_path, list):
+                kwargs["path"] = [str(Path(p).resolve()) for p in raw_path]
+            else:
+                kwargs["path"] = str(Path(raw_path).resolve())
         if "k" in args:
             kwargs["k"] = args["k"]
         if "runslow" in args:
             kwargs["runslow"] = args["runslow"]
 
         return cls(**kwargs)
+
+
+@dataclass
+class PythonStepConfig(BaseStepConfig):
+    """Configuration for a Python script workflow step.
+
+    This step type constructs a ``python`` command from a script path and
+    optional arguments, running it as a single Jobmon task.
+
+    Examples
+    --------
+    YAML configuration::
+
+        steps:
+          - name: postprocess
+            type: python
+            resources:
+              memory_gb: 8
+              runtime: "00:30:00"
+            args:
+              path: scripts/postprocess.py
+              positional_args:
+                - "foo"
+                - "bar"
+              keyword_args:
+                input_dir: /mnt/results/model_29
+                verbose: true
+                num_workers: 4
+
+    Notes
+    -----
+    Positional arguments are appended in list order. Keyword arguments are
+    emitted in alphabetical order by key.
+
+    Keyword argument value handling:
+
+    - ``true`` → bare flag (``--key``)
+    - ``false`` → omitted from the command entirely
+    - ``null`` → bare flag (``--key``), same as ``true``
+    - Any other scalar → ``--key value``
+
+    """
+
+    _SUPPORTED_ARGS: ClassVar[set[str]] = {"path", "positional_args", "keyword_args"}
+    _SCALAR_TYPES: ClassVar[tuple[type, ...]] = (str, int, float, bool)
+
+    name: str
+    """Unique name for this step within the workflow."""
+    resources: ResourceConfig
+    """Compute resources for this step."""
+    output_directory: Path
+    """Output directory for this step. Inherited from the workflow's output_directory."""
+    environment: str | None = None
+    """Optional environment name to use for this step."""
+    args: dict[str, Any] = field(default_factory=dict)
+    """Args dictionary from YAML. Must contain a 'path' to a Python file.
+    Both relative and absolute paths are accepted. May optionally contain
+    'positional_args' (list of scalars passed in order) and 'keyword_args'
+    (dict of named arguments; see class-level Notes for how values map to
+    CLI flags)."""
+
+    def _validate(self) -> None:
+        """Validate python step configuration."""
+        if "path" not in self.args:
+            raise ValueError(f"Step '{self.name}': python type requires 'path' in args.")
+        path = self.args["path"]
+        if not isinstance(path, str) or not path.endswith(".py"):
+            raise ValueError(
+                f"Step '{self.name}': 'path' must be a string ending with .py, "
+                f"got {path!r}."
+            )
+        if "positional_args" in self.args:
+            self._validate_positional_args(self.args["positional_args"])
+        if "keyword_args" in self.args:
+            self._validate_keyword_args(self.args["keyword_args"])
+
+    @property
+    def required_paths(self) -> list[Path]:
+        """Return paths that must exist for python steps."""
+        return [Path(self.args["path"])]
+
+    def _validate_scalar(self, value: Any, label: str, *, allow_none: bool = True) -> None:
+        """Validate that *value* is a scalar type suitable for CLI usage.
+
+        Parameters
+        ----------
+        value
+            The value to check.
+        label
+            Human-readable label for error messages (e.g. ``"positional_args[0]"``).
+        allow_none
+            Whether ``None`` is accepted. Positional args do not allow ``None``
+            (it has no CLI representation), while keyword args do (treated as a flag).
+        """
+        allowed = (*self._SCALAR_TYPES, type(None)) if allow_none else self._SCALAR_TYPES
+        if not isinstance(value, allowed):
+            raise ValueError(
+                f"Step '{self.name}': {label} must be a scalar type "
+                f"({', '.join(t.__name__ for t in allowed)}), "
+                f"got {type(value).__name__}."
+            )
+
+    def _validate_positional_args(self, positional_args: Any) -> None:
+        """Validate that positional_args is a list of scalar values."""
+        if not isinstance(positional_args, list):
+            raise ValueError(
+                f"Step '{self.name}': 'positional_args' must be a list, "
+                f"got {type(positional_args).__name__}."
+            )
+        for arg_index, item in enumerate(positional_args):
+            self._validate_scalar(item, f"positional_args[{arg_index}]", allow_none=False)
+
+    def _validate_keyword_args(self, keyword_args: Any) -> None:
+        """Validate that keyword_args is a dict with valid keys and scalar values."""
+        if not isinstance(keyword_args, dict):
+            raise ValueError(
+                f"Step '{self.name}': 'keyword_args' must be a dict, "
+                f"got {type(keyword_args).__name__}."
+            )
+        for key, value in keyword_args.items():
+            if not re.match(r"^[a-zA-Z0-9_-]+$", key):
+                raise ValueError(
+                    f"Step '{self.name}': keyword_args key {key!r} is not a valid "
+                    "identifier. Keys must match [a-zA-Z0-9_-]+."
+                )
+            self._validate_scalar(value, f"keyword_args['{key}']")
+
+    def _build_command(self) -> str:
+        """Build the python command string from the script path and args.
+
+        Positional arguments are appended first (in the order provided),
+        followed by keyword arguments (sorted alphabetically by key).
+        """
+        parts = ["python", shlex.quote(self.args["path"])]
+        # Positional args: appended in list order
+        for value in self.args.get("positional_args", []):
+            parts.append(shlex.quote(str(value)))
+        # Keyword args: sorted by key, with --key prefix
+        for key in sorted(self.args.get("keyword_args", {})):
+            value = self.args["keyword_args"][key]
+            if value is True or value is None:
+                parts.append(f"--{key}")
+            elif value is False:
+                continue
+            else:
+                parts.append(f"--{key} {shlex.quote(str(value))}")
+        return " ".join(parts)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a dictionary with type: python."""
+        result: dict[str, Any] = {
+            "name": self.name,
+            "type": "python",
+            "resources": self.resources.to_dict(),
+        }
+        if self.environment is not None:
+            result["environment"] = self.environment
+        result["args"] = copy.deepcopy(self.args)
+        return result
+
+    @classmethod
+    def _build_from_dict(
+        cls, data: dict[str, Any], output_directory: Path, *, project: str, queue: str
+    ) -> PythonStepConfig:
+        """Create a PythonStepConfig from a dictionary."""
+        args = copy.deepcopy(data["args"])
+        if "path" in args:
+            args["path"] = str(Path(args["path"]).resolve())
+        return cls(
+            name=data["name"],
+            resources=ResourceConfig.from_dict(
+                data["resources"], workflow_project=project, workflow_queue=queue
+            ),
+            output_directory=output_directory,
+            environment=data.get("environment"),
+            args=args,
+        )
 
 
 @dataclass
@@ -765,6 +981,7 @@ class WorkflowConfig:
     SUPPORTED_STEP_TYPES: ClassVar[dict[str, type[BaseStepConfig]]] = {
         "simulation": SimulationStepConfig,
         "pytest": PytestStepConfig,
+        "python": PythonStepConfig,
     }
 
     name: str
@@ -774,7 +991,8 @@ class WorkflowConfig:
     queue: str
     """Queue to submit the workflow to."""
     output_directory: Path
-    """Directory where workflow outputs will be stored."""
+    """Directory where workflow outputs will be stored. Both relative and absolute
+    paths are accepted."""
     default_environment: str | None
     """Default environment to use for steps that do not specify one."""
     steps: list[BaseStepConfig]
@@ -902,7 +1120,9 @@ class WorkflowConfig:
         resolved_project = project or workflow.get("project")
         resolved_queue = queue or workflow.get("queue")
         resolved_output_directory = output_directory or (
-            Path(workflow["output_directory"]) if "output_directory" in workflow else None
+            Path(workflow["output_directory"]).resolve()
+            if "output_directory" in workflow
+            else None
         )
 
         if not resolved_project:
