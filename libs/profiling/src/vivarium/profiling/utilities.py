@@ -6,7 +6,8 @@ import pandas as pd
 from loguru import logger
 from scipy import stats
 from vivarium.framework.randomness import get_hash
-from vivarium_profiling.constants import metadata
+
+from vivarium.profiling.constants import metadata
 
 SeededDistribution = tuple[str, stats.rv_continuous]
 

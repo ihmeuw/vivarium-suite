@@ -3,7 +3,8 @@
 from pathlib import Path
 
 import pytest
-from vivarium_profiling.tools.extraction import (
+
+from vivarium.profiling.tools.extraction import (
     ExtractionConfig,
     FunctionCallConfiguration,
     bottleneck_config,

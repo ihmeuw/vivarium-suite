@@ -1,4 +1,4 @@
-from vivarium_profiling.constants import data_keys
+from vivarium.profiling.constants import data_keys
 
 ###########################
 # Disease Model variables #

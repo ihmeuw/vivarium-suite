@@ -6,6 +6,9 @@ import pandas as pd
 # Project metadata #
 ####################
 
+# Underscore form is intentional: this string is used to build paths on the
+# shared cluster filesystem (e.g. /mnt/team/.../{PROJECT_NAME}/artifacts/).
+# Changing it would break access to existing artifacts.
 PROJECT_NAME = "vivarium_profiling"
 CLUSTER_PROJECT = "proj_simscience_prod"
 

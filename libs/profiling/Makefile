@@ -114,9 +114,3 @@ build-env: # Create a new environment with installed packages
 	@echo
 	@echo "Don't forget to activate it with: 'conda activate $(name)'"
 	@echo
-
-# FIXME [MIC-7017]: profiling is mid-migration. Override lint/mypy/test/docs targets
-# to no-ops so CI passes until the full migration lands. Remove this block when MIC-7017 merges.
-.PHONY: lint mypy test-all test-unit test-integration test-e2e build-docs test-docs
-lint mypy test-all test-unit test-integration test-e2e build-docs test-docs:
-	@echo "$@: skipped (profiling mid-migration, see MIC-7017)"

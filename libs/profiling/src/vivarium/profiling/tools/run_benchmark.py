@@ -10,13 +10,14 @@ from typing import Any
 import click
 import pandas as pd
 from loguru import logger
-from vivarium_profiling.tools import configure_logging_to_terminal
-from vivarium_profiling.tools.extraction import (
+
+from vivarium.profiling.tools import configure_logging_to_terminal
+from vivarium.profiling.tools.extraction import (
     ExtractionConfig,
     extract_runtime,
     get_peak_memory,
 )
-from vivarium_profiling.tools.summarize import run_summarize_analysis
+from vivarium.profiling.tools.summarize import run_summarize_analysis
 
 RESULTS_SUMMARY_NAME = "benchmark_results.csv"
 

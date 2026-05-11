@@ -32,8 +32,15 @@ pipeline {
             steps {
                 script {
                     def jenkinsfiles = findFiles(glob: 'libs/*/Jenkinsfile').collect { it.path }
-                    // 'Public' targets the Jenkins folder where public monorepo jobs are provisioned
-                    monorepo(jenkinsfiles: jenkinsfiles, folderPrefix: 'Public')
+                    // 'Public' targets the Jenkins folder where public monorepo jobs are provisioned.
+                    // githubCredentialsId is the GitHub App credential for the ihmeuw org on
+                    // simsci's Jenkins; vbu intentionally requires it here so the org-specific
+                    // value lives next to the org context rather than being baked into vbu.
+                    monorepo(
+                        jenkinsfiles: jenkinsfiles,
+                        folderPrefix: 'Public',
+                        githubCredentialsId: 'fad62062-b1f4-447b-997f-005d6b1ea41e',
+                    )
                 }
             }
         }

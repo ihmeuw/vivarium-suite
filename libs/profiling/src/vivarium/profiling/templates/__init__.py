@@ -1,4 +1,4 @@
-"""Templates for vivarium_profiling."""
+"""Templates for vivarium.profiling."""
 
 from pathlib import Path
 
