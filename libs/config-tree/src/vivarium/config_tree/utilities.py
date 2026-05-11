@@ -82,7 +82,7 @@ class SafeLoader(yaml.SafeLoader):
         """
         mapping = []
         for key_node, _value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)  # type: ignore[no-untyped-call]
+            key = self.construct_object(key_node, deep=deep)
             if key in mapping:
                 raise DuplicatedConfigurationError(
                     f"Duplicate key detected at same level of YAML: {key}. Resolve duplicates and try again.",
