@@ -56,8 +56,14 @@ fi
 # in the same monorepo don't pollute the one-step-bump check.
 TAG_PREFIX="${TAG_PREFIX:-}"
 
-# Determine the tag to validate
-RELEASE_TAG="${GITHUB_REF_NAME:-}"
+# Determine the tag to validate.
+#
+# RELEASE_TAG can be set explicitly by the caller (workflows triggered by push
+# or workflow_dispatch don't have GITHUB_REF_NAME == the release tag, and the
+# `GITHUB_*` namespace can't be overridden via a step `env:` block in GitHub
+# Actions). Falls back to GITHUB_REF_NAME for workflows triggered directly by
+# a tag (e.g. `release: types: [published]`), where it's already the tag.
+RELEASE_TAG="${RELEASE_TAG:-${GITHUB_REF_NAME:-}}"
 if [ -z "$RELEASE_TAG" ]; then
     echo "ERROR: No git tag found. Cannot validate version."
     exit 1
