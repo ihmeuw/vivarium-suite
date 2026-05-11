@@ -1,6 +1,9 @@
 **v0.4.0 - 05/11/26**
 
-- Initial release to vivarium-suite monorepo
+BREAKING CHANGE: Initial release from vivarium-suite monorepo. The import path is 
+now ``vivarium.profiling`` (was ``vivarium_profiling``). The ``vivarium-compat``
+shim redirects the old path with a ``DeprecationWarning``; update imports before
+that shim is removed.
 
 **v0.3.6 - 05/05/26**
 

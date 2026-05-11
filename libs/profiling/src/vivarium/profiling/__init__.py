@@ -1,5 +1,5 @@
 """vivarium.profiling
 
-Vivarium simulation model for the vivarium.profiling project.
+Profiling and benchmarking tools for Vivarium simulations.
 
 """
