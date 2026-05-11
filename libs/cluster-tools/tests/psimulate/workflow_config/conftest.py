@@ -14,6 +14,33 @@ from tests.psimulate.workflow_config.utilities import (
 )
 
 
+@pytest.fixture(scope="session")
+def valid_pytest_path(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """A valid test directory path for pytest steps."""
+    path = tmp_path_factory.mktemp("test_dir") / "unit"
+    path.mkdir()
+    return str(path)
+
+
+@pytest.fixture(scope="session")
+def valid_pytest_paths(tmp_path_factory: pytest.TempPathFactory) -> list[str]:
+    """Multiple valid test directory paths for pytest steps."""
+    base = tmp_path_factory.mktemp("test_dirs")
+    unit = base / "unit"
+    unit.mkdir()
+    integration = base / "integration"
+    integration.mkdir()
+    return [str(unit), str(integration)]
+
+
+@pytest.fixture(scope="session")
+def valid_python_script(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """A valid Python script path for python steps."""
+    script = tmp_path_factory.mktemp("scripts") / "run.py"
+    script.write_text("")
+    return str(script)
+
+
 @pytest.fixture()
 def valid_workflow_dict() -> dict[str, Any]:
     """A valid minimal workflow config dict."""

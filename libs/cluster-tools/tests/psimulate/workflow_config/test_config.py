@@ -10,6 +10,7 @@ import pytest
 
 from tests.psimulate.workflow_config.utilities import (
     make_pytest_step_dict,
+    make_python_step_dict,
     make_step_dict,
     make_workflow_dict,
     write_workflow_yaml,
@@ -17,6 +18,7 @@ from tests.psimulate.workflow_config.utilities import (
 from vivarium_cluster_tools.psimulate.workflow_config.config import (
     CommandStepConfig,
     PytestStepConfig,
+    PythonStepConfig,
     ResourceConfig,
     SimulationStepConfig,
     WorkflowConfig,
@@ -235,19 +237,60 @@ class TestResourceConfigValidation:
         assert rc.cores == 4
 
 
-class TestCommandStepConfig:
-    """Tests for CommandStepConfig - the default command-based step type."""
+class TestBaseStepConfig:
+    """Tests for behavior implemented in BaseStepConfig (tested via concrete subclasses)."""
 
-    def test_supported_arguments_returns_none(self) -> None:
-        config = CommandStepConfig(
-            name="test_step",
-            resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
-            command="echo test",
-            output_directory=Path("/tmp/results"),
-        )
-        assert config.supported_arguments is None
+    @pytest.mark.parametrize(
+        "cls, kwargs, expected",
+        [
+            (
+                CommandStepConfig,
+                {
+                    "name": "cmd",
+                    "command": "echo hi",
+                },
+                None,
+            ),
+            (
+                PytestStepConfig,
+                {
+                    "name": "tests",
+                },
+                {"path", "k", "runslow"},
+            ),
+            (
+                PythonStepConfig,
+                {
+                    "name": "script",
+                },
+                {"path", "positional_args", "keyword_args"},
+            ),
+        ],
+        ids=["command", "pytest", "python"],
+    )
+    def test_supported_arguments(
+        self,
+        cls: type,
+        kwargs: dict[str, Any],
+        expected: set[str] | None,
+        valid_pytest_path: str,
+        valid_python_script: str,
+    ) -> None:
+        common = {
+            "resources": ResourceConfig(
+                memory_gb=4, project="proj_simscience", queue="all.q"
+            ),
+            "output_directory": Path("/tmp/results"),
+        }
+        if cls == PytestStepConfig:
+            kwargs["path"] = valid_pytest_path
+        elif cls == PythonStepConfig:
+            kwargs["args"] = {"path": valid_python_script}
+        config = cls(**{**common, **kwargs})
+        assert config.supported_arguments == expected
 
     def test_get_tasks_creates_single_task(self) -> None:
+        """Base class get_tasks wires _build_command into a single Jobmon task."""
         config = CommandStepConfig(
             name="test_step",
             resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
@@ -279,6 +322,21 @@ class TestCommandStepConfig:
             env="my_env",
             command="echo hello world",
         )
+
+    def test_validate_required_paths_rejects_nonexistent(self) -> None:
+        with pytest.raises(FileNotFoundError, match="does not exist"):
+            PythonStepConfig(
+                name="bad",
+                resources=ResourceConfig(
+                    memory_gb=4, project="proj_simscience", queue="all.q"
+                ),
+                output_directory=Path("/tmp/results"),
+                args={"path": "/nonexistent/script.py"},
+            )
+
+
+class TestCommandStepConfig:
+    """Tests for CommandStepConfig - the default command-based step type."""
 
     def test_to_dict(self) -> None:
         config = CommandStepConfig(
@@ -589,15 +647,6 @@ class TestSimulationStepConfig:
 class TestPytestStepConfig:
     """Tests for PytestStepConfig - the pytest step type."""
 
-    def test_supported_arguments_returns_expected_set(self) -> None:
-        config = PytestStepConfig(
-            name="tests",
-            resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
-            output_directory=Path("/tmp/results"),
-            path="tests/",
-        )
-        assert config.supported_arguments == {"path", "k", "runslow"}
-
     def test_rejects_neither_path_nor_k(self) -> None:
         with pytest.raises(ValueError, match="at least one of 'path' or 'k'"):
             PytestStepConfig(
@@ -608,24 +657,24 @@ class TestPytestStepConfig:
                 output_directory=Path("/tmp/results"),
             )
 
-    def test_accepts_all_supported_args(self) -> None:
+    def test_accepts_all_supported_args(self, valid_pytest_path: str) -> None:
         config = PytestStepConfig(
             name="tests",
             resources=ResourceConfig(
                 memory_gb=4, project="proj_simscience", queue="all.q", cores=4
             ),
             output_directory=Path("/tmp/results"),
-            path="tests/unit",
+            path=valid_pytest_path,
             k="not slow",
             runslow=True,
         )
-        assert config.path == "tests/unit"
+        assert config.path == valid_pytest_path
         assert config.k == "not slow"
         assert config.runslow is True
 
-    def test_from_dict_deserialization(self) -> None:
+    def test_from_dict_deserialization(self, valid_pytest_path: str) -> None:
         step_dict = make_pytest_step_dict(
-            args={"path": "tests/unit", "k": "test_foo", "runslow": True},
+            args={"path": valid_pytest_path, "k": "test_foo", "runslow": True},
             resources={"memory_gb": 8, "runtime": "02:00:00", "cores": 4},
         )
         config = PytestStepConfig.from_dict(
@@ -636,14 +685,14 @@ class TestPytestStepConfig:
         )
         assert isinstance(config, PytestStepConfig)
         assert config.name == "run_tests"
-        assert config.path == "tests/unit"
+        assert config.path == valid_pytest_path
         assert config.k == "test_foo"
         assert config.runslow is True
         assert config.resources.cores == 4
 
-    def test_from_dict_rejects_unsupported_args(self) -> None:
+    def test_from_dict_rejects_unsupported_args(self, valid_pytest_path: str) -> None:
         step_dict = make_pytest_step_dict(
-            args={"path": "tests/", "bogus_flag": "nope"},
+            args={"path": valid_pytest_path, "bogus_flag": "nope"},
         )
         with pytest.raises(ValueError, match="unsupported args"):
             PytestStepConfig.from_dict(
@@ -653,14 +702,14 @@ class TestPytestStepConfig:
                 queue="all.q",
             )
 
-    def test_to_dict_serialization(self) -> None:
+    def test_to_dict_serialization(self, valid_pytest_path: str) -> None:
         config = PytestStepConfig(
             name="tests",
             resources=ResourceConfig(
                 memory_gb=8, project="proj_simscience", queue="all.q", cores=4
             ),
             output_directory=Path("/tmp/results"),
-            path="tests/unit",
+            path=valid_pytest_path,
             k="test_foo",
             runslow=True,
         )
@@ -676,30 +725,30 @@ class TestPytestStepConfig:
                 "cores": 4,
             },
             "args": {
-                "path": "tests/unit",
+                "path": valid_pytest_path,
                 "k": "test_foo",
                 "runslow": True,
             },
         }
 
-    def test_to_dict_omits_unset_optional_fields(self) -> None:
+    def test_to_dict_omits_unset_optional_fields(self, valid_pytest_path: str) -> None:
         config = PytestStepConfig(
             name="tests",
             resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
             output_directory=Path("/tmp/results"),
-            path="tests/",
+            path=valid_pytest_path,
         )
         result = config.to_dict()
-        assert result["args"] == {"path": "tests/"}
+        assert result["args"] == {"path": valid_pytest_path}
 
-    def test_get_tasks_builds_correct_command(self) -> None:
+    def test_get_tasks_builds_correct_command(self, valid_pytest_path: str) -> None:
         config = PytestStepConfig(
             name="tests",
             resources=ResourceConfig(
                 memory_gb=4, project="proj_simscience", queue="all.q", cores=4
             ),
             output_directory=Path("/tmp/results"),
-            path="tests/unit",
+            path=valid_pytest_path,
             k="test_foo or test_bar",
             runslow=True,
         )
@@ -715,17 +764,17 @@ class TestPytestStepConfig:
         assert tasks == [mock_task]
         call_kwargs = mock_template.create_task.call_args[1]
         assert call_kwargs["command"] == (
-            "pytest tests/unit -k 'test_foo or test_bar' --runslow --numprocesses 4"
+            f"pytest {valid_pytest_path} -k 'test_foo or test_bar' --runslow --numprocesses 4"
         )
 
-    def test_build_command_path_only(self) -> None:
+    def test_build_command_path_only(self, valid_pytest_path: str) -> None:
         config = PytestStepConfig(
             name="tests",
             resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
             output_directory=Path("/tmp/results"),
-            path="tests/",
+            path=valid_pytest_path,
         )
-        assert config._build_command() == "pytest tests/"
+        assert config._build_command() == f"pytest {valid_pytest_path}"
 
     def test_build_command_k_only(self) -> None:
         config = PytestStepConfig(
@@ -745,28 +794,31 @@ class TestPytestStepConfig:
         )
         assert "--numprocesses" not in config._build_command()
 
-    def test_build_command_multiple_paths(self) -> None:
+    def test_build_command_multiple_paths(self, valid_pytest_paths: list[str]) -> None:
         config = PytestStepConfig(
             name="tests",
             resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
             output_directory=Path("/tmp/results"),
-            path=["tests/unit", "tests/integration"],
+            path=valid_pytest_paths,
         )
-        assert config._build_command() == "pytest tests/unit tests/integration"
+        assert (
+            config._build_command()
+            == f"pytest {valid_pytest_paths[0]} {valid_pytest_paths[1]}"
+        )
 
-    def test_to_dict_multiple_paths(self) -> None:
+    def test_to_dict_multiple_paths(self, valid_pytest_paths: list[str]) -> None:
         config = PytestStepConfig(
             name="tests",
             resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
             output_directory=Path("/tmp/results"),
-            path=["tests/unit", "tests/integration"],
+            path=valid_pytest_paths,
         )
         result = config.to_dict()
-        assert result["args"] == {"path": ["tests/unit", "tests/integration"]}
+        assert result["args"] == {"path": valid_pytest_paths}
 
-    def test_from_dict_multiple_paths(self) -> None:
+    def test_from_dict_multiple_paths(self, valid_pytest_paths: list[str]) -> None:
         step_dict = make_pytest_step_dict(
-            args={"path": ["tests/unit", "tests/integration"]},
+            args={"path": valid_pytest_paths},
         )
         config = PytestStepConfig.from_dict(
             step_dict,
@@ -774,8 +826,11 @@ class TestPytestStepConfig:
             project="proj_simscience",
             queue="all.q",
         )
-        assert config.path == ["tests/unit", "tests/integration"]
-        assert config._build_command() == "pytest tests/unit tests/integration"
+        assert config.path == valid_pytest_paths
+        assert (
+            config._build_command()
+            == f"pytest {valid_pytest_paths[0]} {valid_pytest_paths[1]}"
+        )
 
     def test_routes_to_pytest_step_from_yaml(self, tmp_path: Path) -> None:
         steps = [make_pytest_step_dict()]
@@ -786,3 +841,246 @@ class TestPytestStepConfig:
         assert len(config.steps) == 1
         assert isinstance(config.steps[0], PytestStepConfig)
         assert config.steps[0].name == "run_tests"
+
+
+class TestPythonStepConfig:
+    """Tests for PythonStepConfig - the python script step type."""
+
+    @pytest.mark.parametrize(
+        "extra_args, match",
+        [
+            ({"path": "script_no_ext"}, r"\.py"),  # non-.py path
+            (
+                {"keyword_args": {"nested": {"a": 1}}},
+                "scalar",
+            ),  # non-scalar keyword arg value
+            (
+                {"keyword_args": {"bad key!": "val"}},
+                "identifier",
+            ),  # shell metacharacters in keyword key
+            (
+                {"positional_args": "not_a_list"},
+                "list",
+            ),  # positional_args must be a list
+            (
+                {"positional_args": [{"nested": 1}]},
+                "scalar",
+            ),  # positional_args items must be scalar
+            (
+                {"keyword_args": ["not", "a", "dict"]},
+                "dict",
+            ),  # keyword_args must be a dict
+        ],
+        ids=[
+            "non_py_path",
+            "non_scalar_keyword_value",
+            "invalid_keyword_key",
+            "positional_not_list",
+            "positional_non_scalar_item",
+            "keyword_args_not_dict",
+        ],
+    )
+    def test_rejects_invalid_configurations(
+        self, valid_python_script: str, extra_args: dict[str, Any], match: str
+    ) -> None:
+        args = {"path": valid_python_script, **extra_args}
+        with pytest.raises(ValueError, match=match):
+            PythonStepConfig(
+                name="bad",
+                resources=ResourceConfig(
+                    memory_gb=4, project="proj_simscience", queue="all.q"
+                ),
+                output_directory=Path("/tmp/results"),
+                args=args,
+            )
+
+    def test_rejects_missing_path(self) -> None:
+        with pytest.raises(ValueError, match="path"):
+            PythonStepConfig(
+                name="bad",
+                resources=ResourceConfig(
+                    memory_gb=4, project="proj_simscience", queue="all.q"
+                ),
+                output_directory=Path("/tmp/results"),
+                args={},
+            )
+
+    def test_from_dict_rejects_unexpected_top_level_key(
+        self, valid_python_script: str
+    ) -> None:
+        step_dict = make_python_step_dict(
+            args={"path": valid_python_script, "unknown_key": "val"},
+        )
+        with pytest.raises(ValueError, match="unsupported args"):
+            PythonStepConfig.from_dict(
+                step_dict,
+                output_directory=Path("/tmp/results"),
+                project="proj_simscience",
+                queue="all.q",
+            )
+
+    def test_accepts_valid_configuration(self, valid_python_script: str) -> None:
+        config = PythonStepConfig(
+            name="run_script",
+            resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
+            output_directory=Path("/tmp/results"),
+            args={
+                "path": valid_python_script,
+                "positional_args": ["/mnt/data", 4],
+                "keyword_args": {
+                    "verbose": True,
+                    "ratio": 0.5,
+                },
+            },
+        )
+        assert config.args["path"] == valid_python_script
+        assert config.args["positional_args"] == ["/mnt/data", 4]
+        assert config.args["keyword_args"]["verbose"] is True
+        assert config.args["keyword_args"]["ratio"] == 0.5
+
+    @pytest.mark.parametrize(
+        "args, expected_command",
+        [
+            (
+                {},
+                "python {path}",
+            ),
+            (
+                {"positional_args": ["cal_raleigh", "home_runs"]},
+                "python {path} cal_raleigh home_runs",
+            ),
+            (
+                {"keyword_args": {"alpha": "hello", "beta": 42}},
+                "python {path} --alpha hello --beta 42",
+            ),
+            (
+                {"keyword_args": {"verbose": True}},
+                "python {path} --verbose",
+            ),
+            (
+                {"keyword_args": {"debug": False}},
+                "python {path}",
+            ),
+            (
+                {"keyword_args": {"flag": None}},
+                "python {path} --flag",
+            ),
+            (
+                {"keyword_args": {"msg": "hello world"}},
+                "python {path} --msg 'hello world'",
+            ),
+            (
+                {
+                    "positional_args": ["input.csv", 42],
+                    "keyword_args": {"verbose": True, "output": "/tmp/out"},
+                },
+                "python {path} input.csv 42 --output /tmp/out --verbose",
+            ),
+        ],
+        ids=[
+            "path_only",
+            "positional_args_only",
+            "keyword_args_sorted",
+            "bool_true_as_flag",
+            "bool_false_omitted",
+            "none_as_flag",
+            "value_with_spaces_quoted",
+            "positional_and_keyword_mixed",
+        ],
+    )
+    def test_build_command(
+        self, valid_python_script: str, args: dict[str, Any], expected_command: str
+    ) -> None:
+        full_args = {"path": valid_python_script, **args}
+        config = PythonStepConfig(
+            name="run_script",
+            resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
+            output_directory=Path("/tmp/results"),
+            args=full_args,
+        )
+        assert config._build_command() == expected_command.format(path=valid_python_script)
+
+    def test_from_dict_deserialization(self, valid_python_script: str) -> None:
+        step_dict = make_python_step_dict(
+            args={
+                "path": valid_python_script,
+                "positional_args": ["/mnt/data"],
+                "keyword_args": {"verbose": True},
+            },
+        )
+        config = PythonStepConfig.from_dict(
+            step_dict,
+            output_directory=Path("/tmp/results"),
+            project="proj_simscience",
+            queue="all.q",
+        )
+        assert isinstance(config, PythonStepConfig)
+        assert config.name == "run_script"
+        assert config.args["path"] == valid_python_script
+        assert config.args["positional_args"] == ["/mnt/data"]
+        assert config.args["keyword_args"]["verbose"] is True
+
+    def test_from_dict_rejects_missing_path(self) -> None:
+        step_dict = make_python_step_dict(args={"input_dir": "/mnt/data"})
+        with pytest.raises(ValueError, match="path"):
+            PythonStepConfig.from_dict(
+                step_dict,
+                output_directory=Path("/tmp/results"),
+                project="proj_simscience",
+                queue="all.q",
+            )
+
+    def test_from_dict_rejects_missing_args_key(self) -> None:
+        step_dict = make_python_step_dict()
+        del step_dict["args"]
+        with pytest.raises(KeyError, match="args"):
+            PythonStepConfig.from_dict(
+                step_dict,
+                output_directory=Path("/tmp/results"),
+                project="proj_simscience",
+                queue="all.q",
+            )
+
+    def test_rejects_none_in_positional_args(self, valid_python_script: str) -> None:
+        with pytest.raises(ValueError, match="scalar"):
+            PythonStepConfig(
+                name="bad",
+                resources=ResourceConfig(
+                    memory_gb=4, project="proj_simscience", queue="all.q"
+                ),
+                output_directory=Path("/tmp/results"),
+                args={"path": valid_python_script, "positional_args": [None]},
+            )
+
+    def test_to_dict_round_trip(self, valid_python_script: str) -> None:
+        config = PythonStepConfig(
+            name="run_script",
+            resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
+            output_directory=Path("/tmp/results"),
+            args={
+                "path": valid_python_script,
+                "positional_args": ["/mnt/data"],
+                "keyword_args": {"verbose": True},
+            },
+        )
+        serialized = config.to_dict()
+        restored = PythonStepConfig.from_dict(
+            serialized,
+            output_directory=Path("/tmp/results"),
+            project="proj_simscience",
+            queue="all.q",
+        )
+        assert restored.name == config.name
+        assert restored.args == config.args
+
+    def test_routes_to_python_step_from_yaml(
+        self, tmp_path: Path, valid_python_script: str
+    ) -> None:
+        steps = [make_python_step_dict(args={"path": valid_python_script})]
+        workflow_dict = make_workflow_dict(steps=steps)
+        yaml_path = write_workflow_yaml(tmp_path, workflow_dict)
+
+        config = WorkflowConfig.from_yaml_with_cli_overrides(yaml_path)
+        assert len(config.steps) == 1
+        assert isinstance(config.steps[0], PythonStepConfig)
+        assert config.steps[0].name == "run_script"
