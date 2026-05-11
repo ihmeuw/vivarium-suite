@@ -90,50 +90,6 @@ def make_simulation_step_dict(**overrides: Any) -> dict[str, Any]:
     return defaults
 
 
-def write_psimulate_config(
-    tmp_path: Path,
-    model_specification: str | None = None,
-    branch_configuration: str | None = None,
-    artifact_path: str | None = None,
-    **extra_fields: Any,
-) -> Path:
-    """Write a psimulate run config file and return the path.
-
-    Creates a config file compatible with `psimulate run --run-config`.
-
-    Parameters
-    ----------
-    tmp_path
-        Temporary directory to write the config file.
-    model_specification
-        Path to model specification file.
-    branch_configuration
-        Path to branch configuration file.
-    artifact_path
-        Optional path to artifact file.
-    extra_fields
-        Additional fields to include in the config.
-
-    Returns
-    -------
-        Path to the written config file.
-    """
-    config: dict[str, Any] = {}
-
-    if model_specification is not None:
-        config["model_specification"] = model_specification
-    if branch_configuration is not None:
-        config["branch_configuration"] = branch_configuration
-    if artifact_path is not None:
-        config["artifact_path"] = artifact_path
-
-    config.update(extra_fields)
-
-    config_path = tmp_path / "psimulate_config.yaml"
-    config_path.write_text(yaml.dump(config, sort_keys=False))
-    return config_path
-
-
 def make_pytest_step_dict(**overrides: Any) -> dict[str, Any]:
     """Create a minimal valid pytest step dict with sensible defaults.
 
@@ -149,6 +105,27 @@ def make_pytest_step_dict(**overrides: Any) -> dict[str, Any]:
         },
         "args": {
             "path": "tests/",
+        },
+    }
+    defaults.update(overrides)
+    return defaults
+
+
+def make_python_step_dict(**overrides: Any) -> dict[str, Any]:
+    """Create a minimal valid python step dict with sensible defaults.
+
+    Returns a dict suitable for inclusion in a workflow's steps list.
+    Override any field or provide additional args.
+    """
+    defaults: dict[str, Any] = {
+        "name": "run_script",
+        "type": "python",
+        "resources": {
+            "memory_gb": 4,
+            "runtime": "01:00:00",
+        },
+        "args": {
+            "path": "scripts/process.py",
         },
     }
     defaults.update(overrides)
