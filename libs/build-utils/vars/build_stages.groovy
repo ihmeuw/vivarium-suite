@@ -72,6 +72,7 @@ def runDebugInfo(Map skipEval = [:]) {
  */
 def withWorkingDirectory(Closure body) {
     def subdir = get_package_subdir()
+    echo "Working directory: ${subdir ?: 'repo root'}"
     dir(subdir ?: '.') {
         body()
     }
@@ -103,6 +104,9 @@ def buildEnvironment() {
 }
 
 def installPackage(String env_reqs = "") {
+    // env_reqs selects which pyproject.toml extra `make install` pulls in.
+    // Callers in reusable_pipeline.groovy: "" (leaves base.mk's "dev" default for
+    // standalone repos), "ci_jenkins" (monorepo libs), or "docs" (doc-only skip path).
     env_reqs = env_reqs ? "ENV_REQS=${env_reqs}" : ""
     stage("Install Package - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
@@ -213,7 +217,9 @@ def deployDocs() {
 }
 
 def cleanup() {
+    // `make clean` is path-relative, so it runs inside the package subdir.
     withWorkingDirectory { sh "make clean" }
+    // CONDA_ENV_PATH is absolute; no working dir needed.
     // Remove the conda environment immediately to conserve local disk space.
     // Envs are built on local node storage, not shared NFS, so they must be
     // cleaned up by the build that created them.

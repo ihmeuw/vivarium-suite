@@ -34,6 +34,8 @@ def call(Map config = [:]){
   def is_deployable = (config?.deployable == true)
   def skip_doc_build = (config?.skip_doc_build == true)
   def run_mypy = (config.run_mypy != null) ? config.run_mypy : true
+  // Empty string leaves base.mk's default ("dev") in effect. installPackage in
+  // build_stages.groovy only sets ENV_REQS=... when this is non-empty.
   def env_reqs = config.env_reqs ?: ""
 
   // task_node, conda_env_dir, and run_weekly are resolved in the Initialization

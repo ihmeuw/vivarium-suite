@@ -1,10 +1,19 @@
 **x.x.x - tbd**
 
-   - Add support for monorepo
-   - Search recursively for py.typed markers
-   - Make the artifactory extra-index URL configurable via Make variable
-   - Add 'env_reqs' parameter to reusable_pipeline.groovy for specifying CI build install extras
-   - Add tag prefix support during tag validation
+   - Add monorepo support: top-level ``monorepo()`` step that provisions per-package
+     Jenkins Multibranch Pipelines, ``withWorkingDirectory`` routing of build stages
+     into ``libs/<pkg>/``, and ``get_package_subdir()`` for resolving the package
+     subdir from JOB_NAME
+   - Add ``TAG_PREFIX`` support across ``make tag-version``, ``make validate-tag``,
+     and ``validate_tag_version.sh`` so monorepo libs can use prefixed tags
+     (e.g. ``vivarium-core-v1.2.3``)
+   - Add ``env_reqs`` parameter to ``reusable_pipeline.groovy`` for selecting the
+     pyproject.toml extras installed during CI
+   - Make the artifactory extra-index URL configurable via the ``IHME_PYPI`` Make
+     variable; setting it empty disables the extra-index entirely (for GitHub
+     Actions runners outside the IHME network)
+   - Guard ``make deploy-package-artifactory`` against an empty ``IHME_PYPI``
+   - Search recursively for ``py.typed`` markers so monorepo packages are detected
 
 **3.2.2 - 05/07/26**
 

@@ -181,7 +181,9 @@ validate-tag: # Validate that current git tag matches CHANGELOG and is valid sem
 
 .PHONY: tag-version
 tag-version: # Tag current version and push to git
-	git tag -a "v${PACKAGE_VERSION}" -m "Tag automatically generated from Jenkins."
+    # TAG_PREFIX is empty for standalone repos and "vivarium-<lib>-" for monorepo libs.
+    # Must stay consistent with validate-tag, which filters by the same prefix.
+	git tag -a "${TAG_PREFIX}v${PACKAGE_VERSION}" -m "Tag automatically generated from Jenkins."
 	git push --tags
 
 .PHONY: build-package
@@ -191,6 +193,7 @@ build-package: # Build pip wheel package
 
 .PHONY: deploy-package-artifactory
 deploy-package-artifactory: # Deploy the package to Artifactory
+	@[ "${IHME_PYPI}" ] && echo "" > /dev/null || ( echo "IHME_PYPI is empty; cannot upload. This target is Jenkins/internal-only."; exit 1 )
 	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set, export using simsci artifactory credentials"; exit 1 )
 	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set, export using simsci artifactory credentials"; exit 1 )
 	pip install twine

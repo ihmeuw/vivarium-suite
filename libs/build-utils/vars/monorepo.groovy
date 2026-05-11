@@ -6,8 +6,13 @@
  * The provisioner pipeline's JOB_NAME format is "<something>/<repo>/<branch>"; the
  * per-package pipelines it creates use "<prefix>/<repo>/libs/<pkg>/<branch>".
  *
- * @param config.jenkinsfiles  List of Jenkinsfile paths to provision (e.g. ["libs/core/Jenkinsfile"])
- * @param config.folderPrefix  Jenkins folder prefix for provisioned pipelines (default: "Public")
+ * @param config.jenkinsfiles          (required) List of Jenkinsfile paths to provision
+ *                                     (e.g. ["libs/core/Jenkinsfile"])
+ * @param config.githubCredentialsId   (required) Jenkins credential ID for the GitHub App
+ *                                     used by the branch source. Lives in the calling
+ *                                     monorepo's Jenkinsfile so vbu stays org-agnostic.
+ * @param config.folderPrefix          Jenkins folder prefix for provisioned pipelines
+ *                                     (default: "Public")
  */
 def call(Map config = [:]) {
     echo "Provisioning Multibranch Pipelines for Libraries..."
@@ -16,6 +21,11 @@ def call(Map config = [:]) {
     if (jenkinsfilePaths.isEmpty()) {
         echo "No Jenkinsfile paths provided — skipping provisioning"
         return
+    }
+
+    String githubCredentialsId = config.githubCredentialsId
+    if (!githubCredentialsId) {
+        error("monorepo(): 'githubCredentialsId' is required. Pass the Jenkins credential ID for the GitHub App from the calling Jenkinsfile.")
     }
 
     // Use GIT_URL rather than JOB_NAME to derive the repository name reliably;
@@ -30,22 +40,25 @@ def call(Map config = [:]) {
     echo "Root Folder Path: ${rootFolderPath}"
     jenkinsfilePaths.each { path -> echo "  - ${path}" }
 
-    def provisionItems = { String rootPath, String repoURL, List<String> paths ->
+    def provisionItems = { String rootPath, String repoURL, List<String> paths, String credId ->
         echo "Executing Job DSL to provision Jenkins items..."
         jobDsl(
             scriptText: libraryResource('multiPipelines.groovy'),
             additionalParameters: [
-                jenkinsfilePathsStr: paths,
-                rootFolderStr      : rootPath,
-                repositoryURL      : repoURL
+                jenkinsfilePathStrings: paths,
+                rootFolderStr         : rootPath,
+                repositoryURL         : repoURL,
+                githubCredentialsId   : credId
             ],
-            // The following may be set to 'IGNORE'.
-            // Note that because we only provision from the default branch (main),
-            // branches will not compete to delete and recreate items.
+            // The following may be set to 'IGNORE'. Using 'DELETE' is safe ONLY because
+            // monorepo() is expected to run from the default branch (main) of the
+            // top-level monorepo Jenkinsfile - not enforced here; the calling Jenkinsfile
+            // must gate this step (e.g. `if (env.BRANCH_NAME == 'main')`). If 'DELETE' ran
+            // from feature branches, branches would compete to delete and recreate items.
             removedJobAction: 'DELETE'
         )
         echo "Job DSL execution completed"
     }
 
-    provisionItems(rootFolderPath, env.GIT_URL, jenkinsfilePaths)
+    provisionItems(rootFolderPath, env.GIT_URL, jenkinsfilePaths, githubCredentialsId)
 }

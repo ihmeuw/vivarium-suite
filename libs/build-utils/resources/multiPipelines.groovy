@@ -41,12 +41,12 @@ def generateFolders(List<Path> jenkinsfilePaths, Path rootFolder) {
 def generateMultibranchPipelines(List<Path> jenkinsfilePaths, Path rootFolder, String repositoryURL) {
     // The following variables are needed to configure the branch source for GitHub.
     // Configuration for other version control providers vary.
-    def matcher = repositoryURL =~ /.+[\/:](?<owner>[^\/]+)\/(?<repository>[^\/]+)(?:\.git)?$/
+    def matcher = repositoryURL =~ /.+[\/:](?<owner>[^\/]+)\/(?<repository>[^\/]+)$/
     if (!matcher.matches()) {
         throw new Exception("Could not parse repository URL: ${repositoryURL}")
     }
     String repositoryOwner = matcher.group('owner')
-    String repositoryName = matcher.group('repository')
+    String repositoryName = matcher.group('repository').replaceFirst(/\.git$/, '')
 
     // Discover branches strategies
     final int EXCLUDE_PULL_REQUESTS_STRATEGY_ID = 1
@@ -71,9 +71,12 @@ def generateMultibranchPipelines(List<Path> jenkinsfilePaths, Path rootFolder, S
                             repositoryUrl(repositoryURL)
                             configuredByUrl(false)
 
-                            // GitHub App credential for ihmeuw organization (Jenkins credential ID)
-                            // Note that this is just a pointer to a secret stored in Jenkins and not the credential itself
-                            credentialsId('fad62062-b1f4-447b-997f-005d6b1ea41e')
+                            // Jenkins credential ID for the GitHub App. Passed in by
+                            // monorepo.groovy so different Jenkins instances or orgs
+                            // (e.g. ihmeuw vs. a future private fork) can supply their own.
+                            // Note that this is just a pointer to a secret stored in Jenkins,
+                            // not the credential itself.
+                            credentialsId(githubCredentialsId)
 
                             traits {
                                 // Discover branches but exclude those that are also PRs
@@ -130,9 +133,9 @@ def generateMultibranchPipelines(List<Path> jenkinsfilePaths, Path rootFolder, S
     }
 }
 
-// `jenkinsfilePathsStr`, `rootFolderStr`, and `repositoryURL` are global variables injected
-// via `jobDsl`'s `additionalParameters` option in monorepo.groovy.
-List<Path> jenkinsfilePaths = jenkinsfilePathsStr.collect { Paths.get(it) }
+// `jenkinsfilePathStrings`, `rootFolderStr`, `repositoryURL`, and `githubCredentialsId`
+// are global variables injected via `jobDsl`'s `additionalParameters` option in monorepo.groovy.
+List<Path> jenkinsfilePaths = jenkinsfilePathStrings.collect { Paths.get(it) }
 Path rootFolder = Paths.get(rootFolderStr)
 
 generateFolders(jenkinsfilePaths, rootFolder)
