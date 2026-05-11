@@ -1,3 +1,7 @@
+**4.1.7 - 05/11/26**
+
+ - Type hint: Remove unused ignore
+
 **4.1.6 - 04/16/26**
 
  - Tighten vivarium_build_utils pin
