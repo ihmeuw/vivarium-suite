@@ -16,14 +16,6 @@ Installation
 
    pip install vivarium-profiling
 
-The package depends on artifactory-only IHME packages (via ``vivarium-cluster-tools``)
-for full cluster integration. Outside the IHME network, install with the ``test``
-extra to skip those:
-
-.. code-block:: bash
-
-   pip install "vivarium-profiling[test]"
-
 For local development against the monorepo source, see the monorepo README at
 https://github.com/ihmeuw/vivarium-suite.
 
