@@ -1,7 +1,14 @@
 ---
 name: _review_dry
 description: "Use when: reviewing code for DRY violations, duplicated logic, repeated patterns, opportunities to extract helpers or shared utilities, near-identical code blocks."
-tools: [read, search, github/*]
+tools:
+  # Claude vocabulary (Copilot silently drops unknown tokens)
+  - Read
+  - Grep
+  - Glob
+  # Copilot vocabulary (Claude silently drops unknown tokens)
+  - read
+  - search
 user-invocable: false
 ---
 
