@@ -1,0 +1,14 @@
+{
+  "name": "vivarium-ai-tools",
+  "owner": {
+    "name": "IHME"
+  },
+  "description": "Marketplace for the vivarium-ai-tools plugin (custom agent workflows for vivarium development).",
+  "plugins": [
+    {
+      "name": "viv",
+      "source": "./",
+      "description": "Custom agent workflows for vivarium development: code reviewer and simulation regression debugger orchestrators with specialist sub-agents."
+    }
+  ]
+}
