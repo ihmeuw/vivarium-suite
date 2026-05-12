@@ -1,3 +1,7 @@
+**0.4.2 - 05/12/26**
+
+- Delete unused .github/ directory
+
 **0.4.1 - 05/12/26**
 
 - Pin vivarium_build_utils to epic/monorepo branch (temporary until all packages are migrated)
