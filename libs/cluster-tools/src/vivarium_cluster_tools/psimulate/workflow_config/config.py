@@ -47,6 +47,85 @@ DEFAULT_BACKUP_FREQ_SECONDS = 30.0 * 60.0
 """Default backup frequency in seconds (30 minutes), matching ``psimulate run``."""
 
 
+_SCALAR_TYPES: tuple[type, ...] = (str, int, float, bool)
+"""Scalar value types accepted in step args (e.g. notebook ``parameters``,
+python ``keyword_args`` / ``positional_args``)."""
+
+_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+"""Pattern for keys in scalar-dict step args (``keyword_args``, ``parameters``)."""
+
+
+def _check_scalar(
+    value: object,
+    *,
+    label: str,
+    step_name: str,
+    allow_none: bool = True,
+) -> None:
+    """Validate that *value* is a scalar type.
+
+    Parameters
+    ----------
+    value
+        The value to check.
+    label
+        Human-readable label for error messages (e.g. ``"positional_args[0]"``).
+    step_name
+        Name of the owning step, used in error messages.
+    allow_none
+        Whether ``None`` is an acceptable value.
+    """
+    allowed = (*_SCALAR_TYPES, type(None)) if allow_none else _SCALAR_TYPES
+    if not isinstance(value, allowed):
+        raise ValueError(
+            f"Step '{step_name}': {label} must be a scalar type "
+            f"({', '.join(t.__name__ for t in allowed)}), "
+            f"got {type(value).__name__}."
+        )
+
+
+def _validate_scalar_dict(
+    configuration: object,
+    *,
+    field_name: str,
+    step_name: str,
+    allow_none_values: bool = True,
+) -> None:
+    """Validate ``configuration`` is a dict of identifier-keyed scalar values.
+
+    Parameters
+    ----------
+    configuration
+        The untrusted value to validate (typically a sub-dict from a step's
+        YAML ``args``).
+    field_name
+        Name of the field being validated, used in error messages
+        (e.g. ``"keyword_args"`` or ``"parameters"``).
+    step_name
+        Name of the owning step, used in error messages.
+    allow_none_values
+        Whether ``None`` is an acceptable value (treated as a flag for
+        keyword args; treated as YAML ``null`` for notebook parameters).
+    """
+    if not isinstance(configuration, dict):
+        raise ValueError(
+            f"Step '{step_name}': '{field_name}' must be a dict, "
+            f"got {type(configuration).__name__}."
+        )
+    for key, value in configuration.items():
+        if not isinstance(key, str) or not _IDENTIFIER_RE.match(key):
+            raise ValueError(
+                f"Step '{step_name}': {field_name} key {key!r} is not a valid "
+                "identifier. Keys must be alphanumeric, have dashes, or underscores."
+            )
+        _check_scalar(
+            value,
+            label=f"{field_name}['{key}']",
+            step_name=step_name,
+            allow_none=allow_none_values,
+        )
+
+
 @dataclass
 class ResourceConfig:
     """Compute resource specification for a workflow step."""
@@ -838,7 +917,6 @@ class PythonStepConfig(BaseStepConfig):
     """
 
     _SUPPORTED_ARGS: ClassVar[set[str]] = {"path", "positional_args", "keyword_args"}
-    _SCALAR_TYPES: ClassVar[tuple[type, ...]] = (str, int, float, bool)
 
     name: str
     """Unique name for this step within the workflow."""
@@ -868,33 +946,16 @@ class PythonStepConfig(BaseStepConfig):
         if "positional_args" in self.args:
             self._validate_positional_args(self.args["positional_args"])
         if "keyword_args" in self.args:
-            self._validate_keyword_args(self.args["keyword_args"])
+            _validate_scalar_dict(
+                self.args["keyword_args"],
+                field_name="keyword_args",
+                step_name=self.name,
+            )
 
     @property
     def required_paths(self) -> list[Path]:
         """Return paths that must exist for python steps."""
         return [Path(self.args["path"])]
-
-    def _validate_scalar(self, value: Any, label: str, *, allow_none: bool = True) -> None:
-        """Validate that *value* is a scalar type suitable for CLI usage.
-
-        Parameters
-        ----------
-        value
-            The value to check.
-        label
-            Human-readable label for error messages (e.g. ``"positional_args[0]"``).
-        allow_none
-            Whether ``None`` is accepted. Positional args do not allow ``None``
-            (it has no CLI representation), while keyword args do (treated as a flag).
-        """
-        allowed = (*self._SCALAR_TYPES, type(None)) if allow_none else self._SCALAR_TYPES
-        if not isinstance(value, allowed):
-            raise ValueError(
-                f"Step '{self.name}': {label} must be a scalar type "
-                f"({', '.join(t.__name__ for t in allowed)}), "
-                f"got {type(value).__name__}."
-            )
 
     def _validate_positional_args(self, positional_args: Any) -> None:
         """Validate that positional_args is a list of scalar values."""
@@ -904,22 +965,12 @@ class PythonStepConfig(BaseStepConfig):
                 f"got {type(positional_args).__name__}."
             )
         for arg_index, item in enumerate(positional_args):
-            self._validate_scalar(item, f"positional_args[{arg_index}]", allow_none=False)
-
-    def _validate_keyword_args(self, keyword_args: Any) -> None:
-        """Validate that keyword_args is a dict with valid keys and scalar values."""
-        if not isinstance(keyword_args, dict):
-            raise ValueError(
-                f"Step '{self.name}': 'keyword_args' must be a dict, "
-                f"got {type(keyword_args).__name__}."
+            _check_scalar(
+                item,
+                label=f"positional_args[{arg_index}]",
+                step_name=self.name,
+                allow_none=False,
             )
-        for key, value in keyword_args.items():
-            if not re.match(r"^[a-zA-Z0-9_-]+$", key):
-                raise ValueError(
-                    f"Step '{self.name}': keyword_args key {key!r} is not a valid "
-                    "identifier. Keys must match [a-zA-Z0-9_-]+."
-                )
-            self._validate_scalar(value, f"keyword_args['{key}']")
 
     def _build_command(self) -> str:
         """Build the python command string from the script path and args.
@@ -974,6 +1025,178 @@ class PythonStepConfig(BaseStepConfig):
 
 
 @dataclass
+class NotebookStepConfig(BaseStepConfig):
+    """Configuration for a notebook-based workflow step.
+
+    Currently routes to ``papermill`` under the hood, but exposes a
+    notebook-agnostic schema so the executor can be swapped later.
+
+    Examples
+    --------
+    YAML configuration::
+
+        steps:
+          - name: post_notebook_neonatal
+            type: notebook
+            resources:
+              memory_gb: 20
+              runtime: "02:00:00"
+            args:
+              path: tests/model_notebooks/results/neonatal.ipynb
+              output_path: /mnt/results/run_29/executed/neonatal.ipynb
+              parameters:
+                model_dir: /mnt/results/run_29
+                year: 2020
+                verbose: true
+
+    Notes
+    -----
+    Parameter values map to papermill flags as follows:
+
+    - ``str`` / ``int`` / ``float`` -> ``-p key value``
+    - ``bool`` / ``None`` -> ``-y key {true,false,null}`` (YAML-typed)
+
+    Parameters are emitted sorted by key for deterministic command output.
+    """
+
+    _SUPPORTED_ARGS: ClassVar[set[str]] = {"path", "parameters", "output_path", "cwd"}
+
+    name: str
+    """Unique name for this step within the workflow."""
+    resources: ResourceConfig
+    """Compute resources for this step."""
+    output_directory: Path
+    """Output directory for this step. Inherited from the workflow's output_directory."""
+    path: Path
+    """Path to the input notebook (.ipynb). Both relative and absolute paths are
+    accepted; resolved to absolute when serialized."""
+    output_path: Path
+    """Where to write the executed notebook (.ipynb). Both relative and absolute
+    paths are accepted."""
+    environment: str | None = None
+    """Optional environment name to use for this step."""
+    parameters: dict[str, Any] = field(default_factory=dict)
+    """Notebook parameters injected as cell-level variables. Scalar values only."""
+    cwd: Path | None = None
+    """Optional working directory for notebook execution. Both relative and absolute
+    paths are accepted. If not provided, defaults to the parent directory of ``path``."""
+
+    _DEFAULT_KERNEL: ClassVar[str] = "python3"
+    """Jupyter kernel used for notebook execution. Not user-configurable;
+    extracted here for discoverability."""
+
+    _PYTHON_IDENTIFIER_RE: ClassVar[re.Pattern[str]] = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+    """Parameter keys must be valid Python identifiers because papermill
+    injects them as variable assignments in a notebook cell."""
+
+    def _validate(self) -> None:
+        if not str(self.path).endswith(".ipynb"):
+            raise ValueError(
+                f"Step '{self.name}': 'path' must end with .ipynb, " f"got {self.path!r}."
+            )
+        if not str(self.output_path).endswith(".ipynb"):
+            raise ValueError(
+                f"Step '{self.name}': 'output_path' must end with .ipynb, "
+                f"got {self.output_path!r}."
+            )
+        _validate_scalar_dict(
+            self.parameters,
+            field_name="parameters",
+            step_name=self.name,
+        )
+        for key in self.parameters:
+            if not self._PYTHON_IDENTIFIER_RE.match(key):
+                raise ValueError(
+                    f"Step '{self.name}': parameter key {key!r} is not a valid "
+                    "Python identifier. Notebooks require parameter names that "
+                    "are valid Python identifiers (letters, digits, underscores; "
+                    "cannot start with a digit)."
+                )
+
+    @property
+    def required_paths(self) -> list[Path]:
+        return [self.path]
+
+    def _build_command(self) -> str:
+        cwd = self.cwd if self.cwd is not None else self.path.parent
+        parts = [
+            f"mkdir -p {shlex.quote(str(self.output_path.parent))}",
+            "&&",
+            "papermill",
+            shlex.quote(str(self.path)),
+            shlex.quote(str(self.output_path)),
+            f"-k {self._DEFAULT_KERNEL}",
+        ]
+        for key in sorted(self.parameters):
+            value = self.parameters[key]
+            if isinstance(value, bool) or value is None:
+                yaml_value = (
+                    "true" if value is True else "false" if value is False else "null"
+                )
+                parts.append(f"-y {shlex.quote(f'{key}: {yaml_value}')}")
+            else:
+                parts.append(f"-p {key} {shlex.quote(str(value))}")
+        parts.append(f"--cwd {shlex.quote(str(cwd))}")
+        return " ".join(parts)
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "name": self.name,
+            "type": "notebook",
+            "resources": self.resources.to_dict(),
+        }
+        if self.environment is not None:
+            result["environment"] = self.environment
+
+        args: dict[str, Any] = {
+            "path": str(self.path),
+            "output_path": str(self.output_path),
+        }
+        if self.parameters:
+            args["parameters"] = copy.deepcopy(self.parameters)
+        if self.cwd is not None:
+            args["cwd"] = str(self.cwd)
+
+        result["args"] = args
+        return result
+
+    @classmethod
+    def _build_from_dict(
+        cls,
+        data: dict[str, Any],
+        output_directory: Path,
+        *,
+        project: str,
+        queue: str,
+    ) -> NotebookStepConfig:
+        args = copy.deepcopy(data["args"])
+        step_name = data.get("name", "<unnamed>")
+
+        if "output_path" not in args:
+            raise ValueError(
+                f"Step '{step_name}': notebook type requires 'output_path' in args."
+            )
+
+        kwargs: dict[str, Any] = {
+            "name": data["name"],
+            "resources": ResourceConfig.from_dict(
+                data["resources"], workflow_project=project, workflow_queue=queue
+            ),
+            "output_directory": output_directory,
+            "path": Path(args["path"]).resolve(),
+            "output_path": Path(args["output_path"]).resolve(),
+        }
+        if "environment" in data:
+            kwargs["environment"] = data["environment"]
+        if "parameters" in args:
+            kwargs["parameters"] = args["parameters"]
+        if "cwd" in args:
+            kwargs["cwd"] = Path(args["cwd"]).resolve()
+
+        return cls(**kwargs)
+
+
+@dataclass
 class WorkflowConfig:
     """Parsed and validated workflow configuration."""
 
@@ -982,6 +1205,7 @@ class WorkflowConfig:
         "simulation": SimulationStepConfig,
         "pytest": PytestStepConfig,
         "python": PythonStepConfig,
+        "notebook": NotebookStepConfig,
     }
 
     name: str

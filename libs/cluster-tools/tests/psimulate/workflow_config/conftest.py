@@ -41,6 +41,14 @@ def valid_python_script(tmp_path_factory: pytest.TempPathFactory) -> str:
     return str(script)
 
 
+@pytest.fixture(scope="session")
+def valid_notebook_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A valid notebook path for notebook steps."""
+    notebook = tmp_path_factory.mktemp("notebooks") / "analysis.ipynb"
+    notebook.write_text("")
+    return notebook
+
+
 @pytest.fixture()
 def valid_workflow_dict() -> dict[str, Any]:
     """A valid minimal workflow config dict."""
