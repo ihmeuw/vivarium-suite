@@ -3,9 +3,10 @@ Vivarium AI Tools
 =================
 
 Vivarium AI Tools is a Claude Code plugin providing custom agent
-workflows for vivarium development. The repository is structured as
-both a plugin and a single-plugin marketplace, so Claude Code users can
-install it via the marketplace mechanism.
+workflows for vivarium development. It lives under ``tools/ai-tools/``
+in the ``vivarium-suite`` monorepo and is structured as both a plugin
+and a single-plugin marketplace, so Claude Code users can install it
+via the marketplace mechanism.
 
 It includes:
 
@@ -28,31 +29,35 @@ Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
 Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>``.
 
-Repository Layout
-=================
+Layout
+======
+
+Under ``tools/ai-tools/`` in the ``vivarium-suite`` monorepo:
 
 - ``.claude-plugin/plugin.json``: plugin manifest (auto-detected by VS Code Copilot)
 - ``.claude-plugin/marketplace.json``: marketplace catalog so Claude Code can install this as a plugin
 - ``agents/``: orchestrator agents (Copilot entry points) and specialist sub-agents
 - ``commands/``: Claude Code slash commands
-- project metadata files copied from ``vivarium_dependencies``
+- ``CHANGELOG.rst``: history of plugin changes
+
+Top-level project metadata (license, code of conduct, contributing guide) lives at the
+monorepo root and applies to this tool as well.
 
 Installing in Claude Code
 =========================
 
-Add the marketplace and install the plugin:
+The plugin's marketplace lives under ``tools/ai-tools/`` in the monorepo. For local
+development against a checked-out monorepo:
 
 .. code-block:: shell
 
-   /plugin marketplace add ihmeuw/vivarium_ai_tools
+   /plugin marketplace add /path/to/vivarium-suite/tools/ai-tools
    /plugin install viv@vivarium-ai-tools
 
-For local development against a checked-out copy:
-
-.. code-block:: shell
-
-   /plugin marketplace add /path/to/vivarium_ai_tools
-   /plugin install viv@vivarium-ai-tools
+Installation directly from the monorepo on GitHub depends on whether Claude Code's
+``/plugin marketplace add`` accepts a subdirectory inside an ``org/repo``. If you
+hit an error pointing at ``ihmeuw/vivarium-suite``, clone the repo locally and use
+the local-path form above.
 
 Once installed, the canonical Claude Code entry points are the slash
 commands ``/viv:code-review`` and ``/viv:debug-regression``. These run
@@ -164,7 +169,7 @@ Add this path to ``chat.pluginLocations`` in settings:
 
    {
      "chat.pluginLocations": {
-       "/your/path/to/vivarium_ai_tools": true
+       "/your/path/to/vivarium-suite/tools/ai-tools": true
      }
    }
 
