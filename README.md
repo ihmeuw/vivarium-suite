@@ -19,6 +19,15 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 | `libs/dependencies/` | `vivarium-dependencies` | *(meta-package)* |
 | `libs/compat/` | `vivarium-compat` | *(import compatibility shim — temporary)* |
 
+## Tools
+
+Developer tooling that is not a Python package and is not published to PyPI lives under `tools/`.
+These are not built or released by the monorepo's CI/release workflows.
+
+| Directory | Purpose |
+|---|---|
+| `tools/ai-tools/` | Claude Code plugin: custom agent workflows for vivarium development (code review, regression debugging) |
+
 ## Local development
 
 Each package has its own development environment. From the package directory:
