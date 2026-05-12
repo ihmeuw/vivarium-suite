@@ -1,3 +1,7 @@
+**0.4.1 - 05/12/26**
+
+- Pin vivarium_build_utils to epic/monorepo branch (temporary until all packages are migrated)
+
 **0.4.0 - 05/11/26**
 
 BREAKING CHANGE: Initial release from vivarium-suite monorepo. The import path is 
