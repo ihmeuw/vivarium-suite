@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tests.psimulate.workflow_config.utilities import (
+    make_notebook_step_dict,
     make_pytest_step_dict,
     make_python_step_dict,
     make_step_dict,
@@ -17,6 +18,7 @@ from tests.psimulate.workflow_config.utilities import (
 )
 from vivarium_cluster_tools.psimulate.workflow_config.config import (
     CommandStepConfig,
+    NotebookStepConfig,
     PytestStepConfig,
     PythonStepConfig,
     ResourceConfig,
@@ -265,8 +267,15 @@ class TestBaseStepConfig:
                 },
                 {"path", "positional_args", "keyword_args"},
             ),
+            (
+                NotebookStepConfig,
+                {
+                    "name": "notebook",
+                },
+                {"path", "parameters", "output_path", "cwd"},
+            ),
         ],
-        ids=["command", "pytest", "python"],
+        ids=["command", "pytest", "python", "notebook"],
     )
     def test_supported_arguments(
         self,
@@ -275,6 +284,7 @@ class TestBaseStepConfig:
         expected: set[str] | None,
         valid_pytest_path: str,
         valid_python_script: str,
+        valid_notebook_path: Path,
     ) -> None:
         common = {
             "resources": ResourceConfig(
@@ -286,6 +296,9 @@ class TestBaseStepConfig:
             kwargs["path"] = valid_pytest_path
         elif cls == PythonStepConfig:
             kwargs["args"] = {"path": valid_python_script}
+        elif cls == NotebookStepConfig:
+            kwargs["path"] = valid_notebook_path
+            kwargs["output_path"] = Path("/tmp/results/run_notebook.ipynb")
         config = cls(**{**common, **kwargs})
         assert config.supported_arguments == expected
 
@@ -1084,3 +1097,242 @@ class TestPythonStepConfig:
         assert len(config.steps) == 1
         assert isinstance(config.steps[0], PythonStepConfig)
         assert config.steps[0].name == "run_script"
+
+
+class TestNotebookStepConfig:
+    """Tests for NotebookStepConfig - the notebook step type."""
+
+    @staticmethod
+    def _base_kwargs(valid_notebook_path: Path) -> dict[str, Any]:
+        return {
+            "name": "run_notebook",
+            "resources": ResourceConfig(
+                memory_gb=4, project="proj_simscience", queue="all.q"
+            ),
+            "output_directory": Path("/tmp/results"),
+            "path": valid_notebook_path,
+            "output_path": Path("/tmp/results/run_notebook.ipynb"),
+        }
+
+    @pytest.mark.parametrize("omitted_field", ["path", "output_path"])
+    def test_requires_required_fields(
+        self, valid_notebook_path: Path, omitted_field: str
+    ) -> None:
+        kwargs = self._base_kwargs(valid_notebook_path)
+        del kwargs[omitted_field]
+        with pytest.raises(TypeError, match=omitted_field):
+            NotebookStepConfig(**kwargs)
+
+    @pytest.mark.parametrize(
+        "overrides, match",
+        [
+            ({"path": Path("/tmp/foo.py")}, r"\.ipynb"),
+            ({"output_path": Path("/tmp/out.txt")}, r"\.ipynb"),
+            ({"parameters": [1, 2, 3]}, "dict"),
+            ({"parameters": {"x": {"nested": 1}}}, "scalar"),
+            ({"parameters": {"bad key!": 1}}, "identifier"),
+            ({"parameters": {"hyphen-key": 1}}, "Python identifier"),
+            ({"parameters": {"2startsdigit": 1}}, "Python identifier"),
+        ],
+        ids=[
+            "non_ipynb_path",
+            "non_ipynb_output_path",
+            "parameters_not_dict",
+            "non_scalar_parameter_value",
+            "invalid_parameter_key",
+            "hyphenated_parameter_key",
+            "digit_start_parameter_key",
+        ],
+    )
+    def test_rejects_invalid_configurations(
+        self,
+        valid_notebook_path: Path,
+        overrides: dict[str, Any],
+        match: str,
+    ) -> None:
+        kwargs = {**self._base_kwargs(valid_notebook_path), **overrides}
+        with pytest.raises(ValueError, match=match):
+            NotebookStepConfig(**kwargs)
+
+    def test_from_dict_rejects_missing_output_path(self, valid_notebook_path: Path) -> None:
+        step_dict = make_notebook_step_dict(
+            args={"path": str(valid_notebook_path)},
+        )
+        with pytest.raises(ValueError, match="output_path"):
+            NotebookStepConfig.from_dict(
+                step_dict,
+                output_directory=Path("/tmp/results"),
+                project="proj_simscience",
+                queue="all.q",
+            )
+
+    def test_from_dict_rejects_unsupported_args(self, valid_notebook_path: Path) -> None:
+        step_dict = make_notebook_step_dict(
+            args={"path": str(valid_notebook_path), "bogus": "nope"},
+        )
+        with pytest.raises(ValueError, match="unsupported args"):
+            NotebookStepConfig.from_dict(
+                step_dict,
+                output_directory=Path("/tmp/results"),
+                project="proj_simscience",
+                queue="all.q",
+            )
+
+    def test_required_paths_only_contains_input(self, valid_notebook_path: Path) -> None:
+        config = NotebookStepConfig(**self._base_kwargs(valid_notebook_path))
+        assert config.required_paths == [valid_notebook_path]
+
+    @pytest.mark.parametrize(
+        "field_overrides, expected_command_template",
+        [
+            (
+                {},
+                "mkdir -p {out_parent} && papermill {input} {output} -k python3 --cwd {input_parent}",
+            ),
+            (
+                {"parameters": {"name": "alice"}},
+                "mkdir -p {out_parent} && papermill {input} {output} -k python3"
+                " -p name alice --cwd {input_parent}",
+            ),
+            (
+                {"parameters": {"verbose": True}},
+                "mkdir -p {out_parent} && papermill {input} {output} -k python3"
+                " -y 'verbose: true' --cwd {input_parent}",
+            ),
+            (
+                {"parameters": {"flag": False}},
+                "mkdir -p {out_parent} && papermill {input} {output} -k python3"
+                " -y 'flag: false' --cwd {input_parent}",
+            ),
+            (
+                {"parameters": {"missing": None}},
+                "mkdir -p {out_parent} && papermill {input} {output} -k python3"
+                " -y 'missing: null' --cwd {input_parent}",
+            ),
+            (
+                {"parameters": {"name": "alice", "verbose": True, "year": 2020}},
+                "mkdir -p {out_parent} && papermill {input} {output} -k python3"
+                " -p name alice -y 'verbose: true' -p year 2020 --cwd {input_parent}",
+            ),
+            (
+                {"cwd": Path("/tmp/notebooks")},
+                "mkdir -p {out_parent} && papermill {input} {output} -k python3 --cwd /tmp/notebooks",
+            ),
+            (
+                {"parameters": {"msg": "hello world"}},
+                "mkdir -p {out_parent} && papermill {input} {output} -k python3"
+                " -p msg 'hello world' --cwd {input_parent}",
+            ),
+        ],
+        ids=[
+            "no_parameters_defaults_cwd_to_path_parent",
+            "string_parameter",
+            "bool_true_via_y",
+            "bool_false_via_y",
+            "none_via_y",
+            "mixed_sorted_by_key",
+            "with_cwd",
+            "value_with_spaces_quoted",
+        ],
+    )
+    def test_build_command(
+        self,
+        valid_notebook_path: Path,
+        field_overrides: dict[str, Any],
+        expected_command_template: str,
+    ) -> None:
+        kwargs = {**self._base_kwargs(valid_notebook_path), **field_overrides}
+        config = NotebookStepConfig(**kwargs)
+        output_path = kwargs["output_path"]
+        expected = expected_command_template.format(
+            out_parent=output_path.parent,
+            input=valid_notebook_path,
+            input_parent=valid_notebook_path.parent,
+            output=output_path,
+        )
+        assert config._build_command() == expected
+
+    def test_to_dict_serialization(self, valid_notebook_path: Path) -> None:
+        config = NotebookStepConfig(
+            name="run_notebook",
+            resources=ResourceConfig(
+                memory_gb=8,
+                runtime="02:00:00",
+                project="proj_simscience",
+                queue="all.q",
+            ),
+            output_directory=Path("/tmp/results"),
+            path=valid_notebook_path,
+            output_path=Path("/tmp/results/executed/run_notebook.ipynb"),
+            parameters={"year": 2020, "verbose": True},
+            cwd=Path("/tmp/notebooks"),
+        )
+        result = config.to_dict()
+        assert result["name"] == "run_notebook"
+        assert result["type"] == "notebook"
+        assert result["args"]["path"] == str(valid_notebook_path)
+        assert result["args"]["parameters"] == {"year": 2020, "verbose": True}
+        assert result["args"]["output_path"] == str(
+            Path("/tmp/results/executed/run_notebook.ipynb")
+        )
+        assert result["args"]["cwd"] == str(Path("/tmp/notebooks"))
+
+    def test_to_dict_round_trip(self, valid_notebook_path: Path) -> None:
+        config = NotebookStepConfig(
+            name="run_notebook",
+            resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
+            output_directory=Path("/tmp/results"),
+            path=valid_notebook_path,
+            output_path=Path("/tmp/results/run_notebook.ipynb"),
+            parameters={"year": 2020},
+        )
+        serialized = config.to_dict()
+        restored = NotebookStepConfig.from_dict(
+            serialized,
+            output_directory=Path("/tmp/results"),
+            project="proj_simscience",
+            queue="all.q",
+        )
+        assert restored.name == config.name
+        assert restored.path == config.path
+        assert restored.parameters == config.parameters
+        assert restored.output_path == config.output_path
+
+    def test_from_dict_resolves_paths(
+        self, tmp_path: Path, valid_notebook_path: Path
+    ) -> None:
+        step_dict = make_notebook_step_dict(
+            args={
+                "path": str(valid_notebook_path),
+                "output_path": "out.ipynb",
+                "cwd": ".",
+            },
+        )
+        config = NotebookStepConfig.from_dict(
+            step_dict,
+            output_directory=Path("/tmp/results"),
+            project="proj_simscience",
+            queue="all.q",
+        )
+        assert config.path is not None and config.path.is_absolute()
+        assert config.output_path is not None and config.output_path.is_absolute()
+        assert config.cwd is not None and config.cwd.is_absolute()
+
+    def test_routes_to_notebook_step_from_yaml(
+        self, tmp_path: Path, valid_notebook_path: Path
+    ) -> None:
+        steps = [
+            make_notebook_step_dict(
+                args={
+                    "path": str(valid_notebook_path),
+                    "output_path": "out.ipynb",
+                },
+            )
+        ]
+        workflow_dict = make_workflow_dict(steps=steps)
+        yaml_path = write_workflow_yaml(tmp_path, workflow_dict)
+
+        config = WorkflowConfig.from_yaml_with_cli_overrides(yaml_path)
+        assert len(config.steps) == 1
+        assert isinstance(config.steps[0], NotebookStepConfig)
+        assert config.steps[0].name == "run_notebook"
