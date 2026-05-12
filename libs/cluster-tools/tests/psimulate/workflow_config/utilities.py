@@ -130,3 +130,24 @@ def make_python_step_dict(**overrides: Any) -> dict[str, Any]:
     }
     defaults.update(overrides)
     return defaults
+
+
+def make_notebook_step_dict(**overrides: Any) -> dict[str, Any]:
+    """Create a minimal valid notebook step dict with sensible defaults.
+
+    Returns a dict suitable for inclusion in a workflow's steps list.
+    Override any field or provide additional args.
+    """
+    defaults: dict[str, Any] = {
+        "name": "run_notebook",
+        "type": "notebook",
+        "resources": {
+            "memory_gb": 4,
+            "runtime": "01:00:00",
+        },
+        "args": {
+            "path": "notebooks/analysis.ipynb",
+        },
+    }
+    defaults.update(overrides)
+    return defaults
