@@ -1,6 +1,12 @@
 """Layered Config Tree: a configuration structure supporting cascading layers."""
 
-from vivarium.config_tree._version import __version__
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("vivarium-config-tree")
+except PackageNotFoundError:
+    __version__ = "unknown"
+
 from vivarium.config_tree.exceptions import (
     ConfigurationError,
     ConfigurationKeyError,

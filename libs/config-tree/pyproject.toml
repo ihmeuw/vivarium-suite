@@ -17,7 +17,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["vivarium_dependencies[pytest]"]
+test = [
+    "vivarium_dependencies[pytest]",
+    "vivarium_testing_utils",]
 docs = [
     "vivarium_dependencies[sphinx,sphinx-click,ipython,matplotlib]",
     "sphinxcontrib-video",
@@ -46,8 +48,6 @@ include = ["vivarium.config_tree*"]
 
 [tool.setuptools_scm]
 root = "../.."
-write_to = "src/vivarium/config_tree/_version.py"
-write_to_template = '__version__ = "{version}"\n'
 tag_regex = '^vivarium-config-tree-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-config-tree-v*"'
 fallback_version = "5.0.0"
