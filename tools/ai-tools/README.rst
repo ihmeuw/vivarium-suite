@@ -3,10 +3,12 @@ Vivarium AI Tools
 =================
 
 Vivarium AI Tools is a Claude Code plugin providing custom agent
-workflows for vivarium development. It lives under ``tools/ai-tools/``
-in the ``vivarium-suite`` monorepo and is structured as both a plugin
-and a single-plugin marketplace, so Claude Code users can install it
-via the marketplace mechanism.
+workflows for vivarium development. The plugin lives under
+``tools/ai-tools/`` in the ``vivarium-suite`` monorepo, and is
+published through a single-plugin marketplace whose catalog
+(``.claude-plugin/marketplace.json``) lives at the monorepo root, so
+Claude Code users can install it via
+``/plugin marketplace add ihmeuw/vivarium-suite``.
 
 It includes:
 
@@ -43,14 +45,20 @@ vivarium-suite.
 Layout
 ======
 
-Under ``tools/ai-tools/`` in the ``vivarium-suite`` monorepo:
+The marketplace catalog lives at the monorepo root; the plugin itself lives under
+``tools/ai-tools/``:
 
-- ``.claude-plugin/plugin.json``: plugin manifest (auto-detected by VS Code Copilot)
-- ``.claude-plugin/marketplace.json``: marketplace catalog so Claude Code can install this as a plugin
-- ``agents/``: orchestrator agents (Copilot entry points) and specialist sub-agents
-- ``commands/``: Claude Code slash commands
-- ``skills/``: Claude Code skills (model-loaded reference material for setup and usage flows)
-- ``CHANGELOG.rst``: history of plugin changes
+- ``<repo-root>/.claude-plugin/marketplace.json``: marketplace catalog. Its single
+  plugin entry uses ``"source": "./tools/ai-tools"`` to point at the plugin
+  directory. Claude Code requires the marketplace catalog at the repo root for
+  ``/plugin marketplace add ihmeuw/vivarium-suite`` to find it.
+- ``tools/ai-tools/.claude-plugin/plugin.json``: plugin manifest (also auto-detected
+  by VS Code Copilot).
+- ``tools/ai-tools/agents/``: orchestrator agents (Copilot entry points) and
+  specialist sub-agents.
+- ``tools/ai-tools/commands/``: Claude Code slash commands.
+- ``tools/ai-tools/skills/``: Claude Code skills (model-loaded reference material for setup and usage flows)
+- ``tools/ai-tools/CHANGELOG.rst``: history of plugin changes.
 
 Top-level project metadata (license, code of conduct, contributing guide) lives at the
 monorepo root and applies to this tool as well.
@@ -58,18 +66,21 @@ monorepo root and applies to this tool as well.
 Installing in Claude Code
 =========================
 
-The plugin's marketplace lives under ``tools/ai-tools/`` in the monorepo. For local
-development against a checked-out monorepo:
+From GitHub:
 
 .. code-block:: shell
 
-   /plugin marketplace add /path/to/vivarium-suite/tools/ai-tools
+   /plugin marketplace add ihmeuw/vivarium-suite
    /plugin install viv@vivarium-ai-tools
 
-Installation directly from the monorepo on GitHub depends on whether Claude Code's
-``/plugin marketplace add`` accepts a subdirectory inside an ``org/repo``. If you
-hit an error pointing at ``ihmeuw/vivarium-suite``, clone the repo locally and use
-the local-path form above.
+For local development against a checked-out monorepo, point ``marketplace add``
+at the repo root (the directory containing ``.claude-plugin/``), not at
+``tools/ai-tools/``:
+
+.. code-block:: shell
+
+   /plugin marketplace add /path/to/vivarium-suite
+   /plugin install viv@vivarium-ai-tools
 
 Once installed, the canonical Claude Code entry points are the slash
 commands ``/viv:code-review`` and ``/viv:debug-regression``. These run

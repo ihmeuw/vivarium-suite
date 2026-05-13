@@ -2,5 +2,8 @@
     "name": "viv",
     "displayName": "Vivarium AI Tools",
     "description": "Custom agent workflows for vivarium development.",
-    "publisher": "ihmeuw"
+    "publisher": "ihmeuw",
+    "dependencies": [
+        { "name": "skill-creator", "marketplace": "claude-plugins-official" }
+    ]
 }

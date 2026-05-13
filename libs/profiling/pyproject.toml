@@ -65,8 +65,6 @@ include = ["vivarium.profiling*"]
 
 [tool.setuptools_scm]
 root = "../.."
-write_to = "src/vivarium/profiling/_version.py"
-write_to_template = '__version__ = "{version}"\n'
 tag_regex = '^vivarium-profiling-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-profiling-v*"'
 fallback_version = "0.0.1"

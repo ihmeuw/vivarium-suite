@@ -1,3 +1,8 @@
+**0.4.4 - 05/13/26**
+
+- Stop writing out _version file
+- Remove unnecessary CODEOWNERS
+
 **0.4.3 - 05/13/26**
 
 - Add vivarium_testing_utils to test requirements for --runslow plugin

@@ -4,10 +4,11 @@
     "name": "IHME"
   },
   "description": "Marketplace for the vivarium-ai-tools plugin (custom agent workflows for vivarium development).",
+  "allowCrossMarketplaceDependenciesOn": ["claude-plugins-official"],
   "plugins": [
     {
       "name": "viv",
-      "source": "./",
+      "source": "./tools/ai-tools",
       "description": "Custom agent workflows for vivarium development: code reviewer and simulation regression debugger orchestrators with specialist sub-agents."
     }
   ]
