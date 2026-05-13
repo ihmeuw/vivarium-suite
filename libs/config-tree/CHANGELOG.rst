@@ -1,3 +1,13 @@
+**5.0.0 - 05/13/26**
+
+BREAKING CHANGE: Initial release from the vivarium-suite monorepo. The PyPI
+package is now ``vivarium-config-tree`` (was ``layered_config_tree``) and the
+import path is now ``vivarium.config_tree`` (was ``layered_config_tree``).
+The standalone ``layered_config_tree`` repository has been archived; a final
+v4.1.8 release was published as a shim that depends on this package, and the
+``vivarium-compat`` import shim will temporarily redirect the old import path
+with a ``DeprecationWarning`` - update imports before that shim is removed.
+
 **4.1.7 - 05/11/26**
 
  - Type hint: Remove unused ignore

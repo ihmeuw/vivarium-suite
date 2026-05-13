@@ -1,23 +1,33 @@
-===================
-Layered Config Tree
-===================
+====================
+vivarium.config_tree
+====================
 
-Layered Config Tree is a configuration structure that supports cascading layers.
+A configuration structure that supports cascading layers.
+
+.. contents::
+   :depth: 1
+
+Installation
+------------
 
 **Supported Python versions: 3.10, 3.11, 3.12, 3.13**
 
-You can install ``layered_config_tree`` from PyPI with pip:
+``vivarium-config-tree`` is published on PyPI as part of the vivarium-suite monorepo:
 
-  ``> pip install layered_config_tree``
+.. code-block:: bash
 
-or build it from from source:
+   pip install vivarium-config-tree
 
-  ``> git clone https://github.com/ihmeuw/layered_config_tree.git``
+To build it from source, clone the monorepo and install from the package directory:
 
-  ``> cd layered_config_tree``
+.. code-block:: bash
 
-  ``> conda create -n ENVIRONMENT_NAME python=3.13``
+   git clone https://github.com/ihmeuw/vivarium-suite.git
+   cd vivarium-suite
+   conda create -n ENVIRONMENT_NAME python=3.13
+   conda activate ENVIRONMENT_NAME
+   pip install libs/config-tree
 
-  ``> pip install .``
+For broader monorepo development setup, see the monorepo README at
+https://github.com/ihmeuw/vivarium-suite.
 
-This will make the ``layered_config_tree`` library available to python.
