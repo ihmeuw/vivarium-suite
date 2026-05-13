@@ -29,6 +29,17 @@ Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
 Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>``.
 
+**Jenkins MCP**
+
+- ``jenkins-mcp`` skill — install and use the IHME SimSci Jenkins MCP server
+  (``jenkins.simsci.ihme.washington.edu``) with Claude Code. Covers one-time
+  credential setup (Jenkins API token, 0600 dotfile, ``${VAR}`` substitution
+  in ``~/.claude.json``) and day-to-day read-only queries against the
+  vivarium-suite build pipelines.
+
+Loaded automatically when a user asks about Jenkins setup or build status for
+vivarium-suite.
+
 Layout
 ======
 
@@ -38,6 +49,7 @@ Under ``tools/ai-tools/`` in the ``vivarium-suite`` monorepo:
 - ``.claude-plugin/marketplace.json``: marketplace catalog so Claude Code can install this as a plugin
 - ``agents/``: orchestrator agents (Copilot entry points) and specialist sub-agents
 - ``commands/``: Claude Code slash commands
+- ``skills/``: Claude Code skills (model-loaded reference material for setup and usage flows)
 - ``CHANGELOG.rst``: history of plugin changes
 
 Top-level project metadata (license, code of conduct, contributing guide) lives at the
