@@ -452,9 +452,9 @@ class BaseStepConfig(ABC):
         task_template = tool.get_task_template(
             template_name="workflow_command_step",
             command_template="conda run --no-capture-output -n {env} {command}",
-            node_args=["command"],
+            node_args=["command", "env"],
             task_args=[],
-            op_args=["env"],
+            op_args=[],
             default_cluster_name="slurm",
         )
         compute_resources = self.native_specification.to_jobmon_spec(
