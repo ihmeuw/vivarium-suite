@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+
 @pytest.fixture
 def test_data_dir() -> Path:
     data_dir = Path(__file__).resolve().parent / "test_data"
