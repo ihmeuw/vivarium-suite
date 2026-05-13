@@ -8,7 +8,10 @@ Activated at interpreter startup via ``vivarium_compat.pth`` so the hook is in
 place before any user code runs.
 
 To add a redirect when a package migrates, add an entry to ``_REDIRECTS`` and
-bump the ``vivarium-compat`` version in ``pyproject.toml``.
+bump the ``vivarium-compat`` version in ``pyproject.toml``. Entries are safe
+to add *before* the target package is released: if the new module isn't
+importable, the hook falls back to letting the old on-disk package resolve
+normally, so installations during the transition window aren't broken.
 
 Remove this module once all downstream packages have released versions that use
 the new import paths and the deprecation period has ended.
@@ -22,12 +25,14 @@ import warnings
 from types import ModuleType
 
 # Old import root -> new import root.
-# Activate an entry when its package has been migrated into the monorepo.
-# The hook will fail loudly if the new location does not yet exist, so do not
-# enable an entry before its target package is released.
+# Entries here are safe to populate ahead of the target package's release:
+# if the new target isn't installed yet, the hook falls back to the old
+# package's normal on-disk location (so existing installations during the
+# transition window keep working).
 _REDIRECTS: dict[str, str] = {
-    # Renamed top-level packages (enable when each package migrates)
+    # Renamed top-level packages
     "vivarium_profiling": "vivarium.profiling",
+    "layered_config_tree": "vivarium.config_tree",
     # "vivarium_public_health": "vivarium.public_health",
     # "vivarium_cluster_tools": "vivarium.cluster_tools",
     # "vivarium_testing_utils": "vivarium.testing_utils",
@@ -42,7 +47,6 @@ _REDIRECTS: dict[str, str] = {
     # "vivarium_helpers": "vivarium.helpers",
     # "risk_distributions": "vivarium.risk_distributions",
     # "gbd_mapping": "vivarium.gbd_mapping",
-    "layered_config_tree": "vivarium.config_tree",
 }
 
 # Tracks which old names are currently being resolved to prevent infinite
@@ -115,7 +119,16 @@ class _CompatLoader(importlib.abc.Loader):
             )
         _resolving.add(self._old_name)
         try:
-            real = importlib.import_module(self._new_name)
+            try:
+                real = importlib.import_module(self._new_name)
+            except ModuleNotFoundError:
+                # FIXME: MIC-7100 Revert when all packages are migrated
+                # New target isn't installed. Fall back to the old name's actual
+                # on-disk location so installations during the transition window
+                # — old package still installed, new package not yet released —
+                # keep working. The DeprecationWarning was already emitted in
+                # find_spec(); users will see it whether or not the fallback fires.
+                real = _import_bypassing_compat(self._old_name)
             # Register under the old name so subsequent imports hit sys.modules directly.
             sys.modules[self._old_name] = real
             # Defensive: covers the case where another import hook holds a direct
@@ -128,6 +141,28 @@ class _CompatLoader(importlib.abc.Loader):
             module.__spec__ = real.__spec__
         finally:
             _resolving.discard(self._old_name)
+
+
+def _import_bypassing_compat(name: str) -> ModuleType:
+    """Import `name` without going through our compat finder.
+
+    Used to fall back to a name's real on-disk location when the redirect target
+    isn't installed. Temporarily removes our finder from sys.meta_path so the
+    standard PathFinder resolves the name directly. Also clears any placeholder
+    sys.modules entry the import system set when our find_spec returned a spec.
+    """
+    sys.modules.pop(name, None)
+    saved: list[tuple[int, _CompatFinder]] = [
+        (i, f) for i, f in enumerate(sys.meta_path) if isinstance(f, _CompatFinder)
+    ]
+    for _, f in saved:
+        sys.meta_path.remove(f)
+    try:
+        return importlib.import_module(name)
+    finally:
+        # Reinsert in original order so any other meta_path entries stay in place.
+        for i, f in saved:
+            sys.meta_path.insert(i, f)
 
 
 def install_compat_finder() -> None:

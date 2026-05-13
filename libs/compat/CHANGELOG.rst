@@ -1,6 +1,11 @@
 **0.2.0 - 05/13/26**
 
-- Add layered_config_tree redirect
+- Activate ``layered_config_tree`` -> ``vivarium.config_tree`` redirect.
+- Make the import hook degrade gracefully: if a redirect's target package
+  isn't installed (e.g. during the transition window where the old standalone
+  is still on disk but the new monorepo package hasn't been released yet),
+  fall back to the old name's normal on-disk location instead of raising
+  ``ModuleNotFoundError``. The ``DeprecationWarning`` still fires.
 
 **0.1.5- 05/13/26**
 

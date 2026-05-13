@@ -103,7 +103,8 @@ def test_circular_guard_cleans_up_on_success():
     assert "_test_clean_old" not in _resolving
 
 
-def test_error_when_target_does_not_exist(monkeypatch):
+def test_error_when_neither_target_nor_old_name_exists(monkeypatch):
+    """ModuleNotFoundError surfaces only when both new target and old name are missing."""
     monkeypatch.setattr(
         "vivarium._compat._compat._REDIRECTS",
         {"_nonexistent_old": "_nonexistent_new_xyz_abc"},
@@ -114,3 +115,28 @@ def test_error_when_target_does_not_exist(monkeypatch):
     with pytest.raises(ModuleNotFoundError):
         with pytest.warns(DeprecationWarning):
             importlib.import_module("_nonexistent_old")
+
+
+def test_falls_back_when_target_missing_but_old_name_exists(monkeypatch):
+    """If the redirect target is not installed, fall back to the old name's real module.
+
+    This makes redirect entries safe to ship ahead of their target packages: existing
+    code that imports the old name keeps working against the still-on-disk old package,
+    with the DeprecationWarning fired to nudge migration.
+    """
+    monkeypatch.setattr(
+        "vivarium._compat._compat._REDIRECTS",
+        {"json": "_nonexistent_new_target_xyz"},
+    )
+    sys.meta_path[:] = [f for f in sys.meta_path if not isinstance(f, _CompatFinder)]
+    install_compat_finder()
+
+    # Drop the cached `json` so the hook actually fires on next import.
+    sys.modules.pop("json", None)
+
+    with pytest.warns(DeprecationWarning):
+        result = importlib.import_module("json")
+
+    # Fallback resolved to the real json module despite the (missing) redirect target.
+    assert hasattr(result, "loads")
+    assert hasattr(result, "dumps")
