@@ -31,6 +31,22 @@ Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
 Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>``.
 
+**Skills**
+
+- ``plugin-setup`` — walks the user through post-install configuration that the
+  plugin install itself doesn't perform. Currently covers connecting the IHME
+  SimSci Jenkins MCP server (``jenkins.simsci.ihme.washington.edu``) — API token,
+  0600 credential file, ``${VAR}`` substitution in ``~/.claude.json``, and
+  ``claude mcp add`` registration.
+- ``continuous-integration`` — catalogues the vivarium-suite CI setup: the
+  parallel GH Actions + Jenkins systems, the per-package Multibranch Pipeline
+  layout, URL-to-``jobFullName`` translation for the Jenkins MCP, and the
+  parallel matrix log interleaving that ``searchBuildLog`` results need to be
+  disambiguated against.
+
+Loaded automatically when a user asks about post-install plugin setup or about
+CI for vivarium-suite.
+
 Layout
 ======
 
@@ -46,6 +62,7 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives unde
 - ``tools/ai-tools/agents/``: orchestrator agents (Copilot entry points) and
   specialist sub-agents.
 - ``tools/ai-tools/commands/``: Claude Code slash commands.
+- ``tools/ai-tools/skills/``: Claude Code skills (model-loaded reference material for setup and usage flows)
 - ``tools/ai-tools/CHANGELOG.rst``: history of plugin changes.
 
 Top-level project metadata (license, code of conduct, contributing guide) lives at the

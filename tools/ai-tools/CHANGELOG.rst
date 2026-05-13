@@ -1,3 +1,8 @@
+**0.4.0 - 05/13/26**
+
+ - Add ``continuous-integration`` and ``plugin-setup`` skills covering install and interaction
+   with the SimSci Jenkins MCP server.
+
 **0.3.2- 05/13/26**
 
 - Put the marketplace at the repo root

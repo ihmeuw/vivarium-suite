@@ -36,12 +36,7 @@ To run a single test, activate the env and use pytest directly: `pytest tests/pa
 - Each package keeps its own `CHANGELOG.rst`, `Jenkinsfile`, `pyproject.toml`, and `Makefile`.
 - `setuptools_scm` is configured per-package with a `tag_regex` of `vivarium-<pkg>-v<X.Y.Z>` and `root = "../.."` so it resolves against the monorepo git history.
 
-## CI / release model
-
-Two parallel CI systems:
-
-- **GitHub Actions** (`.github/workflows/ci.yml`) runs on push/PR for *affected* packages only. The `detect-changes` job diffs against the base ref and builds a `{library, python-version}` matrix from each changed lib's `python_versions.json`. Root-level changes (`pyproject.toml`, `Makefile`, workflows) trigger a full rebuild. GH runners install `vivarium_build_utils` from git, then run `make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=`. `IHME_PYPI=` disables the artifactory extra-index because GH runners cannot reach IHME's firewalled artifactory; packages with artifactory-only dependencies are only fully exercised in Jenkins.
-- **Jenkins** is provisioned by the top-level `Jenkinsfile`, which calls `monorepo(...)` from `vivarium_build_utils` to auto-create one Multibranch Pipeline per `libs/*/Jenkinsfile`. Adding a new package under `libs/` is picked up on the next main build. Each lib's Jenkinsfile delegates to `reusable_pipeline(...)` from the same shared library.
+## Release model
 
 Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst` is touched on `main`. The workflow:
 
@@ -51,8 +46,6 @@ Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst
 4. Builds and publishes to PyPI, then creates a GitHub Release.
 
 `workflow_dispatch` and `release: published` paths exist for manual/recovery releases of a specific lib.
-
-`vivarium_build_utils` is currently pinned to the `epic/monorepo` branch in both Jenkinsfiles and the GH workflow installs - search for `FIXME: Update to main` before touching anything that pulls in vbu.
 
 ## The `vivarium-compat` shim
 
