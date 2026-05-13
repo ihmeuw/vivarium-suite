@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from layered_config_tree import DuplicatedConfigurationError, LayeredConfigTree
+from vivarium.config_tree import DuplicatedConfigurationError, LayeredConfigTree
 
 TEST_YAML_ONE = """
 test_section:
