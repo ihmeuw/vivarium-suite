@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "viv",
-      "source": "./",
+      "source": "./tools/ai-tools",
       "description": "Custom agent workflows for vivarium development: code reviewer and simulation regression debugger orchestrators with specialist sub-agents."
     }
   ]
