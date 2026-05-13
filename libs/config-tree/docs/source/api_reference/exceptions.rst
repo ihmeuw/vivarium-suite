@@ -1,1 +1,1 @@
-.. automodule:: layered_config_tree.exceptions
+.. automodule:: vivarium.config_tree.exceptions

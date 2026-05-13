@@ -17,26 +17,20 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 from pathlib import Path
 
-import layered_config_tree
-
-base_dir = Path(layered_config_tree.__file__).parent
-
-about: dict[str, str] = {}
-with (base_dir / "__about__.py").open() as f:
-    exec(f.read(), about)
+import vivarium.config_tree
 
 sys.path.insert(0, str(Path("..").resolve()))
 
 # -- Project information -----------------------------------------------------
 
-project = about["__title__"]
-copyright = f'2024, {about["__author__"]}'
-author = about["__author__"]
+project = "vivarium.config_tree"
+author = "The vivarium developers"
+copyright = f"2024, {author}"
 
 # The short X.Y version.
-version = layered_config_tree.__version__
+version = vivarium.config_tree.__version__
 # The full version, including alpha/beta/rc tags.
-release = layered_config_tree.__version__
+release = vivarium.config_tree.__version__
 
 
 # -- General configuration ------------------------------------------------
@@ -132,7 +126,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = f'{about["__title__"]}doc'
+htmlhelp_basename = f"{project}doc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -158,9 +152,9 @@ latex_elements: dict[str, str] = {
 latex_documents = [
     (
         master_doc,
-        f'{about["__title__"]}.tex',
-        f'{about["__title__"]} Documentation',
-        about["__author__"],
+        f"{project}.tex",
+        f"{project} Documentation",
+        author,
         "manual",
     ),
 ]
@@ -170,9 +164,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, f'{about["__title__"]}', f'{about["__title__"]} Documentation', [author], 1)
-]
+man_pages = [(master_doc, project, f"{project} Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -183,11 +175,11 @@ man_pages = [
 texinfo_documents = [
     (
         master_doc,
-        f'{about["__title__"]}',
-        f'{about["__title__"]} Documentation',
+        project,
+        f"{project} Documentation",
         author,
-        f'{about["__title__"]}',
-        about["__summary__"],
+        project,
+        "Configuration structure which supports cascading layers.",
         "Miscellaneous",
     ),
 ]

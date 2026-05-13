@@ -4,7 +4,7 @@
 Getting Started
 ===============
 
-This tutorial introduces :class:`~layered_config_tree.main.LayeredConfigTree`, a 
+This tutorial introduces :class:`~vivarium.config_tree.main.LayeredConfigTree`, a 
 configuration data structure where values can be set at multiple priority layers. 
 By default, reading a value returns the one from the highest-priority layer that 
 has it defined.
@@ -16,7 +16,7 @@ At its simplest, a tree can be created from a dictionary:
 
 .. testcode::
 
-    from layered_config_tree import LayeredConfigTree
+    from vivarium.config_tree import LayeredConfigTree
 
     print(LayeredConfigTree({"greeting": "hello"}))
 
@@ -36,7 +36,7 @@ priority, see :ref:`layers_and_priority_tutorial`.
 Adding Data
 ===========
 
-Use :meth:`~layered_config_tree.main.LayeredConfigTree.update` to add data at a
+Use :meth:`~vivarium.config_tree.main.LayeredConfigTree.update` to add data at a
 specific layer. Data is provided as a (possibly nested) dictionary:
 
 .. testcode::
@@ -88,7 +88,7 @@ is raised:
 
     DuplicatedConfigurationError
 
-New keys **cannot** be created via assignment — you must use :meth:`~layered_config_tree.main.LayeredConfigTree.update`
+New keys **cannot** be created via assignment — you must use :meth:`~vivarium.config_tree.main.LayeredConfigTree.update`
 for that:
 
 .. testcode::
@@ -212,7 +212,7 @@ A ``ConfigurationKeyError`` will be raised of the requested key does not exist a
 get() method access
 -------------------
 
-:meth:`~layered_config_tree.main.LayeredConfigTree.get` works like :meth:`dict.get` 
+:meth:`~vivarium.config_tree.main.LayeredConfigTree.get` works like :meth:`dict.get` 
 and returns a default value (``None`` by default) when the key is missing instead of 
 raising an error. It also accepts a list of keys for nested lookups and supports a 
 ``layer`` parameter to read from a specific layer:
@@ -236,9 +236,9 @@ raising an error. It also accepts a list of keys for nested lookups and supports
 get_tree() method access
 ------------------------
 
-:meth:`~layered_config_tree.main.LayeredConfigTree.get_tree` *guarantees* the result 
+:meth:`~vivarium.config_tree.main.LayeredConfigTree.get_tree` *guarantees* the result 
 is a sub-tree. Note that it does *not* support a ``layer`` argument or return a default
-value like :meth:`~layered_config_tree.main.LayeredConfigTree.get`.
+value like :meth:`~vivarium.config_tree.main.LayeredConfigTree.get`.
 
 .. testcode::
 
@@ -307,7 +307,7 @@ Meanwhile, the ``repr`` shows *all* layers along with source information:
 Converting to a Dictionary
 ==========================
 
-Use :meth:`~layered_config_tree.main.LayeredConfigTree.to_dict` to extract a plain
+Use :meth:`~vivarium.config_tree.main.LayeredConfigTree.to_dict` to extract a plain
 dictionary of highest priority information. 
 
 .. testcode::

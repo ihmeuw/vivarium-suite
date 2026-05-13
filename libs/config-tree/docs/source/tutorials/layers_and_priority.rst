@@ -15,7 +15,7 @@ later layers have higher priority and override earlier ones.
 
 .. testcode::
 
-    from layered_config_tree import LayeredConfigTree
+    from vivarium.config_tree import LayeredConfigTree
 
     tree = LayeredConfigTree(
         layers=["defaults", "component", "user"]
@@ -78,7 +78,7 @@ Reading from a Specific Layer
 =============================
 
 Normally you get the highest-priority value. However, you can request a value
-from a *specific* layer using the :meth`~layered_config_tree.main.LayeredConfigTree.get`
+from a *specific* layer using the :meth`~vivarium.config_tree.main.LayeredConfigTree.get`
 with the ``layer`` argument:
 
 .. testcode::
@@ -107,14 +107,14 @@ is raised:
 
 .. note::
 
-    You can only request values from a specific layer via the :meth:`~layered_config_tree.main.LayeredConfigTree.get` 
+    You can only request values from a specific layer via the :meth:`~vivarium.config_tree.main.LayeredConfigTree.get` 
     method. Dot notation access (e.g. ``config.server.host``) and the 
-    :meth:`~layered_config_tree.main.LayeredConfigTree.get_tree` method always return 
+    :meth:`~vivarium.config_tree.main.LayeredConfigTree.get_tree` method always return 
     the highest-priority values.
 
 .. note::
 
-    The interaction between the :meth:`~layered_config_tree.main.LayeredConfigTree.get`
+    The interaction between the :meth:`~vivarium.config_tree.main.LayeredConfigTree.get`
     ``default_value`` and ``layer`` arguments may sometimes be a cause of confusion. 
     The ``default_value`` at a requested ``layer`` will only be returned *if the requested 
     value does not exist at all at any layer*. If the requested value *does* exist - 
