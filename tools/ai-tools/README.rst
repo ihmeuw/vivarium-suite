@@ -31,16 +31,21 @@ Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
 Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>``.
 
-**Jenkins MCP**
+**Skills**
 
-- ``jenkins-mcp`` skill — install and use the IHME SimSci Jenkins MCP server
-  (``jenkins.simsci.ihme.washington.edu``) with Claude Code. Covers one-time
-  credential setup (Jenkins API token, 0600 dotfile, ``${VAR}`` substitution
-  in ``~/.claude.json``) and day-to-day read-only queries against the
-  vivarium-suite build pipelines.
+- ``plugin-setup`` — walks the user through post-install configuration that the
+  plugin install itself doesn't perform. Currently covers connecting the IHME
+  SimSci Jenkins MCP server (``jenkins.simsci.ihme.washington.edu``) — API token,
+  0600 credential file, ``${VAR}`` substitution in ``~/.claude.json``, and
+  ``claude mcp add`` registration.
+- ``continuous-integration`` — catalogues the vivarium-suite CI setup: the
+  parallel GH Actions + Jenkins systems, the per-package Multibranch Pipeline
+  layout, URL-to-``jobFullName`` translation for the Jenkins MCP, and the
+  parallel matrix log interleaving that ``searchBuildLog`` results need to be
+  disambiguated against.
 
-Loaded automatically when a user asks about Jenkins setup or build status for
-vivarium-suite.
+Loaded automatically when a user asks about post-install plugin setup or about
+CI for vivarium-suite.
 
 Layout
 ======
