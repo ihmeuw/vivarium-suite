@@ -1,6 +1,7 @@
 **0.3.2- 05/13/26**
 
 - Put the marketplace at the repo root
+- Add dependency for anthropic skill-creator
 
 **0.3.1 - 05/13/26**
 
