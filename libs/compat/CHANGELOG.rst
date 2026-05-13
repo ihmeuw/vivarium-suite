@@ -1,3 +1,7 @@
+**0.2.0 - 05/13/26**
+
+- Add layered_config_tree redirect
+
 **0.1.5- 05/13/26**
 
 - Add vivarium_testing_utils to test requirements for --runslow plugin
