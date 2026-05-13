@@ -1,3 +1,7 @@
+**0.3.1 - 05/13/26**
+
+- Fix marketplace directory path for monorepo
+
 **0.3.0 - 05/12/26**
 
  - Migrate from standalone ``ihmeuw/vivarium_ai_tools`` repo into the
