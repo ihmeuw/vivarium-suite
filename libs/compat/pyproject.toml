@@ -10,9 +10,13 @@ dynamic = ["version"]
 # No dependencies; the hook redirects imports, it does not depend on them.
 
 [project.optional-dependencies]
-dev = [
-    "vivarium_dependencies[lint]",
+test = [
     "vivarium_dependencies[pytest]",
+    "vivarium_testing_utils",
+]
+dev = [
+    "vivarium-compat[test]",
+    "vivarium_dependencies[lint]",
 ]
 ci_github = ["vivarium-compat[dev]"]
 ci_jenkins = ["vivarium-compat[dev]"]

@@ -27,7 +27,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["vivarium_dependencies[pytest]"]
+test = [
+    "vivarium_dependencies[pytest]",
+    "vivarium_testing_utils",
+]
 cluster = ["vivarium_cluster_tools>=2.1.17"]
 data = [
     "vivarium_inputs>=5.2.6",

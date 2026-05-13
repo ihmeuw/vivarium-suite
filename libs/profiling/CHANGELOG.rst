@@ -1,3 +1,7 @@
+**0.4.3 - 05/13/26**
+
+- Add vivarium_testing_utils to test requirements for --runslow plugin
+
 **0.4.2 - 05/12/26**
 
 - Delete unused .github/ directory
