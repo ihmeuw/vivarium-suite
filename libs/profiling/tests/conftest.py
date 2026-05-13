@@ -16,6 +16,7 @@ TEST_ARTIFACT_PATH = (
     "/mnt/team/simulation_science/pub/simulation_profiling/artifacts/pakistan.hdf"
 )
 
+
 @pytest.fixture
 def test_model_specs(tmp_path) -> list[Path]:
     """Create minimal test model specification files in a temporary directory."""
