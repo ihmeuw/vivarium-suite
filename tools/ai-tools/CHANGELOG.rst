@@ -1,9 +1,8 @@
-<<<<<<< pnast/feature/mic-6953-ci-skill
 **0.4.0 - 05/13/26**
 
  - Add ``jenkins-mcp`` skill covering install and interaction
    with the SimSci Jenkins MCP server.
-=======
+
 **0.3.2- 05/13/26**
 
 - Put the marketplace at the repo root
@@ -12,7 +11,6 @@
 **0.3.1 - 05/13/26**
 
 - Fix marketplace directory path for monorepo
->>>>>>> main
 
 **0.3.0 - 05/12/26**
 
