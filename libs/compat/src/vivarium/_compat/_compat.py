@@ -47,7 +47,6 @@ _REDIRECTS: dict[str, str] = {
     # "vivarium_helpers": "vivarium.helpers",
     # "risk_distributions": "vivarium.risk_distributions",
     # "gbd_mapping": "vivarium.gbd_mapping",
-    "layered_config_tree": "vivarium.config_tree",
 }
 
 # Tracks which old names are currently being resolved to prevent infinite
