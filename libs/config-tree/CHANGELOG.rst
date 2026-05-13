@@ -1,0 +1,118 @@
+**4.1.7 - 05/11/26**
+
+ - Type hint: Remove unused ignore
+
+**4.1.6 - 04/16/26**
+
+ - Tighten vivarium_build_utils pin
+
+**4.1.5 - 04/15/26**
+
+ - Update vivarium_build_utils pin
+
+**4.1.4 - 04/14/26**
+
+ - Go back to explicit vbu pin (revert change from v4.1.3)
+
+**4.1.3 - 04/14/26** (YANKED)
+
+ - Use vivarium_dependencies for vbu pins
+
+**4.1.2 - 04/14/26**
+
+ - Strengthen documentation
+
+**4.1.1 - 03/16/26**
+
+ - Validate version and CHANGELOG date prior to deploying
+ - Update python docs url
+
+**4.1.0 - 02/19/26**
+
+ - Add support for Python versions 3.12 and 3.13
+
+**4.0.7 - 01/06/26**
+
+ - Fail deployment if changelog date does not match current date
+
+**4.0.6 - 11/20/25**
+
+ - Improve 'make build-env': better handle args and make the env name optional
+
+**4.0.5 - 11/12/2025**
+
+ - Add API docs and a getting started guide
+
+**4.0.4 - 08/04/2025**
+
+ - Remove deprecated reusable_pipeline 'use_shared_fs' arg from Jenkinsfile
+
+**4.0.3 - 08/01/2025**
+
+ - Use vivarium_dependencies for common setup constraints
+
+**4.0.2 - 07/25/2025**
+
+ - Feature: Support new environment creation via 'make build-env'
+
+**4.0.1 - 07/16/2025**
+
+ - Support pinning of vivarium_build_utils; pin vivarium_build_utils>=1.1.0,<2.0.0
+
+**4.0.0 - 07/03/2025**
+
+ - Remove get_from_layer() method
+
+**3.2.0 - 04/03/2025**
+
+ - Bugfix: Raise a MissingLayerError if a requested value exists but not at the requested layer.
+ - Get nested values from a single 'get' or 'get_tree' call
+ - Move tree.get_from_layer() logic into tree.get() and add deprecation warning. 
+ - Utilize centralized build tools
+
+**3.1.0 - 03/18/2025**
+
+ - Raise an error if YAML contains duplicate keys within the same level
+
+**3.0.0 - 02/18/2025**
+
+ - Better handle dunder-style keys
+
+**2.2.1 - 12/27/2024**
+
+ - Bugfix: failing mypy
+
+**2.2.0 - 11/21/2024**
+
+ - Drop support for Python 3.9
+
+**2.1.0 - 10/31/2024**
+
+ - Add getter methods
+
+**2.0.2 - 08/01/2024**
+
+ - Create explicit iterator for LayeredConfigTree
+
+**2.0.1 - 06/14/2024**
+
+ - Add py.typed marker
+
+**2.0.0 - 05/17/2024**
+
+ - Drop support for Python v3.8
+ - Add type hints
+
+**1.0.2 - 04/26/2024**
+
+ - Allow default None argument for ConfigurationError
+
+**1.0.1 - 04/11/2024**
+
+ - Extract python version test matrix from python_versions.json
+ - Automatically update README when supported python versions change
+ - Bugfix missing ConfigurationError attribute
+
+**1.0.0 - 04/11/2024**
+
+ - Initial release
