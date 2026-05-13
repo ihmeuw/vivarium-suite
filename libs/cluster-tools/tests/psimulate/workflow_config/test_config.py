@@ -336,6 +336,22 @@ class TestBaseStepConfig:
             command="echo hello world",
         )
 
+    def test_get_tasks_includes_env_in_node_args(self) -> None:
+        """env must be a node_arg so two steps with the same command but
+        different envs produce distinct Jobmon task hashes."""
+        config = CommandStepConfig(
+            name="test_step",
+            resources=ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q"),
+            command="echo hello world",
+            output_directory=Path("/tmp/results"),
+        )
+        mock_tool = MagicMock()
+        config.get_tasks(mock_tool, env="my_env", build_timestamp="2026_04_24_10_00_00")
+
+        template_kwargs = mock_tool.get_task_template.call_args.kwargs
+        assert "env" in template_kwargs["node_args"]
+        assert "env" not in template_kwargs["op_args"]
+
     def test_validate_required_paths_rejects_nonexistent(self) -> None:
         with pytest.raises(FileNotFoundError, match="does not exist"):
             PythonStepConfig(
