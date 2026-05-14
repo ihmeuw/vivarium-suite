@@ -1,5 +1,5 @@
 import pytest
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from vivarium.interface.interactive import InteractiveContext
 from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.results import DiseaseObserver
@@ -33,7 +33,7 @@ def test_multi_component_parser():
         }
     }
 
-    config = LayeredConfigTree(config_dict)
+    config = ConfigTree(config_dict)
 
     # Create parser and parse configuration
     parser = MultiComponentParser()
@@ -111,7 +111,7 @@ def test_multi_component_parser_risks():
         },
     }
 
-    config = LayeredConfigTree(config_dict)
+    config = ConfigTree(config_dict)
 
     parser = MultiComponentParser()
     components = parser.parse_component_config(config)
@@ -175,7 +175,7 @@ def test_risk_affects_normally_defined_cause():
         },
     }
 
-    config = LayeredConfigTree(config_dict)
+    config = ConfigTree(config_dict)
     parser = MultiComponentParser()
     components = parser.parse_component_config(config)
 
@@ -223,7 +223,7 @@ def test_risk_error_when_affected_cause_number_exceeds_available():
         },
     }
 
-    config = LayeredConfigTree(config_dict)
+    config = ConfigTree(config_dict)
     parser = MultiComponentParser()
 
     with pytest.raises(MultiComponentParsingErrors, match="exceeds available causes"):
@@ -255,7 +255,7 @@ def test_risk_error_when_affected_cause_undefined():
         },
     }
 
-    config = LayeredConfigTree(config_dict)
+    config = ConfigTree(config_dict)
     parser = MultiComponentParser()
 
     with pytest.raises(
@@ -282,7 +282,7 @@ def test_error_when_cause_defined_in_both_multi_config_and_standard():
         },
     }
 
-    config = LayeredConfigTree(config_dict)
+    config = ConfigTree(config_dict)
     parser = MultiComponentParser()
 
     with pytest.raises(

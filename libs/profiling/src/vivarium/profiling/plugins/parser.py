@@ -1,4 +1,4 @@
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from vivarium.framework.components import ComponentConfigurationParser
 from vivarium.framework.components.parser import ParsingError
 from vivarium_public_health.disease import DiseaseModel
@@ -56,7 +56,7 @@ class MultiComponentParser(ComponentConfigurationParser):
     And if observers: True, it will also create corresponding DiseaseObserver components.
     """
 
-    def parse_component_config(self, component_config: LayeredConfigTree) -> list[Component]:
+    def parse_component_config(self, component_config: ConfigTree) -> list[Component]:
         """Parses the component configuration and returns a list of components.
 
         This method looks for a `causes` key that contains multi-configuration
@@ -66,7 +66,7 @@ class MultiComponentParser(ComponentConfigurationParser):
         Parameters
         ----------
         component_config
-            A LayeredConfigTree defining the components to initialize.
+            A ConfigTree defining the components to initialize.
 
         Returns
         -------
@@ -114,15 +114,13 @@ class MultiComponentParser(ComponentConfigurationParser):
 
         return components
 
-    def _get_multi_disease_components(
-        self, causes_config: LayeredConfigTree
-    ) -> list[Component]:
+    def _get_multi_disease_components(self, causes_config: ConfigTree) -> list[Component]:
         """Creates multiple disease components based on multi-configuration.
 
         Parameters
         ----------
         causes_config
-            A LayeredConfigTree defining the disease multi-configuration
+            A ConfigTree defining the disease multi-configuration
             where each cause name is a key with multi-parameters
 
         Returns
@@ -147,14 +145,14 @@ class MultiComponentParser(ComponentConfigurationParser):
         return components
 
     def _validate_causes_config(
-        self, causes_config: LayeredConfigTree, standard_causes: set[str]
+        self, causes_config: ConfigTree, standard_causes: set[str]
     ) -> None:
         """Validates the diseases multi-configuration.
 
         Parameters
         ----------
         causes_config
-            A LayeredConfigTree defining the diseases multi-configuration
+            A ConfigTree defining the diseases multi-configuration
             where each cause name is a key with multi-parameters
 
         Raises
@@ -184,9 +182,7 @@ class MultiComponentParser(ComponentConfigurationParser):
         if error_messages:
             raise MultiComponentParsingErrors(error_messages)
 
-    def _validate_cause_config(
-        self, cause_name: str, cause_config: LayeredConfigTree
-    ) -> None:
+    def _validate_cause_config(self, cause_name: str, cause_config: ConfigTree) -> None:
         """Validates the configuration for a single cause.
 
         Parameters
@@ -194,7 +190,7 @@ class MultiComponentParser(ComponentConfigurationParser):
         cause_name
             The name of the cause
         cause_config
-            A LayeredConfigTree defining the cause multi-configuration
+            A ConfigTree defining the cause multi-configuration
 
         Raises
         ------
@@ -232,8 +228,8 @@ class MultiComponentParser(ComponentConfigurationParser):
 
     def _get_multi_risk_components(
         self,
-        risks_config: LayeredConfigTree,
-        causes_config: LayeredConfigTree | None,
+        risks_config: ConfigTree,
+        causes_config: ConfigTree | None,
         standard_causes: set[str],
     ) -> list[Component]:
         components: list[Component] = []
@@ -303,8 +299,8 @@ class MultiComponentParser(ComponentConfigurationParser):
 
     def _validate_risks_config(
         self,
-        risks_config: LayeredConfigTree,
-        causes_config: LayeredConfigTree | None,
+        risks_config: ConfigTree,
+        causes_config: ConfigTree | None,
         standard_causes: set[str],
     ) -> None:
         error_messages = []
@@ -328,7 +324,7 @@ class MultiComponentParser(ComponentConfigurationParser):
     def _validate_risk_config(
         self,
         risk_name: str,
-        risk_config: LayeredConfigTree,
+        risk_config: ConfigTree,
         cause_counts: dict[str, int],
         standard_causes: set[str],
     ) -> list[str]:
@@ -394,7 +390,7 @@ class MultiComponentParser(ComponentConfigurationParser):
         return error_messages
 
     @staticmethod
-    def _get_cause_counts(causes_config: LayeredConfigTree | None) -> dict[str, int]:
+    def _get_cause_counts(causes_config: ConfigTree | None) -> dict[str, int]:
         """Get counts for all causes (multi-config and normally-defined).
 
         Parameters

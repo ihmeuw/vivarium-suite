@@ -1,3 +1,9 @@
+**0.4.5 - 05/14/26**
+
+- Update imports for config_tree
+- Remove unused environment.sh and artifact_requirements.txt
+- Change fallback version
+
 **0.4.4 - 05/13/26**
 
 - Stop writing out _version file
