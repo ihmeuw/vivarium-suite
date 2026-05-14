@@ -10,6 +10,7 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import datetime
 import sys
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -25,7 +26,7 @@ sys.path.insert(0, str(Path("..").resolve()))
 
 project = "vivarium.config_tree"
 author = "The vivarium developers"
-copyright = f"2024, {author}"
+copyright = f"2016-{datetime.date.today().year}, {author}"
 
 # The short X.Y version.
 version = vivarium.config_tree.__version__

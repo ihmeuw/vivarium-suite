@@ -9,6 +9,11 @@ Fires after the deadline below. If you hit this:
 The alias exists in ``vivarium/config_tree/__init__.py`` as a ``__getattr__``
 hook that returns ``ConfigTree`` with a ``DeprecationWarning`` when callers
 import the old name. See the v5.0.0 CHANGELOG entry for context.
+
+Note: this deadline is independent of ``libs/compat/tests/test_removal_deadline.py``,
+which governs the lifetime of the entire ``vivarium-compat`` package (a separate
+transitional artifact). The two currently share a date but should not be assumed
+to move in lockstep - update each one when its specific shim is actually retired.
 """
 
 import datetime

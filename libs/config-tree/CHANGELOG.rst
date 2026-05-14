@@ -5,7 +5,7 @@
   import path is now ``vivarium.config_tree`` (was ``layered_config_tree``).
   The standalone ``layered_config_tree`` repository has been archived; a final
   v4.1.8 release was published as a shim that depends on this package, and the
-  ``vivarium-compat`` import shim will temporarily redirect the old import path
+  ``vivarium-compat`` package temporarily redirects the old import path
   with a ``DeprecationWarning`` - update imports before that shim is removed.
 - BREAKING CHANGE: The primary class ``LayeredConfigTree`` has been renamed to
   ``ConfigTree``. ``LayeredConfigTree`` remains available as a deprecated alias

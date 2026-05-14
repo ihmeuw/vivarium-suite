@@ -78,7 +78,7 @@ Reading from a Specific Layer
 =============================
 
 Normally you get the highest-priority value. However, you can request a value
-from a *specific* layer using the :meth`~vivarium.config_tree.main.ConfigTree.get`
+from a *specific* layer using the :meth:`~vivarium.config_tree.main.ConfigTree.get`
 with the ``layer`` argument:
 
 .. testcode::

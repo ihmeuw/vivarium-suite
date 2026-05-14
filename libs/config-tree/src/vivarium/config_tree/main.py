@@ -33,7 +33,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from vivarium.config_tree import (
+from vivarium.config_tree.exceptions import (
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,
