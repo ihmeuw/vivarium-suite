@@ -1,0 +1,26 @@
+[build-system]
+requires = ["packaging", "setuptools"]
+
+[tool.black]
+line_length = 94
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+# This is the global mypy configuration.
+# Avoid changing this!
+strict = true  # See all the enabled flags `mypy --help | grep -A 10 'Strict mode'`
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = [
+    "build",
+]
+
+# handle mypy errors when 3rd party packages are not typed.
+[[tool.mypy.overrides]]
+module = [
+    # "scipy.*",
+    # "sklearn.*",
+]
+ignore_missing_imports = true
