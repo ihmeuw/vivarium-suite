@@ -1,1 +1,1 @@
-import vivarium._compat._compat; vivarium._compat._compat.install_compat_finder()
+import vivarium_compat._compat; vivarium_compat._compat.install_compat_finder()

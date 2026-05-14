@@ -33,16 +33,17 @@ git_describe_command = 'git describe --dirty --tags --long --match "vivarium-com
 fallback_version = "0.0.0+unknown"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/vivarium/_compat/_version.py"
+version-file = "src/vivarium_compat/_version.py"
 
 [tool.hatch.build.targets.wheel]
-# Ship only the _compat subpackage at the correct namespace path. We do NOT
-# ship vivarium/__init__.py because the namespace owner (standalone vivarium
-# today, vivarium-core post-monorepo-migration) ships the canonical one with
-# backward-compat re-exports. only-include preserves the vivarium/_compat/
-# layout in the wheel.
+# vivarium_compat is a *top-level* package (not under the vivarium namespace).
+# This is deliberate: the vivarium_compat.pth startup file imports
+# vivarium_compat._compat to install the redirect hook, and if this package
+# lived under vivarium, Python would have to run vivarium/__init__.py first -
+# which itself imports names that the hook is supposed to redirect, creating
+# a bootstrap deadlock during interpreter startup.
 sources = ["src"]
-only-include = ["src/vivarium/_compat"]
+only-include = ["src/vivarium_compat"]
 
 # force-include places vivarium_compat.pth at the site-packages root so Python
 # executes it at interpreter startup, before any user code runs.
