@@ -4,7 +4,7 @@
 Tutorials
 =========
 
-These tutorials introduce the core concepts and features of Layered Config Tree.
+These tutorials introduce the core concepts and features of Config Tree.
 
 .. toctree::
    :maxdepth: 2

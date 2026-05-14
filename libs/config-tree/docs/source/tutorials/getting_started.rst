@@ -4,7 +4,7 @@
 Getting Started
 ===============
 
-This tutorial introduces :class:`~vivarium.config_tree.main.LayeredConfigTree`, a 
+This tutorial introduces :class:`~vivarium.config_tree.main.ConfigTree`, a 
 configuration data structure where values can be set at multiple priority layers. 
 By default, reading a value returns the one from the highest-priority layer that 
 has it defined.
@@ -16,9 +16,9 @@ At its simplest, a tree can be created from a dictionary:
 
 .. testcode::
 
-    from vivarium.config_tree import LayeredConfigTree
+    from vivarium.config_tree import ConfigTree
 
-    print(LayeredConfigTree({"greeting": "hello"}))
+    print(ConfigTree({"greeting": "hello"}))
 
 .. testoutput::
 
@@ -36,12 +36,12 @@ priority, see :ref:`layers_and_priority_tutorial`.
 Adding Data
 ===========
 
-Use :meth:`~vivarium.config_tree.main.LayeredConfigTree.update` to add data at a
+Use :meth:`~vivarium.config_tree.main.ConfigTree.update` to add data at a
 specific layer. Data is provided as a (possibly nested) dictionary:
 
 .. testcode::
 
-    tree = LayeredConfigTree(layers=["base", "override"])
+    tree = ConfigTree(layers=["base", "override"])
     tree.update(
         {"name": "some_service", "database": {"host": "localhost", "port": 5432}},
         layer="base",
@@ -62,7 +62,7 @@ for that key and records the source as ``None``:
 
 .. testcode::
 
-    t = LayeredConfigTree({"x": 1}, layers=["base", "override"])
+    t = ConfigTree({"x": 1}, layers=["base", "override"])
     t.x = 99
     print(repr(t))
 
@@ -88,7 +88,7 @@ is raised:
 
     DuplicatedConfigurationError
 
-New keys **cannot** be created via assignment — you must use :meth:`~vivarium.config_tree.main.LayeredConfigTree.update`
+New keys **cannot** be created via assignment — you must use :meth:`~vivarium.config_tree.main.ConfigTree.update`
 for that:
 
 .. testcode::
@@ -107,7 +107,7 @@ YAML strings or a path to a YAML file.
 
 .. testcode::
 
-    print(LayeredConfigTree("server:\n  host: localhost\n  port: 8080\n"))
+    print(ConfigTree("server:\n  host: localhost\n  port: 8080\n"))
 
 .. testoutput::
 
@@ -120,7 +120,7 @@ YAML strings or a path to a YAML file.
 Reading Values
 ==============
 
-There are four ways to read from a ``LayeredConfigTree``, each with different behavior.
+There are four ways to read from a ``ConfigTree``, each with different behavior.
 
 .. note::
 
@@ -159,7 +159,7 @@ A ``ConfigurationKeyError`` will be raised of the requested key does not exist a
 
     .. testcode::
 
-        answer = LayeredConfigTree({"__special__": 42})
+        answer = ConfigTree({"__special__": 42})
 
         # Bracket notation works
         print(answer["__special__"])
@@ -182,7 +182,7 @@ A ``ConfigurationKeyError`` will be raised of the requested key does not exist a
     
     .. testcode::
 
-        weird = LayeredConfigTree({"space key": "foo", "dash-key": "bar"})
+        weird = ConfigTree({"space key": "foo", "dash-key": "bar"})
 
         # Bracket notation works
         print(weird["space key"])
@@ -212,7 +212,7 @@ A ``ConfigurationKeyError`` will be raised of the requested key does not exist a
 get() method access
 -------------------
 
-:meth:`~vivarium.config_tree.main.LayeredConfigTree.get` works like :meth:`dict.get` 
+:meth:`~vivarium.config_tree.main.ConfigTree.get` works like :meth:`dict.get` 
 and returns a default value (``None`` by default) when the key is missing instead of 
 raising an error. It also accepts a list of keys for nested lookups and supports a 
 ``layer`` parameter to read from a specific layer:
@@ -236,9 +236,9 @@ raising an error. It also accepts a list of keys for nested lookups and supports
 get_tree() method access
 ------------------------
 
-:meth:`~vivarium.config_tree.main.LayeredConfigTree.get_tree` *guarantees* the result 
+:meth:`~vivarium.config_tree.main.ConfigTree.get_tree` *guarantees* the result 
 is a sub-tree. Note that it does *not* support a ``layer`` argument or return a default
-value like :meth:`~vivarium.config_tree.main.LayeredConfigTree.get`.
+value like :meth:`~vivarium.config_tree.main.ConfigTree.get`.
 
 .. testcode::
 
@@ -307,7 +307,7 @@ Meanwhile, the ``repr`` shows *all* layers along with source information:
 Converting to a Dictionary
 ==========================
 
-Use :meth:`~vivarium.config_tree.main.LayeredConfigTree.to_dict` to extract a plain
+Use :meth:`~vivarium.config_tree.main.ConfigTree.to_dict` to extract a plain
 dictionary of highest priority information. 
 
 .. testcode::

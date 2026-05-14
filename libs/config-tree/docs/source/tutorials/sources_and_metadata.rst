@@ -4,20 +4,20 @@
 Sources and Metadata
 ======================
 
-One of the key features of ``LayeredConfigTree`` is **provenance tracking**:
+One of the key features of ``ConfigTree`` is **provenance tracking**:
 every value records which layer it was set at and where it came from.
 
 Setting Sources
 ===============
 
-The ``source`` parameter on :meth:`~vivarium.config_tree.main.LayeredConfigTree.update`
+The ``source`` parameter on :meth:`~vivarium.config_tree.main.ConfigTree.update`
 records the origin of a value:
 
 .. testcode::
 
-    from vivarium.config_tree import LayeredConfigTree
+    from vivarium.config_tree import ConfigTree
 
-    config = LayeredConfigTree(layers=["file", "env", "cli"])
+    config = ConfigTree(layers=["file", "env", "cli"])
 
     config.update(
         {"log_level": "WARNING", "workers": 4},
@@ -40,7 +40,7 @@ time gets the source ``"initial data"``:
 
 .. testcode::
 
-    defaults = LayeredConfigTree({"timeout": 30}, layers=["base", "override"])
+    defaults = ConfigTree({"timeout": 30}, layers=["base", "override"])
     defaults.update({"timeout": 60})
     print(repr(defaults))
 
@@ -77,7 +77,7 @@ Use ``repr()`` to see all layers and their sources at a glance:
             source: config.yaml
 
 You can also inspect metadata for a specific key programmatically using
-:meth:`~vivarium.config_tree.main.LayeredConfigTree.metadata`:
+:meth:`~vivarium.config_tree.main.ConfigTree.metadata`:
 
 .. testcode::
 
@@ -95,13 +95,13 @@ keys, ordered from lowest to highest priority.
 Tracking Unused Keys
 ====================
 
-The :meth:`~vivarium.config_tree.main.LayeredConfigTree.unused_keys` method returns
+The :meth:`~vivarium.config_tree.main.ConfigTree.unused_keys` method returns
 a list of keys that have been set but never read. This is helpful for detecting
 typos or leftover configuration:
 
 .. testcode::
 
-    fresh = LayeredConfigTree({"a": 1, "b": 2, "c": 3})
+    fresh = ConfigTree({"a": 1, "b": 2, "c": 3})
 
     # Only read 'a'
     _ = fresh.a

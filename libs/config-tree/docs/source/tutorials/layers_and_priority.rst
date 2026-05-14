@@ -10,14 +10,14 @@ you see when multiple layers define the same key.
 Defining Layers
 ===============
 
-Layers are defined when you create a ``LayeredConfigTree``. The order matters:
+Layers are defined when you create a ``ConfigTree``. The order matters:
 later layers have higher priority and override earlier ones.
 
 .. testcode::
 
-    from vivarium.config_tree import LayeredConfigTree
+    from vivarium.config_tree import ConfigTree
 
-    tree = LayeredConfigTree(
+    tree = ConfigTree(
         layers=["defaults", "component", "user"]
     )
 
@@ -53,7 +53,7 @@ overridden where explicitly set:
 
 .. testcode::
 
-    config = LayeredConfigTree(layers=["defaults", "overrides"])
+    config = ConfigTree(layers=["defaults", "overrides"])
     config.update(
         {"server": {"host": "localhost", "port": 8080, "debug": True}},
         layer="defaults",
@@ -78,7 +78,7 @@ Reading from a Specific Layer
 =============================
 
 Normally you get the highest-priority value. However, you can request a value
-from a *specific* layer using the :meth`~vivarium.config_tree.main.LayeredConfigTree.get`
+from a *specific* layer using the :meth`~vivarium.config_tree.main.ConfigTree.get`
 with the ``layer`` argument:
 
 .. testcode::
@@ -107,14 +107,14 @@ is raised:
 
 .. note::
 
-    You can only request values from a specific layer via the :meth:`~vivarium.config_tree.main.LayeredConfigTree.get` 
+    You can only request values from a specific layer via the :meth:`~vivarium.config_tree.main.ConfigTree.get` 
     method. Dot notation access (e.g. ``config.server.host``) and the 
-    :meth:`~vivarium.config_tree.main.LayeredConfigTree.get_tree` method always return 
+    :meth:`~vivarium.config_tree.main.ConfigTree.get_tree` method always return 
     the highest-priority values.
 
 .. note::
 
-    The interaction between the :meth:`~vivarium.config_tree.main.LayeredConfigTree.get`
+    The interaction between the :meth:`~vivarium.config_tree.main.ConfigTree.get`
     ``default_value`` and ``layer`` arguments may sometimes be a cause of confusion. 
     The ``default_value`` at a requested ``layer`` will only be returned *if the requested 
     value does not exist at all at any layer*. If the requested value *does* exist - 
@@ -145,7 +145,7 @@ at the same layer a second time raises a ``DuplicatedConfigurationError``:
 
 .. testcode::
 
-    dup = LayeredConfigTree(layers=["base"])
+    dup = ConfigTree(layers=["base"])
     dup.update({"x": 1}, layer="base")
 
     try:

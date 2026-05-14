@@ -4,20 +4,20 @@
 Advanced Usage
 ==============
 
-This tutorial covers additional features of :class:`~vivarium.config_tree.main.LayeredConfigTree`,
+This tutorial covers additional features of :class:`~vivarium.config_tree.main.ConfigTree`,
 including freezing, iteration, deletion, and error handling.
 
 Freezing a Tree
 ===============
 
-Call :meth:`~vivarium.config_tree.main.LayeredConfigTree.freeze` to make a tree
+Call :meth:`~vivarium.config_tree.main.ConfigTree.freeze` to make a tree
 read-only. This recursively freezes all children:
 
 .. testcode::
 
-    from vivarium.config_tree import LayeredConfigTree
+    from vivarium.config_tree import ConfigTree
 
-    config = LayeredConfigTree({"database": {"host": "localhost", "port": 5432}})
+    config = ConfigTree({"database": {"host": "localhost", "port": 5432}})
     config.freeze()
 
     try:
@@ -35,11 +35,11 @@ after initialization.
 Iterating Over Keys
 ===================
 
-``LayeredConfigTree`` supports dictionary-style iteration:
+``ConfigTree`` supports dictionary-style iteration:
 
 .. testcode::
 
-    config = LayeredConfigTree({"a": 1, "b": 2, "c": 3})
+    config = ConfigTree({"a": 1, "b": 2, "c": 3})
 
     for key in config:
         print(key)
@@ -50,9 +50,9 @@ Iterating Over Keys
     b
     c
 
-You can also use :meth:`~vivarium.config_tree.main.LayeredConfigTree.keys`,
-:meth:`~vivarium.config_tree.main.LayeredConfigTree.values`, and
-:meth:`~vivarium.config_tree.main.LayeredConfigTree.items`:
+You can also use :meth:`~vivarium.config_tree.main.ConfigTree.keys`,
+:meth:`~vivarium.config_tree.main.ConfigTree.values`, and
+:meth:`~vivarium.config_tree.main.ConfigTree.items`:
 
 .. testcode::
 
@@ -114,7 +114,7 @@ Since ``ConfigurationKeyError`` inherits from both ``ConfigurationError`` and
 
 .. testcode::
 
-    tree = LayeredConfigTree({"a": 1})
+    tree = ConfigTree({"a": 1})
 
     try:
         tree["nonexistent"]
