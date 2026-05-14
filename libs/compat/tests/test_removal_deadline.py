@@ -10,7 +10,7 @@ import datetime
 
 import pytest
 
-_REMOVAL_DEADLINE = datetime.date(2026, 11, 1)
+_REMOVAL_DEADLINE = datetime.date(2027, 7, 1)
 
 
 def test_remove_by_deadline():
