@@ -46,6 +46,12 @@ where = ["src"]
 # `from vivarium import Component`.
 include = ["vivarium.config_tree*"]
 
+[tool.setuptools.package-data]
+# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
+# users install it from PyPI and so mypy also finds the marker via the
+# editable install during in-repo type checks.
+"vivarium.config_tree" = ["py.typed"]
+
 [tool.setuptools_scm]
 root = "../.."
 tag_regex = '^vivarium-config-tree-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
