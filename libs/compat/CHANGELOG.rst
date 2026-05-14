@@ -1,3 +1,18 @@
+**0.3.0 - 05/14/26**
+
+- BREAKING (packaging only): move the compat module out of the ``vivarium``
+  namespace to a top-level package ``vivarium_compat``. The hook's
+  ``vivarium_compat.pth`` startup file previously imported
+  ``vivarium._compat._compat``, which forced Python to run
+  ``vivarium/__init__.py`` before the redirect hook was installed. If the
+  vivarium package's ``__init__`` imported anything that depended on the
+  hook (e.g. ``from layered_config_tree import ...`` once the v4.1.8 shim
+  was installed), the .pth load deadlocked and every Python interpreter
+  startup in that env printed a ``ModuleNotFoundError``. The hook now lives
+  at ``vivarium_compat._compat`` so .pth load no longer touches the
+  vivarium package. No user-visible API change since downstream packages
+  don't import compat directly.
+
 **0.2.1 - 05/14/26**
 
 - Update test_removal_deadline to reflect new removal deadline of 2027-07-01.
