@@ -1,7 +1,7 @@
 API Reference
 =============
 
-.. automodule:: layered_config_tree
+.. automodule:: vivarium.config_tree
 
 .. toctree::
    :maxdepth: 1

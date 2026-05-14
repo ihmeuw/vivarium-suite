@@ -3,7 +3,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = layered_config_tree
+SPHINXPROJ    = vivarium-config-tree
 SOURCEDIR     = source
 BUILDDIR      = build
 

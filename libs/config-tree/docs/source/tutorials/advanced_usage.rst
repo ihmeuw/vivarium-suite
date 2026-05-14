@@ -4,18 +4,18 @@
 Advanced Usage
 ==============
 
-This tutorial covers additional features of :class:`~layered_config_tree.main.LayeredConfigTree`,
+This tutorial covers additional features of :class:`~vivarium.config_tree.main.LayeredConfigTree`,
 including freezing, iteration, deletion, and error handling.
 
 Freezing a Tree
 ===============
 
-Call :meth:`~layered_config_tree.main.LayeredConfigTree.freeze` to make a tree
+Call :meth:`~vivarium.config_tree.main.LayeredConfigTree.freeze` to make a tree
 read-only. This recursively freezes all children:
 
 .. testcode::
 
-    from layered_config_tree import LayeredConfigTree
+    from vivarium.config_tree import LayeredConfigTree
 
     config = LayeredConfigTree({"database": {"host": "localhost", "port": 5432}})
     config.freeze()
@@ -50,9 +50,9 @@ Iterating Over Keys
     b
     c
 
-You can also use :meth:`~layered_config_tree.main.LayeredConfigTree.keys`,
-:meth:`~layered_config_tree.main.LayeredConfigTree.values`, and
-:meth:`~layered_config_tree.main.LayeredConfigTree.items`:
+You can also use :meth:`~vivarium.config_tree.main.LayeredConfigTree.keys`,
+:meth:`~vivarium.config_tree.main.LayeredConfigTree.values`, and
+:meth:`~vivarium.config_tree.main.LayeredConfigTree.items`:
 
 .. testcode::
 
@@ -98,15 +98,15 @@ Error Handling
 
 The package provides a hierarchy of specific exceptions:
 
-- :class:`~layered_config_tree.exceptions.ConfigurationError` — base class for all
+- :class:`~vivarium.config_tree.exceptions.ConfigurationError` — base class for all
   configuration errors.
-- :class:`~layered_config_tree.exceptions.ConfigurationKeyError` — a key doesn't exist
+- :class:`~vivarium.config_tree.exceptions.ConfigurationKeyError` — a key doesn't exist
   (also a :class:`KeyError`).
-- :class:`~layered_config_tree.exceptions.DuplicatedConfigurationError` — a key is set
+- :class:`~vivarium.config_tree.exceptions.DuplicatedConfigurationError` — a key is set
   twice at the same layer.
-- :class:`~layered_config_tree.exceptions.MissingLayerError` — a value exists but not at
+- :class:`~vivarium.config_tree.exceptions.MissingLayerError` — a value exists but not at
   the requested layer.
-- :class:`~layered_config_tree.exceptions.ImproperAccessError` — a dunder key is accessed
+- :class:`~vivarium.config_tree.exceptions.ImproperAccessError` — a dunder key is accessed
   with dot notation.
 
 Since ``ConfigurationKeyError`` inherits from both ``ConfigurationError`` and

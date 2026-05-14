@@ -10,12 +10,12 @@ every value records which layer it was set at and where it came from.
 Setting Sources
 ===============
 
-The ``source`` parameter on :meth:`~layered_config_tree.main.LayeredConfigTree.update`
+The ``source`` parameter on :meth:`~vivarium.config_tree.main.LayeredConfigTree.update`
 records the origin of a value:
 
 .. testcode::
 
-    from layered_config_tree import LayeredConfigTree
+    from vivarium.config_tree import LayeredConfigTree
 
     config = LayeredConfigTree(layers=["file", "env", "cli"])
 
@@ -77,7 +77,7 @@ Use ``repr()`` to see all layers and their sources at a glance:
             source: config.yaml
 
 You can also inspect metadata for a specific key programmatically using
-:meth:`~layered_config_tree.main.LayeredConfigTree.metadata`:
+:meth:`~vivarium.config_tree.main.LayeredConfigTree.metadata`:
 
 .. testcode::
 
@@ -95,7 +95,7 @@ keys, ordered from lowest to highest priority.
 Tracking Unused Keys
 ====================
 
-The :meth:`~layered_config_tree.main.LayeredConfigTree.unused_keys` method returns
+The :meth:`~vivarium.config_tree.main.LayeredConfigTree.unused_keys` method returns
 a list of keys that have been set but never read. This is helpful for detecting
 typos or leftover configuration:
 

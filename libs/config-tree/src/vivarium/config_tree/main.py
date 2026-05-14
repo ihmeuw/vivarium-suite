@@ -33,15 +33,15 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from layered_config_tree import (
+from vivarium.config_tree import (
     ConfigurationError,
     ConfigurationKeyError,
     DuplicatedConfigurationError,
     ImproperAccessError,
     MissingLayerError,
 )
-from layered_config_tree.types import InputData
-from layered_config_tree.utilities import load_yaml
+from vivarium.config_tree.types import InputData
+from vivarium.config_tree.utilities import load_yaml
 
 
 class ConfigNode:
@@ -61,7 +61,7 @@ class ConfigNode:
 
     A :class:`ConfigNode` may only have a value set at each layer once.
     Attempts to set a value at the same layer multiple times will result in
-    a :class:`~layered_config_tree.exceptions.DuplicatedConfigurationError`.
+    a :class:`~vivarium.config_tree.exceptions.DuplicatedConfigurationError`.
 
     The :class:`ConfigNode` will record all values set and the source they
     are set from. This sort of provenance with configuration data greatly

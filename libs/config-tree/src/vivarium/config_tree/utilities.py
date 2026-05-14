@@ -3,7 +3,7 @@
 Utilities
 =========
 
-This module contains utility functions and classes for the layered_config_tree
+This module contains utility functions and classes for the vivarium.config_tree
 package.
 
 """
@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from layered_config_tree import DuplicatedConfigurationError
+from vivarium.config_tree import DuplicatedConfigurationError
 
 
 def load_yaml(data: str | Path) -> dict[str, Any]:

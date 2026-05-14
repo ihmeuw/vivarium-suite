@@ -1,26 +1,61 @@
 [build-system]
-requires = ["packaging", "setuptools"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-config-tree"
+description = "Configuration structure which supports cascading layers."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD 3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+dependencies = [
+    "vivarium-compat>=0.2.0",
+    "vivarium_dependencies[pyyaml]",
+    "vivarium_build_utils>=3.0.2,<4.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "vivarium_dependencies[pytest]",
+    "vivarium_testing_utils",]
+docs = [
+    "vivarium_dependencies[sphinx,sphinx-click,ipython,matplotlib]",
+    "sphinxcontrib-video",
+]
+interactive = ["vivarium_dependencies[interactive]"]
+dev = [
+    "vivarium-config-tree[test,docs,interactive]",
+    "vivarium_dependencies[lint]",
+    "types-setuptools",
+]
+ci_github = [
+    "vivarium-config-tree[test]",
+    "vivarium_dependencies[lint]",
+]
+ci_jenkins = ["vivarium-config-tree[ci_github]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.config_tree and its subpackages. Excluding vivarium itself
+# means the wheel does not ship vivarium/__init__.py. The "namespace owner"
+# (standalone vivarium today, vivarium-core post-monorepo-migration) ships the
+# canonical vivarium/__init__.py with backward-compat re-exports. If we shipped
+# our own here, pip would overwrite the canonical one and break imports like
+# `from vivarium import Component`.
+include = ["vivarium.config_tree*"]
+
+[tool.setuptools_scm]
+root = "../.."
+tag_regex = '^vivarium-config-tree-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-config-tree-v*"'
+fallback_version = "5.0.0"
 
 [tool.black]
-line_length = 94
+line-length = 94
 
 [tool.isort]
 profile = "black"
-
-[tool.mypy]
-# This is the global mypy configuration.
-# Avoid changing this!
-strict = true  # See all the enabled flags `mypy --help | grep -A 10 'Strict mode'`
-disallow_any_unimported = false
-implicit_reexport = true
-exclude = [
-    "build",
-]
-
-# handle mypy errors when 3rd party packages are not typed.
-[[tool.mypy.overrides]]
-module = [
-    # "scipy.*",
-    # "sklearn.*",
-]
-ignore_missing_imports = true
+line_length = 94
+multi_line_output = 3

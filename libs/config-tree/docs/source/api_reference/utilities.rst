@@ -1,1 +1,1 @@
-.. automodule:: layered_config_tree.utilities
+.. automodule:: vivarium.config_tree.utilities

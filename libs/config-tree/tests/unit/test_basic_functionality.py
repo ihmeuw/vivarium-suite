@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from layered_config_tree import (
+from vivarium.config_tree import (
     ConfigNode,
     ConfigurationError,
     ConfigurationKeyError,
