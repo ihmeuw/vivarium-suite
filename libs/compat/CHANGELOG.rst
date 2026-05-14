@@ -1,6 +1,6 @@
 **0.2.1 - 05/14/26**
 
-- Update test_renewal_deadline to reflect new removal deadline of 2027-07-01.
+- Update test_removal_deadline to reflect new removal deadline of 2027-07-01.
 
 **0.2.0 - 05/13/26**
 
