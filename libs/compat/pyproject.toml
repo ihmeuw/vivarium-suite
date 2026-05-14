@@ -11,12 +11,12 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 test = [
-    "vivarium_dependencies[pytest]",
-    "vivarium_testing_utils",
+    "vivarium-dependencies[pytest]",
+    "vivarium-testing-utils",
 ]
 dev = [
     "vivarium-compat[test]",
-    "vivarium_dependencies[lint]",
+    "vivarium-dependencies[lint]",
 ]
 ci_github = ["vivarium-compat[dev]"]
 ci_jenkins = ["vivarium-compat[dev]"]
@@ -30,7 +30,7 @@ root = "../.."
 # Match only this lib's tags so other libs' tags don't drive our version.
 tag_regex = '^vivarium-compat-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-compat-v*"'
-fallback_version = "0.0.0"
+fallback_version = "0.0.0+unknown"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/vivarium/_compat/_version.py"

@@ -1,0 +1,96 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-config-tree"
+description = "Configuration structure which supports cascading layers."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD 3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+dependencies = [
+    # vivarium-compat is a transitional dep: it installs the import hook that
+    # redirects `import layered_config_tree` to `vivarium.config_tree`. Declaring
+    # it here means anyone pulling in vivarium-config-tree (directly or via the
+    # layered_config_tree v4.1.8 shim) ends up with the redirect in place. When
+    # compat is eventually retired (see libs/compat/tests/test_removal_deadline.py)
+    # we drop this entry in a major version bump.
+    "vivarium-compat>=0.2.0",
+    "vivarium-dependencies[pyyaml]",
+    "vivarium-build-utils>=3.0.2,<4.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "vivarium-dependencies[pytest]",
+    "vivarium-testing-utils",]
+docs = [
+    "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
+    "sphinxcontrib-video",
+]
+interactive = ["vivarium-dependencies[interactive]"]
+dev = [
+    "vivarium-config-tree[test,docs,interactive]",
+    "vivarium-dependencies[lint]",
+    "types-setuptools",
+]
+ci_github = [
+    "vivarium-config-tree[test,docs]",
+    "vivarium-dependencies[lint]",
+]
+ci_jenkins = ["vivarium-config-tree[ci_github]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.config_tree and its subpackages. Excluding vivarium itself
+# means the wheel does not ship vivarium/__init__.py. The "namespace owner"
+# (standalone vivarium today, vivarium-core post-monorepo-migration) ships the
+# canonical vivarium/__init__.py with backward-compat re-exports. If we shipped
+# our own here, pip would overwrite the canonical one and break imports like
+# `from vivarium import Component`.
+include = ["vivarium.config_tree*"]
+
+[tool.setuptools.package-data]
+# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
+# users install it from PyPI and so mypy also finds the marker via the
+# editable install during in-repo type checks.
+"vivarium.config_tree" = ["py.typed"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags are prefixed with "vivarium-config-tree-"
+# (e.g. vivarium-config-tree-v5.0.0). tag_regex strips the prefix so
+# setuptools_scm sees a clean semver; git_describe_command filters to only
+# this lib's tags so siblings' releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-config-tree-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-config-tree-v*"'
+# Fires when no matching tag is reachable (e.g. shallow clone, brand-new repo
+# without git history).
+fallback_version = "0.0.0+unknown"
+
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3
+
+[tool.mypy]
+# WARNING: settings here that aren't mypy_path / explicit_package_bases must be
+# kept in sync manually with the monorepo-root [tool.mypy]. The local
+# `make mypy` passes --config-file pyproject.toml (this file), so mypy doesn't
+# read the root config. If you change the root, change this too.
+#
+# mypy_path lets absolute self-imports (e.g. "from vivarium.config_tree import X")
+# resolve to the source tree rather than the PEP 660 editable install (which
+# hides files like py.typed behind a finder, making mypy think the package is
+# untyped).
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = ["build"]
+mypy_path = "src"
+explicit_package_bases = true

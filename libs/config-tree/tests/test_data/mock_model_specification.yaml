@@ -1,0 +1,17 @@
+components:
+    system_module:
+        utility_tests:
+            - TestModule()
+        core_framework:
+            - module.ModuleA()
+            - module.ModuleB()
+
+configuration:
+    simulation_period:
+        start:
+            cycle: 1000
+        end:
+            cycle: 5000
+        interval: 30.5
+    randomness_control:
+        grid_size: 1000
