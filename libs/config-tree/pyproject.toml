@@ -31,7 +31,7 @@ dev = [
     "types-setuptools",
 ]
 ci_github = [
-    "vivarium-config-tree[test]",
+    "vivarium-config-tree[test,docs]",
     "vivarium_dependencies[lint]",
 ]
 ci_jenkins = ["vivarium-config-tree[ci_github]"]
