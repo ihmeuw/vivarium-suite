@@ -1,4 +1,4 @@
-**5.0.0 - 05/13/26**
+**5.0.0 - 05/14/26**
 
 - BREAKING CHANGE: Initial release from the vivarium-suite monorepo. The PyPI
   package is now ``vivarium-config-tree`` (was ``layered_config_tree``) and the
