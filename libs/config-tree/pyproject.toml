@@ -65,3 +65,15 @@ line-length = 94
 profile = "black"
 line_length = 94
 multi_line_output = 3
+
+[tool.mypy]
+# Mirrors the monorepo-root [tool.mypy], plus mypy_path so absolute self-imports
+# (e.g. "from vivarium.config_tree import X") resolve to the source tree rather
+# than the PEP 660 editable install (which hides files like py.typed behind a
+# finder, making mypy think the package is untyped).
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = ["build"]
+mypy_path = "src"
+explicit_package_bases = true
