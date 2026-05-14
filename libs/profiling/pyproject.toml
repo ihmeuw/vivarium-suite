@@ -69,6 +69,12 @@ where = ["src"]
 # `from vivarium import Component`.
 include = ["vivarium.profiling*"]
 
+[tool.setuptools.package-data]
+# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
+# users install it from PyPI and so mypy also finds the marker via the
+# editable install during in-repo type checks.
+"vivarium.profiling" = ["py.typed"]
+
 [tool.setuptools_scm]
 # Monorepo tagging convention: tags are prefixed with "vivarium-profiling-"
 # (e.g. vivarium-profiling-v0.4.0). tag_regex strips the prefix so
