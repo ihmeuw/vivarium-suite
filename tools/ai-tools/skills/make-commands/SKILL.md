@@ -39,8 +39,6 @@ The only target that lives in the *downstream* `Makefile` itself is `build-env`,
 | `make build-env` | The normal way to start working in a vivarium repo. Creates a fresh conda env, `pip install`s `vivarium_build_utils` into it, then runs `make install` inside it. Defined in each downstream `Makefile` (not in `base.mk`) because it has to bootstrap `vivarium_build_utils` before the shared makefiles are even readable. Accepts two named args: `name=<env name>` (defaults to `PACKAGE_NAME`) and `py=<python version>` (defaults to the last version in `python_versions.json`, or 3.12 if that file is absent). After it finishes, `conda activate <name>` to use it. |
 | `make create-env` | Creates a bare conda env with just Python. This is the Jenkins entry point and is normally not used directly in dev — `build-env` calls it via `conda create` and then bootstraps build-utils. Env is named `${PACKAGE_NAME}_py${PYTHON_VERSION}` by default; if `CONDA_ENV_PATH` is set (Jenkins), it uses `-p <path>` instead of `-n <name>`. |
 | `make install` | Installs the current package and its dependencies (editable, with extras `[dev]` by default) using `uv pip install`, pulling from the IHME Artifactory PyPI as an extra index. Also runs `make setup-slack`. Accepts `ENV_REQS=<extras>` (default `dev`) to change which extras are installed, and `UV_FLAGS=...` for extra `uv pip` args. |
-| `make setup-slack` | Copies the shared simsci Slack bot config (`/mnt/team/simulation_science/priv/engineering/config/slack_bot_config.sh`) into the active conda env's `activate.d`/`deactivate.d` so `PSIMULATE_SLACK_BOT_TOKEN` is set on activation. No-op (with a NOTE) if that path doesn't exist. Called automatically by `make install`. |
-
 ## Code quality
 
 | Target | What it does |
@@ -71,7 +69,6 @@ So `make test-all RUNSLOW=true` runs everything including slow tests; `make test
 |---|---|
 | `make build-docs` | Runs `make html` inside `docs/` with strict Sphinx flags (`-T -W --keep-going`). No-op (prints "No 'docs/' folder found - skipping.") if `docs/` doesn't exist. Wipes `docs/build/` first. |
 | `make test-docs` | Runs `make doctest` inside `docs/`. No-op if `docs/` doesn't exist. |
-| `make deploy-docs` | Copies `docs/build/html/*` to `${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}/`, sets permissions to 0775, and updates the `current` symlink. Requires `DOCS_ROOT_PATH` to be set in the environment; fails fast if not. |
 
 ## Packaging and release
 
@@ -80,8 +77,6 @@ So `make test-all RUNSLOW=true` runs everything including slow tests; `make test
 | `make validate-tag` | Validates that the current git tag matches `CHANGELOG.rst` and is valid semver. Intended for use by GitHub deploy workflows — `bash $(UTILS_DIR)resources/scripts/validate_tag_version.sh`. |
 | `make tag-version` | `git tag -a v${PACKAGE_VERSION} -m "..."` and `git push --tags`. `PACKAGE_VERSION` is parsed out of the first semver in `CHANGELOG.rst`. |
 | `make build-package` | `pip install build && python -m build` — produces a wheel in `dist/`. |
-| `make deploy-package-artifactory` | Uploads `dist/*` to IHME Artifactory via `twine`. Requires `PYPI_ARTIFACTORY_CREDENTIALS_USR` and `PYPI_ARTIFACTORY_CREDENTIALS_PSW` env vars to be set (fails fast with a clear message if either is missing). |
-| `make manual-deploy-artifactory` | Combo target for when Jenkins deploy fails: validates the credentials, then runs `build-package`, `tag-version`, and `deploy-package-artifactory` in sequence. Use sparingly — Jenkins is the normal release path. |
 
 ## Misc
 
@@ -156,6 +151,6 @@ make model info v24.0
 
 ## When the user asks "what does `make X` do?"
 
-1. If `X` is in the tables above, summarize it from there — including any required env vars and meaningful side effects (Slack config, git tagging/pushing, network uploads).
+1. If `X` is in the tables above, summarize it from there — including any required env vars and meaningful side effects (git tagging/pushing, network uploads).
 2. If it isn't, check the local `Makefile` in the user's CWD — downstream repos sometimes add repo-specific targets on top of the shared base.
 3. If it still isn't there, read `vivarium_build_utils/resources/makefiles/base.mk` and `test.mk` directly — those are the source of truth and may have changed since this skill was written.
