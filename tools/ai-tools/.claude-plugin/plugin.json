@@ -4,6 +4,7 @@
     "description": "Custom agent workflows for vivarium development.",
     "publisher": "ihmeuw",
     "dependencies": [
-        { "name": "skill-creator", "marketplace": "claude-plugins-official" }
+        { "name": "skill-creator", "marketplace": "claude-plugins-official" },
+        { "name": "slack", "marketplace": "claude-plugins-official" }
     ]
 }

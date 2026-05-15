@@ -1,11 +1,11 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, drafting a Jira ticket against the team's hub doc, and opening a PR with the repo's `.github/pull_request_template.md` via `gh`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "draft a Jira ticket", "open a PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, drafting a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via `gh`, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "draft a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
 
-The three workflows below are the team-standard ways to start a change, file the ticket that justifies it, and ship the resulting PR. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
+The four workflows below are the team-standard ways to start a change, file the ticket that justifies it, ship the resulting PR, and flag it for review. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
 
 ## 1. Naming a branch
 
@@ -63,3 +63,19 @@ EOF
 ```
 
 4. Don't push first and then PR — `gh pr create` will push the current branch if needed and prompt for the upstream. Letting it handle the push keeps the tracking ref consistent.
+
+## 4. Flagging a PR for review
+
+A Slack message in `#vivarium_dev` (private channel, ID `GCF5T9TDM`) is the team's primary signal that a PR is ready for review. Open the PR (§3) first, then post.
+
+Format: `<short description> PR <github-link>` — e.g. `AI Tools Team Conventions PR https://github.com/ihmeuw/vivarium-suite/pull/41`. Keep the description to a handful of words; the link does the heavy lifting.
+
+Default flow: stage a draft first, show the user, send on their confirmation.
+
+```
+mcp__plugin_slack_slack__slack_send_message_draft(channel_id="GCF5T9TDM", message="<short desc> PR <link>")
+# user reviews in Slack, then:
+mcp__plugin_slack_slack__slack_send_message(channel_id="GCF5T9TDM", message="<same text>", draft_id="<id from draft>")
+```
+
+Skip the draft step only when the user has pre-approved direct posting for this PR. Posting to `#vivarium_dev` is visible to the whole team, so don't send without an explicit go-ahead.

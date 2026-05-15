@@ -1,6 +1,7 @@
 **0.5.0 - 05/15/26**
 
  - Add ``team-conventions`` skill covering SimSci Engineering conventions
+ - Add dependency for anthropic slack plugin
 
 **0.4.0 - 05/13/26**
 
