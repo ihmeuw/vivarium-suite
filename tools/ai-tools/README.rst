@@ -14,7 +14,12 @@ It includes:
 
 **Code Reviewer**
 
-- ``code_reviewer`` — orchestrator that delegates to a number of specialist sub-agents
+- ``code_reviewer`` — orchestrator that delegates to a number of specialist sub-agents focused on:
+  - Maintainability
+  - DRY
+  - Structural design choices
+  - Testing coverage and quality
+  - Documentation
 
 Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
