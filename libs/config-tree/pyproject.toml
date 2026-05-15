@@ -11,13 +11,6 @@ license = {text = "BSD 3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
-    # vivarium-compat is a transitional dep: it installs the import hook that
-    # redirects `import layered_config_tree` to `vivarium.config_tree`. Declaring
-    # it here means anyone pulling in vivarium-config-tree (directly or via the
-    # layered_config_tree v4.1.8 shim) ends up with the redirect in place. When
-    # compat is eventually retired (see libs/compat/tests/test_removal_deadline.py)
-    # we drop this entry in a major version bump.
-    "vivarium-compat>=0.2.0",
     "vivarium-dependencies[pyyaml]",
     "vivarium-build-utils>=3.0.2,<4.0.0",
 ]

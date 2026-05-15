@@ -1,3 +1,7 @@
+**5.0.1 - 05/15/26**
+
+- Drop vivarium-compat runtime dependency
+
 **5.0.0 - 05/14/26**
 
 - BREAKING CHANGE: Initial release from the vivarium-suite monorepo. The PyPI
