@@ -1,10 +1,7 @@
-**0.4.6 - 05/15/26**
+**0.4.5 - 05/15/26**
 
 - Bump vivarium-compat dependency
 - Add explicit dependency for vivarium-config-tree to prevent transitive import from vivarium
-
-**0.4.5 - 05/14/26**
-
 - Update imports for config_tree
 - Remove unused environment.sh and artifact_requirements.txt
 - Change fallback version
