@@ -9,16 +9,18 @@ The four workflows below are the team-standard ways to start a change, file the 
 
 ## 1. Naming a branch
 
-Format: `<username>/<type>/mic-####-short-desc`
+Format: `<username>/<type>/mic-####/short-desc`
 
 - `<username>`: the user's active git config user name.
 - `<type>`: one of `feature`, `refactor`, `bugfix`, `hotfix`. Pick `feature` for net-new functionality, `refactor` for behavior-preserving changes, `bugfix` for fixes tracked under a MIC ticket, `hotfix` for urgent fixes that bypass the usual sprint flow.
 - `mic-####`: the Jira ticket key, lower-case (`mic-6973`, not `MIC-6973`).
-- `short-desc`: 2–5 hyphenated words summarizing the change. 
+- `short-desc`: 2–5 hyphenated words summarizing the change.
 
-Examples that match: `pnast/feature/mic-6973-team-conventions`, `sbachmei/bugfix/mic-7010-config-tree-iter`.
+Examples that match: `pnast/feature/mic-6973/team-conventions`, `sbachmei/bugfix/mic-7010/config-tree-iter`.
 
-Special case — epics or non-ticketed work: `epic/<short-desc>` (e.g. `epic/monorepo`). Use this only when the branch is the long-lived integration target for an epic, *not* for individual sub-tickets that land on it.
+Special cases:
+- **Epics or non-ticketed work:** `epic/<short-desc>` (e.g. `epic/monorepo`). Use this only when the branch is the long-lived integration target for an epic, *not* for individual sub-tickets that land on it.
+- **Release branches:** `release-candidate-x.x.x` (e.g. `release-candidate-1.2.0`). Used by the release flow, not for everyday changes.
 
 Edge cases:
 - **No MIC ticket yet.** Ask the user to file one first (see §2). Branches without a ticket are hard to track in sprint reporting.
@@ -36,6 +38,8 @@ mcp__plugin_mcp-hub_mcp-hub__get_page(page_id="178128092")
 ```
 
 That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria, and the optional fields when they apply. Show the user the draft for review before they paste it into Jira; this skill does not create Jira tickets directly.
+
+Format the draft in **Jira wiki markup** — not Markdown, not RST. The team's Jira (`jira.ihme.washington.edu`) is Server/Data Center, which renders wiki markup natively. Key syntax: `h2. Heading`, `*bold*`, `_italic_`, `{{monospace}}`, `* bullet` / `# numbered`, `[label|url]` for links, `{code}...{code}` for code blocks. Drafting in Markdown will paste as literal `**bold**` and `[text](url)` strings.
 
 If the MCP fetch fails, tell the user and link them to `https://hub.ihme.washington.edu/spaces/SSE/pages/178128092/Make+a+Jira+Ticket` — do not improvise a substitute structure from memory.
 

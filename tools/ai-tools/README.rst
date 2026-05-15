@@ -32,7 +32,7 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
 - ``team-conventions`` — SimSci Engineering conventions for everyday change
   flow.
 
-Loaded automatically when the context is relevan to the skill's description.
+Loaded automatically when the context is relevant to the skill's description.
 Layout
 ======
 
