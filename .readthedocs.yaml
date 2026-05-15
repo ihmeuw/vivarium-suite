@@ -1,0 +1,17 @@
+# Placeholder for RTD's "Import a Project" wizard, which refuses to
+# proceed without a root-level config. Per-package configs live in
+# libs/<lib>/.readthedocs.yaml; each RTD project points at its own
+# via Admin > Advanced Settings > "Path for .readthedocs.yaml".
+
+version: 2
+
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.13"
+
+# NOTE: the path below needs to point to a real conf.py file, but it does NOT
+# matter which one - RTD only uses it for the import wizard to make sure
+# files exist.
+sphinx:
+  configuration: libs/config-tree/docs/source/conf.py
