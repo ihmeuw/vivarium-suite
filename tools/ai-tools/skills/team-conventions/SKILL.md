@@ -72,14 +72,4 @@ EOF
 
 A Slack message in `#vivarium_dev` (private channel, ID `GCF5T9TDM`) is the team's primary signal that a PR is ready for review. Open the PR (§3) first, then post.
 
-Format: `<short description> PR <github-link>` — e.g. `AI Tools Team Conventions PR https://github.com/ihmeuw/vivarium-suite/pull/41`. Keep the description to a handful of words; the link does the heavy lifting.
-
-Default flow: stage a draft first, show the user, send on their confirmation.
-
-```
-mcp__plugin_slack_slack__slack_send_message_draft(channel_id="GCF5T9TDM", message="<short desc> PR <link>")
-# user reviews in Slack, then:
-mcp__plugin_slack_slack__slack_send_message(channel_id="GCF5T9TDM", message="<same text>", draft_id="<id from draft>")
-```
-
-Skip the draft step only when the user has pre-approved direct posting for this PR. Posting to `#vivarium_dev` is visible to the whole team, so don't send without an explicit go-ahead.
+Format: `<short description> PR <github-link>` — e.g. `AI Tools Team Conventions PR https://github.com/ihmeuw/vivarium-suite/pull/41`. Keep the description to a handful of words.
