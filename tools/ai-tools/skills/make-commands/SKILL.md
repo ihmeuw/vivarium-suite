@@ -22,7 +22,8 @@ The only target that lives in the *downstream* `Makefile` itself is `build-env`,
 
 ## Quickly figuring out which target the user wants
 
-`make` (no args) prints a generated list of every defined target with its inline `#` description. `make help` prints a curated, grouped help message.
+`make` (no args) prints a generated list of every defined target with its inline `#` description. 
+`make help` prints a curated, grouped help message.
 
 
 ## Things to know that surprise people
