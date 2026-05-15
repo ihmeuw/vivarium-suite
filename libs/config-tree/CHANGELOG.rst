@@ -1,3 +1,7 @@
+**5.0.2 - 05/15/26**
+
+- Bugfix: point to correct readthedocs files
+
 **5.0.1 - 05/15/26**
 
 - Drop vivarium-compat runtime dependency
