@@ -32,7 +32,9 @@ from types import ModuleType
 _REDIRECTS: dict[str, str] = {
     # Renamed top-level packages
     "vivarium_profiling": "vivarium.profiling",
-    "layered_config_tree": "vivarium.config_tree",
+    # FIXME [MIC-7113]: the layered_config_tree redirect is disabled until vivarium
+    #   is migrated and all `from layered_config_tree import ...` statements are updated.
+    # "layered_config_tree": "vivarium.config_tree",
     # "vivarium_public_health": "vivarium.public_health",
     # "vivarium_cluster_tools": "vivarium.cluster_tools",
     # "vivarium_testing_utils": "vivarium.testing_utils",

@@ -1,3 +1,7 @@
+**0.3.1 - 05/15/26**
+
+- Disable layered_config_tree redirect
+
 **0.3.0 - 05/14/26**
 
 - BREAKING (packaging only): move the compat module out of the ``vivarium``
