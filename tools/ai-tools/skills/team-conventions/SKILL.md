@@ -39,7 +39,7 @@ mcp__plugin_mcp-hub_mcp-hub__get_page(page_id="178128092")
 
 That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria, and the optional fields when they apply. Show the user the draft for review before they paste it into Jira; this skill does not create Jira tickets directly.
 
-Format the draft in **Jira wiki markup** — not Markdown, not RST. The team's Jira (`jira.ihme.washington.edu`) is Server/Data Center, which renders wiki markup natively. Key syntax: `h2. Heading`, `*bold*`, `_italic_`, `{{monospace}}`, `* bullet` / `# numbered`, `[label|url]` for links, `{code}...{code}` for code blocks. Drafting in Markdown will paste as literal `**bold**` and `[text](url)` strings.
+Format the draft in **Jira wiki markup** — not Markdown, not RST.
 
 If the MCP fetch fails, tell the user and link them to `https://hub.ihme.washington.edu/spaces/SSE/pages/178128092/Make+a+Jira+Ticket` — do not improvise a substitute structure from memory.
 
