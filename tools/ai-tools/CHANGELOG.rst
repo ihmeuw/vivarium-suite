@@ -1,3 +1,7 @@
+**0.5.0 - 05/15/26**
+
+ - Add ``team-conventions`` skill covering SimSci Engineering conventions
+
 **0.4.0 - 05/13/26**
 
  - Add ``continuous-integration`` and ``plugin-setup`` skills covering install and interaction
