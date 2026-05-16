@@ -238,6 +238,38 @@ class TestResourceConfigValidation:
         assert rc.runtime == "02:00:00"
         assert rc.cores == 4
 
+    def test_requires_archive_node_defaults_false(self) -> None:
+        rc = ResourceConfig(memory_gb=1)
+        assert rc.requires_archive_node is False
+
+    def test_from_dict_reads_requires_archive_node(self) -> None:
+        rc = ResourceConfig.from_dict({"memory_gb": 4, "requires_archive_node": True})
+        assert rc.requires_archive_node is True
+
+    def test_to_dict_emits_requires_archive_node_only_when_true(self) -> None:
+        rc_default = ResourceConfig(memory_gb=4, project="proj_simscience", queue="all.q")
+        assert "requires_archive_node" not in rc_default.to_dict()
+
+        rc_archive = ResourceConfig(
+            memory_gb=4,
+            project="proj_simscience",
+            queue="all.q",
+            requires_archive_node=True,
+        )
+        assert rc_archive.to_dict()["requires_archive_node"] is True
+
+    def test_to_native_specification_passes_archive_flag(self) -> None:
+        rc = ResourceConfig(
+            memory_gb=4,
+            project="proj_simscience",
+            queue="all.q",
+            hardware=["r650"],
+            requires_archive_node=True,
+        )
+        native = rc.to_native_specification(job_name="job")
+        assert native.requires_archive_node is True
+        assert native.hardware == ["r650"]
+
 
 class TestBaseStepConfig:
     """Tests for behavior implemented in BaseStepConfig (tested via concrete subclasses)."""
