@@ -142,6 +142,8 @@ class ResourceConfig:
     """Number of CPU cores to request. Default is 1."""
     hardware: list[str] | None = None
     """Optional list of hardware types to target (e.g. ``["r650", "r650v2"]``)."""
+    requires_archive_node: bool = False
+    """Whether to enforce landing on an archive node."""
 
     _RUNTIME_RE = re.compile(r"^\d{2}:\d{2}:\d{2}$")
 
@@ -158,6 +160,12 @@ class ResourceConfig:
                 validate_runtime_and_queue(self.runtime, self.queue)
         if self.hardware is not None:
             validate_hardware(self.hardware)
+        if not isinstance(self.requires_archive_node, bool):
+            raise TypeError(
+                f"'requires_archive_node' must be a bool, "
+                f"got {type(self.requires_archive_node).__name__}: "
+                f"{self.requires_archive_node!r}."
+            )
 
     @classmethod
     def from_dict(
@@ -190,6 +198,8 @@ class ResourceConfig:
             kwargs["cores"] = data["cores"]
         if "hardware" in data:
             kwargs["hardware"] = data["hardware"]
+        if "requires_archive_node" in data:
+            kwargs["requires_archive_node"] = data["requires_archive_node"]
         return cls(**kwargs)
 
     def to_dict(self) -> dict[str, Any]:
@@ -206,6 +216,8 @@ class ResourceConfig:
             result["cores"] = self.cores
         if self.hardware is not None:
             result["hardware"] = self.hardware
+        if self.requires_archive_node:
+            result["requires_archive_node"] = True
         return result
 
     def to_native_specification(self, job_name: str) -> NativeSpecification:
@@ -229,6 +241,7 @@ class ResourceConfig:
             max_runtime=self.runtime,
             hardware=self.hardware or [],
             cores=self.cores,
+            requires_archive_node=self.requires_archive_node,
         )
 
 

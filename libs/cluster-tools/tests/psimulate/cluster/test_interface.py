@@ -84,22 +84,36 @@ class TestNativeSpecification:
         assert spec["stderr"] == str(worker_logging_root)
 
     @pytest.mark.parametrize(
-        "hardware, expected_constraints",
+        "hardware, requires_archive_node, expected_constraints",
         [
-            (["r650"], "r650"),
-            (["r650", "r650v2"], "r650|r650v2"),
-            (["a100", "h100", "l40s"], "a100|h100|l40s"),
-            ([], None),
+            (["r650"], False, "(r650)"),
+            (["r650", "r650v2"], False, "(r650|r650v2)"),
+            (["a100", "h100", "l40s"], False, "(a100|h100|l40s)"),
+            ([], False, None),
+            ([], True, "archive"),
+            (["r650"], True, "(r650)&archive"),
+            (["r650", "r650v2"], True, "(r650|r650v2)&archive"),
+            (["a100", "h100", "l40s"], True, "(a100|h100|l40s)&archive"),
         ],
-        ids=["single", "two", "three", "empty"],
+        ids=[
+            "hw-single",
+            "hw-two",
+            "hw-three",
+            "none",
+            "archive-only",
+            "hw-single-archive",
+            "hw-two-archive",
+            "hw-three-archive",
+        ],
     )
     def test_to_jobmon_spec_hardware_constraints(
         self,
         worker_logging_root: Path,
         hardware: list[str],
+        requires_archive_node: bool,
         expected_constraints: str | None,
     ) -> None:
-        """Hardware list is pipe-joined into 'constraints'; empty list omits the key."""
+        """Constraint string combines ``hardware`` (OR) with archive (AND)."""
         ns = NativeSpecification(
             job_name="j",
             project="p",
@@ -107,6 +121,7 @@ class TestNativeSpecification:
             peak_memory=2.0,
             max_runtime="00:30:00",
             hardware=hardware,
+            requires_archive_node=requires_archive_node,
         )
         spec = ns.to_jobmon_spec(worker_logging_root)
         if expected_constraints is None:
