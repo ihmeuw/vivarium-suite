@@ -1,6 +1,6 @@
 ---
 name: make-commands
-description: Reference for the shared `make` targets used across vivarium repositories (env setup, lint, test, docs, packaging, deploy, model lineage), centralized in `vivarium_build_utils/resources/makefiles/`. Use whenever the user asks what a `make <target>` does in a vivarium repo, mentions running `make` in this ecosystem, or whenever another skill or instruction says "run `make X`" and you need to know exactly what it does, its arguments, env vars, and side effects.
+description: Reference for the shared `make` targets used across vivarium repositories, centralized in `vivarium_build_utils/resources/makefiles/`. Use this when the task involves making a new conda environment, running tests, formatting code, running development checks, or type hinting. Use whenever the user asks what a `make <target>` does in a vivarium repo, mentions running `make` in this ecosystem, or whenever another skill or instruction says "run `make X`" and you need to know exactly what it does, its arguments, env vars, and side effects.
 ---
 
 # Vivarium `make` commands
