@@ -14,39 +14,31 @@ It includes:
 
 **Code Reviewer**
 
-- ``code_reviewer`` — orchestrator that delegates to specialist sub-agents
-- ``_review_maintainability`` - sub-agent that reviews readability, documentation, implicit assumptions, and coupling
-- ``_review_dry`` - sub-agent that identifies duplicated logic, missed abstractions, and repeated patterns
-- ``_review_design`` - sub-agent that evaluates data structure choices, algorithmic efficiency, API surface, and representation trade-offs
-- ``_review_tests`` - sub-agent that assesses test coverage, test quality, edge cases, and test naming and structure
-- ``_review_documentation`` - sub-agent that checks docstring quality, accuracy, and completeness, as well as comments and changelog updates
+- ``code_reviewer`` — orchestrator that delegates to a number of specialist sub-agents focused on:
+  
+  - Maintainability
+  - DRY
+  - Structural design choices
+  - Testing coverage and quality
+  - Documentation
 
 Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
 **Regression Debugger**
 
 - ``model_regression_debugger`` — orchestrator that traces data pipeline changes across repos to find the cause of simulation regressions
-- ``_diff_analyzer`` — sub-agent that analyzes diffs in a single repo (run in parallel for multi-repo changes)
-- ``_hypothesis_tester`` — sub-agent that tests a single hypothesis about a regression cause
 
 Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>``.
 
 **Skills**
 
 - ``plugin-setup`` — walks the user through post-install configuration that the
-  plugin install itself doesn't perform. Currently covers connecting the IHME
-  SimSci Jenkins MCP server (``jenkins.simsci.ihme.washington.edu``) — API token,
-  0600 credential file, ``${VAR}`` substitution in ``~/.claude.json``, and
-  ``claude mcp add`` registration.
-- ``continuous-integration`` — catalogues the vivarium-suite CI setup: the
-  parallel GH Actions + Jenkins systems, the per-package Multibranch Pipeline
-  layout, URL-to-``jobFullName`` translation for the Jenkins MCP, and the
-  parallel matrix log interleaving that ``searchBuildLog`` results need to be
-  disambiguated against.
+  plugin install itself doesn't perform.
+- ``continuous-integration`` — catalogues the vivarium-suite CI setup.
+- ``team-conventions`` — SimSci Engineering conventions for everyday change
+  flow.
 
-Loaded automatically when a user asks about post-install plugin setup or about
-CI for vivarium-suite.
-
+Loaded automatically when the context is relevant to the skill's description.
 Layout
 ======
 
