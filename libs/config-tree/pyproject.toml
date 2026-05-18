@@ -18,21 +18,19 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",]
+    "vivarium-testing-utils",
+]
 docs = [
     "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
     "sphinxcontrib-video",
 ]
 interactive = ["vivarium-dependencies[interactive]"]
+lint = ["vivarium-dependencies[lint]"]
 dev = [
-    "vivarium-config-tree[test,docs,interactive]",
-    "vivarium-dependencies[lint]",
+    "vivarium-config-tree[test,docs,interactive,lint]",
     "types-setuptools",
 ]
-ci_github = [
-    "vivarium-config-tree[test,docs]",
-    "vivarium-dependencies[lint]",
-]
+ci_github = ["vivarium-config-tree[test,docs,lint]"]
 ci_jenkins = ["vivarium-config-tree[ci_github]"]
 
 [tool.setuptools.packages.find]

@@ -20,8 +20,6 @@ from pathlib import Path
 
 import vivarium.config_tree
 
-sys.path.insert(0, str(Path("..").resolve()))
-
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.config_tree"

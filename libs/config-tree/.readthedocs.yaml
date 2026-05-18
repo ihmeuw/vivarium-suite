@@ -1,5 +1,10 @@
 # Paths are repo-root-relative even when this file lives in a subdirectory,
 # so the package path must be qualified with libs/config-tree/.
+#
+# This file is read by RTD only when the vivarium-config-tree RTD
+# project's Admin > Advanced Settings > "Path for .readthedocs.yaml" points
+# here. The root-level /.readthedocs.yaml is a placeholder used by the
+# import wizard and ignored for any project that has overridden the path.
 version: 2
 
 sphinx:
