@@ -1,3 +1,7 @@
+**3.1.4 - 05/18/26**
+
+- Fix mypy error for generic ParamType in cli_tools
+
 **3.1.3 - 05/07/26**
 
 - Set VCT to run E2E tests on slurm weekly

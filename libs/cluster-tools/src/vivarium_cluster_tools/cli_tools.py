@@ -75,7 +75,7 @@ def pass_shared_options(shared_options: list[Decorator]) -> Decorator:
     return _pass_shared_options
 
 
-class MinutesOrNone(click.ParamType):
+class MinutesOrNone(click.ParamType[float | None]):
     """Click param type to allow user to set time in minutes or None."""
 
     name = "minutesornone"
