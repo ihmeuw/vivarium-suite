@@ -61,6 +61,19 @@ def mock_tool_cls(mocker: MockerFixture) -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
+def mock_resolve_env_prefix(mocker: MockerFixture) -> MagicMock:
+    """Patch ``resolve_env_prefix`` to echo back its input as the prefix.
+
+    Lets tests assert the env resolution chain by checking what name was
+    passed through, without invoking the real ``conda env list`` lookup.
+    """
+    return mocker.patch(
+        "vivarium_cluster_tools.psimulate.workflow_config.builder.resolve_env_prefix",
+        side_effect=lambda env: env,
+    )
+
+
+@pytest.fixture(autouse=True)
 def mock_build_timestamp(mocker: MockerFixture) -> str:
     """Patch the build timestamp so tests don't write to the filesystem."""
     ts = "2026_04_24_10_00_00"
@@ -190,7 +203,7 @@ class TestEnvironmentResolution:
         WorkflowBuilder(config).build(workflow_args="test_workflow_args")
 
         call_kwargs = template_mock.create_task.call_args[1]
-        assert call_kwargs["env"] == "step_env"
+        assert call_kwargs["env_prefix"] == "step_env"
 
     def test_workflow_default_environment(self, mock_tool_cls: MagicMock) -> None:
         """When step has no environment, workflow default_environment is used."""
@@ -200,7 +213,7 @@ class TestEnvironmentResolution:
         WorkflowBuilder(config).build(workflow_args="test_workflow_args")
 
         call_kwargs = template_mock.create_task.call_args[1]
-        assert call_kwargs["env"] == "workflow_env"
+        assert call_kwargs["env_prefix"] == "workflow_env"
 
     def test_conda_env_variable_fallback(
         self, mock_tool_cls: MagicMock, monkeypatch: pytest.MonkeyPatch
@@ -213,7 +226,7 @@ class TestEnvironmentResolution:
         WorkflowBuilder(config).build(workflow_args="test_workflow_args")
 
         call_kwargs = template_mock.create_task.call_args[1]
-        assert call_kwargs["env"] == "conda_env"
+        assert call_kwargs["env_prefix"] == "conda_env"
 
     def test_base_fallback(
         self, mock_tool_cls: MagicMock, monkeypatch: pytest.MonkeyPatch

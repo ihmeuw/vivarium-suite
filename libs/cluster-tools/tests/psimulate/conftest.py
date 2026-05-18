@@ -1,7 +1,7 @@
 """Shared fixtures for the psimulate test suite."""
 
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
 import pytest
 from _pytest.logging import LogCaptureFixture

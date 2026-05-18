@@ -404,7 +404,7 @@ class BaseStepConfig(ABC):
         self,
         tool: Tool,
         *,
-        env: str,
+        env_prefix: str,
         build_timestamp: str,
         is_resume: bool = False,
     ) -> list[Task]:
@@ -418,8 +418,10 @@ class BaseStepConfig(ABC):
         ----------
         tool
             The Jobmon Tool instance to create task templates from.
-        env
-            Conda environment name to wrap the command with.
+        env_prefix
+            Absolute filesystem path to the conda environment prefix.
+            Resolved on the runner so worker commands can invoke the env's
+            ``bin/`` directly without needing ``conda`` on worker PATH.
         build_timestamp
             Stable timestamp string (``YYYY_MM_DD_HH_MM_SS``) generated once
             per workflow build. Steps that create output directories should
@@ -433,7 +435,9 @@ class BaseStepConfig(ABC):
             A list of Jobmon Task instances ready to be added to a workflow.
         """
         return [
-            self._create_single_command_task(tool, env=env, command=self._build_command())
+            self._create_single_command_task(
+                tool, env_prefix=env_prefix, command=self._build_command()
+            )
         ]
 
     @abstractmethod
@@ -446,15 +450,19 @@ class BaseStepConfig(ABC):
         """
         pass
 
-    def _create_single_command_task(self, tool: Tool, *, env: str, command: str) -> Task:
-        """Create a single Jobmon task that runs a command under conda.
+    def _create_single_command_task(
+        self, tool: Tool, *, env_prefix: str, command: str
+    ) -> Task:
+        """Create a single Jobmon task that runs a command in a conda env.
 
         Parameters
         ----------
         tool
             The Jobmon Tool instance to create task templates from.
-        env
-            Conda environment name to wrap the command with.
+        env_prefix
+            Absolute filesystem path to the conda environment prefix.
+            Prepended to the worker's PATH so binaries from the env
+            (``python``, ``pytest``, etc.) resolve correctly.
         command
             The command string to execute.
 
@@ -464,8 +472,8 @@ class BaseStepConfig(ABC):
         """
         task_template = tool.get_task_template(
             template_name="workflow_command_step",
-            command_template="conda run --no-capture-output -n {env} {command}",
-            node_args=["command", "env"],
+            command_template="PATH={env_prefix}/bin:$PATH {command}",
+            node_args=["command", "env_prefix"],
             task_args=[],
             op_args=[],
             default_cluster_name="slurm",
@@ -476,7 +484,7 @@ class BaseStepConfig(ABC):
         return task_template.create_task(
             name=self.name,
             compute_resources=compute_resources,
-            env=env,
+            env_prefix=env_prefix,
             command=command,
         )
 
@@ -640,7 +648,7 @@ class SimulationStepConfig(BaseStepConfig):
         self,
         tool: Tool,
         *,
-        env: str,
+        env_prefix: str,
         build_timestamp: str,
         is_resume: bool = False,
     ) -> list[Task]:
@@ -692,7 +700,8 @@ class SimulationStepConfig(BaseStepConfig):
             results_dir=output_paths.results_dir,
             worker_logging_root=output_paths.worker_logging_root,
             native_specification=self.native_specification,
-            env=env,
+            env_prefix=env_prefix,
+            template_name=f"psimulate_{self.name}",
         )
 
     def to_dict(self) -> dict[str, Any]:

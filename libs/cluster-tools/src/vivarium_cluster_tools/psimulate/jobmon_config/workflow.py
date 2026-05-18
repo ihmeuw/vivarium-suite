@@ -9,6 +9,9 @@ Build and configure Jobmon workflows for psimulate runs.
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -25,6 +28,39 @@ if TYPE_CHECKING:
     from jobmon.client.workflow import Workflow
 
 
+def resolve_env_prefix(env: str) -> str:
+    """Resolve a conda env name to its absolute filesystem prefix.
+
+    Uses ``CONDA_PREFIX`` directly when *env* matches the active env. For
+    other env names, queries ``conda env list --json`` via ``CONDA_EXE``
+    to find the matching prefix.
+
+    """
+    if env == os.environ.get("CONDA_DEFAULT_ENV"):
+        env_prefix: str | None = os.environ["CONDA_PREFIX"]
+    else:
+        result = subprocess.run(
+            [os.environ["CONDA_EXE"], "env", "list", "--json"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        env_prefix = next(
+            (
+                str(path)
+                for path in json.loads(result.stdout)["envs"]
+                if Path(path).name == env
+            ),
+            None,
+        )
+    if env_prefix is None:
+        raise RuntimeError(
+            f"Could not resolve conda env {env!r} to a filesystem prefix "
+            "via `conda env list`."
+        )
+    return env_prefix
+
+
 def get_task_list(
     tool: Tool,
     command: str,
@@ -34,7 +70,8 @@ def get_task_list(
     worker_logging_root: Path,
     native_specification: NativeSpecification,
     max_attempts: int = 3,
-    env: str | None = None,
+    env_prefix: str | None = None,
+    template_name: str = "psimulate",
 ) -> list[Task]:
     """Create Jobmon tasks for a list of job parameters.
 
@@ -60,9 +97,15 @@ def get_task_list(
         SLURM resource specification for the simulation tasks.
     max_attempts
         Maximum number of attempts Jobmon will make for each task.
-    env
-        Optional conda environment name. When provided, the worker command
-        is wrapped with ``conda run --no-capture-output -n <env>``.
+    env_prefix
+        Optional absolute path to the conda env's prefix. When provided,
+        the worker command is wrapped with ``PATH=<env_prefix>/bin:$PATH``
+        so the env's ``python`` is found without depending on ``conda``
+        being available on the worker.
+    template_name
+        Name to register the Jobmon ``TaskTemplate`` under. Must be unique
+        per Tool/Workflow; callers that build multiple simulation step
+        groups in a single workflow must pass a distinct value per group.
 
     Returns
     -------
@@ -75,11 +118,11 @@ def get_task_list(
         "--results-dir {results_dir} "
         "--command {command}"
     )
-    if env is not None:
-        worker_command = f"conda run --no-capture-output -n {env} {worker_command}"
+    if env_prefix is not None:
+        worker_command = f"PATH={env_prefix}/bin:$PATH {worker_command}"
 
     task_template = tool.get_task_template(
-        template_name="psimulate",
+        template_name=template_name,
         command_template=worker_command,
         node_args=["task_id"],
         task_args=["metadata_dir", "results_dir"],
