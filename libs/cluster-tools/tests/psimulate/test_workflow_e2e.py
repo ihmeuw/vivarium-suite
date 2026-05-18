@@ -27,6 +27,14 @@ from typing import Iterator
 import pytest
 import yaml
 
+from tests.psimulate.test_e2e import (
+    _BRANCHES,
+    _EXPECTED_TOTAL_JOBS,
+    _MODEL_SPEC,
+    _assert_result_task_counts,
+    _read_metadata,
+)
+
 RESULTS_DIR = "/mnt/team/simulation_science/priv/engineering/tests/output/"
 
 pytestmark = [pytest.mark.cluster, pytest.mark.slow, pytest.mark.weekly]
@@ -88,6 +96,24 @@ def _write_step_scripts(script_dir: Path, output_dir: Path) -> dict[str, Path]:
     )
 
     return {"init": init_script, "process": process_script}
+
+
+def _write_simulation_step_inputs(script_dir: Path, locations: list[str]) -> dict[str, Path]:
+    """Copy the shared model spec into per-location files and return their paths.
+
+    The simulation step computes its output directory from
+    ``Path(model_spec_path).stem``.  Using the location name as the
+    filename keeps each location's outputs in its own subdirectory
+    (e.g. ``<output_dir>/kenya/<timestamp>``).
+    """
+    script_dir.mkdir(exist_ok=True)
+    spec_paths: dict[str, Path] = {}
+    spec_content = _MODEL_SPEC.read_text()
+    for location in locations:
+        path = script_dir / f"{location}.yaml"
+        path.write_text(spec_content)
+        spec_paths[location] = path
+    return spec_paths
 
 
 def _write_workflow_config(
@@ -202,3 +228,85 @@ class TestPsimulateWorkflow:
         assert "workflow" in saved_config
         assert saved_config["workflow"]["name"] == "e2e_workflow_test"
         assert len(saved_config["workflow"]["steps"]) == 3
+
+    def test_sequential_simulation_steps(
+        self, shared_tmp_path: Path, slurm_project: str
+    ) -> None:
+        """Run a workflow with two sequential simulation steps for different locations.
+
+        This exercises the real-Jobmon simulation-step path (no mocks) and
+        guards the fix from commit 3d229c2: two simulation steps in the
+        same workflow must register distinct Jobmon ``TaskTemplate`` names
+        (``psimulate_<step_name>``) rather than colliding on a shared
+        ``"psimulate"`` template.
+
+        Each location gets its own model spec file (named after the location)
+        so that psimulate writes outputs to a location-specific directory
+        (``<output_dir>/<location>/<timestamp>/``).
+        """
+        output_dir = shared_tmp_path / "workflow_output"
+        output_dir.mkdir()
+        script_dir = shared_tmp_path / "scripts"
+        locations = ["kenya", "ethiopia"]
+        spec_paths = _write_simulation_step_inputs(script_dir, locations)
+
+        config = {
+            "workflow": {
+                "name": "e2e_simulation_workflow_test",
+                "project": slurm_project,
+                "queue": "all.q",
+                "output_directory": str(output_dir),
+                "steps": [
+                    {
+                        "name": location,
+                        "type": "simulation",
+                        "resources": {"memory_gb": 1, "runtime": "00:05:00"},
+                        "args": {
+                            "model_specification": str(spec_paths[location]),
+                            "branch_configuration": str(_BRANCHES),
+                        },
+                    }
+                    for location in locations
+                ],
+            }
+        }
+        config_path = shared_tmp_path / "workflow_config.yaml"
+        config_path.write_text(yaml.dump(config))
+
+        proc = _run_psimulate(
+            [
+                "workflow",
+                "-c",
+                str(config_path),
+                "-P",
+                slurm_project,
+                "-o",
+                str(output_dir),
+            ]
+        )
+        assert (
+            proc.returncode == 0
+        ), f"psimulate workflow failed.\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+
+        # Each location writes outputs under <output_dir>/<location>/<timestamp>/.
+        # Verify both location directories exist under the output directory.
+        location_dirs = {d.name for d in output_dir.iterdir() if d.is_dir()}
+        assert set(locations) == location_dirs, (
+            f"Expected location directories {set(locations)}, "
+            f"found {location_dirs} in {output_dir}"
+        )
+
+        for location in locations:
+            location_root = output_dir / location
+            timestamp_dirs = [d for d in location_root.iterdir() if d.is_dir()]
+            assert len(timestamp_dirs) == 1, (
+                f"Expected exactly 1 timestamp directory in {location_root}, "
+                f"found {len(timestamp_dirs)}: {timestamp_dirs}"
+            )
+            step_output_dir = timestamp_dirs[0]
+            metadata = _read_metadata(step_output_dir)
+            assert len(metadata) == _EXPECTED_TOTAL_JOBS, (
+                f"Location '{location}': expected {_EXPECTED_TOTAL_JOBS} completed tasks, "
+                f"got {len(metadata)}"
+            )
+            _assert_result_task_counts(step_output_dir / "results", _EXPECTED_TOTAL_JOBS)

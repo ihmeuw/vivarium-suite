@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from jobmon.client.api import Tool
 
+from vivarium_cluster_tools.psimulate.jobmon_config.workflow import resolve_env_prefix
 from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
 
 if TYPE_CHECKING:
@@ -85,7 +86,7 @@ class WorkflowBuilder:
 
             step_tasks = step.get_tasks(
                 self._tool,
-                env=env,
+                env_prefix=resolve_env_prefix(env),
                 build_timestamp=build_timestamp,
                 is_resume=is_resume,
             )
