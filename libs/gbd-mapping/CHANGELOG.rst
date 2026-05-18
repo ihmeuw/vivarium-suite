@@ -1,0 +1,198 @@
+**5.0.4 - 04/16/26**
+
+ - Tighten vivarium_build_utils pin
+
+**5.0.3 - 04/15/26**
+
+ - Update vivarium_build_utils pin
+
+**5.0.2 - 03/16/26**
+
+ - Validate version and CHANGELOG date prior to deploying
+ - Bugfix: Update intersphinx mapping for python and pandas
+
+**5.0.1 - 11/20/25**
+
+ - Improve 'make build-env': better handle args and make the env name optional
+
+**5.0.0 - 10/02/25**
+
+ - Update GBD Mapping for 2023
+
+**4.1.6 - 08/01/25**
+
+ - Use vivarium_dependencies for common setup constraints
+
+**4.1.5 - 07/25/25**
+
+ - Feature: Support new environment creation via 'make build-env'
+
+**4.1.4 - 07/16/25**
+
+ - Support pinning of vivarium_build_utils; pin vivarium_build_utils>=1.1.0,<2.0.0
+
+**4.1.3 - 02/05/25**
+
+ - Add python versions file
+
+**4.1.2 - 12/3/24**
+
+ - Fix infinite recursion bug
+
+**4.1.1 - 12/2/24**
+
+ - Properly clean up Jenkins workspaces
+
+**4.1.0 - 11/06/24**
+
+ - Drop support for Python 3.9
+ - Modernize type hints
+ - Update imports written by builders to be isort compliant
+
+**4.0.0 - 05/20/24**
+
+ - Rebuild with GBD 2021 data
+
+**3.1.2 - 01/09/24**
+
+ - Update PyPI to 2FA with trusted publisher (GitHub Actions)
+
+**3.1.1 - 07/13/23**
+
+ - Changes version metadata to use setuptools_scm
+
+**3.1.0 - 06/01/23**
+
+ - Update vivarium_gbd_access pin 
+ - Support Python 3.8-3.11 
+ - Update git actions to remove warnings
+
+**3.0.6 - 07/05/22**
+
+ - Add CODEOWNERS
+
+**3.0.5 - 05/05/22**
+
+ - Fix black and click dependency conflict in CI.
+
+**3.0.4 - 02/15/22**
+
+ - Autoformat code with black and isort.
+ - Add black and isort checks to CI.
+
+**3.0.3 - 02/12/22**
+
+ - Bugfix in risk data access.
+ - Modernize CI.
+ - Squash warnings in doc building
+ - Fix remote doc builds.
+ - Rebuild mappings.
+
+**3.0.2 - 5/21/21**
+
+ - Bugfix: update for gbd_access dependency
+
+**3.0.1 - 1/6/21**
+
+ - Bugfix: don't install extras
+
+**3.0.0 - 1/5/21**
+
+ - Update to GBD 2019
+ 
+**2.1.0 - 11/18/19**
+
+ - Be consistent about rate names.
+
+**2.0.4 - 06/18/19**
+
+ - Add CI script to handle upstream dependencies properly.
+ - Update metadata.
+
+**2.0.3 - 04/09/19**
+
+ - Remove incorrect risk categories from previous GBD rounds.
+
+**2.0.2 - 02/24/19**
+
+ - Remove unused coverage gaps.
+ - Have coverage gap inherit from modelable entity.
+ - Use sorted list for coverage gaps to fix order.
+
+**2.0.1 - 02/14/19**
+
+ - Update dependencies.
+
+**2.0.0 - 02/11/19**
+
+ - Update all cause, covariate, coverage_gap, etiology and risk_factor mappings
+   to include the GBD 2017 metadata.
+ - Update all the mappings to include the gbd_summary results.
+ - Rename risk as risk_factor.
+ - Fix the recursion and nan errors.
+
+**1.0.13 - 01/04/19**
+
+ - Remove covariate flag.
+ - Add CI branch synchronization
+
+**1.0.12 - 12/7/18**
+
+ - Add coverage_gap of lack_of_eggs
+
+**1.0.11 - 11/28/18**
+
+ - Add non_exclusive_breastfeeding relative risk to lack_of_breastfeeding_promotion
+
+**1.0.10 - 11/15/18**
+
+ - Documentation dependency update.
+
+**1.0.9 - 11/13/18**
+
+ - Add coverage_gap of lack_of_vitamin_a_fortification
+
+**1.0.8 - 10/26/18**
+
+ - Add a ``kind`` field to entities.
+ - Update covariates and coverage gaps mappings
+ - Remove HealthcareEntity
+ - Unpin click version
+
+**1.0.7 - 10/12/18**
+
+ - Change setup.py
+ - Add coverage_gap of lack_of_immediate_assessment_and_stimulation exposure
+ - Add coverage_gap of lack_of_immediate_assessment_and_stimulation relative risk to (neonatal_preterm_birth_complications)
+
+**1.0.6 - 10/12/18**
+
+ - Fix requirements.txt (add the click version)
+
+**1.0.5 - 09/12/18**
+
+ - Add coverage_gap of lack_of_breastfeeding_promotion exposure
+ - Add coverage_gap of lack_of_lipid_lowering_therapy exposure
+
+**1.0.4 - 09/06/18**
+
+ - Remove none from causes
+ - Change risks to risk_factors
+ - Make coverage_gap available
+
+**1.0.3 - 08/22/18**
+
+ - Use __about__ in docs
+ - Split gbd_access into a separate package
+ - Removing lingering paths
+ - Fix GbdRecord.to_dict
+ - Update auxiliary data calls
+ - Add measles
+
+**1.0.2 - 07/26/18**
+
+ - Fix deployment issues
+
+**1.0.0 - 07/25/18**
+
+ - Initial release

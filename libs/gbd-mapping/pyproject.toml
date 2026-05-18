@@ -1,0 +1,21 @@
+[tool.black]
+line_length = 94
+exclude = '''
+/(
+   build
+   | src/gbd_mapping
+)/
+
+'''
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/"]
+
+[tool.coverage.run]
+source = ["gbd_mapping"]
+
+[tool.coverage.report]
+show_missing = true
