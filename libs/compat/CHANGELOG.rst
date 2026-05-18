@@ -1,3 +1,7 @@
+**0.4.0 - 05/18/26**
+
+- Add risk_distributions redirect
+
 **0.3.1 - 05/15/26**
 
 - Disable layered_config_tree redirect
