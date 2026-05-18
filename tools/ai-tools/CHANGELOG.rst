@@ -2,6 +2,7 @@
 
  - Add ``team-conventions`` skill covering SimSci Engineering conventions
  - Add dependency for anthropic slack plugin
+ - Add make command skill
 
 **0.4.0 - 05/13/26**
 
