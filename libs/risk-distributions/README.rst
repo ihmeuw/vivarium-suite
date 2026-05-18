@@ -1,5 +1,5 @@
 Risk Distributions
-======================
+==================
 
 .. image:: https://badge.fury.io/py/vivarium-risk-distributions.svg
     :target: https://badge.fury.io/py/vivarium-risk-distributions
@@ -9,6 +9,8 @@ Risk Distributions
     :alt: Documentation Status
 
 This library contains various probability distributions, compatible for use with the ``Vivarium`` framework.
+
+**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
 
 You can install ``vivarium-risk-distributions`` from PyPI with pip:
 

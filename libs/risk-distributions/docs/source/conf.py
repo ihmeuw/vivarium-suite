@@ -23,13 +23,11 @@ from sphinx.ext.intersphinx import missing_reference
 
 import vivarium.risk_distributions
 
-sys.path.insert(0, str(Path("..").resolve()))
-
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.risk_distributions"
 author = "The vivarium developers"
-copyright = f"2022-{datetime.date.today().year}, {author}"
+copyright = f"2022-{datetime.date.today().year}, Institute for Health Metrics and Evaluation"
 
 version = vivarium.risk_distributions.__version__
 release = vivarium.risk_distributions.__version__

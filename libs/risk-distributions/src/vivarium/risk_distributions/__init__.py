@@ -1,11 +1,11 @@
-"""Risk Distributions: components for building distributions compatible with ``vivarium``."""
+"""Risk distributions for use with the ``vivarium`` simulation framework."""
 
 from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version("vivarium-risk-distributions")
 except PackageNotFoundError:
-    __version__ = "unknown"
+    __version__ = "0.0.0+unknown"
 
 from vivarium.risk_distributions.risk_distributions import (
     EnsembleDistribution,

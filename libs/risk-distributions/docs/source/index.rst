@@ -1,5 +1,5 @@
-Risk Distrbutions Documentation
-===============================
+Risk Distributions Documentation
+================================
 
 .. include:: ../../README.rst
    :start-line: 2
