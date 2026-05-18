@@ -150,11 +150,10 @@ def workflow_main(
     )
 
     if wf_status != "D":
-        logger.warning(
+        raise RuntimeError(
             f"Workflow finished with status '{wf_status}' (expected 'D' for DONE)."
         )
-    else:
-        logger.info(f"Workflow completed successfully. Results in {output_root}")
+    logger.info(f"Workflow completed successfully. Results in {output_root}")
 
 
 def report_initial_status(
