@@ -1,14 +1,14 @@
 # Paths are repo-root-relative even when this file lives in a subdirectory,
-# so the package path must be qualified with libs/config-tree/.
+# so the package path must be qualified with libs/risk-distributions/.
 #
-# This file is read by RTD only when the vivarium-config-tree RTD
+# This file is read by RTD only when the vivarium-risk-distributions RTD
 # project's Admin > Advanced Settings > "Path for .readthedocs.yaml" points
 # here. The root-level /.readthedocs.yaml is a placeholder used by the
 # import wizard and ignored for any project that has overridden the path.
 version: 2
 
 sphinx:
-  configuration: libs/config-tree/docs/source/conf.py
+  configuration: libs/risk-distributions/docs/source/conf.py
   fail_on_warning: true
 
 build:
@@ -19,7 +19,7 @@ build:
 python:
   install:
     - method: pip
-      path: libs/config-tree
+      path: libs/risk-distributions
       extra_requirements:
         - docs
 

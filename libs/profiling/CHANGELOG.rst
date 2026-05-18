@@ -1,3 +1,9 @@
+**0.4.6 - 05/18/26**
+
+- Update init fallback version
+- Add explicit 'lint' optional dependency
+- Use double-quotes in Jenkinsfile
+
 **0.4.5 - 05/15/26**
 
 - Bump vivarium-compat dependency
@@ -25,10 +31,11 @@
 
 **0.4.0 - 05/11/26**
 
-BREAKING CHANGE: Initial release from vivarium-suite monorepo. The import path is 
-now ``vivarium.profiling`` (was ``vivarium_profiling``). The ``vivarium-compat``
-shim redirects the old path with a ``DeprecationWarning``; update imports before
-that shim is removed.
+Initial release from the vivarium-suite monorepo; the standalone ``vivarium_profiling``
+repository has been archived.
+
+Breaking changes:
+- Import path changed from ``vivarium_profiling`` to ``vivarium.profiling``.
 
 **0.3.6 - 05/05/26**
 

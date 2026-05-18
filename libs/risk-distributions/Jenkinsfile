@@ -30,8 +30,12 @@ library("vivarium_build_utils@epic/monorepo")
 // library("vivarium_build_utils@${get_vbu_version()}")
 
 reusable_pipeline(
-    scheduled_branches: ["main"],
-    skip_doc_build: true,
-    run_mypy: false,
+    scheduled_branches: [
+        // Add additional branches for cron jobs below.
+        // Note: Newly added branches will require a manual trigger of the first build
+        // for subsequent scheduled builds to run.
+        "main"
+    ],
     env_reqs: "ci_jenkins",
+    run_mypy: false,
 )

@@ -44,14 +44,9 @@ data = [
     "vivarium-profiling[cluster]",
 ]
 interactive = ["vivarium-dependencies[interactive]"]
-dev = [
-    "vivarium-profiling[test,cluster,interactive]",
-    "vivarium-dependencies[lint]",
-]
-ci_github = [
-    "vivarium-profiling[test]",
-    "vivarium-dependencies[lint]",
-]
+lint = ["vivarium-dependencies[lint]"]
+dev = ["vivarium-profiling[test,cluster,interactive,lint]"]
+ci_github = ["vivarium-profiling[test,lint]"]
 ci_jenkins = ["vivarium-profiling[ci_github,cluster]"]
 
 [project.scripts]

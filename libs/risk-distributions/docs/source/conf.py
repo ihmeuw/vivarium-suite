@@ -18,18 +18,19 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 from pathlib import Path
 
-import vivarium.config_tree
+from docutils.nodes import Text
+from sphinx.ext.intersphinx import missing_reference
+
+import vivarium.risk_distributions
 
 # -- Project information -----------------------------------------------------
 
-project = "vivarium.config_tree"
+project = "vivarium.risk_distributions"
 author = "The vivarium developers"
-copyright = f"2016-{datetime.date.today().year}, {author}"
+copyright = f"2022-{datetime.date.today().year}, Institute for Health Metrics and Evaluation"
 
-# The short X.Y version.
-version = vivarium.config_tree.__version__
-# The full version, including alpha/beta/rc tags.
-release = vivarium.config_tree.__version__
+version = vivarium.risk_distributions.__version__
+release = vivarium.risk_distributions.__version__
 
 
 # -- General configuration ------------------------------------------------
@@ -43,7 +44,6 @@ needs_sphinx = "4.0"
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx_autodoc_typehints",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
     "sphinx.ext.todo",
@@ -51,9 +51,6 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
-    "sphinx_click.ext",
-    "matplotlib.sphinxext.plot_directive",
-    "sphinxcontrib.video",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -81,7 +78,7 @@ language = "en"
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns: list[str | None] = []
+exclude_patterns = []
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
@@ -130,7 +127,7 @@ htmlhelp_basename = f"{project}doc"
 
 # -- Options for LaTeX output ---------------------------------------------
 
-latex_elements: dict[str, str] = {
+latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
@@ -178,7 +175,7 @@ texinfo_documents = [
         f"{project} Documentation",
         author,
         project,
-        "Configuration structure which supports cascading layers.",
+        "Components for building distributions. Compatible for use with vivarium.",
         "Miscellaneous",
     ),
 ]
@@ -186,6 +183,10 @@ texinfo_documents = [
 # Other docs we can link to
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
+    "tables": ("https://www.pytables.org/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "networkx": ("https://networkx.org/documentation/stable/", None),
 }
 
 
@@ -212,10 +213,29 @@ autodoc_typehints = "description"
 
 nitpicky = True
 
-nitpick_ignore: list[tuple[str, str]] = []
+nitpick_ignore = []
 for line in open("../nitpick-exceptions"):
     if line.strip() == "" or line.startswith("#"):
         continue
     dtype, target = line.split(None, 1)
     target = target.strip()
     nitpick_ignore.append((dtype, target))
+
+
+# Fix sphinx warnings when for literal Ellipses in type hints.
+def setup(app):
+    app.connect("missing-reference", __sphinx_issue_8127)
+
+
+def __sphinx_issue_8127(app, env, node, contnode):
+    reftarget = node.get("reftarget", None)
+    if reftarget == "..":
+        node["reftype"] = "data"
+        node["reftarget"] = "Ellipsis"
+        text_node = next(iter(contnode.traverse(lambda n: n.tagname == "#text")))
+        replacement_node = Text("...", "")
+        if text_node.parent is not None:
+            text_node.parent.replace(text_node, replacement_node)
+        else:  # e.g. happens in rtype fields
+            contnode = replacement_node
+        return missing_reference(app, env, node, contnode)
