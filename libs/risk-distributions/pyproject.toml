@@ -1,0 +1,18 @@
+[tool.black]
+line_length = 94
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.coverage.run]
+source = ["risk_distributions"]
+
+[tool.coverage.report]
+show_missing = true
