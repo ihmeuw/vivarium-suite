@@ -1,5 +1,6 @@
 **0.5.0 - 05/18/26**
 
+ - Add ``framework-clis`` skill covering vivarium console scripts on PATH in a model-repo env
  - Add ``team-conventions`` skill covering SimSci Engineering conventions
  - Add dependency for anthropic slack plugin
  - Add make command skill
