@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from risk_distributions.formatting import (
+from vivarium.risk_distributions.formatting import (
     cast_to_series,
     format_call_data,
     format_data,

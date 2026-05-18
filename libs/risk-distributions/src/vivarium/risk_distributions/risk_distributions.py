@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy import optimize, special, stats
 
-from risk_distributions.formatting import (
+from vivarium.risk_distributions.formatting import (
     Parameter,
     Parameters,
     cast_to_series,

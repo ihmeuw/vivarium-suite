@@ -1,18 +1,58 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-risk-distributions"
+description = "Components for building distributions. Compatible for use with ``vivarium``."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD 3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+dependencies = [
+    "vivarium-dependencies[pandas,numpy,scipy]",
+    "vivarium-build-utils>=3.0.2,<4.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "vivarium-dependencies[pytest]",
+    "vivarium-testing-utils",
+]
+docs = ["vivarium-dependencies[sphinx]"]
+interactive = ["vivarium-dependencies[interactive]"]
+lint = ["vivarium-dependencies[lint]"]
+dev = ["vivarium-risk-distributions[test,docs,interactive,lint]"]
+ci_github = ["vivarium-risk-distributions[test,docs,lint]"]
+ci_jenkins = ["vivarium-risk-distributions[ci_github]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.risk_distributions and its subpackages. Excluding
+# vivarium itself means the wheel does not ship vivarium/__init__.py. The
+# "namespace owner" (standalone vivarium today, vivarium-core post-monorepo-
+# migration) ships the canonical vivarium/__init__.py with backward-compat
+# re-exports. If we shipped our own here, pip would overwrite the canonical
+# one and break imports like `from vivarium import Component`.
+include = ["vivarium.risk_distributions*"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags are prefixed with "vivarium-risk-distributions-"
+# (e.g. vivarium-risk-distributions-v3.0.0). tag_regex strips the prefix so
+# setuptools_scm sees a clean semver; git_describe_command filters to only
+# this lib's tags so siblings' releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-risk-distributions-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-risk-distributions-v*"'
+# Fires when no matching tag is reachable (e.g. shallow clone, brand-new repo
+# without git history).
+fallback_version = "0.0.0+unknown"
+
 [tool.black]
-line_length = 94
+line-length = 94
 
 [tool.isort]
 profile = "black"
-
-[tool.pytest.ini_options]
-testpaths = ["tests/"]
-
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
-[tool.coverage.run]
-source = ["risk_distributions"]
-
-[tool.coverage.report]
-show_missing = true
+line_length = 94
+multi_line_output = 3

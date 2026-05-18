@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from conftest import assert_equal
 
-from risk_distributions import risk_distributions
+from vivarium.risk_distributions import risk_distributions
 
 distributions = [
     risk_distributions.Exponential,

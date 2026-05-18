@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 from conftest import assert_equal
 
-from risk_distributions.formatting import Parameter, Parameters
-from risk_distributions.risk_distributions import EnsembleDistribution
+from vivarium.risk_distributions.formatting import Parameter, Parameters
+from vivarium.risk_distributions.risk_distributions import EnsembleDistribution
 
 weights_base = {
     "betasr": 1,

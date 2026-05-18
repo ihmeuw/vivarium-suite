@@ -1,3 +1,7 @@
+**3.0.0 - 05/18/26**
+
+- Initial release from the vivarium-suite monorepo.
+
 **2.3.4 - 05/07/26**
 
  - Bugfix: Persist mirror_point in parameters so MirroredDistribution can be instantiated without mean/sd

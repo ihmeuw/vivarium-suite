@@ -1,4 +1,4 @@
 Risk Distributions
 ==================
 
-.. automodule:: risk_distributions.risk_distributions
+.. automodule:: vivarium.risk_distributions.risk_distributions
