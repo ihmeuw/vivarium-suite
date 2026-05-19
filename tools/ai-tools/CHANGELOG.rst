@@ -1,3 +1,8 @@
+**0.5.1 - 05/19/26**
+
+- Add LICENSE file
+- Remove .gitignore file
+
 **0.5.0 - 05/18/26**
 
  - Add ``team-conventions`` skill covering SimSci Engineering conventions

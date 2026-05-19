@@ -1,3 +1,9 @@
+**3.0.2 - 05/19/26**
+
+- Update LICENSE file
+- Remove .gitignore file
+- Add package-level tests (test_package.py)
+
 **3.0.1 - 05/19/26**
 
 - Add regression test for EnsembleDistribution with missing parameters

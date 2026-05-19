@@ -1,3 +1,8 @@
+**0.5.1 - 05/19/26**
+
+- add license and authors to pyproject.toml
+- modify fallback version
+
 **0.5.0 - 05/19/26**
 
 - Add gbd_mapping and gbd_mapping_generator redirects

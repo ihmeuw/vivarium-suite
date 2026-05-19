@@ -1,3 +1,9 @@
+**5.0.4 - 05/19/26**
+
+- Update LICENSE file
+- Remove .gitignore file
+- Add package-level tests (test_package.py)
+
 **5.0.3 - 05/18/26**
 
 - Update init fallback version
