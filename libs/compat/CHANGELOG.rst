@@ -1,3 +1,9 @@
+**0.5.0 - 05/19/26**
+
+- Add gbd_mapping and gbd_mapping_generator redirects
+- Add LICENSE file
+- Add package-level tests (test_package.py)
+
 **0.4.0 - 05/18/26**
 
 - Add risk_distributions redirect
