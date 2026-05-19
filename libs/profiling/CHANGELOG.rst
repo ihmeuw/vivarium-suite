@@ -1,3 +1,7 @@
+**0.4.6 - 05/19/26**
+
+- Update old-style imports and dependencies
+
 **0.4.6 - 05/18/26**
 
 - Update init fallback version
