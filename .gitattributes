@@ -1,0 +1,14 @@
+# Auto-detect text files and normalize line endings on commit to LF.
+# Files are checked out with native line endings (LF on Linux/Mac, CRLF on
+# Windows) so cross-platform contributors don't fight over EOL diffs.
+* text=auto
+
+# Better diff hunk headers for Python (shows function/class names).
+*.py text diff=python
+
+# Explicit text declarations for common file types.
+*.rst text
+*.md text
+*.toml text
+*.yaml text
+*.yml text
