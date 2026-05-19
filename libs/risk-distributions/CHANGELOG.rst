@@ -1,3 +1,7 @@
+**3.0.1 - 05/19/26**
+
+- Add regression test for EnsembleDistribution with missing parameters
+
 **3.0.0 - 05/18/26**
 
 Initial release from the vivarium-suite monorepo; the standalone ``risk_distributions``
