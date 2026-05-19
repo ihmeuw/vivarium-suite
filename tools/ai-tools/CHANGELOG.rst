@@ -1,6 +1,11 @@
-**0.6.0 - 05/18/26**
+**0.6.0 - 05/19/26**
 
  - Add ``framework-clis`` skill covering vivarium console scripts on PATH in a model-repo env
+ 
+**0.5.1 - 05/19/26**
+
+- Add LICENSE file
+- Remove .gitignore file
 
 **0.5.0 - 05/18/26**
 
