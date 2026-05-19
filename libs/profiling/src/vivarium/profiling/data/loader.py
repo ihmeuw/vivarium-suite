@@ -14,7 +14,7 @@ for an example.
 """
 import numpy as np
 import pandas as pd
-from gbd_mapping import causes, covariates, risk_factors
+from vivarium.gbd_mapping import causes, covariates, risk_factors
 from vivarium.framework.artifact import EntityKey
 from vivarium_gbd_access import gbd
 from vivarium_inputs import globals as vi_globals
