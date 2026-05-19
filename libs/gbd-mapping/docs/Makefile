@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = gbd_mapping
+SPHINXPROJ    = vivarium-gbd-mapping
 SOURCEDIR     = source
 BUILDDIR      = build
 

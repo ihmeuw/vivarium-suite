@@ -1,3 +1,14 @@
+**6.0.0 - 05/19/26**
+
+Initial release from the vivarium-suite monorepo; the standalone ``gbd_mapping``
+repository has been archived.
+
+Breaking changes:
+
+- PyPI distribution renamed from ``gbd_mapping`` to ``vivarium-gbd-mapping``
+- Import path changed from ``gbd_mapping`` to ``vivarium.gbd_mapping`` 
+- Import path changed from ``gbd_mapping_generator`` to ``vivarium.gbd_mapping_generator``
+
 **5.0.4 - 04/16/26**
 
  - Tighten vivarium_build_utils pin

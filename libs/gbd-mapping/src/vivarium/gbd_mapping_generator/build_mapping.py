@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from gbd_mapping_generator import (
+from vivarium.gbd_mapping_generator import (
     base_template_builder,
     cause_builder,
     covariate_builder,

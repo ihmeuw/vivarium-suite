@@ -1,5 +1,5 @@
-Welcome to gbd_mapping's documentation!
-=======================================
+GBD Mapping Documentation
+=========================
 
 .. toctree::
    :maxdepth: 2

@@ -1,15 +1,11 @@
 GBD Mapping
 ===========
 
-.. image:: https://badge.fury.io/py/gbd-mapping.svg
-    :target: https://badge.fury.io/py/gbd-mapping
+.. image:: https://badge.fury.io/py/vivarium-gbd-mapping.svg
+    :target: https://badge.fury.io/py/vivarium-gbd-mapping
 
-.. image:: https://github.com/ihmeuw/gbd_mapping/actions/workflows/build.yml/badge.svg?branch=main
-    :target: https://github.com/ihmeuw/gbd_mapping
-    :alt: Latest Version
-
-.. image:: https://readthedocs.org/projects/gbd_mapping/badge/?version=latest
-    :target: https://gbd_mapping.readthedocs.io/en/latest/?badge=latest
+.. image:: https://readthedocs.org/projects/vivarium-gbd-mapping/badge/?version=latest
+    :target: https://vivarium-gbd-mapping.readthedocs.io/en/latest/?badge=latest
     :alt: Latest Docs
 
 Mapping of Global Burden of Disease (GBD) entities to their metadata.
@@ -29,17 +25,19 @@ including:
  - Etiologies
  - Sequelae
 
-You can install ``gbd_mapping`` from PyPI with pip:
+You can install ``vivarium-gbd-mapping`` from PyPI with pip:
 
-  ``> pip install gbd_mapping``
+.. code-block:: bash
 
-or build it from source with
+   pip install vivarium-gbd-mapping
 
-  ``> git clone https://github.com/ihmeuw/gbd_mapping.git``
+or build it from source by cloning the monorepo and installing this package:
 
-  ``> cd gbd_mapping``
+.. code-block:: bash
 
-  ``> pip install .``
+   git clone https://github.com/ihmeuw/vivarium-suite.git
+   cd vivarium-suite
+   pip install libs/gbd-mapping
 
 
 Development and Mapping Generation
@@ -51,12 +49,12 @@ Contact <collijk@uw.edu> if you need further instructions on that.
 
 Given proper permissions, you can set up this library in development mode with
 
-    ``> git clone https://github.com/ihmeuw/gbd_mapping.git``
+.. code-block:: bash
 
-    ``> cd gbd_mapping``
+   git clone https://github.com/ihmeuw/vivarium-suite.git
+   cd vivarium-suite
+   pip install -e 'libs/gbd-mapping[dev]'
 
-    ``> pip install -e .['dev']``
 
-
-`Check out the docs! <https://vivarium.readthedocs.io/projects/gbd-mapping/en/latest/>`_
-----------------------------------------------------------------------------------------
+`Check out the docs! <https://vivarium-gbd-mapping.readthedocs.io/en/latest/>`_
+-------------------------------------------------------------------------------

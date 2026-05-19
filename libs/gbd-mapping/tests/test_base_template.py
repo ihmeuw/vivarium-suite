@@ -1,4 +1,4 @@
-from gbd_mapping.base_template import GbdRecord
+from vivarium.gbd_mapping.base_template import GbdRecord
 
 
 class TestGbdRecord(GbdRecord):

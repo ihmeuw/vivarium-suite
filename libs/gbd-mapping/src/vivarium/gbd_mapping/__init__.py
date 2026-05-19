@@ -1,9 +1,23 @@
-from ._version import __version__
-from .base_template import Categories, GbdRecord, ModelableEntity, Restrictions, Tmred
-from .cause import Cause, causes
-from .covariate import Covariate, covariates
-from .etiology import Etiology, etiologies
-from .id import (
+"""A programmatically accessible mapping of GBD entities."""
+
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("vivarium-gbd-mapping")
+except PackageNotFoundError:
+    __version__ = "0.0.0+unknown"
+
+from vivarium.gbd_mapping.base_template import (
+    Categories,
+    GbdRecord,
+    ModelableEntity,
+    Restrictions,
+    Tmred,
+)
+from vivarium.gbd_mapping.cause import Cause, causes
+from vivarium.gbd_mapping.covariate import Covariate, covariates
+from vivarium.gbd_mapping.etiology import Etiology, etiologies
+from vivarium.gbd_mapping.id import (
     UNKNOWN,
     UnknownEntityError,
     c_id,
@@ -14,5 +28,5 @@ from .id import (
     s_id,
     scalar,
 )
-from .risk_factor import RiskFactor, risk_factors
-from .sequela import Healthstate, Sequela, sequelae
+from vivarium.gbd_mapping.risk_factor import RiskFactor, risk_factors
+from vivarium.gbd_mapping.sequela import Healthstate, Sequela, sequelae
