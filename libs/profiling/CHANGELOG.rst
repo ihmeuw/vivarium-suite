@@ -1,3 +1,7 @@
+**0.4.8 - 05/19/26**
+
+- Update old-style imports and dependencies
+
 **0.4.7 - 05/19/26**
 
 - Update LICENSE file
