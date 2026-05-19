@@ -3,7 +3,7 @@
 import vivarium.config_tree
 
 
-def test_version_resolves_to_installed_distribution():
+def test_version_resolves_to_installed_distribution() -> None:
     """Verify ``__version__`` came from importlib.metadata, not the fallback.
 
     Guards against a misspelled distribution name in ``__init__.py`` silently
@@ -17,26 +17,21 @@ def test_version_resolves_to_installed_distribution():
     Version(vivarium.config_tree.__version__)
 
 
-def test_public_api_reexports():
-    """Top-level re-exports stay reachable. A regression that removes one of
-    these would only break downstream callers, never local tests.
-    """
-    from vivarium.config_tree import (
-        ConfigNode,
-        ConfigTree,
-        ConfigurationError,
-        ConfigurationKeyError,
-        DuplicatedConfigurationError,
-        ImproperAccessError,
-        MissingLayerError,
-        load_yaml,
-    )
+def test_public_api_reexports() -> None:
+    """Verify each documented re-export is reachable on the package.
 
-    assert ConfigNode is not None
-    assert ConfigTree is not None
-    assert ConfigurationError is not None
-    assert ConfigurationKeyError is not None
-    assert DuplicatedConfigurationError is not None
-    assert ImproperAccessError is not None
-    assert MissingLayerError is not None
-    assert load_yaml is not None
+    A regression that removes a name from ``__init__.py`` raises
+    ``AttributeError`` here with the specific missing name in the message.
+    """
+    expected = (
+        "ConfigNode",
+        "ConfigTree",
+        "ConfigurationError",
+        "ConfigurationKeyError",
+        "DuplicatedConfigurationError",
+        "ImproperAccessError",
+        "MissingLayerError",
+        "load_yaml",
+    )
+    for name in expected:
+        getattr(vivarium.config_tree, name)

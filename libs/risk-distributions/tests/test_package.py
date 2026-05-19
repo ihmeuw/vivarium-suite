@@ -18,11 +18,15 @@ def test_version_resolves_to_installed_distribution():
 
 
 def test_public_api_reexports():
-    """Top-level re-exports stay reachable. A regression that removes one of
-    these would only break downstream callers, never local tests.
-    """
-    from vivarium.risk_distributions import EnsembleDistribution, LogNormal, Normal
+    """Verify each documented re-export is reachable on the package.
 
-    assert EnsembleDistribution is not None
-    assert LogNormal is not None
-    assert Normal is not None
+    A regression that removes a name from ``__init__.py`` raises
+    ``AttributeError`` here with the specific missing name in the message.
+    """
+    expected = (
+        "EnsembleDistribution",
+        "LogNormal",
+        "Normal",
+    )
+    for name in expected:
+        getattr(vivarium.risk_distributions, name)
