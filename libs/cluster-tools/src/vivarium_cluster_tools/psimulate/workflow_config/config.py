@@ -33,6 +33,10 @@ from vivarium_cluster_tools.psimulate.jobs import (
     build_job_parameters_from_keyspace,
 )
 from vivarium_cluster_tools.psimulate.paths import OutputPaths
+from vivarium_cluster_tools.psimulate.workflow_config.utilities import (
+    check_scalar,
+    validate_scalar_dict,
+)
 
 if TYPE_CHECKING:
     from jobmon.client.api import Tool
@@ -45,85 +49,6 @@ DEFAULT_MAX_ATTEMPTS = 2
 
 DEFAULT_BACKUP_FREQ_SECONDS = 30.0 * 60.0
 """Default backup frequency in seconds (30 minutes), matching ``psimulate run``."""
-
-
-_SCALAR_TYPES: tuple[type, ...] = (str, int, float, bool)
-"""Scalar value types accepted in step args (e.g. notebook ``parameters``,
-python ``keyword_args`` / ``positional_args``)."""
-
-_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
-"""Pattern for keys in scalar-dict step args (``keyword_args``, ``parameters``)."""
-
-
-def _check_scalar(
-    value: object,
-    *,
-    label: str,
-    step_name: str,
-    allow_none: bool = True,
-) -> None:
-    """Validate that *value* is a scalar type.
-
-    Parameters
-    ----------
-    value
-        The value to check.
-    label
-        Human-readable label for error messages (e.g. ``"positional_args[0]"``).
-    step_name
-        Name of the owning step, used in error messages.
-    allow_none
-        Whether ``None`` is an acceptable value.
-    """
-    allowed = (*_SCALAR_TYPES, type(None)) if allow_none else _SCALAR_TYPES
-    if not isinstance(value, allowed):
-        raise ValueError(
-            f"Step '{step_name}': {label} must be a scalar type "
-            f"({', '.join(t.__name__ for t in allowed)}), "
-            f"got {type(value).__name__}."
-        )
-
-
-def _validate_scalar_dict(
-    configuration: object,
-    *,
-    field_name: str,
-    step_name: str,
-    allow_none_values: bool = True,
-) -> None:
-    """Validate ``configuration`` is a dict of identifier-keyed scalar values.
-
-    Parameters
-    ----------
-    configuration
-        The untrusted value to validate (typically a sub-dict from a step's
-        YAML ``args``).
-    field_name
-        Name of the field being validated, used in error messages
-        (e.g. ``"keyword_args"`` or ``"parameters"``).
-    step_name
-        Name of the owning step, used in error messages.
-    allow_none_values
-        Whether ``None`` is an acceptable value (treated as a flag for
-        keyword args; treated as YAML ``null`` for notebook parameters).
-    """
-    if not isinstance(configuration, dict):
-        raise ValueError(
-            f"Step '{step_name}': '{field_name}' must be a dict, "
-            f"got {type(configuration).__name__}."
-        )
-    for key, value in configuration.items():
-        if not isinstance(key, str) or not _IDENTIFIER_RE.match(key):
-            raise ValueError(
-                f"Step '{step_name}': {field_name} key {key!r} is not a valid "
-                "identifier. Keys must be alphanumeric, have dashes, or underscores."
-            )
-        _check_scalar(
-            value,
-            label=f"{field_name}['{key}']",
-            step_name=step_name,
-            allow_none=allow_none_values,
-        )
 
 
 @dataclass
@@ -968,7 +893,7 @@ class PythonStepConfig(BaseStepConfig):
         if "positional_args" in self.args:
             self._validate_positional_args(self.args["positional_args"])
         if "keyword_args" in self.args:
-            _validate_scalar_dict(
+            validate_scalar_dict(
                 self.args["keyword_args"],
                 field_name="keyword_args",
                 step_name=self.name,
@@ -987,7 +912,7 @@ class PythonStepConfig(BaseStepConfig):
                 f"got {type(positional_args).__name__}."
             )
         for arg_index, item in enumerate(positional_args):
-            _check_scalar(
+            check_scalar(
                 item,
                 label=f"positional_args[{arg_index}]",
                 step_name=self.name,
@@ -1121,7 +1046,7 @@ class NotebookStepConfig(BaseStepConfig):
                 f"Step '{self.name}': 'output_path' must end with .ipynb, "
                 f"got {self.output_path!r}."
             )
-        _validate_scalar_dict(
+        validate_scalar_dict(
             self.parameters,
             field_name="parameters",
             step_name=self.name,
