@@ -1,4 +1,4 @@
-**0.6.0 - 05/18/26**
+**0.6.0 - 05/19/26**
 
  - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
 
