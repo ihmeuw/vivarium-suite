@@ -6,6 +6,8 @@ build-backend = "hatchling.build"
 name = "vivarium-compat"
 description = "Backward-compatible import redirects for the vivarium monorepo migration."
 requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 # No dependencies; the hook redirects imports, it does not depend on them.
 

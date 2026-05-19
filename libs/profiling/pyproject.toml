@@ -7,7 +7,7 @@ name = "vivarium-profiling"
 description = "Profiling and benchmarking tools for Vivarium simulations."
 readme = "README.rst"
 requires-python = ">=3.10"
-license = {text = "BSD 3-Clause"}
+license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
@@ -39,6 +39,7 @@ test = [
     "vivarium-testing-utils",
 ]
 cluster = ["vivarium-cluster-tools>=2.1.17"]
+docs = []
 data = [
     "vivarium-inputs>=5.2.6",
     "vivarium-profiling[cluster]",
@@ -46,7 +47,7 @@ data = [
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
 dev = ["vivarium-profiling[test,cluster,interactive,lint]"]
-ci_github = ["vivarium-profiling[test,lint]"]
+ci_github = ["vivarium-profiling[test,docs,lint]"]
 ci_jenkins = ["vivarium-profiling[ci_github,cluster]"]
 
 [project.scripts]
