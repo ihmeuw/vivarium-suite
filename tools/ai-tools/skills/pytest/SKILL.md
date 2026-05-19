@@ -7,7 +7,7 @@ description: Reference for the vivarium pytest setup. Use this skill when runnin
 
 ## Running tests in a vivarium repo
 
-The recommended way to run tests is via `make test-*` targets, which include coverage reporting and built-in support for the `@slow`, `@weekly`, and `@cluster` markers. For quick iteration on a single test or when you want to skip coverage, use direct `pytest` commands. In general, you should start by testing narrowly within the scope of the current task, and run a more comprehensive make command (e.g. make check or make test-all) before major workflow points like submitting a pull request.
+The recommended way to run tests is via `make test-*` targets, which include coverage reporting and built-in support for several markers. For quick iteration on a single test, running individual pytest commands is acceptable. In general, you should start by testing narrowly within the scope of the current task, and run a more comprehensive make command (e.g. make check or make test-all) before major workflow points like submitting a pull request.
 
 **`make test-*` targets:**
 
@@ -28,18 +28,9 @@ make test-all RUNSLOW=true RUNWEEKLY=true
 `make test-unit`/`-integration`/`-e2e` only work in repos that actually have the matching `tests/<type>/` subdir — most vivarium repos don't (test layouts are flat or domain-organized). Check `ls tests/` first; otherwise fall back to `make test-all` or direct pytest.
 
 
-## Markers (`slow`, `cluster`, `weekly`)
+## Markers
 
-`vivarium_testing_utils` auto-loads as a pytest plugin (no conftest import needed) and registers three markers with default-skip rules.
-
-| Marker | Skipped unless… |
-|---|---|
-| `@pytest.mark.slow` | `--runslow` is passed (or `make ... RUNSLOW=true`) |
-| `@pytest.mark.cluster` | `sbatch` is on PATH (i.e. running on the SLURM cluster). No CLI override — you have to actually be on the cluster. |
-| `@pytest.mark.weekly` | `--runweekly` is passed **OR** today is `SLOW_TEST_DAY` (default Sunday) |
-
-
-If a test is mysteriously skipping, run pytest with `-v` (or `-rs`) and read the skip reason — the plugin emits `"need --runslow option to run"`, `"not running on SLURM cluster"`, or `"not the designated slow test day for weekly tests"`.
+`vivarium_testing_utils` auto-loads as a pytest plugin and registers markers with default-skip rules. Look at `vivarium_testing_utils/pytest_plugin.py` to understand their behavior. If a test is mysteriously skipping, you may also run pytest with `-v` (or `-rs`) and read the skip reason.
 
 ## Coverage
 
