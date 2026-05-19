@@ -58,9 +58,7 @@ include = ["vivarium.config_tree*"]
 root = "../.."
 tag_regex = '^vivarium-config-tree-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-config-tree-v*"'
-# Fires when no matching tag is reachable (e.g. shallow clone, brand-new repo
-# without git history).
-fallback_version = "0.0.0+unknown"
+fallback_version = "0.0.0+no-git-tag"
 
 [tool.black]
 line-length = 94
