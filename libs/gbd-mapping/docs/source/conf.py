@@ -21,7 +21,10 @@ import vivarium.gbd_mapping
 
 project = "vivarium.gbd_mapping"
 author = "The vivarium developers"
-copyright = f"2023-{datetime.date.today().year}, Institute for Health Metrics and Evaluation"
+# Copyright start year mirrors the LICENSE file (first publication year of
+# the standalone gbd_mapping package). End year tracks the current build to
+# signal active maintenance.
+copyright = f"2016-{datetime.date.today().year}, Institute for Health Metrics and Evaluation"
 
 # The short X.Y version.
 version = vivarium.gbd_mapping.__version__

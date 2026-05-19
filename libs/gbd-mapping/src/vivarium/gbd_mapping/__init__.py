@@ -5,7 +5,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("vivarium-gbd-mapping")
 except PackageNotFoundError:
-    __version__ = "0.0.0+unknown"
+    __version__ = "0.0.0+not-installed"
 
 from vivarium.gbd_mapping.base_template import (
     Categories,

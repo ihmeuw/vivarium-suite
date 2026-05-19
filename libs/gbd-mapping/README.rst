@@ -45,7 +45,8 @@ Development and Mapping Generation
 
 In order to generate or regenerate the mappings from data, you must have access to
 the Institute for Health Metrics and Evaluation cluster and internal PyPI server.
-Contact <collijk@uw.edu> if you need further instructions on that.
+Contact the vivarium developers at vivarium.dev@gmail.com or open an issue at
+https://github.com/ihmeuw/vivarium-suite for further instructions.
 
 Given proper permissions, you can set up this library in development mode with
 
