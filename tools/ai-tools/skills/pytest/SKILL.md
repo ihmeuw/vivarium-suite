@@ -30,7 +30,7 @@ make test-all RUNSLOW=true RUNWEEKLY=true
 
 ## Markers (`slow`, `cluster`, `weekly`)
 
-`vivarium_testing_utils` auto-loads as a pytest11 plugin (no conftest import needed) and registers three markers with default-skip rules.
+`vivarium_testing_utils` auto-loads as a pytest plugin (no conftest import needed) and registers three markers with default-skip rules.
 
 | Marker | Skipped unless… |
 |---|---|
@@ -38,10 +38,6 @@ make test-all RUNSLOW=true RUNWEEKLY=true
 | `@pytest.mark.cluster` | `sbatch` is on PATH (i.e. running on the SLURM cluster). No CLI override — you have to actually be on the cluster. |
 | `@pytest.mark.weekly` | `--runweekly` is passed **OR** today is `SLOW_TEST_DAY` (default Sunday) |
 
-The `weekly` rule is `not (--runweekly or is_sunday)` → skip. So:
-- On a regular weekday with no flag: `@weekly` tests skip.
-- On a regular weekday with `--runweekly`: they run.
-- On Sunday with no flag: they run (CI relies on this).
 
 If a test is mysteriously skipping, run pytest with `-v` (or `-rs`) and read the skip reason — the plugin emits `"need --runslow option to run"`, `"not running on SLURM cluster"`, or `"not the designated slow test day for weekly tests"`.
 
