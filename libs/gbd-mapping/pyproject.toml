@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-gbd-mapping"
+description = "A programmatically accessible mapping of GBD entities."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD 3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+dependencies = [
+    "vivarium-dependencies[pandas,numpy,click]",
+    "vivarium-build-utils>=3.0.2,<4.0.0",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+# Data extra pulls vivarium-gbd-access, which requires IHME-internal cluster
+# access. Omitted from ci_github (GH runners can't reach the cluster) and
+# only invoked by maintainers running ``build_mapping``.
+data = ["vivarium-gbd-access>=5.0.0, <6.0.0"]
+test = [
+    "vivarium-dependencies[pytest]",
+    "vivarium-testing-utils",
+]
+docs = ["vivarium-dependencies[sphinx]"]
+interactive = ["vivarium-dependencies[interactive]"]
+lint = ["vivarium-dependencies[lint]"]
+dev = ["vivarium-gbd-mapping[docs,interactive,test,data,lint]"]
+cluster = []
+ci_github = ["vivarium-gbd-mapping[test,docs,lint]"]
+ci_jenkins = ["vivarium-gbd-mapping[ci_github,cluster]"]
+
+[project.scripts]
+build_mapping = "vivarium.gbd_mapping_generator.build_mapping:build_mapping"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Enumerate the two top-level packages and their subpackages explicitly. A
+# loose glob like ``vivarium.gbd_mapping*`` would also match a hypothetical
+# sibling ``vivarium.gbd_mapping_helpers`` shipped by another lib.
+#
+# Excluding ``vivarium`` itself means the wheel does not ship
+# ``vivarium/__init__.py``. The "namespace owner" (standalone vivarium today,
+# vivarium-core post-monorepo-migration) ships the canonical
+# ``vivarium/__init__.py`` with backward-compat re-exports. If we shipped our
+# own here, pip would overwrite the canonical one and break imports like
+# ``from vivarium import Component``.
+include = [
+    "vivarium.gbd_mapping",
+    "vivarium.gbd_mapping.*",
+    "vivarium.gbd_mapping_generator",
+    "vivarium.gbd_mapping_generator.*",
+]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with
+# ``vivarium-gbd-mapping-v`` (e.g. ``vivarium-gbd-mapping-v6.0.0``). The
+# regex strips the prefix so setuptools_scm sees a clean semver;
+# git_describe_command filters to only this lib's tags so siblings' releases
+# don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-gbd-mapping-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-gbd-mapping-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
+# No [tool.mypy] section: this package is only partially typed and the
+# gbd_mapping module is largely auto-generated. CI's `make mypy` is skipped
+# when py.typed is absent (see .github/workflows/ci.yml); Jenkinsfile sets
+# `run_mypy: false` to match. When the codebase is fully annotated, add a
+# py.typed marker plus the standard [tool.mypy] block (see
+# libs/config-tree/pyproject.toml for the template) and flip Jenkins
+# `run_mypy` back to true.
+
+[tool.black]
+line-length = 94
+# Skip the mapping module; most of it is a flat data dump produced by
+# vivarium.gbd_mapping_generator and should not be hand-formatted.
+exclude = '''
+/(
+   build
+   | src/vivarium/gbd_mapping
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3
