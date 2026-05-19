@@ -40,11 +40,9 @@ from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
 from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
-from vivarium_cluster_tools.psimulate.workflow_config.builder import (
-    WORKFLOW_ARGS_FILENAME,
-    WorkflowBuilder,
-)
+from vivarium_cluster_tools.psimulate.workflow_config.builder import WorkflowBuilder
 from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
+from vivarium_cluster_tools.psimulate.workflow_config.utilities import WORKFLOW_ARGS_FILENAME
 from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 if TYPE_CHECKING:
