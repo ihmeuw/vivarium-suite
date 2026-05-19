@@ -1,3 +1,7 @@
+**0.6.0 - 05/18/26**
+
+ - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
+
 **0.5.0 - 05/18/26**
 
  - Add ``team-conventions`` skill covering SimSci Engineering conventions

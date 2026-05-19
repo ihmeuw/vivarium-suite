@@ -37,6 +37,9 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
 - ``continuous-integration`` — catalogues the vivarium-suite CI setup.
 - ``team-conventions`` — SimSci Engineering conventions for everyday change
   flow.
+- ``pytest`` — reference for the vivarium pytest setup: ``make test-*`` entry
+  points, the ``slow`` / ``cluster`` / ``weekly`` markers from
+  ``vivarium_testing_utils``, and where baked-in coverage output lands.
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
