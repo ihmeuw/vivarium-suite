@@ -34,7 +34,6 @@ extensions = [
     "sphinx.ext.viewcode",
 ]
 
-templates_path = ["_templates"]
 source_suffix = ".rst"
 master_doc = "index"
 language = "en"
@@ -47,6 +46,7 @@ todo_include_todos = True
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+html_css_files = ["style.css"]
 html_sidebars = {
     "**": [
         "globaltoc.html",

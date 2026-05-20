@@ -2,6 +2,7 @@
 
 - Tighten tag pattern
 - Pin vivarium_build_utils to epic/monorepo branch (temporary)
+- Use style.css for docs
 
 **3.0.2 - 05/19/26**
 

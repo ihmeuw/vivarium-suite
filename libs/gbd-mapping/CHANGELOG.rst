@@ -1,6 +1,7 @@
 **6.0.1 - 05/20/26**
 
 - Pin vivarium_build_utils to epic/monorepo branch (temporary)
+- Use style.css for docs
 
 **6.0.0 - 05/19/26**
 
