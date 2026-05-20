@@ -31,7 +31,8 @@ class Artifact:
 
     Wraps the underlying HDF5 file and provides keyed read/write/load access to
     the data it contains. This is the data-model class; for the simulation-lifecycle
-    integration see ``ArtifactManager`` and ``ArtifactInterface`` in :mod:`vivarium.framework.artifact`.
+    integration see ``ArtifactManager`` and ``ArtifactInterface`` in
+    :mod:`vivarium.framework.artifact`.
     """
 
     def __init__(self, path: str | Path, filter_terms: list[str] | None = None) -> None:
