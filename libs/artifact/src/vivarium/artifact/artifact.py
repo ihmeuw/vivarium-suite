@@ -35,8 +35,7 @@ class Artifact:
     memory for repeat access; call :meth:`clear_cache` to drop the cache.
 
     This is the data-model class; for the simulation-lifecycle integration see
-    ``ArtifactManager`` and ``ArtifactInterface`` in
-    :mod:`vivarium.framework.artifact`.
+    ``ArtifactManager`` and ``ArtifactInterface`` in :mod:`vivarium_engine.framework.artifact`.
     """
 
     def __init__(self, path: str | Path, filter_terms: list[str] | None = None) -> None:
