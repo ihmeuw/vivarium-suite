@@ -1,3 +1,7 @@
+**0.4.10 - 05/20/26**
+
+- Update Artifact imports to use new package
+
 **0.4.9 - 05/20/26**
 
 - Tighten tag pattern
