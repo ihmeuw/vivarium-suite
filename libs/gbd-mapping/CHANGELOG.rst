@@ -1,6 +1,5 @@
 **6.0.1 - 05/20/26**
 
-- Pin vivarium_build_utils to epic/monorepo branch (temporary)
 - Use style.css for docs
 - Calculate current year more robustly in docs/conf.py
 
