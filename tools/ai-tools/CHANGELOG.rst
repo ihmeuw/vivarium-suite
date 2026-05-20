@@ -1,6 +1,11 @@
-**0.6.0 - 05/19/26**
+**0.6.0 - 05/20/26**
 
  - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
+ 
+**0.5.1 - 05/19/26**
+
+- Add LICENSE file
+- Remove .gitignore file
 
 **0.5.0 - 05/18/26**
 

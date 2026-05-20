@@ -1,3 +1,13 @@
+**0.4.8 - 05/19/26**
+
+- Update old-style imports and dependencies
+
+**0.4.7 - 05/19/26**
+
+- Update LICENSE file
+- Remove .gitignore file
+- Add package-level tests (test_package.py)
+
 **0.4.6 - 05/18/26**
 
 - Update init fallback version

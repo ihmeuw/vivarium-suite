@@ -7,7 +7,7 @@ from typing import Any
 try:
     __version__ = version("vivarium-config-tree")
 except PackageNotFoundError:
-    __version__ = "0.0.0+unknown"
+    __version__ = "0.0.0+not-installed"
 
 from vivarium.config_tree.exceptions import (
     ConfigurationError,

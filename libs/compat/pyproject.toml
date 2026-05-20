@@ -6,6 +6,8 @@ build-backend = "hatchling.build"
 name = "vivarium-compat"
 description = "Backward-compatible import redirects for the vivarium monorepo migration."
 requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 # No dependencies; the hook redirects imports, it does not depend on them.
 
@@ -30,7 +32,7 @@ root = "../.."
 # Match only this lib's tags so other libs' tags don't drive our version.
 tag_regex = '^vivarium-compat-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-compat-v*"'
-fallback_version = "0.0.0+unknown"
+fallback_version = "0.0.0+no-git-tag"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/vivarium_compat/_version.py"

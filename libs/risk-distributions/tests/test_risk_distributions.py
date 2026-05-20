@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from conftest import assert_equal
 
-from vivarium.risk_distributions import risk_distributions
+from vivarium.risk_distributions import EnsembleDistribution, risk_distributions
 
 distributions = [
     risk_distributions.Exponential,
@@ -218,3 +218,39 @@ def test_mirrored_distribution_from_parameters_only(distribution):
     assert not dist.mirror_point.isna().any()
     result = dist.ppf(pd.Series([0.5, 0.5, 0.5]))
     assert not np.isnan(result).any()
+
+
+def test_ensemble_distribution_with_mirrored_components_is_callable():
+    """Regression test: EnsembleDistribution.ppf must work when mirrored sub-distributions carry weight.
+
+    EnsembleDistribution.ppf rebuilds each sub-distribution from a
+    parameters DataFrame on every call; prior to the mirror_point-in-
+    parameters fix this raised inside MirroredDistribution.__init__.
+    """
+    weights = pd.DataFrame(
+        {
+            "betasr": [0.0],
+            "exp": [0.0],
+            "gamma": [0.1],
+            "gumbel": [0.1],
+            "invgamma": [0.0],
+            "invweibull": [0.0],
+            "llogis": [0.0],
+            "lnorm": [0.1],
+            "mgamma": [0.3],
+            "mgumbel": [0.3],
+            "norm": [0.1],
+            "weibull": [0.0],
+        },
+        index=[0],
+    )
+    mean = pd.Series([28.0], index=[0])
+    sd = pd.Series([5.0], index=[0])
+
+    dist = EnsembleDistribution(weights=weights, mean=mean, sd=sd)
+
+    propensity = pd.Series([0.5], index=[0])
+    weight_propensity = pd.Series([0.5], index=[0])
+    out = dist.ppf(propensity, weight_propensity)
+
+    assert np.isfinite(out).all()
