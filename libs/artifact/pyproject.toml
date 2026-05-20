@@ -82,3 +82,10 @@ implicit_reexport = true
 exclude = ["build"]
 mypy_path = "src"
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# pytables (the ``tables`` package) doesn't ship a py.typed marker or stubs.
+# Without this override, strict mypy raises "import-untyped" errors for every
+# ``import tables`` line. Treat the package as Any-typed.
+module = ["tables", "tables.*"]
+ignore_missing_imports = true
