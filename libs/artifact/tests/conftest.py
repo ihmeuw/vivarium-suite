@@ -4,107 +4,23 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-import pytest_mock
 import tables
-import yaml
-from _pytest.logging import LogCaptureFixture
-from layered_config_tree import LayeredConfigTree
-from loguru import logger
-from vivarium_testing_utils import FuzzyChecker
-
-from vivarium.framework.configuration import (
-    build_model_specification,
-    build_simulation_configuration,
-)
-from vivarium.testing_utilities import metadata
-
-
-@pytest.fixture(scope="session")
-def fuzzy_checker() -> FuzzyChecker:
-    return FuzzyChecker()
-
-
-@pytest.fixture
-def caplog(caplog: LogCaptureFixture) -> Generator[LogCaptureFixture, None, None]:
-    handler_id = logger.add(caplog.handler, format="{message}")
-    yield caplog
-    logger.remove(handler_id)
-
-
-@pytest.fixture
-def base_config() -> LayeredConfigTree:
-    config = build_simulation_configuration()
-    config.update(
-        {
-            "time": {
-                "start": {
-                    "year": 1990,
-                },
-                "end": {"year": 2010},
-                "step_size": 30.5,
-            },
-            "randomness": {"key_columns": ["entrance_time", "age"]},
-        },
-        **metadata(__file__, layer="model_override"),
-    )
-    return config
 
 
 @pytest.fixture
 def test_data_dir() -> Path:
+    """Directory containing binary test fixtures (e.g. artifact.hdf)."""
     data_dir = Path(__file__).resolve().parent / "test_data"
     assert data_dir.exists(), "Test directory structure is broken"
     return data_dir
 
 
-@pytest.fixture(params=[".yaml", ".yml"])
-def test_spec(request: pytest.FixtureRequest, test_data_dir: Path) -> Path:
-    return test_data_dir / f"mock_model_specification{request.param}"
-
-
-@pytest.fixture(params=[".yaml", ".yml"])
-def test_user_config(request: pytest.FixtureRequest, test_data_dir: Path) -> Path:
-    return test_data_dir / f"mock_user_config{request.param}"
-
-
-@pytest.fixture
-def model_specification(
-    mocker: pytest_mock.MockFixture, test_spec: Path, test_user_config: Path
-) -> LayeredConfigTree:
-    expand_user_mock = mocker.patch("vivarium.framework.configuration.Path.expanduser")
-    expand_user_mock.return_value = test_user_config
-    return build_model_specification(test_spec)
-
-
-@pytest.fixture
-def disease_model_spec(tmp_path: Path) -> Path:
-    model_spec_path = (
-        Path(__file__).resolve().parent.parent
-        / "src/vivarium/examples/disease_model/disease_model.yaml"
-    )
-    with open(model_spec_path, "r") as file:
-        ms = yaml.safe_load(file)
-
-    # modify the time so as not to take so long for a unit test
-    ms["configuration"]["time"]["end"]["year"] = ms["configuration"]["time"]["start"]["year"]
-    ms["configuration"]["time"]["end"]["month"] = ms["configuration"]["time"]["start"][
-        "month"
-    ]
-    ms["configuration"]["time"]["start"]["day"] = 1
-    ms["configuration"]["time"]["end"]["day"] = 5
-    ms["configuration"]["time"]["step_size"] = 0.5
-    model_spec = tmp_path / "disease_model.yaml"
-
-    with open(model_spec, "w") as file:
-        yaml.dump(ms, file)
-
-    return model_spec
-
-
 @pytest.fixture
 def hdf_file_path(tmp_path: Path, test_data_dir: Path) -> Path:
-    """This file contains the following:
-    Object Tree:
+    """Path to a writable copy of the canonical test artifact.
+
+    The fixture file contains the following object tree::
+
         / (RootGroup) ''
         /cause (Group) ''
         /population (Group) ''
@@ -121,7 +37,8 @@ def hdf_file_path(tmp_path: Path, test_data_dir: Path) -> Path:
         /cause/all_causes (Group) ''
         /cause/all_causes/restrictions (EArray(166,)) ''
     """
-    # Make temporary copy of file for test.
+    # Make a temporary writable copy so tests can mutate without polluting
+    # the committed fixture.
     p = tmp_path / "artifact.hdf"
     with tables.open_file(str(test_data_dir / "artifact.hdf")) as file:
         file.copy_file(str(p), overwrite=True)
@@ -130,5 +47,6 @@ def hdf_file_path(tmp_path: Path, test_data_dir: Path) -> Path:
 
 @pytest.fixture
 def hdf_file(hdf_file_path: Path) -> Generator[tables.file.File, None, None]:
+    """An open ``tables.File`` handle to the test artifact (read-only)."""
     with tables.open_file(str(hdf_file_path)) as file:
         yield file
