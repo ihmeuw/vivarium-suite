@@ -2,9 +2,7 @@
 
 A data artifact is an archive on disk that packages all data relevant to a
 particular simulation. This package provides the artifact model and the HDF5
-storage backend. The Manager / Interface integration that hooks artifacts
-into a vivarium simulation lifecycle lives in ``vivarium.framework.artifact``
-(in the vivarium-core package).
+storage backend.
 """
 
 from importlib.metadata import PackageNotFoundError, version

@@ -37,7 +37,7 @@ extensions = [
 source_suffix = ".rst"
 master_doc = "index"
 language = "en"
-exclude_patterns: list[str | None] = []
+exclude_patterns: list[str] = []
 pygments_style = "sphinx"
 todo_include_todos = True
 
@@ -105,9 +105,10 @@ autodoc_typehints = "description"
 nitpicky = True
 
 nitpick_ignore: list[tuple[str, str]] = []
-for line in open("../nitpick-exceptions"):
-    if line.strip() == "" or line.startswith("#"):
-        continue
-    dtype, target = line.split(None, 1)
-    target = target.strip()
-    nitpick_ignore.append((dtype, target))
+with open("../nitpick-exceptions") as f:
+    for line in f:
+        if line.strip() == "" or line.startswith("#"):
+            continue
+        dtype, target = line.split(None, 1)
+        target = target.strip()
+        nitpick_ignore.append((dtype, target))

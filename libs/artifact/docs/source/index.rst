@@ -1,8 +1,7 @@
 vivarium.artifact Documentation
 ===============================
 
-Data artifact storage and access for the
-`vivarium <https://github.com/ihmeuw/vivarium-suite>`_ simulation framework.
+Data artifact storage and access.
 
 .. toctree::
    :maxdepth: 2

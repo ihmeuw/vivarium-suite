@@ -1,6 +1,8 @@
 """Smoke tests for the ``vivarium-artifact`` distribution."""
 
 import vivarium.artifact
+from vivarium.artifact import artifact as artifact_module
+from vivarium.artifact import hdf as hdf_module
 
 
 def test_version_resolves_to_installed_distribution() -> None:
@@ -17,19 +19,15 @@ def test_version_resolves_to_installed_distribution() -> None:
     Version(vivarium.artifact.__version__)
 
 
-def test_public_api_reexports() -> None:
-    """Verify each documented re-export is reachable on the package.
+def test_public_api_reexports_resolve_to_source_symbols() -> None:
+    """Verify package-root re-exports are the same objects as in their source modules.
 
-    A regression that removes a name from ``__init__.py`` raises
-    ``AttributeError`` here with the specific missing name in the message.
+    A drift in ``__init__.py`` (e.g. shadowing ``Artifact`` with a local stub)
+    would pass a bare ``getattr`` check but fail identity here.
     """
-    expected = (
-        "Artifact",
-        "ArtifactException",
-        "EntityKey",
-    )
-    for name in expected:
-        getattr(vivarium.artifact, name)
+    assert vivarium.artifact.Artifact is artifact_module.Artifact
+    assert vivarium.artifact.ArtifactException is artifact_module.ArtifactException
+    assert vivarium.artifact.EntityKey is hdf_module.EntityKey
 
 
 def test_submodules_importable() -> None:
@@ -37,7 +35,4 @@ def test_submodules_importable() -> None:
     resolve, including the cross-module ``from vivarium.artifact import hdf``
     rewrite done during the extract.
     """
-    from vivarium.artifact import artifact, hdf
-
-    assert artifact is not None
-    assert hdf is not None
+    assert artifact_module.hdf is hdf_module

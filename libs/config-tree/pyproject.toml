@@ -53,7 +53,7 @@ include = ["vivarium.config_tree", "vivarium.config_tree.*"]
 
 [tool.setuptools_scm]
 # Monorepo tagging convention: tags must be prefixed with "vivarium-config-tree-v"
-# (e.g. vivarium-config-tree-v5.0.0). tag_regex strips the prefix so
+# (e.g. ``vivarium-config-tree-v5.0.0``). tag_regex strips the prefix so
 # setuptools_scm sees a clean semver; git_describe_command filters to only
 # this lib's tags so siblings' releases don't pollute the version derivation.
 root = "../.."

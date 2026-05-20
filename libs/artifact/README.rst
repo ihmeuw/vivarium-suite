@@ -15,7 +15,11 @@ A data artifact is an archive on disk that packages data. This package provides:
 - ``Artifact``: the in-memory model wrapping the on-disk archive
 - ``ArtifactException``: raised on inconsistent artifact use
 - ``EntityKey``: the structured key type used to address artifact contents
-- HDF5 read/write/load/remove free functions for direct backend access
+
+The above names are re-exported at the package root (``from vivarium.artifact
+import Artifact``). The HDF5 backend (``touch`` / ``write`` / ``load`` /
+``remove`` / ``get_keys``) is reachable from the ``vivarium.artifact.hdf``
+submodule for direct backend access.
 
 .. note::
     

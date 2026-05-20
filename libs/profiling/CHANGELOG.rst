@@ -1,6 +1,7 @@
 **0.4.9 - 05/20/26**
 
 - Tighten tag pattern
+- Tighten setuptools include pattern (avoid matching hypothetical sibling packages)
 - Pin vivarium_build_utils to epic/monorepo branch (temporary)
 
 **0.4.8 - 05/19/26**
