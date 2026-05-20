@@ -1,3 +1,7 @@
+**3.1.5 - 05/20/26**
+
+- Add tests covering the ``backup_freq=None`` (no-backup) code path
+
 **3.1.4 - 05/18/26**
 
 - Fix mypy error for generic ParamType in cli_tools
