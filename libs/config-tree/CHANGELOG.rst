@@ -1,6 +1,7 @@
 **5.0.5 - 05/20/26**
 
 - Tighten tag pattern
+- Pin vivarium_build_utils to epic/monorepo branch (temporary)
 
 **5.0.4 - 05/19/26**
 

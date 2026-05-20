@@ -19,7 +19,8 @@ dependencies = [
     # version bump.
     "vivarium-compat>=0.3.1",
     "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
-    "vivarium-build-utils>=3.0.2,<4.0.0",
+    # FIXME [MIC-7015]: temporary pin until branch is merged
+    "vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo",
     "vivarium-gbd-mapping>=6.0.0",
     "vivarium>=4.1.2",
     "vivarium-public-health>=5.0.0",

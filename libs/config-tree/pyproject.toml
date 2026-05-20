@@ -12,7 +12,8 @@ authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
     "vivarium-dependencies[pyyaml]",
-    "vivarium-build-utils>=3.0.2,<4.0.0",
+    # FIXME [MIC-7015]: temporary pin until branch is merged
+    "vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo",
 ]
 
 [project.optional-dependencies]
