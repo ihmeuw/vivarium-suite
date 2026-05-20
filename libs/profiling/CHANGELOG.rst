@@ -1,3 +1,7 @@
+**0.4.9 - 05/20/26**
+
+- Tighten tag pattern
+
 **0.4.8 - 05/19/26**
 
 - Update old-style imports and dependencies

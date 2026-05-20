@@ -1,3 +1,7 @@
+**5.0.5 - 05/20/26**
+
+- Tighten tag pattern
+
 **5.0.4 - 05/19/26**
 
 - Update LICENSE file

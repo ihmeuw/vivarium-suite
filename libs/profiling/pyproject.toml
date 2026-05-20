@@ -64,7 +64,7 @@ where = ["src"]
 # canonical vivarium/__init__.py with backward-compat re-exports. If we shipped
 # our own here, pip would overwrite the canonical one and break imports like
 # `from vivarium import Component`.
-include = ["vivarium.profiling*"]
+include = ["vivarium.profiling", "vivarium.profiling.*"]
 
 [tool.setuptools.package-data]
 # Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
@@ -73,12 +73,12 @@ include = ["vivarium.profiling*"]
 "vivarium.profiling" = ["py.typed"]
 
 [tool.setuptools_scm]
-# Monorepo tagging convention: tags are prefixed with "vivarium-profiling-"
-# (e.g. vivarium-profiling-v0.4.0). tag_regex strips the prefix so
-# setuptools_scm sees a clean semver; git_describe_command filters to only
-# this lib's tags so siblings' releases don't pollute the version derivation.
+# Monorepo tagging convention: tags must be prefixed with "vivarium-profiling-v"
+# (e.g. vivarium-profiling-v0.4.0). tag_regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so siblings'
+# releases don't pollute the version derivation.
 root = "../.."
-tag_regex = '^vivarium-profiling-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+tag_regex = '^vivarium-profiling-v(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-profiling-v*"'
 fallback_version = "0.0.0+no-git-tag"
 

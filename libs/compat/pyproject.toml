@@ -30,7 +30,7 @@ source = "vcs"
 # Resolve the git root from the monorepo, not this lib directory.
 root = "../.."
 # Match only this lib's tags so other libs' tags don't drive our version.
-tag_regex = '^vivarium-compat-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+tag_regex = '^vivarium-compat-v(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-compat-v*"'
 fallback_version = "0.0.0+no-git-tag"
 
