@@ -5,13 +5,13 @@ from unittest.mock import MagicMock, call
 import pytest
 import pytest_mock
 
-from vivarium.framework.artifact.artifact import (
+from vivarium.artifact.artifact import (
     Artifact,
     ArtifactException,
     _parse_draw_filters,
     _to_tree,
 )
-from vivarium.framework.artifact.hdf import EntityKey
+from vivarium.artifact.hdf import EntityKey
 
 
 @pytest.fixture()
@@ -57,7 +57,7 @@ def keys_mock() -> list[str]:
 
 @pytest.fixture()
 def hdf_mock(mocker: pytest_mock.MockFixture, keys_mock: list[str]) -> MagicMock:
-    mock = mocker.patch("vivarium.framework.artifact.artifact.hdf")
+    mock = mocker.patch("vivarium.artifact.artifact.hdf")
 
     def mock_load(_: Any, key: str, __: Any, ___: Any) -> list[str] | str | None:
         if key in keys_mock:

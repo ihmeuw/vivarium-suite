@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from vivarium.framework.artifact import hdf
+from vivarium.artifact import hdf
 
 
 class ArtifactException(Exception):
@@ -27,7 +27,12 @@ class ArtifactException(Exception):
 
 
 class Artifact:
-    """An interface for interacting with :mod:`vivarium` artifacts."""
+    """In-memory handle for a :mod:`vivarium` data artifact archive on disk.
+
+    Wraps the underlying HDF5 file and provides keyed read/write/load access to
+    the data it contains. This is the data-model class; for the simulation-lifecycle
+    integration see ``ArtifactManager`` and ``ArtifactInterface`` in :mod:`vivarium.framework.artifact`.
+    """
 
     def __init__(self, path: str | Path, filter_terms: list[str] | None = None) -> None:
         """

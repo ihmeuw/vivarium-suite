@@ -11,9 +11,8 @@ from pytest_mock import MockerFixture
 from tables.file import File
 from tables.nodes import filenode
 
-from vivarium.framework.artifact import hdf
-from vivarium.framework.artifact.hdf import EntityKey
-from vivarium.testing_utilities import build_table
+from vivarium.artifact import hdf
+from vivarium.artifact.hdf import EntityKey
 
 _KEYS = [
     "population.age_bins",
@@ -57,7 +56,7 @@ def json_data(request: pytest.FixtureRequest) -> Any:
 
 def test_touch_no_file(mocker: MockerFixture) -> None:
     path = Path("not/an/existing/path.hdf")
-    tables_mock = mocker.patch("vivarium.framework.artifact.hdf.tables")
+    tables_mock = mocker.patch("vivarium.artifact.hdf.tables")
 
     hdf.touch(path)
     tables_mock.open_file.assert_called_once_with(str(path), mode="w")
@@ -86,7 +85,7 @@ def test_touch_existing_file(tmpdir: Path) -> None:
 
 
 def test_write_df(hdf_file_path: Path, mock_key: EntityKey, mocker: MockerFixture) -> None:
-    df_mock = mocker.patch("vivarium.framework.artifact.hdf._write_pandas_data")
+    df_mock = mocker.patch("vivarium.artifact.hdf._write_pandas_data")
     data = pd.DataFrame(np.random.random((10, 3)), columns=["a", "b", "c"], index=range(10))
 
     hdf.write(hdf_file_path, mock_key, data)
@@ -97,7 +96,7 @@ def test_write_df(hdf_file_path: Path, mock_key: EntityKey, mocker: MockerFixtur
 def test_write_json(
     hdf_file_path: Path, mock_key: EntityKey, json_data: list[str], mocker: MockerFixture
 ) -> None:
-    json_mock = mocker.patch("vivarium.framework.artifact.hdf._write_json_blob")
+    json_mock = mocker.patch("vivarium.artifact.hdf._write_json_blob")
     hdf.write(hdf_file_path, mock_key, json_data)
     json_mock.assert_called_once_with(hdf_file_path, mock_key, json_data)
 
@@ -206,13 +205,17 @@ def test_write_load_empty_data_frame_index(hdf_file_path: Path) -> None:
 
 def test_write_data_frame(hdf_file_path: Path) -> None:
     key = hdf.EntityKey("cause.test.prevalence")
-    data = build_table(
-        lambda x: random.choice([0, 1]),
-        key_columns={"draw": [0, 1], "location": ["Kenya"]},
+    # A multi-indexed DataFrame with a "draw" column so the where="draw == 0"
+    # filter test below has something to slice on. The exact axes / values
+    # don't matter for the round-trip; we just need a non-trivial frame.
+    index = pd.MultiIndex.from_product(
+        [range(5), range(2020, 2022), [0, 1], ["Kenya"]],
+        names=["age", "year", "draw", "location"],
     )
-
-    non_val_columns = data.columns.difference(["value"])
-    data = data.set_index(list(non_val_columns))
+    data = pd.DataFrame(
+        {"value": [random.choice([0, 1]) for _ in range(len(index))]},
+        index=index,
+    )
 
     hdf._write_pandas_data(hdf_file_path, key, data)
 

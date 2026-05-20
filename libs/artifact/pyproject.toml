@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-artifact"
+description = "Data artifact storage and access for the vivarium simulation framework."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+dependencies = [
+    "vivarium-dependencies[pandas,tables]",
+    "vivarium-build-utils>=3.0.2,<4.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "vivarium-dependencies[pytest,numpy]",
+    "vivarium-testing-utils",
+]
+docs = ["vivarium-dependencies[sphinx]"]
+interactive = []
+lint = ["vivarium-dependencies[lint]"]
+dev = ["vivarium-artifact[docs,interactive,test,lint]"]
+cluster = []
+ci_github = ["vivarium-artifact[test,docs,lint]"]
+ci_jenkins = ["vivarium-artifact[ci_github,cluster]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.artifact and its subpackages. Excluding vivarium itself
+# means the wheel does not ship vivarium/__init__.py. The "namespace owner"
+# (standalone vivarium today, vivarium-core post-monorepo-migration) ships the
+# canonical vivarium/__init__.py with backward-compat re-exports. If we shipped
+# our own here, pip would overwrite the canonical one and break imports like
+# `from vivarium import Component`.
+include = [
+    "vivarium.artifact",
+    "vivarium.artifact.*",
+]
+
+[tool.setuptools.package-data]
+# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
+# users install it from PyPI and so mypy also finds the marker via the
+# editable install during in-repo type checks.
+"vivarium.artifact" = ["py.typed"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with ``vivarium-artifact-v``
+# (e.g. ``vivarium-artifact-v1.0.0``). The regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so siblings'
+# releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-artifact-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-artifact-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3
+
+[tool.mypy]
+# WARNING: settings here that aren't mypy_path / explicit_package_bases must be
+# kept in sync manually with the monorepo-root [tool.mypy]. The local
+# `make mypy` passes --config-file pyproject.toml (this file), so mypy doesn't
+# read the root config. If you change the root, change this too.
+#
+# mypy_path lets absolute self-imports (e.g. "from vivarium.artifact import X")
+# resolve to the source tree rather than the PEP 660 editable install (which
+# hides files like py.typed behind a finder, making mypy think the package is
+# untyped).
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = ["build"]
+mypy_path = "src"
+explicit_package_bases = true
