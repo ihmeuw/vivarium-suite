@@ -3,84 +3,59 @@ requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vivarium-profiling"
-description = "Profiling and benchmarking tools for Vivarium simulations."
+name = "vivarium-artifact"
+description = "Data artifact storage and access for the vivarium simulation framework."
 readme = "README.rst"
 requires-python = ">=3.10"
 license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
-    # vivarium-compat is a transitional dep: it installs the import hook that
-    # redirects `import vivarium_profiling` to `vivarium.profiling`. Declaring
-    # it here means anyone pulling in vivarium-profiling ends up with the redirect
-    # in place. When compat is eventually retired (see
-    # libs/compat/tests/test_removal_deadline.py) we drop this entry in a major
-    # version bump.
-    "vivarium-compat>=0.3.1",
-    "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
+    "vivarium-dependencies[pandas,tables]",
     # FIXME [MIC-7015]: temporary pin until branch is merged
     "vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo",
-    "vivarium-gbd-mapping>=6.0.0",
-    "vivarium>=4.1.2",
-    "vivarium-public-health>=5.0.0",
-    "vivarium-config-tree>=5.0.1",
-    "jinja2",
-    "pyyaml",
-    "memory-profiler",
-    "matplotlib",
-    "seaborn",
-    "scalene",
-    "nbformat>=5.0",
 ]
 
 [project.optional-dependencies]
 test = [
-    "vivarium-dependencies[pytest]",
+    "vivarium-dependencies[pytest,numpy]",
     "vivarium-testing-utils",
 ]
-cluster = ["vivarium-cluster-tools>=2.1.17"]
-docs = []
-data = [
-    "vivarium-inputs>=5.2.6",
-    "vivarium-profiling[cluster]",
-]
-interactive = ["vivarium-dependencies[interactive]"]
+docs = ["vivarium-dependencies[sphinx]"]
+interactive = []
 lint = ["vivarium-dependencies[lint]"]
-dev = ["vivarium-profiling[test,cluster,interactive,lint]"]
-ci_github = ["vivarium-profiling[test,docs,lint]"]
-ci_jenkins = ["vivarium-profiling[ci_github,cluster]"]
-
-[project.scripts]
-make_artifacts = "vivarium.profiling.tools.cli:make_artifacts"
-run_benchmark = "vivarium.profiling.tools.cli:run_benchmark"
-profile_sim = "vivarium.profiling.tools.cli:profile_sim"
-summarize = "vivarium.profiling.tools.cli:summarize"
+dev = ["vivarium-artifact[docs,interactive,test,lint]"]
+cluster = []
+ci_github = ["vivarium-artifact[test,docs,lint]"]
+ci_jenkins = ["vivarium-artifact[ci_github,cluster]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# Only include vivarium.profiling and its subpackages. Excluding vivarium itself
+# Only include vivarium.artifact and its subpackages. Excluding vivarium itself
 # means the wheel does not ship vivarium/__init__.py. The "namespace owner"
 # (standalone vivarium today, vivarium-core post-monorepo-migration) ships the
 # canonical vivarium/__init__.py with backward-compat re-exports. If we shipped
 # our own here, pip would overwrite the canonical one and break imports like
 # `from vivarium import Component`.
-include = ["vivarium.profiling", "vivarium.profiling.*"]
+include = [
+    "vivarium.artifact",
+    "vivarium.artifact.*",
+]
 
 [tool.setuptools.package-data]
 # Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
 # users install it from PyPI and so mypy also finds the marker via the
 # editable install during in-repo type checks.
-"vivarium.profiling" = ["py.typed"]
+"vivarium.artifact" = ["py.typed"]
 
 [tool.setuptools_scm]
-# Monorepo tagging convention: tags must be prefixed with "vivarium-profiling-v"
-# (e.g. vivarium-profiling-v0.4.0). tag_regex strips the prefix so setuptools_scm
+# Monorepo tagging convention: tags must be prefixed with ``vivarium-artifact-v``
+# (e.g. ``vivarium-artifact-v1.0.0``). The regex strips the prefix so setuptools_scm
 # sees a clean semver; git_describe_command filters to only this lib's tags so siblings'
 # releases don't pollute the version derivation.
 root = "../.."
-tag_regex = '^vivarium-profiling-v(?P<version>[^\+]+)$'
-git_describe_command = 'git describe --dirty --tags --long --match "vivarium-profiling-v*"'
+tag_regex = '^vivarium-artifact-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-artifact-v*"'
 fallback_version = "0.0.0+no-git-tag"
 
 [tool.black]
@@ -97,7 +72,7 @@ multi_line_output = 3
 # `make mypy` passes --config-file pyproject.toml (this file), so mypy doesn't
 # read the root config. If you change the root, change this too.
 #
-# mypy_path lets absolute self-imports (e.g. "from vivarium.config_tree import X")
+# mypy_path lets absolute self-imports (e.g. "from vivarium.artifact import X")
 # resolve to the source tree rather than the PEP 660 editable install (which
 # hides files like py.typed behind a finder, making mypy think the package is
 # untyped).
@@ -107,3 +82,10 @@ implicit_reexport = true
 exclude = ["build"]
 mypy_path = "src"
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# pytables (the ``tables`` package) doesn't ship a py.typed marker or stubs.
+# Without this override, strict mypy raises "import-untyped" errors for every
+# ``import tables`` line. Treat the package as Any-typed.
+module = ["tables", "tables.*"]
+ignore_missing_imports = true

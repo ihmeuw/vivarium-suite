@@ -11,6 +11,8 @@
 # serve to show the default.
 
 import datetime
+import os
+import subprocess
 import sys
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -23,11 +25,39 @@ from sphinx.ext.intersphinx import missing_reference
 
 import vivarium.risk_distributions
 
+
+def _copyright_end_year() -> str:
+    """Resolve the copyright end year for reproducible docs builds.
+
+    Two builds of the same git SHA must produce identical output, which rules
+    out ``datetime.date.today().year``. Order of precedence:
+
+    1. ``SOURCE_DATE_EPOCH`` (reproducible-builds standard).
+    2. Year of the HEAD commit (stable for a given SHA).
+    3. Current year (fallback for sdist / detached source builds).
+    """
+    if epoch := os.environ.get("SOURCE_DATE_EPOCH"):
+        return datetime.datetime.fromtimestamp(
+            int(epoch), tz=datetime.timezone.utc
+        ).strftime("%Y")
+    try:
+        out = subprocess.check_output(
+            ["git", "log", "-1", "--format=%cd", "--date=format:%Y"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        if out:
+            return out
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+    return str(datetime.date.today().year)
+
+
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.risk_distributions"
 author = "The vivarium developers"
-copyright = f"2022-{datetime.date.today().year}, Institute for Health Metrics and Evaluation"
+copyright = f"2022-{_copyright_end_year()}, Institute for Health Metrics and Evaluation"
 
 version = vivarium.risk_distributions.__version__
 release = vivarium.risk_distributions.__version__
@@ -105,6 +135,8 @@ html_theme = "sphinx_rtd_theme"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
+
+html_css_files = ["style.css"]
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.

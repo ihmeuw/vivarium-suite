@@ -1,3 +1,7 @@
+**0.5.2 - 05/20/26**
+
+- Tighten tag pattern
+
 **0.5.1 - 05/19/26**
 
 - add license and authors to pyproject.toml

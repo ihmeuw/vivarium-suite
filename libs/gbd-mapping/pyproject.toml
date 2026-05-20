@@ -12,7 +12,8 @@ authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
     "vivarium-dependencies[pandas,numpy,click]",
-    "vivarium-build-utils>=3.0.2,<4.0.0",
+    # FIXME [MIC-7015]: temporary pin until branch is merged
+    "vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo",
     "pyyaml",
 ]
 
@@ -56,11 +57,10 @@ include = [
 ]
 
 [tool.setuptools_scm]
-# Monorepo tagging convention: tags must be prefixed with
-# ``vivarium-gbd-mapping-v`` (e.g. ``vivarium-gbd-mapping-v6.0.0``). The
-# regex strips the prefix so setuptools_scm sees a clean semver;
-# git_describe_command filters to only this lib's tags so siblings' releases
-# don't pollute the version derivation.
+# Monorepo tagging convention: tags must be prefixed with ``vivarium-gbd-mapping-v``
+# (e.g. ``vivarium-gbd-mapping-v6.0.0``). The regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so siblings'
+# releases don't pollute the version derivation.
 root = "../.."
 tag_regex = '^vivarium-gbd-mapping-v(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-gbd-mapping-v*"'

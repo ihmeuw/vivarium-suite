@@ -1,0 +1,16 @@
+# Python 3.13 refactored pathlib internals: type hints that resolve to
+# pathlib.Path at the source level get resolved to pathlib._local.Path at
+# runtime, and Sphinx autodoc inspects the runtime type. Python's intersphinx
+# inventory only exposes pathlib.Path (the public name), not the internal
+# alias, so nitpicky mode flags every Path-typed argument. Suppress.
+py:class pathlib._local.Path
+
+# pytables nodes module isn't documented externally; autodoc references the
+# filenode helper for HDF blob writes but there's no public inventory.
+py:class tables.nodes.filenode.RAFileNode
+
+# TEMPORARY: the Artifact docstring references vivarium_engine.framework.artifact,
+# but vivarium_engine has not yet been migrated into the monorepo, so no
+# intersphinx inventory exists for it. Remove this entry once vivarium_engine
+# ships and is added to intersphinx_mapping in conf.py.
+py:mod vivarium_engine.framework.artifact

@@ -12,7 +12,8 @@ authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
     "vivarium-dependencies[pyyaml]",
-    "vivarium-build-utils>=3.0.2,<4.0.0",
+    # FIXME [MIC-7015]: temporary pin until branch is merged
+    "vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo",
 ]
 
 [project.optional-dependencies]
@@ -42,7 +43,7 @@ where = ["src"]
 # canonical vivarium/__init__.py with backward-compat re-exports. If we shipped
 # our own here, pip would overwrite the canonical one and break imports like
 # `from vivarium import Component`.
-include = ["vivarium.config_tree*"]
+include = ["vivarium.config_tree", "vivarium.config_tree.*"]
 
 [tool.setuptools.package-data]
 # Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
@@ -51,12 +52,12 @@ include = ["vivarium.config_tree*"]
 "vivarium.config_tree" = ["py.typed"]
 
 [tool.setuptools_scm]
-# Monorepo tagging convention: tags are prefixed with "vivarium-config-tree-"
-# (e.g. vivarium-config-tree-v5.0.0). tag_regex strips the prefix so
+# Monorepo tagging convention: tags must be prefixed with "vivarium-config-tree-v"
+# (e.g. ``vivarium-config-tree-v5.0.0``). tag_regex strips the prefix so
 # setuptools_scm sees a clean semver; git_describe_command filters to only
 # this lib's tags so siblings' releases don't pollute the version derivation.
 root = "../.."
-tag_regex = '^vivarium-config-tree-(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+tag_regex = '^vivarium-config-tree-v(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-config-tree-v*"'
 fallback_version = "0.0.0+no-git-tag"
 
