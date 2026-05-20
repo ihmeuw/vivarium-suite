@@ -37,6 +37,9 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
 - ``continuous-integration`` — catalogues the vivarium-suite CI setup.
 - ``team-conventions`` — SimSci Engineering conventions for everyday change
   flow.
+- ``framework-clis`` — reference for the vivarium-ecosystem console scripts
+  (``simulate``, ``psimulate``, ``vipin``, per-repo ``make_artifacts``,
+  ``update_gbd_round``) available in a standard model-repo env.
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
