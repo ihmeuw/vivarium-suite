@@ -1,4 +1,4 @@
-**0.6.0 - 05/19/26**
+**0.6.0 - 05/20/26**
 
  - Add ``framework-clis`` skill covering vivarium console scripts on PATH in a model-repo env
  
