@@ -7,12 +7,11 @@ description: Reference for the vivarium pytest setup. Use this skill when runnin
 
 ## Running tests in a vivarium repo
 
-The recommended way to run tests is via `make test-*` targets, which include coverage reporting and built-in support for several markers. For quick iteration on a single test, running individual pytest commands is acceptable. In general, you should start by testing narrowly within the scope of the current task, and run a more comprehensive make command (e.g. make check or make test-all) before major workflow points like submitting a pull request.
+The recommended way to run tests is via `make test-*` targets, which include coverage reporting and built-in support for several markers. For quick iteration on a single test, running individual pytest commands is acceptable. In general, you should start by testing narrowly within the scope of the current task, and run a more comprehensive make command (e.g. make test-all) before major workflow points like submitting a pull request.
 
 **`make test-*` targets:**
 
 ```
-make check                 # formatting, typecheck, and test (fast tests only)
 make test-all              # everything
 make test-unit             # only tests/unit/
 make test-integration      # only tests/integration/
