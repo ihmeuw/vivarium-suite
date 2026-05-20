@@ -1,6 +1,7 @@
 **0.6.0 - 05/20/26**
 
  - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
+ - Add ``framework-clis`` skill covering vivarium console scripts on PATH in a model-repo env
  
 **0.5.1 - 05/19/26**
 
