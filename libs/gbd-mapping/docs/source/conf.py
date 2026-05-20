@@ -11,20 +11,49 @@
 # serve to show the default.
 
 import datetime
+import os
+import subprocess
 
 from docutils.nodes import Text
 from sphinx.ext.intersphinx import missing_reference
 
 import vivarium.gbd_mapping
 
+
+def _copyright_end_year() -> str:
+    """Resolve the copyright end year for reproducible docs builds.
+
+    Two builds of the same git SHA must produce identical output, which rules
+    out ``datetime.date.today().year``. Order of precedence:
+
+    1. ``SOURCE_DATE_EPOCH`` (reproducible-builds standard).
+    2. Year of the HEAD commit (stable for a given SHA).
+    3. Current year (fallback for sdist / detached source builds).
+    """
+    if epoch := os.environ.get("SOURCE_DATE_EPOCH"):
+        return datetime.datetime.fromtimestamp(
+            int(epoch), tz=datetime.timezone.utc
+        ).strftime("%Y")
+    try:
+        out = subprocess.check_output(
+            ["git", "log", "-1", "--format=%cd", "--date=format:%Y"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        if out:
+            return out
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+    return str(datetime.date.today().year)
+
+
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.gbd_mapping"
 author = "The vivarium developers"
 # Copyright start year mirrors the LICENSE file (first publication year of
-# the standalone gbd_mapping package). End year tracks the current build to
-# signal active maintenance.
-copyright = f"2016-{datetime.date.today().year}, Institute for Health Metrics and Evaluation"
+# the standalone gbd_mapping package).
+copyright = f"2016-{_copyright_end_year()}, Institute for Health Metrics and Evaluation"
 
 # The short X.Y version.
 version = vivarium.gbd_mapping.__version__

@@ -4,6 +4,7 @@
 - Tighten setuptools include pattern (avoid matching hypothetical sibling packages)
 - Pin vivarium_build_utils to epic/monorepo branch (temporary)
 - Use style.css for docs
+- Calculate current year more robustly in docs/conf.py
 
 **3.0.2 - 05/19/26**
 
