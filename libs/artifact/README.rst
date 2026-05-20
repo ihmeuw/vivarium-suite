@@ -1,6 +1,6 @@
-================
+=================
 vivarium.artifact
-================
+=================
 
 Data artifact storage and access.
 
