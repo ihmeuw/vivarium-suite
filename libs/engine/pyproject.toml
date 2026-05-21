@@ -90,11 +90,13 @@ fallback_version = "0.0.0+no-git-tag"
 
 [tool.black]
 line-length = 94
+exclude = '''.*examples.*'''
 
 [tool.isort]
 profile = "black"
 line_length = 94
 multi_line_output = 3
+skip_glob = ["*/examples/*", "**/examples/*"]
 
 [tool.mypy]
 # WARNING: settings here that aren't mypy_path / explicit_package_bases must be
@@ -112,6 +114,18 @@ implicit_reexport = true
 exclude = ["build"]
 mypy_path = "src"
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# 3rd-party packages that don't ship type stubs. Treat them as Any-typed
+# so strict mypy doesn't raise "import-untyped" errors at every import site.
+module = [
+    "scipy.*",
+    "ipywidgets.*",
+    "IPython.*",
+    "dill",
+    "tables.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests/"]
