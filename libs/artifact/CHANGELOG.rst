@@ -1,3 +1,9 @@
+**1.0.1 - 05/21/26**
+
+- Migrate the Artifact tutorial from vivarium (engine) docs
+- Fix docstring reference
+- Replace stale nitpick exception
+
 **1.0.0 - 05/20/26**
 
 Initial release as a standalone package extracted from ``vivarium``. Provides
