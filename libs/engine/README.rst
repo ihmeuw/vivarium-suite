@@ -17,7 +17,14 @@ Installation
 
 **Supported Python versions: 3.10, 3.11, 3.12**
 
-You can install ``vivarium`` from PyPI with pip:
+.. note::
+
+    If you have an older version of ``vivarium`` installed, you should uninstall
+    it before installing ``vivarium-engine``. If you have both packages installed,
+    you may see deprecation warnings when importing from ``vivarium`` and it's possible
+    that some imports will break if they hit the old package's on-disk location instead of the new one.
+
+You can install ``vivarium-engine`` from PyPI with pip:
 
 .. code-block:: bash
 

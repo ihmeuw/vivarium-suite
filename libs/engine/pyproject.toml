@@ -63,9 +63,14 @@ simulate = "vivarium.engine.interface.cli:simulate"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# Only include vivarium.engine and its subpackages. Excluding vivarium itself
-# means the wheel does not ship vivarium/__init__.py beyond the namespace marker.
+# vivarium-engine owns the ``vivarium`` namespace's __init__.py: it ships the
+# pkgutil ``extend_path`` namespace marker AND re-exports the top-level
+# attributes (Component, Artifact, etc.) that the pre-monorepo ``vivarium``
+# package exposed. Sibling libs (vivarium-artifact, vivarium-config-tree, ...)
+# deliberately do NOT ship a ``vivarium/__init__.py`` to avoid file conflicts
+# at install time.
 include = [
+    "vivarium",
     "vivarium.engine",
     "vivarium.engine.*",
 ]
