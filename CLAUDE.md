@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Code Style
+
+On our team, we type-hint all new python code. We generally use NumPy Doc style, with the exception that we do not add types in the dosctrings for parameters or returns, since they are given by the type hinting. Don't add a return section if the function returns None. Always add a full docstring to new public methods and functions, but for private methods and functions a single line is usually sufficient. Docstrings should be in the imperative mood.
+
 ## Repository shape
 
 Monorepo for the Vivarium framework. Each subdirectory under `libs/` is an independently versioned and released Python package; the root itself is *not* a Python package. The root `pyproject.toml` only holds shared lint config (`black`, `isort`, `mypy`). Almost all work happens inside one `libs/<pkg>/` directory.
