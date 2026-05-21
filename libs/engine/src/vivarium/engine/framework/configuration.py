@@ -12,19 +12,20 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from layered_config_tree import ConfigurationError, LayeredConfigTree
+from vivarium.config_tree import ConfigurationError
+from vivarium.config_tree import ConfigTree
 
 from vivarium.engine.framework.plugins import DEFAULT_PLUGINS
 
 
 def build_model_specification(
-    model_specification: str | Path | LayeredConfigTree | None = None,
-    component_configuration: dict[str, Any] | LayeredConfigTree | None = None,
-    configuration: dict[str, Any] | LayeredConfigTree | None = None,
+    model_specification: str | Path | ConfigTree | None = None,
+    component_configuration: dict[str, Any] | ConfigTree | None = None,
+    configuration: dict[str, Any] | ConfigTree | None = None,
     plugin_configuration: dict[str, dict[str, dict[str, str]]]
-    | LayeredConfigTree
+    | ConfigTree
     | None = None,
-) -> LayeredConfigTree:
+) -> ConfigTree:
     if isinstance(model_specification, (str, Path)):
         validate_model_specification_file(model_specification)
         source = str(model_specification)
@@ -74,11 +75,11 @@ def validate_model_specification_file(file_path: str | Path) -> None:
         )
 
 
-def build_simulation_configuration() -> LayeredConfigTree:
+def build_simulation_configuration() -> ConfigTree:
     return _get_default_specification().get_tree("configuration")
 
 
-def _get_default_specification() -> LayeredConfigTree:
+def _get_default_specification() -> ConfigTree:
     default_config_layers = [
         "base",
         "user_configs",
@@ -88,7 +89,7 @@ def _get_default_specification() -> LayeredConfigTree:
     ]
     default_metadata = {"layer": "base", "source": "vivarium_defaults"}
 
-    model_specification = LayeredConfigTree(layers=default_config_layers)
+    model_specification = ConfigTree(layers=default_config_layers)
     model_specification.update(DEFAULT_PLUGINS, **default_metadata)
     model_specification.update({"components": {}, "configuration": {}})
 

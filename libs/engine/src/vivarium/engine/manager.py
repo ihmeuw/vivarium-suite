@@ -39,7 +39,7 @@ class Manager(ABC):
         managed by this manager.
 
         These default values will be stored at the `component_configs` layer of the
-        simulation's LayeredConfigTree.
+        simulation's ConfigTree.
         """
         return self.CONFIGURATION_DEFAULTS
 

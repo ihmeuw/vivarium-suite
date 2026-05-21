@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 import pytest
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import MockComponentA, MockManager
@@ -17,12 +17,12 @@ plugin_config = {"george": {"controller": "big_brother", "builder_interface": "m
 
 
 @pytest.fixture
-def test_plugin_manager(model_specification: LayeredConfigTree) -> PluginManager:
+def test_plugin_manager(model_specification: ConfigTree) -> PluginManager:
     model_specification.plugins.optional.update(plugin_config)
     return PluginManager(model_specification.plugins)
 
 
-def test_PluginManager_initializaiton(model_specification: LayeredConfigTree) -> None:
+def test_PluginManager_initializaiton(model_specification: ConfigTree) -> None:
     model_specification.plugins.optional.update(plugin_config)
     plugin_manager = PluginManager(model_specification.plugins)
 

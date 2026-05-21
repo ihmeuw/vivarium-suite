@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, overload
 
 import pandas as pd
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -73,7 +73,7 @@ class LookupTableManager(Manager):
     def on_post_setup(self, event: Event) -> None:
         configured_lookup_tables: dict[str, list[str]] = {}
         for config_key, config in self._configuration.items():
-            if isinstance(config, LayeredConfigTree) and "data_sources" in config:
+            if isinstance(config, ConfigTree) and "data_sources" in config:
                 configured_lookup_tables[config_key] = list(
                     config.get_tree("data_sources").keys()
                 )

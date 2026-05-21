@@ -178,7 +178,7 @@ Let's step through the ``setup`` method and examine what's happening.
    :end-before: # docs-end: setup
 
 To start, we simply grab a copy of the simulation
-:class:`configuration <layered_config_tree.main.LayeredConfigTree>`. This is essentially
+:class:`configuration <vivarium.config_tree.main.ConfigTree>`. This is essentially
 a dictionary that supports ``.``-access notation.
 
 The next handful of lines interact with Vivarium's

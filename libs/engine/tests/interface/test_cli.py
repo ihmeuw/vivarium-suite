@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 from click.testing import CliRunner
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 
 from tests.framework.results.helpers import HARRY_POTTER_CONFIG
 from vivarium.engine.interface.cli import simulate
@@ -15,7 +15,7 @@ def runner() -> CliRunner:
 
 
 @pytest.fixture
-def model_spec(base_config: LayeredConfigTree, tmp_path: Path) -> str:
+def model_spec(base_config: ConfigTree, tmp_path: Path) -> str:
     base_config.update(HARRY_POTTER_CONFIG)
     model_spec = {}
     model_spec["configuration"] = base_config.to_dict()

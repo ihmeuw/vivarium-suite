@@ -5,7 +5,7 @@ from unittest.mock import Mock, call
 import pytest
 import yaml
 from _pytest.monkeypatch import MonkeyPatch
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.main import ConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import MockComponentA, MockComponentB
@@ -170,6 +170,6 @@ def test_get_components(parser: ComponentConfigurationParser, components: str) -
 def test_components_invalid_config(
     parser: ComponentConfigurationParser, config: str, error_message: str
 ) -> None:
-    bad_config = LayeredConfigTree(yaml.full_load(config))["components"]
+    bad_config = ConfigTree(yaml.full_load(config))["components"]
     with pytest.raises(ParsingError, match=error_message):
         parser.parse_component_config(bad_config)

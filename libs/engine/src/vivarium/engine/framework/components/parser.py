@@ -4,7 +4,7 @@ The Component Configuration Parser
 ==================================
 
 The :class:`ComponentConfigurationParser` is responsible for taking a list or
-hierarchical :class:`LayeredConfigTree <layered_config_tree.main.LayeredConfigTree>` of components
+hierarchical :class:`ConfigTree <vivarium.config_tree.main.ConfigTree>` of components
 derived from a model specification yaml file and turning it into a list of
 instantiated component objects. When a model specification yaml file is loaded,
 the components come in as strings. In order for the simulation to be able to
@@ -23,7 +23,7 @@ There are three steps to this process.
 
 from typing import Union
 
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.main import ConfigTree
 
 from vivarium.engine.framework.utilities import import_by_path
 
@@ -63,7 +63,7 @@ class ComponentConfigurationParser:
     """
 
     def get_components(
-        self, component_config: LayeredConfigTree | list[str]
+        self, component_config: ConfigTree | list[str]
     ) -> list[Component]:
         """Extracts component specifications from configuration information and
         returns initialized components.
@@ -72,7 +72,7 @@ class ComponentConfigurationParser:
         validating/prepping, and importing/instantiating.
 
         The first step of parsing is only done for component configurations that
-        come in as a :class:`LayeredConfigTree <layered_config_tree.main.LayeredConfigTree>`.
+        come in as a :class:`ConfigTree <vivarium.config_tree.main.ConfigTree>`.
         Configurations that are provided in the form of a list are already
         assumed to be in the correct form.
 
@@ -88,7 +88,7 @@ class ComponentConfigurationParser:
         -------
             A list of initialized components.
         """
-        if isinstance(component_config, LayeredConfigTree):
+        if isinstance(component_config, ConfigTree):
             component_list = self.parse_component_config(component_config)
         else:  # Components were specified in a list rather than a tree.
             component_list = [
@@ -96,11 +96,11 @@ class ComponentConfigurationParser:
             ]
         return component_list
 
-    def parse_component_config(self, component_config: LayeredConfigTree) -> list[Component]:
+    def parse_component_config(self, component_config: ConfigTree) -> list[Component]:
         """
-        Helper function for parsing a ``LayeredConfigTree`` into a flat list of Components.
+        Helper function for parsing a ``ConfigTree`` into a flat list of Components.
 
-        This function converts the ``LayeredConfigTree`` into a dictionary and passes it
+        This function converts the ``ConfigTree`` into a dictionary and passes it
         along with an empty prefix list to
         :meth:`process_level <ComponentConfigurationParser.process_level>`. The
         result is a flat list of components.
@@ -108,7 +108,7 @@ class ComponentConfigurationParser:
         Parameters
         ----------
         component_config
-            A ``LayeredConfigTree`` representing a hierarchical component specification blob.
+            A ``ConfigTree`` representing a hierarchical component specification blob.
 
         Returns
         -------

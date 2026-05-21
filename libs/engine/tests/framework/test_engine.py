@@ -10,7 +10,7 @@ import dill
 import pandas as pd
 import pytest
 from _pytest.logging import LogCaptureFixture
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 
 from tests.framework.results.helpers import (
@@ -223,7 +223,7 @@ def test_SimulationContext_run_simulation(
 
 def test_SimulationContext_setup_default(
     SimulationContext: type[SimulationContext_],
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     components: list[Component],
 ) -> None:
     sim = SimulationContext(base_config, components)
@@ -268,7 +268,7 @@ def test_SimulationContext_setup_default(
 
 def test_SimulationContext_initialize_simulants(
     SimulationContext: type[SimulationContext_],
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     components: list[Component],
 ) -> None:
     sim = SimulationContext(base_config, components)
@@ -283,7 +283,7 @@ def test_SimulationContext_initialize_simulants(
 
 def test_SimulationContext_step(
     SimulationContext: type[SimulationContext_],
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     components: list[Component],
     caplog: LogCaptureFixture,
 ) -> None:
@@ -315,7 +315,7 @@ def test_SimulationContext_step(
 
 def test_SimulationContext_finalize(
     SimulationContext: type[SimulationContext_],
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     components: list[Component],
 ) -> None:
     sim = SimulationContext(base_config, components)
@@ -329,7 +329,7 @@ def test_SimulationContext_finalize(
 
 
 def test_get_results(
-    SimulationContext: type[SimulationContext_], base_config: LayeredConfigTree
+    SimulationContext: type[SimulationContext_], base_config: ConfigTree
 ) -> None:
     """Test that get_results returns expected values. This does NOT test for
     correct formatting.
@@ -350,7 +350,7 @@ def test_get_results(
 
 def test_SimulationContext_report_no_write_warning(
     SimulationContext: type[SimulationContext_],
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     caplog: LogCaptureFixture,
 ) -> None:
     components = [
@@ -372,7 +372,7 @@ def test_SimulationContext_report_no_write_warning(
 
 def test_SimulationContext_report_write(
     SimulationContext: type[SimulationContext_],
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     components: list[Component],
     tmp_path: Path,
 ) -> None:
@@ -426,7 +426,7 @@ def test_SimulationContext_write_backup(
 def test_SimulationContext_run_with_backup(
     mocker: MockerFixture,
     SimulationContext: type[SimulationContext_],
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     tmp_path: Path,
 ) -> None:
     mocked_write_backup = mocker.patch(
@@ -457,7 +457,7 @@ def test_SimulationContext_run_with_backup(
 
 
 def test_get_results_formatting(
-    SimulationContext: type[SimulationContext_], base_config: LayeredConfigTree
+    SimulationContext: type[SimulationContext_], base_config: ConfigTree
 ) -> None:
     """Test formatted results are as expected"""
     components = [

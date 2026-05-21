@@ -18,7 +18,8 @@ from inspect import signature
 from typing import TYPE_CHECKING, Any, overload
 
 import pandas as pd
-from layered_config_tree import ConfigurationError, LayeredConfigTree
+from vivarium.config_tree import ConfigurationError
+from vivarium.config_tree import ConfigTree
 
 from vivarium.engine.framework.artifact import ArtifactException
 from vivarium.engine.framework.lifecycle import LifeCycleError, lifecycle_states
@@ -98,7 +99,7 @@ class Component(ABC):
         self._name: str = ""
         self._sub_components: Sequence["Component"] = []
         self._logger: loguru.Logger | None = None
-        self.configuration: LayeredConfigTree = LayeredConfigTree()
+        self.configuration: ConfigTree = ConfigTree()
         self._population_view: PopulationView | None = None
 
     def __repr__(self) -> str:
@@ -218,7 +219,7 @@ class Component(ABC):
         by this component.
 
         These default values will be stored at the ``component_configs`` layer of the
-        simulation's :class:`~layered_config_tree.main.LayeredConfigTree`.
+        simulation's :class:`~vivarium.config_tree.main.ConfigTree`.
         """
         return self.CONFIGURATION_DEFAULTS
 
@@ -418,7 +419,7 @@ class Component(ABC):
             if hasattr(self, parameter_name)
         }
 
-    def get_configuration(self, builder: Builder) -> LayeredConfigTree:
+    def get_configuration(self, builder: Builder) -> ConfigTree:
         """Retrieves the configuration for this component from the builder.
 
         This method retrieves the configuration for this component from the
@@ -437,7 +438,7 @@ class Component(ABC):
 
         if self.name in builder.configuration:
             return builder.configuration.get_tree(self.name)
-        return LayeredConfigTree({"data_sources": {}})
+        return ConfigTree({"data_sources": {}})
 
     @overload
     def build_lookup_table(
@@ -496,7 +497,7 @@ class Component(ABC):
 
         Raises
         ------
-        layered_config_tree.exceptions.ConfigurationError
+        vivarium.config_tree.exceptions.ConfigurationError
             If the data source is invalid.
         """
         if data_source is None:
@@ -540,7 +541,7 @@ class Component(ABC):
 
         Raises
         ------
-        layered_config_tree.exceptions.ConfigurationError
+        vivarium.config_tree.exceptions.ConfigurationError
             If the data source is invalid.
         """
         if isinstance(data_source, str):

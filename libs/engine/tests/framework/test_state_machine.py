@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import ColumnCreator
@@ -35,7 +35,7 @@ def test_initialize_with_initial_state() -> None:
 
 @pytest.mark.parametrize("weights_type", ["artifact", "callable", "scalar"])
 def test_initialize_with_scalar_initialization_weights(
-    base_config: LayeredConfigTree, weights_type: str, mocker: MockerFixture
+    base_config: ConfigTree, weights_type: str, mocker: MockerFixture
 ) -> None:
     state_weights = {"state_a.weights": 0.2, "state_b.weights": 0.8}
 
@@ -140,7 +140,7 @@ def test_error_if_initialize_with_neither_initial_state_nor_initialization_weigh
 @pytest.mark.parametrize("population_size", [1, 100])
 @pytest.mark.parametrize("use_transition_arg", [True, False])
 def test_transition(
-    base_config: LayeredConfigTree, population_size: int, use_transition_arg: bool
+    base_config: ConfigTree, population_size: int, use_transition_arg: bool
 ) -> None:
     base_config.update(
         {
@@ -162,7 +162,7 @@ def test_transition(
     assert np.all(simulation.get_population("state") == "done")
 
 
-def test_no_null_transition(base_config: LayeredConfigTree) -> None:
+def test_no_null_transition(base_config: ConfigTree) -> None:
     base_config.update(
         {"population": {"population_size": 10000}, "randomness": {"key_columns": []}}
     )
@@ -190,7 +190,7 @@ def test_no_null_transition(base_config: LayeredConfigTree) -> None:
     assert round((state == "b").mean(), 1) == 0.6
 
 
-def test_null_transition(base_config: LayeredConfigTree) -> None:
+def test_null_transition(base_config: ConfigTree) -> None:
     base_config.update(
         {"population": {"population_size": 10000}, "randomness": {"key_columns": []}}
     )

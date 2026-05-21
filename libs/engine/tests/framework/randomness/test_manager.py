@@ -2,7 +2,7 @@ from typing import Literal
 
 import pandas as pd
 import pytest
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import ColumnCreator
@@ -137,7 +137,7 @@ def test_get_random_seed() -> None:
 
 
 @pytest.mark.parametrize("additional_seed", ["789", None])
-def test_additional_seed(base_config: LayeredConfigTree, additional_seed: str | None) -> None:
+def test_additional_seed(base_config: ConfigTree, additional_seed: str | None) -> None:
 
     input_draw = "123"
     seed = "456"

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.main import ConfigTree
 
 from vivarium.engine.framework.artifact import ArtifactException
 from vivarium.engine.framework.artifact.artifact import Artifact
@@ -54,7 +54,7 @@ class ArtifactManager(Manager):
         self.artifact = self._load_artifact(builder.configuration)
         builder.lifecycle.add_constraint(self.load, allow_during=[lifecycle_states.SETUP])
 
-    def _load_artifact(self, configuration: LayeredConfigTree) -> Artifact | None:
+    def _load_artifact(self, configuration: ConfigTree) -> Artifact | None:
         """Loads artifact data.
 
         Looks up the path to the artifact hdf file, builds a default filter,
@@ -178,7 +178,7 @@ def _subset_columns(
     return data.drop(columns=list(columns_to_remove))
 
 
-def get_base_filter_terms(configuration: LayeredConfigTree) -> list[str]:
+def get_base_filter_terms(configuration: ConfigTree) -> list[str]:
     """Parses default filter terms from the artifact configuration."""
     base_filter_terms = []
 
@@ -189,7 +189,7 @@ def get_base_filter_terms(configuration: LayeredConfigTree) -> list[str]:
     return base_filter_terms
 
 
-def parse_artifact_path_config(config: LayeredConfigTree) -> str:
+def parse_artifact_path_config(config: ConfigTree) -> str:
     """Gets the path to the data artifact from the simulation configuration.
 
     The path specified in the configuration may be absolute or it may be relative

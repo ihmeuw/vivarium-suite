@@ -29,8 +29,8 @@ from typing import Any
 import dill
 import numpy as np
 import pandas as pd
-from layered_config_tree.exceptions import ConfigurationKeyError
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.exceptions import ConfigurationKeyError
+from vivarium.config_tree.main import ConfigTree
 
 from vivarium.engine import Component
 from vivarium.engine.exceptions import VivariumError
@@ -108,10 +108,10 @@ class SimulationContext:
 
     def __init__(
         self,
-        model_specification: str | Path | LayeredConfigTree | None = None,
-        components: list[Component] | dict[str, Any] | LayeredConfigTree | None = None,
-        configuration: dict[str, Any] | LayeredConfigTree | None = None,
-        plugin_configuration: dict[str, Any] | LayeredConfigTree | None = None,
+        model_specification: str | Path | ConfigTree | None = None,
+        components: list[Component] | dict[str, Any] | ConfigTree | None = None,
+        configuration: dict[str, Any] | ConfigTree | None = None,
+        plugin_configuration: dict[str, Any] | ConfigTree | None = None,
         sim_name: str | None = None,
         logging_verbosity: int = 1,
     ) -> None:
@@ -119,7 +119,7 @@ class SimulationContext:
 
         # Bootstrap phase: Parse arguments, make private managers
         component_configuration = (
-            components if isinstance(components, (dict, LayeredConfigTree)) else None
+            components if isinstance(components, (dict, ConfigTree)) else None
         )
         self._additional_components = components if isinstance(components, list) else []
         self.model_specification = build_model_specification(
@@ -394,7 +394,7 @@ class Builder:
     """
 
     def __init__(
-        self, configuration: LayeredConfigTree, plugin_manager: PluginManager
+        self, configuration: ConfigTree, plugin_manager: PluginManager
     ) -> None:
         self.configuration = configuration
         """Provides access to the :ref:`configuration<configuration_concept>`"""

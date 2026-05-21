@@ -1,7 +1,7 @@
 from typing import Any
 
 import pytest
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.main import ConfigTree
 from pytest_mock import MockerFixture
 
 from vivarium.engine import InteractiveContext
@@ -53,9 +53,9 @@ def test_set_results_dir(
 ) -> None:
     builder = mocker.Mock()
     if is_interactive:
-        builder.configuration = LayeredConfigTree()
+        builder.configuration = ConfigTree()
     else:
-        builder.configuration = LayeredConfigTree(
+        builder.configuration = ConfigTree(
             {
                 "output_data": {"results_directory": results_dir},
             }
@@ -68,7 +68,7 @@ def test_set_results_dir(
 
 
 def test_observer_get_configuration(
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
 ) -> None:
 
     observer = TestObserverStratifications()
@@ -85,7 +85,7 @@ def test_observer_get_configuration(
     assert observer_config.to_dict() == dict(sim_observer_config)
 
 
-def test_duplicated_observer_error(base_config: LayeredConfigTree) -> None:
+def test_duplicated_observer_error(base_config: ConfigTree) -> None:
     observer1 = TestObserverStratifications()
     observer2 = TestObserverStratifications()
     with pytest.raises(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 
 from tests.helpers import MockComponentA, MockComponentB, MockGenericComponent, MockManager
 from vivarium.engine import Component

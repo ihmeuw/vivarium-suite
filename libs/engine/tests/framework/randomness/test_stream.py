@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 from scipy import stats
 from vivarium_testing_utils import FuzzyChecker
@@ -323,7 +323,7 @@ def test_sample_from_distribution_using_ppf(
 )
 def test_stream_rate_conversion_config(
     rate_conversion: str,
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
 ) -> None:
     cc = ColumnCreator()
     # Do not update key if key is not configured (None) to test default behavior

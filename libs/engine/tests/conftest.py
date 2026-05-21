@@ -8,7 +8,7 @@ import pytest_mock
 import tables
 import yaml
 from _pytest.logging import LogCaptureFixture
-from vivarium.config_tree import ConfigTree as LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from loguru import logger
 from vivarium_testing_utils import FuzzyChecker
 
@@ -32,7 +32,7 @@ def caplog(caplog: LogCaptureFixture) -> Generator[LogCaptureFixture, None, None
 
 
 @pytest.fixture
-def base_config() -> LayeredConfigTree:
+def base_config() -> ConfigTree:
     config = build_simulation_configuration()
     config.update(
         {
@@ -70,7 +70,7 @@ def test_user_config(request: pytest.FixtureRequest, test_data_dir: Path) -> Pat
 @pytest.fixture
 def model_specification(
     mocker: pytest_mock.MockFixture, test_spec: Path, test_user_config: Path
-) -> LayeredConfigTree:
+) -> ConfigTree:
     expand_user_mock = mocker.patch("vivarium.engine.framework.configuration.Path.expanduser")
     expand_user_mock.return_value = test_user_config
     return build_model_specification(test_spec)

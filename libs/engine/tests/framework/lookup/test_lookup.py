@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import LookupCreator
@@ -75,7 +75,7 @@ def test_build_table_calls_methods_correctly(mocker: MockerFixture) -> None:
 
 
 @pytest.mark.skip(reason="only order 0 interpolation currently supported")
-def test_interpolated_tables(base_config: LayeredConfigTree) -> None:
+def test_interpolated_tables(base_config: ConfigTree) -> None:
     year_start = base_config.time.start.year
     year_end = base_config.time.end.year
     years_df = build_table(
@@ -133,7 +133,7 @@ def test_interpolated_tables(base_config: LayeredConfigTree) -> None:
 
 @pytest.mark.skip(reason="only order 0 interpolation currently supported")
 def test_interpolated_tables_without_uninterpolated_columns(
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
 ) -> None:
     year_start = base_config.time.start.year
     year_end = base_config.time.end.year
@@ -173,7 +173,7 @@ def test_interpolated_tables_without_uninterpolated_columns(
 
 
 def test_interpolated_tables__exact_values_at_input_points(
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
 ) -> None:
     year_start = base_config.time.start.year
     year_end = base_config.time.end.year
@@ -201,7 +201,7 @@ def test_interpolated_tables__exact_values_at_input_points(
 
 
 def test_interpolated_tables__only_categorical_parameters(
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
 ) -> None:
     sexes = ["Female", "Male"]
     locations = ["USA", "Canada", "Mexico"]
@@ -230,7 +230,7 @@ def test_interpolated_tables__only_categorical_parameters(
 
 @pytest.mark.parametrize("data", [(1, 2), [1, 2]])
 def test_lookup_table_scalar_from_list(
-    base_config: LayeredConfigTree, data: list[ScalarValue] | tuple[ScalarValue, ...]
+    base_config: ConfigTree, data: list[ScalarValue] | tuple[ScalarValue, ...]
 ) -> None:
     component = TestPopulation()
     simulation = InteractiveContext(components=[component], configuration=base_config)
@@ -245,7 +245,7 @@ def test_lookup_table_scalar_from_list(
     assert np.all(table.b == 2)
 
 
-def test_lookup_table_scalar_from_single_value(base_config: LayeredConfigTree) -> None:
+def test_lookup_table_scalar_from_single_value(base_config: ConfigTree) -> None:
     component = TestPopulation()
     simulation = InteractiveContext(components=[component], configuration=base_config)
     manager = simulation._tables
@@ -256,7 +256,7 @@ def test_lookup_table_scalar_from_single_value(base_config: LayeredConfigTree) -
     assert np.all(table == 1)
 
 
-def test_invalid_data_type_build_table(base_config: LayeredConfigTree) -> None:
+def test_invalid_data_type_build_table(base_config: ConfigTree) -> None:
     component = TestPopulation()
     simulation = InteractiveContext(components=[component], configuration=base_config)
     manager = simulation._tables
@@ -264,7 +264,7 @@ def test_invalid_data_type_build_table(base_config: LayeredConfigTree) -> None:
         manager._build_table(component, "break", "", value_columns=())  # type: ignore [arg-type]
 
 
-def test_lookup_table_interpolated_return_types(base_config: LayeredConfigTree) -> None:
+def test_lookup_table_interpolated_return_types(base_config: ConfigTree) -> None:
     year_start = base_config.time.start.year
     year_end = base_config.time.end.year
     data = build_table(
@@ -406,7 +406,7 @@ class TestValidateBuildTableParameters:
         LookupTable._validate_data_inputs(mock_table, data)
 
 
-def test__build_table_from_dict(base_config: LayeredConfigTree) -> None:
+def test__build_table_from_dict(base_config: ConfigTree) -> None:
     component = TestPopulation()
     simulation = InteractiveContext(components=[component], configuration=base_config)
     manager = simulation._tables
@@ -427,7 +427,7 @@ def test__build_table_from_dict(base_config: LayeredConfigTree) -> None:
 
 
 def test_uncreated_lookup_table_warning(
-    base_config: LayeredConfigTree, caplog: pytest.LogCaptureFixture
+    base_config: ConfigTree, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test that a warning is logged when a lookup table is configured but not created."""
 
@@ -777,7 +777,7 @@ class TestLookupTableSetData:
         ]
 
     @staticmethod
-    def _make_config() -> LayeredConfigTree:
+    def _make_config() -> ConfigTree:
         """Create a base configuration for set_data tests."""
         config = build_simulation_configuration()
         config.update(

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 import pytest_mock
 from _pytest.logging import LogCaptureFixture
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.main import ConfigTree
 from loguru import logger
 from pandas.api.types import CategoricalDtype
 
@@ -115,7 +115,7 @@ def test_register_stratification(
 ) -> None:
     mgr = ResultsManager()
     builder = mocker.MagicMock()
-    builder.configuration.stratification = LayeredConfigTree(
+    builder.configuration.stratification = ConfigTree(
         {"default": [], "excluded_categories": {}}
     )
     mgr.setup(builder)

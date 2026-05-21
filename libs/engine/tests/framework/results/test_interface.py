@@ -6,7 +6,7 @@ from types import MethodType
 
 import pandas as pd
 import pytest
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.main import ConfigTree
 from loguru import logger
 from pytest_mock import MockerFixture
 
@@ -389,7 +389,7 @@ def test_register_adding_observation_when_options(when: str, mocker: MockerFixtu
     mgr = ResultsManager()
     results_interface = ResultsInterface(mgr)
     builder = mocker.MagicMock()
-    builder.configuration.stratification = LayeredConfigTree(
+    builder.configuration.stratification = ConfigTree(
         {"default": [], "excluded_categories": {}}
     )
     mgr.setup(builder)

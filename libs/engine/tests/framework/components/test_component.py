@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from layered_config_tree.exceptions import ConfigurationError
+from vivarium.config_tree.exceptions import ConfigurationError
 
 from tests.helpers import (
     ColumnCreator,

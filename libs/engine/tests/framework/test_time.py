@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import pytest_mock
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 
 from tests.helpers import Listener, MockComponentA, MockComponentB, MockGenericComponent
 from vivarium.engine.component import Component
@@ -199,7 +199,7 @@ class StepModifierWithMovement(StepModifierWithRatePipeline):
 
 @pytest.mark.parametrize("varied_step_size", [True, False])
 def test_basic_iteration(
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     components: list[Component | Listener],
     varied_step_size: bool,
 ) -> None:
@@ -238,7 +238,7 @@ def test_basic_iteration(
 
 
 def test_empty_active_pop(
-    base_config: LayeredConfigTree, components: list[Component | Listener]
+    base_config: ConfigTree, components: list[Component | Listener]
 ) -> None:
     """Make sure that if we have no active simulants, we still take a step, given
     by the minimum step size."""
@@ -272,7 +272,7 @@ def test_empty_active_pop(
     "step_modifier_even,step_modifier_odd", [(0.5, 0.5), (1, 1), (2, 2), (4.5, 4)]
 )
 def test_skip_iterations(
-    base_config: LayeredConfigTree,
+    base_config: ConfigTree,
     step_modifier_even: float | int,
     step_modifier_odd: float | int,
 ) -> None:
@@ -299,7 +299,7 @@ def test_skip_iterations(
         )
 
 
-def test_uneven_steps(base_config: LayeredConfigTree) -> None:
+def test_uneven_steps(base_config: ConfigTree) -> None:
     """Test that if we have a mix of step sizes, we take steps in accordance
     to reach all simulants' next event times in the fewest steps.
     """
@@ -337,7 +337,7 @@ def test_uneven_steps(base_config: LayeredConfigTree) -> None:
         assert np.all(sample_pipeline == pipeline_by_parity(sim, step_modifiers, group))
 
 
-def test_partial_modification(base_config: LayeredConfigTree) -> None:
+def test_partial_modification(base_config: ConfigTree) -> None:
     """Test that if we have one modifier that doesn't apply to all simulants,
     we choose the standard value for unmodified simulants.
     """
@@ -375,7 +375,7 @@ def test_partial_modification(base_config: LayeredConfigTree) -> None:
         assert np.all(sample_pipeline == pipeline_by_parity(sim, step_modifiers, group))
 
 
-def test_standard_step_size(base_config: LayeredConfigTree) -> None:
+def test_standard_step_size(base_config: ConfigTree) -> None:
     """Test that if we have one modifier that doesn't apply to all simulants,
     we choose the standard value for unmodified simulants.
     """
@@ -414,7 +414,7 @@ def test_standard_step_size(base_config: LayeredConfigTree) -> None:
         assert np.all(sample_pipeline == pipeline_by_parity(sim, step_modifiers, group))
 
 
-def test_multiple_modifiers(base_config: LayeredConfigTree) -> None:
+def test_multiple_modifiers(base_config: ConfigTree) -> None:
     """Test that if we have a mix of step sizes, we take steps in accordance
     to reach all simulants' next event times in the fewest steps.
     """
@@ -453,7 +453,7 @@ def test_multiple_modifiers(base_config: LayeredConfigTree) -> None:
         )
 
 
-def test_move_simulants_to_end(base_config: LayeredConfigTree) -> None:
+def test_move_simulants_to_end(base_config: ConfigTree) -> None:
     """Ensure that we move simulants' next event time to the end of the simulation, if they are even."""
     base_config.update({"configuration": {"time": {"standard_step_size": 7}}})
     listener = Listener("listener")
@@ -513,7 +513,7 @@ def test_step_size_post_processor(builder: MagicMock) -> None:
 
 
 @pytest.mark.parametrize("end_day", [31, 23])
-def test_time_steps_remaining(base_config: LayeredConfigTree, end_day: int) -> None:
+def test_time_steps_remaining(base_config: ConfigTree, end_day: int) -> None:
     UselessComponent = MockGenericComponent("Placeholder")
     base_config.update(
         {
@@ -538,7 +538,7 @@ def test_time_steps_remaining(base_config: LayeredConfigTree, end_day: int) -> N
 
 
 @pytest.mark.parametrize("end", [31, 23])
-def test_simple_clock_time_steps_remaining(base_config: LayeredConfigTree, end: int) -> None:
+def test_simple_clock_time_steps_remaining(base_config: ConfigTree, end: int) -> None:
     UselessComponent = MockGenericComponent("Placeholder")
     base_config.update(
         {

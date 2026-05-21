@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.main import ConfigTree
 from loguru import logger
 from pandas.core.groupby.generic import DataFrameGroupBy
 from pytest_mock import MockerFixture
@@ -104,7 +104,7 @@ def test_add_stratification_excluded_categories(
 ) -> None:
     ctx = ResultsContext()
     builder = mocker.Mock()
-    builder.configuration.stratification = LayeredConfigTree(
+    builder.configuration.stratification = ConfigTree(
         {"default": [], "excluded_categories": {NAME: excluded_categories}}
     )
     builder.logging.get_logger.return_value = logger

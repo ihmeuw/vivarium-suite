@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 
 from vivarium.engine.framework.artifact.manager import (
@@ -84,7 +84,7 @@ def test_subset_columns() -> None:
 
 
 def test_parse_artifact_path_config(
-    base_config: LayeredConfigTree, test_data_dir: Path
+    base_config: ConfigTree, test_data_dir: Path
 ) -> None:
     artifact_path = test_data_dir / "artifact.hdf"
     base_config.update(
@@ -94,7 +94,7 @@ def test_parse_artifact_path_config(
     assert parse_artifact_path_config(base_config) == str(artifact_path)
 
 
-def test_parse_artifact_path_relative_no_source(base_config: LayeredConfigTree) -> None:
+def test_parse_artifact_path_relative_no_source(base_config: ConfigTree) -> None:
     artifact_path = "./artifact.hdf"
     base_config.update({"input_data": {"artifact_path": str(artifact_path)}})
 
@@ -103,7 +103,7 @@ def test_parse_artifact_path_relative_no_source(base_config: LayeredConfigTree) 
 
 
 def test_parse_artifact_path_relative(
-    base_config: LayeredConfigTree, test_data_dir: Path
+    base_config: ConfigTree, test_data_dir: Path
 ) -> None:
     base_config.update(
         {"input_data": {"artifact_path": "../../test_data/artifact.hdf"}},
@@ -112,7 +112,7 @@ def test_parse_artifact_path_relative(
     assert parse_artifact_path_config(base_config) == str(test_data_dir / "artifact.hdf")
 
 
-def test_parse_artifact_path_config_fail(base_config: LayeredConfigTree) -> None:
+def test_parse_artifact_path_config_fail(base_config: ConfigTree) -> None:
     artifact_path = Path(__file__).parent / "not_an_artifact.hdf"
     base_config.update(
         {"input_data": {"artifact_path": str(artifact_path)}}, **metadata(str(Path("/")))
@@ -122,7 +122,7 @@ def test_parse_artifact_path_config_fail(base_config: LayeredConfigTree) -> None
         parse_artifact_path_config(base_config)
 
 
-def test_parse_artifact_path_config_fail_relative(base_config: LayeredConfigTree) -> None:
+def test_parse_artifact_path_config_fail_relative(base_config: ConfigTree) -> None:
     base_config.update(
         {"input_data": {"artifact_path": "./not_an_artifact.hdf"}}, **metadata(__file__)
     )

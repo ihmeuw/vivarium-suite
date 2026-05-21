@@ -22,10 +22,10 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from layered_config_tree import (
+from vivarium.config_tree import (
     ConfigurationError,
     DuplicatedConfigurationError,
-    LayeredConfigTree,
+    ConfigTree,
 )
 
 from vivarium.engine import Component
@@ -129,11 +129,11 @@ class ComponentManager(Manager):
     def __init__(self) -> None:
         self._managers: OrderedComponentSet[Manager] = OrderedComponentSet()
         self._components: OrderedComponentSet[Component] = OrderedComponentSet()
-        self._configuration: LayeredConfigTree | None = None
+        self._configuration: ConfigTree | None = None
         self._current_component: Component | Manager | None = None
 
     @property
-    def configuration(self) -> LayeredConfigTree:
+    def configuration(self) -> ConfigTree:
         """The configuration tree for the simulation."""
         if self._configuration is None:
             raise VivariumError("ComponentManager has no configuration tree.")
@@ -145,7 +145,7 @@ class ComponentManager(Manager):
         return "component_manager"
 
     def setup_manager(  # type: ignore[override]
-        self, configuration: LayeredConfigTree, lifecycle_manager: LifeCycleManager
+        self, configuration: ConfigTree, lifecycle_manager: LifeCycleManager
     ) -> None:
         """Sets up the component manager.
 

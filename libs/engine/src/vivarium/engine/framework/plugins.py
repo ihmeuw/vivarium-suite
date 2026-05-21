@@ -12,7 +12,7 @@ The Plugin Management System
 from dataclasses import dataclass
 from typing import TypeVar
 
-from layered_config_tree.main import LayeredConfigTree
+from vivarium.config_tree.main import ConfigTree
 
 from vivarium.engine.exceptions import VivariumError
 from vivarium.engine.framework.artifact import ArtifactInterface, ArtifactManager
@@ -148,10 +148,10 @@ class PluginManager(Manager):
     def __init__(
         self,
         plugin_configuration: (
-            dict[str, dict[str, dict[str, str]]] | LayeredConfigTree | None
+            dict[str, dict[str, dict[str, str]]] | ConfigTree | None
         ) = None,
     ):
-        self._plugin_configuration = LayeredConfigTree(
+        self._plugin_configuration = ConfigTree(
             DEFAULT_PLUGINS["plugins"], layers=["base", "override"]
         )
         self._plugin_configuration.update(plugin_configuration, source="initialization_args")
