@@ -3,7 +3,7 @@
 Lookup Table Manager
 ====================
 
-Simulations tend to require a large quantity of data to run.  :mod:`vivarium`
+Simulations tend to require a large quantity of data to run.  :mod:`vivarium.engine`
 provides the :class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>`
 abstraction to ensure that accurate data can be retrieved when it's needed. It's
 a callable object that takes in a population index and returns data specific to

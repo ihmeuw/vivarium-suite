@@ -73,7 +73,7 @@ In this example, we will use the model specification from our
 
 .. _disease_model_yaml:
 
-.. literalinclude:: ../../../../src/vivarium/examples/disease_model/disease_model.yaml
+.. literalinclude:: ../../../../src/vivarium/engine/examples/disease_model/disease_model.yaml
    :caption: **File**: :file:`disease_model.yaml`
 
 Generating a simulation from a model specification is very straightforward,
@@ -81,7 +81,7 @@ as it is the primary use case.
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    p = "/path/to/disease_model.yaml"
    sim = InteractiveContext(p)
 
@@ -91,7 +91,7 @@ distributed with ``vivarium``.
 
 .. testcode::
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model import get_model_specification_path
 
    p = get_model_specification_path()
@@ -182,7 +182,7 @@ simulation in a very similar manner as before.
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    sim = InteractiveContext(components=components, configuration=config)
 
 
@@ -200,7 +200,7 @@ one last way to set up the simulation in an interactive setting.
    from vivarium.engine.examples.disease_model import (BasePopulation, DeathsObserver,
                                                 YllsObserver, SISDiseaseModel, Risk,
                                                 RiskEffect, TreatmentIntervention)
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
 
    config = {
        'randomness': {
@@ -256,7 +256,7 @@ To do this we'll set the ``setup`` flag in the
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model import get_model_specification_path
 
    p = get_model_specification_path()
@@ -298,7 +298,7 @@ After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 
 .. testcode::
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model import get_model_specification_path
 
    p = get_model_specification_path()
@@ -318,7 +318,7 @@ into our disease model. We could do the following.
 
 .. testcode::
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model import get_model_specification_path, Risk, RiskEffect
 
    p = get_model_specification_path()
@@ -355,7 +355,7 @@ the InteractiveContext:
 
 .. testcode::
 
-    from vivarium import InteractiveContext
+    from vivarium.engine import InteractiveContext
     from vivarium.engine.framework.configuration import build_model_specification
     from vivarium.engine.examples.disease_model import get_model_specification_path
 

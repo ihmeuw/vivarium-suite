@@ -188,7 +188,7 @@ for this decision point of whether to move left or not. Here's how we'd do it:
 
     import pandas as pd
 
-    from vivarium import Component
+    from vivarium.engine import Component
 
     class MoveLeft(Component):
 

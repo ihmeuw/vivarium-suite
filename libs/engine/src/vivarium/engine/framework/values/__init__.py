@@ -3,7 +3,7 @@
 The Value Pipeline System
 =========================
 
-The value pipeline system is a vital part of the :mod:`vivarium`
+The value pipeline system is a vital part of the :mod:`vivarium.engine`
 infrastructure. It allows for values that determine the behavior of individual
 :term:`simulants <Simulant>` to be constructed across multiple
 :ref:`components <components_concept>`.

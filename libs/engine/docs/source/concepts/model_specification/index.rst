@@ -15,7 +15,7 @@ The Model Specification
    yaml_basics
 
 A :term:`model specification <Model Specification>` is a complete representation
-of a :mod:`vivarium` simulation formatted as a yaml file.
+of a :mod:`vivarium.engine` simulation formatted as a yaml file.
 
 A model specification file contains three distinct blocks:
 

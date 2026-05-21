@@ -44,7 +44,7 @@ vivarium.engine.
 We need a population, though, so we'll start with one here and defer explanation
 of some of the more complex pieces/systems until later.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :caption: **File**: :file:`~/code/vivarium/examples/disease_model/population.py`
    :linenos:
 
@@ -53,7 +53,7 @@ There are a lot of things here. Let's take them piece by piece.
 Imports
 +++++++
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: imports
    :end-before: # docs-end: imports
 
@@ -84,7 +84,7 @@ come with that.
 Default Configuration
 +++++++++++++++++++++
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: configuration_defaults
    :end-before: # docs-end: configuration_defaults
 
@@ -107,7 +107,7 @@ population management system.
 Sub-components
 ++++++++++++++
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: sub_components
    :end-before: # docs-end: sub_components
 
@@ -173,7 +173,7 @@ method on each component and calls that method with a
 
 Let's step through the ``setup`` method and examine what's happening.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: setup
    :end-before: # docs-end: setup
 
@@ -190,7 +190,7 @@ a variance reduction technique employed by the Vivarium framework to make
 it easier to perform counterfactual analysis. It's not important to have a full
 grasp of this system at this point.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: crn
    :end-before: # docs-end: crn
    :dedent: 4
@@ -229,7 +229,7 @@ interventions.
 Next, we grab actual :class:`randomness streams <vivarium.engine.framework.randomness.stream.RandomnessStream>`
 from the framework.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: randomness
    :end-before: # docs-end: randomness
    :dedent: 4
@@ -257,7 +257,7 @@ Finally, we register two initializers with the population manager. This tells
 vivarium which initializers to call when creating the component as well as
 which columns (if any) each initializer is responsible for creating.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: initializers
    :end-before: # docs-end: initializers
    :dedent: 4
@@ -323,7 +323,7 @@ Let's inspect the two initializer methods line by line as we did with ``setup``.
 The ``initialize_entrance_time_and_age`` method
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: initialize_entrance_time_and_age
    :end-before: # docs-end: initialize_entrance_time_and_age
    :dedent: 4
@@ -354,7 +354,7 @@ is manage the age of our simulants. Back in the ``configuration_defaults``
 property we specified an ``'age_start'`` and ``'age_end'``. Here we use these
 to generate the age distribution of our initial population.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: ages
    :end-before: # docs-end: ages
    :dedent: 4
@@ -388,7 +388,7 @@ in the index.
 With the simulant ages defined, we then create a dataframe of simulant 
 ages and entrance times.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: population_dataframe
    :end-before: # docs-end: population_dataframe
    :dedent: 4
@@ -408,7 +408,7 @@ system. This is responsible for mapping the attributes of interest (here
 ``'entrance_time'`` and ``'age'``) to a particular set of random numbers
 that will be used across simulations with the same random seed.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: crn_registration
    :end-before: # docs-end: crn_registration
    :dedent: 4
@@ -443,7 +443,7 @@ inform the simulation by passing in the ``DataFrame`` to our
    the new simulants. Passing an index that contains simulants *not* in ``pop_data.index`` 
    will cause hard-to-debug errors.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: update_entrance_time_and_age
    :end-before: # docs-end: update_entrance_time_and_age
    :dedent: 4
@@ -451,7 +451,7 @@ inform the simulation by passing in the ``DataFrame`` to our
 The ``initialize_sex`` method
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: initialize_sex
    :end-before: # docs-end: initialize_sex
    :dedent: 4
@@ -467,7 +467,7 @@ The ``on_time_step`` method
 The last piece of our population component is the ``'time_step'`` listener
 method ``on_time_step``.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/population.py
    :start-after: # docs-start: on_time_step
    :end-before: # docs-end: on_time_step
    :dedent: 4
@@ -530,7 +530,7 @@ Now that we've done all this hard work, let's see what it gives us.
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model.population import BasePopulation
 
    config = {'randomness': {'key_columns': ['entrance_time', 'age']}}
@@ -553,7 +553,7 @@ Now that we've done all this hard work, let's see what it gives us.
    
    import pandas as pd
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model.population import BasePopulation
 
    config = {'randomness': {'key_columns': ['entrance_time', 'age']}}
@@ -618,7 +618,7 @@ investigate the Mortality component. Note that Mortality is a sub-component
 of the BasePopulation component and comes for free when we request BasePopulation
 via the model specification; there is no need to add Mortality separately.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/mortality.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/mortality.py
    :caption: **File**: :file:`~/code/vivarium/examples/disease_model/mortality.py`
    :linenos:
 
@@ -634,7 +634,7 @@ Default Configuration
 Since we're building our disease model without data to inform it, we'll
 expose all the important bits of the model as parameters in the configuration.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/mortality.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/mortality.py
    :start-after: # docs-start: configuration_defaults
    :end-before: # docs-end: configuration_defaults
 
@@ -650,7 +650,7 @@ The ``setup`` method
 There is not a whole lot going on in this setup method, but there is one new concept
 we should discuss.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/mortality.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/mortality.py
    :start-after: # docs-start: setup
    :end-before: # docs-end: setup
 
@@ -697,7 +697,7 @@ Finally, we register an initializer method which is responsible for creating an
 The ``initialize_is_alive`` method
 ++++++++++++++++++++++++++++++++++++++
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/mortality.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/mortality.py
    :start-after: # docs-start: initialize_is_alive
    :end-before: # docs-end: initialize_is_alive
    :dedent: 4
@@ -716,7 +716,7 @@ The ``on_time_step`` method
 Similar to how we aged simulants in the population component, we determine which
 simulants die during ``'time_step'`` events.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/mortality.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/mortality.py
    :start-after: # docs-start: on_time_step
    :end-before: # docs-end: on_time_step
    :dedent: 4
@@ -761,7 +761,7 @@ can see the impact of our mortality component without taking too many steps.
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model.population import BasePopulation
 
    config = {
@@ -900,7 +900,7 @@ and added to the simulation via the model specification.
 
 This example's observers are shown below.
 
-.. literalinclude:: ../../../src/vivarium/examples/disease_model/observer.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/disease_model/observer.py
    :caption: **File**: :file:`~/code/vivarium/examples/disease_model/observer.py`
    :linenos:
 
@@ -929,7 +929,7 @@ observations up to this point in the simulation.
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model.population import BasePopulation
    from vivarium.engine.examples.disease_model.observer import DeathsObserver, YllsObserver
 

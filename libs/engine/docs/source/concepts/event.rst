@@ -10,7 +10,7 @@ The Event System
    :backlinks: none
 
 
-:mod:`vivarium` constructs and manages the flow of :ref:`time <time_concept>`
+:mod:`vivarium.engine` constructs and manages the flow of :ref:`time <time_concept>`
 through the emission of regularly scheduled events. This event system provides
 a means of coordinating across various components in a simulation.
 
@@ -40,7 +40,7 @@ the event. Each Event contains the following:
      - | A :class:`dict` that allows an event emitter to pass arbitrary
        | information to event listeners.
 
-:mod:`vivarium` manages these events with a publication-subscriber system.  The
+:mod:`vivarium.engine` manages these events with a publication-subscriber system.  The
 framework maintains several named event channels where it and user
 :ref:`components <components_concept>` can emit (or publish) events.  User
 components may then register methods or functions as *listeners* (or

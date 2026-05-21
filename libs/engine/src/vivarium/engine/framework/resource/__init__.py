@@ -4,7 +4,7 @@ Resource Management
 ===================
 
 This module provides a tool to manage dependencies on resources within a
-:mod:`vivarium` simulation. These resources take the form of things that can
+:mod:`vivarium.engine` simulation. These resources take the form of things that can
 be created and utilized by components, for example columns in the
 :mod:`population state table <vivarium.engine.framework.population>`
 or :mod:`named value pipelines <vivarium.engine.framework.values>`.

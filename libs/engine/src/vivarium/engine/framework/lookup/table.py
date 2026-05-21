@@ -3,7 +3,7 @@
 Lookup Tables
 =============
 
-Simulations tend to require a large quantity of data to run.  :mod:`vivarium`
+Simulations tend to require a large quantity of data to run.  :mod:`vivarium.engine`
 provides the :class:`LookupTable` abstraction to ensure that accurate data can
 be retrieved when it's needed. It's a callable object that takes in a
 population index and returns data specific to the individuals represented by
@@ -38,7 +38,7 @@ DEFAULT_VALUE_COLUMN = "value"
 class LookupTable(Resource, Generic[T]):
     """A callable to produces values for a population index.
 
-    In :mod:`vivarium` simulations, the index is synonymous with the simulated
+    In :mod:`vivarium.engine` simulations, the index is synonymous with the simulated
     population.  The lookup system allows the user to provide different kinds
     of data and strategies for using that data.  When the simulation is
     running, then, components can lookup parameter values based solely on

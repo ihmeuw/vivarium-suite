@@ -27,7 +27,7 @@ class ArtifactException(Exception):
 
 
 class Artifact:
-    """An interface for interacting with :mod:`vivarium` artifacts."""
+    """An interface for interacting with :mod:`vivarium.engine` artifacts."""
 
     def __init__(self, path: str | Path, filter_terms: list[str] | None = None) -> None:
         """

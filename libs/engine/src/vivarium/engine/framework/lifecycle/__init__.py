@@ -4,7 +4,7 @@ Life Cycle Management
 =====================
 
 The life cycle is a representation of the flow of execution states in a
-:mod:`vivarium` simulation. The tools in this model allow a simulation to
+:mod:`vivarium.engine` simulation. The tools in this model allow a simulation to
 formally represent its execution state and use the formal representation to
 enforce run-time contracts.
 

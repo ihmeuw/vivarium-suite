@@ -33,7 +33,7 @@ Building a population
 
 Create a file called ``population.py`` with the following content:
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/population.py
    :caption: **File**: :file:`~/code/vivarium_examples/boids/population.py`
    :linenos:
 
@@ -46,7 +46,7 @@ patterns repeated in later components.
 Imports
 +++++++
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/population.py
    :start-after: # docs-start: imports
    :end-before: # docs-end: imports
 
@@ -77,7 +77,7 @@ various parameters. Vivarium accomplishes this by pulling those knobs out as
 configuration information. Components typically expose the values they use in
 the ``configuration_defaults`` class attribute.
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/population.py
    :start-after: # docs-start: configuration_defaults
    :end-before: # docs-end: configuration_defaults
    :dedent: 4
@@ -95,7 +95,7 @@ to help build components. The simulation framework is responsible for calling
 the setup method on components and providing the builder to them. We'll
 explore these tools that the builder provides in detail as we go.
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/population.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/population.py
    :start-after: # docs-start: setup
    :end-before: # docs-end: setup
    :dedent: 4
@@ -172,7 +172,7 @@ we can set up our simulation with the following code:
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium_examples.boids.population import Population
 
    sim = InteractiveContext(
@@ -188,7 +188,7 @@ we can set up our simulation with the following code:
 .. testcode::
    :hide:
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.boids import Population
 
    sim = InteractiveContext(
@@ -217,7 +217,7 @@ We create a ``Movement`` component for this purpose.
 It tracks the position and velocity of each boid, and creates an
 ``acceleration`` pipeline that we will use later.
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/movement.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/movement.py
    :caption: **File**: :file:`~/code/vivarium_examples/boids/movement.py`
    :linenos:
 
@@ -256,7 +256,7 @@ The Builder class exposes an additional property for working with attribute pipe
 We call the :meth:`vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer`
 method to register a new attribute pipeline as the producer of some attribute.
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/movement.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/movement.py
    :start-after: # docs-start: register_attribute_producer
    :end-before: # docs-end: register_attribute_producer
    :dedent: 4
@@ -264,7 +264,7 @@ method to register a new attribute pipeline as the producer of some attribute.
 This call provides a ``source`` function for our pipeline which initializes the values.
 In this case, the default is zero acceleration:
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/movement.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/movement.py
    :start-after: # docs-start: base_acceleration
    :end-before: # docs-end: base_acceleration
    :dedent: 4
@@ -327,7 +327,7 @@ attribute.
    receives a :class:`~pandas.DataFrame` of those four columns, and we also
    retrieve the acceleration attributes inside it so that we can apply forces.
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/movement.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/movement.py
    :start-after: # docs-start: on_time_step
    :end-before: # docs-end: on_time_step
    :dedent: 4
@@ -339,7 +339,7 @@ Let's run the simulation with our new component and look again at the state tabl
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium_examples.boids.population import Population
    from vivarium_examples.boids.movement import Movement
 
@@ -355,7 +355,7 @@ Let's run the simulation with our new component and look again at the state tabl
 .. testcode::
    :hide:
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.boids import Population, Movement
 
    sim = InteractiveContext(
@@ -394,7 +394,7 @@ but their velocity stay the same.
 .. testcode::
    :hide:
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.boids import Population, Movement
 
    sim = InteractiveContext(
@@ -435,7 +435,7 @@ useful.
 For our purposes, we really just want to be able to plot the positions of our
 boids and maybe some arrows to indicated their velocity.
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/visualization.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/visualization.py
    :caption: **File**: :file:`~/code/vivarium_examples/boids/visualization.py`
    :start-after: # docs-start: plot_boids
    :end-before: # docs-end: plot_boids
@@ -444,7 +444,7 @@ We can then visualize our flock with
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium_examples.boids.population import Population
    from vivarium_examples.boids.movement import Movement
    from vivarium_examples.boids.visualization import plot_boids
@@ -459,7 +459,7 @@ We can then visualize our flock with
 
 .. plot::
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.boids import Population, Movement, plot_boids
 
    sim = InteractiveContext(
@@ -482,7 +482,7 @@ that tells us about the neighbor relationships of each boid.
 
 __ https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/neighbors.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/neighbors.py
    :caption: **File**: :file:`~/code/vivarium_examples/boids/neighbors.py`
    :linenos:
 
@@ -514,7 +514,7 @@ We won't get into the details of this class, but at a high level it uses the
 applies some force to (some of) those pairs, and limits that force to a maximum
 magnitude.
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/forces.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/forces.py
    :caption: **File**: :file:`~/code/vivarium_examples/boids/forces.py`
    :start-after: # docs-start: force_base_class
    :end-before: # docs-end: force_base_class
@@ -525,7 +525,7 @@ As the name suggests, this allows us to modify attributes,
 in this case adding the effect of a force to the ``acceleration`` attribute.
 We register that the ``apply_force`` method as the modifier like so:
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/forces.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/forces.py
    :caption: **File**: :file:`~/code/vivarium_examples/boids/forces.py`
    :start-after: # docs-start: register_acceleration_modifier
    :end-before: # docs-end: register_acceleration_modifier
@@ -541,7 +541,7 @@ of boids.
 The separation force is a bit special in that it also defines an extra configurable
 parameter: the distance within which it should act.
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/forces.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/forces.py
    :caption: **File**: :file:`~/code/vivarium_examples/boids/forces.py`
    :start-after: # docs-start: concrete_force_classes
    :end-before: # docs-end: concrete_force_classes
@@ -551,7 +551,7 @@ For a quick test of our swarming behavior, let's add in these forces and check i
 
 .. code-block:: python
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium_examples.boids.population import Population
    from vivarium_examples.boids.movement import Movement
    from vivarium_examples.boids.neighbors import Neighbors
@@ -570,7 +570,7 @@ For a quick test of our swarming behavior, let's add in these forces and check i
 
 .. plot::
 
-   from vivarium import InteractiveContext
+   from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.boids import Population, Movement, Neighbors, Separation, Cohesion, Alignment, plot_boids
 
    sim = InteractiveContext(
@@ -590,7 +590,7 @@ matplotlib to do this.
 
 Add this method to ``visualization.py``:
 
-.. literalinclude:: ../../../src/vivarium/examples/boids/visualization.py
+.. literalinclude:: ../../../src/vivarium/engine/examples/boids/visualization.py
    :caption: **File**: :file:`~/code/vivarium_examples/boids/visualization.py`
    :start-after: # docs-start: plot_boids_animated
    :end-before: # docs-end: plot_boids_animated
@@ -599,7 +599,7 @@ Then, try it out like so:
 
 .. code-block:: python
 
-  from vivarium import InteractiveContext
+  from vivarium.engine import InteractiveContext
   from vivarium_examples.boids.population import Population
   from vivarium_examples.boids.movement import Movement
   from vivarium_examples.boids.neighbors import Neighbors

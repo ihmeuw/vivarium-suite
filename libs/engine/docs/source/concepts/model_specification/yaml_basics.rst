@@ -5,11 +5,11 @@ YAML Basics
 ===========
 
 YAML is a simple, human-readable data serialization format that is used for
-:mod:`vivarium` :term:`model specification <Model Specification>` files. The
+:mod:`vivarium.engine` :term:`model specification <Model Specification>` files. The
 extensions of a file can be **.yaml** or **.yml**, both of which are accepted
-throughout the :mod:`vivarium` framework.  The following are general rules to
+throughout the :mod:`vivarium.engine` framework.  The following are general rules to
 keep in mind when writing and interpreting YAML files. Examples use snippets
-from :mod:`vivarium` model specifications but do not go in-depth about that
+from :mod:`vivarium.engine` model specifications but do not go in-depth about that
 topic. For more information about model specifications, please see the
 relevant :ref:`concept note <model_specification_concept>`.
 

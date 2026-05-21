@@ -4,7 +4,7 @@
 Simulation Entry Points
 =======================
 
-:mod:`vivarium` provides a single main entry point, the
+:mod:`vivarium.engine` provides a single main entry point, the
 :class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`,
 that is then wrapped for use on the command line
 and in interactive settings.  This document describes the main entry point
@@ -24,8 +24,8 @@ The Vivarium Engine
 
 The :mod:`engine <vivarium.engine.framework.engine>` houses the
 :class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>` --
-the key :mod:`vivarium` object for running and interacting with simulations.
-It is the top-level manager for all state information in :mod:`vivarium`. All
+the key :mod:`vivarium.engine` object for running and interacting with simulations.
+It is the top-level manager for all state information in :mod:`vivarium.engine`. All
 simulations are created by a call to the ``__init__`` of the
 :class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>` at
 some level and wrappers around the context should try to be as thin as
@@ -35,20 +35,20 @@ The context accepts four arguments:
 
 model_specification
   The :term:`model specification <Model Specification>` is a complete
-  representation of a :mod:`vivarium` simulation formatted as a yaml file.
+  representation of a :mod:`vivarium.engine` simulation formatted as a yaml file.
   As an argument ot the
   :class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`, it
   can be provided as a path to a file (either as a :class:`str` or a
   :class:`pathlib.Path`) or as a
   :class:`ConfigTree <vivarium.config_tree.main.ConfigTree>`, the internal
-  representation of configuration information used by :mod:`vivarium`. The
+  representation of configuration information used by :mod:`vivarium.engine`. The
   model specification contains three pieces, each represented by the next
   three arguments. For more information about model specifications and their
   formatting, see the associated
   :ref:`concept note <model_specification_concept>`.
 components
   :term:`Components <Component>` provide the logical structure
-  of a :mod:`vivarium` simulation. They are python classes that interact with
+  of a :mod:`vivarium.engine` simulation. They are python classes that interact with
   the framework via the :ref:`builder <builder_concept>`. Components may be
   provided to the context as a list of instantiated objects, as a dictionary
   representation of their import paths, or as a
@@ -61,13 +61,13 @@ components
   :ref:`concept note <components_concept>`.
 configuration
   The :term:`configuration <Configuration>` is the set of
-  variable model parameters in a :mod:`vivarium` simulation.  It may be
+  variable model parameters in a :mod:`vivarium.engine` simulation.  It may be
   provided as a dictionary or
   :class:`ConfigTree <vivarium.config_tree.main.ConfigTree>` representation. See
   the :ref:`concept note <configuration_concept>` for more information.
 plugins
   :term:`Plugins <Plugin>` represent core functionality and
-  subsystems of a :mod:`vivarium` simulation.  Users may wish to extend the
+  subsystems of a :mod:`vivarium.engine` simulation.  Users may wish to extend the
   functionality of the framework by writing their own plugins.  The framework
   then needs to be notified of their names and where they are located. Plugins
   may be specified as either a dictionary or
@@ -121,16 +121,16 @@ work in an interactive setting like a
 `jupyter notebook <https://jupyter.org>`_ or a Python REPL. For this sort of
 work, the :mod:`vivarium.engine.interface.interactive` module provides the
 :class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
-(also available as a top-level import from :mod:`vivarium`). Details about
+(also available as a top-level import from :mod:`vivarium.engine`). Details about
 the many ways to initialize and run a simulation using the interactive context
 are available in the :ref:`interactive tutorial <interactive_tutorial>`.
 
-:mod:`vivarium` itself does not provide tools for running simulations in
+:mod:`vivarium.engine` itself does not provide tools for running simulations in
 a distributed system, mostly because each cluster is unique. However, many
 common simulation tasks will require running many variations of the same
 simulation (parameter searches, intervention analysis, uncertainty analysis,
 etc.).  For an example of a distributed system built on top of
-:mod:`vivarium`, see the
+:mod:`vivarium.engine`, see the
 `vivarium_cluster_tools <https://github.com/ihmeuw/vivarium_cluster_tools>`_
 package and its associated
 `documentation <https://vivarium-cluster-tools.readthedocs.io/en/latest/?badge=latest>`_.

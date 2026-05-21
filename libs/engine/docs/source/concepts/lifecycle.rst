@@ -4,7 +4,7 @@
 The Simulation Lifecycle
 ========================
 
-The life cycle of a :mod:`vivarium` simulation is a representation of
+The life cycle of a :mod:`vivarium.engine` simulation is a representation of
 the different execution **states** and their transitions.  An execution state
 is a clearly delineated execution period during the simulation around which
 we build and enforce concrete programmatic contracts. These states
@@ -79,7 +79,7 @@ and the initialization phase begins.
 The Initialization Phase
 ------------------------
 
-The initialization phase of a :mod:`vivarium` simulation starts when the
+The initialization phase of a :mod:`vivarium.engine` simulation starts when the
 :class:`~vivarium.engine.framework.lifecycle.entities.LifeCycle` is fully constructed and
 ends when the ``__init__`` method of the
 :class:`vivarium.engine.framework.engine.SimulationContext` completes.

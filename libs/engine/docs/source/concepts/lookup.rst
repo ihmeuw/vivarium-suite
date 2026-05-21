@@ -8,13 +8,13 @@ Simulations tend to require a large quantity of data to run.  A completely
 reasonable way to look at a simulation is to think of it as a task of
 getting the right data and the right random numbers in the appropriate
 place at the appropriate time.  To address the first concern,
-:mod:`vivarium` provides the
+:mod:`vivarium.engine` provides the
 :class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>` abstraction
 to ensure that the right data can be retrieved when it's needed. In
 particular, it attempts to wrap different strategies for constructing
 interpolations or distributions on data such that a user simply needs to
 request values for a set of simulants when they're needed. This idea is
-extended to compositions of of several data-based values by :mod:`vivarium`'s
+extended to compositions of of several data-based values by :mod:`vivarium.engine`'s
 :ref:`values system <values_concept>`.
 
 
@@ -217,7 +217,7 @@ A more complete example is reproduced from the `Mortality <https://vivarium.read
 
 .. code-block:: python
 
-    from vivarium import Component
+    from vivarium.engine import Component
 
     class Mortality(Component):
 

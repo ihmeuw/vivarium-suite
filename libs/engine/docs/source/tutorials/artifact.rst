@@ -9,7 +9,7 @@ Artifact
 
 A data artifact is a bundle of input data associated with a particular
 model. It is typically stored as an ``hdf`` file on disk with very particular
-formatting. This file is then used by the :mod:`vivarium` simulations to fill
+formatting. This file is then used by the :mod:`vivarium.engine` simulations to fill
 in all the relevant parameter data.
 
 It is frequently useful to be able to view or modify this data outside the
@@ -36,7 +36,7 @@ illustrate:
 
 .. code-block:: python
 
-    from vivarium import Artifact
+    from vivarium.engine import Artifact
 
     art = Artifact('test_artifact.hdf')
     print(art)
@@ -92,7 +92,7 @@ age_start filters we just described:
 
 .. code-block:: python
 
-    from vivarium import Artifact
+    from vivarium.engine import Artifact
 
     art = Artifact('test_artifact.hdf', filter_terms=['draw == 0', 'year_start > 2005', 'age_start <= 5'])
     print(art)

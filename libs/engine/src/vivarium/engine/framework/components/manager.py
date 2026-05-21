@@ -3,7 +3,7 @@
 Component Manager
 =================
 
-The :mod:`vivarium` component manager system is responsible for maintaining a
+The :mod:`vivarium.engine` component manager system is responsible for maintaining a
 reference to all of the managers and components in a simulation, providing an
 interface for adding additional components or managers, and applying default
 configurations and initiating the ``setup`` stage of the lifecycle. This module
@@ -111,9 +111,9 @@ class OrderedComponentSet(Generic[T]):
 
 
 class ComponentManager(Manager):
-    """Manages the initialization and setup of :mod:`vivarium` components.
+    """Manages the initialization and setup of :mod:`vivarium.engine` components.
 
-    Maintains references to all components and managers in a :mod:`vivarium`
+    Maintains references to all components and managers in a :mod:`vivarium.engine`
     simulation, applies their default configuration and initiates their
     ``setup`` life-cycle stage.
 

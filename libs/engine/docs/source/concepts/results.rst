@@ -159,7 +159,7 @@ Here is an example of how you might register a "current_year" and "sex" as strat
 
   import pandas as pd
 
-  from vivarium import Component
+  from vivarium.engine import Component
   from vivarium.engine.framework.engine import Builder
 
   class ResultsStratifier(Component):

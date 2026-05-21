@@ -30,7 +30,7 @@ Event Times
 -----------
 Discrete time simulations assume that all changes to a simulant's state vector happen
 at the end of the time step, that is, the current clock time *plus* the step size.
-:mod:`vivarium` explicates this important distinction and labels this quantity the
+:mod:`vivarium.engine` explicates this important distinction and labels this quantity the
 *event time*. `Events <events_concept>` that correspond to (potential) state changes
 are mediated through the :class:`Event Manager <vivarium.engine.framework.event.manager.EventManager>`,
 which propagates events to :ref:`components <components_concept>` subscribed to
@@ -47,13 +47,13 @@ can access the current time and step size (and, implicitly, the event time).
 
 Individual Clocks
 -----------------
-:mod:`vivarium` also allows one to update simulants asynchronously with different
+:mod:`vivarium.engine` also allows one to update simulants asynchronously with different
 frequencies depending on their state information. For example, a component that
 simulates the progression of a disease might need to update the state of each simulant
 more frequently when infected than when in remission. The basic method is to give
 each simulant its own distinct clock time and step size instead of one global clock. 
 A simulant's *next event time*, that is, the sum of its clock time and step size,
-is when it is scheduled to be updated. Currently, :mod:`vivarium` still incorporates
+is when it is scheduled to be updated. Currently, :mod:`vivarium.engine` still incorporates
 a global clock, which determines the start, end, and minimal step size of the simulation.
 The minimum step size is the smallest value that a simulant's step size can take,
 and therefore determines the minimum duration by which the simulation can advance
