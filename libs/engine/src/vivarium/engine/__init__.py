@@ -14,11 +14,3 @@ from vivarium.engine.framework.artifact import Artifact
 from vivarium.engine.framework.configuration import build_model_specification
 from vivarium.engine.framework.results.observer import Observer
 from vivarium.engine.interface import InteractiveContext
-
-__all__ = [
-    "Artifact",
-    "Component",
-    "InteractiveContext",
-    "Observer",
-    "build_model_specification",
-]
