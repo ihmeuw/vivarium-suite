@@ -43,6 +43,11 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
 - ``framework-clis`` — reference for the vivarium-ecosystem console scripts
   (``simulate``, ``psimulate``, ``vipin``, per-repo ``make_artifacts``,
   ``update_gbd_round``) available in a standard model-repo env.
+- ``environments`` — discovery-first guidance for picking up the right Python
+  environment in a vivarium repo (VS Code interpreter → ``conda env list``
+  with shortened-name heuristic → ``.venv/`` overlay → ``environment.sh``),
+  with a brief reference to the three creation paths (``make build-env``,
+  ``make build-shared-env``, ``source environment.sh``).
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout

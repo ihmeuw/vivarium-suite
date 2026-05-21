@@ -1,3 +1,7 @@
+**0.7.0 - 05/21/26**
+
+ - Add ``environments`` skill covering env discovery and creation across vivarium repos
+
 **0.6.0 - 05/20/26**
 
  - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
