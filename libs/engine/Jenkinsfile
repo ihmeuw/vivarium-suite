@@ -36,6 +36,5 @@ reusable_pipeline(
         // for subsequent scheduled builds to run.
         "main"
     ],
-    requires_slurm: false,
     env_reqs: "ci_jenkins",
 )

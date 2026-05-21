@@ -2,24 +2,28 @@
 vivarium.engine
 ================
 
-.. image:: https://readthedocs.org/projects/vivarium/badge/?version=latest
-    :target: https://vivarium.readthedocs.io/en/latest/?badge=latest
+.. image:: https://readthedocs.org/projects/vivarium-engine/badge/?version=latest
+    :target: https://vivarium-engine.readthedocs.io/en/latest/?badge=latest
     :alt: Latest Docs
 
 .. image:: https://zenodo.org/badge/96817805.svg
    :target: https://zenodo.org/badge/latestdoi/96817805
 
-Vivarium is a simulation framework written using standard scientific Python
-tools. ``vivarium-engine`` is the core simulation lifecycle, component model,
-and runtime: it is what the rest of the ``vivarium-*`` ecosystem builds on.
+``vivarium-engine`` is a simulation framework written using standard scientific Python
+tools.
 
 Installation
 ------------
 
-**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
+**Supported Python versions: 3.10, 3.11, 3.12**
 
-``vivarium-engine`` lives in the vivarium-suite monorepo. To build it from
-source, clone the monorepo and install from this package directory:
+You can install ``vivarium`` from PyPI with pip:
+
+.. code-block:: bash
+
+   pip install vivarium-engine
+
+or build it from source with
 
 .. code-block:: bash
 
@@ -27,8 +31,10 @@ source, clone the monorepo and install from this package directory:
    cd vivarium-suite
    pip install libs/engine
 
-This installs the ``vivarium.engine`` import package and a command-line
-executable ``simulate`` that you can use to verify your installation:
+
+This will make the ``vivarium-engine`` library available to python and install a
+command-line executable called ``simulate`` that you can use to verify your
+installation with
 
 .. code-block:: bash
 
@@ -37,5 +43,5 @@ executable ``simulate`` that you can use to verify your installation:
 For broader monorepo development setup, see the monorepo README at
 https://github.com/ihmeuw/vivarium-suite.
 
-`Check out the docs! <https://vivarium.readthedocs.io/en/latest/>`_
+`Check out the docs! <https://vivarium-engine.readthedocs.io/en/latest/>`_
 -------------------------------------------------------------------

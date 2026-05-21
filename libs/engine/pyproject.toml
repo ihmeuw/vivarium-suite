@@ -49,7 +49,10 @@ docs = [
     "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
     "sphinxcontrib-video",
 ]
-lint = ["vivarium-dependencies[lint]"]
+lint = [
+    "vivarium-dependencies[lint]",
+    "mypy<1.17.0",  # FIXME [MIC-6218]
+]
 dev = ["vivarium-engine[docs,interactive,test,lint]"]
 cluster = []
 ci_github = ["vivarium-engine[test,docs,lint]"]
@@ -71,10 +74,10 @@ include = [
 "vivarium.engine" = ["py.typed"]
 
 [tool.setuptools_scm]
-# Monorepo tagging convention: tags must be prefixed with ``vivarium-engine-v``.
-# tag_regex strips the prefix so setuptools_scm sees a clean semver;
-# git_describe_command filters to only this lib's tags so siblings' releases
-# don't pollute the version derivation.
+# Monorepo tagging convention: tags must be prefixed with ``vivarium-engine-v``
+# (e.g. ``vivarium-engine-v6.0.0``). The regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so siblings'
+# releases don't pollute the version derivation.
 root = "../.."
 tag_regex = '^vivarium-engine-v(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-engine-v*"'
@@ -90,7 +93,14 @@ multi_line_output = 3
 
 [tool.mypy]
 # WARNING: settings here that aren't mypy_path / explicit_package_bases must be
-# kept in sync manually with the monorepo-root [tool.mypy].
+# kept in sync manually with the monorepo-root [tool.mypy]. The local
+# `make mypy` passes --config-file pyproject.toml (this file), so mypy doesn't
+# read the root config. If you change the root, change this too.
+#
+# mypy_path lets absolute self-imports (e.g. "from vivarium.engine import X")
+# resolve to the source tree rather than the PEP 660 editable install (which
+# hides files like py.typed behind a finder, making mypy think the package is
+# untyped).
 strict = true
 disallow_any_unimported = false
 implicit_reexport = true

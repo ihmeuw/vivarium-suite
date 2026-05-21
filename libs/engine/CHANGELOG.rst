@@ -6,14 +6,9 @@ repository has been archived.
 Breaking changes:
 
 - PyPI distribution renamed from ``vivarium`` to ``vivarium-engine``.
-- Import path changed from ``vivarium`` to ``vivarium.engine`` (e.g.
-  ``from vivarium.engine import Component``). The ``vivarium-compat`` shim
-  maps the old ``vivarium.*`` import paths to the new ones during a
-  deprecation period.
-- The data-artifact model (``Artifact``, ``ArtifactException``, ``EntityKey``,
-  and the HDF5 free functions) moved to the separate ``vivarium-artifact``
-  package. ``vivarium.engine`` re-exports ``Artifact`` for backward
-  compatibility but new code should import from ``vivarium.artifact``.
+- Import path changed from ``vivarium`` to ``vivarium.engine``.
+- The data-artifact model has been removed (it moved to the separate ``vivarium-artifact``
+  package).
 
 **4.1.5 - 05/11/26**
 
