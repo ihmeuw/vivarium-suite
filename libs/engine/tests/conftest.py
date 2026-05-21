@@ -8,7 +8,7 @@ import pytest_mock
 import tables
 import yaml
 from _pytest.logging import LogCaptureFixture
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree as LayeredConfigTree
 from loguru import logger
 from vivarium_testing_utils import FuzzyChecker
 
@@ -80,7 +80,7 @@ def model_specification(
 def disease_model_spec(tmp_path: Path) -> Path:
     model_spec_path = (
         Path(__file__).resolve().parent.parent
-        / "src/vivarium/examples/disease_model/disease_model.yaml"
+        / "src/vivarium/engine/examples/disease_model/disease_model.yaml"
     )
     with open(model_spec_path, "r") as file:
         ms = yaml.safe_load(file)

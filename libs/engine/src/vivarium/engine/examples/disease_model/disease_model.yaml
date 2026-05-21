@@ -1,5 +1,5 @@
 components:
-    vivarium.examples.disease_model:
+    vivarium.engine.examples.disease_model:
         population:
             - BasePopulation()
         disease:
