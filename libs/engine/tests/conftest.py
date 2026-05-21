@@ -126,9 +126,3 @@ def hdf_file_path(tmp_path: Path, test_data_dir: Path) -> Path:
     with tables.open_file(str(test_data_dir / "artifact.hdf")) as file:
         file.copy_file(str(p), overwrite=True)
     return p
-
-
-@pytest.fixture
-def hdf_file(hdf_file_path: Path) -> Generator[tables.file.File, None, None]:
-    with tables.open_file(str(hdf_file_path)) as file:
-        yield file

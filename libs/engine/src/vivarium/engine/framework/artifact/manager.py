@@ -15,10 +15,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
+from vivarium.artifact import Artifact, ArtifactException
 from vivarium.config_tree.main import ConfigTree
 
-from vivarium.engine.framework.artifact import ArtifactException
-from vivarium.engine.framework.artifact.artifact import Artifact
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.manager import Manager
 
