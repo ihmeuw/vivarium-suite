@@ -1,21 +1,24 @@
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("vivarium-engine")
+except PackageNotFoundError:
+    __version__ = "0.0.0+not-installed"
 
 import numpy
 
 numpy.seterr(all="raise")
 
-from vivarium.__about__ import (
-    __author__,
-    __copyright__,
-    __email__,
-    __license__,
-    __summary__,
-    __title__,
-    __uri__,
-)
-from vivarium._version import __version__
-from vivarium.component import Component
-from vivarium.framework.artifact import Artifact
-from vivarium.framework.configuration import build_model_specification
-from vivarium.framework.results.observer import Observer
-from vivarium.interface import InteractiveContext
+from vivarium.engine.component import Component
+from vivarium.engine.framework.artifact import Artifact
+from vivarium.engine.framework.configuration import build_model_specification
+from vivarium.engine.framework.results.observer import Observer
+from vivarium.engine.interface import InteractiveContext
+
+__all__ = [
+    "Artifact",
+    "Component",
+    "InteractiveContext",
+    "Observer",
+    "build_model_specification",
+]

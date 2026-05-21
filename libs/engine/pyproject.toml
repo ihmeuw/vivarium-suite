@@ -1,46 +1,108 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-engine"
+description = "vivarium is a microsimulation framework built on top of the standard scientific python stack."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX",
+    "Operating System :: POSIX :: BSD",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Life",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "vivarium-artifact",
+    "vivarium-config-tree",
+    "vivarium-dependencies[numpy_lt_2,pandas,pyyaml,scipy,click,tables,loguru,pyarrow,networkx]",
+    "vivarium-build-utils>=3.0.2,<4.0.0",
+    "dill",
+]
+
+[project.optional-dependencies]
+interactive = ["vivarium-dependencies[interactive]"]
+test = [
+    "vivarium-dependencies[pytest]",
+    "vivarium-testing-utils",
+]
+docs = [
+    "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
+    "sphinxcontrib-video",
+]
+lint = ["vivarium-dependencies[lint]"]
+dev = ["vivarium-engine[docs,interactive,test,lint]"]
+cluster = []
+ci_github = ["vivarium-engine[test,docs,lint]"]
+ci_jenkins = ["vivarium-engine[ci_github,cluster]"]
+
+[project.scripts]
+simulate = "vivarium.engine.interface.cli:simulate"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.engine and its subpackages. Excluding vivarium itself
+# means the wheel does not ship vivarium/__init__.py beyond the namespace marker.
+include = [
+    "vivarium.engine",
+    "vivarium.engine.*",
+]
+
+[tool.setuptools.package-data]
+"vivarium.engine" = ["py.typed"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with ``vivarium-engine-v``.
+# tag_regex strips the prefix so setuptools_scm sees a clean semver;
+# git_describe_command filters to only this lib's tags so siblings' releases
+# don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-engine-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-engine-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3
+
+[tool.mypy]
+# WARNING: settings here that aren't mypy_path / explicit_package_bases must be
+# kept in sync manually with the monorepo-root [tool.mypy].
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = ["build"]
+mypy_path = "src"
+explicit_package_bases = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests/"]
 
 [tool.coverage.run]
-source = ["vivarium"]
+source = ["vivarium.engine"]
 
 [tool.coverage.report]
 show_missing = true
-
-[tool.black]
-line_length = 94
-exclude = '''.*examples.*'''
-
-[tool.isort]
-line_length = 94
-profile = "black"
-multi_line_output = 3 # Vertical Hanging Indent, see https://pypi.org/project/isort/
-skip_glob = ["*/examples/*", "**/examples/*"]
-
-[tool.mypy]
-# This is the global mypy configuration.
-strict = true  # See all the enabled flags `mypy --help | grep -A 10 'Strict mode'`
-disallow_any_unimported = false
-implicit_reexport = true
-exclude = [
-    'build',
-    # Files below here should have their errors fixed and then be removed from this list
-    # You will need to remove the mypy: ignore-errors comment from the file heading as well
-]
-
-disable_error_code = []
-
-# handle mypy errors when 3rd party packages are not typed.
-[[tool.mypy.overrides]]
-module = [
-    "scipy.*",
-    "ipywidgets.*",
-    "Ipython.*",
-    "dill",
-    "tables.*"
-]
-ignore_missing_imports = true
