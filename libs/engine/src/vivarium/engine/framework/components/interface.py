@@ -1,0 +1,118 @@
+"""
+===================
+Component Interface
+===================
+
+This module provides an interface to the :class:`ComponentManager <vivarium.framework.components.manager.ComponentManager>`.
+
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from contextlib import AbstractContextManager
+from typing import TYPE_CHECKING, Union
+
+from vivarium import Component
+from vivarium.framework.components.manager import C, ComponentManager
+from vivarium.manager import Interface, Manager
+
+if TYPE_CHECKING:
+    _ComponentsType = Sequence[Union[Component, Manager, "_ComponentsType"]]
+
+
+class ComponentInterface(Interface):
+    """The builder interface for the component manager system."""
+
+    def __init__(self, manager: ComponentManager):
+        self._manager = manager
+
+    def get_component(self, name: str) -> Component | Manager:
+        """Get the component or manager that has ``name`` if presently held by the
+        component manager. Names are guaranteed to be unique.
+
+        Parameters
+        ----------
+        name
+            A component or manager name.
+
+        Returns
+        -------
+            A component or manager that has name ``name``.
+        """
+        return self._manager.get_component(name)
+
+    def get_components_by_type(self, component_type: type[C] | Sequence[type[C]]) -> list[C]:
+        """Get all components that are an instance of ``component_type``.
+
+        Parameters
+        ----------
+        component_type
+            A component type to retrieve, compared against internal components
+            using isinstance().
+
+        Returns
+        -------
+            A list of components of type ``component_type``.
+        """
+        return self._manager.get_components_by_type(component_type)
+
+    def list_components(self) -> dict[str, Component | Manager]:
+        """Get a mapping of names to components or managers held by the manager.
+
+        Returns
+        -------
+            A dictionary mapping names to components or managers.
+        """
+        return self._manager.list_components()
+
+    def get_current_component(self) -> Component:
+        """Get the component currently being set up, if any.
+
+        This method is primarily used internally by the framework to support
+        automatic component injection in interface methods.
+
+        Returns
+        -------
+            The component currently being set up.
+
+        Raises
+        ------
+            LifeCycleError
+                If there is no component currently being set up.
+        """
+        return self._manager.get_current_component()
+
+    def get_current_component_or_manager(self) -> Component | Manager:
+        """Get the component or manager currently being set up, if any.
+
+        This method exists to allow for cases where a manager is needed during
+        setup, such as if a manager creates a Value Pipeline.
+
+        Returns
+        -------
+            The component or manager currently being set up.
+
+        Raises
+        ------
+            LifeCycleError
+                If there is no component or manager currently being set up.
+        """
+        return self._manager.get_current_component_or_manager()
+
+    def _tracking_setup(self, component: Component | Manager) -> AbstractContextManager[None]:
+        """Context manager that tracks the component currently being set up.
+
+        Delegates to
+        :meth:`ComponentManager._tracking_setup
+        <vivarium.framework.components.manager.ComponentManager._tracking_setup>`.
+        This is intentionally private: write-access to
+        ``ComponentManager._current_component`` should remain confined to the
+        setup lifecycle.
+
+        Parameters
+        ----------
+        component
+            The component or manager currently being set up.
+        """
+        return self._manager.tracking_setup(component)

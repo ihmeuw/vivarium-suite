@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from vivarium import Component
+from vivarium.framework.engine import Builder
+from vivarium.framework.event import Event
+from vivarium.framework.population import SimulantData
+
+
+class Mortality(Component):
+
+    ##############
+    # Properties #
+    ##############
+
+    # docs-start: configuration_defaults
+    @property
+    def configuration_defaults(self) -> dict[str, Any]:
+        """A set of default configuration values for this component.
+
+        These can be overwritten in the simulation model specification or by
+        providing override values when constructing an interactive simulation.
+        """
+        return {self.name: {"data_sources": {"mortality_rate": 0.01}}}
+    # docs-end: configuration_defaults
+
+    #####################
+    # Lifecycle methods #
+    #####################
+
+    # noinspection PyAttributeOutsideInit
+    # docs-start: setup
+    def setup(self, builder: Builder) -> None:
+        """Performs this component's simulation setup.
+
+        The ``setup`` method is automatically called by the simulation
+        framework. The framework passes in a ``builder`` object which
+        provides access to a variety of framework subsystems and metadata.
+
+        Parameters
+        ----------
+        builder
+            Access to simulation tools and subsystems.
+        """
+        self.randomness = builder.randomness.get_stream("mortality")
+        builder.value.register_rate_producer(
+            "mortality_rate", source=self.build_lookup_table(builder, "mortality_rate")
+        )
+        builder.population.register_initializer(
+            initializer=self.initialize_is_alive,
+            columns="is_alive",
+            required_resources=[]
+        )
+    # docs-end: setup
+
+    ########################
+    # Event-driven methods #
+    ########################
+
+    # docs-start: initialize_is_alive
+    def initialize_is_alive(self, pop_data: SimulantData) -> None:
+        """Called by the simulation whenever new simulants are added.
+
+        This component is responsible for creating and filling the 'is_alive' column
+        in the population state table.
+
+        Parameters
+        ----------
+        pop_data
+            A record containing the index of the new simulants, the
+            start of the time step the simulants are added on, the width
+            of the time step, and the age boundaries for the simulants to
+            generate.
+        """
+        self.population_view.initialize(pd.Series(True, index=pop_data.index, name="is_alive"))
+
+    # docs-end: initialize_is_alive
+
+    # docs-start: on_time_step
+    def on_time_step(self, event: Event) -> None:
+        """Determines who dies each time step.
+
+        Parameters
+        ----------
+        event
+            An event object emitted by the simulation containing an index
+            representing the simulants affected by the event and timing
+            information.
+        """
+        effective_rate = self.population_view.get(event.index, "mortality_rate")
+        effective_probability = 1 - np.exp(-effective_rate)
+        draw = self.randomness.get_draw(event.index)
+        affected_simulants = draw < effective_probability
+        self.population_view.update(
+            "is_alive", lambda _: pd.Series(False, index=event.index[affected_simulants])
+        )
+    # docs-end: on_time_step

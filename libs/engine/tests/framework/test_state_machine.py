@@ -1,0 +1,246 @@
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+from layered_config_tree import LayeredConfigTree
+from pytest_mock import MockerFixture
+
+from tests.helpers import ColumnCreator
+from vivarium import InteractiveContext
+from vivarium.framework.configuration import build_simulation_configuration
+from vivarium.framework.engine import Builder
+from vivarium.framework.population import SimulantData
+from vivarium.framework.state_machine import Machine, State, Transition
+from vivarium.types import ClockTime, DataInput
+
+
+def test_initialize_allowing_self_transition() -> None:
+    self_transitions = State("self-transitions")
+    no_self_transitions = State("no-self-transitions", allow_self_transition=False)
+    undefined_self_transitions = State("self-transitions")
+
+    assert self_transitions.transition_set.allow_self_transition
+    assert not no_self_transitions.transition_set.allow_self_transition
+    assert undefined_self_transitions.transition_set.allow_self_transition
+
+
+def test_initialize_with_initial_state() -> None:
+    start_state = State("start")
+    other_state = State("other")
+    machine = Machine("state", states=[start_state, other_state], initial_state=start_state)
+    simulation = InteractiveContext(components=[machine])
+    assert all(simulation.get_population("state") == "start")
+
+
+@pytest.mark.parametrize("weights_type", ["artifact", "callable", "scalar"])
+def test_initialize_with_scalar_initialization_weights(
+    base_config: LayeredConfigTree, weights_type: str, mocker: MockerFixture
+) -> None:
+    state_weights = {"state_a.weights": 0.2, "state_b.weights": 0.8}
+
+    def mock_load(key: str) -> float:
+        return state_weights[key]
+
+    base_config.update(
+        {"population": {"population_size": 10000}, "randomness": {"key_columns": []}}
+    )
+
+    def initialization_weights(key: str) -> DataInput:
+        weights = {
+            "artifact": key,
+            "callable": lambda _: state_weights[key],
+            "scalar": state_weights[key],
+        }[weights_type]
+        assert isinstance(weights, (str, float)) or callable(weights)
+        return weights
+
+    state_a = State("a", initialization_weights=initialization_weights("state_a.weights"))
+    state_b = State("b", initialization_weights=initialization_weights("state_b.weights"))
+    machine = Machine("state", states=[state_a, state_b])
+    simulation = InteractiveContext(
+        components=[machine], configuration=base_config, setup=False
+    )
+    mocker.patch(
+        "vivarium.framework.artifact.interface.ArtifactInterface.load", side_effect=mock_load
+    )
+    simulation.setup()
+
+    state = simulation.get_population("state")
+    assert np.all(simulation.get_population("state") != "start")
+    assert round((state == "a").mean(), 1) == 0.2
+    assert round((state == "b").mean(), 1) == 0.8
+
+
+@pytest.mark.parametrize("weights_type", ["artifact", "callable", "dataframe"])
+def test_initialize_with_array_initialization_weights(
+    weights_type: str, mocker: MockerFixture
+) -> None:
+    state_weights = {
+        "state_a.weights": pd.DataFrame(
+            {"test_column_1": [0, 1, 2], "value": [0.2, 0.7, 0.4]}
+        ),
+        "state_b.weights": pd.DataFrame(
+            {"test_column_1": [0, 1, 2], "value": [0.8, 0.3, 0.6]}
+        ),
+    }
+
+    def mock_load(key: str) -> pd.DataFrame:
+        return state_weights[key]
+
+    config = build_simulation_configuration()
+    config.update(
+        {"population": {"population_size": 10000}, "randomness ": {"key_columns": []}}
+    )
+
+    def initialization_weights(key: str) -> DataInput:
+        weights = {
+            "artifact": key,
+            "callable": lambda _: state_weights[key],
+            "dataframe": state_weights[key],
+        }[weights_type]
+        assert isinstance(weights, (str, pd.DataFrame)) or callable(weights)
+        return weights
+
+    state_a = State("a", initialization_weights=initialization_weights("state_a.weights"))
+    state_b = State("b", initialization_weights=initialization_weights("state_b.weights"))
+    machine = Machine("state", states=[state_a, state_b])
+    simulation = InteractiveContext(
+        components=[machine, ColumnCreator()], configuration=config, setup=False
+    )
+    mocker.patch(
+        "vivarium.framework.artifact.interface.ArtifactInterface.load", side_effect=mock_load
+    )
+    simulation.setup()
+
+    pop = simulation.get_population(["state", "test_column_1"])
+    state_a_weights = state_weights["state_a.weights"]
+    state_b_weights = state_weights["state_b.weights"]
+    for i in range(3):
+        pop_i_state = pop.loc[pop["test_column_1"] == i, "state"]
+        assert round((pop_i_state == "a").mean(), 1) == state_a_weights.loc[i, "value"]
+        assert round((pop_i_state == "b").mean(), 1) == state_b_weights.loc[i, "value"]
+
+
+def test_error_if_initialize_with_both_initial_state_and_initialization_weights() -> None:
+    start_state = State("start")
+    other_state = State("other", initialization_weights=lambda _: 0.8)
+    machine = Machine("state", states=[start_state, other_state], initial_state=start_state)
+
+    with pytest.raises(ValueError, match="Cannot specify both"):
+        InteractiveContext(components=[machine])
+
+
+def test_error_if_initialize_with_neither_initial_state_nor_initialization_weights() -> None:
+    machine = Machine("state", states=[State("a"), State("b")])
+    with pytest.raises(ValueError, match="Must specify either"):
+        InteractiveContext(components=[machine])
+
+
+@pytest.mark.parametrize("population_size", [1, 100])
+@pytest.mark.parametrize("use_transition_arg", [True, False])
+def test_transition(
+    base_config: LayeredConfigTree, population_size: int, use_transition_arg: bool
+) -> None:
+    base_config.update(
+        {
+            "population": {"population_size": population_size},
+            "randomness": {"key_columns": []},
+        }
+    )
+    start_state = State("start", allow_self_transition=False)
+    done_state = State("done")
+    if use_transition_arg:
+        start_state.add_transition(Transition(start_state, done_state))
+    else:
+        start_state.add_transition(output_state=done_state)
+    machine = Machine("state", states=[start_state, done_state], initial_state=start_state)
+
+    simulation = InteractiveContext(components=[machine], configuration=base_config)
+    assert np.all(simulation.get_population("state") == "start")
+    simulation.step()
+    assert np.all(simulation.get_population("state") == "done")
+
+
+def test_no_null_transition(base_config: LayeredConfigTree) -> None:
+    base_config.update(
+        {"population": {"population_size": 10000}, "randomness": {"key_columns": []}}
+    )
+    a_state = State("a", allow_self_transition=False)
+    b_state = State("b", allow_self_transition=False)
+    start_state = State("start", allow_self_transition=False)
+    start_state.add_transition(
+        output_state=a_state, probability_function=lambda index: pd.Series(0.4, index=index)
+    )
+    start_state.add_transition(
+        output_state=b_state, probability_function=lambda index: pd.Series(0.6, index=index)
+    )
+    machine = Machine(
+        "state", states=[start_state, a_state, b_state], initial_state=start_state
+    )
+
+    simulation = InteractiveContext(components=[machine], configuration=base_config)
+    assert np.all(simulation.get_population("state") == "start")
+
+    simulation.step()
+
+    state = simulation.get_population("state")
+    assert np.all(state != "start")
+    assert round((state == "a").mean(), 1) == 0.4
+    assert round((state == "b").mean(), 1) == 0.6
+
+
+def test_null_transition(base_config: LayeredConfigTree) -> None:
+    base_config.update(
+        {"population": {"population_size": 10000}, "randomness": {"key_columns": []}}
+    )
+    a_state = State("a", allow_self_transition=False)
+    start_state = State("start")
+    start_state.add_transition(
+        output_state=a_state, probability_function=lambda index: pd.Series(0.4, index=index)
+    )
+
+    machine = Machine("state", states=[start_state, a_state], initial_state=start_state)
+
+    simulation = InteractiveContext(components=[machine], configuration=base_config)
+    simulation.step()
+    state = simulation.get_population("state")
+    assert round((state == "a").mean(), 1) == 0.4
+
+
+def test_side_effects() -> None:
+    class CountingState(State):
+        def setup(self, builder: Builder) -> None:
+            super().setup(builder)
+            builder.population.register_initializer(
+                initializer=self.initialize_count, columns="count"
+            )
+
+        def initialize_count(self, pop_data: SimulantData) -> None:
+            self.population_view.initialize(pd.Series(0, index=pop_data.index, name="count"))
+
+        def transition_side_effect(self, index: pd.Index[int], _: ClockTime) -> None:
+            self.population_view.update("count", lambda count: count + 1)
+
+    counting_state = CountingState("counting", allow_self_transition=False)
+    start_state = State("start", allow_self_transition=False)
+    start_state.add_transition(output_state=counting_state)
+    counting_state.add_transition(output_state=start_state)
+
+    machine = Machine(
+        "state", states=[start_state, counting_state], initial_state=start_state
+    )
+    simulation = InteractiveContext(components=[machine])
+    assert np.all(simulation.get_population("count") == 0)
+
+    # transitioning to counting state
+    simulation.step()
+    assert np.all(simulation.get_population("count") == 1)
+
+    # transitioning back to start state
+    simulation.step()
+    assert np.all(simulation.get_population("count") == 1)
+
+    # transitioning to counting state again
+    simulation.step()
+    assert np.all(simulation.get_population("count") == 2)

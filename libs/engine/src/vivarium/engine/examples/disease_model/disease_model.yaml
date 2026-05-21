@@ -1,0 +1,45 @@
+components:
+    vivarium.examples.disease_model:
+        population:
+            - BasePopulation()
+        disease:
+            - SISDiseaseModel('lower_respiratory_infections')
+        risk:
+            - Risk('child_wasting')
+            - RiskEffect('child_wasting', 'infected_with_lower_respiratory_infections.incidence_rate')
+        intervention:
+            - TreatmentIntervention('sqlns', 'child_wasting.proportion_exposed')
+        observer:
+            - DeathsObserver()
+            - YllsObserver()
+
+configuration:
+    randomness:
+        key_columns: ['entrance_time', 'age']
+    time:
+        start:
+            year: 2022
+            month: 1
+            day: 1
+        end:
+            year: 2026
+            month: 12
+            day: 31
+        step_size: 0.5  # Days
+    population:
+        population_size: 100_000
+        age_start: 0
+        age_end: 5
+    mortality:
+        mortality_rate: 0.0114
+        life_expectancy: 88.9
+    lower_respiratory_infections:
+        incidence_rate: 0.871
+        remission_rate: 45.1
+        excess_mortality_rate: 0.634
+    child_wasting:
+        proportion_exposed: 0.0914
+    effect_of_child_wasting_on_infected_with_lower_respiratory_infections.incidence_rate:
+        relative_risk: 4.63
+    sqlns:
+        effect_size: 0.18
