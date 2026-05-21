@@ -44,28 +44,28 @@ py:class ResultsFormatter
 py:class ResultsUpdater
 py:class _NestedDict
 py:exc ResultsConfigurationError
-py:exc vivarium.framework.results.exceptions.ResultsConfigurationError
-py:class vivarium.framework.plugins.M
-py:class vivarium.framework.plugins.I
-py:class vivarium.framework.utilities.TimeValue
+py:exc vivarium.engine.framework.results.exceptions.ResultsConfigurationError
+py:class vivarium.engine.framework.plugins.M
+py:class vivarium.engine.framework.plugins.I
+py:class vivarium.engine.framework.utilities.TimeValue
 py:class T
-py:class vivarium.framework.components.manager.T
-py:class vivarium.framework.components.manager.C
+py:class vivarium.engine.framework.components.manager.T
+py:class vivarium.engine.framework.components.manager.C
 
-# layered_config_tree
+# vivarium-config-tree (renamed from layered_config_tree)
 py:class LayeredConfigTree
-py:class layered_config_tree.main.LayeredConfigTree
-py:exc layered_config_tree.exceptions.ConfigurationError
+py:class vivarium.config_tree.main.LayeredConfigTree
+py:exc vivarium.config_tree.exceptions.ConfigurationError
 
 # Special methods that Sphinx can't resolve
 py:meth __init__
 py:meth __repr__
 
 # vivarium internal references that may not be in the docs
-py:class vivarium.framework.population.PopulationView
-py:class vivarium.framework.lookup.LookupTable
-py:class vivarium.framework.artifact.ArtifactManager
-py:meth vivarium.framework.artifact.ArtifactInterface.load
+py:class vivarium.engine.framework.population.PopulationView
+py:class vivarium.engine.framework.lookup.LookupTable
+py:class vivarium.engine.framework.artifact.ArtifactManager
+py:meth vivarium.engine.framework.artifact.ArtifactInterface.load
 py:class Component
 
 # TODO: Need to revisit this. Nitpicking here to avoid failing builds on 3.9
