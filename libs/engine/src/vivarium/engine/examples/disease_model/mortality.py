@@ -26,6 +26,7 @@ class Mortality(Component):
         providing override values when constructing an interactive simulation.
         """
         return {self.name: {"data_sources": {"mortality_rate": 0.01}}}
+
     # docs-end: configuration_defaults
 
     #####################
@@ -51,10 +52,9 @@ class Mortality(Component):
             "mortality_rate", source=self.build_lookup_table(builder, "mortality_rate")
         )
         builder.population.register_initializer(
-            initializer=self.initialize_is_alive,
-            columns="is_alive",
-            required_resources=[]
+            initializer=self.initialize_is_alive, columns="is_alive", required_resources=[]
         )
+
     # docs-end: setup
 
     ########################
@@ -76,7 +76,9 @@ class Mortality(Component):
             of the time step, and the age boundaries for the simulants to
             generate.
         """
-        self.population_view.initialize(pd.Series(True, index=pop_data.index, name="is_alive"))
+        self.population_view.initialize(
+            pd.Series(True, index=pop_data.index, name="is_alive")
+        )
 
     # docs-end: initialize_is_alive
 
@@ -98,4 +100,5 @@ class Mortality(Component):
         self.population_view.update(
             "is_alive", lambda _: pd.Series(False, index=event.index[affected_simulants])
         )
+
     # docs-end: on_time_step

@@ -8,10 +8,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.config_tree.main import ConfigTree
 from loguru import logger
 from pandas.core.groupby.generic import DataFrameGroupBy
 from pytest_mock import MockerFixture
+from vivarium.config_tree.main import ConfigTree
 
 from tests.framework.results.helpers import (
     BASE_POPULATION,
@@ -28,8 +28,14 @@ from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
 from vivarium.engine.framework.results.interface import PopulationFilter
-from vivarium.engine.framework.results.observation import AddingObservation, ConcatenatingObservation
-from vivarium.engine.framework.results.stratification import Stratification, get_mapped_col_name
+from vivarium.engine.framework.results.observation import (
+    AddingObservation,
+    ConcatenatingObservation,
+)
+from vivarium.engine.framework.results.stratification import (
+    Stratification,
+    get_mapped_col_name,
+)
 from vivarium.engine.types import ScalarMapper, VectorMapper
 
 

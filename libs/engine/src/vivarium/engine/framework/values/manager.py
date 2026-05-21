@@ -22,7 +22,10 @@ from vivarium.engine.framework.values.pipeline import (
     PrivateColumnValueSource,
     ValueSource,
 )
-from vivarium.engine.framework.values.post_processors import AttributePostProcessor, PostProcessor
+from vivarium.engine.framework.values.post_processors import (
+    AttributePostProcessor,
+    PostProcessor,
+)
 from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:

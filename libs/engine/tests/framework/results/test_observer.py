@@ -1,8 +1,8 @@
 from typing import Any
 
 import pytest
-from vivarium.config_tree.main import ConfigTree
 from pytest_mock import MockerFixture
+from vivarium.config_tree.main import ConfigTree
 
 from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.components.manager import ComponentConfigError

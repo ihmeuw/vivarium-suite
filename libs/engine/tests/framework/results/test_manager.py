@@ -5,9 +5,9 @@ import pandas as pd
 import pytest
 import pytest_mock
 from _pytest.logging import LogCaptureFixture
-from vivarium.config_tree.main import ConfigTree
 from loguru import logger
 from pandas.api.types import CategoricalDtype
+from vivarium.config_tree.main import ConfigTree
 
 from tests.framework.results.helpers import (
     BIN_BINNED_COLUMN,
@@ -45,7 +45,10 @@ from vivarium.engine.framework.results.interface import PopulationFilter
 from vivarium.engine.framework.results.manager import ResultsManager
 from vivarium.engine.framework.results.observation import AddingObservation, Observation
 from vivarium.engine.framework.results.observer import Observer
-from vivarium.engine.framework.results.stratification import Stratification, get_mapped_col_name
+from vivarium.engine.framework.results.stratification import (
+    Stratification,
+    get_mapped_col_name,
+)
 from vivarium.engine.interface.interactive import InteractiveContext
 from vivarium.engine.types import ScalarMapper, VectorMapper
 

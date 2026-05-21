@@ -393,9 +393,7 @@ class Builder:
 
     """
 
-    def __init__(
-        self, configuration: ConfigTree, plugin_manager: PluginManager
-    ) -> None:
+    def __init__(self, configuration: ConfigTree, plugin_manager: PluginManager) -> None:
         self.configuration = configuration
         """Provides access to the :ref:`configuration<configuration_concept>`"""
 

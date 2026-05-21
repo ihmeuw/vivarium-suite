@@ -22,15 +22,15 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from vivarium.config_tree import (
-    ConfigurationError,
-    DuplicatedConfigurationError,
-    ConfigTree,
-)
+from vivarium.config_tree import ConfigTree, ConfigurationError, DuplicatedConfigurationError
 
 from vivarium.engine import Component
 from vivarium.engine.exceptions import VivariumError
-from vivarium.engine.framework.lifecycle import LifeCycleError, LifeCycleManager, lifecycle_states
+from vivarium.engine.framework.lifecycle import (
+    LifeCycleError,
+    LifeCycleManager,
+    lifecycle_states,
+)
 from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:

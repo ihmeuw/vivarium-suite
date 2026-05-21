@@ -14,7 +14,12 @@ import networkx as nx
 
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.resource.exceptions import ResourceError
-from vivarium.engine.framework.resource.resource import Column, Initializer, Resource, ResourceId
+from vivarium.engine.framework.resource.resource import (
+    Column,
+    Initializer,
+    Resource,
+    ResourceId,
+)
 from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:

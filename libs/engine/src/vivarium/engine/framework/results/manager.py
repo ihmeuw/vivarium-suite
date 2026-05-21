@@ -16,7 +16,10 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results.context import ResultsContext
 from vivarium.engine.framework.results.observation import Observation
-from vivarium.engine.framework.results.stratification import Stratification, get_mapped_col_name
+from vivarium.engine.framework.results.stratification import (
+    Stratification,
+    get_mapped_col_name,
+)
 from vivarium.engine.manager import Manager
 from vivarium.engine.types import ScalarMapper, VectorMapper
 

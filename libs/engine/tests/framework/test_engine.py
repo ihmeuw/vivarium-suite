@@ -10,8 +10,8 @@ import dill
 import pandas as pd
 import pytest
 from _pytest.logging import LogCaptureFixture
-from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
+from vivarium.config_tree import ConfigTree
 
 from tests.framework.results.helpers import (
     FAMILIARS,
@@ -413,7 +413,9 @@ def test_SimulationContext_write_backup(
 ) -> None:
     # TODO MIC-5216: Remove mocks when we can use dill in pytest.
     mocker.patch("vivarium.engine.framework.engine.dill.dump")
-    mocker.patch("vivarium.engine.framework.engine.dill.load", return_value=SimulationContext())
+    mocker.patch(
+        "vivarium.engine.framework.engine.dill.load", return_value=SimulationContext()
+    )
     sim = SimulationContext()
     backup_path = tmp_path / "backup.pkl"
     sim.write_backup(backup_path)
@@ -521,7 +523,9 @@ def test_SimulationContext_load_from_backup(
 ) -> None:
     # TODO MIC-5216: Remove mocks when we can use dill in pytest.
     mocker.patch("vivarium.engine.framework.engine.dill.dump")
-    mocker.patch("vivarium.engine.framework.engine.dill.load", return_value=SimulationContext())
+    mocker.patch(
+        "vivarium.engine.framework.engine.dill.load", return_value=SimulationContext()
+    )
     sim = SimulationContext()
     backup_path = tmp_path / "backup.pkl"
     sim.write_backup(backup_path)

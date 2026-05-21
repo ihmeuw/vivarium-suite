@@ -50,6 +50,8 @@ class TreatmentIntervention(Component):
     # Pipeline sources and modifiers #
     ##################################
 
-    def intervention_effect(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
+    def intervention_effect(
+        self, index: pd.Index[int], value: pd.Series[float]
+    ) -> pd.Series[float]:
         effect_size = self.population_view.get(index, self.effect_size_pipeline)
         return value * (1 - effect_size)

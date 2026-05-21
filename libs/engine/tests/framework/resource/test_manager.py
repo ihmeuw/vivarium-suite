@@ -15,7 +15,12 @@ from vivarium.engine.framework.randomness.index_map import IndexMap
 from vivarium.engine.framework.resource import Resource, ResourceManager
 from vivarium.engine.framework.resource.exceptions import ResourceError
 from vivarium.engine.framework.resource.resource import Column, Initializer
-from vivarium.engine.framework.values import AttributePipeline, Pipeline, ValueModifier, ValueSource
+from vivarium.engine.framework.values import (
+    AttributePipeline,
+    Pipeline,
+    ValueModifier,
+    ValueSource,
+)
 
 
 @pytest.fixture

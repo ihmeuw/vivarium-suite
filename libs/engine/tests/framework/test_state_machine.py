@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
+from vivarium.config_tree import ConfigTree
 
 from tests.helpers import ColumnCreator
 from vivarium.engine import InteractiveContext
@@ -62,7 +62,8 @@ def test_initialize_with_scalar_initialization_weights(
         components=[machine], configuration=base_config, setup=False
     )
     mocker.patch(
-        "vivarium.engine.framework.artifact.interface.ArtifactInterface.load", side_effect=mock_load
+        "vivarium.engine.framework.artifact.interface.ArtifactInterface.load",
+        side_effect=mock_load,
     )
     simulation.setup()
 
@@ -109,7 +110,8 @@ def test_initialize_with_array_initialization_weights(
         components=[machine, ColumnCreator()], configuration=config, setup=False
     )
     mocker.patch(
-        "vivarium.engine.framework.artifact.interface.ArtifactInterface.load", side_effect=mock_load
+        "vivarium.engine.framework.artifact.interface.ArtifactInterface.load",
+        side_effect=mock_load,
     )
     simulation.setup()
 

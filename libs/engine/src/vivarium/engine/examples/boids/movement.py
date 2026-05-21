@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 
-from vivarium.engine.framework.event import Event
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population import SimulantData
 
 
@@ -38,7 +39,7 @@ class Movement(Component):
         builder.population.register_initializer(
             initializer=self.initialize_movement,
             columns=["x", "y", "vx", "vy"],
-            required_resources=[self.randomness]
+            required_resources=[self.randomness],
         )
 
     ##################################
@@ -48,6 +49,7 @@ class Movement(Component):
     # docs-start: base_acceleration
     def base_acceleration(self, index: pd.Index[int]) -> pd.DataFrame:
         return pd.DataFrame(0.0, columns=["acc_x", "acc_y"], index=index)
+
     # docs-end: base_acceleration
 
     ########################
@@ -60,8 +62,10 @@ class Movement(Component):
             {
                 "x": self.config.field.width * self.randomness.get_draw(pop_data.index, "x"),
                 "y": self.config.field.height * self.randomness.get_draw(pop_data.index, "y"),
-                "vx": ((2 * self.randomness.get_draw(pop_data.index, "vx")) - 1) * self.config.movement.max_speed,
-                "vy": ((2 * self.randomness.get_draw(pop_data.index, "vy")) - 1) * self.config.movement.max_speed,
+                "vx": ((2 * self.randomness.get_draw(pop_data.index, "vx")) - 1)
+                * self.config.movement.max_speed,
+                "vy": ((2 * self.randomness.get_draw(pop_data.index, "vy")) - 1)
+                * self.config.movement.max_speed,
             },
             index=pop_data.index,
         )
@@ -96,4 +100,5 @@ class Movement(Component):
             return pop
 
         self.population_view.update(["x", "y", "vx", "vy"], _apply_physics)
+
     # docs-end: on_time_step

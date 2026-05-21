@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from typing import Any
+
 import pandas as pd
 
 from vivarium.engine import Component
@@ -9,7 +10,7 @@ from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.state_machine import Machine, State, Transition, Trigger
 from vivarium.engine.framework.utilities import rate_to_probability
 from vivarium.engine.framework.values import list_combiner, union_post_processor
-from collections.abc import Iterable
+
 
 class DiseaseTransition(Transition):
     #####################
@@ -86,7 +87,9 @@ class DiseaseState(State):
     def __init__(self, state_id: str, cause_key: str):
         super().__init__(state_id)
         self._cause_key = cause_key
-        self.emr_paf_pipeline = f"{self.state_id}.excess_mortality_rate.population_attributable_fraction"
+        self.emr_paf_pipeline = (
+            f"{self.state_id}.excess_mortality_rate.population_attributable_fraction"
+        )
         self.emr_pipeline = f"{self.state_id}.excess_mortality_rate"
 
     # noinspection PyAttributeOutsideInit
@@ -118,7 +121,7 @@ class DiseaseState(State):
         builder.value.register_attribute_modifier(
             "mortality_rate",
             modifier=self.add_in_excess_mortality,
-            required_resources=[self.emr_pipeline]
+            required_resources=[self.emr_pipeline],
         )
 
     ##################
@@ -126,16 +129,22 @@ class DiseaseState(State):
     ##################
 
     def add_disease_transition(
-        self, output: "DiseaseState", measure: str, rate_name: str, triggered: Trigger = Trigger.NOT_TRIGGERED
+        self,
+        output: "DiseaseState",
+        measure: str,
+        rate_name: str,
+        triggered: Trigger = Trigger.NOT_TRIGGERED,
     ) -> DiseaseTransition:
-        t = DiseaseTransition(self, output, self._cause_key, measure, rate_name, triggered=triggered)
+        t = DiseaseTransition(
+            self, output, self._cause_key, measure, rate_name, triggered=triggered
+        )
         self.add_transition(t)
         return t
 
     ##################################
     # Pipeline sources and modifiers #
     ##################################
-    
+
     def risk_deleted_excess_mortality_rate(self, index: pd.Index[int]) -> pd.Series[float]:
         base_emr = self.emr_table(index)
         emr_paf = self.population_view.get(index, self.emr_paf_pipeline)
@@ -144,9 +153,7 @@ class DiseaseState(State):
     def add_in_excess_mortality(
         self, index: pd.Index[int], mortality_rates: pd.Series[float]
     ) -> pd.Series[float]:
-        mortality_rates.loc[index] += self.population_view.get(
-            index, self.emr_pipeline
-        )
+        mortality_rates.loc[index] += self.population_view.get(index, self.emr_pipeline)
         return mortality_rates
 
 
@@ -189,7 +196,9 @@ class DiseaseModel(Machine):
     # Pipeline sources and modifiers #
     ##################################
 
-    def delete_cause_specific_mortality(self, index: pd.Index[int], rates: pd.Series[float]) -> pd.Series[float]:
+    def delete_cause_specific_mortality(
+        self, index: pd.Index[int], rates: pd.Series[float]
+    ) -> pd.Series[float]:
         csmr = self.population_view.get(index, self.csmr_pipeline)
         return rates - csmr
 

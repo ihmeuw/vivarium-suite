@@ -18,7 +18,10 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population import utilities as pop_utils
 from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
 from vivarium.engine.framework.results.observation import Observation
-from vivarium.engine.framework.results.stratification import Stratification, get_mapped_col_name
+from vivarium.engine.framework.results.stratification import (
+    Stratification,
+    get_mapped_col_name,
+)
 from vivarium.engine.types import ScalarMapper, VectorMapper
 
 if TYPE_CHECKING:

@@ -1,8 +1,8 @@
 from collections.abc import Callable
 
 import pytest
-from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
+from vivarium.config_tree import ConfigTree
 
 from tests.helpers import MockComponentA, MockManager
 from vivarium.engine.framework.components import ComponentConfigurationParser

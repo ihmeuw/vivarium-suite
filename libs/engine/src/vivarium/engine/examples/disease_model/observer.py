@@ -3,9 +3,10 @@ from typing import Any
 import pandas as pd
 
 from vivarium.engine.framework.engine import Builder
-from vivarium.engine.framework.results import Observer
-from vivarium.engine.framework.population import SimulantData
 from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.framework.results import Observer
+
 
 class DeathsObserver(Observer):
     """Observes the number of deaths."""
@@ -18,14 +19,14 @@ class DeathsObserver(Observer):
         builder.population.register_initializer(
             initializer=self.initialize_previous_alive,
             columns="previous_alive",
-            required_resources=["is_alive"]
+            required_resources=["is_alive"],
         )
 
     def register_observations(self, builder: Builder) -> None:
         builder.results.register_adding_observation(
             name="dead",
             requires_attributes=["is_alive", "previous_alive"],
-            pop_filter='previous_alive == True and is_alive == False',
+            pop_filter="previous_alive == True and is_alive == False",
         )
 
     ########################
@@ -34,7 +35,9 @@ class DeathsObserver(Observer):
 
     def initialize_previous_alive(self, pop_data: SimulantData) -> None:
         """Initialize simulants as alive"""
-        self.population_view.initialize(pd.Series(True, index=pop_data.index, name="previous_alive"))
+        self.population_view.initialize(
+            pd.Series(True, index=pop_data.index, name="previous_alive")
+        )
 
     def on_time_step_prepare(self, event: Event) -> None:
         """Update the previous deaths column to the current deaths."""
@@ -55,6 +58,7 @@ class YllsObserver(Observer):
         config = super().configuration_defaults
         config["mortality"] = {"life_expectancy": 80.0}
         return config
+
     #####################
     # Lifecycle methods #
     #####################
@@ -70,7 +74,7 @@ class YllsObserver(Observer):
         builder.results.register_adding_observation(
             name="ylls",
             requires_attributes=["age", "is_alive", "previous_alive"],
-            pop_filter='previous_alive == True and is_alive == False',
+            pop_filter="previous_alive == True and is_alive == False",
             aggregator=self.calculate_ylls,
         )
 

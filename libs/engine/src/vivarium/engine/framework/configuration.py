@@ -12,8 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from vivarium.config_tree import ConfigurationError
-from vivarium.config_tree import ConfigTree
+from vivarium.config_tree import ConfigTree, ConfigurationError
 
 from vivarium.engine.framework.plugins import DEFAULT_PLUGINS
 
@@ -22,9 +21,7 @@ def build_model_specification(
     model_specification: str | Path | ConfigTree | None = None,
     component_configuration: dict[str, Any] | ConfigTree | None = None,
     configuration: dict[str, Any] | ConfigTree | None = None,
-    plugin_configuration: dict[str, dict[str, dict[str, str]]]
-    | ConfigTree
-    | None = None,
+    plugin_configuration: dict[str, dict[str, dict[str, str]]] | ConfigTree | None = None,
 ) -> ConfigTree:
     if isinstance(model_specification, (str, Path)):
         validate_model_specification_file(model_specification)

@@ -32,7 +32,10 @@ from pandas.core.groupby.generic import DataFrameGroupBy
 
 from vivarium.engine.exceptions import VivariumError
 from vivarium.engine.framework.event import Event
-from vivarium.engine.framework.results.stratification import Stratification, get_original_col_name
+from vivarium.engine.framework.results.stratification import (
+    Stratification,
+    get_original_col_name,
+)
 
 if TYPE_CHECKING:
     from vivarium.engine.framework.results.interface import PopulationFilter

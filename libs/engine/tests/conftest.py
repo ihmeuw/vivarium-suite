@@ -8,8 +8,8 @@ import pytest_mock
 import tables
 import yaml
 from _pytest.logging import LogCaptureFixture
-from vivarium.config_tree import ConfigTree
 from loguru import logger
+from vivarium.config_tree import ConfigTree
 from vivarium_testing_utils import FuzzyChecker
 
 from vivarium.engine.framework.configuration import (

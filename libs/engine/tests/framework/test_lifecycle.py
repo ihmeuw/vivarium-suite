@@ -2,7 +2,11 @@ import pandas as pd
 import pytest
 
 from vivarium.engine.framework.event import Event
-from vivarium.engine.framework.lifecycle.entities import LifeCycle, LifeCyclePhase, LifeCycleState
+from vivarium.engine.framework.lifecycle.entities import (
+    LifeCycle,
+    LifeCyclePhase,
+    LifeCycleState,
+)
 from vivarium.engine.framework.lifecycle.exceptions import ConstraintError, LifeCycleError
 from vivarium.engine.framework.lifecycle.lifecycle_states import INITIALIZATION
 from vivarium.engine.framework.lifecycle.manager import LifeCycleManager

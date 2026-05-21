@@ -6,9 +6,9 @@ from types import MethodType
 
 import pandas as pd
 import pytest
-from vivarium.config_tree.main import ConfigTree
 from loguru import logger
 from pytest_mock import MockerFixture
+from vivarium.config_tree.main import ConfigTree
 
 from tests.framework.results.helpers import BASE_POPULATION, FAMILIARS
 from tests.framework.results.helpers import HOUSE_CATEGORIES as HOUSES

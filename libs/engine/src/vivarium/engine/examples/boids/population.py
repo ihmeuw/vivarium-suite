@@ -4,6 +4,7 @@ import pandas as pd
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.population import SimulantData
+
 # docs-end: imports
 
 
@@ -31,8 +32,9 @@ class Population(Component):
         builder.population.register_initializer(
             initializer=self.initialize_population,
             columns=["color", "entrance_time"],
-            required_resources=[self.randomness]
+            required_resources=[self.randomness],
         )
+
     # docs-end: setup
 
     ########################

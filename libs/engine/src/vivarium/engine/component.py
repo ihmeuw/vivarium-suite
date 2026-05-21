@@ -18,8 +18,7 @@ from inspect import signature
 from typing import TYPE_CHECKING, Any, overload
 
 import pandas as pd
-from vivarium.config_tree import ConfigurationError
-from vivarium.config_tree import ConfigTree
+from vivarium.config_tree import ConfigTree, ConfigurationError
 
 from vivarium.engine.framework.artifact import ArtifactException
 from vivarium.engine.framework.lifecycle import LifeCycleError, lifecycle_states

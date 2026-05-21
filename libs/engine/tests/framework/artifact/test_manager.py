@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
-from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
+from vivarium.config_tree import ConfigTree
 
 from vivarium.engine.framework.artifact.manager import (
     ArtifactManager,
@@ -83,9 +83,7 @@ def test_subset_columns() -> None:
     )
 
 
-def test_parse_artifact_path_config(
-    base_config: ConfigTree, test_data_dir: Path
-) -> None:
+def test_parse_artifact_path_config(base_config: ConfigTree, test_data_dir: Path) -> None:
     artifact_path = test_data_dir / "artifact.hdf"
     base_config.update(
         {"input_data": {"artifact_path": str(artifact_path)}}, **metadata(str(Path("/")))
@@ -102,9 +100,7 @@ def test_parse_artifact_path_relative_no_source(base_config: ConfigTree) -> None
         parse_artifact_path_config(base_config)
 
 
-def test_parse_artifact_path_relative(
-    base_config: ConfigTree, test_data_dir: Path
-) -> None:
+def test_parse_artifact_path_relative(base_config: ConfigTree, test_data_dir: Path) -> None:
     base_config.update(
         {"input_data": {"artifact_path": "../../test_data/artifact.hdf"}},
         **metadata(__file__),

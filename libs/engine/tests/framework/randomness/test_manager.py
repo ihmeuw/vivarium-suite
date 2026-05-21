@@ -2,8 +2,8 @@ from typing import Literal
 
 import pandas as pd
 import pytest
-from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
+from vivarium.config_tree import ConfigTree
 
 from tests.helpers import ColumnCreator
 from vivarium.engine import Component, InteractiveContext

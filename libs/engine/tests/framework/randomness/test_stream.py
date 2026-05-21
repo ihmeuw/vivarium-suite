@@ -5,14 +5,18 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 from scipy import stats
+from vivarium.config_tree import ConfigTree
 from vivarium_testing_utils import FuzzyChecker
 
 from tests.helpers import ColumnCreator
 from vivarium.engine import InteractiveContext
-from vivarium.engine.framework.randomness import RESIDUAL_CHOICE, RandomnessError, RandomnessStream
+from vivarium.engine.framework.randomness import (
+    RESIDUAL_CHOICE,
+    RandomnessError,
+    RandomnessStream,
+)
 from vivarium.engine.framework.randomness.index_map import IndexMap
 from vivarium.engine.framework.randomness.stream import (
     PPFCallable,

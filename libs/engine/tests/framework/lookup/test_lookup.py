@@ -6,8 +6,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
+from vivarium.config_tree import ConfigTree
 
 from tests.helpers import LookupCreator
 from vivarium.engine import Component, InteractiveContext

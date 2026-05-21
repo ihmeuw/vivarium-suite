@@ -15,7 +15,10 @@ from typing import TYPE_CHECKING, Any
 
 from vivarium.engine.framework.lifecycle.constraint_maker import ConstraintMaker
 from vivarium.engine.framework.lifecycle.entities import LifeCycle
-from vivarium.engine.framework.lifecycle.exceptions import InvalidTransitionError, LifeCycleError
+from vivarium.engine.framework.lifecycle.exceptions import (
+    InvalidTransitionError,
+    LifeCycleError,
+)
 from vivarium.engine.framework.lifecycle.lifecycle_states import INITIALIZATION
 from vivarium.engine.manager import Manager
 

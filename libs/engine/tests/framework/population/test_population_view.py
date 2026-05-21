@@ -25,7 +25,11 @@ from tests.helpers import AttributePipelineCreator, ColumnCreator
 from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lifecycle import lifecycle_states
-from vivarium.engine.framework.population import PopulationError, PopulationManager, PopulationView
+from vivarium.engine.framework.population import (
+    PopulationError,
+    PopulationManager,
+    PopulationView,
+)
 
 ##########################
 # Mock data and fixtures #

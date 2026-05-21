@@ -5,7 +5,7 @@ from vivarium.engine import InteractiveContext
 
 
 # docs-start: plot_boids
-def plot_boids(simulation: InteractiveContext, plot_velocity: bool=False) -> None:
+def plot_boids(simulation: InteractiveContext, plot_velocity: bool = False) -> None:
     width = simulation.configuration.field.width
     height = simulation.configuration.field.height
     pop = simulation.get_population(["x", "y", "color", "vx", "vy"])
@@ -18,6 +18,8 @@ def plot_boids(simulation: InteractiveContext, plot_velocity: bool=False) -> Non
     plt.ylabel("y")
     plt.axis((0, width, 0, height))
     plt.show()
+
+
 # docs-end: plot_boids
 
 # docs-start: plot_boids_animated
@@ -43,4 +45,6 @@ def plot_boids_animated(simulation: InteractiveContext) -> FuncAnimation:
         s.set_offsets(frame_pops[i])
 
     return FuncAnimation(fig, animate, frames=frames, interval=10)  # type: ignore[arg-type]
+
+
 # docs-end: plot_boids_animated

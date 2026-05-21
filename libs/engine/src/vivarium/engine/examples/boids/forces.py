@@ -1,5 +1,5 @@
-
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -46,7 +46,9 @@ class Force(Component, ABC):
         neighbors = self.population_view.get(index, "neighbors")
         pop = self.population_view.get(index, ["x", "y", "vx", "vy"])
         if not (isinstance(neighbors, pd.Series) and isinstance(pop, pd.DataFrame)):
-            raise ValueError("Neighbors must be a pd.Series of ints and population a pd.DataFrame")
+            raise ValueError(
+                "Neighbors must be a pd.Series of ints and population a pd.DataFrame"
+            )
         pairs = self._get_pairs(neighbors, pop)
 
         raw_force = self.calculate_force(pairs)
@@ -69,7 +71,9 @@ class Force(Component, ABC):
     def calculate_force(self, neighbors: pd.DataFrame) -> pd.DataFrame:
         pass
 
-    def _get_pairs(self, neighbors: pd.Series[int | float], pop: pd.DataFrame) -> pd.DataFrame:
+    def _get_pairs(
+        self, neighbors: pd.Series[int | float], pop: pd.DataFrame
+    ) -> pd.DataFrame:
         pairs = (
             pop.join(neighbors.rename("neighbors"))
             .reset_index()
@@ -115,6 +119,8 @@ class Force(Component, ABC):
 
     def _magnitude(self, df: pd.DataFrame) -> pd.Series[float]:
         return pd.Series(np.sqrt(np.square(df.x) + np.square(df.y)), dtype=float)
+
+
 # docs-end: force_base_class
 
 
@@ -173,4 +179,6 @@ class Alignment(Force):
             .sum()
             .rename(columns=lambda c: c.replace("v", "").replace("_other", ""))
         )
+
+
 # docs-end: concrete_force_classes

@@ -62,9 +62,7 @@ class ComponentConfigurationParser:
 
     """
 
-    def get_components(
-        self, component_config: ConfigTree | list[str]
-    ) -> list[Component]:
+    def get_components(self, component_config: ConfigTree | list[str]) -> list[Component]:
         """Extracts component specifications from configuration information and
         returns initialized components.
 

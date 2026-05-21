@@ -5,10 +5,11 @@ from typing import Any
 import pandas as pd
 
 from vivarium.engine import Component
+from vivarium.engine.examples.disease_model import Mortality
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population import SimulantData
-from vivarium.engine.examples.disease_model import Mortality
+
 # docs-end: imports
 
 
@@ -35,12 +36,14 @@ class BasePopulation(Component):
                 # Note: There is also a 'population_size' key.
             },
         }
+
     # docs-end: configuration_defaults
-    
+
     # docs-start: sub_components
     @property
     def sub_components(self) -> list[Component]:
         return [Mortality()]
+
     # docs-end: sub_components
 
     #####################
@@ -78,7 +81,8 @@ class BasePopulation(Component):
 
         # docs-start: randomness
         self.age_randomness = builder.randomness.get_stream(
-            "age_initialization", initializes_crn_attributes=self.with_common_random_numbers,
+            "age_initialization",
+            initializes_crn_attributes=self.with_common_random_numbers,
         )
         self.sex_randomness = builder.randomness.get_stream("sex_initialization")
         # docs-end: randomness
@@ -87,14 +91,15 @@ class BasePopulation(Component):
         builder.population.register_initializer(
             initializer=self.initialize_entrance_time_and_age,
             columns=["entrance_time", "age"],
-            required_resources=[self.age_randomness]
+            required_resources=[self.age_randomness],
         )
         builder.population.register_initializer(
             initializer=self.initialize_sex,
             columns="sex",
-            required_resources=[self.sex_randomness]
+            required_resources=[self.sex_randomness],
         )
         # docs-end: initializers
+
     # docs-end: setup
 
     ########################
@@ -137,11 +142,17 @@ class BasePopulation(Component):
         # docs-start: update_entrance_time_and_age
         self.population_view.initialize(population)
         # docs-end: update_entrance_time_and_age
+
     # docs-end: initialize_entrance_time_and_age
 
     # docs-start: initialize_sex
     def initialize_sex(self, pop_data: SimulantData) -> None:
-        self.population_view.initialize(pd.Series(self.sex_randomness.choice(pop_data.index, ["Male", "Female"]), name="sex"))
+        self.population_view.initialize(
+            pd.Series(
+                self.sex_randomness.choice(pop_data.index, ["Male", "Female"]), name="sex"
+            )
+        )
+
     # docs-end: initialize_sex
 
     # docs-start: on_time_step
@@ -167,4 +178,5 @@ class BasePopulation(Component):
             "age",
             lambda age: age.loc[living_index] + delta,
         )
+
     # docs-end: on_time_step

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from pathlib import Path
+
 import numpy as np
 from vivarium.config_tree import ConfigTree
 from vivarium_testing_utils import FuzzyChecker
@@ -72,8 +73,12 @@ def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) ->
             name=f"{sex}_proportion",
         )
 
-    assert np.all(pop["lower_respiratory_infections"] == "susceptible_to_lower_respiratory_infections")
-    assert np.all((pop["child_wasting_propensity"] >= 0) & (pop["child_wasting_propensity"] <= 1))
+    assert np.all(
+        pop["lower_respiratory_infections"] == "susceptible_to_lower_respiratory_infections"
+    )
+    assert np.all(
+        (pop["child_wasting_propensity"] >= 0) & (pop["child_wasting_propensity"] <= 1)
+    )
 
     simulation.step()
     pop = simulation.get_population(["is_alive", "lower_respiratory_infections"])
@@ -89,7 +94,9 @@ def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) ->
         name="alive_proportion",
     )
 
-    has_lri = pop["lower_respiratory_infections"] == "infected_with_lower_respiratory_infections"
+    has_lri = (
+        pop["lower_respiratory_infections"] == "infected_with_lower_respiratory_infections"
+    )
     lri_target = from_yearly(25, timedelta(days=0.5))
     assert isinstance(lri_target, float)
     fuzzy_checker.fuzzy_assert_proportion(
