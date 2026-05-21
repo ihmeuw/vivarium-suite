@@ -38,7 +38,7 @@ during a simulation.
        | to disk.
 
 The simulation itself maintains a formal representation of its internal
-execution state using the tools in the :mod:`~vivarium.framework.lifecycle`
+execution state using the tools in the :mod:`~vivarium.engine.framework.lifecycle`
 module. The tools allow the simulation to make concrete contracts about flow
 of execution in simulations and to constrain the availability of certain
 framework services to particular life cycle states.  This makes error handling
@@ -80,9 +80,9 @@ The Initialization Phase
 ------------------------
 
 The initialization phase of a :mod:`vivarium` simulation starts when the
-:class:`~vivarium.framework.lifecycle.entities.LifeCycle` is fully constructed and
+:class:`~vivarium.engine.framework.lifecycle.entities.LifeCycle` is fully constructed and
 ends when the ``__init__`` method of the
-:class:`vivarium.framework.engine.SimulationContext` completes.
+:class:`vivarium.engine.framework.engine.SimulationContext` completes.
 
 Two important things happen here:
 
@@ -122,7 +122,7 @@ creating :ref:`lookup tables <lookup_concept>`, and registering
 :ref:`population initializers <population_concept>`, among other things.
 The specifics of this are determined by the ``setup`` method on each component
 - the framework itself simply calls that method with a
-:class:`vivarium.framework.engine.Builder` object.
+:class:`vivarium.engine.framework.engine.Builder` object.
 
 Post-setup
 ++++++++++
@@ -180,7 +180,7 @@ simulation end time.
 .. note::
 
     We have multiple sources of time during this process. The
-    :class:`vivarium.framework.engine.SimulationContext` itself holds onto a
+    :class:`vivarium.engine.framework.engine.SimulationContext` itself holds onto a
     clock. This simulation clock is the actual time in the simulation. Events
     (including e.g., *time_step*) come with a time as well. This time is the
     time at the start of the next time step, that is, the time when any changes

@@ -39,7 +39,7 @@ Building a population
 In many ways, this is a bad place to start. The population component
 is one of the more complicated components in the simulation as it typically is
 responsible for bootstrapping some of the more interesting features in
-vivarium.
+vivarium.engine.
 
 We need a population, though, so we'll start with one here and defer explanation
 of some of the more complex pieces/systems until later.
@@ -59,7 +59,7 @@ Imports
 
 It's typical to import all required objects at the top of each module. In this case,
 we are importing ``pandas`` and the Vivarium 
-:class:`Component <vivarium.component.Component>` class because they are used 
+:class:`Component <vivarium.engine.component.Component>` class because they are used 
 explicitly throughout the file. Further, we import several objects from python's
 ``typing`` package as well as three classes from the core Vivarium framework 
 which are used solely for `typing <https://docs.python.org/3/library/typing.html>`_ 
@@ -77,7 +77,7 @@ BasePopulation Instantiation
 ++++++++++++++++++++++++++++
 
 We define a class called ``BasePopulation`` that inherits from the Vivarium
-:class:`Component <vivarium.component.Component>`. This inheritance is what 
+:class:`Component <vivarium.engine.component.Component>`. This inheritance is what 
 makes a class a proper Vivarium :term:`component` and all the affordances that 
 come with that.
 
@@ -137,7 +137,7 @@ takes place in the ``setup`` method.
 The signature for the ``setup`` method is the same in every component.
 When the framework is constructing the simulation it looks for a ``setup``
 method on each component and calls that method with a
-:class:`~vivarium.framework.engine.Builder` instance.
+:class:`~vivarium.engine.framework.engine.Builder` instance.
 
 .. note::
 
@@ -182,7 +182,7 @@ To start, we simply grab a copy of the simulation
 a dictionary that supports ``.``-access notation.
 
 The next handful of lines interact with Vivarium's
-:class:`randomness system <vivarium.framework.randomness.interface.RandomnessInterface>`.
+:class:`randomness system <vivarium.engine.framework.randomness.interface.RandomnessInterface>`.
 Several things are happening here.
 
 First, we deal with the topic of :doc:`Common Random Numbers </concepts/crn>`,
@@ -226,7 +226,7 @@ randomness system to let us know whether or not we care about using CRN.
 We'll explore this later when we're looking at running simulations with
 interventions.
 
-Next, we grab actual :class:`randomness streams <vivarium.framework.randomness.stream.RandomnessStream>`
+Next, we grab actual :class:`randomness streams <vivarium.engine.framework.randomness.stream.RandomnessStream>`
 from the framework.
 
 .. literalinclude:: ../../../src/vivarium/examples/disease_model/population.py
@@ -330,7 +330,7 @@ The ``initialize_entrance_time_and_age`` method
 
 First, we see that this method takes in a special argument that we don't provide. 
 This argument, ``pop_data``, is an instance of 
-:class:`~vivarium.framework.population.manager.SimulantData` containing a
+:class:`~vivarium.engine.framework.population.manager.SimulantData` containing a
 handful of information useful when initializing simulants.
 
 .. note::
@@ -370,7 +370,7 @@ data here to generate arbitrarily complex starting populations.
 The only thing really of note here is the call to
 ``self.age_randomness.get_draw``. If we recall from the ``setup`` method,
 ``self.age_randomness`` is an instance of a
-:class:`~vivarium.framework.randomness.stream.RandomnessStream` which supports several
+:class:`~vivarium.engine.framework.randomness.stream.RandomnessStream` which supports several
 convenience methods for interacting with random numbers. ``get_draw`` takes
 in an ``index`` representing particular simulants and returns a
 ``pandas.Series`` with a uniformly drawn random number for each simulant
@@ -422,14 +422,14 @@ In either case, we are hanging on to a table representing some attributes of
 our new simulants. However, this table does not matter yet because the
 simulation's population system doesn't know anything about it. We must first
 inform the simulation by passing in the ``DataFrame`` to our
-:class:`population view's <vivarium.framework.population.population_view.PopulationView>`
+:class:`population view's <vivarium.engine.framework.population.population_view.PopulationView>`
 ``initialize`` method.
 
 .. note::
     
    **Population Views**
 
-   A :class:`~vivarium.framework.population.population_view.PopulationView` is a
+   A :class:`~vivarium.engine.framework.population.population_view.PopulationView` is a
    read/write interface to the population state table. It provides methods for
    reading attributes, initializing private columns, and updating private column
    data over the course of a simulation.
@@ -472,7 +472,7 @@ method ``on_time_step``.
    :end-before: # docs-end: on_time_step
    :dedent: 4
 
-This method takes in an :class:`~ <vivarium.framework.event.manager.Event>` argument
+This method takes in an :class:`~ <vivarium.engine.framework.event.manager.Event>` argument
 provided by the simulation. This is very similar to the ``SimulantData``
 argument provided to initializer methods. It carries around
 some information about what's happening in the event.
@@ -495,7 +495,7 @@ some information about what's happening in the event.
    about here.
 
 In order to age our simulants, we call the population view's
-:meth:`~vivarium.framework.population.population_view.PopulationView.update`
+:meth:`~vivarium.engine.framework.population.population_view.PopulationView.update`
 method with the column name and a *modifier* function. The modifier receives
 the current values of the private column as a :class:`~pandas.Series` and
 returns the updated values. The ``update`` method handles reading the current
@@ -516,12 +516,12 @@ state table.
    Refer to the :ref:`population management documentation <population_concept>` for more details.
 
    The methods available to read attributes are:
-    - :meth:`~vivarium.framework.population.population_view.PopulationView.get`
-    - :meth:`~vivarium.framework.population.population_view.PopulationView.get_frame`
+    - :meth:`~vivarium.engine.framework.population.population_view.PopulationView.get`
+    - :meth:`~vivarium.engine.framework.population.population_view.PopulationView.get_frame`
 
     The methods available to update private columns are:
-    - :meth:`~vivarium.framework.population.population_view.PopulationView.initialize`
-    - :meth:`~vivarium.framework.population.population_view.PopulationView.update`
+    - :meth:`~vivarium.engine.framework.population.population_view.PopulationView.initialize`
+    - :meth:`~vivarium.engine.framework.population.population_view.PopulationView.update`
 
 Examining our work
 ++++++++++++++++++
@@ -531,7 +531,7 @@ Now that we've done all this hard work, let's see what it gives us.
 .. code-block:: python
 
    from vivarium import InteractiveContext
-   from vivarium.examples.disease_model.population import BasePopulation
+   from vivarium.engine.examples.disease_model.population import BasePopulation
 
    config = {'randomness': {'key_columns': ['entrance_time', 'age']}}
 
@@ -554,7 +554,7 @@ Now that we've done all this hard work, let's see what it gives us.
    import pandas as pd
 
    from vivarium import InteractiveContext
-   from vivarium.examples.disease_model.population import BasePopulation
+   from vivarium.engine.examples.disease_model.population import BasePopulation
 
    config = {'randomness': {'key_columns': ['entrance_time', 'age']}}
    sim = InteractiveContext(components=[BasePopulation()], configuration=config)
@@ -658,7 +658,7 @@ The first line simply adds a useful class attribute: the mortality randomness st
 (which is used to answer the question "which simulants died at this time step?").
 
 The next bit is the main feature of note: the introduction of the
-:class:`values system <vivarium.framework.values.interface.ValuesInterface>`.
+:class:`values system <vivarium.engine.framework.values.interface.ValuesInterface>`.
 The values system provides a way of distributing the computation of a
 value over multiple components. This can be a bit difficult to grasp,
 but is vital to the way we think about components in Vivarium. The best
@@ -762,7 +762,7 @@ can see the impact of our mortality component without taking too many steps.
 .. code-block:: python
 
    from vivarium import InteractiveContext
-   from vivarium.examples.disease_model.population import BasePopulation
+   from vivarium.engine.examples.disease_model.population import BasePopulation
 
    config = {
       'population': {
@@ -894,8 +894,8 @@ work in non-interactive (or even distributed) environments where we simply don't
 have access to the simulation object and so would like to write our output to disk. 
 These recorded outputs (i.e. results) are referred to in vivarium as **observations** 
 and it is the job of **observers** to register them to the simulation. 
-:class:`Observers <vivarium.framework.results.observer.Observer>` are vivarium 
-:class:`components <vivarium.component.Component>` that are created by the user 
+:class:`Observers <vivarium.engine.framework.results.observer.Observer>` are vivarium 
+:class:`components <vivarium.engine.component.Component>` that are created by the user 
 and added to the simulation via the model specification.
 
 This example's observers are shown below.
@@ -930,8 +930,8 @@ observations up to this point in the simulation.
 .. code-block:: python
 
    from vivarium import InteractiveContext
-   from vivarium.examples.disease_model.population import BasePopulation
-   from vivarium.examples.disease_model.observer import DeathsObserver, YllsObserver
+   from vivarium.engine.examples.disease_model.population import BasePopulation
+   from vivarium.engine.examples.disease_model.observer import DeathsObserver, YllsObserver
 
    config = {
        'population': {
@@ -969,7 +969,7 @@ been a total of 27,720 years of life lost.
 .. testcode::
    :hide:
 
-   from vivarium.examples.disease_model.observer import DeathsObserver, YllsObserver
+   from vivarium.engine.examples.disease_model.observer import DeathsObserver, YllsObserver
 
    sim = InteractiveContext(
       components=[

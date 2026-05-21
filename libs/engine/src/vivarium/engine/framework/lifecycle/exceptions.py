@@ -8,7 +8,7 @@ Exception classes for the lifecycle management system.
 """
 from __future__ import annotations
 
-from vivarium.exceptions import VivariumError
+from vivarium.engine.exceptions import VivariumError
 
 
 class LifeCycleError(VivariumError):

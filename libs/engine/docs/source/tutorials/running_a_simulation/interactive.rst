@@ -34,7 +34,7 @@ Setting up a Simulation
 -----------------------
 
 To run a simulation interactively, we will need to create a
-:class:`simulation context <vivarium.interface.interactive.InteractiveContext>`.
+:class:`simulation context <vivarium.engine.interface.interactive.InteractiveContext>`.
 At a bare minimum, we need to provide the context with a set of
 :ref:`components <components_concept>` that encode all the behavior of
 the simulation model. Frequently, we'll also provide some
@@ -53,7 +53,7 @@ The combination of components, configuration, and plugins forms a
 :term:`model specification <Model Specification>`, a complete description
 of a ``vivarium`` model.
 
-The :class:`InteractiveContext <vivarium.interface.interactive.InteractiveContext>`
+The :class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
 can be generated from several different kinds of data and may be generated
 at two separate :ref:`lifecycle <lifecycle_concept>` stages.  We'll explore
 several examples of generating simulation objects here.
@@ -92,7 +92,7 @@ distributed with ``vivarium``.
 .. testcode::
 
    from vivarium import InteractiveContext
-   from vivarium.examples.disease_model import get_model_specification_path
+   from vivarium.engine.examples.disease_model import get_model_specification_path
 
    p = get_model_specification_path()
    sim = InteractiveContext(p)
@@ -124,7 +124,7 @@ example and we will place them in a normal Python list.
 
 .. code-block:: python
 
-   from vivarium.examples.disease_model import (BasePopulation, Mortality, DeathsObserver,
+   from vivarium.engine.examples.disease_model import (BasePopulation, Mortality, DeathsObserver,
                                                 YllsObserver, SISDiseaseModel, Risk,
                                                 RiskEffect, TreatmentIntervention)
 
@@ -197,7 +197,7 @@ one last way to set up the simulation in an interactive setting.
 .. testcode::
    :hide:
 
-   from vivarium.examples.disease_model import (BasePopulation, DeathsObserver,
+   from vivarium.engine.examples.disease_model import (BasePopulation, DeathsObserver,
                                                 YllsObserver, SISDiseaseModel, Risk,
                                                 RiskEffect, TreatmentIntervention)
    from vivarium import InteractiveContext
@@ -252,12 +252,12 @@ or modify the configuration data. You then have to call setup on the simulation
 yourself.
 
 To do this we'll set the ``setup`` flag in the
-:class:`~vivarium.interface.interactive.InteractiveContext` to ``False``.
+:class:`~vivarium.engine.interface.interactive.InteractiveContext` to ``False``.
 
 .. code-block:: python
 
    from vivarium import InteractiveContext
-   from vivarium.examples.disease_model import get_model_specification_path
+   from vivarium.engine.examples.disease_model import get_model_specification_path
 
    p = get_model_specification_path()
    sim = InteractiveContext(p, setup=False)
@@ -277,7 +277,7 @@ population size to be smaller so the simulation takes less time to run.
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
 We then need to call the
-:meth:`vivarium.framework.engine.SimulationContext.setup` method on the
+:meth:`vivarium.engine.framework.engine.SimulationContext.setup` method on the
 simulation context to prepare it to run.
 
 .. code-block:: python
@@ -299,7 +299,7 @@ After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 .. testcode::
 
    from vivarium import InteractiveContext
-   from vivarium.examples.disease_model import get_model_specification_path
+   from vivarium.engine.examples.disease_model import get_model_specification_path
 
    p = get_model_specification_path()
    sim = InteractiveContext(p, setup=False)
@@ -310,7 +310,7 @@ Adding additional components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Another use case for creating the
-:class:`~vivarium.interface.interactive.InteractiveContext` in
+:class:`~vivarium.engine.interface.interactive.InteractiveContext` in
 its pre-setup state is to extend existing models.
 
 For example, say we wanted to add another risk for unsafe water sources
@@ -319,7 +319,7 @@ into our disease model. We could do the following.
 .. testcode::
 
    from vivarium import InteractiveContext
-   from vivarium.examples.disease_model import get_model_specification_path, Risk, RiskEffect
+   from vivarium.engine.examples.disease_model import get_model_specification_path, Risk, RiskEffect
 
    p = get_model_specification_path()
    sim = InteractiveContext(p, setup=False)
@@ -356,17 +356,17 @@ the InteractiveContext:
 .. testcode::
 
     from vivarium import InteractiveContext
-    from vivarium.framework.configuration import build_model_specification
-    from vivarium.examples.disease_model import get_model_specification_path
+    from vivarium.engine.framework.configuration import build_model_specification
+    from vivarium.engine.examples.disease_model import get_model_specification_path
 
     p = get_model_specification_path()
     model_spec = build_model_specification(p)
 
     # Remove all observer components
-    del model_spec.components['vivarium.examples.disease_model'].observer
+    del model_spec.components['vivarium.engine.examples.disease_model'].observer
     # Remove all RiskEffect components
-    model_spec.components['vivarium.examples.disease_model'].risk = [
-        c for c in model_spec.components['vivarium.examples.disease_model'].risk
+    model_spec.components['vivarium.engine.examples.disease_model'].risk = [
+        c for c in model_spec.components['vivarium.engine.examples.disease_model'].risk
         if 'RiskEffect' not in c
     ]
     # This approach can also be used to change configuration
@@ -380,13 +380,13 @@ Running the Simulation
 
 A simulation can be run in several ways once it is set up. The simplest way to
 advance a simulation is to call
-:meth:`sim.run() <vivarium.interface.interactive.InteractiveContext.run>` on
+:meth:`sim.run() <vivarium.engine.interface.interactive.InteractiveContext.run>` on
 it, which will advance it from its current time to the end time specified in
 the simulation :term:`configuration <Configuration>`.  If you need finer
 control, there are a set of methods on the context that allow you to run
 the simulation for specified spans of time or numbers of simulation steps.
 Below is a table of the functions that can be called on an
-:class:`InteractiveContext <vivarium.interface.interactive.InteractiveContext>`
+:class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
 to advance a simulation in different ways.
 
 .. list-table:: **InteractiveContext methods for advancing simulations**
@@ -395,18 +395,18 @@ to advance a simulation in different ways.
 
    *   - Method
        - Description
-   *   - | :meth:`run <vivarium.interface.interactive.InteractiveContext.run>`
+   *   - | :meth:`run <vivarium.engine.interface.interactive.InteractiveContext.run>`
        - | Run the simulation for its entire duration, from its current time
          | to its end time. The start time and end time are specified in the
          | ``time`` block of the configuration.
-   *   - | :meth:`step <vivarium.interface.interactive.InteractiveContext.step>`
+   *   - | :meth:`step <vivarium.engine.interface.interactive.InteractiveContext.step>`
        - | Advance the simulation one step. The step size is taken from the
          | ``time`` block of the configuration.
-   *   - | :meth:`take_steps <vivarium.interface.interactive.InteractiveContext.take_steps>`
+   *   - | :meth:`take_steps <vivarium.engine.interface.interactive.InteractiveContext.take_steps>`
        - | Advance the simulation ``n`` steps.
-   *   - | :meth:`run_until <vivarium.interface.interactive.InteractiveContext.run_until>`
+   *   - | :meth:`run_until <vivarium.engine.interface.interactive.InteractiveContext.run_until>`
        - | Advance the simulation to a specific time. This time should make
          | sense given the simulation's clock type.
-   *   - | :meth:`run_for <vivarium.interface.interactive.InteractiveContext.run_for>`
+   *   - | :meth:`run_for <vivarium.engine.interface.interactive.InteractiveContext.run_for>`
        - | Advance the simulation for a duration. This duration should make
          | sense given the simulation's clock type.

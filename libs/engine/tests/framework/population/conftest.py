@@ -9,10 +9,10 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 
-from vivarium import Component
-from vivarium.framework.engine import Builder, SimulationContext
-from vivarium.framework.population import PopulationManager, SimulantData
-from vivarium.framework.values import ValuesManager
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.population import PopulationManager, SimulantData
+from vivarium.engine.framework.values import ValuesManager
 
 # FIXME: Streamline with already-existing classes in tests/helpers.py
 PIE_COL_NAMES = ["pie", "pi"]

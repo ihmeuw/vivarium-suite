@@ -9,7 +9,7 @@ reasonable way to look at a simulation is to think of it as a task of
 getting the right data and the right random numbers in the appropriate
 place at the appropriate time.  To address the first concern,
 :mod:`vivarium` provides the
-:class:`Lookup Table <vivarium.framework.lookup.table.LookupTable>` abstraction
+:class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>` abstraction
 to ensure that the right data can be retrieved when it's needed. In
 particular, it attempts to wrap different strategies for constructing
 interpolations or distributions on data such that a user simply needs to
@@ -26,34 +26,34 @@ extended to compositions of of several data-based values by :mod:`vivarium`'s
 The Lookup Table
 ----------------
 
-A :class:`Lookup Table <vivarium.framework.lookup.table.LookupTable>`
+A :class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>`
 for a quantity is a callable object that is built from
 a scalar value or a :class:`pandas.DataFrame` of data points that describes
 how the quantity varies with other variable(s). It is called with a
 :class:`pandas.Index` as a function parameter which represents a simulated
 population as discussed in the :ref:`population concept <population_concept>`.
-When called, the :class:`Lookup Table <vivarium.framework.lookup.table.LookupTable>`
+When called, the :class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>`
 simply returns appropriate values of the quantity for the population it was
 passed, interpolating if necessary or extrapolating if configured to. This
 behavior represents the standard interface for asking for data about a
 population in a simulation.
 
 The lookup table system is built in layers. At the top is the
-:class:`Lookup Table <vivarium.framework.lookup.table.LookupTable>` object which
+:class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>` object which
 is responsible for providing a uniform interface to the user regardless
 of the underlying data. From the user's perspective, it takes in a data set
 or scalar value on initialization and then lets them query against that data
 with a population index.
 
 At initialization time, the
-:class:`Lookup Table <vivarium.framework.lookup.table.LookupTable>` examines the
+:class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>` examines the
 provided data and configures itself accordingly. If the data is a scalar value
 (or list/tuple of scalars), the table simply broadcasts those values over the
 population index when called. If the data is a :class:`pandas.DataFrame`, the
 table delegates to an
-:class:`Interpolation <vivarium.framework.lookup.interpolation.Interpolation>`
+:class:`Interpolation <vivarium.engine.framework.lookup.interpolation.Interpolation>`
 object that handles both categorical and continuous parameter lookups. The
-:class:`Interpolation <vivarium.framework.lookup.interpolation.Interpolation>`
+:class:`Interpolation <vivarium.engine.framework.lookup.interpolation.Interpolation>`
 groups the data by any categorical (key) columns and then, for each group,
 finds the correct bin for any continuous parameters. Tables with only
 categorical parameters are simply the special case where there are no
@@ -89,7 +89,7 @@ value
 
 Along with data about these variables, A lookup table is instantiated with the
 corresponding column names which are used to query an internal
-:class:`population view <vivarium.framework.population.population_view.PopulationView>`
+:class:`population view <vivarium.engine.framework.population.population_view.PopulationView>`
 when the table itself is called. This means the lookup table only needs to be
 called with a population index -- it gathers the population information it
 needs itself. It also means the data must be available in the
@@ -122,9 +122,9 @@ Female  60         100      27
 Constructing Lookup Tables from a Component
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Components can build lookup tables as needed via the :meth:`~vivarium.component.Component.build_lookup_table`
+Components can build lookup tables as needed via the :meth:`~vivarium.engine.component.Component.build_lookup_table`
 method which will refer to the ``data_sources`` block in the component's
-:attr:`~vivarium.component.Component.configuration_defaults` property. As a basic example,
+:attr:`~vivarium.engine.component.Component.configuration_defaults` property. As a basic example,
 DiseaseModel in ``vivarium_public_health`` has the following ``data_sources`` configuration:
 
 .. code-block:: python
@@ -166,7 +166,7 @@ following data source types are supported:
 **Artifact key (string without** ``::`` **):**
     A string path to data in the artifact, e.g.,
     ``"cause.all_causes.cause_specific_mortality_rate"``. The data is loaded
-    via :meth:`builder.data.load() <vivarium.framework.artifact.interface.ArtifactInterface.load>`. Strings with ``::`` are reserved for method
+    via :meth:`builder.data.load() <vivarium.engine.framework.artifact.interface.ArtifactInterface.load>`. Strings with ``::`` are reserved for method
     or function references (see below).
 
 **Callable:**
@@ -200,7 +200,7 @@ When building a lookup table from a :class:`pandas.DataFrame` using ``data_sourc
 the component automatically determines key columns, parameter columns, and value columns
 based on the data structure:
 
-- **Value columns** can be provided as an argument to :meth:`~vivarium.component.Component.build_lookup_table`
+- **Value columns** can be provided as an argument to :meth:`~vivarium.engine.component.Component.build_lookup_table`
   If value columns are not provided, it will default to ``"value"``.
 - **Parameter columns** are detected by finding columns ending in ``_start``
   that have corresponding ``_end`` columns (e.g., ``age_start``/``age_end``).

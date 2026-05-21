@@ -12,11 +12,11 @@ import textwrap
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from vivarium.framework.lifecycle.exceptions import LifeCycleError
-from vivarium.framework.lifecycle.lifecycle_states import INITIALIZATION
+from vivarium.engine.framework.lifecycle.exceptions import LifeCycleError
+from vivarium.engine.framework.lifecycle.lifecycle_states import INITIALIZATION
 
 if TYPE_CHECKING:
-    from vivarium.framework.event import Event
+    from vivarium.engine.framework.event import Event
 
 
 class LifeCycleState:
@@ -87,7 +87,7 @@ class LifeCycleState:
 
         The primary use case here is for introspection and reporting.
         For setting constraints, see
-        :meth:`vivarium.framework.lifecycle.interface.LifeCycleInterface.add_constraint`.
+        :meth:`vivarium.engine.framework.lifecycle.interface.LifeCycleInterface.add_constraint`.
 
         Parameters
         ----------

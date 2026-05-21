@@ -17,16 +17,16 @@ leveraged directly from external modules like
 or be user-written and customized. More information about components is available in the
 :ref:`component concept note <components_concept>`.
 
-The Builder (:class:`vivarium.framework.engine.Builder`) is created during initialization
-of a :class:`vivarium.framework.engine.SimulationContext`. Components use the Builder to access interfaces to
+The Builder (:class:`vivarium.engine.framework.engine.Builder`) is created during initialization
+of a :class:`vivarium.engine.framework.engine.SimulationContext`. Components use the Builder to access interfaces to
 interact with the Vivarium framework. Most components should have a setup method, where
 they register for services and provide information about their structure. For example,
 a component needing to leverage the simulation clock and step size
 to determine a numerical effect to apply on each time step, will get the
 simulation clock and step size though the Builder and will register
-method(s) to apply the effect (e.g., via :meth:`vivarium.framework.values.interface.ValuesInterface.register_value_modifier`).
+method(s) to apply the effect (e.g., via :meth:`vivarium.engine.framework.values.interface.ValuesInterface.register_value_modifier`).
 Another component, needing to initialize state for simulants before the
-simulation begins, might call :meth:`vivarium.framework.population.interface.PopulationInterface.register_initializer` 
+simulation begins, might call :meth:`vivarium.engine.framework.population.interface.PopulationInterface.register_initializer` 
 in its setup method to register method(s) that set up the additional state.
 
 

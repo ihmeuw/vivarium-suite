@@ -4,8 +4,8 @@ import numpy as np
 from layered_config_tree import LayeredConfigTree
 from vivarium_testing_utils import FuzzyChecker
 
-from vivarium import InteractiveContext
-from vivarium.framework.utilities import from_yearly
+from vivarium.engine import InteractiveContext
+from vivarium.engine.framework.utilities import from_yearly
 
 
 def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) -> None:

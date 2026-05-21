@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.results.observer
+.. automodule:: vivarium.engine.framework.results.observer

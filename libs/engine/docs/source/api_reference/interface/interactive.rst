@@ -1,1 +1,1 @@
-.. automodule:: vivarium.interface.interactive
+.. automodule:: vivarium.engine.interface.interactive

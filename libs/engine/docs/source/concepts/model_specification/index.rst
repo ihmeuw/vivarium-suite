@@ -72,17 +72,17 @@ string representation of the components into the actual component objects that
 the simulation can use. The exact process of that mapping between the model
 specification item and the fully instantiated object is the domain of the
 :class:`ComponentConfigurationParser
-<vivarium.framework.components.parser.ComponentConfigurationParser>`.
+<vivarium.engine.framework.components.parser.ComponentConfigurationParser>`.
 
 The :class:`ComponentConfigurationParser
-<vivarium.framework.components.parser.ComponentConfigurationParser>`
+<vivarium.engine.framework.components.parser.ComponentConfigurationParser>`
 is responsible for taking a list or hierarchical 
 :class:`LayeredConfigTree <layered_config_tree.main.LayeredConfigTree>` of 
 components derived from a model specification file and turning it into a list of 
 instantiated component objects. 
 
 The :meth:`get_components
-<vivarium.framework.components.parser.ComponentConfigurationParser.get_components>`
+<vivarium.engine.framework.components.parser.ComponentConfigurationParser.get_components>`
 method of the parser is used anytime a simulation is initialized from a
 model specification file. This method is responsible for the following three
 steps that comprise the transformation process:
@@ -93,7 +93,7 @@ steps that comprise the transformation process:
 3. Importing and instantiating the actual components
 
 To illustrate this process, the result of a :meth:`get_components
-<vivarium.framework.components.parser.ComponentConfigurationParser.get_components>`
+<vivarium.engine.framework.components.parser.ComponentConfigurationParser.get_components>`
 call on either of the above yaml components block examples would be a list
 containing three instantiated objects: a population object, a mortality object,
 and a diarrhea disease model.

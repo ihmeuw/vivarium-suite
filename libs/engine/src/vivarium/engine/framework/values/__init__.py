@@ -12,23 +12,23 @@ For more information about when and how you should use pipelines in your
 simulations, see the value system :ref:`concept note <values_concept>`.
 
 """
-from vivarium.framework.values.combiners import (
+from vivarium.engine.framework.values.combiners import (
     ValueCombiner,
     addition_combiner,
     list_combiner,
     multiplication_combiner,
     replace_combiner,
 )
-from vivarium.framework.values.exceptions import DynamicValueError
-from vivarium.framework.values.interface import ValuesInterface
-from vivarium.framework.values.manager import ValuesManager
-from vivarium.framework.values.pipeline import (
+from vivarium.engine.framework.values.exceptions import DynamicValueError
+from vivarium.engine.framework.values.interface import ValuesInterface
+from vivarium.engine.framework.values.manager import ValuesManager
+from vivarium.engine.framework.values.pipeline import (
     AttributePipeline,
     Pipeline,
     ValueModifier,
     ValueSource,
 )
-from vivarium.framework.values.post_processors import (
+from vivarium.engine.framework.values.post_processors import (
     AttributePostProcessor,
     PostProcessor,
     raw_union_post_processor,

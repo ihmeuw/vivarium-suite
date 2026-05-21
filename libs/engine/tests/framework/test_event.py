@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vivarium.framework.event import Event, EventManager
+from vivarium.engine.framework.event import Event, EventManager
 
 
 class EventData(TypedDict):

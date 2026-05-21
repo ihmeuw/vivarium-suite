@@ -1,5 +1,5 @@
-from vivarium.framework.time.interface import TimeInterface
-from vivarium.framework.time.manager import (
+from vivarium.engine.framework.time.interface import TimeInterface
+from vivarium.engine.framework.time.manager import (
     DateTimeClock,
     SimpleClock,
     SimulationClock,

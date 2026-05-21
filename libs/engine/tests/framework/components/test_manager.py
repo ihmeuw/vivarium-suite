@@ -6,17 +6,17 @@ import pytest
 from layered_config_tree import LayeredConfigTree
 
 from tests.helpers import MockComponentA, MockComponentB, MockGenericComponent, MockManager
-from vivarium import Component
-from vivarium.exceptions import VivariumError
-from vivarium.framework.components.manager import (
+from vivarium.engine import Component
+from vivarium.engine.exceptions import VivariumError
+from vivarium.engine.framework.components.manager import (
     ComponentConfigError,
     ComponentManager,
     OrderedComponentSet,
 )
-from vivarium.framework.configuration import build_simulation_configuration
-from vivarium.framework.engine import Builder
-from vivarium.interface import InteractiveContext
-from vivarium.manager import Manager
+from vivarium.engine.framework.configuration import build_simulation_configuration
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.interface import InteractiveContext
+from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
@@ -185,8 +185,8 @@ def test_flatten_with_nested_sub_components() -> None:
 def test_setup_components(mocker: MockerFixture) -> None:
     builder = mocker.MagicMock()
     builder.configuration = {}
-    mocker.patch("vivarium.framework.results.observer.Observer.set_results_dir")
-    mocker.patch("vivarium.framework.results.observer.Observer.get_configuration")
+    mocker.patch("vivarium.engine.framework.results.observer.Observer.set_results_dir")
+    mocker.patch("vivarium.engine.framework.results.observer.Observer.get_configuration")
     mock_a = MockComponentA("test_a")
     mock_b = MockComponentB("test_b")
     manager = ComponentManager()

@@ -10,7 +10,7 @@ configurations and initiating the ``setup`` stage of the lifecycle. This module
 provides the default implementation and interface.
 
 The :class:`ComponentManager` is the first plugin loaded by the
-:class:`SimulationContext <vivarium.framework.engine.SimulationContext>`
+:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`
 and managers and components are given to it by the context. It is called on to
 setup everything it holds when the context itself is setup.
 
@@ -28,13 +28,13 @@ from layered_config_tree import (
     LayeredConfigTree,
 )
 
-from vivarium import Component
-from vivarium.exceptions import VivariumError
-from vivarium.framework.lifecycle import LifeCycleError, LifeCycleManager, lifecycle_states
-from vivarium.manager import Manager
+from vivarium.engine import Component
+from vivarium.engine.exceptions import VivariumError
+from vivarium.engine.framework.lifecycle import LifeCycleError, LifeCycleManager, lifecycle_states
+from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
+    from vivarium.engine.framework.engine import Builder
 
 C = TypeVar("C", bound=Component)
 T = TypeVar("T", Component, Manager)

@@ -27,12 +27,12 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
-from vivarium.framework.lifecycle import ConstraintError, lifecycle_states
-from vivarium.manager import Manager
-from vivarium.types import ClockStepSize, ClockTime
+from vivarium.engine.framework.lifecycle import ConstraintError, lifecycle_states
+from vivarium.engine.manager import Manager
+from vivarium.engine.types import ClockStepSize, ClockTime
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
+    from vivarium.engine.framework.engine import Builder
 
 
 @dataclass(frozen=True)

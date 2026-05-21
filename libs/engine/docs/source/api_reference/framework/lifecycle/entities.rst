@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.lifecycle.entities
+.. automodule:: vivarium.engine.framework.lifecycle.entities

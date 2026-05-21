@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from vivarium.framework.artifact import hdf
+from vivarium.engine.framework.artifact import hdf
 
 
 class ArtifactException(Exception):

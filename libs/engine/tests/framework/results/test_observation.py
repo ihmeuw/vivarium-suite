@@ -8,10 +8,10 @@ import pandas as pd
 import pytest
 
 from tests.framework.results.helpers import BASE_POPULATION, FAMILIARS, HOUSE_CATEGORIES
-from vivarium.framework.results import VALUE_COLUMN
-from vivarium.framework.results.context import ResultsContext
-from vivarium.framework.results.interface import PopulationFilter
-from vivarium.framework.results.observation import (
+from vivarium.engine.framework.results import VALUE_COLUMN
+from vivarium.engine.framework.results.context import ResultsContext
+from vivarium.engine.framework.results.interface import PopulationFilter
+from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
     Observation,

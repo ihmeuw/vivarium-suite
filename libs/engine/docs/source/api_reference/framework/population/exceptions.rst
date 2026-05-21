@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.population.exceptions
+.. automodule:: vivarium.engine.framework.population.exceptions

@@ -1,8 +1,8 @@
 from pytest_mock import MockerFixture
 
-from vivarium.framework.resource.interface import ResourceInterface
-from vivarium.framework.resource.manager import ResourceManager
-from vivarium.framework.resource.resource import Column, ResourceId
+from vivarium.engine.framework.resource.interface import ResourceInterface
+from vivarium.engine.framework.resource.manager import ResourceManager
+from vivarium.engine.framework.resource.resource import Column, ResourceId
 
 
 def test_add_private_columns(mocker: MockerFixture) -> None:

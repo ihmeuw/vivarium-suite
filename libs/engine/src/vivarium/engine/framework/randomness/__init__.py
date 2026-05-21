@@ -26,7 +26,7 @@ For more information, see the Common Random Numbers
 
 """
 
-from vivarium.framework.randomness.exceptions import RandomnessError
-from vivarium.framework.randomness.interface import RandomnessInterface
-from vivarium.framework.randomness.manager import RandomnessManager
-from vivarium.framework.randomness.stream import RESIDUAL_CHOICE, RandomnessStream, get_hash
+from vivarium.engine.framework.randomness.exceptions import RandomnessError
+from vivarium.engine.framework.randomness.interface import RandomnessInterface
+from vivarium.engine.framework.randomness.manager import RandomnessManager
+from vivarium.engine.framework.randomness.stream import RESIDUAL_CHOICE, RandomnessStream, get_hash

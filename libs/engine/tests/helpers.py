@@ -4,12 +4,12 @@ from typing import Any
 
 import pandas as pd
 
-from vivarium import Component, Observer
-from vivarium.framework.engine import Builder
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.population import SimulantData
-from vivarium.manager import Manager
+from vivarium.engine import Component, Observer
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.manager import Manager
 
 
 class MockComponentA(Observer):

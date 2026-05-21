@@ -10,11 +10,11 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.resource import Column, Resource
-from vivarium.framework.values.combiners import ValueCombiner, replace_combiner
-from vivarium.framework.values.pipeline import (
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.resource import Column, Resource
+from vivarium.engine.framework.values.combiners import ValueCombiner, replace_combiner
+from vivarium.engine.framework.values.pipeline import (
     AttributePipeline,
     AttributesValueSource,
     DynamicValueError,
@@ -22,13 +22,13 @@ from vivarium.framework.values.pipeline import (
     PrivateColumnValueSource,
     ValueSource,
 )
-from vivarium.framework.values.post_processors import AttributePostProcessor, PostProcessor
-from vivarium.manager import Manager
+from vivarium.engine.framework.values.post_processors import AttributePostProcessor, PostProcessor
+from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from vivarium.framework.engine import Builder
+    from vivarium.engine.framework.engine import Builder
 
 T = TypeVar("T")
 
@@ -39,8 +39,8 @@ class ValuesManager(Manager):
     Notes
     -----
     This is the only manager for the values system; different methods exist for
-    working with generic value :class:`Pipelines <vivarium.framework.values.pipeline.Pipeline>`
-    and :class:`AttributePipelines <vivarium.framework.values.pipeline.AttributePipeline>`.
+    working with generic value :class:`Pipelines <vivarium.engine.framework.values.pipeline.Pipeline>`
+    and :class:`AttributePipelines <vivarium.engine.framework.values.pipeline.AttributePipeline>`.
     """
 
     def __init__(self) -> None:
@@ -116,13 +116,13 @@ class ValuesManager(Manager):
             A strategy for combining the source and the results of any calls
             to mutators in the pipeline. ``vivarium`` provides the strategies
             ``replace_combiner`` (the default) and ``list_combiner``, which
-            are importable from ``vivarium.framework.values``. Client code
+            are importable from ``vivarium.engine.framework.values``. Client code
             may define additional strategies as necessary.
         preferred_post_processor
             A strategy for processing the final output of the pipeline.
             ``vivarium`` provides the strategies ``rescale_post_processor``
             and ``union_post_processor`` which are importable from
-            ``vivarium.framework.values``. Client code may define additional
+            ``vivarium.engine.framework.values``. Client code may define additional
             strategies as necessary. If a sequence of post processors is provided,
             they will be applied in the order they are provided.
 
@@ -169,13 +169,13 @@ class ValuesManager(Manager):
             A strategy for combining the source and the results of any calls
             to mutators in the pipeline. ``vivarium`` provides the strategies
             ``replace_combiner`` (the default) and ``list_combiner``, which
-            are importable from ``vivarium.framework.values``. Client code
+            are importable from ``vivarium.engine.framework.values``. Client code
             may define additional strategies as necessary.
         preferred_post_processor
             A strategy for processing the final output of the pipeline.
             ``vivarium`` provides the strategies ``rescale_post_processor``
             and ``union_post_processor`` which are importable from
-            ``vivarium.framework.values``. Client code may define additional
+            ``vivarium.engine.framework.values``. Client code may define additional
             strategies as necessary. If a sequence of post processors is provided,
             they will be applied in the order they are provided.
         source_is_private_column
@@ -327,8 +327,8 @@ class ValuesManager(Manager):
         This is not the preferred access method to getting population attributes
         since it does not implement various features (e.g. querying, simulant
         tracking, etc); it exists for other managers to use if needed. Use
-        :meth:`vivarium.framework.population.population_view.PopulationView.get`
-        or :meth:`vivarium.framework.population.population_view.PopulationView.get_frame`
+        :meth:`vivarium.engine.framework.population.population_view.PopulationView.get`
+        or :meth:`vivarium.engine.framework.population.population_view.PopulationView.get_frame`
         instead.
         """
         return self._attribute_pipelines

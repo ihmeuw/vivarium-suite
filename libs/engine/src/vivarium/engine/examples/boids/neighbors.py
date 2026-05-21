@@ -2,10 +2,10 @@ from __future__ import annotations
 import pandas as pd
 from scipy import spatial
 
-from vivarium import Component
-from vivarium.framework.engine import Builder
-from vivarium.framework.event import Event
-from vivarium.framework.population import SimulantData
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.population import SimulantData
 
 
 class Neighbors(Component):

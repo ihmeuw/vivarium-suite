@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.randomness.interface
+.. automodule:: vivarium.engine.framework.randomness.interface

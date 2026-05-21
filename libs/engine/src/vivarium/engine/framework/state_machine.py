@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING, Any, Iterator
 import numpy as np
 import pandas as pd
 
-from vivarium import Component
+from vivarium.engine import Component
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
-    from vivarium.framework.event import Event
-    from vivarium.framework.population import PopulationView, SimulantData
-    from vivarium.types import ClockTime, DataInput, NumericArray
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.population import PopulationView, SimulantData
+    from vivarium.engine.types import ClockTime, DataInput, NumericArray
 
 
 def default_probability_function(index: pd.Index[int]) -> pd.Series[float]:

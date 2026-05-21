@@ -14,7 +14,7 @@ from typing import Any
 import yaml
 from layered_config_tree import ConfigurationError, LayeredConfigTree
 
-from vivarium.framework.plugins import DEFAULT_PLUGINS
+from vivarium.engine.framework.plugins import DEFAULT_PLUGINS
 
 
 def build_model_specification(
@@ -92,7 +92,7 @@ def _get_default_specification() -> LayeredConfigTree:
     model_specification.update(DEFAULT_PLUGINS, **default_metadata)
     model_specification.update({"components": {}, "configuration": {}})
 
-    user_config_path = Path("~/vivarium.yaml").expanduser()
+    user_config_path = Path("~/vivarium.engine.yaml").expanduser()
     if user_config_path.exists():
         model_specification.configuration.update(user_config_path, layer="user_configs")
 

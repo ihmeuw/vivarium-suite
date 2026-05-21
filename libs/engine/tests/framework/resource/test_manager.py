@@ -8,14 +8,14 @@ import pytest
 from pytest_mock import MockerFixture
 
 from tests.helpers import ColumnCreator, ColumnCreatorAndRequirer
-from vivarium import Component
-from vivarium.framework.population import SimulantData
-from vivarium.framework.randomness import RandomnessStream
-from vivarium.framework.randomness.index_map import IndexMap
-from vivarium.framework.resource import Resource, ResourceManager
-from vivarium.framework.resource.exceptions import ResourceError
-from vivarium.framework.resource.resource import Column, Initializer
-from vivarium.framework.values import AttributePipeline, Pipeline, ValueModifier, ValueSource
+from vivarium.engine import Component
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.framework.randomness import RandomnessStream
+from vivarium.engine.framework.randomness.index_map import IndexMap
+from vivarium.engine.framework.resource import Resource, ResourceManager
+from vivarium.engine.framework.resource.exceptions import ResourceError
+from vivarium.engine.framework.resource.resource import Column, Initializer
+from vivarium.engine.framework.values import AttributePipeline, Pipeline, ValueModifier, ValueSource
 
 
 @pytest.fixture

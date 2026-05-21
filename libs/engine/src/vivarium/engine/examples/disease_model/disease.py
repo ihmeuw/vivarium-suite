@@ -4,11 +4,11 @@ from collections.abc import Iterable
 from typing import Any
 import pandas as pd
 
-from vivarium import Component
-from vivarium.framework.engine import Builder
-from vivarium.framework.state_machine import Machine, State, Transition, Trigger
-from vivarium.framework.utilities import rate_to_probability
-from vivarium.framework.values import list_combiner, union_post_processor
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.state_machine import Machine, State, Transition, Trigger
+from vivarium.engine.framework.utilities import rate_to_probability
+from vivarium.engine.framework.values import list_combiner, union_post_processor
 from collections.abc import Iterable
 
 class DiseaseTransition(Transition):

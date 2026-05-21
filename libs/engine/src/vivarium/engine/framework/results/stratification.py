@@ -12,7 +12,7 @@ from typing import Any
 import pandas as pd
 from pandas.api.types import CategoricalDtype
 
-from vivarium.types import ScalarMapper, VectorMapper
+from vivarium.engine.types import ScalarMapper, VectorMapper
 
 STRATIFICATION_COLUMN_SUFFIX: str = "mapped_values"
 

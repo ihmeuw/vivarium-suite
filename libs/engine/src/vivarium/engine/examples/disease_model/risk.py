@@ -4,11 +4,11 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
-from vivarium import Component
+from vivarium.engine import Component
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
-    from vivarium.framework.population import SimulantData
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.population import SimulantData
 
 
 class Risk(Component):

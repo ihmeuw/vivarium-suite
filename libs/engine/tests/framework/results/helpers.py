@@ -5,14 +5,14 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from vivarium import Component
-from vivarium.framework.engine import Builder
-from vivarium.framework.event import Event
-from vivarium.framework.population import SimulantData
-from vivarium.framework.results import VALUE_COLUMN
-from vivarium.framework.results.observer import Observer
-from vivarium.framework.results.stratification import Stratification
-from vivarium.types import ScalarMapper, VectorMapper
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.framework.results import VALUE_COLUMN
+from vivarium.engine.framework.results.observer import Observer
+from vivarium.engine.framework.results.stratification import Stratification
+from vivarium.engine.types import ScalarMapper, VectorMapper
 
 NAME = "hogwarts_house"
 NAME_COLUMNS = ["first_name", "last_name"]

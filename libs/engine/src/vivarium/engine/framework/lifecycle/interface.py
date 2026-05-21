@@ -3,7 +3,7 @@
 Life Cycle Interface
 ====================
 
-This module provides an interface to the :class:`LifeCycleManager <vivarium.framework.lifecycle.manager.LifeCycleManager>`.
+This module provides an interface to the :class:`LifeCycleManager <vivarium.engine.framework.lifecycle.manager.LifeCycleManager>`.
 
 """
 from __future__ import annotations
@@ -11,11 +11,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from vivarium.manager import Interface
+from vivarium.engine.manager import Interface
 
 if TYPE_CHECKING:
-    from vivarium.framework.event import Event
-    from vivarium.framework.lifecycle.manager import LifeCycleManager
+    from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.lifecycle.manager import LifeCycleManager
 
 
 class LifeCycleInterface(Interface):

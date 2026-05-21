@@ -14,38 +14,38 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 from pandas.core.groupby.generic import DataFrameGroupBy
 
-from vivarium.framework.event import Event
-from vivarium.framework.population import utilities as pop_utils
-from vivarium.framework.results.exceptions import ResultsConfigurationError
-from vivarium.framework.results.observation import Observation
-from vivarium.framework.results.stratification import Stratification, get_mapped_col_name
-from vivarium.types import ScalarMapper, VectorMapper
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.population import utilities as pop_utils
+from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
+from vivarium.engine.framework.results.observation import Observation
+from vivarium.engine.framework.results.stratification import Stratification, get_mapped_col_name
+from vivarium.engine.types import ScalarMapper, VectorMapper
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
-    from vivarium.framework.results.interface import PopulationFilter
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.results.interface import PopulationFilter
 
 
 class ResultsContext:
     """Manager for organizing observations and their required stratifications.
 
-    This context object is wholly contained by :class:`ResultsManager <vivarium.framework.results.manager.ResultsManager>`.
+    This context object is wholly contained by :class:`ResultsManager <vivarium.engine.framework.results.manager.ResultsManager>`.
     Stratifications and observations can be added to the context through the manager via the
-    :meth:`add_stratification <vivarium.framework.results.context.ResultsContext.add_stratification>` and
-    :meth:`register_observation <vivarium.framework.results.context.ResultsContext.register_observation>` methods, respectively.
+    :meth:`add_stratification <vivarium.engine.framework.results.context.ResultsContext.add_stratification>` and
+    :meth:`register_observation <vivarium.engine.framework.results.context.ResultsContext.register_observation>` methods, respectively.
 
     Attributes
     ----------
     default_stratifications
         List of column names to use for stratifying results.
     stratifications
-        List of :class:`Stratification <vivarium.framework.results.stratification.Stratification>`
+        List of :class:`Stratification <vivarium.engine.framework.results.stratification.Stratification>`
         objects to be applied to results.
     excluded_categories
         Dictionary of possible per-metric stratification values to be excluded
         from results processing.
     observations
-        Dictionary of :class:`Observation <vivarium.framework.results.observation.Observation>`
+        Dictionary of :class:`Observation <vivarium.engine.framework.results.observation.Observation>`
         objects to be produced keyed by the observation name.
     grouped_observations
         Dictionary of observation details. It is of the format
@@ -76,7 +76,7 @@ class ResultsContext:
     def setup(self, builder: Builder) -> None:
         """Sets up the results context.
 
-        This method is called by the :class:`ResultsManager <vivarium.framework.results.manager.ResultsManager>`
+        This method is called by the :class:`ResultsManager <vivarium.engine.framework.results.manager.ResultsManager>`
         during the setup phase of that object.
         """
         self.logger = builder.logging.get_logger(self.name)

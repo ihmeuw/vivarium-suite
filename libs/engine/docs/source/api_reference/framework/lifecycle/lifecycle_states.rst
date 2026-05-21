@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.lifecycle.lifecycle_states
+.. automodule:: vivarium.engine.framework.lifecycle.lifecycle_states

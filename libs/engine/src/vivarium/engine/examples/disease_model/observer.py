@@ -2,10 +2,10 @@ from typing import Any
 
 import pandas as pd
 
-from vivarium.framework.engine import Builder
-from vivarium.framework.results import Observer
-from vivarium.framework.population import SimulantData
-from vivarium.framework.event import Event
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.results import Observer
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.framework.event import Event
 
 class DeathsObserver(Observer):
     """Observes the number of deaths."""

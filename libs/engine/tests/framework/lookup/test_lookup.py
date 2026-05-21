@@ -10,15 +10,15 @@ from layered_config_tree import LayeredConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import LookupCreator
-from vivarium import Component, InteractiveContext
-from vivarium.framework.configuration import build_simulation_configuration
-from vivarium.framework.engine import Builder
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.lookup.manager import LookupTableManager
-from vivarium.framework.lookup.table import LookupTable
-from vivarium.testing_utilities import TestPopulation, build_table, metadata
-from vivarium.types import LookupTableData, ScalarValue
+from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.configuration import build_simulation_configuration
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.lookup.manager import LookupTableManager
+from vivarium.engine.framework.lookup.table import LookupTable
+from vivarium.engine.testing_utilities import TestPopulation, build_table, metadata
+from vivarium.engine.types import LookupTableData, ScalarValue
 
 
 def test_build_table_calls_methods_correctly(mocker: MockerFixture) -> None:

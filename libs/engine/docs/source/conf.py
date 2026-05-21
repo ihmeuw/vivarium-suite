@@ -19,7 +19,7 @@ from pathlib import Path
 
 import vivarium
 
-base_dir = Path(vivarium.__file__).parent
+base_dir = Path(vivarium.engine.__file__).parent
 
 about: dict[str, str] = {}
 with (base_dir / "__about__.py").open() as f:
@@ -34,9 +34,9 @@ copyright = f'2023, {about["__author__"]}'
 author = about["__author__"]
 
 # The short X.Y version.
-version = vivarium.__version__
+version = vivarium.engine.__version__
 # The full version, including alpha/beta/rc tags.
-release = vivarium.__version__
+release = vivarium.engine.__version__
 
 
 # -- General configuration ------------------------------------------------

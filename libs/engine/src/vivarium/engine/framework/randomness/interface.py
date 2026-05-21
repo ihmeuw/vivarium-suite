@@ -3,7 +3,7 @@
 Randomness Interface
 ====================
 
-This module provides an interface to the :class:`RandomnessManager <vivarium.framework.randomness.manager.RandomnessManager>`.
+This module provides an interface to the :class:`RandomnessManager <vivarium.engine.framework.randomness.manager.RandomnessManager>`.
 
 """
 
@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from vivarium.framework.randomness.manager import RandomnessManager
-from vivarium.framework.randomness.stream import RandomnessStream
-from vivarium.manager import Interface
+from vivarium.engine.framework.randomness.manager import RandomnessManager
+from vivarium.engine.framework.randomness.stream import RandomnessStream
+from vivarium.engine.manager import Interface
 
 
 class RandomnessInterface(Interface):

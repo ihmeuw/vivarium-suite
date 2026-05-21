@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.resource.manager
+.. automodule:: vivarium.engine.framework.resource.manager

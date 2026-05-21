@@ -32,31 +32,31 @@ import pandas as pd
 from layered_config_tree.exceptions import ConfigurationKeyError
 from layered_config_tree.main import LayeredConfigTree
 
-from vivarium import Component
-from vivarium.exceptions import VivariumError
-from vivarium.framework.artifact import ArtifactInterface, ArtifactManager
-from vivarium.framework.components import (
+from vivarium.engine import Component
+from vivarium.engine.exceptions import VivariumError
+from vivarium.engine.framework.artifact import ArtifactInterface, ArtifactManager
+from vivarium.engine.framework.components import (
     ComponentConfigError,
     ComponentInterface,
     ComponentManager,
 )
-from vivarium.framework.configuration import build_model_specification
-from vivarium.framework.event import EventInterface, EventManager
-from vivarium.framework.lifecycle import (
+from vivarium.engine.framework.configuration import build_model_specification
+from vivarium.engine.framework.event import EventInterface, EventManager
+from vivarium.engine.framework.lifecycle import (
     LifeCycleInterface,
     LifeCycleManager,
     lifecycle_states,
 )
-from vivarium.framework.logging import LoggingInterface, LoggingManager
-from vivarium.framework.lookup import LookupTableInterface, LookupTableManager
-from vivarium.framework.plugins import PluginManager
-from vivarium.framework.population import PopulationInterface, PopulationManager
-from vivarium.framework.randomness import RandomnessInterface, RandomnessManager
-from vivarium.framework.resource import ResourceInterface, ResourceManager
-from vivarium.framework.results import ResultsInterface, ResultsManager
-from vivarium.framework.time import SimulationClock, TimeInterface
-from vivarium.framework.values import ValuesInterface, ValuesManager
-from vivarium.types import ClockTime
+from vivarium.engine.framework.logging import LoggingInterface, LoggingManager
+from vivarium.engine.framework.lookup import LookupTableInterface, LookupTableManager
+from vivarium.engine.framework.plugins import PluginManager
+from vivarium.engine.framework.population import PopulationInterface, PopulationManager
+from vivarium.engine.framework.randomness import RandomnessInterface, RandomnessManager
+from vivarium.engine.framework.resource import ResourceInterface, ResourceManager
+from vivarium.engine.framework.results import ResultsInterface, ResultsManager
+from vivarium.engine.framework.time import SimulationClock, TimeInterface
+from vivarium.engine.framework.values import ValuesInterface, ValuesManager
+from vivarium.engine.types import ClockTime
 
 
 class SimulationContext:
@@ -216,7 +216,7 @@ class SimulationContext:
         if non_components:
             message = (
                 "Attempting to create a simulation with the following components "
-                "that do not inherit from `vivarium.Component`: "
+                "that do not inherit from `vivarium.engine.Component`: "
                 f"[{[c.name for c in non_components]}]."
             )
             raise ComponentConfigError(message)

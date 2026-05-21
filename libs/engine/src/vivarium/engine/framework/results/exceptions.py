@@ -6,7 +6,7 @@ Results System Exceptions
 Errors related to the results system
 """
 
-from vivarium.exceptions import VivariumError
+from vivarium.engine.exceptions import VivariumError
 
 
 class ResultsConfigurationError(VivariumError):

@@ -2,7 +2,7 @@
 Value Management
 ================
 
-.. automodule:: vivarium.framework.values
+.. automodule:: vivarium.engine.framework.values
 
 .. toctree::
    :maxdepth: 1

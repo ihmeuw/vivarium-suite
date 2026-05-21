@@ -3,12 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
-from vivarium.framework.lifecycle import LifeCycleError
+from vivarium.engine.framework.lifecycle import LifeCycleError
 
 if TYPE_CHECKING:
-    from vivarium import Component
-    from vivarium.framework.population import SimulantData
-    from vivarium.manager import Manager
+    from vivarium.engine import Component
+    from vivarium.engine.framework.population import SimulantData
+    from vivarium.engine.manager import Manager
 
 
 class ResourceId(str):
@@ -84,7 +84,7 @@ class Resource:
     @property
     def required_resources(self) -> list[ResourceId]:
         """The long names (including type) of required resources for this group."""
-        from vivarium.framework.values import AttributePipeline
+        from vivarium.engine.framework.values import AttributePipeline
 
         return [
             dep.resource_id

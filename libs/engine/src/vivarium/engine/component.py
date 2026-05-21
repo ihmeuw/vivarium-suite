@@ -20,18 +20,18 @@ from typing import TYPE_CHECKING, Any, overload
 import pandas as pd
 from layered_config_tree import ConfigurationError, LayeredConfigTree
 
-from vivarium.framework.artifact import ArtifactException
-from vivarium.framework.lifecycle import LifeCycleError, lifecycle_states
-from vivarium.types import LookupTableData
+from vivarium.engine.framework.artifact import ArtifactException
+from vivarium.engine.framework.lifecycle import LifeCycleError, lifecycle_states
+from vivarium.engine.types import LookupTableData
 
 if TYPE_CHECKING:
     import loguru
 
-    from vivarium.framework.engine import Builder
-    from vivarium.framework.event import Event
-    from vivarium.framework.lookup import LookupTable
-    from vivarium.framework.population import PopulationView
-    from vivarium.types import DataInput
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.lookup import LookupTable
+    from vivarium.engine.framework.population import PopulationView
+    from vivarium.engine.types import DataInput
 
 DEFAULT_EVENT_PRIORITY = 5
 """The default priority at which events will be triggered."""
@@ -186,7 +186,7 @@ class Component(ABC):
 
     @property
     def population_view(self) -> PopulationView:
-        """The :class:`~vivarium.framework.population.PopulationView` for this component.
+        """The :class:`~vivarium.engine.framework.population.PopulationView` for this component.
 
         Raises
         ------
@@ -194,7 +194,7 @@ class Component(ABC):
             If the component does not have access to the state table.
         """
         if self._population_view is None:
-            from vivarium.framework.population.exceptions import PopulationError
+            from vivarium.engine.framework.population.exceptions import PopulationError
 
             raise PopulationError(
                 f"Component '{self.name}' does not have access to the state table. "

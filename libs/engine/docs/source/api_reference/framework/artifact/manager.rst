@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.artifact.manager
+.. automodule:: vivarium.engine.framework.artifact.manager

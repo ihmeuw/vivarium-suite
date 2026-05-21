@@ -18,8 +18,8 @@ from tests.framework.results.helpers import (
     sorting_hat_serial,
     sorting_hat_vectorized,
 )
-from vivarium.framework.results.manager import ResultsManager
-from vivarium.framework.results.stratification import (
+from vivarium.engine.framework.results.manager import ResultsManager
+from vivarium.engine.framework.results.stratification import (
     Stratification,
     get_mapped_col_name,
     get_original_col_name,

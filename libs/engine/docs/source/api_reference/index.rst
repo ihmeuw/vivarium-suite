@@ -1,7 +1,7 @@
 API Reference
 =============
 
-.. automodule:: vivarium
+.. automodule:: vivarium.engine
 
 .. toctree::
    :maxdepth: 1

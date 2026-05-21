@@ -2,7 +2,7 @@
 Logging Management
 ==================
 
-.. automodule:: vivarium.framework.logging
+.. automodule:: vivarium.engine.framework.logging
 
 .. toctree::
    :maxdepth: 1

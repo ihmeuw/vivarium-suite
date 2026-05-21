@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.artifact.artifact
+.. automodule:: vivarium.engine.framework.artifact.artifact

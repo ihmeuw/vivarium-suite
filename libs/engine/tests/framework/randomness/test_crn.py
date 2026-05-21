@@ -13,14 +13,14 @@ import pytest
 from pandas.testing import assert_frame_equal
 
 from tests.helpers import ColumnCreator
-from vivarium import Component
-from vivarium.framework.engine import Builder
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.population import SimulantData
-from vivarium.framework.randomness.index_map import IndexMap
-from vivarium.framework.randomness.stream import RandomnessStream
-from vivarium.interface import InteractiveContext
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.framework.randomness.index_map import IndexMap
+from vivarium.engine.framework.randomness.stream import RandomnessStream
+from vivarium.engine.interface import InteractiveContext
 
 
 @pytest.mark.parametrize("initializes_crn_attributes", [True, False])

@@ -7,7 +7,7 @@ Errors related to improper use of the Randomness system.
 
 """
 
-from vivarium.exceptions import VivariumError
+from vivarium.engine.exceptions import VivariumError
 
 
 class RandomnessError(VivariumError):

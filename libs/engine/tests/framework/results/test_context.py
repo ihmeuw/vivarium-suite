@@ -23,14 +23,14 @@ from tests.framework.results.helpers import (
     sorting_hat_vectorized,
     verify_stratification_added,
 )
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.results import VALUE_COLUMN
-from vivarium.framework.results.context import ResultsContext
-from vivarium.framework.results.interface import PopulationFilter
-from vivarium.framework.results.observation import AddingObservation, ConcatenatingObservation
-from vivarium.framework.results.stratification import Stratification, get_mapped_col_name
-from vivarium.types import ScalarMapper, VectorMapper
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.results import VALUE_COLUMN
+from vivarium.engine.framework.results.context import ResultsContext
+from vivarium.engine.framework.results.interface import PopulationFilter
+from vivarium.engine.framework.results.observation import AddingObservation, ConcatenatingObservation
+from vivarium.engine.framework.results.stratification import Stratification, get_mapped_col_name
+from vivarium.engine.types import ScalarMapper, VectorMapper
 
 
 def _aggregate_state_person_time(x: pd.DataFrame) -> float:

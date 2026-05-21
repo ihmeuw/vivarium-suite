@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.logging.interface
+.. automodule:: vivarium.engine.framework.logging.interface

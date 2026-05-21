@@ -15,7 +15,7 @@ from typing import Any
 
 import yaml
 
-from vivarium.exceptions import VivariumError
+from vivarium.engine.exceptions import VivariumError
 
 
 def run_from_ipython() -> bool:

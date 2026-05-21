@@ -2,7 +2,7 @@
 Population Management
 =====================
 
-.. automodule:: vivarium.framework.population
+.. automodule:: vivarium.engine.framework.population
 
 .. toctree::
    :maxdepth: 1

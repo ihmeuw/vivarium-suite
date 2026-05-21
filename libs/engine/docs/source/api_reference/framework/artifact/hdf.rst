@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.artifact.hdf
+.. automodule:: vivarium.engine.framework.artifact.hdf

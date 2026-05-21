@@ -4,7 +4,7 @@ Lookup Table Manager
 ====================
 
 Simulations tend to require a large quantity of data to run.  :mod:`vivarium`
-provides the :class:`Lookup Table <vivarium.framework.lookup.table.LookupTable>`
+provides the :class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>`
 abstraction to ensure that accurate data can be retrieved when it's needed. It's
 a callable object that takes in a population index and returns data specific to
 the individuals represented by that index. See the
@@ -20,15 +20,15 @@ from typing import TYPE_CHECKING, Any, overload
 import pandas as pd
 from layered_config_tree import LayeredConfigTree
 
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.lookup.table import DEFAULT_VALUE_COLUMN, LookupTable
-from vivarium.manager import Manager
-from vivarium.types import LookupTableData
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.lookup.table import DEFAULT_VALUE_COLUMN, LookupTable
+from vivarium.engine.manager import Manager
+from vivarium.engine.types import LookupTableData
 
 if TYPE_CHECKING:
-    from vivarium import Component
-    from vivarium.framework.engine import Builder
+    from vivarium.engine import Component
+    from vivarium.engine.framework.engine import Builder
 
 
 class LookupTableManager(Manager):

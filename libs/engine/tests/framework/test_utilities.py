@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vivarium.framework.utilities import (
+from vivarium.engine.framework.utilities import (
     collapse_nested_dict,
     from_yearly,
     handle_exceptions,
@@ -123,7 +123,7 @@ def test_import_class_by_path() -> None:
 
 
 def test_import_function_by_path() -> None:
-    func = import_by_path("vivarium.framework.utilities.import_by_path")
+    func = import_by_path("vivarium.engine.framework.utilities.import_by_path")
     assert func is import_by_path
 
 
@@ -131,7 +131,7 @@ def test_bad_import_by_path() -> None:
     with pytest.raises(ImportError):
         import_by_path("junk.garbage.SillyClass")
     with pytest.raises(AttributeError):
-        import_by_path("vivarium.framework.components.SillyClass")
+        import_by_path("vivarium.engine.framework.components.SillyClass")
 
 
 class CustomException(Exception):

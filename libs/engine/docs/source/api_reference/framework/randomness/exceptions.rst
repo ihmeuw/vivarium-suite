@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.randomness.exceptions
+.. automodule:: vivarium.engine.framework.randomness.exceptions

@@ -5,7 +5,7 @@ Simulation Entry Points
 =======================
 
 :mod:`vivarium` provides a single main entry point, the
-:class:`SimulationContext <vivarium.framework.engine.SimulationContext>`,
+:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`,
 that is then wrapped for use on the command line
 and in interactive settings.  This document describes the main entry point
 and the wrappers and gives an indication about how you might parallelize
@@ -22,12 +22,12 @@ the :ref:`tutorials section <running_a_sim>`.
 The Vivarium Engine
 -------------------
 
-The :mod:`engine <vivarium.framework.engine>` houses the
-:class:`SimulationContext <vivarium.framework.engine.SimulationContext>` --
+The :mod:`engine <vivarium.engine.framework.engine>` houses the
+:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>` --
 the key :mod:`vivarium` object for running and interacting with simulations.
 It is the top-level manager for all state information in :mod:`vivarium`. All
 simulations are created by a call to the ``__init__`` of the
-:class:`SimulationContext <vivarium.framework.engine.SimulationContext>` at
+:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>` at
 some level and wrappers around the context should try to be as thin as
 possible around simulation creation.
 
@@ -37,7 +37,7 @@ model_specification
   The :term:`model specification <Model Specification>` is a complete
   representation of a :mod:`vivarium` simulation formatted as a yaml file.
   As an argument ot the
-  :class:`SimulationContext <vivarium.framework.engine.SimulationContext>`, it
+  :class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`, it
   can be provided as a path to a file (either as a :class:`str` or a
   :class:`pathlib.Path`) or as a
   :class:`LayeredConfigTree <layered_config_tree.main.LayeredConfigTree>`, the internal
@@ -56,7 +56,7 @@ components
   representation of their import paths. The latter two representations are
   treated as prefix trees when they are parsed into objects. This behavior
   is controlled by the
-  :class:`ComponentConfigurationParser <vivarium.framework.components.parser.ComponentConfigurationParser>`.
+  :class:`ComponentConfigurationParser <vivarium.engine.framework.components.parser.ComponentConfigurationParser>`.
   More information about components is available in the component
   :ref:`concept note <components_concept>`.
 configuration
@@ -73,7 +73,7 @@ plugins
   may be specified as either a dictionary or
   :class:`LayeredConfigTree <layered_config_tree.main.LayeredConfigTree>` and are
   parsed into objects by the
-  :class:`PluginManager <vivarium.framework.plugins.PluginManager>`.
+  :class:`PluginManager <vivarium.engine.framework.plugins.PluginManager>`.
   This is an advanced feature and almost never necessary.
 
 The ``configuration`` and ``plugins`` arguments are treated as overrides for
@@ -90,10 +90,10 @@ modification of a simulation defined in a model specification file.
 By intention, the context exposes a very simple interface for managing the
 :ref:`simulation lifecycle <lifecycle_concept>`.  Once a context is instantiated,
 all steps of running a simulation are encapsulated in the
-:func:`run_simulation <vivarium.framework.engine.SimulationContext.run_simulation>`
+:func:`run_simulation <vivarium.engine.framework.engine.SimulationContext.run_simulation>`
 method.
 
-The simulation :class:`Builder <vivarium.framework.engine.Builder>` is also
+The simulation :class:`Builder <vivarium.engine.framework.engine.Builder>` is also
 part of the engine. It is the main interface that components use to interact
 with the simulation framework. You can read more about how the builder works
 and what services it exposes :ref:`here <builder_concept>`.
@@ -101,12 +101,12 @@ and what services it exposes :ref:`here <builder_concept>`.
 Public Interfaces
 -----------------
 
-Functionality in the the :mod:`vivarium.framework.engine` serves as the lowest
+Functionality in the the :mod:`vivarium.engine.framework.engine` serves as the lowest
 level entry point into the simulation, but common use cases demand more
-usability.  In the :mod:`vivarium.interface` subpackage we have two public
+usability.  In the :mod:`vivarium.engine.interface` subpackage we have two public
 interfaces for interacting with the simulation.
 
-The :mod:`vivarium.interface.cli` module provides the
+The :mod:`vivarium.engine.interface.cli` module provides the
 ``simulate`` command and sub-commands for running and profiling simulations
 from the command line. A complete tutorial is available
 :ref:`here <cli_tutorial>`. ``simulate`` restricts the user to work
@@ -119,8 +119,8 @@ different output directories.
 During model development and debugging, it is frequently more useful to
 work in an interactive setting like a
 `jupyter notebook <https://jupyter.org>`_ or a Python REPL. For this sort of
-work, the :mod:`vivarium.interface.interactive` module provides the
-:class:`InteractiveContext <vivarium.interface.interactive.InteractiveContext>`
+work, the :mod:`vivarium.engine.interface.interactive` module provides the
+:class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
 (also available as a top-level import from :mod:`vivarium`). Details about
 the many ways to initialize and run a simulation using the interactive context
 are available in the :ref:`interactive tutorial <interactive_tutorial>`.

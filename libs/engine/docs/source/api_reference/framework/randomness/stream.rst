@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.randomness.stream
+.. automodule:: vivarium.engine.framework.randomness.stream

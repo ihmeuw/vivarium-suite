@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.components.manager
+.. automodule:: vivarium.engine.framework.components.manager

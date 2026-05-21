@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.event.interface
+.. automodule:: vivarium.engine.framework.event.interface

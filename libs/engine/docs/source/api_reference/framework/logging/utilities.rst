@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.logging.utilities
+.. automodule:: vivarium.engine.framework.logging.utilities

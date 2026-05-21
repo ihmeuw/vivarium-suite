@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from vivarium.framework.population.utilities import (
+from vivarium.engine.framework.population.utilities import (
     combine_queries,
     extract_columns_from_query,
 )

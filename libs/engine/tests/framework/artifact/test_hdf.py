@@ -11,9 +11,9 @@ from pytest_mock import MockerFixture
 from tables.file import File
 from tables.nodes import filenode
 
-from vivarium.framework.artifact import hdf
-from vivarium.framework.artifact.hdf import EntityKey
-from vivarium.testing_utilities import build_table
+from vivarium.engine.framework.artifact import hdf
+from vivarium.engine.framework.artifact.hdf import EntityKey
+from vivarium.engine.testing_utilities import build_table
 
 _KEYS = [
     "population.age_bins",
@@ -57,7 +57,7 @@ def json_data(request: pytest.FixtureRequest) -> Any:
 
 def test_touch_no_file(mocker: MockerFixture) -> None:
     path = Path("not/an/existing/path.hdf")
-    tables_mock = mocker.patch("vivarium.framework.artifact.hdf.tables")
+    tables_mock = mocker.patch("vivarium.engine.framework.artifact.hdf.tables")
 
     hdf.touch(path)
     tables_mock.open_file.assert_called_once_with(str(path), mode="w")
@@ -86,7 +86,7 @@ def test_touch_existing_file(tmpdir: Path) -> None:
 
 
 def test_write_df(hdf_file_path: Path, mock_key: EntityKey, mocker: MockerFixture) -> None:
-    df_mock = mocker.patch("vivarium.framework.artifact.hdf._write_pandas_data")
+    df_mock = mocker.patch("vivarium.engine.framework.artifact.hdf._write_pandas_data")
     data = pd.DataFrame(np.random.random((10, 3)), columns=["a", "b", "c"], index=range(10))
 
     hdf.write(hdf_file_path, mock_key, data)
@@ -97,7 +97,7 @@ def test_write_df(hdf_file_path: Path, mock_key: EntityKey, mocker: MockerFixtur
 def test_write_json(
     hdf_file_path: Path, mock_key: EntityKey, json_data: list[str], mocker: MockerFixture
 ) -> None:
-    json_mock = mocker.patch("vivarium.framework.artifact.hdf._write_json_blob")
+    json_mock = mocker.patch("vivarium.engine.framework.artifact.hdf._write_json_blob")
     hdf.write(hdf_file_path, mock_key, json_data)
     json_mock.assert_called_once_with(hdf_file_path, mock_key, json_data)
 

@@ -13,10 +13,10 @@ formatting. This file is then used by the :mod:`vivarium` simulations to fill
 in all the relevant parameter data.
 
 It is frequently useful to be able to view or modify this data outside the
-simulation.  The :class:`vivarium.framework.artifact.artifact.Artifact` provides
+simulation.  The :class:`vivarium.engine.framework.artifact.artifact.Artifact` provides
 a high level interface to do just that. In this tutorial we'll go through how to
 view, delete, and write data to an artifact using the tools provided by the
-:class:`~vivarium.framework.artifact.artifact.Artifact`. You'll access data in
+:class:`~vivarium.engine.framework.artifact.artifact.Artifact`. You'll access data in
 the artifact through keys, mirroring the underlying hdf storage of artifacts.
 
 .. contents::
@@ -29,7 +29,7 @@ Creating an artifact
 ---------------------
 
 To view an existing hdf file via the
-:class:`~vivarium.framework.artifact.artifact.Artifact` tools, we'll
+:class:`~vivarium.engine.framework.artifact.artifact.Artifact` tools, we'll
 create a new artifact. We can print the resulting artifact to view the tree
 structure of the keys in our artifact. We'll use our test artifact to
 illustrate:
@@ -53,7 +53,7 @@ illustrate:
             structure
             theoretical_minimum_risk_life_expectancy
 
-Now we have an :class:`~vivarium.framework.artifact.artifact.Artifact` object,
+Now we have an :class:`~vivarium.engine.framework.artifact.artifact.Artifact` object,
 which we can use to interact with the data stored in the hdf file with which we
 created it.
 
@@ -68,7 +68,7 @@ subsets of the data you may want to read only the portion you need. This is
 the idea behind filter terms.
 
 Filter terms are built into an
-:class:`~vivarium.framework.artifact.artifact.Artifact` on its creation and
+:class:`~vivarium.engine.framework.artifact.artifact.Artifact` on its creation and
 apply to all data loaded from that Artifact. You can think
 of filter terms as somewhat similar to the :meth:`pandas.DataFrame.query`
 method, although the key difference is that filter terms apply to what data is
@@ -136,10 +136,10 @@ Reading data
 -------------
 
 Now that we've seen how to create an
-:class:`~vivarium.framework.artifact.artifact.Artifact` object and
+:class:`~vivarium.engine.framework.artifact.artifact.Artifact` object and
 view the underlying storage structure, let's cover how to actually retrieve
 data from that artifact. We'll use the
-:meth:`~vivarium.framework.artifact.artifact.Artifact.load` method.
+:meth:`~vivarium.engine.framework.artifact.artifact.Artifact.load` method.
 
 We saw the key names in our artifact in the previous step, and we'll use those
 names to load data. For example, if we want to load the population structure
@@ -195,13 +195,13 @@ to load a key not present in our Artifact, we will get an error:
       File "<stdin>", line 1, in <module>
       File "/home/kate/code/vivarium/vivarium/src/vivarium/framework/artifact/artifact.py", line 75, in load
         raise ArtifactException(f"{entity_key} should be in {self.path}.")
-    vivarium.framework.artifact.ArtifactException: a.fake.key should be in tests/dataset_manager/artifact.hdf.
+    vivarium.engine.framework.artifact.ArtifactException: a.fake.key should be in tests/dataset_manager/artifact.hdf.
 
 Writing data
 ------------
 
 To write new data to an artifact, use the
-:meth:`~vivarium.framework.artifact.artifact.Artifact.write`
+:meth:`~vivarium.engine.framework.artifact.artifact.Artifact.write`
 method, passing the full key (in the string representation we saw above of
 ``type.name.measure`` or ``type.measure``) and the data you wish to store.
 
@@ -233,11 +233,11 @@ wrote to. We get an error:
       File "<stdin>", line 1, in <module>
       File "/home/kate/code/vivarium/vivarium/src/vivarium/framework/artifact/artifact.py", line 105, in write
         raise ArtifactException(f'{entity_key} already in artifact.')
-    vivarium.framework.artifact.ArtifactException: locations.names already in artifact.
+    vivarium.engine.framework.artifact.ArtifactException: locations.names already in artifact.
 
 If the key you want to write to is already in the artifact, you'll want to
-use the :meth:`~vivarium.framework.artifact.artifact.Artifact.replace` method
-instead of :meth:`~vivarium.framework.artifact.artifact.Artifact.write`. This
+use the :meth:`~vivarium.engine.framework.artifact.artifact.Artifact.replace` method
+instead of :meth:`~vivarium.engine.framework.artifact.artifact.Artifact.write`. This
 allows you to replace the data in the artifact at the given key with the passed
 data.
 
@@ -255,9 +255,9 @@ data.
 Removing data
 -------------
 
-Like :meth:`~vivarium.framework.artifact.artifact.Artifact.load` and
-:meth:`~vivarium.framework.artifact.artifact.Artifact.write`,
-:meth:`~vivarium.framework.artifact.artifact.Artifact.remove` is based on keys.
+Like :meth:`~vivarium.engine.framework.artifact.artifact.Artifact.load` and
+:meth:`~vivarium.engine.framework.artifact.artifact.Artifact.write`,
+:meth:`~vivarium.engine.framework.artifact.artifact.Artifact.remove` is based on keys.
 Pass the name of the key you wish to remove, and it will be deleted from the
 artifact and the underlying hdf file.
 

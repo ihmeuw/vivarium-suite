@@ -3,7 +3,7 @@
 Results Interface
 =================
 
-This module provides an interface to the :class:`ResultsManager <vivarium.framework.results.manager.ResultsManager>`.
+This module provides an interface to the :class:`ResultsManager <vivarium.engine.framework.results.manager.ResultsManager>`.
 
 """
 from __future__ import annotations
@@ -14,19 +14,19 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Sequence, Union
 import pandas as pd
 from pandas.core.groupby.generic import DataFrameGroupBy
 
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.results.observation import (
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
     StratifiedObservation,
     UnstratifiedObservation,
 )
-from vivarium.manager import Interface
-from vivarium.types import ScalarMapper, VectorMapper
+from vivarium.engine.manager import Interface
+from vivarium.engine.types import ScalarMapper, VectorMapper
 
 if TYPE_CHECKING:
-    from vivarium.framework.results.manager import ResultsManager
+    from vivarium.engine.framework.results.manager import ResultsManager
 
 
 ResultsUpdater = Callable[[pd.DataFrame, pd.DataFrame], pd.DataFrame]
@@ -233,10 +233,10 @@ class ResultsInterface(Interface):
         results_formatter
             Function that formats the raw observation results.
         additional_stratifications
-            List of additional :class:`Stratification <vivarium.framework.results.stratification.Stratification>`
+            List of additional :class:`Stratification <vivarium.engine.framework.results.stratification.Stratification>`
             names by which to stratify this observation by.
         excluded_stratifications
-            List of default :class:`Stratification <vivarium.framework.results.stratification.Stratification>`
+            List of default :class:`Stratification <vivarium.engine.framework.results.stratification.Stratification>`
             names to remove from this observation.
         aggregator_sources
             List of population view columns to be used in the `aggregator`.
@@ -367,10 +367,10 @@ class ResultsInterface(Interface):
         results_formatter
             Function that formats the raw observation results.
         additional_stratifications
-            List of additional :class:`Stratification <vivarium.framework.results.stratification.Stratification>`
+            List of additional :class:`Stratification <vivarium.engine.framework.results.stratification.Stratification>`
             names by which to stratify this observation by.
         excluded_stratifications
-            List of default :class:`Stratification <vivarium.framework.results.stratification.Stratification>`
+            List of default :class:`Stratification <vivarium.engine.framework.results.stratification.Stratification>`
             names to remove from this observation.
         aggregator_sources
             List of population view columns to be used in the `aggregator`.

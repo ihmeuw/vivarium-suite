@@ -19,13 +19,13 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import pandas as pd
 
-import vivarium.framework.population.utilities as pop_utils
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.population.exceptions import PopulationError
+import vivarium.engine.framework.population.utilities as pop_utils
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.population.exceptions import PopulationError
 
 if TYPE_CHECKING:
-    from vivarium.component import Component
-    from vivarium.framework.population.manager import PopulationManager
+    from vivarium.engine.component import Component
+    from vivarium.engine.framework.population.manager import PopulationManager
 
 
 class PopulationView:

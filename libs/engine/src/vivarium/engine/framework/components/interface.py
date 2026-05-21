@@ -3,7 +3,7 @@
 Component Interface
 ===================
 
-This module provides an interface to the :class:`ComponentManager <vivarium.framework.components.manager.ComponentManager>`.
+This module provides an interface to the :class:`ComponentManager <vivarium.engine.framework.components.manager.ComponentManager>`.
 
 """
 
@@ -13,9 +13,9 @@ from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Union
 
-from vivarium import Component
-from vivarium.framework.components.manager import C, ComponentManager
-from vivarium.manager import Interface, Manager
+from vivarium.engine import Component
+from vivarium.engine.framework.components.manager import C, ComponentManager
+from vivarium.engine.manager import Interface, Manager
 
 if TYPE_CHECKING:
     _ComponentsType = Sequence[Union[Component, Manager, "_ComponentsType"]]
@@ -105,7 +105,7 @@ class ComponentInterface(Interface):
 
         Delegates to
         :meth:`ComponentManager._tracking_setup
-        <vivarium.framework.components.manager.ComponentManager._tracking_setup>`.
+        <vivarium.engine.framework.components.manager.ComponentManager._tracking_setup>`.
         This is intentionally private: write-access to
         ``ComponentManager._current_component`` should remain confined to the
         setup lifecycle.

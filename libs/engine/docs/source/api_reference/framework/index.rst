@@ -2,7 +2,7 @@
 The Vivarium Framework
 ======================
 
-.. automodule:: vivarium.framework
+.. automodule:: vivarium.engine.framework
 
 .. toctree::
    :maxdepth: 1

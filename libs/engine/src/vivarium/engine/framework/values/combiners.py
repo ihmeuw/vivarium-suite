@@ -3,7 +3,7 @@ from typing import Any, Protocol
 
 import pandas as pd
 
-from vivarium.types import NumberLike
+from vivarium.engine.types import NumberLike
 
 
 class ValueCombiner(Protocol):
@@ -77,7 +77,7 @@ def multiplication_combiner(
     the product of all intermediate values.
 
     When ``value`` is a ``pd.Series`` and the pipeline is invoked with the
-    :class:`~vivarium.framework.values.pipeline.AttributePipeline` calling
+    :class:`~vivarium.engine.framework.values.pipeline.AttributePipeline` calling
     convention (a single positional ``pd.Index`` and no kwargs), the mutator
     is evaluated only on the non-zero entries of ``value``. Entries that are
     already zero will multiply to zero regardless of the mutator's output.

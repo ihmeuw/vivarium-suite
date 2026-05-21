@@ -9,7 +9,7 @@ import pytest
 from layered_config_tree import LayeredConfigTree
 from pytest_mock import MockerFixture
 
-from vivarium.framework.artifact.manager import (
+from vivarium.engine.framework.artifact.manager import (
     ArtifactManager,
     _config_filter,
     _subset_columns,
@@ -17,12 +17,12 @@ from vivarium.framework.artifact.manager import (
     parse_artifact_path_config,
     validate_filter_term,
 )
-from vivarium.testing_utilities import build_table, metadata
+from vivarium.engine.testing_utilities import build_table, metadata
 
 
 @pytest.fixture()
 def artifact_mock(mocker: MockerFixture) -> MagicMock:
-    mock = mocker.patch("vivarium.framework.artifact.manager.Artifact")
+    mock = mocker.patch("vivarium.engine.framework.artifact.manager.Artifact")
 
     def mock_load(key: str) -> str | pd.DataFrame | None:
         if key == "string_data.key":

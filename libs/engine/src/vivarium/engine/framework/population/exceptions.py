@@ -6,7 +6,7 @@ Population Management Exceptions
 Errors related to the mishandling of the population state table.
 """
 
-from vivarium.exceptions import VivariumError
+from vivarium.engine.exceptions import VivariumError
 
 
 class PopulationError(VivariumError):

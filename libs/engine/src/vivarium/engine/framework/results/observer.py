@@ -4,7 +4,7 @@ Observers
 =========
 
 An observer is a component that is responsible for registering
-:class:`observations <vivarium.framework.results.observation.Observation>`
+:class:`observations <vivarium.engine.framework.results.observation.Observation>`
 to the simulation.
 
 The provided :class:`Observer` class is an abstract base class that should be subclassed
@@ -19,10 +19,10 @@ from typing import TYPE_CHECKING, Any
 
 from layered_config_tree.main import LayeredConfigTree
 
-from vivarium import Component
+from vivarium.engine import Component
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
+    from vivarium.engine.framework.engine import Builder
 
 
 class Observer(Component, ABC):

@@ -2,7 +2,7 @@
 Random Number Generation
 ========================
 
-.. automodule:: vivarium.framework.randomness
+.. automodule:: vivarium.engine.framework.randomness
 
 .. toctree::
    :maxdepth: 1

@@ -2,7 +2,7 @@
 Results Processing
 ==================
 
-.. automodule:: vivarium.framework.results
+.. automodule:: vivarium.engine.framework.results
 
 .. toctree::
    :maxdepth: 1

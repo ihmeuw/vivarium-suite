@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import pandas as pd
 
-from vivarium import Component
-from vivarium.framework.resource import Resource
-from vivarium.framework.values.exceptions import DynamicValueError
-from vivarium.manager import Manager
+from vivarium.engine import Component
+from vivarium.engine.framework.resource import Resource
+from vivarium.engine.framework.values.exceptions import DynamicValueError
+from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:
-    from vivarium.framework.population import PopulationView
-    from vivarium.framework.values import (
+    from vivarium.engine.framework.population import PopulationView
+    from vivarium.engine.framework.values import (
         AttributePostProcessor,
         PostProcessor,
         ValueCombiner,
@@ -132,7 +132,7 @@ class Pipeline(Resource):
     -----
     Pipelines are highy generic and can be used to calculate values of any type
     through a simulation. *Most* pipelines are intended to calculate simulant
-    attributes; for those, use :class:`~vivarium.framework.values.pipeline.AttributePipeline`.
+    attributes; for those, use :class:`~vivarium.engine.framework.values.pipeline.AttributePipeline`.
     """
 
     RESOURCE_TYPE = "value"
@@ -316,7 +316,7 @@ class Pipeline(Resource):
 class AttributePipeline(Pipeline):
     """A type of value pipeline for calculating simulant attributes.
 
-    An attribute pipeline is a specific type of :class:`~vivarium.framework.values.pipeline.Pipeline`
+    An attribute pipeline is a specific type of :class:`~vivarium.engine.framework.values.pipeline.Pipeline`
     where the source and callable must take a pd.Index of integers and return a pd.Series
     or pd.DataFrame that has that same index.
 

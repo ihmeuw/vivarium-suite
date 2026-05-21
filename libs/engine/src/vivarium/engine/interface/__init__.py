@@ -1,1 +1,1 @@
-from vivarium.interface.interactive import InteractiveContext
+from vivarium.engine.interface.interactive import InteractiveContext

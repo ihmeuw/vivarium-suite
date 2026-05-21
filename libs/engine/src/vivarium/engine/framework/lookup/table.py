@@ -20,14 +20,14 @@ from typing import TypeVar
 
 import pandas as pd
 
-from vivarium.component import Component
-from vivarium.framework.lookup.interpolation import Interpolation
-from vivarium.framework.population.population_view import PopulationView
-from vivarium.framework.resource import Resource
-from vivarium.types import LookupTableData
+from vivarium.engine.component import Component
+from vivarium.engine.framework.lookup.interpolation import Interpolation
+from vivarium.engine.framework.population.population_view import PopulationView
+from vivarium.engine.framework.resource import Resource
+from vivarium.engine.types import LookupTableData
 
 if TYPE_CHECKING:
-    from vivarium.framework.lookup.manager import LookupTableManager
+    from vivarium.engine.framework.lookup.manager import LookupTableManager
 
 T = TypeVar("T", pd.Series, pd.DataFrame)  # type: ignore [type-arg]
 
@@ -46,8 +46,8 @@ class LookupTable(Resource, Generic[T]):
 
     Notes
     -----
-    These should not be created directly. Use the :attr:`~vivarium.framework.engine.Builder.lookup`
-    attribute on the :class:`~vivarium.framework.engine.Builder` class during setup.
+    These should not be created directly. Use the :attr:`~vivarium.engine.framework.engine.Builder.lookup`
+    attribute on the :class:`~vivarium.engine.framework.engine.Builder` class during setup.
 
     """
 

@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.population.manager
+.. automodule:: vivarium.engine.framework.population.manager

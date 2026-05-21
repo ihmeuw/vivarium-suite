@@ -10,11 +10,11 @@ import pytest
 from pytest_mock import MockerFixture, MockFixture
 
 from tests.helpers import ColumnCreator
-from vivarium import Component
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.resource import Resource
-from vivarium.framework.utilities import from_yearly
-from vivarium.framework.values import (
+from vivarium.engine import Component
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.resource import Resource
+from vivarium.engine.framework.utilities import from_yearly
+from vivarium.engine.framework.values import (
     AttributePipeline,
     DynamicValueError,
     Pipeline,
@@ -25,19 +25,19 @@ from vivarium.framework.values import (
     rescale_post_processor,
     union_post_processor,
 )
-from vivarium.framework.values.interface import ValuesInterface
-from vivarium.framework.values.pipeline import (
+from vivarium.engine.framework.values.interface import ValuesInterface
+from vivarium.engine.framework.values.pipeline import (
     AttributesValueSource,
     PrivateColumnValueSource,
     ValueSource,
 )
-from vivarium.interface import InteractiveContext
-from vivarium.types import NumberLike
+from vivarium.engine.interface import InteractiveContext
+from vivarium.engine.types import NumberLike
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
-    from vivarium.framework.population import SimulantData
-    from vivarium.framework.values import AttributePostProcessor
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.population import SimulantData
+    from vivarium.engine.framework.values import AttributePostProcessor
 
 
 INDEX = pd.Index([4, 8, 15, 16, 23, 42])

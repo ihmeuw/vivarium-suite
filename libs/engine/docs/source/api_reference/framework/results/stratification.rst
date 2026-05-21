@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.results.stratification
+.. automodule:: vivarium.engine.framework.results.stratification

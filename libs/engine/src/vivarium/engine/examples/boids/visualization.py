@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
-from vivarium import InteractiveContext
+from vivarium.engine import InteractiveContext
 
 
 # docs-start: plot_boids

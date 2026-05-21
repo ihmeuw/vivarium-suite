@@ -3,7 +3,7 @@
 LookupTable Interface
 =====================
 
-This module provides an interface to the :class:`LookupTableManager <vivarium.framework.lookup.manager.LookupTableManager>`.
+This module provides an interface to the :class:`LookupTableManager <vivarium.engine.framework.lookup.manager.LookupTableManager>`.
 
 """
 
@@ -13,17 +13,17 @@ from typing import Any, overload
 
 import pandas as pd
 
-from vivarium.framework.lookup.manager import LookupTableManager
-from vivarium.framework.lookup.table import LookupTable
-from vivarium.manager import Interface
-from vivarium.types import LookupTableData
+from vivarium.engine.framework.lookup.manager import LookupTableManager
+from vivarium.engine.framework.lookup.table import LookupTable
+from vivarium.engine.manager import Interface
+from vivarium.engine.types import LookupTableData
 
 
 class LookupTableInterface(Interface):
     """The interface to the lookup table management system.
 
     Simulations tend to require a large quantity of data to run. ``vivarium``
-    provides the :class:`Lookup Table <vivarium.framework.lookup.table.LookupTable>`
+    provides the :class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>`
     abstraction to ensure that accurate data can be retrieved when it's needed.
 
     For more information, see :ref:`here <lookup_concept>`.
@@ -81,7 +81,7 @@ class LookupTableInterface(Interface):
         ----------
         data
             The source data which will be used to build the resulting
-            :class:`Lookup Table <vivarium.framework.lookup.table.LookupTable>`.
+            :class:`Lookup Table <vivarium.engine.framework.lookup.table.LookupTable>`.
         name
             The name of the table. If not provided, a generic name will be assigned.
         value_columns

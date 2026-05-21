@@ -21,7 +21,7 @@ from the command line.  It provides three subcommands:
 For more information, see the :ref:`tutorial <cli_tutorial>` on running
 simulations from the command line.
 
-.. click:: vivarium.interface.cli:simulate
+.. click:: vivarium.engine.interface.cli:simulate
    :prog: simulate
    :show-nested:
 
@@ -35,14 +35,14 @@ import click
 import yaml
 from loguru import logger
 
-from vivarium.examples import disease_model
-from vivarium.framework.engine import SimulationContext
-from vivarium.framework.logging import (
+from vivarium.engine.examples import disease_model
+from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.logging import (
     configure_logging_to_file,
     configure_logging_to_terminal,
 )
-from vivarium.framework.utilities import handle_exceptions
-from vivarium.interface.utilities import get_output_root
+from vivarium.engine.framework.utilities import handle_exceptions
+from vivarium.engine.interface.utilities import get_output_root
 
 
 @click.group()

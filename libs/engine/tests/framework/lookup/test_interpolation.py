@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vivarium.framework.lookup.interpolation import (
+from vivarium.engine.framework.lookup.interpolation import (
     Interpolation,
     Order0Interp,
     check_data_complete,

@@ -22,10 +22,10 @@ from tests.helpers import (
     MultiLevelSingleColumnCreator,
     SingleColumnCreator,
 )
-from vivarium import Component, InteractiveContext
-from vivarium.framework.engine import Builder
-from vivarium.framework.population.exceptions import PopulationError
-from vivarium.framework.population.manager import PopulationManager, SimulantData
+from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.population.exceptions import PopulationError
+from vivarium.engine.framework.population.manager import PopulationManager, SimulantData
 
 
 class InitializingComponent(Component):

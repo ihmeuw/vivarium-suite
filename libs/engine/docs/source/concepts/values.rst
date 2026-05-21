@@ -23,8 +23,8 @@ As mentioned above, values and attributes are dynamically calculated as needed t
 the simulation. The most prominent example is any time during the simulation a component
 requests some information from the state table, the desired attributes are calculated.
 The producers of these values - the things that actually do the calcuations - are
-:class:`pipelines <vivarium.framework.values.pipeline.Pipeline>` for generic values
-and :class:`attribute pipelines <vivarium.framework.values.pipeline.AttributePipeline>`
+:class:`pipelines <vivarium.engine.framework.values.pipeline.Pipeline>` for generic values
+and :class:`attribute pipelines <vivarium.engine.framework.values.pipeline.AttributePipeline>`
 for attributes.
 
 
@@ -60,13 +60,13 @@ three options for combiners, detailed in the following table.
    * - Combiner
      - Description
      - Modifier Signature
-   * - | :func:`Replace <vivarium.framework.values.combiners.replace_combiner>`
+   * - | :func:`Replace <vivarium.engine.framework.values.combiners.replace_combiner>`
      - | Replaces the output of the source or modifier with the output of the
        | next modifier. This is the default combiner if none is specified on
        | pipeline registration.
      - | Arguments for the modifiers should be the same as the source with an
        | additional last argument of the results of the previous modifier.
-   * - | :func:`List <vivarium.framework.values.combiners.list_combiner>`
+   * - | :func:`List <vivarium.engine.framework.values.combiners.list_combiner>`
      - | The output of the source should be a list to which the results of the
        | modifiers are appended.
      - | Modifiers should have the same signature as the source.
@@ -81,11 +81,11 @@ combiner to do some postprocessing.
 
    * - Post-processor
      - Description
-   * - | :func:`Rescale <vivarium.framework.values.post_processors.rescale_post_processor>`
+   * - | :func:`Rescale <vivarium.engine.framework.values.post_processors.rescale_post_processor>`
      - | Used for pipelines that produce rates.  Rescales the rates to the
        | size of the time step. Rates provided by source and modifiers are
        | presumed to be annual.
-   * - | :func:`Union <vivarium.framework.values.post_processors.union_post_processor>`
+   * - | :func:`Union <vivarium.engine.framework.values.post_processors.union_post_processor>`
      - | Used for pipelines that produce independent proportions or
        | probabilities. Combines values in a way that is consistent with a
        | union of the underlying sample space
@@ -124,30 +124,30 @@ The values system provides a handful of interface methods, available off the
 
    * - Method
      - Description
-   * - | :meth:`register_value_producer <vivarium.framework.values.interface.ValuesInterface.register_value_producer>`
+   * - | :meth:`register_value_producer <vivarium.engine.framework.values.interface.ValuesInterface.register_value_producer>`
      - | Registers a new pipeline with the values system. Provide a name for the
        | pipeline and a source. Optionally provide a combiner (defaults to
        | the replace combiner) and a postprocessor. Provide required resources (see note).
-   * - | :meth:`register_value_producer <vivarium.framework.values.interface.ValuesInterface.register_attribute_producer>`
+   * - | :meth:`register_value_producer <vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer>`
      - | Registers a new attribute pipeline with the values system. Provide a name
        | for the attribute pipeline and a source. Optionally provide a combiner
        | (defaults to the replace combiner) and a postprocessor. Provide required
        | resources (see note).
-   * - | :meth:`register_rate_producer <vivarium.framework.values.interface.ValuesInterface.register_rate_producer>`
-     - | A special case of :meth:`register_attribute_producer <vivarium.framework.values.interface.ValuesInterface.register_attribute_producer>`
+   * - | :meth:`register_rate_producer <vivarium.engine.framework.values.interface.ValuesInterface.register_rate_producer>`
+     - | A special case of :meth:`register_attribute_producer <vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer>`
        | for rates specifically.
        | Provide a name for the pipeline and a source and the values system will
        | automatically use the rescale postprocessor. Provide required resources (see note).
-   * - | :meth:`register_value_modifier <vivarium.framework.values.interface.ValuesInterface.register_value_modifier>`
+   * - | :meth:`register_value_modifier <vivarium.engine.framework.values.interface.ValuesInterface.register_value_modifier>`
      - | Registers a modifier to a pipeline. Provide a name for the pipeline to
        | modify and a modifier callable. Provide required resources (see note).
-   * - | :meth:`register_value_modifier <vivarium.framework.values.interface.ValuesInterface.register_attribute_modifier>`
+   * - | :meth:`register_value_modifier <vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_modifier>`
      - | Registers a modifier to an attribute pipeline. Provide a name for the attribute
        | pipeline to modify and a modifier callable or name of an attribute pipeline
        | that does the modifying. Provide required resources (see note).
-   * - | :meth:`get_value <vivarium.framework.values.interface.ValuesInterface.get_value>`
+   * - | :meth:`get_value <vivarium.engine.framework.values.interface.ValuesInterface.get_value>`
      - | Retrieves the pipeline with the given name.
-   * - | :meth:`get_value <vivarium.framework.values.interface.ValuesInterface.get_attribute_pipelines>`
+   * - | :meth:`get_value <vivarium.engine.framework.values.interface.ValuesInterface.get_attribute_pipelines>`
      - | Retrieves a callable that in turn gets a dictionary of all attribute pipelines
        | registered with the values system. This method is intended to be used only
        | by backend managers as needed. Components should not need direct access

@@ -20,12 +20,12 @@ from typing import Any
 
 import pandas as pd
 
-from vivarium.framework.event.manager import Event, EventManager
-from vivarium.manager import Interface
+from vivarium.engine.framework.event.manager import Event, EventManager
+from vivarium.engine.manager import Interface
 
 
 class EventInterface(Interface):
-    """The public interface for the :class:`~ <vivarium.framework.event.manager.Event>` system."""
+    """The public interface for the :class:`~ <vivarium.engine.framework.event.manager.Event>` system."""
 
     def __init__(self, manager: EventManager):
         self._manager = manager

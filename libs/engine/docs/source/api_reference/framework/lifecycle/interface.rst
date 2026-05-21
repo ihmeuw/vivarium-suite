@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.lifecycle.interface
+.. automodule:: vivarium.engine.framework.lifecycle.interface

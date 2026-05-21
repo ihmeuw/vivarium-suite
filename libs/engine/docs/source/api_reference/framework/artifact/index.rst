@@ -2,7 +2,7 @@
 Data Artifact Management
 ========================
 
-.. automodule:: vivarium.framework.artifact
+.. automodule:: vivarium.engine.framework.artifact
 
 .. toctree::
    :maxdepth: 1

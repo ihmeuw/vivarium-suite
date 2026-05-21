@@ -15,14 +15,14 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
-from vivarium.framework.population.population_view import PopulationView
-from vivarium.framework.resource import Resource
-from vivarium.manager import Interface
+from vivarium.engine.framework.population.population_view import PopulationView
+from vivarium.engine.framework.resource import Resource
+from vivarium.engine.manager import Interface
 
 if TYPE_CHECKING:
-    from vivarium import Component
-    from vivarium.framework.population import SimulantData
-    from vivarium.framework.population.manager import PopulationManager
+    from vivarium.engine import Component
+    from vivarium.engine.framework.population import SimulantData
+    from vivarium.engine.framework.population.manager import PopulationManager
 
 
 class PopulationInterface(Interface):
@@ -32,7 +32,7 @@ class PopulationInterface(Interface):
     (or simply ``state table``). It is a table with a row for every individual or
     cohort (referred to as a simulant) being simulated and a column for each of
     the attributes of the simulant being modeled. All access to the state table
-    is mediated by :class:`population views <vivarium.framework.population.population_view.PopulationView>`,
+    is mediated by :class:`population views <vivarium.engine.framework.population.population_view.PopulationView>`,
     which may be requested from this system during setup time.
 
     """

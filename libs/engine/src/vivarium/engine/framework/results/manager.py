@@ -12,25 +12,25 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 import pandas as pd
 
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.results.context import ResultsContext
-from vivarium.framework.results.observation import Observation
-from vivarium.framework.results.stratification import Stratification, get_mapped_col_name
-from vivarium.manager import Manager
-from vivarium.types import ScalarMapper, VectorMapper
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.results.context import ResultsContext
+from vivarium.engine.framework.results.observation import Observation
+from vivarium.engine.framework.results.stratification import Stratification, get_mapped_col_name
+from vivarium.engine.manager import Manager
+from vivarium.engine.types import ScalarMapper, VectorMapper
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
-    from vivarium.framework.results.interface import PopulationFilter
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.results.interface import PopulationFilter
 
 
 class ResultsManager(Manager):
     """Backend manager object for the results management system.
 
-    This class contains the public methods used by the :class:`ResultsInterface <vivarium.framework.results.interface.ResultsInterface>`
+    This class contains the public methods used by the :class:`ResultsInterface <vivarium.engine.framework.results.interface.ResultsInterface>`
     to register stratifications and observations as well as the :meth:`get_results <get_results>`
-    method used to retrieve formatted results by the :class:`ResultsContext <vivarium.framework.results.context.ResultsContext>`.
+    method used to retrieve formatted results by the :class:`ResultsContext <vivarium.engine.framework.results.context.ResultsContext>`.
 
     """
 
@@ -131,7 +131,7 @@ class ResultsManager(Manager):
         """Sets the default stratifications for the results context.
 
         This passes the default stratifications from the configuration to the
-        :class:`ResultsContext <vivarium.framework.results.context.ResultsContext>`
+        :class:`ResultsContext <vivarium.engine.framework.results.context.ResultsContext>`
         :meth:`set_default_stratifications` method to be set.
 
         Parameters
@@ -153,7 +153,7 @@ class ResultsManager(Manager):
     ) -> None:
         """Registers a stratification that can be used by stratified observations.
 
-        Adds a stratification to the :class:`ResultsContext <vivarium.framework.results.context.ResultsContext>`
+        Adds a stratification to the :class:`ResultsContext <vivarium.engine.framework.results.context.ResultsContext>`
         as well as the stratification's required resources to this manager.
 
         Parameters

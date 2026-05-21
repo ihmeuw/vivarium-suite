@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.artifact.interface
+.. automodule:: vivarium.engine.framework.artifact.interface

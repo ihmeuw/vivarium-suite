@@ -2,7 +2,7 @@
 Resource Management
 ===================
 
-.. automodule:: vivarium.framework.resource
+.. automodule:: vivarium.engine.framework.resource
 
 .. toctree::
    :maxdepth: 1

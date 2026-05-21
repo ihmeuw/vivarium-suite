@@ -12,14 +12,14 @@ from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.resource.exceptions import ResourceError
-from vivarium.framework.resource.resource import Column, Initializer, Resource, ResourceId
-from vivarium.manager import Manager
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.resource.exceptions import ResourceError
+from vivarium.engine.framework.resource.resource import Column, Initializer, Resource, ResourceId
+from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
-    from vivarium.framework.population.manager import SimulantData
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.population.manager import SimulantData
 
 
 class ResourceManager(Manager):
@@ -161,7 +161,7 @@ class ResourceManager(Manager):
         -----
         We are taking advantage of lazy initialization to sneak this in
         between post setup time when the :class:`values manager
-        <vivarium.framework.values.ValuesManager>` finalizes pipeline
+        <vivarium.engine.framework.values.ValuesManager>` finalizes pipeline
         dependencies and population creation time.
         """
         resource_graph = nx.DiGraph()

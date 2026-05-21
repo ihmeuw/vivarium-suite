@@ -5,7 +5,7 @@ Running from the Command Line
 =============================
 
 To run from the command line, we'll use the
-:mod:`simulate <vivarium.interface.cli>` command. This command is actually a
+:mod:`simulate <vivarium.engine.interface.cli>` command. This command is actually a
 group containing two sub-commands: ``run`` and ``test``. We will
 focus on ``run`` here.
 
@@ -110,16 +110,16 @@ the following:
 
 .. code-block:: console
 
-    DEBUG:vivarium.framework.values:Registering PopulationManager.metrics as modifier to metrics
-    DEBUG:vivarium.framework.values:Registering value pipeline mortality_rate
-    DEBUG:vivarium.framework.values:Registering value pipeline metrics
-    DEBUG:vivarium.framework.values:Unsourced pipelines: []
-    DEBUG:vivarium.framework.engine:2005-07-01 00:00:00
-    DEBUG:vivarium.framework.engine:2005-07-04 00:00:00
-    DEBUG:vivarium.framework.engine:2005-07-07 00:00:00
-    DEBUG:vivarium.framework.engine:2005-07-10 00:00:00
-    DEBUG:vivarium.framework.engine:2005-07-13 00:00:00
-    DEBUG:vivarium.framework.engine:Some configuration keys not used during run: {'input_data.cache_data', 'output_data.results_directory', 'input_data.intermediary_data_cache_path'}
+    DEBUG:vivarium.engine.framework.values:Registering PopulationManager.metrics as modifier to metrics
+    DEBUG:vivarium.engine.framework.values:Registering value pipeline mortality_rate
+    DEBUG:vivarium.engine.framework.values:Registering value pipeline metrics
+    DEBUG:vivarium.engine.framework.values:Unsourced pipelines: []
+    DEBUG:vivarium.engine.framework.engine:2005-07-01 00:00:00
+    DEBUG:vivarium.engine.framework.engine:2005-07-04 00:00:00
+    DEBUG:vivarium.engine.framework.engine:2005-07-07 00:00:00
+    DEBUG:vivarium.engine.framework.engine:2005-07-10 00:00:00
+    DEBUG:vivarium.engine.framework.engine:2005-07-13 00:00:00
+    DEBUG:vivarium.engine.framework.engine:Some configuration keys not used during run: {'input_data.cache_data', 'output_data.results_directory', 'input_data.intermediary_data_cache_path'}
 
 The specifics of these messages will depend on your model specification, but
 you should see a series of timestamps that correspond to the time steps the

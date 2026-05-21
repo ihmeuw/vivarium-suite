@@ -4,10 +4,10 @@ import pytest
 from layered_config_tree.main import LayeredConfigTree
 from pytest_mock import MockerFixture
 
-from vivarium import InteractiveContext
-from vivarium.framework.components.manager import ComponentConfigError
-from vivarium.framework.engine import Builder
-from vivarium.framework.results.observer import Observer
+from vivarium.engine import InteractiveContext
+from vivarium.engine.framework.components.manager import ComponentConfigError
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.results.observer import Observer
 
 
 class TestObserver(Observer):

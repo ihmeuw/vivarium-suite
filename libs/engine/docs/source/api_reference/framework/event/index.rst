@@ -2,7 +2,7 @@
 Event Management
 ================
 
-.. automodule:: vivarium.framework.event
+.. automodule:: vivarium.engine.framework.event
 
 .. toctree::
    :maxdepth: 1

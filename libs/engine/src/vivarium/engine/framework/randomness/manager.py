@@ -12,17 +12,17 @@ from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
 
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.randomness.exceptions import RandomnessError
-from vivarium.framework.randomness.index_map import IndexMap
-from vivarium.framework.randomness.stream import RandomnessStream, get_hash
-from vivarium.manager import Manager
-from vivarium.types import ClockTime
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.randomness.exceptions import RandomnessError
+from vivarium.engine.framework.randomness.index_map import IndexMap
+from vivarium.engine.framework.randomness.stream import RandomnessStream, get_hash
+from vivarium.engine.manager import Manager
+from vivarium.engine.types import ClockTime
 
 if TYPE_CHECKING:
-    from vivarium.component import Component
-    from vivarium.framework.engine import Builder
-    from vivarium.framework.resource import Resource
+    from vivarium.engine.component import Component
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.resource import Resource
 
 
 class RandomnessManager(Manager):

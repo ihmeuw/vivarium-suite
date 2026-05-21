@@ -72,10 +72,10 @@ There are several methods on a population view that facilitate working with the
 state table, including ones to get the population index and attributes. There are
 also two methods for writing to private columns:
 
-- :meth:`~vivarium.framework.population.population_view.PopulationView.initialize`
+- :meth:`~vivarium.engine.framework.population.population_view.PopulationView.initialize`
   is used during simulant creation (both initial population and new cohorts) to
   write initial values for private columns.
-- :meth:`~vivarium.framework.population.population_view.PopulationView.update`
+- :meth:`~vivarium.engine.framework.population.population_view.PopulationView.update`
   is used during the simulation to modify existing private column data. It takes
   the column name(s) and a modifier function that receives the current values and
   returns the updated values.
@@ -87,9 +87,9 @@ There are two types of filtering that can be applied when using a population vie
 to get attributes or private columns.
 
 First, a ``query`` argument can be passed in to any of the population view's
-:meth:`~vivarium.framework.population.population_view.PopulationView.get`,
-:meth:`~vivarium.framework.population.population_view.PopulationView.get_frame`, or
-:meth:`~vivarium.framework.population.population_view.PopulationView.get_filtered_index`
+:meth:`~vivarium.engine.framework.population.population_view.PopulationView.get`,
+:meth:`~vivarium.engine.framework.population.population_view.PopulationView.get_frame`, or
+:meth:`~vivarium.engine.framework.population.population_view.PopulationView.get_filtered_index`
 to filter the simulants returned for that specific call.
 
 Second, if any components have registered an untracking query, untracked simulants
@@ -110,7 +110,7 @@ a simulant allows for automatic filtering of those simulants from population vie
 so that components can ignore them. This is useful to reduce computational overhead
 when simulants are no longer relevant to the simulation, e.g. deceased individuals
 or those who have aged beyond the scope of interest. A component can register a
-tracked query via :meth:`vivarium.framework.population.interface.PopulationInterface.register_tracked_query`.
+tracked query via :meth:`vivarium.engine.framework.population.interface.PopulationInterface.register_tracked_query`.
 
 .. note::
 
@@ -148,14 +148,14 @@ Creating and Updating Private Columns
 To create a private column to be used as a source for an attribute pipeline, a component
 must register initializer methods during its setup. Any columns that are created
 and passed to the population view's
-:meth:`~vivarium.framework.population.population_view.PopulationView.initialize`
+:meth:`~vivarium.engine.framework.population.population_view.PopulationView.initialize`
 method within these methods will be automatically registered as private columns
 for that component. The corresponding attribute pipelines will be registered
 automatically as well.
 
 To update private column data over the course of a simulation, a component can use
 the population view's
-:meth:`~vivarium.framework.population.population_view.PopulationView.update`
+:meth:`~vivarium.engine.framework.population.population_view.PopulationView.update`
 method, passing the column name(s) and a modifier function.
 
 .. note::
@@ -190,8 +190,8 @@ all components.
 
 Not all attributes use a private column as their source, however. A component can
 also register an attribute pipeline explicitly during its setup phase by calling
-the values manager interface's :meth:`~vivarium.framework.values.interface.ValuesInterface.register_attribute_producer` 
-or :meth:`~vivarium.framework.values.interface.ValuesInterface.register_rate_producer` methods.
+the values manager interface's :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer` 
+or :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.register_rate_producer` methods.
 
 Creating Simulants
 ------------------
@@ -199,7 +199,7 @@ Creating Simulants
 The population view pattern also underlies the creation of simulants, the only
 difference being that when simulations are being initialized for the first time,
 it is acceptable to create columns in the state table via
-:meth:`~vivarium.framework.population.population_view.PopulationView.initialize`
+:meth:`~vivarium.engine.framework.population.population_view.PopulationView.initialize`
 that don't already exist.
 
 The Simulant Creator Function
@@ -216,7 +216,7 @@ initialization state during the setup phase, and the main event loop.
 
 The simulant creator function first adds rows to the state table. It then loops
 through a set of functions that have been registered to it as population
-initializers via :meth:`~vivarium.framework.population.interface.PopulationInterface.register_initializer`,
+initializers via :meth:`~vivarium.engine.framework.population.interface.PopulationInterface.register_initializer`,
 passing in the index of the newly created simulants. These functions generally proceed
 by using population views to dictate the state of the newly created simulants they
 are responsible for. It is the only time creating columns in the state table is

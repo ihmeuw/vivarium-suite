@@ -2,7 +2,7 @@
 Lookup Table Management
 =======================
 
-.. automodule:: vivarium.framework.lookup
+.. automodule:: vivarium.engine.framework.lookup
 
 .. toctree::
    :maxdepth: 1

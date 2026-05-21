@@ -3,7 +3,7 @@
 Logging Interface
 =================
 
-This module provides an interface to the :class:`LoggingManager <vivarium.framework.logging.manager.LoggingManager>`.
+This module provides an interface to the :class:`LoggingManager <vivarium.engine.framework.logging.manager.LoggingManager>`.
 
 
 """
@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import loguru
 
-from vivarium.framework.logging.manager import LoggingManager
-from vivarium.manager import Interface
+from vivarium.engine.framework.logging.manager import LoggingManager
+from vivarium.engine.manager import Interface
 
 
 class LoggingInterface(Interface):

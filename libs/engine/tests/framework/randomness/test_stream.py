@@ -11,10 +11,10 @@ from scipy import stats
 from vivarium_testing_utils import FuzzyChecker
 
 from tests.helpers import ColumnCreator
-from vivarium import InteractiveContext
-from vivarium.framework.randomness import RESIDUAL_CHOICE, RandomnessError, RandomnessStream
-from vivarium.framework.randomness.index_map import IndexMap
-from vivarium.framework.randomness.stream import (
+from vivarium.engine import InteractiveContext
+from vivarium.engine.framework.randomness import RESIDUAL_CHOICE, RandomnessError, RandomnessStream
+from vivarium.engine.framework.randomness.index_map import IndexMap
+from vivarium.engine.framework.randomness.stream import (
     PPFCallable,
     _normalize_shape,
     _set_residual_probability,

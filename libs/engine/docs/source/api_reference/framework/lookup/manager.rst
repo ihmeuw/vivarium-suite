@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.lookup.manager
+.. automodule:: vivarium.engine.framework.lookup.manager

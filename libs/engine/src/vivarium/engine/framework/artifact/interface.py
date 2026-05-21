@@ -3,7 +3,7 @@
 Artifact Interface
 ==================
 
-This module provides an interface to the :class:`ArtifactManager <vivarium.framework.artifact.manager.ArtifactManager>`.
+This module provides an interface to the :class:`ArtifactManager <vivarium.engine.framework.artifact.manager.ArtifactManager>`.
 
 
 """
@@ -13,8 +13,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from vivarium.framework.artifact.manager import ArtifactManager
-from vivarium.manager import Interface
+from vivarium.engine.framework.artifact.manager import ArtifactManager
+from vivarium.engine.manager import Interface
 
 
 class ArtifactInterface(Interface):

@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.components.parser
+.. automodule:: vivarium.engine.framework.components.parser

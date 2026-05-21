@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.values.manager
+.. automodule:: vivarium.engine.framework.values.manager

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import loguru
 
-from vivarium.framework.logging.utilities import configure_logging_to_terminal
-from vivarium.manager import Manager
+from vivarium.engine.framework.logging.utilities import configure_logging_to_terminal
+from vivarium.engine.manager import Manager
 
 
 class LoggingManager(Manager):

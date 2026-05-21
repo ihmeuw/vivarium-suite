@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from vivarium.types import NumberLike, NumericArray, Timedelta
+from vivarium.engine.types import NumberLike, NumericArray, Timedelta
 
 TimeValue = TypeVar("TimeValue", bound=NumberLike)
 

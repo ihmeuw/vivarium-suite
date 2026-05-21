@@ -2,7 +2,7 @@
 Time Management
 ===============
 
-.. automodule:: vivarium.framework.time
+.. automodule:: vivarium.engine.framework.time
 
 .. toctree::
    :maxdepth: 1

@@ -3,7 +3,7 @@
 Resource Interface
 ==================
 
-This module provides an interface to the :class:`ResourceManager <vivarium.framework.resource.manager.ResourceManager>`.
+This module provides an interface to the :class:`ResourceManager <vivarium.engine.framework.resource.manager.ResourceManager>`.
 
 """
 
@@ -11,15 +11,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from vivarium.framework.resource.manager import ResourceManager
-from vivarium.framework.resource.resource import Resource
-from vivarium.manager import Interface, Manager
+from vivarium.engine.framework.resource.manager import ResourceManager
+from vivarium.engine.framework.resource.resource import Resource
+from vivarium.engine.manager import Interface, Manager
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from vivarium import Component
-    from vivarium.framework.population.manager import SimulantData
+    from vivarium.engine import Component
+    from vivarium.engine.framework.population.manager import SimulantData
 
 
 class ResourceInterface(Interface):

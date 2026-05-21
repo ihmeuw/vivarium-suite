@@ -20,9 +20,9 @@ from tests.helpers import (
     NestedLookupCaller,
     SingleColumnCreator,
 )
-from vivarium import InteractiveContext
-from vivarium.framework.engine import Builder
-from vivarium.framework.values import Pipeline
+from vivarium.engine import InteractiveContext
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.values import Pipeline
 
 
 def test_list_values() -> None:

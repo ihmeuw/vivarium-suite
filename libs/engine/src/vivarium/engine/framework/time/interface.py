@@ -4,7 +4,7 @@ Time Interface
 ==============
 
 This module provides an interface to the various types of
-:class:`simulation clocks <vivarium.framework.time.manager.SimulationClock>` for
+:class:`simulation clocks <vivarium.engine.framework.time.manager.SimulationClock>` for
 use in ``vivarium``.
 
 For more information about time in the simulation, see the associated
@@ -19,13 +19,13 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from vivarium.types import ClockStepSize, ClockTime
+from vivarium.engine.types import ClockStepSize, ClockTime
 
 if TYPE_CHECKING:
-    from vivarium.framework.resource import Resource
-    from vivarium.framework.time.manager import SimulationClock
+    from vivarium.engine.framework.resource import Resource
+    from vivarium.engine.framework.time.manager import SimulationClock
 
-from vivarium.manager import Interface
+from vivarium.engine.manager import Interface
 
 
 class TimeInterface(Interface):

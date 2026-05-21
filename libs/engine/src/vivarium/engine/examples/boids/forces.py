@@ -5,8 +5,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 
-from vivarium import Component
-from vivarium.framework.engine import Builder
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
 
 
 # docs-start: force_base_class

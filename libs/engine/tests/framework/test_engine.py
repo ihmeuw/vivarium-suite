@@ -31,30 +31,30 @@ from tests.helpers import (
     MockComponentA,
     MockComponentB,
 )
-from vivarium import Component, InteractiveContext
-from vivarium.framework.artifact import ArtifactInterface, ArtifactManager
-from vivarium.framework.components import (
+from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.artifact import ArtifactInterface, ArtifactManager
+from vivarium.engine.framework.components import (
     ComponentConfigError,
     ComponentInterface,
     ComponentManager,
     OrderedComponentSet,
 )
-from vivarium.framework.engine import Builder
-from vivarium.framework.engine import SimulationContext as SimulationContext_
-from vivarium.framework.event import EventInterface, EventManager
-from vivarium.framework.lifecycle import (
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.engine import SimulationContext as SimulationContext_
+from vivarium.engine.framework.event import EventInterface, EventManager
+from vivarium.engine.framework.lifecycle import (
     LifeCycleInterface,
     LifeCycleManager,
     lifecycle_states,
 )
-from vivarium.framework.logging import LoggingInterface, LoggingManager
-from vivarium.framework.lookup import LookupTableInterface, LookupTableManager
-from vivarium.framework.population import PopulationInterface, PopulationManager
-from vivarium.framework.randomness import RandomnessInterface, RandomnessManager
-from vivarium.framework.resource import ResourceInterface, ResourceManager
-from vivarium.framework.results import VALUE_COLUMN, ResultsInterface, ResultsManager
-from vivarium.framework.time import DateTimeClock, TimeInterface
-from vivarium.framework.values import ValuesInterface, ValuesManager
+from vivarium.engine.framework.logging import LoggingInterface, LoggingManager
+from vivarium.engine.framework.lookup import LookupTableInterface, LookupTableManager
+from vivarium.engine.framework.population import PopulationInterface, PopulationManager
+from vivarium.engine.framework.randomness import RandomnessInterface, RandomnessManager
+from vivarium.engine.framework.resource import ResourceInterface, ResourceManager
+from vivarium.engine.framework.results import VALUE_COLUMN, ResultsInterface, ResultsManager
+from vivarium.engine.framework.time import DateTimeClock, TimeInterface
+from vivarium.engine.framework.values import ValuesInterface, ValuesManager
 
 
 def is_same_object_method(
@@ -88,7 +88,7 @@ def test_simulation_with_non_components(
             self.name = "non_component"
 
     with pytest.raises(
-        ComponentConfigError, match="that do not inherit from `vivarium.Component`"
+        ComponentConfigError, match="that do not inherit from `vivarium.engine.Component`"
     ):
         SimulationContext(components=components + [NonComponent()])  # type: ignore[list-item]
 
@@ -210,7 +210,7 @@ def test_SimulationContext_run_simulation(
     mock = mocker.MagicMock()
     for call in expected_calls:
         mock.attach_mock(
-            mocker.patch(f"vivarium.framework.engine.SimulationContext.{call}"), call
+            mocker.patch(f"vivarium.engine.framework.engine.SimulationContext.{call}"), call
         )
 
     sim.run_simulation()
@@ -412,8 +412,8 @@ def test_SimulationContext_write_backup(
     mocker: MockerFixture, SimulationContext: type[SimulationContext_], tmp_path: Path
 ) -> None:
     # TODO MIC-5216: Remove mocks when we can use dill in pytest.
-    mocker.patch("vivarium.framework.engine.dill.dump")
-    mocker.patch("vivarium.framework.engine.dill.load", return_value=SimulationContext())
+    mocker.patch("vivarium.engine.framework.engine.dill.dump")
+    mocker.patch("vivarium.engine.framework.engine.dill.load", return_value=SimulationContext())
     sim = SimulationContext()
     backup_path = tmp_path / "backup.pkl"
     sim.write_backup(backup_path)
@@ -430,7 +430,7 @@ def test_SimulationContext_run_with_backup(
     tmp_path: Path,
 ) -> None:
     mocked_write_backup = mocker.patch(
-        "vivarium.framework.engine.SimulationContext.write_backup"
+        "vivarium.engine.framework.engine.SimulationContext.write_backup"
     )
     original_time = time()
 
@@ -440,7 +440,7 @@ def test_SimulationContext_run_with_backup(
             yield current_time
             current_time += 5
 
-    mocker.patch("vivarium.framework.engine.time", side_effect=time_generator())
+    mocker.patch("vivarium.engine.framework.engine.time", side_effect=time_generator())
     components = [
         Hogwarts(),
         HousePointsObserver(),
@@ -520,8 +520,8 @@ def test_SimulationContext_load_from_backup(
     tmp_path: Path,
 ) -> None:
     # TODO MIC-5216: Remove mocks when we can use dill in pytest.
-    mocker.patch("vivarium.framework.engine.dill.dump")
-    mocker.patch("vivarium.framework.engine.dill.load", return_value=SimulationContext())
+    mocker.patch("vivarium.engine.framework.engine.dill.dump")
+    mocker.patch("vivarium.engine.framework.engine.dill.load", return_value=SimulationContext())
     sim = SimulationContext()
     backup_path = tmp_path / "backup.pkl"
     sim.write_backup(backup_path)

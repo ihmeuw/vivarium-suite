@@ -22,10 +22,10 @@ from tests.framework.population.helpers import (
     assert_squeezing_single_level_single_col,
 )
 from tests.helpers import AttributePipelineCreator, ColumnCreator
-from vivarium import InteractiveContext
-from vivarium.framework.engine import Builder
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.population import PopulationError, PopulationManager, PopulationView
+from vivarium.engine import InteractiveContext
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.population import PopulationError, PopulationManager, PopulationView
 
 ##########################
 # Mock data and fixtures #

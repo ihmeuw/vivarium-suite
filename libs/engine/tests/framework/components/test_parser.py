@@ -9,8 +9,8 @@ from layered_config_tree.main import LayeredConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import MockComponentA, MockComponentB
-from vivarium.framework.components.parser import ComponentConfigurationParser, ParsingError
-from vivarium.framework.configuration import build_simulation_configuration
+from vivarium.engine.framework.components.parser import ComponentConfigurationParser, ParsingError
+from vivarium.engine.framework.configuration import build_simulation_configuration
 
 TEST_COMPONENTS_NESTED = """
 components:
@@ -129,7 +129,7 @@ def test_parse_and_prep_components(parser: ComponentConfigurationParser) -> None
 
 
 def test_import_and_instantiate_components(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("vivarium.framework.components.parser.import_by_path", mock_importer)
+    monkeypatch.setattr("vivarium.engine.framework.components.parser.import_by_path", mock_importer)
 
     component_descriptions = [
         ("test_components.MockComponentA", ("A Hundred and One Ways to Start a Fight",)),

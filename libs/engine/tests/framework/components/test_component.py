@@ -18,12 +18,12 @@ from tests.helpers import (
     ParameterizedByComponent,
     SingleLookupCreator,
 )
-from vivarium import Artifact, InteractiveContext
-from vivarium.framework.engine import Builder
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.lookup.table import LookupTable
-from vivarium.framework.population import PopulationError
-from vivarium.framework.resource.resource import Initializer
+from vivarium.engine import Artifact, InteractiveContext
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.lookup.table import LookupTable
+from vivarium.engine.framework.population import PopulationError
+from vivarium.engine.framework.resource.resource import Initializer
 
 
 def load_cooling_time(builder: Builder) -> pd.DataFrame:

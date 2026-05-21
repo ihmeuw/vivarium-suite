@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.values.pipeline
+.. automodule:: vivarium.engine.framework.values.pipeline

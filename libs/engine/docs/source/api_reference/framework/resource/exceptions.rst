@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.resource.exceptions
+.. automodule:: vivarium.engine.framework.resource.exceptions

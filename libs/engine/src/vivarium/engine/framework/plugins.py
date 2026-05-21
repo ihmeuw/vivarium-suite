@@ -14,25 +14,25 @@ from typing import TypeVar
 
 from layered_config_tree.main import LayeredConfigTree
 
-from vivarium.exceptions import VivariumError
-from vivarium.framework.artifact import ArtifactInterface, ArtifactManager
-from vivarium.framework.components import (
+from vivarium.engine.exceptions import VivariumError
+from vivarium.engine.framework.artifact import ArtifactInterface, ArtifactManager
+from vivarium.engine.framework.components import (
     ComponentConfigurationParser,
     ComponentInterface,
     ComponentManager,
 )
-from vivarium.framework.event import EventInterface, EventManager
-from vivarium.framework.lifecycle import LifeCycleInterface, LifeCycleManager
-from vivarium.framework.logging import LoggingInterface, LoggingManager
-from vivarium.framework.lookup import LookupTableInterface, LookupTableManager
-from vivarium.framework.population import PopulationInterface, PopulationManager
-from vivarium.framework.randomness import RandomnessInterface, RandomnessManager
-from vivarium.framework.resource import ResourceInterface, ResourceManager
-from vivarium.framework.results import ResultsInterface, ResultsManager
-from vivarium.framework.time import SimulationClock, TimeInterface
-from vivarium.framework.utilities import import_by_path
-from vivarium.framework.values import ValuesInterface, ValuesManager
-from vivarium.manager import Interface, Manager
+from vivarium.engine.framework.event import EventInterface, EventManager
+from vivarium.engine.framework.lifecycle import LifeCycleInterface, LifeCycleManager
+from vivarium.engine.framework.logging import LoggingInterface, LoggingManager
+from vivarium.engine.framework.lookup import LookupTableInterface, LookupTableManager
+from vivarium.engine.framework.population import PopulationInterface, PopulationManager
+from vivarium.engine.framework.randomness import RandomnessInterface, RandomnessManager
+from vivarium.engine.framework.resource import ResourceInterface, ResourceManager
+from vivarium.engine.framework.results import ResultsInterface, ResultsManager
+from vivarium.engine.framework.time import SimulationClock, TimeInterface
+from vivarium.engine.framework.utilities import import_by_path
+from vivarium.engine.framework.values import ValuesInterface, ValuesManager
+from vivarium.engine.manager import Interface, Manager
 
 I = TypeVar("I", bound=Interface)
 M = TypeVar("M", bound=Manager)
@@ -40,59 +40,59 @@ M = TypeVar("M", bound=Manager)
 
 _MANAGERS = {
     "logging": {
-        "controller": "vivarium.framework.logging.LoggingManager",
-        "builder_interface": "vivarium.framework.logging.LoggingInterface",
+        "controller": "vivarium.engine.framework.logging.LoggingManager",
+        "builder_interface": "vivarium.engine.framework.logging.LoggingInterface",
     },
     "lookup": {
-        "controller": "vivarium.framework.lookup.LookupTableManager",
-        "builder_interface": "vivarium.framework.lookup.LookupTableInterface",
+        "controller": "vivarium.engine.framework.lookup.LookupTableManager",
+        "builder_interface": "vivarium.engine.framework.lookup.LookupTableInterface",
     },
     "randomness": {
-        "controller": "vivarium.framework.randomness.RandomnessManager",
-        "builder_interface": "vivarium.framework.randomness.RandomnessInterface",
+        "controller": "vivarium.engine.framework.randomness.RandomnessManager",
+        "builder_interface": "vivarium.engine.framework.randomness.RandomnessInterface",
     },
     "value": {
-        "controller": "vivarium.framework.values.ValuesManager",
-        "builder_interface": "vivarium.framework.values.ValuesInterface",
+        "controller": "vivarium.engine.framework.values.ValuesManager",
+        "builder_interface": "vivarium.engine.framework.values.ValuesInterface",
     },
     "event": {
-        "controller": "vivarium.framework.event.EventManager",
-        "builder_interface": "vivarium.framework.event.EventInterface",
+        "controller": "vivarium.engine.framework.event.EventManager",
+        "builder_interface": "vivarium.engine.framework.event.EventInterface",
     },
     "population": {
-        "controller": "vivarium.framework.population.PopulationManager",
-        "builder_interface": "vivarium.framework.population.PopulationInterface",
+        "controller": "vivarium.engine.framework.population.PopulationManager",
+        "builder_interface": "vivarium.engine.framework.population.PopulationInterface",
     },
     "resource": {
-        "controller": "vivarium.framework.resource.ResourceManager",
-        "builder_interface": "vivarium.framework.resource.ResourceInterface",
+        "controller": "vivarium.engine.framework.resource.ResourceManager",
+        "builder_interface": "vivarium.engine.framework.resource.ResourceInterface",
     },
 }
 DEFAULT_PLUGINS = {
     "plugins": {
         "required": {
             "component_manager": {
-                "controller": "vivarium.framework.components.ComponentManager",
-                "builder_interface": "vivarium.framework.components.ComponentInterface",
+                "controller": "vivarium.engine.framework.components.ComponentManager",
+                "builder_interface": "vivarium.engine.framework.components.ComponentInterface",
             },
             "clock": {
-                "controller": "vivarium.framework.time.DateTimeClock",
-                "builder_interface": "vivarium.framework.time.TimeInterface",
+                "controller": "vivarium.engine.framework.time.DateTimeClock",
+                "builder_interface": "vivarium.engine.framework.time.TimeInterface",
             },
             "component_configuration_parser": {
-                "controller": "vivarium.framework.components.ComponentConfigurationParser",
+                "controller": "vivarium.engine.framework.components.ComponentConfigurationParser",
             },
             "lifecycle": {
-                "controller": "vivarium.framework.lifecycle.LifeCycleManager",
-                "builder_interface": "vivarium.framework.lifecycle.LifeCycleInterface",
+                "controller": "vivarium.engine.framework.lifecycle.LifeCycleManager",
+                "builder_interface": "vivarium.engine.framework.lifecycle.LifeCycleInterface",
             },
             "data": {
-                "controller": "vivarium.framework.artifact.ArtifactManager",
-                "builder_interface": "vivarium.framework.artifact.ArtifactInterface",
+                "controller": "vivarium.engine.framework.artifact.ArtifactManager",
+                "builder_interface": "vivarium.engine.framework.artifact.ArtifactInterface",
             },
             "results": {
-                "controller": "vivarium.framework.results.ResultsManager",
-                "builder_interface": "vivarium.framework.results.ResultsInterface",
+                "controller": "vivarium.engine.framework.results.ResultsManager",
+                "builder_interface": "vivarium.engine.framework.results.ResultsInterface",
             },
         },
         "optional": {},

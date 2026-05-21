@@ -36,18 +36,18 @@ from tests.framework.results.helpers import (
     sorting_hat_vectorized,
     verify_stratification_added,
 )
-from vivarium.framework.engine import Builder
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.results import VALUE_COLUMN
-from vivarium.framework.results.context import ResultsContext
-from vivarium.framework.results.interface import PopulationFilter
-from vivarium.framework.results.manager import ResultsManager
-from vivarium.framework.results.observation import AddingObservation, Observation
-from vivarium.framework.results.observer import Observer
-from vivarium.framework.results.stratification import Stratification, get_mapped_col_name
-from vivarium.interface.interactive import InteractiveContext
-from vivarium.types import ScalarMapper, VectorMapper
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.results import VALUE_COLUMN
+from vivarium.engine.framework.results.context import ResultsContext
+from vivarium.engine.framework.results.interface import PopulationFilter
+from vivarium.engine.framework.results.manager import ResultsManager
+from vivarium.engine.framework.results.observation import AddingObservation, Observation
+from vivarium.engine.framework.results.observer import Observer
+from vivarium.engine.framework.results.stratification import Stratification, get_mapped_col_name
+from vivarium.engine.interface.interactive import InteractiveContext
+from vivarium.engine.types import ScalarMapper, VectorMapper
 
 
 @pytest.mark.parametrize(
@@ -166,7 +166,7 @@ def test_register_binned_stratification_raises_bins_labels_mismatch(
         )
 
 
-from vivarium.types import VectorMapper
+from vivarium.engine.types import VectorMapper
 
 
 def test_binned_stratification_mapper() -> None:

@@ -7,12 +7,12 @@ from layered_config_tree import LayeredConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import ColumnCreator
-from vivarium import InteractiveContext
-from vivarium.framework.configuration import build_simulation_configuration
-from vivarium.framework.engine import Builder
-from vivarium.framework.population import SimulantData
-from vivarium.framework.state_machine import Machine, State, Transition
-from vivarium.types import ClockTime, DataInput
+from vivarium.engine import InteractiveContext
+from vivarium.engine.framework.configuration import build_simulation_configuration
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.framework.state_machine import Machine, State, Transition
+from vivarium.engine.types import ClockTime, DataInput
 
 
 def test_initialize_allowing_self_transition() -> None:
@@ -62,7 +62,7 @@ def test_initialize_with_scalar_initialization_weights(
         components=[machine], configuration=base_config, setup=False
     )
     mocker.patch(
-        "vivarium.framework.artifact.interface.ArtifactInterface.load", side_effect=mock_load
+        "vivarium.engine.framework.artifact.interface.ArtifactInterface.load", side_effect=mock_load
     )
     simulation.setup()
 
@@ -109,7 +109,7 @@ def test_initialize_with_array_initialization_weights(
         components=[machine, ColumnCreator()], configuration=config, setup=False
     )
     mocker.patch(
-        "vivarium.framework.artifact.interface.ArtifactInterface.load", side_effect=mock_load
+        "vivarium.engine.framework.artifact.interface.ArtifactInterface.load", side_effect=mock_load
     )
     simulation.setup()
 

@@ -13,20 +13,20 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
-from vivarium.framework.resource import Resource
-from vivarium.framework.values.combiners import ValueCombiner, replace_combiner
-from vivarium.framework.values.pipeline import AttributePipeline, Pipeline
-from vivarium.framework.values.post_processors import (
+from vivarium.engine.framework.resource import Resource
+from vivarium.engine.framework.values.combiners import ValueCombiner, replace_combiner
+from vivarium.engine.framework.values.pipeline import AttributePipeline, Pipeline
+from vivarium.engine.framework.values.post_processors import (
     AttributePostProcessor,
     PostProcessor,
     rescale_post_processor,
 )
-from vivarium.manager import Interface
+from vivarium.engine.manager import Interface
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from vivarium.framework.values import ValuesManager
+    from vivarium.engine.framework.values import ValuesManager
 
 
 class ValuesInterface(Interface):
@@ -39,8 +39,8 @@ class ValuesInterface(Interface):
     Notes
     -----
     This is the only public interface for the values system; different methods
-    exist for working with generic value :class:`Pipelines <vivarium.framework.values.pipeline.Pipeline>`
-    and :class:`AttributePipelines <vivarium.framework.values.pipeline.AttributePipeline>`.
+    exist for working with generic value :class:`Pipelines <vivarium.engine.framework.values.pipeline.Pipeline>`
+    and :class:`AttributePipelines <vivarium.engine.framework.values.pipeline.AttributePipeline>`.
 
     """
 
@@ -70,13 +70,13 @@ class ValuesInterface(Interface):
             A strategy for combining the source and the results of any calls
             to mutators in the pipeline. ``vivarium`` provides the strategies
             ``replace_combiner`` (the default) and ``list_combiner``, which
-            are importable from ``vivarium.framework.values``. Client code
+            are importable from ``vivarium.engine.framework.values``. Client code
             may define additional strategies as necessary.
         preferred_post_processor
             A strategy for processing the final output of the pipeline.
             ``vivarium`` provides the strategies ``rescale_post_processor``
             and ``union_post_processor`` which are importable from
-            ``vivarium.framework.values``. Client code may define additional
+            ``vivarium.engine.framework.values``. Client code may define additional
             strategies as necessary. If a sequence of post processors is provided,
             they will be applied in the order they are provided.
 
@@ -120,13 +120,13 @@ class ValuesInterface(Interface):
             A strategy for combining the source and the results of any calls
             to mutators in the pipeline. ``vivarium`` provides the strategies
             ``replace_combiner`` (the default) and ``list_combiner``, which
-            are importable from ``vivarium.framework.values``. Client code
+            are importable from ``vivarium.engine.framework.values``. Client code
             may define additional strategies as necessary.
         preferred_post_processor
             A strategy for processing the final output of the pipeline.
             ``vivarium`` provides the strategies ``rescale_post_processor``
             and ``union_post_processor`` which are importable from
-            ``vivarium.framework.values``. Client code may define additional
+            ``vivarium.engine.framework.values``. Client code may define additional
             strategies as necessary. If a sequence of post processors is provided,
             they will be applied in the order they are provided.
         source_is_private_column
@@ -174,13 +174,13 @@ class ValuesInterface(Interface):
             A strategy for combining the source and the results of any calls
             to mutators in the pipeline. ``vivarium`` provides the strategies
             ``replace_combiner`` (the default) and ``list_combiner``, which
-            are importable from ``vivarium.framework.values``. Client code
+            are importable from ``vivarium.engine.framework.values``. Client code
             may define additional strategies as necessary.
         preferred_post_processor
             A strategy for processing the final output of the pipeline. These will
             be applied after the ``rescale_post_processor`` has been applied first.
             ``vivarium`` provides the strategy ``union_post_processor`` which is
-            importable from ``vivarium.framework.values``. Client code may define additional
+            importable from ``vivarium.engine.framework.values``. Client code may define additional
             strategies as necessary. If a sequence of post processors is provided,
             they will be applied in the order they are provided.
         """
@@ -284,8 +284,8 @@ class ValuesInterface(Interface):
         This is not the preferred access method to getting population attributes
         since it does not implement various features (e.g. querying, simulant
         tracking, etc); it exists for other managers to use if needed. Use
-        :meth:`vivarium.framework.population.population_view.PopulationView.get`
-        or :meth:`vivarium.framework.population.population_view.PopulationView.get_frame`
+        :meth:`vivarium.engine.framework.population.population_view.PopulationView.get`
+        or :meth:`vivarium.engine.framework.population.population_view.PopulationView.get_frame`
         instead.
         """
         return self._manager.get_attribute_pipelines

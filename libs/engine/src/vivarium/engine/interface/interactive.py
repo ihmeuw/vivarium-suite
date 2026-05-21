@@ -20,11 +20,11 @@ from typing import Any, overload
 
 import pandas as pd
 
-from vivarium.framework.engine import SimulationContext
-from vivarium.framework.event import Event
-from vivarium.framework.values import Pipeline
-from vivarium.interface.utilities import log_progress, run_from_ipython
-from vivarium.types import ClockStepSize, ClockTime
+from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.values import Pipeline
+from vivarium.engine.interface.utilities import log_progress, run_from_ipython
+from vivarium.engine.types import ClockStepSize, ClockTime
 
 
 class InteractiveContext(SimulationContext):

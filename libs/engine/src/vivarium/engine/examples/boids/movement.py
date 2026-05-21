@@ -2,10 +2,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from vivarium.framework.event import Event
-from vivarium import Component
-from vivarium.framework.engine import Builder
-from vivarium.framework.population import SimulantData
+from vivarium.engine.framework.event import Event
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.population import SimulantData
 
 
 class Movement(Component):

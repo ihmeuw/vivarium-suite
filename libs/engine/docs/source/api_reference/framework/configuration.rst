@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.configuration
+.. automodule:: vivarium.engine.framework.configuration

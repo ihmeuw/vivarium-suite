@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.state_machine
+.. automodule:: vivarium.engine.framework.state_machine

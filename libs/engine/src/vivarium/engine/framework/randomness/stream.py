@@ -29,15 +29,15 @@ import numpy.typing as npt
 import pandas as pd
 from scipy import stats
 
-from vivarium.framework.randomness.exceptions import RandomnessError
-from vivarium.framework.randomness.index_map import IndexMap
-from vivarium.framework.resource import Resource
-from vivarium.framework.utilities import rate_to_probability
-from vivarium.types import ClockTime, NumericArray
+from vivarium.engine.framework.randomness.exceptions import RandomnessError
+from vivarium.engine.framework.randomness.index_map import IndexMap
+from vivarium.engine.framework.resource import Resource
+from vivarium.engine.framework.utilities import rate_to_probability
+from vivarium.engine.types import ClockTime, NumericArray
 
 if TYPE_CHECKING:
-    from vivarium import Component
-    from vivarium.manager import Manager
+    from vivarium.engine import Component
+    from vivarium.engine.manager import Manager
 
 RESIDUAL_CHOICE = object()
 

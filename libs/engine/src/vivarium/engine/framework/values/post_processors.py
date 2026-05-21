@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Any, Protocol
 import numpy as np
 import pandas as pd
 
-from vivarium.framework.utilities import from_yearly
-from vivarium.framework.values.exceptions import DynamicValueError
-from vivarium.types import NumberLike, NumericArray
+from vivarium.engine.framework.utilities import from_yearly
+from vivarium.engine.framework.values.exceptions import DynamicValueError
+from vivarium.engine.types import NumberLike, NumericArray
 
 if TYPE_CHECKING:
-    from vivarium.framework.values.manager import ValuesManager
+    from vivarium.engine.framework.values.manager import ValuesManager
 
 
 class PostProcessor(Protocol):
@@ -33,7 +33,7 @@ def rescale_post_processor(
 ) -> pd.Series[float] | pd.DataFrame:
     """Rescales annual rates to time-step appropriate rates.
 
-    This should only be used with a simulation using a :class:`~vivarium.framework.time.manager.DateTimeClock`
+    This should only be used with a simulation using a :class:`~vivarium.engine.framework.time.manager.DateTimeClock`
     or another implementation of a clock that traffics in pandas date-time objects.
 
     Parameters

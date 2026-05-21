@@ -1,5 +1,5 @@
 from tests.helpers import ColumnCreator
-from vivarium.framework.resource import Resource
+from vivarium.engine.framework.resource import Resource
 
 
 def test_resource_id() -> None:

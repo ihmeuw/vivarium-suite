@@ -11,13 +11,13 @@ import pytest_mock
 from layered_config_tree import LayeredConfigTree
 
 from tests.helpers import Listener, MockComponentA, MockComponentB, MockGenericComponent
-from vivarium.component import Component
-from vivarium.framework.engine import Builder, SimulationContext
-from vivarium.framework.event import Event
-from vivarium.framework.time.manager import SimulationClock, get_time_stamp
-from vivarium.framework.utilities import from_yearly
-from vivarium.framework.values import ValuesManager, rescale_post_processor
-from vivarium.types import ClockStepSize
+from vivarium.engine.component import Component
+from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.time.manager import SimulationClock, get_time_stamp
+from vivarium.engine.framework.utilities import from_yearly
+from vivarium.engine.framework.values import ValuesManager, rescale_post_processor
+from vivarium.engine.types import ClockStepSize
 
 
 @pytest.fixture
@@ -552,7 +552,7 @@ def test_simple_clock_time_steps_remaining(base_config: LayeredConfigTree, end: 
             "plugins": {
                 "required": {
                     "clock": {
-                        "controller": "vivarium.framework.time.SimpleClock",
+                        "controller": "vivarium.engine.framework.time.SimpleClock",
                     },
                 }
             },

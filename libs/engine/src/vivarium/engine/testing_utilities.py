@@ -17,13 +17,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from vivarium import Component
-from vivarium.framework.engine import Builder
-from vivarium.framework.event import Event
-from vivarium.framework.population import SimulantData
-from vivarium.framework.randomness.index_map import IndexMap
-from vivarium.framework.randomness.stream import RandomnessStream
-from vivarium.types import ClockStepSize, ClockTime
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.framework.randomness.index_map import IndexMap
+from vivarium.engine.framework.randomness.stream import RandomnessStream
+from vivarium.engine.types import ClockStepSize, ClockTime
 
 
 class NonCRNTestPopulation(Component):

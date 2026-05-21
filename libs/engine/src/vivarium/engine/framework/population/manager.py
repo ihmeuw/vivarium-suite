@@ -12,18 +12,18 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import pandas as pd
 
-import vivarium.framework.population.utilities as pop_utils
-from vivarium.component import Component
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.population.exceptions import PopulationError
-from vivarium.framework.population.population_view import PopulationView
-from vivarium.framework.resource import Resource
-from vivarium.manager import Manager
+import vivarium.engine.framework.population.utilities as pop_utils
+from vivarium.engine.component import Component
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.population.exceptions import PopulationError
+from vivarium.engine.framework.population.population_view import PopulationView
+from vivarium.engine.framework.resource import Resource
+from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
-    from vivarium.types import ClockStepSize, ClockTime
+    from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.types import ClockStepSize, ClockTime
 
 from collections import defaultdict
 

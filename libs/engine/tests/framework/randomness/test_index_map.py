@@ -11,8 +11,8 @@ import pytest
 import pytest_mock
 from scipy.stats import chisquare
 
-from vivarium.framework.randomness import RandomnessError
-from vivarium.framework.randomness.index_map import IndexMap
+from vivarium.engine.framework.randomness import RandomnessError
+from vivarium.engine.framework.randomness.index_map import IndexMap
 
 
 def almost_powerset(iterable: Iterable[int | str]) -> list[tuple[int | str, ...]]:

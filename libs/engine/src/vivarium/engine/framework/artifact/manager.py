@@ -17,13 +17,13 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 from layered_config_tree.main import LayeredConfigTree
 
-from vivarium.framework.artifact import ArtifactException
-from vivarium.framework.artifact.artifact import Artifact
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.manager import Manager
+from vivarium.engine.framework.artifact import ArtifactException
+from vivarium.engine.framework.artifact.artifact import Artifact
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
+    from vivarium.engine.framework.engine import Builder
 
 
 class ArtifactManager(Manager):

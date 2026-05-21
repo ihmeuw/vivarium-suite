@@ -1,9 +1,9 @@
 # docs-start: imports
 import pandas as pd
 
-from vivarium import Component
-from vivarium.framework.engine import Builder
-from vivarium.framework.population import SimulantData
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.population import SimulantData
 # docs-end: imports
 
 

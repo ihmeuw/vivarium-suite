@@ -6,11 +6,11 @@ from layered_config_tree import LayeredConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import ColumnCreator
-from vivarium import Component, InteractiveContext
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.randomness.index_map import IndexMap
-from vivarium.framework.randomness.manager import RandomnessError, RandomnessManager
-from vivarium.framework.randomness.stream import get_hash
+from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.randomness.index_map import IndexMap
+from vivarium.engine.framework.randomness.manager import RandomnessError, RandomnessManager
+from vivarium.engine.framework.randomness.stream import get_hash
 
 
 @pytest.mark.parametrize("initializes_crn_attributes", [True, False])

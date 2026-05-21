@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from vivarium.interface.utilities import get_output_model_name_string
+from vivarium.engine.interface.utilities import get_output_model_name_string
 
 _MODEL_SPEC_STEM = "model_spec_name"
 _ARTIFACT_STEM = "artifact_name"

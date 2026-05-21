@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.lifecycle.manager
+.. automodule:: vivarium.engine.framework.lifecycle.manager

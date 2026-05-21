@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.time.manager
+.. automodule:: vivarium.engine.framework.time.manager

@@ -12,14 +12,14 @@ from pytest_mock import MockerFixture
 
 from tests.framework.results.helpers import BASE_POPULATION, FAMILIARS
 from tests.framework.results.helpers import HOUSE_CATEGORIES as HOUSES
-from vivarium.framework.event import Event
-from vivarium.framework.lifecycle import lifecycle_states
-from vivarium.framework.results import ResultsInterface, ResultsManager
-from vivarium.framework.results.interface import (
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.results import ResultsInterface, ResultsManager
+from vivarium.engine.framework.results.interface import (
     PopulationFilter,
     _default_stratified_observation_formatter,
 )
-from vivarium.framework.results.observation import (
+from vivarium.engine.framework.results.observation import (
     ConcatenatingObservation,
     StratifiedObservation,
 )

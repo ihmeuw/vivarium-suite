@@ -12,11 +12,11 @@ from layered_config_tree import LayeredConfigTree
 from loguru import logger
 from vivarium_testing_utils import FuzzyChecker
 
-from vivarium.framework.configuration import (
+from vivarium.engine.framework.configuration import (
     build_model_specification,
     build_simulation_configuration,
 )
-from vivarium.testing_utilities import metadata
+from vivarium.engine.testing_utilities import metadata
 
 
 @pytest.fixture(scope="session")
@@ -71,7 +71,7 @@ def test_user_config(request: pytest.FixtureRequest, test_data_dir: Path) -> Pat
 def model_specification(
     mocker: pytest_mock.MockFixture, test_spec: Path, test_user_config: Path
 ) -> LayeredConfigTree:
-    expand_user_mock = mocker.patch("vivarium.framework.configuration.Path.expanduser")
+    expand_user_mock = mocker.patch("vivarium.engine.framework.configuration.Path.expanduser")
     expand_user_mock.return_value = test_user_config
     return build_model_specification(test_spec)
 

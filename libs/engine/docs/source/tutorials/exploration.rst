@@ -62,7 +62,7 @@ Getting Things Set Up
 
 Before we can start exploring properties of the simulation, we need to get
 our hands on a simulation
-:class:`context <vivarium.interface.interactive.InteractiveContext>`.  This is
+:class:`context <vivarium.engine.interface.interactive.InteractiveContext>`.  This is
 the object we'll use to examine and run our simulation model.  You can check
 out our tutorial on :ref:`setting up a simulation <interactive_setup_tutorial>`
 to see the tools that ``vivarium`` provides for building your own simulation
@@ -72,7 +72,7 @@ notebook or python interpreter, you can run the following
 
 .. testcode::
 
-   from vivarium.examples.disease_model import get_disease_model_simulation
+   from vivarium.engine.examples.disease_model import get_disease_model_simulation
 
    sim = get_disease_model_simulation()
 
@@ -90,7 +90,7 @@ configuration by simply printing it.
 
 .. testsetup:: configuration
 
-    from vivarium.examples.disease_model import get_disease_model_simulation
+    from vivarium.engine.examples.disease_model import get_disease_model_simulation
 
     sim = get_disease_model_simulation()
 

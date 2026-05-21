@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.event.manager
+.. automodule:: vivarium.engine.framework.event.manager

@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.randomness.manager
+.. automodule:: vivarium.engine.framework.randomness.manager

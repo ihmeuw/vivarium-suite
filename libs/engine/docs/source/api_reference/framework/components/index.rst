@@ -2,7 +2,7 @@
 Component Management
 ====================
 
-.. automodule:: vivarium.framework.components
+.. automodule:: vivarium.engine.framework.components
 
 .. toctree::
    :maxdepth: 1

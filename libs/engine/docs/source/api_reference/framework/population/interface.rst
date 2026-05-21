@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.population.interface
+.. automodule:: vivarium.engine.framework.population.interface

@@ -9,7 +9,7 @@ import numpy.typing as npt
 import pandas as pd
 
 if TYPE_CHECKING:
-    from vivarium.framework.engine import Builder
+    from vivarium.engine.framework.engine import Builder
 
 NumericArray = npt.NDArray[np.number[npt.NBitBase]]
 

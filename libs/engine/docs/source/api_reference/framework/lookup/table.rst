@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.lookup.table
+.. automodule:: vivarium.engine.framework.lookup.table

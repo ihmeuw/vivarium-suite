@@ -6,7 +6,7 @@ from click.testing import CliRunner
 from layered_config_tree import LayeredConfigTree
 
 from tests.framework.results.helpers import HARRY_POTTER_CONFIG
-from vivarium.interface.cli import simulate
+from vivarium.engine.interface.cli import simulate
 
 
 @pytest.fixture

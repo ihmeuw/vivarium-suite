@@ -2,7 +2,7 @@
 Interface
 =========
 
-.. automodule:: vivarium.interface
+.. automodule:: vivarium.engine.interface
 
 .. toctree::
    :maxdepth: 1

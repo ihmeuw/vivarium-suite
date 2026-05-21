@@ -19,8 +19,8 @@ import numpy as np
 import pandas as pd
 import pandas.api.types as pdt
 
-from vivarium.framework.randomness.exceptions import RandomnessError
-from vivarium.types import ClockTime
+from vivarium.engine.framework.randomness.exceptions import RandomnessError
+from vivarium.engine.types import ClockTime
 
 
 class IndexMap:

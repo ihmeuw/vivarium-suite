@@ -30,12 +30,12 @@ import pandas as pd
 from pandas.api.types import CategoricalDtype
 from pandas.core.groupby.generic import DataFrameGroupBy
 
-from vivarium.exceptions import VivariumError
-from vivarium.framework.event import Event
-from vivarium.framework.results.stratification import Stratification, get_original_col_name
+from vivarium.engine.exceptions import VivariumError
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.results.stratification import Stratification, get_original_col_name
 
 if TYPE_CHECKING:
-    from vivarium.framework.results.interface import PopulationFilter
+    from vivarium.engine.framework.results.interface import PopulationFilter
 
 VALUE_COLUMN = "value"
 

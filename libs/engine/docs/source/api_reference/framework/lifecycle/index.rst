@@ -2,7 +2,7 @@
 Life Cycle Management
 =====================
 
-.. automodule:: vivarium.framework.lifecycle
+.. automodule:: vivarium.engine.framework.lifecycle
 
 .. toctree::
    :maxdepth: 1

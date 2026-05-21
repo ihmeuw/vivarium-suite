@@ -90,7 +90,7 @@ The ``setup`` method
 
 Almost every component in Vivarium will have a setup method. The setup method
 gives the component access to an instance of the
-:class:`~vivarium.framework.engine.Builder` which exposes a handful of tools
+:class:`~vivarium.engine.framework.engine.Builder` which exposes a handful of tools
 to help build components. The simulation framework is responsible for calling
 the setup method on components and providing the builder to them. We'll
 explore these tools that the builder provides in detail as we go.
@@ -138,7 +138,7 @@ called by Vivarium when new simulants are being added to the simulation.
 
 We see that, like the ``setup`` method, initializer methods (``initialize_population``
 in this case) take in a special argument that we don't provide. This argument, 
-``pop_data``, is an instance of :class:`~vivarium.framework.population.manager.SimulantData` 
+``pop_data``, is an instance of :class:`~vivarium.engine.framework.population.manager.SimulantData` 
 containing a handful of information useful when initializing simulants.
 
 The only bits of information we need for now are the randomness stream we registered
@@ -189,7 +189,7 @@ we can set up our simulation with the following code:
    :hide:
 
    from vivarium import InteractiveContext
-   from vivarium.examples.boids import Population
+   from vivarium.engine.examples.boids import Population
 
    sim = InteractiveContext(
       components=[Population()],
@@ -252,8 +252,8 @@ You can find an overview of the values system :ref:`here <values_concept>`.
    will not discuss the more general concept further in this tutorial.
 
 The Builder class exposes an additional property for working with attribute pipelines:
-:meth:`vivarium.framework.engine.Builder.value`.
-We call the :meth:`vivarium.framework.values.interface.ValuesInterface.register_attribute_producer`
+:meth:`vivarium.engine.framework.engine.Builder.value`.
+We call the :meth:`vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer`
 method to register a new attribute pipeline as the producer of some attribute.
 
 .. literalinclude:: ../../../src/vivarium/examples/boids/movement.py
@@ -288,12 +288,12 @@ limit their velocity to a maximum, and update their position according
 to their velocity.
 
 To get population attributes such as ``acceleration`` inside on_time_step,
-we leverage a :class:`~vivarium.framework.population.population_view.PopulationView`
+we leverage a :class:`~vivarium.engine.framework.population.population_view.PopulationView`
 which provides a handful of methods designed to get when you need. In this case, 
-we call :meth:`~vivarium.framework.population.population_view.PopulationView.get_frame` 
+we call :meth:`~vivarium.engine.framework.population.population_view.PopulationView.get_frame` 
 to get the acceleration attribute. We pass in the ``event.index`` which is the set 
 of simulants affected by the event (in this case, all of them). Note that there is
-also available a :meth:`~vivarium.framework.population.population_view.PopulationView.get`
+also available a :meth:`~vivarium.engine.framework.population.population_view.PopulationView.get`
 method which is similar to ``get_frame`` but can request multiple attributes
 at once and does not necessarily return a dataframe.
 
@@ -301,13 +301,13 @@ at once and does not necessarily return a dataframe.
     
    **Population Views**
 
-   A :class:`~vivarium.framework.population.population_view.PopulationView` is a
+   A :class:`~vivarium.engine.framework.population.population_view.PopulationView` is a
    read/write interface to the population state table. It provides a number of
    convenience methods for getting and setting attributes, private columns,
    and other bits of information about the population.
 
 We call the population view's
-:meth:`~vivarium.framework.population.population_view.PopulationView.update`
+:meth:`~vivarium.engine.framework.population.population_view.PopulationView.update`
 method, passing the names of the private columns we want to change and a *modifier*
 function that receives the current values and returns the updated ones. A
 :term:`private column <Private Column>` is one that acts as a *source* of an
@@ -356,7 +356,7 @@ Let's run the simulation with our new component and look again at the state tabl
    :hide:
 
    from vivarium import InteractiveContext
-   from vivarium.examples.boids import Population, Movement
+   from vivarium.engine.examples.boids import Population, Movement
 
    sim = InteractiveContext(
       components=[Population(), Movement()],
@@ -395,7 +395,7 @@ but their velocity stay the same.
    :hide:
 
    from vivarium import InteractiveContext
-   from vivarium.examples.boids import Population, Movement
+   from vivarium.engine.examples.boids import Population, Movement
 
    sim = InteractiveContext(
       components=[Population(), Movement()],
@@ -460,7 +460,7 @@ We can then visualize our flock with
 .. plot::
 
    from vivarium import InteractiveContext
-   from vivarium.examples.boids import Population, Movement, plot_boids
+   from vivarium.engine.examples.boids import Population, Movement, plot_boids
 
    sim = InteractiveContext(
       components=[Population(), Movement()],
@@ -520,7 +520,7 @@ magnitude.
    :end-before: # docs-end: force_base_class
 
 The major new Vivarium feature seen here is that of the **attribute modifier**,
-which we register with :meth:`vivarium.framework.values.interface.ValuesInterface.register_attribute_modifier`.
+which we register with :meth:`vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_modifier`.
 As the name suggests, this allows us to modify attributes,
 in this case adding the effect of a force to the ``acceleration`` attribute.
 We register that the ``apply_force`` method as the modifier like so:
@@ -571,7 +571,7 @@ For a quick test of our swarming behavior, let's add in these forces and check i
 .. plot::
 
    from vivarium import InteractiveContext
-   from vivarium.examples.boids import Population, Movement, Neighbors, Separation, Cohesion, Alignment, plot_boids
+   from vivarium.engine.examples.boids import Population, Movement, Neighbors, Separation, Cohesion, Alignment, plot_boids
 
    sim = InteractiveContext(
       components=[Population(), Movement(), Neighbors(), Separation(), Cohesion(), Alignment()],

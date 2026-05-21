@@ -25,7 +25,7 @@ from typing import Union
 
 from layered_config_tree.main import LayeredConfigTree
 
-from vivarium.framework.utilities import import_by_path
+from vivarium.engine.framework.utilities import import_by_path
 
 from ... import Component
 from .manager import ComponentConfigError

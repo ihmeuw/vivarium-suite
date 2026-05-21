@@ -1,1 +1,1 @@
-.. automodule:: vivarium.framework.lookup.interpolation
+.. automodule:: vivarium.engine.framework.lookup.interpolation

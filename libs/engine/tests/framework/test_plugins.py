@@ -5,13 +5,13 @@ from layered_config_tree import LayeredConfigTree
 from pytest_mock import MockerFixture
 
 from tests.helpers import MockComponentA, MockManager
-from vivarium.framework.components import ComponentConfigurationParser
-from vivarium.framework.plugins import (
+from vivarium.engine.framework.components import ComponentConfigurationParser
+from vivarium.engine.framework.plugins import (
     DEFAULT_PLUGINS,
     PluginConfigurationError,
     PluginManager,
 )
-from vivarium.framework.time import DateTimeClock, SimulationClock, TimeInterface
+from vivarium.engine.framework.time import DateTimeClock, SimulationClock, TimeInterface
 
 plugin_config = {"george": {"controller": "big_brother", "builder_interface": "minipax"}}
 
@@ -51,10 +51,10 @@ def test_PluginManager__lookup(test_plugin_manager: PluginManager) -> None:
 def test_PluginManager__get_fail(
     test_plugin_manager: PluginManager, mocker: MockerFixture
 ) -> None:
-    import_by_path_mock = mocker.patch("vivarium.framework.plugins.import_by_path")
+    import_by_path_mock = mocker.patch("vivarium.engine.framework.plugins.import_by_path")
 
     def err1(path: str) -> None:
-        if path == "vivarium.framework.time.DateTimeClock":
+        if path == "vivarium.engine.framework.time.DateTimeClock":
             raise ValueError()
 
     import_by_path_mock.side_effect = err1
@@ -63,7 +63,7 @@ def test_PluginManager__get_fail(
         test_plugin_manager._get("clock")
 
     def err2(path: str) -> Callable[[], str]:
-        if path == "vivarium.framework.time.TimeInterface":
+        if path == "vivarium.engine.framework.time.TimeInterface":
             raise ValueError()
         return lambda: "fake_controller"
 
@@ -102,7 +102,7 @@ def test_PluginManager_get_plugin_interface(test_plugin_manager: PluginManager) 
 def test_PluginManager_get_optional_controllers(
     test_plugin_manager: PluginManager, mocker: MockerFixture
 ) -> None:
-    import_by_path_mock = mocker.patch("vivarium.framework.plugins.import_by_path")
+    import_by_path_mock = mocker.patch("vivarium.engine.framework.plugins.import_by_path")
     manager = MockManager("george")
 
     def import_by_path_side_effect(
@@ -124,7 +124,7 @@ def test_PluginManager_get_optional_controllers(
 def test_PluginManager_get_optional_interfaces(
     test_plugin_manager: PluginManager, mocker: MockerFixture
 ) -> None:
-    import_by_path_mock = mocker.patch("vivarium.framework.plugins.import_by_path")
+    import_by_path_mock = mocker.patch("vivarium.engine.framework.plugins.import_by_path")
     component = MockComponentA("george")
 
     def import_by_path_side_effect(
