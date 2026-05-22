@@ -1,0 +1,371 @@
+"""
+=================
+Component Manager
+=================
+
+The :mod:`vivarium.engine` component manager system is responsible for maintaining a
+reference to all of the managers and components in a simulation, providing an
+interface for adding additional components or managers, and applying default
+configurations and initiating the ``setup`` stage of the lifecycle. This module
+provides the default implementation and interface.
+
+The :class:`ComponentManager` is the first plugin loaded by the
+:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`
+and managers and components are given to it by the context. It is called on to
+setup everything it holds when the context itself is setup.
+
+"""
+from __future__ import annotations
+
+import inspect
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Generic, TypeVar
+
+from vivarium.config_tree import ConfigTree, ConfigurationError, DuplicatedConfigurationError
+
+from vivarium.engine import Component
+from vivarium.engine.exceptions import VivariumError
+from vivarium.engine.framework.lifecycle import (
+    LifeCycleError,
+    LifeCycleManager,
+    lifecycle_states,
+)
+from vivarium.engine.manager import Manager
+
+if TYPE_CHECKING:
+    from vivarium.engine.framework.engine import Builder
+
+C = TypeVar("C", bound=Component)
+T = TypeVar("T", Component, Manager)
+
+
+class ComponentConfigError(VivariumError):
+    """Error while interpreting configuration file or initializing components"""
+
+    pass
+
+
+class OrderedComponentSet(Generic[T]):
+    """A container for Vivarium components.
+
+    It preserves ordering, enforces uniqueness by name, and provides a
+    subset of set-like semantics.
+
+    """
+
+    def __init__(self, *args: T) -> None:
+        self.components: list[T] = []
+        if args:
+            self.update(args)
+
+    def add(self, component: T) -> None:
+        if component in self:
+            raise ComponentConfigError(
+                f"Attempting to add a component with duplicate name: {component}"
+            )
+        self.components.append(component)
+
+    def update(self, components: Sequence[T]) -> None:
+        for c in components:
+            self.add(c)
+
+    def pop(self) -> T:
+        component = self.components.pop(0)
+        return component
+
+    def __contains__(self, component: T) -> bool:
+        if not hasattr(component, "name"):
+            raise ComponentConfigError(
+                f"{type(component).__name__} {component} has no name attribute"
+            )
+        return component.name in [c.name for c in self.components]
+
+    def __iter__(self) -> Iterator[T]:
+        return iter(self.components)
+
+    def __len__(self) -> int:
+        return len(self.components)
+
+    def __bool__(self) -> bool:
+        return bool(self.components)
+
+    def __add__(self, other: OrderedComponentSet[T]) -> OrderedComponentSet[T]:
+        return OrderedComponentSet(*(self.components + other.components))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, OrderedComponentSet):
+            return False
+        try:
+            return type(self) is type(other) and [c.name for c in self.components] == [
+                c.name for c in other.components
+            ]
+        except TypeError:
+            return False
+
+    def __getitem__(self, index: int) -> T:
+        return self.components[index]
+
+    def __repr__(self) -> str:
+        return f"OrderedComponentSet({[c.name for c in self.components]})"
+
+
+class ComponentManager(Manager):
+    """Manages the initialization and setup of :mod:`vivarium.engine` components.
+
+    Maintains references to all components and managers in a :mod:`vivarium.engine`
+    simulation, applies their default configuration and initiates their
+    ``setup`` life-cycle stage.
+
+    The component manager maintains a separate list of managers and components
+    and provides methods for adding to these lists and getting members that
+    correspond to a specific type.  It also initiates the ``setup`` lifecycle
+    phase for all components and managers it controls. This is done first for
+    managers and then components, and involves applying default configurations
+    and calling the object's ``setup`` method.
+
+    """
+
+    def __init__(self) -> None:
+        self._managers: OrderedComponentSet[Manager] = OrderedComponentSet()
+        self._components: OrderedComponentSet[Component] = OrderedComponentSet()
+        self._configuration: ConfigTree | None = None
+        self._current_component: Component | Manager | None = None
+
+    @property
+    def configuration(self) -> ConfigTree:
+        """The configuration tree for the simulation."""
+        if self._configuration is None:
+            raise VivariumError("ComponentManager has no configuration tree.")
+        return self._configuration
+
+    @property
+    def name(self) -> str:
+        """The name of this component."""
+        return "component_manager"
+
+    def setup_manager(  # type: ignore[override]
+        self, configuration: ConfigTree, lifecycle_manager: LifeCycleManager
+    ) -> None:
+        """Sets up the component manager.
+
+        It registers lifecycle constraints and stores the configuration tree. Unlike other
+        managers, this is called directly by the simulation context during its __init__.
+        """
+        self._configuration = configuration
+
+        lifecycle_manager.add_constraint(
+            self.get_components_by_type,
+            restrict_during=[
+                lifecycle_states.INITIALIZATION,
+                lifecycle_states.POPULATION_CREATION,
+            ],
+        )
+        lifecycle_manager.add_constraint(
+            self.get_component, restrict_during=[lifecycle_states.POPULATION_CREATION]
+        )
+        lifecycle_manager.add_constraint(
+            self.list_components, restrict_during=[lifecycle_states.INITIALIZATION]
+        )
+
+    def add_managers(self, managers: Sequence[Manager]) -> None:
+        """Registers new managers with the component manager.
+
+        Managers are configured and setup before components.
+
+        Parameters
+        ----------
+        managers
+            Instantiated managers to register.
+        """
+        for manager in managers:
+            self.apply_configuration_defaults(manager)
+            self._managers.add(manager)
+
+    def add_components(self, components: Sequence[Component]) -> None:
+        """Register new components with the component manager.
+
+        Components are configured and setup after managers.
+
+        Parameters
+        ----------
+        components
+            Instantiated components to register.
+        """
+        for c in self._flatten_subcomponents(list(components)):
+            self.apply_configuration_defaults(c)
+            self._components.add(c)
+
+    def get_components_by_type(self, component_type: type[C] | Sequence[type[C]]) -> list[C]:
+        """Get all components that are an instance of ``component_type``.
+
+        Parameters
+        ----------
+        component_type
+            A component type.
+
+        Returns
+        -------
+            A list of components of type ``component_type``.
+        """
+        # Convert component_type to a tuple for isinstance
+        component_type = (
+            component_type if isinstance(component_type, type) else tuple(component_type)
+        )
+        return [c for c in self._components if isinstance(c, component_type)]  # type: ignore[misc]
+
+    def get_component(self, name: str) -> Component | Manager:
+        """Get the component with name ``name``.
+
+        Names are guaranteed to be unique.
+
+        Parameters
+        ----------
+        name
+            A component name.
+
+        Returns
+        -------
+            A component that has name ``name``.
+
+        Raises
+        ------
+        ValueError
+            No component exists in the component manager with ``name``.
+        """
+        for c in self._components:
+            if c.name == name:
+                return c
+        raise ValueError(f"No component found with name {name}")
+
+    def list_components(self) -> dict[str, Component | Manager]:
+        """Get a mapping of component names to components held by the manager.
+
+        Returns
+        -------
+            A mapping of component names to components.
+
+        """
+        return {c.name: c for c in self._components}
+
+    def get_current_component(self) -> Component:
+        """Get the component currently being set up, if any.
+
+        Returns
+        -------
+            The component currently being set up.
+
+        Raises
+        ------
+        LifeCycleError
+            No component is currently being set up.
+        """
+        if not isinstance(self._current_component, Component):
+            raise LifeCycleError("No component is currently being set up.")
+        return self._current_component
+
+    def get_current_component_or_manager(self) -> Component | Manager:
+        """Get the component or manager currently being set up, if any.
+
+        Returns
+        -------
+            The component or manager currently being set up.
+
+        Raises
+        ------
+        LifeCycleError
+            No component or manager is currently being set up.
+        """
+        if self._current_component is None:
+            raise LifeCycleError("No component or manager is currently being set up.")
+        return self._current_component
+
+    @contextmanager
+    def tracking_setup(self, component: Component | Manager) -> Iterator[None]:
+        """Context manager that sets ``_current_component`` to ``component``
+        for the duration of the block, then restores the previous value.
+
+        Using save-and-restore rather than a plain assignment means nested
+        calls (e.g. a manager whose ``setup`` calls ``super().setup``) work
+        correctly.
+
+        Parameters
+        ----------
+        component
+            The component or manager currently being set up.
+        """
+        previous = self._current_component
+        self._current_component = component
+        try:
+            yield
+        finally:
+            self._current_component = previous
+
+    def setup_components(self, builder: Builder) -> None:
+        """Separately configure and set up the managers and components held by
+        the component manager, in that order.
+
+        The setup process involves applying default configurations and then
+        calling the manager or component's setup method. This can result in new
+        components as a side effect of setup because components themselves have
+        access to this interface through the builder in their setup method.
+
+        Parameters
+        ----------
+        builder
+            Interface to several simulation tools.
+        """
+        for manager in self._managers:
+            manager.setup_manager(builder)
+
+        for component in self._components:
+            component.setup_component(builder)
+
+    def apply_configuration_defaults(self, component: Component | Manager) -> None:
+        try:
+            self.configuration.update(
+                component.configuration_defaults,
+                layer="component_configs",
+                source=component.name,
+            )
+        except DuplicatedConfigurationError as e:
+            new_name, new_file = component.name, self._get_file(component)
+            if e.source:
+                old_name, old_file = e.source, self._get_file(self.get_component(e.source))
+                component_string = f"{old_name} in file {old_file}"
+            else:
+                component_string = "another component"
+
+            raise ComponentConfigError(
+                f"Component {new_name} in file {new_file} is attempting to "
+                f"set the configuration value {e.value_name}, but it has already "
+                f"been set by {component_string}."
+            )
+        except ConfigurationError as e:
+            new_name, new_file = component.name, self._get_file(component)
+            raise ComponentConfigError(
+                f"Component {new_name} in file {new_file} is attempting to "
+                f"alter the structure of the configuration at key {e.value_name}. "
+                f"This happens if one component attempts to set a value at an interior "
+                f"configuration key or if it attempts to turn an interior key into a "
+                f"configuration value."
+            )
+
+    @staticmethod
+    def _get_file(component: Component | Manager) -> str:
+        if component.__module__ == "__main__":
+            # This is defined directly in a script or notebook so there's no
+            # file to attribute it to.
+            return "__main__"
+        else:
+            return inspect.getfile(component.__class__)
+
+    def _flatten_subcomponents(self, components: Sequence[Component]) -> list[Component]:
+        out: list[Component] = []
+        for component in components:
+            out.append(component)
+            out.extend(self._flatten_subcomponents(component.sub_components))
+        return out
+
+    def __repr__(self) -> str:
+        return "ComponentManager()"
