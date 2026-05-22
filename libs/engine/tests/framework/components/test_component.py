@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from vivarium.artifact import Artifact
 from vivarium.config_tree.exceptions import ConfigurationError
 
 from tests.helpers import (
@@ -18,7 +19,7 @@ from tests.helpers import (
     ParameterizedByComponent,
     SingleLookupCreator,
 )
-from vivarium.engine import Artifact, InteractiveContext
+from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.lookup.table import LookupTable
