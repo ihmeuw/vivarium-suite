@@ -1,3 +1,9 @@
+**0.6.0 - 05/21/26**
+
+- Add vivarium.<module> -> vivarium-engine.<module> redirects for top level modules.
+- Add ``layered_config_tree`` -> ``vivarium.config_tree`` redirect
+  (previously disabled pending the vivarium migration).
+
 **0.5.2 - 05/20/26**
 
 - Tighten tag pattern
