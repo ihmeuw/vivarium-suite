@@ -1,0 +1,83 @@
+# numpy
+py:class np.number
+py:class np.object_
+py:class npt.NDArray
+py:class npt.NBitBase
+# pandas
+py:class CategoricalDtype
+py:class pandas.core.indexes.base.Index
+py:class pandas.core.indexes.multi.MultiIndex
+py:class pandas._libs.tslibs.timestamps.Timestamp
+py:class pandas._libs.tslibs.timedeltas.Timedelta
+py:class pandas.core.frame.DataFrame
+py:class pandas.core.series.Series
+py:class pandas.core.generic.PandasObject
+py:class pandas.core.groupby.generic.DataFrameGroupBy
+py:class pd.Index
+py:class pd.Series
+py:class pd.DataFrame
+
+#scipy
+py:class scipy.stats._distn_infrastructure.rv_continuous
+py:class stats.rv_continuous
+
+# loguru
+py:class loguru.Logger
+
+# vivarium
+# Type aliases don't play nicely with sphinx when you import them
+# elsewhere.  Works fine for static type checker though.  I think this
+# is because sphinx does runtime checks.
+py:class ScalarValue
+py:class NumberLike
+py:class NumericArray
+py:class ClockTime
+py:class Time
+py:class ClockStepSize
+py:class Timedelta
+py:class DataInput
+py:class VectorMapper
+py:class ScalarMapper
+py:class PandasObject
+py:class DataFrameGroupBy
+py:class ResultsFormatter
+py:class ResultsUpdater
+py:class _NestedDict
+py:exc ResultsConfigurationError
+py:exc vivarium.engine.framework.results.exceptions.ResultsConfigurationError
+py:class vivarium.engine.framework.plugins.M
+py:class vivarium.engine.framework.plugins.I
+py:class vivarium.engine.framework.utilities.TimeValue
+py:class T
+py:class vivarium.engine.framework.components.manager.T
+py:class vivarium.engine.framework.components.manager.C
+
+# vivarium-config-tree: type annotations in engine source use the bare name
+# ``ConfigTree`` (via ``from vivarium.config_tree import ConfigTree``), which
+# autodoc-typehints renders as a bare ``:class:`ConfigTree``` cross-ref that
+# Sphinx can't match against the qualified intersphinx target. Fully-qualified
+# references (e.g. ``:class:`~vivarium.config_tree.main.ConfigTree``` in
+# docstrings/rst) resolve correctly via intersphinx; only the autodoc-derived
+# bare form needs suppression.
+py:class ConfigTree
+
+# Special methods that Sphinx can't resolve
+py:meth __init__
+py:meth __repr__
+
+# vivarium internal references that may not be in the docs
+py:class vivarium.engine.framework.population.PopulationView
+py:class vivarium.engine.framework.lookup.LookupTable
+py:class vivarium.engine.framework.artifact.ArtifactManager
+py:meth vivarium.engine.framework.artifact.ArtifactInterface.load
+
+# TODO: Need to revisit this. Nitpicking here to avoid failing builds on 3.9
+py:class Logger
+py:class Path
+py:class LookupTableData
+
+# pathlib internals
+py:class pathlib._local.Path
+
+# typing
+py:data typing.Union

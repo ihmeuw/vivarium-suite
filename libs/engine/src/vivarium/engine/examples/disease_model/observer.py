@@ -1,0 +1,82 @@
+from typing import Any
+
+import pandas as pd
+
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.population import SimulantData
+from vivarium.engine.framework.results import Observer
+
+
+class DeathsObserver(Observer):
+    """Observes the number of deaths."""
+
+    #################
+    # Setup methods #
+    #################
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_initializer(
+            initializer=self.initialize_previous_alive,
+            columns="previous_alive",
+            required_resources=["is_alive"],
+        )
+
+    def register_observations(self, builder: Builder) -> None:
+        builder.results.register_adding_observation(
+            name="dead",
+            requires_attributes=["is_alive", "previous_alive"],
+            pop_filter="previous_alive == True and is_alive == False",
+        )
+
+    ########################
+    # Event-driven methods #
+    ########################
+
+    def initialize_previous_alive(self, pop_data: SimulantData) -> None:
+        """Initialize simulants as alive"""
+        self.population_view.initialize(
+            pd.Series(True, index=pop_data.index, name="previous_alive")
+        )
+
+    def on_time_step_prepare(self, event: Event) -> None:
+        """Update the previous deaths column to the current deaths."""
+        previous_alive = self.population_view.get(event.index, "is_alive")
+        previous_alive.name = "previous_alive"
+        self.population_view.update("previous_alive", lambda _: previous_alive)
+
+
+class YllsObserver(Observer):
+    """Observes the years of lives lost."""
+
+    ##############
+    # Properties #
+    ##############
+
+    @property
+    def configuration_defaults(self) -> dict[str, Any]:
+        config = super().configuration_defaults
+        config["mortality"] = {"life_expectancy": 80.0}
+        return config
+
+    #####################
+    # Lifecycle methods #
+    #####################
+
+    def setup(self, builder: Builder) -> None:
+        self.life_expectancy = float(builder.configuration.mortality.life_expectancy)
+
+    #################
+    # Setup methods #
+    #################
+
+    def register_observations(self, builder: Builder) -> None:
+        builder.results.register_adding_observation(
+            name="ylls",
+            requires_attributes=["age", "is_alive", "previous_alive"],
+            pop_filter="previous_alive == True and is_alive == False",
+            aggregator=self.calculate_ylls,
+        )
+
+    def calculate_ylls(self, df: pd.DataFrame) -> float:
+        return float((self.life_expectancy - df["age"]).sum())

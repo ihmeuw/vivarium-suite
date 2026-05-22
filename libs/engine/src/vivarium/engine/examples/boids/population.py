@@ -1,0 +1,52 @@
+# docs-start: imports
+import pandas as pd
+
+from vivarium.engine import Component
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.population import SimulantData
+
+# docs-end: imports
+
+
+class Population(Component):
+    ##############
+    # Properties #
+    ##############
+
+    # docs-start: configuration_defaults
+    CONFIGURATION_DEFAULTS = {
+        "population": {
+            "colors": ["red", "blue"],
+        }
+    }
+    # docs-end: configuration_defaults
+
+    #####################
+    # Lifecycle methods #
+    #####################
+
+    # docs-start: setup
+    def setup(self, builder: Builder) -> None:
+        self.colors = builder.configuration.population.colors
+        self.randomness = builder.randomness.get_stream(self.name)
+        builder.population.register_initializer(
+            initializer=self.initialize_population,
+            columns=["color", "entrance_time"],
+            required_resources=[self.randomness],
+        )
+
+    # docs-end: setup
+
+    ########################
+    # Event-driven methods #
+    ########################
+
+    def initialize_population(self, pop_data: SimulantData) -> None:
+        new_population = pd.DataFrame(
+            {
+                "color": self.randomness.choice(pop_data.index, self.colors),
+                "entrance_time": pop_data.creation_time,
+            },
+            index=pop_data.index,
+        )
+        self.population_view.initialize(new_population)
