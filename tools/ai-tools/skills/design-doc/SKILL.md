@@ -1,6 +1,6 @@
 ---
 name: design-doc
-description: SimSci Engineering team convention for drafting a Design Document on the IHME hub. Use whenever the user asks to "draft a design doc", "write a design document", "make a design doc", "start a PRD", or anything similar where a hub design doc is the deliverable.
+description: SimSci Engineering team convention for drafting a Design Document on the IHME hub. Use whenever the user asks to e.g. "draft a design doc", "write a design document", "make a design doc", or "start a PRD".
 ---
 
 # SimSci Engineering design documents
@@ -24,7 +24,7 @@ The returned `body_storage` is Confluence storage XHTML — that is what you wil
 
 ## 2. Draft the copy with the user
 
-Work iteratively. For each section the user has content for, propose Confluence storage XHTML (the same format the template uses). Keep all section headings even when a section is short — engineers scanning the doc rely on the rhythm. Use `*na*` when a section truly doesn't apply (e.g. *Current state* for a greenfield effort).
+Work iteratively. For each section the user has content for, propose Confluence storage XHTML (the same format the template uses). Keep all section headings even when a section is short — engineers scanning the doc rely on the rhythm. Use `*na*` when a section truly doesn't apply (e.g. *Current state* for a greenfield effort). You may also add new sections if it seems relevant.
 
 
 A few notes based on existing docs:
