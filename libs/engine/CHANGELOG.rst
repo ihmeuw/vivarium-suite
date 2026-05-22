@@ -1,4 +1,4 @@
-**5.0.0 - 05/21/26**
+**5.0.0 - 05/22/26**
 
 Initial release from the vivarium-suite monorepo; the standalone ``vivarium``
 repository has been archived.
@@ -6,9 +6,25 @@ repository has been archived.
 Breaking changes:
 
 - PyPI distribution renamed from ``vivarium`` to ``vivarium-engine``.
-- Import path changed from ``vivarium`` to ``vivarium.engine``.
-- The data-artifact model has been removed (it moved to the separate ``vivarium-artifact``
-  package).
+- Import path changed from ``vivarium`` to ``vivarium.engine``. The
+  ``vivarium`` namespace itself is preserved as a pkgutil namespace
+  package shared with sibling libs (vivarium-artifact, vivarium-config-tree).
+- The configuration tree class was renamed from ``LayeredConfigTree`` to
+  ``ConfigTree`` and now lives at ``vivarium.config_tree``.
+- The data-artifact model has been removed from this package; it now ships
+  in the separate ``vivarium-artifact`` distribution.
+
+Deprecations:
+
+- ``from vivarium import Component`` (and ``Artifact``, ``InteractiveContext``,
+  ``Observer``, ``build_model_specification``) still work but emit a
+  ``DeprecationWarning`` pointing callers at ``vivarium.engine``. The shim
+  will be removed in a future release.
+
+Removed:
+
+- The standalone ``Artifact`` tutorial (``docs/source/tutorials/artifact.rst``)
+  moved to vivarium-artifact's documentation.
 
 **4.1.5 - 05/11/26**
 

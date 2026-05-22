@@ -83,13 +83,15 @@ def test_subset_columns() -> None:
     )
 
 
-def test_parse_artifact_path_config(base_config: ConfigTree, test_data_dir: Path) -> None:
-    artifact_path = test_data_dir / "artifact.hdf"
+def test_parse_artifact_path_config(base_config: ConfigTree, hdf_file_path: Path) -> None:
+    # ``parse_artifact_path_config`` validates the artifact file actually exists,
+    # so we use the ``hdf_file_path`` fixture (a freshly-synthesized empty artifact
+    # at tmp_path).
     base_config.update(
-        {"input_data": {"artifact_path": str(artifact_path)}}, **metadata(str(Path("/")))
+        {"input_data": {"artifact_path": str(hdf_file_path)}}, **metadata(str(Path("/")))
     )
 
-    assert parse_artifact_path_config(base_config) == str(artifact_path)
+    assert parse_artifact_path_config(base_config) == str(hdf_file_path)
 
 
 def test_parse_artifact_path_relative_no_source(base_config: ConfigTree) -> None:
@@ -100,12 +102,18 @@ def test_parse_artifact_path_relative_no_source(base_config: ConfigTree) -> None
         parse_artifact_path_config(base_config)
 
 
-def test_parse_artifact_path_relative(base_config: ConfigTree, test_data_dir: Path) -> None:
+def test_parse_artifact_path_relative(base_config: ConfigTree, hdf_file_path: Path) -> None:
+    # ``parse_artifact_path_config`` resolves relative artifact paths against
+    # the config's source-location metadata. Stage a config-source file in the
+    # same tmp dir as the synthesized artifact so a simple ``./artifact.hdf``
+    # relative path resolves to it.
+    fake_source = hdf_file_path.parent / "model_spec.yaml"
+    fake_source.touch()
     base_config.update(
-        {"input_data": {"artifact_path": "../../test_data/artifact.hdf"}},
-        **metadata(__file__),
+        {"input_data": {"artifact_path": "./artifact.hdf"}},
+        **metadata(str(fake_source)),
     )
-    assert parse_artifact_path_config(base_config) == str(test_data_dir / "artifact.hdf")
+    assert parse_artifact_path_config(base_config) == str(hdf_file_path)
 
 
 def test_parse_artifact_path_config_fail(base_config: ConfigTree) -> None:

@@ -1,6 +1,6 @@
-===================
-Installing Vivarium
-===================
+==========================
+Installing vivarium-engine
+==========================
 
 .. contents::
    :depth: 1
@@ -12,7 +12,7 @@ Installing Vivarium
 Overview
 --------
 
-Vivarium is written in `Python`__ and supports Python 3.6+.
+``vivarium-engine`` is written in `Python`__ and supports Python 3.10-3.13.
 
 __ http://docs.python-guide.org/en/latest/
 
@@ -21,47 +21,45 @@ __ http://docs.python-guide.org/en/latest/
 Installation from PyPI
 ----------------------
 
-Vivarium packages are published on the `Python Package Index
-<https://pypi.org/project/vivarium/>`_. The preferred tool for installing
-packages from *PyPI* is :command:`pip`.  This tool is provided with all modern
-versions of Python
+``vivarium-engine`` is published on the `Python Package Index
+<https://pypi.org/project/vivarium-engine/>`_. The preferred tool for
+installing packages from *PyPI* is :command:`pip`, which ships with all
+modern versions of Python.
 
-On Linux or MacOS, you should open your terminal and run the following command.
+.. note::
 
-::
+   If you had the legacy ``vivarium`` package installed (pre-monorepo),
+   uninstall it before installing ``vivarium-engine`` to avoid file
+   conflicts on the shared ``vivarium`` namespace::
 
-   $ pip install -U vivarium
+      $ pip uninstall vivarium
 
-On Windows, you should open *Command Prompt* and run the same command.
+On Linux or MacOS, run::
+
+   $ pip install -U vivarium-engine
+
+On Windows, open *Command Prompt* and run the same command.
 
 .. code-block:: doscon
 
-   C:\> pip install -U vivarium
+   C:\> pip install -U vivarium-engine
 
-After installation, type :command:`simulate test`.  This will run a test
+After installation, run :command:`simulate test`. This will run a test
 simulation packaged with the framework and validate that everything is
 installed correctly.
 
 Installation from source
 ------------------------
 
-You can install Vivarium directly from a clone of the `Git repository`__.
-You can clone the repository locally and install from the local clone::
+``vivarium-engine`` lives in the `vivarium-suite monorepo`__. Clone the
+monorepo and install from this package directory::
 
-    $ git clone https://github.com/ihmeuw/vivarium.git
-    $ cd vivarium
-    $ pip install .
+    $ git clone https://github.com/ihmeuw/vivarium-suite.git
+    $ cd vivarium-suite
+    $ pip install libs/engine
 
-You can also install directly from the git repository with pip::
+For broader monorepo development setup, see the monorepo README.
 
-    $ pip install git+https://github.com/ihmeuw/vivarium.git
-
-Additionally, you can download a snapshot of the Git repository in either
-`tar.gz`__ or `zip`__ format.  Once downloaded and extracted, these can be
-installed with :command:`pip` as above.
+__ https://github.com/ihmeuw/vivarium-suite
 
 .. highlight:: default
-
-__ https://github.com/ihmeuw/vivarium
-__ https://github.com/ihmeuw/vivarium/archive/develop.tar.gz
-__ https://github.com/ihmeuw/vivarium/archive/develop.zip

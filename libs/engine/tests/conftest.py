@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 import pytest_mock
-import tables
 import yaml
 from _pytest.logging import LogCaptureFixture
 from loguru import logger
+from vivarium.artifact import Artifact
 from vivarium.config_tree import ConfigTree
 from vivarium_testing_utils import FuzzyChecker
 
@@ -102,27 +103,13 @@ def disease_model_spec(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def hdf_file_path(tmp_path: Path, test_data_dir: Path) -> Path:
-    """This file contains the following:
-    Object Tree:
-        / (RootGroup) ''
-        /cause (Group) ''
-        /population (Group) ''
-        /population/age_bins (Group) ''
-        /population/age_bins/table (Table(23,), shuffle, zlib(9)) ''
-        /population/structure (Group) ''
-        /population/structure/table (Table(1863,), shuffle, zlib(9)) ''
-        /population/theoretical_minimum_risk_life_expectancy (Group) ''
-        /population/theoretical_minimum_risk_life_expectancy/table (Table(10502,), shuffle, zlib(9)) ''
-        /population/structure/meta (Group) ''
-        /population/structure/meta/values_block_1 (Group) ''
-        /population/structure/meta/values_block_1/meta (Group) ''
-        /population/structure/meta/values_block_1/meta/table (Table(3,), shuffle, zlib(9)) ''
-        /cause/all_causes (Group) ''
-        /cause/all_causes/restrictions (EArray(166,)) ''
-    """
-    # Make temporary copy of file for test.
-    p = tmp_path / "artifact.hdf"
-    with tables.open_file(str(test_data_dir / "artifact.hdf")) as file:
-        file.copy_file(str(p), overwrite=True)
-    return p
+def hdf_file_path(tmp_path: Path) -> Path:
+    """Path to a freshly-initialized empty artifact."""
+    path = tmp_path / "artifact.hdf"
+    # The constructor emits "No artifact found at <path>. Building new
+    # artifact." since path doesn't exist; silence it - building is the
+    # whole point of the fixture.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        Artifact(path)
+    return path

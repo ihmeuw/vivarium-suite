@@ -18,9 +18,9 @@ from inspect import signature
 from typing import TYPE_CHECKING, Any, overload
 
 import pandas as pd
+from vivarium.artifact import ArtifactException
 from vivarium.config_tree import ConfigTree, ConfigurationError
 
-from vivarium.engine.framework.artifact import ArtifactException
 from vivarium.engine.framework.lifecycle import LifeCycleError, lifecycle_states
 from vivarium.engine.types import LookupTableData
 
@@ -147,7 +147,7 @@ class Component(ABC):
 
         The name is created by first converting the name of the class to snake
         case. Then, the names of the initialization parameters are appended,
-        separated by ``.``. If a parameter is an instance of :class:`Component`, its
+        separated by ``.``. If a parameter is an instance of `Component`, its
         :attr:`name` property is used; otherwise, the string representation of the
         parameter is used. The resulting string is stored in the ``_name`` attribute
         and returned.

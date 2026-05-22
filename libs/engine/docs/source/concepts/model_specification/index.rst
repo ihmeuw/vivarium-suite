@@ -77,7 +77,7 @@ specification item and the fully instantiated object is the domain of the
 The :class:`ComponentConfigurationParser
 <vivarium.engine.framework.components.parser.ComponentConfigurationParser>`
 is responsible for taking a list or hierarchical 
-:class:`ConfigTree <vivarium.config_tree.main.ConfigTree>` of 
+:class:`~vivarium.config_tree.main.ConfigTree` of 
 components derived from a model specification file and turning it into a list of 
 instantiated component objects. 
 

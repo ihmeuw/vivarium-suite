@@ -70,7 +70,7 @@ file though.
            packages=find_packages(where='src'),
            include_package_data=True,
 
-           install_requires=['vivarium'],
+           install_requires=['vivarium-engine'],
     )
 
 This is the file that lets us install your package and import it from

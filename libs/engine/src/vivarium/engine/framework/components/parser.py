@@ -4,7 +4,7 @@ The Component Configuration Parser
 ==================================
 
 The :class:`ComponentConfigurationParser` is responsible for taking a list or
-hierarchical :class:`ConfigTree <vivarium.config_tree.main.ConfigTree>` of components
+hierarchical :class:`~vivarium.config_tree.main.ConfigTree` of components
 derived from a model specification yaml file and turning it into a list of
 instantiated component objects. When a model specification yaml file is loaded,
 the components come in as strings. In order for the simulation to be able to
@@ -70,7 +70,7 @@ class ComponentConfigurationParser:
         validating/prepping, and importing/instantiating.
 
         The first step of parsing is only done for component configurations that
-        come in as a :class:`ConfigTree <vivarium.config_tree.main.ConfigTree>`.
+        come in as a :class:`~vivarium.config_tree.main.ConfigTree`.
         Configurations that are provided in the form of a list are already
         assumed to be in the correct form.
 

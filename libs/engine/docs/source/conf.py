@@ -116,8 +116,8 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
     "networkx": ("https://networkx.org/documentation/stable/", None),
     # Sibling monorepo libs whose docs engine references.
-    "vivarium-artifact": ("https://vivarium-artifact.readthedocs.io/en/latest/", None),
-    "vivarium-config-tree": ("https://vivarium-config-tree.readthedocs.io/en/latest/", None),
+    "vivarium_artifact": ("https://vivarium-artifact.readthedocs.io/en/latest/", None),
+    "vivarium_config_tree": ("https://vivarium-config-tree.readthedocs.io/en/latest/", None),
 }
 
 

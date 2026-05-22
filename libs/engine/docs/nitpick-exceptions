@@ -52,10 +52,14 @@ py:class T
 py:class vivarium.engine.framework.components.manager.T
 py:class vivarium.engine.framework.components.manager.C
 
-# vivarium-config-tree
+# vivarium-config-tree: type annotations in engine source use the bare name
+# ``ConfigTree`` (via ``from vivarium.config_tree import ConfigTree``), which
+# autodoc-typehints renders as a bare ``:class:`ConfigTree``` cross-ref that
+# Sphinx can't match against the qualified intersphinx target. Fully-qualified
+# references (e.g. ``:class:`~vivarium.config_tree.main.ConfigTree``` in
+# docstrings/rst) resolve correctly via intersphinx; only the autodoc-derived
+# bare form needs suppression.
 py:class ConfigTree
-py:class vivarium.config_tree.main.ConfigTree
-py:exc vivarium.config_tree.exceptions.ConfigurationError
 
 # Special methods that Sphinx can't resolve
 py:meth __init__
@@ -66,7 +70,6 @@ py:class vivarium.engine.framework.population.PopulationView
 py:class vivarium.engine.framework.lookup.LookupTable
 py:class vivarium.engine.framework.artifact.ArtifactManager
 py:meth vivarium.engine.framework.artifact.ArtifactInterface.load
-py:class Component
 
 # TODO: Need to revisit this. Nitpicking here to avoid failing builds on 3.9
 py:class Logger

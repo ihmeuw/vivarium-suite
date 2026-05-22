@@ -51,7 +51,10 @@ docs = [
 ]
 lint = [
     "vivarium-dependencies[lint]",
-    "mypy<1.17.0",  # FIXME [MIC-6218]
+    # FIXME [MIC-6218]: mypy 1.17 introduced a regression that produces false
+    # positives on our Component / population-management code paths. Pin
+    # until that's fixed upstream or worked around locally.
+    "mypy<1.17.0",
 ]
 dev = ["vivarium-engine[docs,interactive,test,lint]"]
 cluster = []
@@ -64,11 +67,12 @@ simulate = "vivarium.engine.interface.cli:simulate"
 [tool.setuptools.packages.find]
 where = ["src"]
 # vivarium-engine owns the ``vivarium`` namespace's __init__.py: it ships the
-# pkgutil ``extend_path`` namespace marker AND re-exports the top-level
-# attributes (Component, Artifact, etc.) that the pre-monorepo ``vivarium``
-# package exposed. Sibling libs (vivarium-artifact, vivarium-config-tree, ...)
-# deliberately do NOT ship a ``vivarium/__init__.py`` to avoid file conflicts
-# at install time.
+# pkgutil ``extend_path`` namespace marker AND a ``__getattr__`` shim that
+# soft-deprecates the pre-monorepo ``from vivarium import Component`` / etc.
+# imports, routing each to its new canonical module (``vivarium.engine`` or
+# ``vivarium.artifact``) with a DeprecationWarning. Sibling libs
+# (vivarium-artifact, vivarium-config-tree, ...) deliberately do NOT ship a
+# ``vivarium/__init__.py`` to avoid file conflicts at install time.
 include = [
     "vivarium",
     "vivarium.engine",
@@ -97,6 +101,8 @@ profile = "black"
 line_length = 94
 multi_line_output = 3
 skip_glob = ["*/examples/*", "**/examples/*"]
+known_first_party = ["vivarium.engine"]
+known_third_party = ["vivarium.artifact", "vivarium.config_tree"]
 
 [tool.mypy]
 # WARNING: settings here that aren't mypy_path / explicit_package_bases must be

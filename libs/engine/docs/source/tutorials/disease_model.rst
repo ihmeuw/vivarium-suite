@@ -39,7 +39,7 @@ Building a population
 In many ways, this is a bad place to start. The population component
 is one of the more complicated components in the simulation as it typically is
 responsible for bootstrapping some of the more interesting features in
-vivarium.engine.
+``vivarium.engine``.
 
 We need a population, though, so we'll start with one here and defer explanation
 of some of the more complex pieces/systems until later.
