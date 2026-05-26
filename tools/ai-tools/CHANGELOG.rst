@@ -1,8 +1,12 @@
+**0.7.0 - 05/26/26**
+
+ - Add ``vivarium-research`` skill for searching the Vivarium Research documentation via the Read the Docs v2 API
+
 **0.6.0 - 05/20/26**
 
  - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
  - Add ``framework-clis`` skill covering vivarium console scripts on PATH in a model-repo env
- 
+
 **0.5.1 - 05/19/26**
 
 - Add LICENSE file
