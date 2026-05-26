@@ -25,7 +25,7 @@ from vivarium_cluster_tools.psimulate.jobmon_config import with_max_attempts, wi
 from vivarium_cluster_tools.psimulate.worker.load_test_work_horse import (
     get_psimulate_test_dict,
 )
-from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
+from vivarium_cluster_tools.psimulate.workflow_config.parsing import load_workflow_config
 
 
 @click.group()
@@ -474,7 +474,7 @@ def workflow(
     logs.configure_main_process_logging_to_terminal(options["verbose"])
 
     # Parse the workflow configuration, merging CLI overrides
-    workflow_config = WorkflowConfig.from_yaml_with_cli_overrides(
+    workflow_config = load_workflow_config(
         config_path,
         project=options.get("project"),
         queue=options.get("queue"),
