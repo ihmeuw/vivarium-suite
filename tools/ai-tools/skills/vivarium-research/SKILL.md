@@ -17,8 +17,6 @@ The Vivarium Research documentation (https://vivarium-research.readthedocs.io/en
      | sort -u
    ```
 
-   Re-run this when the docs may have changed — do not memorize the tree.
-
 2. **Search the docs** via the Read the Docs v2 search API:
 
    ```bash
