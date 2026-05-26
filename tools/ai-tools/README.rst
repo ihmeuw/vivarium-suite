@@ -43,6 +43,8 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
 - ``framework-clis`` — reference for the vivarium-ecosystem console scripts
   (``simulate``, ``psimulate``, ``vipin``, per-repo ``make_artifacts``,
   ``update_gbd_round``) available in a standard model-repo env.
+- ``design-doc`` — SimSci Engineering convention for drafting a design
+  document on the IHME hub
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
