@@ -1,3 +1,7 @@
+**0.7.0 - 05/26/26**
+
+ - Add ``design-doc`` skill covering the SimSci Engineering convention for drafting a design document on the IHME hub
+
 **0.6.0 - 05/20/26**
 
  - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
