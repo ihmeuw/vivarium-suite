@@ -4,37 +4,51 @@ Workflow Config Interface
 =========================
 
 Python API for building workflow step tasks programmatically, as an
-alternative to authoring a YAML workflow file. Each function constructs
-the corresponding step config and returns the Jobmon tasks produced by
-its ``get_tasks`` method.
+alternative to authoring a YAML workflow file. Each function validates its
+kwargs and constructs the Jobmon tasks for that step type.
 
 """
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from vivarium_cluster_tools.psimulate import COMMANDS, branches
+from vivarium_cluster_tools.psimulate.jobmon_config.workflow import get_task_list
+from vivarium_cluster_tools.psimulate.jobs import (
+    BackupConfiguration,
+    build_job_parameters_from_keyspace,
+)
+from vivarium_cluster_tools.psimulate.paths import OutputPaths
 from vivarium_cluster_tools.psimulate.workflow_config.config import (
     DEFAULT_BACKUP_FREQ_SECONDS,
-    CommandStepConfig,
-    NotebookStepConfig,
-    PytestStepConfig,
-    PythonStepConfig,
     ResourceConfig,
-    SimulationStepConfig,
 )
 from vivarium_cluster_tools.psimulate.workflow_config.utilities import (
+    ensure_output_directory_exists,
     get_or_create_build_timestamp,
+    get_single_command_task,
     resolve_step_env_prefix,
+)
+from vivarium_cluster_tools.psimulate.workflow_config.validation import (
+    validate_bash_step,
+    validate_notebook_step,
+    validate_pytest_step,
+    validate_python_step,
+    validate_simulation_step,
 )
 
 if TYPE_CHECKING:
     from jobmon.client.api import Tool
     from jobmon.client.task import Task
 
+_NOTEBOOK_DEFAULT_KERNEL = "python3"
+"""Jupyter kernel used for notebook execution. Not user-configurable."""
 
-def get_command_step_tasks(
+
+def get_bash_step_tasks(
     *,
     name: str,
     resources: ResourceConfig,
@@ -44,7 +58,7 @@ def get_command_step_tasks(
     environment: str | None = None,
     is_resume: bool = False,
 ) -> list[Task]:
-    """Build a command-based workflow step and return its Jobmon tasks.
+    """Build a bash workflow step and return its Jobmon tasks.
 
     Parameters
     ----------
@@ -68,18 +82,20 @@ def get_command_step_tasks(
     -------
         The Jobmon tasks produced by the step.
     """
-    step = CommandStepConfig(
+    validate_bash_step(
         name=name,
         resources=resources,
         command=command,
-        output_directory=output_directory,
         environment=environment,
     )
-    return step.get_tasks(
+    ensure_output_directory_exists(output_directory)
+    return get_single_command_task(
         tool,
-        env_prefix=resolve_step_env_prefix(step),
-        build_timestamp=get_or_create_build_timestamp(step.output_directory),
-        is_resume=is_resume,
+        name=name,
+        resources=resources,
+        output_directory=output_directory,
+        env_prefix=resolve_step_env_prefix(name=name, environment=environment),
+        command=command,
     )
 
 
@@ -112,7 +128,7 @@ def get_simulation_step_tasks(
         (memory, runtime, cores).
     output_directory
         Directory for this step's outputs. The simulation step lays out
-        ``model_name / timestamp / ...`` subdirectories beneath this.
+        ``model_name / timestamp`` subdirectories beneath this.
     model_specification
         Path to the model specification YAML file. Both relative and
         absolute paths are accepted.
@@ -139,10 +155,9 @@ def get_simulation_step_tasks(
     -------
         The Jobmon tasks produced by the step.
     """
-    step = SimulationStepConfig(
+    validate_simulation_step(
         name=name,
         resources=resources,
-        output_directory=output_directory,
         model_specification=model_specification,
         branch_configuration=branch_configuration,
         environment=environment,
@@ -150,11 +165,43 @@ def get_simulation_step_tasks(
         backup_freq=backup_freq,
         sim_verbosity=sim_verbosity,
     )
-    return step.get_tasks(
-        tool,
-        env_prefix=resolve_step_env_prefix(step),
-        build_timestamp=get_or_create_build_timestamp(step.output_directory),
+    ensure_output_directory_exists(output_directory)
+    output_paths = OutputPaths.from_entry_point_args(
+        command=COMMANDS.run,
+        input_artifact_path=artifact_path,
+        result_directory=output_directory,
+        input_model_spec_path=model_specification,
+        launch_time=get_or_create_build_timestamp(output_directory),
         is_resume=is_resume,
+    )
+    output_paths.touch()
+
+    keyspace = branches.Keyspace.from_branch_configuration(branch_configuration)
+    job_parameters = build_job_parameters_from_keyspace(
+        keyspace,
+        model_specification_path=model_specification,
+        output_root=output_paths.root,
+        worker_logging_root=output_paths.worker_logging_root,
+        backup_configuration=BackupConfiguration(
+            backup_dir=str(output_paths.backup_dir),
+            backup_freq=backup_freq,
+            backup_metadata_path=str(output_paths.backup_metadata_path),
+        ),
+        extras={
+            "sim_verbosity": sim_verbosity,
+        },
+    )
+
+    return get_task_list(
+        tool=tool,
+        command=COMMANDS.run,
+        job_parameters_list=job_parameters,
+        metadata_dir=output_paths.metadata_dir,
+        results_dir=output_paths.results_dir,
+        worker_logging_root=output_paths.worker_logging_root,
+        native_specification=resources.to_native_specification(name),
+        env_prefix=resolve_step_env_prefix(name=name, environment=environment),
+        template_name=f"psimulate_{name}",
     )
 
 
@@ -204,20 +251,34 @@ def get_pytest_step_tasks(
     -------
         The Jobmon tasks produced by the step.
     """
-    step = PytestStepConfig(
+    validate_pytest_step(
         name=name,
         resources=resources,
-        output_directory=output_directory,
         environment=environment,
         path=path,
         k=k,
         runslow=runslow,
     )
-    return step.get_tasks(
+    ensure_output_directory_exists(output_directory)
+    parts = ["pytest"]
+    if path:
+        if isinstance(path, list):
+            parts.extend(shlex.quote(p) for p in path)
+        else:
+            parts.append(shlex.quote(path))
+    if k:
+        parts.append(f"-k {shlex.quote(k)}")
+    if runslow:
+        parts.append("--runslow")
+    if resources.cores > 1:
+        parts.append(f"--numprocesses {resources.cores}")
+    return get_single_command_task(
         tool,
-        env_prefix=resolve_step_env_prefix(step),
-        build_timestamp=get_or_create_build_timestamp(step.output_directory),
-        is_resume=is_resume,
+        name=name,
+        resources=resources,
+        output_directory=output_directory,
+        env_prefix=resolve_step_env_prefix(name=name, environment=environment),
+        command=" ".join(parts),
     )
 
 
@@ -273,23 +334,33 @@ def get_python_step_tasks(
     -------
         The Jobmon tasks produced by the step.
     """
-    args: dict[str, Any] = {"path": path}
-    if positional_args is not None:
-        args["positional_args"] = positional_args
-    if keyword_args is not None:
-        args["keyword_args"] = keyword_args
-    step = PythonStepConfig(
+    validate_python_step(
+        name=name,
+        resources=resources,
+        path=path,
+        environment=environment,
+        positional_args=positional_args,
+        keyword_args=keyword_args,
+    )
+    ensure_output_directory_exists(output_directory)
+    parts = ["python", shlex.quote(path)]
+    for value in positional_args or []:
+        parts.append(shlex.quote(str(value)))
+    for key in sorted(keyword_args or {}):
+        value = (keyword_args or {})[key]
+        if value is True or value is None:
+            parts.append(f"--{key}")
+        elif value is False:
+            continue
+        else:
+            parts.append(f"--{key} {shlex.quote(str(value))}")
+    return get_single_command_task(
+        tool,
         name=name,
         resources=resources,
         output_directory=output_directory,
-        environment=environment,
-        args=args,
-    )
-    return step.get_tasks(
-        tool,
-        env_prefix=resolve_step_env_prefix(step),
-        build_timestamp=get_or_create_build_timestamp(step.output_directory),
-        is_resume=is_resume,
+        env_prefix=resolve_step_env_prefix(name=name, environment=environment),
+        command=" ".join(parts),
     )
 
 
@@ -347,19 +418,39 @@ def get_notebook_step_tasks(
     -------
         The Jobmon tasks produced by the step.
     """
-    step = NotebookStepConfig(
+    validate_notebook_step(
         name=name,
         resources=resources,
-        output_directory=output_directory,
         path=path,
         output_path=output_path,
         environment=environment,
-        parameters=parameters if parameters is not None else {},
+        parameters=parameters,
         cwd=cwd,
     )
-    return step.get_tasks(
+    ensure_output_directory_exists(output_directory)
+    effective_cwd = cwd if cwd is not None else path.parent
+    params = parameters or {}
+    parts = [
+        f"mkdir -p {shlex.quote(str(output_path.parent))}",
+        "&&",
+        "papermill",
+        shlex.quote(str(path)),
+        shlex.quote(str(output_path)),
+        f"-k {_NOTEBOOK_DEFAULT_KERNEL}",
+    ]
+    for key in sorted(params):
+        value = params[key]
+        if isinstance(value, bool) or value is None:
+            yaml_value = "true" if value is True else "false" if value is False else "null"
+            parts.append(f"-y {shlex.quote(f'{key}: {yaml_value}')}")
+        else:
+            parts.append(f"-p {key} {shlex.quote(str(value))}")
+    parts.append(f"--cwd {shlex.quote(str(effective_cwd))}")
+    return get_single_command_task(
         tool,
-        env_prefix=resolve_step_env_prefix(step),
-        build_timestamp=get_or_create_build_timestamp(step.output_directory),
-        is_resume=is_resume,
+        name=name,
+        resources=resources,
+        output_directory=output_directory,
+        env_prefix=resolve_step_env_prefix(name=name, environment=environment),
+        command=" ".join(parts),
     )

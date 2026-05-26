@@ -28,3 +28,5 @@ py:class Component
 py:class jobmon.client.api.Tool
 py:class jobmon.client.task.Task
 py:class jobmon.client.workflow.Workflow
+py:class Tool
+py:class Task

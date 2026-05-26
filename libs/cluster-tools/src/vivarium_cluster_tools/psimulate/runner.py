@@ -40,8 +40,13 @@ from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
 from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
-from vivarium_cluster_tools.psimulate.workflow_config.builder import WorkflowBuilder
+from vivarium_cluster_tools.psimulate.workflow_config.builder import (
+    build_workflow_from_config,
+)
 from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
+from vivarium_cluster_tools.psimulate.workflow_config.serialization import (
+    workflow_config_to_dict,
+)
 from vivarium_cluster_tools.psimulate.workflow_config.utilities import WORKFLOW_ARGS_FILENAME
 from vivarium_cluster_tools.vipin.perf_report import report_performance
 
@@ -132,8 +137,7 @@ def workflow_main(
 
     # Build the workflow
     logger.debug("Building workflow.")
-    builder = WorkflowBuilder(workflow_config)
-    workflow = builder.build(workflow_args=workflow_args)
+    workflow = build_workflow_from_config(workflow_config, workflow_args=workflow_args)
 
     # Persist workflow_args before running so --resume can find it
     workflow_args_path.write_text(workflow_args)
@@ -227,7 +231,7 @@ def write_workflow_configuration(output_root: Path, workflow_config: WorkflowCon
     workflow_config
         The parsed and validated workflow configuration.
     """
-    config: dict[str, Any] = {"workflow": workflow_config.to_dict()}
+    config: dict[str, Any] = {"workflow": workflow_config_to_dict(workflow_config)}
     config_file = output_root / "configuration.yaml"
     config_file.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
     logger.info(f"Run configuration written to {config_file}")

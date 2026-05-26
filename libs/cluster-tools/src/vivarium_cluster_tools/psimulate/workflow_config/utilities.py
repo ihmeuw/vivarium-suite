@@ -1,7 +1,7 @@
 """
-===================
+==================
 Workflow Utilities
-===================
+==================
 
 Shared helpers used across the ``workflow_config`` package: filesystem
 constants for resume markers, build-timestamp management, conda env
@@ -18,10 +18,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from vivarium_cluster_tools.psimulate.jobmon_config.workflow import resolve_env_prefix
+from vivarium_cluster_tools.psimulate.workflow_config.config import ResourceConfig
 
 if TYPE_CHECKING:
-    from vivarium_cluster_tools.psimulate.workflow_config.config import BaseStepConfig
-
+    from jobmon.client.api import Tool
+    from jobmon.client.task import Task
 
 BUILD_TIMESTAMP_FILENAME = ".build_timestamp"
 """File written to a step's output directory to persist the build timestamp
@@ -39,6 +40,11 @@ python ``keyword_args`` / ``positional_args``)."""
 
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 """Pattern for keys in scalar-dict step args (``keyword_args``, ``parameters``)."""
+
+
+def ensure_output_directory_exists(output_directory: Path) -> None:
+    """Create ``output_directory`` (and parents) if it does not yet exist."""
+    output_directory.mkdir(parents=True, exist_ok=True)
 
 
 def get_or_create_build_timestamp(output_directory: Path) -> str:
@@ -67,22 +73,22 @@ def is_resume(output_directory: Path) -> bool:
 
 
 def resolve_step_env_prefix(
-    step: BaseStepConfig,
     *,
-    default_environment: str | None = None,
+    name: str,
+    environment: str | None,
 ) -> str:
     """Resolve a step's conda environment to an absolute filesystem prefix.
 
-    Applies the standard precedence: ``step.environment`` →
-    ``default_environment`` → the runner's active ``CONDA_DEFAULT_ENV``.
-    The resolved env name must be a non-``"base"`` conda environment.
+    Falls back to the runner's active ``CONDA_DEFAULT_ENV`` when
+    ``environment`` is unset. The resolved env name must be a
+    non-``"base"`` conda environment.
 
     Parameters
     ----------
-    step
-        The step config whose environment to resolve.
-    default_environment
-        Workflow-level fallback used when ``step.environment`` is unset.
+    name
+        The step's name (used in error messages).
+    environment
+        The step's explicit environment, if any.
 
     Returns
     -------
@@ -96,14 +102,45 @@ def resolve_step_env_prefix(
     RuntimeError
         If the resolved env name has no matching filesystem prefix.
     """
-    env = step.environment or default_environment or os.environ.get("CONDA_DEFAULT_ENV")
+    env = environment or os.environ.get("CONDA_DEFAULT_ENV")
     if not env or env == "base":
         raise ValueError(
-            f"Step '{step.name}': a non-base conda environment is required. "
+            f"Step '{name}': a non-base conda environment is required. "
             "Set 'environment' on the step, 'default_environment' on the workflow, "
             "or activate a conda environment before running."
         )
     return resolve_env_prefix(env)
+
+
+def get_single_command_task(
+    tool: Tool,
+    *,
+    name: str,
+    resources: ResourceConfig,
+    output_directory: Path,
+    env_prefix: str,
+    command: str,
+) -> list[Task]:
+    """Return a one-element ``list[Task]`` for a step that runs a single command in a conda env."""
+    task_template = tool.get_task_template(
+        template_name="workflow_command_step",
+        command_template="PATH={env_prefix}/bin:$PATH {command}",
+        node_args=["command", "env_prefix"],
+        task_args=[],
+        op_args=[],
+        default_cluster_name="slurm",
+    )
+    compute_resources = resources.to_native_specification(name).to_jobmon_spec(
+        worker_logging_root=output_directory,
+    )
+    return [
+        task_template.create_task(
+            name=name,
+            compute_resources=compute_resources,
+            env_prefix=env_prefix,
+            command=command,
+        )
+    ]
 
 
 def check_scalar(

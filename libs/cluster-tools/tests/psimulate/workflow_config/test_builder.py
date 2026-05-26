@@ -8,17 +8,42 @@ from unittest.mock import MagicMock
 import pytest
 from pytest_mock import MockerFixture
 
-from vivarium_cluster_tools.psimulate.workflow_config.builder import WorkflowBuilder
+from vivarium_cluster_tools.psimulate.workflow_config.builder import (
+    build_workflow_from_config,
+)
 from vivarium_cluster_tools.psimulate.workflow_config.config import (
-    CommandStepConfig,
+    ParsedStep,
     ResourceConfig,
     WorkflowConfig,
 )
 
 
+def _bash_parsed_step(
+    *,
+    name: str,
+    resources: ResourceConfig,
+    command: str,
+    output_directory: Path,
+    environment: str | None = None,
+) -> ParsedStep:
+    """Build a ``ParsedStep`` carrying a bash step's API kwargs."""
+    api_kwargs = {
+        "name": name,
+        "resources": resources,
+        "command": command,
+        "output_directory": output_directory,
+        "environment": environment,
+    }
+    return ParsedStep(
+        step_type="bash",
+        name=name,
+        api_kwargs=api_kwargs,
+    )
+
+
 @pytest.fixture()
 def three_step_config() -> WorkflowConfig:
-    """A ``WorkflowConfig`` with three sequential raw-command steps."""
+    """A ``WorkflowConfig`` with three sequential bash steps."""
     return WorkflowConfig(
         name="test_workflow",
         project="proj_simscience",
@@ -26,30 +51,15 @@ def three_step_config() -> WorkflowConfig:
         output_directory=Path("/tmp/results"),
         default_environment=None,
         steps=[
-            CommandStepConfig(
-                name="step1",
+            _bash_parsed_step(
+                name=f"step{i}",
                 resources=ResourceConfig(
                     memory_gb=1, project="proj_simscience", queue="all.q"
                 ),
-                command="echo step1",
+                command=f"echo step{i}",
                 output_directory=Path("/tmp/results"),
-            ),
-            CommandStepConfig(
-                name="step2",
-                resources=ResourceConfig(
-                    memory_gb=1, project="proj_simscience", queue="all.q"
-                ),
-                command="echo step2",
-                output_directory=Path("/tmp/results"),
-            ),
-            CommandStepConfig(
-                name="step3",
-                resources=ResourceConfig(
-                    memory_gb=1, project="proj_simscience", queue="all.q"
-                ),
-                command="echo step3",
-                output_directory=Path("/tmp/results"),
-            ),
+            )
+            for i in (1, 2, 3)
         ],
     )
 
@@ -75,10 +85,14 @@ def mock_resolve_env_prefix(mocker: MockerFixture) -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def mock_build_timestamp(mocker: MockerFixture) -> str:
-    """Patch the build timestamp so tests don't write to the filesystem."""
+    """Patch the build timestamp so tests don't write to the filesystem.
+
+    The interface API functions import ``get_or_create_build_timestamp``
+    from utilities; patching the imported name here intercepts every call.
+    """
     ts = "2026_04_24_10_00_00"
     mocker.patch(
-        "vivarium_cluster_tools.psimulate.workflow_config.builder.get_or_create_build_timestamp",
+        "vivarium_cluster_tools.psimulate.workflow_config.interface.get_or_create_build_timestamp",
         return_value=ts,
     )
     mocker.patch(
@@ -94,7 +108,7 @@ def _make_single_step_config(
     default_environment: str | None = None,
     step_environment: str | None = None,
 ) -> WorkflowConfig:
-    """Build a WorkflowConfig with one CommandStepConfig for simple tests."""
+    """Build a WorkflowConfig with one bash ParsedStep for simple tests."""
     return WorkflowConfig(
         name="test",
         project="proj_simscience",
@@ -102,7 +116,7 @@ def _make_single_step_config(
         output_directory=Path("/tmp/results"),
         default_environment=default_environment,
         steps=[
-            CommandStepConfig(
+            _bash_parsed_step(
                 name="s1",
                 resources=resources
                 or ResourceConfig(memory_gb=1, project="proj_simscience", queue="all.q"),
@@ -114,8 +128,8 @@ def _make_single_step_config(
     )
 
 
-class TestWorkflowBuilder:
-    """Verify that ``WorkflowBuilder`` builds a correct Jobmon workflow."""
+class TestBuildWorkflowFromConfig:
+    """Verify that ``build_workflow_from_config`` builds a correct Jobmon workflow."""
 
     def test_valid_config_builds_workflow(
         self,
@@ -123,8 +137,9 @@ class TestWorkflowBuilder:
         mock_tool_cls: MagicMock,
     ) -> None:
         """A valid config produces a Jobmon Workflow with tasks added."""
-        builder = WorkflowBuilder(three_step_config)
-        workflow = builder.build(workflow_args="test_workflow_args")
+        workflow = build_workflow_from_config(
+            three_step_config, workflow_args="test_workflow_args"
+        )
 
         expected_workflow = mock_tool_cls.return_value.create_workflow.return_value
         assert workflow is expected_workflow
@@ -142,8 +157,7 @@ class TestWorkflowBuilder:
         template_mock = mock_tool_cls.return_value.get_task_template.return_value
         template_mock.create_task.side_effect = [task1, task2, task3]
 
-        builder = WorkflowBuilder(three_step_config)
-        builder.build(workflow_args="test_workflow_args")
+        build_workflow_from_config(three_step_config, workflow_args="test_workflow_args")
 
         # Each config step produces exactly one task
         assert template_mock.create_task.call_count == 3
@@ -157,14 +171,14 @@ class TestWorkflowBuilder:
 
 
 class TestResourceDefaults:
-    """Verify that ``WorkflowBuilder`` passes resource values through to Jobmon."""
+    """Verify that ``build_workflow_from_config`` passes resource values through to Jobmon."""
 
     def test_default_resources(self, mock_tool_cls: MagicMock) -> None:
         """Steps with default ResourceConfig get the expected compute resources."""
         config = _make_single_step_config()
         template_mock = mock_tool_cls.return_value.get_task_template.return_value
 
-        WorkflowBuilder(config).build(workflow_args="test_workflow_args")
+        build_workflow_from_config(config, workflow_args="test_workflow_args")
 
         call_kwargs = template_mock.create_task.call_args[1]
         assert call_kwargs["compute_resources"]["memory"] == 1.0
@@ -184,7 +198,7 @@ class TestResourceDefaults:
         )
         template_mock = mock_tool_cls.return_value.get_task_template.return_value
 
-        WorkflowBuilder(config).build(workflow_args="test_workflow_args")
+        build_workflow_from_config(config, workflow_args="test_workflow_args")
 
         call_kwargs = template_mock.create_task.call_args[1]
         assert call_kwargs["compute_resources"]["memory"] == 16.0
@@ -193,7 +207,7 @@ class TestResourceDefaults:
 
 
 class TestEnvironmentResolution:
-    """Verify the environment fallback chain in ``WorkflowBuilder.build``."""
+    """Verify the environment fallback chain in ``build_workflow_from_config``."""
 
     def test_step_environment_takes_priority(self, mock_tool_cls: MagicMock) -> None:
         """A step's own environment overrides the workflow default."""
@@ -203,7 +217,7 @@ class TestEnvironmentResolution:
         )
         template_mock = mock_tool_cls.return_value.get_task_template.return_value
 
-        WorkflowBuilder(config).build(workflow_args="test_workflow_args")
+        build_workflow_from_config(config, workflow_args="test_workflow_args")
 
         call_kwargs = template_mock.create_task.call_args[1]
         assert call_kwargs["env_prefix"] == "step_env"
@@ -213,7 +227,7 @@ class TestEnvironmentResolution:
         config = _make_single_step_config(default_environment="workflow_env")
         template_mock = mock_tool_cls.return_value.get_task_template.return_value
 
-        WorkflowBuilder(config).build(workflow_args="test_workflow_args")
+        build_workflow_from_config(config, workflow_args="test_workflow_args")
 
         call_kwargs = template_mock.create_task.call_args[1]
         assert call_kwargs["env_prefix"] == "workflow_env"
@@ -226,7 +240,7 @@ class TestEnvironmentResolution:
         config = _make_single_step_config()
         template_mock = mock_tool_cls.return_value.get_task_template.return_value
 
-        WorkflowBuilder(config).build(workflow_args="test_workflow_args")
+        build_workflow_from_config(config, workflow_args="test_workflow_args")
 
         call_kwargs = template_mock.create_task.call_args[1]
         assert call_kwargs["env_prefix"] == "conda_env"
@@ -239,4 +253,4 @@ class TestEnvironmentResolution:
         config = _make_single_step_config()
 
         with pytest.raises(ValueError, match="non-base conda environment is required"):
-            WorkflowBuilder(config).build(workflow_args="test_workflow_args")
+            build_workflow_from_config(config, workflow_args="test_workflow_args")
