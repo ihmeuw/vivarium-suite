@@ -7,9 +7,7 @@ description: Use BEFORE any design or feature work — building a component, add
 
 Turn an idea into a verified design and a Jira ticket draft, through one-question-at-a-time dialogue. Output is a ticket body the user pastes into Jira — not a markdown spec, not code.
 
-<HARD-GATE>
-Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until the user has approved a design and pasted the resulting ticket draft into Jira. This applies to every project regardless of perceived simplicity. "It's just a config change" is when unexamined assumptions cost the most.
-</HARD-GATE>
+Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until the user has approved a design and pasted the resulting ticket draft into Jira. This applies to every project regardless of perceived simplicity.
 
 ## When to use
 
@@ -26,7 +24,7 @@ Skip when the design is already settled and only execution remains. The HARD-GAT
 
 You **MUST** track these as tasks (via TaskCreate) and complete in order:
 
-1. **Get the context.** Read related files, recent commits, the Jira ticket if one exists (`mcp__plugin_mcp-jira_mcp-jira__get_issue`), and linked design docs on the hub. State what you found in one short paragraph before asking anything.
+1. **Get the context.** Read related files, recent commits, the Jira ticket if one exists, and linked design docs on the hub. State what you found in one short paragraph before asking anything.
 2. **Scope check.** If the request is really multiple independent subsystems ("a platform with chat, billing, analytics"), say so now and help decompose. Brainstorm only the first piece. Don't burn questions refining a project that needs to be split.
 3. **Offer the Visual Companion** *only if* upcoming questions involve visual content (mockups, layout, diagrams). This offer is **its own message** — no clarifying question, no context summary appended. See [Visual Companion](#visual-companion) below.
 4. **Clarify, one question at a time.** Multiple choice when possible; open-ended is fine when not. Each question stands alone — no stacked sub-questions. Focus on purpose, constraints, success criteria, non-goals.
@@ -68,10 +66,6 @@ Fix anything the reviewer flags inline. No need to re-run the review. Then show 
 
 - **Done with brainstorming.** Don't invoke any implementation skill from here. Implementation belongs in a new session, on a fresh branch, with the ticket in hand.
 - If the user wants to keep going *in this session*, that's their call — but the brainstorming skill itself ends at the branch handoff.
-
-## Anti-pattern: "this is too simple to need a design"
-
-Every change goes through this. A one-line config edit, a renamed variable, a one-shot script — all of them. The design can be three sentences for a trivial change, but you must state it and get a thumbs-up before touching code. Skipping the gate is how scope creep and unexamined assumptions sneak in.
 
 ## Visual Companion
 
