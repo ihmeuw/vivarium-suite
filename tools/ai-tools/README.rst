@@ -43,6 +43,8 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
 - ``framework-clis`` — reference for the vivarium-ecosystem console scripts
   (``simulate``, ``psimulate``, ``vipin``, per-repo ``make_artifacts``,
   ``update_gbd_round``) available in a standard model-repo env.
+- ``environments`` — discovery-first guidance for picking up the right Python
+  environment in a vivarium repo.
 - ``vivarium-research`` — connector for the Vivarium Research
   documentation (https://vivarium-research.readthedocs.io). Discovers
   the docs nav tree on demand and searches modelling-strategy content
