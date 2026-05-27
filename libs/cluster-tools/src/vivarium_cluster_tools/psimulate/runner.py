@@ -18,8 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import yaml
-from jobmon.core.configuration import JobmonConfig
-from jobmon.core.exceptions import ConfigError as JobmonConfigError
 from loguru import logger
 from vivarium.framework.utilities import collapse_nested_dict
 
@@ -33,6 +31,7 @@ from vivarium_cluster_tools.psimulate import (
     paths,
     pip_env,
 )
+from vivarium_cluster_tools.psimulate.jobmon_config import client
 from vivarium_cluster_tools.psimulate.jobmon_config.workflow import build_workflow
 from vivarium_cluster_tools.psimulate.notifications import send_slack_notification
 from vivarium_cluster_tools.psimulate.paths import OutputPaths
@@ -59,7 +58,7 @@ def _bind_and_run_workflow(
     output_root: Path,
     *,
     resume: bool = False,
-) -> tuple[str, str]:
+) -> tuple[str, str | None]:
     """Bind a Jobmon workflow, log the monitoring URL, and run it.
 
     Parameters
@@ -74,13 +73,11 @@ def _bind_and_run_workflow(
     Returns
     -------
         A ``(wf_status, monitoring_url)`` tuple.  *wf_status* is the
-        workflow status string from Jobmon (e.g. ``"D"`` for DONE).
-        *monitoring_url* is the Jobmon GUI URL (may be empty).
+        workflow status string from Jobmon (see :data:`client.JOBMON_STATUS_DONE`).
+        *monitoring_url* is the Jobmon GUI URL, or ``None`` if unconfigured.
     """
-    workflow.bind()
-
-    gui_url = JobmonConfig().get("http", "gui_url")
-    monitoring_url = f"{gui_url}/#/workflow/{workflow.workflow_id}" if gui_url else ""
+    client.bind_workflow(workflow)
+    monitoring_url = client.get_monitoring_url(workflow)
 
     logger.info(f"Submitting Jobmon workflow. Results will be written to {output_root}")
     if monitoring_url:
@@ -88,13 +85,11 @@ def _bind_and_run_workflow(
 
     # Match the workflow timeout to the remaining time on the SLURM runner
     # node so jobmon doesn't outlive (or underuse) the allocation.
-    seconds_until_timeout = cluster.get_workflow_timeout_seconds()
-    run_kwargs: dict[str, Any] = {"resume": resume}
-    if seconds_until_timeout is not None:
-        run_kwargs["seconds_until_timeout"] = seconds_until_timeout
-    wf_status = workflow.run(**run_kwargs)
-    if wf_status is None:
-        raise RuntimeError("Jobmon workflow.run() returned None unexpectedly.")
+    wf_status = client.run_workflow(
+        workflow,
+        resume=resume,
+        seconds_until_timeout=cluster.get_workflow_timeout_seconds(),
+    )
     return wf_status, monitoring_url
 
 
@@ -151,9 +146,10 @@ def workflow_main(
         results_dir=str(output_root),
     )
 
-    if wf_status != "D":
+    if wf_status != client.JOBMON_STATUS_DONE:
         raise RuntimeError(
-            f"Workflow finished with status '{wf_status}' (expected 'D' for DONE)."
+            f"Workflow finished with status '{wf_status}' "
+            f"(expected '{client.JOBMON_STATUS_DONE}' for DONE)."
         )
     logger.info(f"Workflow completed successfully. Results in {output_root}")
 
@@ -474,16 +470,16 @@ def main(
     try_run_vipin(output_paths)
 
     # Count task outcomes from Jobmon's in-memory task statuses
-
-    num_done_total = sum(1 for t in workflow.tasks.values() if t.final_status == "D")
+    num_done_total = client.count_completed_tasks(workflow)
     num_completed_this_run = num_done_total - num_jobs_completed
     num_jobs_attempted = len(job_parameters) - num_jobs_completed
     num_failed = num_jobs_attempted - num_completed_this_run
     num_successful = num_jobs_completed + num_completed_this_run
 
-    if wf_status != "D":
+    if wf_status != client.JOBMON_STATUS_DONE:
         logger.info(
-            f"Workflow finished with status '{wf_status}' (expected 'D' for DONE).",
+            f"Workflow finished with status '{wf_status}' "
+            f"(expected '{client.JOBMON_STATUS_DONE}' for DONE).",
         )
 
     # Emit warning if any jobs failed

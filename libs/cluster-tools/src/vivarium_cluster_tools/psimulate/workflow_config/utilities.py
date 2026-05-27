@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from vivarium_cluster_tools.psimulate.jobmon_config import client
 from vivarium_cluster_tools.psimulate.jobmon_config.workflow import resolve_env_prefix
 from vivarium_cluster_tools.psimulate.workflow_config.config import ResourceConfig
 
@@ -121,14 +122,21 @@ def get_single_command_task(
     env_prefix: str,
     command: str,
 ) -> list[Task]:
-    """Return a one-element ``list[Task]`` for a step that runs a single command in a conda env."""
-    task_template = tool.get_task_template(
+    """Return a one-element ``list[Task]`` for a step that runs a single command in a conda env.
+
+    The child inherits SLURM's stdout/stderr file descriptors via the
+    ``stdout`` / ``stderr`` keys on the compute resources dict
+    (configured by :meth:`NativeSpecification.to_jobmon_spec`), so its
+    output flows directly to the per-step log files that the Jobmon GUI
+    surfaces.
+    """
+    task_template = client.make_task_template(
+        tool,
         template_name="workflow_command_step",
         command_template="PATH={env_prefix}/bin:$PATH {command}",
         node_args=["command", "env_prefix"],
         task_args=[],
         op_args=[],
-        default_cluster_name="slurm",
     )
     compute_resources = resources.to_native_specification(name).to_jobmon_spec(
         worker_logging_root=output_directory,
@@ -139,7 +147,8 @@ def get_single_command_task(
         f'rm -f "$LOG"; exit "$RC"'
     )
     return [
-        task_template.create_task(
+        client.create_task(
+            task_template,
             name=name,
             compute_resources=compute_resources,
             env_prefix=env_prefix,
