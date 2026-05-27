@@ -1,3 +1,7 @@
+**0.8.0 - 05/27/26**
+
+ - Add ``vivarium-research`` skill for searching the Vivarium Research documentation via the Read the Docs API
+ 
 **0.7.0 - 05/26/26**
 
  - Add ``design-doc`` skill for drafting a design document on the IHME hub
@@ -6,7 +10,7 @@
 
  - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
  - Add ``framework-clis`` skill covering vivarium console scripts on PATH in a model-repo env
- 
+
 **0.5.1 - 05/19/26**
 
 - Add LICENSE file
