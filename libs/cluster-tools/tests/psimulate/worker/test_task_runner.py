@@ -6,18 +6,22 @@ plumbing, and logging setup.  The actual work horses and result writing
 are mocked — they have their own dedicated test suites.
 """
 
-import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
+from loguru import logger
 
 from tests.psimulate.conftest import make_job_parameters
 from vivarium_cluster_tools.psimulate import COMMANDS
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.psimulate.results.writing import write_metadata
-from vivarium_cluster_tools.psimulate.worker.task_runner import main, parse_args
+from vivarium_cluster_tools.psimulate.worker.task_runner import (
+    _configure_dual_sink,
+    main,
+    parse_args,
+)
 
 # Patch targets are the names as imported into task_runner.
 _WORK_HORSE = "vivarium_cluster_tools.psimulate.worker.task_runner.work_horse"
@@ -194,3 +198,22 @@ class TestMainMissingMetadata:
                     task_id="nonexistent",
                 )
             )
+
+
+class TestConfigureDualSink:
+    """Tests for ``_configure_dual_sink`` — the loguru routing setup that
+    keeps INFO+ on stdout and WARNING+ on stderr."""
+
+    def test_routes_levels_to_correct_streams(
+        self, capfd: pytest.CaptureFixture[str]
+    ) -> None:
+        """INFO+ records go to stdout; WARNING+ records also go to stderr;
+        INFO records must NOT leak to stderr."""
+        _configure_dual_sink()
+        logger.info("info-msg")
+        logger.warning("warn-msg")
+        out, err = capfd.readouterr()
+        assert "info-msg" in out
+        assert "warn-msg" in out
+        assert "warn-msg" in err
+        assert "info-msg" not in err

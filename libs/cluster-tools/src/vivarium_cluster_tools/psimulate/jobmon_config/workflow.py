@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from jobmon.client.api import Tool
 from loguru import logger
 
+from vivarium_cluster_tools.psimulate import TASK_RUNNER_MODULE
 from vivarium_cluster_tools.psimulate.cluster.interface import NativeSpecification
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 from vivarium_cluster_tools.psimulate.paths import OutputPaths
@@ -112,7 +113,7 @@ def get_task_list(
         List of Jobmon Task objects, one per job.
     """
     worker_command = (
-        "python -m vivarium_cluster_tools.psimulate.worker.task_runner "
+        f"python -m {TASK_RUNNER_MODULE} "
         "--metadata-dir {metadata_dir} "
         "--task-id {task_id} "
         "--results-dir {results_dir} "
