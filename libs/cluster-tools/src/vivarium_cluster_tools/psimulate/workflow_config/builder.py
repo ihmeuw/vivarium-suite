@@ -11,8 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable
 
-from jobmon.client.api import Tool
-
+from vivarium_cluster_tools.psimulate.jobmon_config import client
 from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
 from vivarium_cluster_tools.psimulate.workflow_config.interface import (
     get_bash_step_tasks,
@@ -56,13 +55,12 @@ def build_workflow_from_config(config: WorkflowConfig, workflow_args: str) -> Wo
         Deterministic string that Jobmon uses to identify the workflow.
         Must be identical across runs for resume to work.
     """
-    # TODO: MIC-6997 - encapsulate Jobmon UI in one place
-    tool = Tool(name="vivarium_cluster_tools")
-    workflow = tool.create_workflow(
+    tool = client.make_tool()
+    workflow = client.make_workflow(
+        tool,
         workflow_args=workflow_args,
         name=config.name,
-        default_cluster_name="slurm",
-        default_max_attempts=config.max_attempts,
+        max_attempts=config.max_attempts,
     )
     resuming = is_resume(config.output_directory)
     previous_step_tasks: list[Task] = []
@@ -81,11 +79,11 @@ def build_workflow_from_config(config: WorkflowConfig, workflow_args: str) -> Wo
         # depends on every task from the previous step.
         for task in step_tasks:
             for prev_task in previous_step_tasks:
-                task.add_upstream(prev_task)
+                client.add_upstream(task, prev_task)
 
         all_tasks.extend(step_tasks)
         previous_step_tasks = step_tasks
 
-    workflow.add_tasks(all_tasks)
+    client.add_tasks(workflow, all_tasks)
 
     return workflow

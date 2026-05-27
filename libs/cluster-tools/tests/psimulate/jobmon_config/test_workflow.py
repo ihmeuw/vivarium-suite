@@ -20,8 +20,8 @@ FROZEN_TIME = datetime(2025, 1, 1)
 
 @pytest.fixture()
 def mock_tool_cls(mocker: MockerFixture) -> MagicMock:
-    """Patch the Jobmon ``Tool`` class at its import site."""
-    return mocker.patch("vivarium_cluster_tools.psimulate.jobmon_config.workflow.Tool")
+    """Patch the Jobmon ``Tool`` class at the façade's import site."""
+    return mocker.patch("vivarium_cluster_tools.psimulate.jobmon_config.client.Tool")
 
 
 @pytest.fixture()
