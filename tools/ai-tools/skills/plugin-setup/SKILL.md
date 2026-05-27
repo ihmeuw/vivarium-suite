@@ -92,7 +92,7 @@ python3 -c "import json; v=json.load(open('$HOME/.claude.json'))['mcpServers']['
 
 Inside Claude Code, `/mcp` shows connection status without dumping headers.
 
-### Sidebar: alternative secret stores
+### Sidebar: alternative secret stores (Jenkins)
 
 The 0600-file approach above is the team default — short install, consistent behavior, easy to teach. If a teammate has a strong reason to use something else, the substitution surface in `~/.claude.json` (`${JENKINS_MCP_AUTH}`) doesn't care where the value comes from. Have them point `JENKINS_MCP_AUTH` at it in shell init:
 
@@ -101,3 +101,9 @@ The 0600-file approach above is the team default — short install, consistent b
 - **macOS Keychain**: `export JENKINS_MCP_AUTH="$(security find-generic-password -s jenkins-mcp -w 2>/dev/null)"`. Clean on Mac, prompts the first time per app.
 
 All of these end up at the same state: `JENKINS_MCP_AUTH` set in the environment of whatever shell launches `claude`, and the `.claude.json` entry continues to reference `${JENKINS_MCP_AUTH}` literally.
+
+## Brainstorming visual companion (Node.js)
+
+The `brainstorming` skill ships a browser-based visual companion that renders Mermaid diagrams. Its server is written in Node.js. Without Node, the brainstorming skill still works — just no live diagrams.
+
+Install Node via [nvm](https://github.com/nvm-sh/nvm) and verify (`node --version` should print a version on the shell that launches `claude`). The brainstorming skill handles `start-server.sh` and `stop-server.sh` itself when it offers the companion.
