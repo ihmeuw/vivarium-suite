@@ -33,3 +33,5 @@ The Vivarium Research documentation (https://vivarium-research.readthedocs.io/en
 
 - Search is keyword-based. If the first query returns no useful hits, re-query with synonyms, abbreviations (e.g. "TB" vs "tuberculosis"), or GBD terminology.
 - Do not invent details. If the docs don't cover something, say so.
+- If you are working on a model repository, you most likely want to understand how the relevant component is modelled in *that specific concept model*. The concept models
+for active model repositories are documented in models/concept_models/index.html. You should be able to determine the relevant concept model based on the model repository name and description, but if not, ask the user to clarify which concept model they want to reference.
