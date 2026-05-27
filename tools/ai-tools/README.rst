@@ -47,6 +47,8 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
   documentation (https://vivarium-research.readthedocs.io). Discovers
   the docs nav tree on demand and searches modelling-strategy content
   via the Read the Docs v2 API.
+- ``design-doc`` — SimSci Engineering convention for drafting a design
+  document on the IHME hub
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
