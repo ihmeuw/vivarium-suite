@@ -1,39 +1,88 @@
 ---
 name: brainstorming
-description: Use BEFORE any design or feature work — building a component, adding functionality, modifying behavior, picking an approach. Runs a structured brainstorm: background search, one-question-at-a-time clarification, 2–3 approaches with explicit tradeoffs, then a verified design that becomes a Jira-wiki-markup ticket draft. Trigger on "brainstorm", "design", "spec out", "let's figure out how to", "what are our options for", or any request to plan a change before writing code.
+description: Use BEFORE any design or feature work — picking an approach, scoping a change, fleshing out a sparse ticket, deciding whether something needs a design doc. Runs a structured brainstorm with one-question-at-a-time clarification, 2–3 approaches with explicit tradeoffs, ultimately producing a design artifact such as design-doc or JIRA ticket. Trigger on any task that involves reasoning about *what* to build or *how* to approach it, but not when the design is already settled and only execution remains.
 ---
 
 # Brainstorming
 
-Turn an idea into a verified design and a Jira ticket draft, through one-question-at-a-time dialogue. Output is a ticket body the user pastes into Jira — not a markdown spec, not code.
+Turn an idea — or ticket — into a verified design as one of three real artifacts:
 
-Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until the user has approved a design and pasted the resulting ticket draft into Jira. This applies to every project regardless of perceived simplicity.
+| Tier | Artifact | Where it lands |
+|------|----------|----------------|
+| **(a) Plan comment** | A structured plan, posted on an existing Jira ticket | Jira (`add_comment`) |
+| **(b) New ticket** | A team-conventions-shaped ticket with the plan detail in a `Notes` section of the description | Jira (`create_issue`) |
+| **(c) Full design** | A Confluence design doc, delegated to the `design-doc` skill | Confluence (`create_page`) |
+
+You produce the artifact directly via MCP after explicit user approval.
+
+Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until an artifact has been written to Jira or Confluence and the user has confirmed it. This applies to every project regardless of perceived simplicity.
 
 ## When to use
 
-Trigger whenever the user is reasoning about *what* to build or *how* to approach it — not when they've already decided and want the change made. Specifically:
+Trigger whenever the user is reasoning about *what* to build or *how* to approach it — not when the design is already settled and only execution remains. Specifically:
 
+- "I have MIC-#### but the ticket is one sentence — help me flesh it out."
 - "We should build / change / add …" with no agreed shape yet.
 - "What's the best way to …" or "should we use X or Y …"
-- A ticket exists but is one sentence and the design isn't pinned down.
 - The user gestures at a problem ("X is slow", "Y is confusing") without specifying a fix.
 
-Skip when the design is already settled and only execution remains. The HARD-GATE is for the design step, not every code change in the world.
+Skip when the design is already pinned down and the next move is just to write code.
+
+## Input detection
+
+If the user message contains a Jira key (`MIC-####`), fetch the ticket and use its description, comments, and linked hub pages as the starting context for the brainstorm. If there’s no ticket key, treat it as an idea-only brainstorm and start with a blank slate.
 
 ## Process
 
 You **MUST** track these as tasks (via TaskCreate) and complete in order:
 
-1. **Get the context.** Read related files, recent commits, the Jira ticket if one exists, and linked design docs on the hub. State what you found in one short paragraph before asking anything.
-2. **Scope check.** If the request is really multiple independent subsystems ("a platform with chat, billing, analytics"), say so now and help decompose. Brainstorm only the first piece. Don't burn questions refining a project that needs to be split.
-3. **Offer the Visual Companion** *only if* upcoming questions involve visual content (mockups, layout, diagrams). This offer is **its own message** — no clarifying question, no context summary appended. See [Visual Companion](#visual-companion) below.
-4. **Clarify, one question at a time.** Multiple choice when possible; open-ended is fine when not. Each question stands alone — no stacked sub-questions. Focus on purpose, constraints, success criteria, non-goals.
-5. **Propose 2–3 approaches** with tradeoffs. Lead with the recommended one and say why. Don't pad the list — three real options beat two real + one strawman.
-6. **Present the design in sections.** Architecture, components, data flow, error handling, testing — scale each section to its complexity (one sentence for simple, ~200 words for nuanced). Ask after each section: *"Look right so far?"* Be ready to go back and revise.
-7. **Draft the Jira ticket.** Invoke the `team-conventions` skill (§2) to format the validated design as a Jira-wiki-markup ticket against the hub template (Confluence page 178128092). The brainstorm produces *the content* of the ticket; team-conventions produces *the structure*.
-8. **Self-review the draft** with the spec-document-reviewer subagent — see [Spec self-review](#spec-self-review) below. Fix issues inline. No re-review after fix.
-9. **Show the draft to the user.** They paste it into Jira. Ask for the new MIC-#### key.
-10. **Hand off.** Once the ticket exists, invoke the `team-conventions` skill (§1) to set up the branch. Then stop. Implementation is a separate session.
+1. **Detect input.** Pull the ticket via `get_issue` if a `MIC-####` key was provided; otherwise it's an idea-only brainstorm.
+2. **Get the surrounding context.** Read related files, recent commits, any hub pages linked from the ticket. State what you found in one short paragraph before asking anything.
+3. **Scope check.** If the request is really multiple independent subsystems ("a platform with chat, billing, analytics"), say so now and help decompose. Brainstorm only the first piece. Don't burn questions refining a project that needs to be split.
+4. **Offer the Visual Companion** *only if* upcoming questions involve **structural diagrams** — class / sequence / state / data-flow / architecture / ER comparisons. UI mockups are supported but rarely needed for SimSci work. This offer is **its own message** — no clarifying question, no context summary appended. See [Visual Companion](#visual-companion) below.
+5. **Clarify, one question at a time.** Multiple choice when possible; open-ended is fine when not. Each question stands alone — no stacked sub-questions. Focus on purpose, constraints, success criteria, non-goals.
+6. **Propose 2–3 approaches** with tradeoffs. Lead with the recommended one and say why. Don't pad the list — three real options beat two real + one strawman.
+7. **Walk the design in sections.** Architecture, components, data flow, error handling, testing — scale each section to its complexity (one sentence for simple, ~200 words for nuanced). Ask after each section: *"Look right so far?"* Be ready to back up and revise.
+8. **Routing checkpoint.** State a one-sentence scope read-out, recommend a tier, and let the user override. See [Routing checkpoint](#routing-checkpoint) below.
+9. **Produce the artifact** for the chosen tier. See [Producing the artifact](#producing-the-artifact) below.
+10. **Report.** Print the artifact's URL or Jira key. Stop. Don't chain into branch setup or implementation — the user invokes those explicitly if they want to.
+
+## Routing checkpoint
+
+Once the design walk is done, surface the scope read-out and the recommendation as one message:
+
+> Based on what we've worked through, this looks like roughly **\<one-sentence sizing\>** — \<e.g. one developer session / one ticket's worth / a multi-week design with sub-tickets\>. I'd recommend **tier (X): \<artifact summary\>**. Want to go with that, or pick a different tier?
+
+Validation rules:
+
+- If the user picks tier (a) and there's no input ticket, push back and ask whether they meant to provide a ticket key or whether the brainstorm should produce a new ticket (b) instead.
+- If the user picks tier (b) and there *is* an input ticket, push back: tier (b) creates a new ticket, but they already have one. Offer (a) (comment on the existing ticket) or (c) (design doc that references the existing ticket).
+- Tier (c) is valid in both cases — the design doc can reference an existing ticket or stand alone.
+
+## Producing the artifact
+
+### Tier (a) — plan comment on existing ticket
+
+Compose a Jira-wiki-markup comment body with these sections:
+
+- `h3. Scope` — one paragraph on what's in / out.
+- `h3. Approach` — the chosen approach, with a brief mention of what was considered and rejected.
+- `h3. Acceptance criteria` — bulleted, testable.
+- `h3. Notes / risks` — anything the implementer should know that doesn't fit above.
+
+Show the user the comment body and the target ticket key. On explicit approval, write it.
+
+
+### Tier (b) — new ticket with Notes section
+
+Invoke the `team-conventions` skill to format the skill. The team-conventions structure is the spine — *keep the ticket description short and descriptive* per that template. You may optionally append a "Notes" section *inside the description* for extra detail that doesn't fit the main template; only use this if actually necessary.
+
+Show the user the full ticket payload (summary, description, type, labels, project). On explicit approval, create the ticket.
+
+
+### Tier (c) — full design doc
+
+Hand off to the `design-doc` skill with the brainstorm output as input. The design-doc skill owns the rest.
 
 ## Working in existing code
 
@@ -55,37 +104,27 @@ If a reader can't understand what a unit does without reading its internals — 
 - **Recommend, don't punt.** Present alternatives, but lead with your pick and the reason.
 - **Incremental approval.** Section by section, not one giant wall.
 - **Be willing to back up.** When something doesn't fit, the answer is to revise, not to keep going.
-
-## Spec self-review
-
-After the team-conventions draft is generated and *before* showing the user, dispatch a subagent for a fresh-eyes review. Use the [spec-document-reviewer-prompt.md](spec-document-reviewer-prompt.md) template in this skill — it expects the Jira-wiki-markup ticket text inline (not a file path, since we don't write a spec file).
-
-Fix anything the reviewer flags inline. No need to re-run the review. Then show the user.
-
-## After the ticket exists
-
-- **Done with brainstorming.** Don't invoke any implementation skill from here. Implementation belongs in a new session, on a fresh branch, with the ticket in hand.
-- If the user wants to keep going *in this session*, that's their call — but the brainstorming skill itself ends at the branch handoff.
+- **Approve before writing.** No MCP write call goes out without an explicit user yes. Show the payload, wait, then write.
 
 ## Visual Companion
 
-A browser-based companion for showing mockups, diagrams, and visual options during a brainstorm. **It's a tool, not a mode.** Accepting it means it's *available* when a question benefits from a picture — it doesn't mean every question goes through the browser.
+A browser-based companion for showing **structural diagrams** during a brainstorm — class, sequence, state, data-flow, ER, architecture, flowchart — via Mermaid. UI mockups are also supported but rarely useful for our work. **It's a tool, not a mode.** Accepting it means it's *available* when a question benefits from a picture — it doesn't mean every question goes through the browser.
 
 **Offering it (its own message, nothing else):**
 
-> Some of what we're about to work through might be easier to show than describe — mockups, layout comparisons, diagrams. I can spin up a local browser companion for those questions. It's still pretty new and uses extra tokens. Want to try it? (Requires opening a local URL.)
+> Some of what we're about to work through might be easier to show than describe — class diagrams, sequence diagrams, state machines, and other structural views. I can spin up a local browser companion that renders Mermaid diagrams for those questions. It's still pretty new and uses extra tokens. Want to try it? (Requires opening a local URL.)
 
 Wait for the user's answer before continuing. If they decline, proceed text-only.
 
 **Per-question decision (even after they accept):** would the user understand this better by *seeing* it than by *reading* it?
 
-- **Browser** for content that *is* visual — mockups, wireframes, layout comparisons, architecture diagrams, side-by-side visual designs.
+- **Browser** for content that *is* structural — class diagrams comparing decomposition options, sequence diagrams for control flow, state machines, data-flow / ER diagrams, architecture diagrams, side-by-side structure comparisons.
 - **Terminal** for content that's text — requirements questions, conceptual A/B/C choices, tradeoff lists, scope decisions.
 
-A question *about* a UI topic is not automatically visual. *"What does personality mean here?"* — terminal. *"Which of these wizard layouts works better?"* — browser.
+A question *about* a structural topic is not automatically visual. *"Should this be a state machine or just a flag?"* — terminal (you're picking between concepts). *"Here's the state machine — does this transition set look right?"* — browser (you're inspecting structure).
 
 If the user accepts, read [visual-companion.md](visual-companion.md) before using the companion — it covers the server, screen lifecycle, CSS classes, and event format.
 
 ---
 
-*Heavily adapted from [obra/superpowers' brainstorming skill](https://github.com/obra/superpowers/tree/main/skills/brainstorming). The HARD-GATE pattern, the one-question-at-a-time discipline, the 2–3-approach format, the visual companion, and the spec self-review subagent are all from there.*
+*Heavily adapted from [obra/superpowers' brainstorming skill](https://github.com/obra/superpowers/tree/main/skills/brainstorming). The one-question-at-a-time discipline, the 2–3-approach format, and the visual companion are all from there. The tiered routing, MCP write integration, Mermaid-first diagramming, and `team-conventions` / `design-doc` handoffs are SimSci-specific.*
