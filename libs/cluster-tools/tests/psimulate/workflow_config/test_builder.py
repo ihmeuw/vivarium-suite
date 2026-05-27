@@ -66,8 +66,8 @@ def three_step_config() -> WorkflowConfig:
 
 @pytest.fixture()
 def mock_tool_cls(mocker: MockerFixture) -> MagicMock:
-    """Patch the Jobmon ``Tool`` class at the builder's import site."""
-    return mocker.patch("vivarium_cluster_tools.psimulate.workflow_config.builder.Tool")
+    """Patch the Jobmon ``Tool`` class at the façade's import site."""
+    return mocker.patch("vivarium_cluster_tools.psimulate.jobmon_config.client.Tool")
 
 
 @pytest.fixture(autouse=True)

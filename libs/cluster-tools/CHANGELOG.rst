@@ -1,6 +1,7 @@
 **3.2.0 - TBD/TBD/TBD**
 
 - Implement serial workflows via "psimulate workflow" command
+- Add facade to interact with Jobmon SDK
 
 **4.0.1 - 06/04/26**
 
