@@ -377,12 +377,22 @@ def _parsed_step(step_type: str, **api_kwargs: Any) -> ParsedStep:
     return ParsedStep(step_type=step_type, name=api_kwargs["name"], api_kwargs=api_kwargs)
 
 
+_REPLAY_WRAPPER_PREFIX = "LOG=$(mktemp); "
+_REPLAY_WRAPPER_SUFFIX = (
+    ' > "$LOG" 2>&1; RC=$?; '
+    'cat "$LOG"; [ "$RC" -ne 0 ] && cat "$LOG" >&2; '
+    'rm -f "$LOG"; exit "$RC"'
+)
+
+
 def _captured_command(api_fn: Any, /, **api_kwargs: Any) -> str:
-    """Invoke a ``get_*_step_tasks`` API function with a mocked Tool and return the command kwarg.
+    """Invoke a ``get_*_step_tasks`` API function with a mocked Tool and return the inner command.
 
     Stubs the conda env resolver so the API function can run without
-    invoking ``conda env list``. Only used for step types that do not
-    consume the build timestamp (command, pytest, python, notebook).
+    invoking ``conda env list``, and strips the failure-replay shell
+    wrapper (asserted explicitly by
+    ``test_build_command_task_creates_single_task``) so callers can assert
+    on the logical command.
     """
     _utilities = "vivarium_cluster_tools.psimulate.workflow_config.utilities"
     with patch(f"{_utilities}.resolve_env_prefix", return_value="/path/to/envs/my_env"):
@@ -391,7 +401,7 @@ def _captured_command(api_fn: Any, /, **api_kwargs: Any) -> str:
         mock_tool.get_task_template.return_value = mock_template
         api_fn(tool=mock_tool, **api_kwargs)
     command: str = mock_template.create_task.call_args.kwargs["command"]
-    return command
+    return command.removeprefix(_REPLAY_WRAPPER_PREFIX).removesuffix(_REPLAY_WRAPPER_SUFFIX)
 
 
 class TestBashStep:
@@ -463,7 +473,7 @@ class TestBashStep:
                 "stderr": "/tmp/results",
             },
             env_prefix="/path/to/envs/my_env",
-            command="echo hello world",
+            command=_REPLAY_WRAPPER_PREFIX + "echo hello world" + _REPLAY_WRAPPER_SUFFIX,
         )
 
     def test_build_command_task_includes_env_prefix_in_node_args(self) -> None:

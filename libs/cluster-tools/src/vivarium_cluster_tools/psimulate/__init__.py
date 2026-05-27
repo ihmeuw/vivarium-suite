@@ -20,3 +20,5 @@ COMMANDS = __Commands(*__Commands._fields)
 
 del NamedTuple
 del __Commands
+
+TASK_RUNNER_MODULE: str = "vivarium_cluster_tools.psimulate.worker.task_runner"
