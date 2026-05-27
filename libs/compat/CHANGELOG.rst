@@ -1,3 +1,7 @@
+**0.6.1 - 05/22/26**
+
+- Remove the layered_config_tree and vivarium redirects (temporarily)
+
 **0.6.0 - 05/21/26**
 
 - Add vivarium.<module> -> vivarium-engine.<module> redirects for top level modules.

@@ -35,22 +35,23 @@ _REDIRECTS: dict[str, str] = {
     "risk_distributions": "vivarium.risk_distributions",
     "gbd_mapping": "vivarium.gbd_mapping",
     "gbd_mapping_generator": "vivarium.gbd_mapping_generator",
-    "layered_config_tree": "vivarium.config_tree",
-    # vivarium -> vivarium-engine: top-level submodules moved under
-    # vivarium.engine.*; the entries below redirect submodule imports
-    # (e.g. ``from vivarium.framework.engine import Builder``).
-    # NOTE: Attribute imports off the bare namespace (e.g. ``from vivarium
-    #   import Component``) are handled separately by the ``__getattr__``
-    #   in vivarium-engine's ``vivarium/__init__.py``; the compat hook
-    #   cannot intercept those without breaking sibling-namespace lookups.
-    "vivarium.examples": "vivarium.engine.examples",
-    "vivarium.framework": "vivarium.engine.framework",
-    "vivarium.interface": "vivarium.engine.interface",
-    "vivarium.component": "vivarium.engine.component",
-    "vivarium.exceptions": "vivarium.engine.exceptions",
-    "vivarium.manager": "vivarium.engine.manager",
-    "vivarium.testing_utilities": "vivarium.engine.testing_utilities",
-    "vivarium.types": "vivarium.engine.types",
+    # FIXME: Temporarily remove lct and vivarium redirects
+    # "layered_config_tree": "vivarium.config_tree",
+    # # vivarium -> vivarium-engine: top-level submodules moved under
+    # # vivarium.engine.*; the entries below redirect submodule imports
+    # # (e.g. ``from vivarium.framework.engine import Builder``).
+    # # NOTE: Attribute imports off the bare namespace (e.g. ``from vivarium
+    # #   import Component``) are handled separately by the ``__getattr__``
+    # #   in vivarium-engine's ``vivarium/__init__.py``; the compat hook
+    # #   cannot intercept those without breaking sibling-namespace lookups.
+    # "vivarium.examples": "vivarium.engine.examples",
+    # "vivarium.framework": "vivarium.engine.framework",
+    # "vivarium.interface": "vivarium.engine.interface",
+    # "vivarium.component": "vivarium.engine.component",
+    # "vivarium.exceptions": "vivarium.engine.exceptions",
+    # "vivarium.manager": "vivarium.engine.manager",
+    # "vivarium.testing_utilities": "vivarium.engine.testing_utilities",
+    # "vivarium.types": "vivarium.engine.types",
     # Not-yet-migrated libs; uncomment as each lands in the monorepo:
     # "vivarium_public_health": "vivarium.public_health",
     # "vivarium_cluster_tools": "vivarium.cluster_tools",

@@ -1,12 +1,20 @@
-**0.7.0 - 05/21/26**
+**0.9.0 - 05/27/26**
 
  - Add ``environments`` skill covering env discovery and creation across vivarium repos
+ 
+**0.8.0 - 05/27/26**
+
+ - Add ``vivarium-research`` skill for searching the Vivarium Research documentation via the Read the Docs API
+ 
+**0.7.0 - 05/26/26**
+
+ - Add ``design-doc`` skill for drafting a design document on the IHME hub
 
 **0.6.0 - 05/20/26**
 
  - Add ``pytest`` skill covering vivarium pytest conventions, markers, and scope expansion
  - Add ``framework-clis`` skill covering vivarium console scripts on PATH in a model-repo env
- 
+
 **0.5.1 - 05/19/26**
 
 - Add LICENSE file
