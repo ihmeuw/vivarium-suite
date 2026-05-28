@@ -1,3 +1,7 @@
+**0.9.1 - 05/28/26**
+
+ - Update ``team-conventions`` skill to use the Jira MCP for ticket creation now that it has write access
+
 **0.9.0 - 05/27/26**
 
  - Add ``environments`` skill covering env discovery and creation across vivarium repos
