@@ -1,3 +1,7 @@
+**0.10.0 - 05/27/26**
+
+ - Add ``git-rescue`` slash command for diagnosing and untangling messy git histories (stuck rebases, stacked-branch squash-merge conflicts, divergent history) with mandatory backup refs and per-step confirmation
+
 **0.9.0 - 05/27/26**
 
  - Add ``environments`` skill covering env discovery and creation across vivarium repos

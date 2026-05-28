@@ -30,6 +30,17 @@ Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
 Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>``.
 
+**Git Rescue**
+
+- Slash command (Claude Code only): ``/viv:git-rescue [optional description]``.
+  Diagnoses and untangles messy git situations — stuck interactive
+  rebases, stacked-branch conflicts after a squash-merge of the parent,
+  divergent history, accidental merge commits, dropped commits. Always
+  creates a backup ref before rewriting history and gates every
+  destructive step (including the final ``git push --force-with-lease``)
+  on explicit user confirmation. User-invoked only — there is no
+  auto-trigger.
+
 **Skills**
 
 - ``plugin-setup`` — walks the user through post-install configuration that the
