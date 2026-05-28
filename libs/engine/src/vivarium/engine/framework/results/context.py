@@ -304,8 +304,9 @@ class ResultsContext:
         Yields
         ------
             A tuple containing each observation's newly observed results, the name of
-            the observation, and the observations results updater function. Note that
-            it yields (None, None, None) if the filtered population is empty.
+            the observation, and the observation's results updater function.
+            Observations whose filtered population has zero rows are silently
+            skipped (nothing is yielded for them).
 
         Raises
         ------
@@ -329,6 +330,8 @@ class ResultsContext:
                 continue
 
             filtered_population = self._filter_population(population, population_filter)
+            # Use len() not .empty: a zero-column DataFrame (no required attributes)
+            # reports .empty == True even with rows present.
             if len(filtered_population) == 0:
                 continue
 
@@ -341,7 +344,7 @@ class ResultsContext:
 
                 pop: pd.DataFrame | DataFrameGroupBy[tuple[str, ...] | str, bool]
                 pop = self._drop_na_stratifications(filtered_population, stratification_names)
-                if len(pop) == 0:
+                if len(pop) == 0:  # len() not .empty (see above)
                     continue
                 if stratification_names is not None:
                     pop = self._get_groups(stratification_names, pop)
