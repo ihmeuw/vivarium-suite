@@ -1,7 +1,5 @@
 **5.0.1 - 05/27/26**
 
-Bug fixes:
-
 - Fixed unstratified observations with no required attributes being silently skipped
 
 **5.0.0 - 05/22/26**
