@@ -264,8 +264,9 @@ function startServer() {
   if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
 
   // Track known files to distinguish new screens from updates.
-  // macOS fs.watch reports 'rename' for both new files and overwrites,
-  // so we can't rely on eventType alone.
+  // Node's fs.watch event types vary by platform — notably macOS reports
+  // 'rename' for both new files and overwrites — so we can't rely on
+  // eventType alone. Tracking the set ourselves is portable.
   const knownFiles = new Set(
     fs.readdirSync(CONTENT_DIR).filter(f => f.endsWith('.html'))
   );

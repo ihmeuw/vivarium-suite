@@ -45,7 +45,10 @@ if [[ -f "$PID_FILE" ]]; then
 
   rm -f "$PID_FILE" "${STATE_DIR}/server.log"
 
-  # Only delete ephemeral /tmp directories
+  # Only delete ephemeral /tmp directories. Sessions launched with
+  # --project-dir live under <project>/.brainstorm/<session-id>/ and are
+  # kept so the user can revisit past diagrams; .brainstorm/ should be
+  # in the project's .gitignore and removed manually when no longer needed.
   if [[ "$SESSION_DIR" == /tmp/* ]]; then
     rm -rf "$SESSION_DIR"
   fi
