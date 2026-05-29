@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import copy
+from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
@@ -27,12 +30,13 @@ weights_base_missing = copy.deepcopy(weights_base)
 del weights_base_missing["exp"]
 
 
-def normalize_weights(weights: dict[str, float]) -> dict[str, float]:
-    weights = copy.deepcopy(weights)
-    total = sum(weights.values())
-    for k in weights:
-        weights[k] = weights[k] / total
-    return weights
+def normalize_weights(weights: Mapping[str, float]) -> dict[str, float]:
+    """Rescale a mapping of weights so its values sum to one."""
+    normalized: dict[str, float] = copy.deepcopy(dict(weights))
+    total = sum(normalized.values())
+    for k in normalized:
+        normalized[k] = normalized[k] / total
+    return normalized
 
 
 @pytest.fixture
