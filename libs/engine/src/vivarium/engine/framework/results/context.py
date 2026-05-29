@@ -330,9 +330,8 @@ class ResultsContext:
                 continue
 
             filtered_population = self._filter_population(population, population_filter)
-            # Use len() not .empty: a zero-column DataFrame (no required attributes)
-            # reports .empty == True even with rows present.
-            if len(filtered_population) == 0:
+
+            if filtered_population.index.empty:
                 continue
 
             for stratification_names, observations in stratification_observations.items():
@@ -344,7 +343,7 @@ class ResultsContext:
 
                 pop: pd.DataFrame | DataFrameGroupBy[tuple[str, ...] | str, bool]
                 pop = self._drop_na_stratifications(filtered_population, stratification_names)
-                if len(pop) == 0:  # len() not .empty (see above)
+                if pop.index.empty:
                     continue
                 if stratification_names is not None:
                     pop = self._get_groups(stratification_names, pop)
