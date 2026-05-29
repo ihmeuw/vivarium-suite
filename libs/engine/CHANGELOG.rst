@@ -1,3 +1,7 @@
+**5.0.1 - 05/29/26**
+
+- Fixed unstratified observations with no required attributes being silently skipped
+
 **5.0.0 - 05/22/26**
 
 Initial release from the vivarium-suite monorepo; the standalone ``vivarium``

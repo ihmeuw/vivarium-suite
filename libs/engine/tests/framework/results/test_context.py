@@ -554,6 +554,82 @@ def test_gather_results_with_no_stratifications(event: Event, mocker: MockerFixt
     )
 
 
+def test_gather_results_with_zero_column_population(
+    event: Event, mocker: MockerFixture
+) -> None:
+    """Test that gather_results works when population has rows but zero columns.
+
+    This is the scenario when an observation is registered with no stratifications
+    and no required attributes. _prepare_population creates
+    pd.DataFrame(index=event.index) which has rows but zero columns.
+    """
+    ctx = ResultsContext()
+    mocker.patch.object(ctx, "get_tracked_query", return_value="", create=True)
+
+    # A population with rows but zero columns (simulates the output of
+    # _prepare_population when there are no required attributes)
+    population = pd.DataFrame(index=pd.RangeIndex(10))
+    assert len(population) == 10
+    assert len(population.columns) == 0
+    # pandas considers this "empty" even though it has 10 rows
+    assert population.empty
+
+    lifecycle_state = lifecycle_states.COLLECT_METRICS
+    observation = ctx.register_observation(
+        observation_type=AddingObservation,
+        name="row_count",
+        population_filter=PopulationFilter(),
+        requires_attributes=[],
+        aggregator_sources=None,
+        aggregator=lambda df: len(df),
+        stratifications=tuple(),
+        when=lifecycle_state,
+        results_formatter=lambda: None,
+    )
+
+    results = list(ctx.gather_results(population, event.name, [observation]))
+    assert len(results) == 1
+    result, measure, _updater = results[0]
+    assert measure == "row_count"
+    # The aggregator should have been called and counted 10 rows
+    assert result[VALUE_COLUMN].iloc[0] == 10
+
+
+def test_gather_results_with_zero_row_zero_column_population(
+    event: Event, mocker: MockerFixture
+) -> None:
+    """Test that gather_results correctly skips a truly empty (zero-row, zero-column) population.
+
+    Complements test_gather_results_with_zero_column_population by ensuring that
+    the len() check still correctly skips populations with no rows.
+    """
+    ctx = ResultsContext()
+    mocker.patch.object(ctx, "get_tracked_query", return_value="", create=True)
+
+    # A population with zero rows and zero columns
+    population = pd.DataFrame()
+    assert len(population) == 0
+    assert len(population.columns) == 0
+    assert population.empty
+
+    lifecycle_state = lifecycle_states.COLLECT_METRICS
+    observation = ctx.register_observation(
+        observation_type=AddingObservation,
+        name="row_count",
+        population_filter=PopulationFilter(),
+        requires_attributes=[],
+        aggregator_sources=None,
+        aggregator=lambda df: len(df),
+        stratifications=tuple(),
+        when=lifecycle_state,
+        results_formatter=lambda: None,
+    )
+
+    results = list(ctx.gather_results(population, event.name, [observation]))
+    # Should be skipped — no rows means nothing to observe
+    assert len(results) == 0
+
+
 def test_bad_aggregator_stratification(event: Event, mocker: MockerFixture) -> None:
     """Test if an exception gets raised when a stratification that doesn't
     exist is attempted to be used, as expected."""
