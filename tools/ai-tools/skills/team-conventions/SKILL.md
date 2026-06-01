@@ -1,6 +1,6 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, drafting a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via `gh`, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "draft a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via `gh`, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
@@ -29,21 +29,29 @@ Edge cases:
 - **Multiple tickets.** Pick the primary one for the branch name; reference the others in the PR body.
 - **Existing branch with the wrong name.** Rename with `git branch -m <new>` before pushing. If already pushed, rename then `git push -u origin <new>` and delete the old remote with `git push origin --delete <old>` — but only with explicit user confirmation, since the old name may be referenced in PRs or CI.
 
-## 2. Drafting a Jira ticket
+## 2. Writing a Jira ticket
 
 The team's canonical "what belongs on a ticket" doc lives on the IHME hub (Confluence).
 
-Pull it via the hub MCP server when the user asks to draft a ticket:
+Pull it via the hub MCP server when the user asks to write a ticket:
 
 ```
 mcp__plugin_mcp-hub_mcp-hub__get_page(page_id="178128092")
 ```
 
-That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria, and the optional fields when they apply. Show the user the draft for review before they paste it into Jira; this skill does not create Jira tickets directly.
+That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria, and the optional fields when they apply. Show the user the draft for review before creating the ticket.
 
 Format the draft in **Jira wiki markup** — not Markdown, not RST.
 
-If the MCP fetch fails, tell the user and link them to `https://hub.ihme.washington.edu/spaces/SSE/pages/178128092/Make+a+Jira+Ticket` — do not improvise a substitute structure from memory.
+Once the user approves the draft, create the ticket via the Jira MCP:
+
+```
+mcp__plugin_mcp-jira_mcp-jira__create_issue(project="MIC", summary="<title>", description="<wiki-markup body>", issue_type="<Task|Bug|Story|...>")
+```
+
+Report the resulting `MIC-####` key back to the user so it can flow into the branch name (§1) and PR body (§3).
+
+If the hub MCP fetch fails, tell the user and link them to `https://hub.ihme.washington.edu/spaces/SSE/pages/178128092/Make+a+Jira+Ticket` — do not improvise a substitute structure from memory.
 
 ## 3. Submitting a pull request
 

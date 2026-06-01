@@ -62,6 +62,9 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
   via the Read the Docs v2 API.
 - ``design-doc`` — SimSci Engineering convention for drafting a design
   document on the IHME hub
+- ``brainstorming`` — structured design exploration that produces a Jira
+  plan comment, a new Jira ticket, or a Confluence design doc; ships a
+  browser-based Mermaid diagramming companion
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
