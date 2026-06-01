@@ -27,7 +27,7 @@ class ArtifactException(Exception):
 
 
 class Artifact:
-    """In-memory handle for a :mod:`vivarium` data artifact archive on disk.
+    """In-memory handle for a vivarium data artifact archive on disk.
 
     Holds the path to an HDF5 archive and provides keyed read / write / load /
     remove access via the free functions in :mod:`vivarium.artifact.hdf` (no
