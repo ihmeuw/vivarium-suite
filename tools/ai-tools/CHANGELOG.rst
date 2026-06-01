@@ -1,3 +1,7 @@
+**0.12.0 - 06/01/26**
+
+ - Add ``commit-splitter`` skill and ``_split_proposer`` specialist sub-agent for doling out a bulk uncommitted diff into reviewable commits and PR-sized branches
+
 **0.11.0 - 06/01/26**
 
  - Add ``git-rescue`` slash command for diagnosing and untangling messy git histories (stuck rebases, stacked-branch squash-merge conflicts, divergent history) with mandatory backup refs and per-step confirmation
