@@ -52,7 +52,11 @@ def cast_to_series(mean: Parameter, sd: Parameter) -> tuple[pd.Series[Any], pd.S
 
 @singledispatch
 def format_data(data: Any, required_columns: list[str], measure: str) -> pd.DataFrame:
-    """Format parameter data into a dataframe."""
+    """Format parameter data into a dataframe.
+
+    Supported types (``Parameters``) are handled by the registered overloads
+    below; this base case is the fallback for everything else, hence ``Any``.
+    """
     raise TypeError(f"Unsupported data type {type(data)} for {measure}")
 
 

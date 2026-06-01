@@ -183,8 +183,8 @@ class BaseDistribution:
         computable = parameters[
             (parameters.sum(axis=1) != 0)
             & ~np.isnan(q)
-            & (self.computability_bound <= cast("npt.NDArray[Any]", q.values))
-            & (cast("npt.NDArray[Any]", q.values) <= 1 - self.computability_bound)
+            & (self.computability_bound <= q.to_numpy())
+            & (q.to_numpy() <= 1 - self.computability_bound)
         ].index
 
         q.loc[computable] = self.process(
