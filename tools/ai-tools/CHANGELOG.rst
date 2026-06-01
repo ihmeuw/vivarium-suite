@@ -1,3 +1,7 @@
+**0.11.0 - 06/01/26**
+
+ - Add ``git-rescue`` slash command for diagnosing and untangling messy git histories (stuck rebases, stacked-branch squash-merge conflicts, divergent history) with mandatory backup refs and per-step confirmation
+
 **0.10.0 - 05/28/26**
 
  - Add ``brainstorming`` skill for structured design exploration that produces a Jira plan comment, a new Jira ticket, or a Confluence design doc; ships a browser-based Mermaid diagramming companion
