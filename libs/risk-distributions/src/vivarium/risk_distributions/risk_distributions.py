@@ -18,11 +18,6 @@ from vivarium.risk_distributions.formatting import (
     format_data,
 )
 
-# A scalar or vector of numeric values flowing through the distribution API.
-# The element dtype is intentionally unconstrained: pandas-stubs propagates
-# ``Series``'s type parameter only weakly, so ``Any`` is the honest choice.
-# ``Numeric`` is what the ``pdf``/``ppf``/``cdf`` family returns; ``NumericInput``
-# additionally accepts an ``int`` scalar on input.
 Numeric: TypeAlias = "pd.Series[Any] | npt.NDArray[Any] | float"
 NumericInput: TypeAlias = "Numeric | int"
 

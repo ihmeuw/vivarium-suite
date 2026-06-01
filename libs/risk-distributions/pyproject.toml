@@ -49,15 +49,6 @@ git_describe_command = 'git describe --dirty --tags --long --match "vivarium-ris
 fallback_version = "0.0.0+no-git-tag"
 
 [tool.mypy]
-# WARNING: settings here that aren't mypy_path / explicit_package_bases must be
-# kept in sync manually with the monorepo-root [tool.mypy]. The local
-# `make mypy` passes --config-file pyproject.toml (this file), so mypy doesn't
-# read the root config. If you change the root, change this too.
-#
-# mypy_path lets absolute self-imports (e.g. "from vivarium.risk_distributions import X")
-# resolve to the source tree rather than the PEP 660 editable install (which
-# hides files like py.typed behind a finder, making mypy think the package is
-# untyped).
 strict = true
 disallow_any_unimported = false
 implicit_reexport = true
@@ -66,9 +57,7 @@ mypy_path = "src:tests"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-# scipy does not ship a py.typed marker or complete stubs, so strict mypy raises
-# "import-untyped" for ``from scipy import ...``. Treat the package as Any-typed.
-# Mirrors the ``tables`` override precedent in libs/artifact/pyproject.toml.
+# scipy ships no py.typed marker or stubs; treat as Any-typed.
 module = ["scipy", "scipy.*"]
 ignore_missing_imports = true
 
