@@ -12,146 +12,32 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pandas as pd
 import yaml
 from loguru import logger
 from vivarium.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools import logs
+from vivarium_cluster_tools.core import cluster, logs
+from vivarium_cluster_tools.core.jobmon import client
+from vivarium_cluster_tools.core.notifications import send_slack_notification
 from vivarium_cluster_tools.psimulate import (
     COMMANDS,
     branches,
-    cluster,
     jobs,
     model_specification,
     paths,
     pip_env,
 )
-from vivarium_cluster_tools.psimulate.jobmon_config import client
-from vivarium_cluster_tools.psimulate.jobmon_config.workflow import build_workflow
-from vivarium_cluster_tools.psimulate.notifications import send_slack_notification
+from vivarium_cluster_tools.psimulate.jobmon_workflow import build_workflow
 from vivarium_cluster_tools.psimulate.paths import OutputPaths
 from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
 from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
-from vivarium_cluster_tools.psimulate.workflow_config.builder import (
-    build_workflow_from_config,
-)
-from vivarium_cluster_tools.psimulate.workflow_config.config import WorkflowConfig
-from vivarium_cluster_tools.psimulate.workflow_config.serialization import (
-    workflow_config_to_dict,
-)
-from vivarium_cluster_tools.psimulate.workflow_config.utilities import WORKFLOW_ARGS_FILENAME
 from vivarium_cluster_tools.vipin.perf_report import report_performance
-
-if TYPE_CHECKING:
-    from jobmon.client.workflow import Workflow
-
-
-def _bind_and_run_workflow(
-    workflow: Workflow,
-    output_root: Path,
-    *,
-    resume: bool = False,
-) -> tuple[str, str | None]:
-    """Bind a Jobmon workflow, log the monitoring URL, and run it.
-
-    Parameters
-    ----------
-    workflow
-        The Jobmon workflow to submit.
-    output_root
-        Output directory to mention in log messages.
-    resume
-        Whether to resume a previously started workflow.
-
-    Returns
-    -------
-        A ``(wf_status, monitoring_url)`` tuple.  *wf_status* is the
-        workflow status string from Jobmon (see :data:`client.JOBMON_STATUS_DONE`).
-        *monitoring_url* is the Jobmon GUI URL, or ``None`` if unconfigured.
-    """
-    client.bind_workflow(workflow)
-    monitoring_url = client.get_monitoring_url(workflow)
-
-    logger.info(f"Submitting Jobmon workflow. Results will be written to {output_root}")
-    if monitoring_url:
-        logger.info(f"Monitor progress at: {monitoring_url}")
-
-    # Match the workflow timeout to the remaining time on the SLURM runner
-    # node so jobmon doesn't outlive (or underuse) the allocation.
-    wf_status = client.run_workflow(
-        workflow,
-        resume=resume,
-        seconds_until_timeout=cluster.get_workflow_timeout_seconds(),
-    )
-    return wf_status, monitoring_url
-
-
-def workflow_main(
-    workflow_config: WorkflowConfig,
-    verbose: int = 0,
-    resume: bool = False,
-) -> None:
-    """Entry point for the psimulate workflow subcommand.
-
-    Parameters
-    ----------
-    workflow_config
-        The parsed and validated workflow configuration (with CLI overrides applied).
-    verbose
-        Verbosity level.
-    resume
-        Whether to resume a previously started workflow.
-    """
-    logger.info(f"Starting workflow: {workflow_config.name}")
-
-    # Create output directory if it doesn't exist
-    output_root = workflow_config.output_directory
-    output_root.mkdir(parents=True, exist_ok=True)
-
-    workflow_args_path = output_root / WORKFLOW_ARGS_FILENAME
-
-    if resume:
-        workflow_args = workflow_args_path.read_text().strip()
-        logger.info(f"Resuming workflow with args: {workflow_args}")
-    else:
-        # Generate a unique workflow_args using a timestamp so each fresh
-        # run is distinct even with the same config and output directory.
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        output_hash = hashlib.md5(str(output_root).encode()).hexdigest()[:8]
-        workflow_args = f"workflow_{workflow_config.name}_{output_hash}_{timestamp}"
-
-    # Write the requested configuration to output directory
-    write_workflow_configuration(output_root, workflow_config)
-
-    # Build the workflow
-    logger.debug("Building workflow.")
-    workflow = build_workflow_from_config(workflow_config, workflow_args=workflow_args)
-
-    # Persist workflow_args before running so --resume can find it
-    workflow_args_path.write_text(workflow_args)
-
-    wf_status, monitoring_url = _bind_and_run_workflow(workflow, output_root, resume=resume)
-
-    send_slack_notification(
-        workflow_name=workflow_config.name,
-        status=wf_status,
-        monitoring_url=monitoring_url,
-        results_dir=str(output_root),
-    )
-
-    if wf_status != client.JOBMON_STATUS_DONE:
-        raise RuntimeError(
-            f"Workflow finished with status '{wf_status}' "
-            f"(expected '{client.JOBMON_STATUS_DONE}' for DONE)."
-        )
-    logger.info(f"Workflow completed successfully. Results in {output_root}")
 
 
 def report_initial_status(
@@ -212,25 +98,6 @@ def write_backup_metadata(
         mode="a",
         header=not os.path.exists(backup_metadata_path),
     )
-
-
-def write_workflow_configuration(output_root: Path, workflow_config: WorkflowConfig) -> None:
-    """Write workflow configuration to a YAML file in the output directory.
-
-    Creates a ``configuration.yaml`` that can be reused directly with
-    ``psimulate workflow -c configuration.yaml``.
-
-    Parameters
-    ----------
-    output_root
-        The root output directory for the workflow.
-    workflow_config
-        The parsed and validated workflow configuration.
-    """
-    config: dict[str, Any] = {"workflow": workflow_config_to_dict(workflow_config)}
-    config_file = output_root / "configuration.yaml"
-    config_file.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
-    logger.info(f"Run configuration written to {config_file}")
 
 
 def write_configuration(
@@ -455,13 +322,17 @@ def main(
         max_attempts=max_attempts,
     )
 
-    wf_status, monitoring_url = _bind_and_run_workflow(
-        workflow, output_paths.root, resume=restart
+    wf_status, monitoring_url = client.bind_and_run_workflow(
+        workflow,
+        output_paths.root,
+        resume=restart,
+        seconds_until_timeout=cluster.get_workflow_timeout_seconds(),
     )
 
     send_slack_notification(
         workflow_name=workflow_name,
         status=wf_status,
+        command_label=f"psimulate {command}",
         monitoring_url=monitoring_url,
         results_dir=str(output_paths.root),
     )
