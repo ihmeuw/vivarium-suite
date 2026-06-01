@@ -1,3 +1,7 @@
+**0.11.1 - 06/01/26**
+
+ - Update ``git-rescue`` skill to run `make check` and summarize changes before pushing
+
 **0.11.0 - 06/01/26**
 
  - Add ``git-rescue`` slash command for diagnosing and untangling messy git histories (stuck rebases, stacked-branch squash-merge conflicts, divergent history) with mandatory backup refs and per-step confirmation
