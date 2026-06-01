@@ -1,3 +1,7 @@
+**0.4.11 - 06/01/26**
+
+- Update vivarium imports to use new vivarium-engine package
+
 **0.4.10 - 05/20/26**
 
 - Update Artifact imports to use new package

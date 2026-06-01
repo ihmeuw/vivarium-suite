@@ -1,6 +1,6 @@
 import pytest
 from vivarium.config_tree import ConfigTree
-from vivarium.interface.interactive import InteractiveContext
+from vivarium.engine.interface.interactive import InteractiveContext
 from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.results import DiseaseObserver
 from vivarium_public_health.results.causal_factor import CategoricalRiskObserver

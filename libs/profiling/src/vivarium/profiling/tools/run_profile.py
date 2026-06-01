@@ -7,7 +7,7 @@ import cProfile
 import sys
 
 from scalene import scalene_profiler
-from vivarium.framework.engine import SimulationContext
+from vivarium.engine.framework.engine import SimulationContext
 
 
 def run_profile_scalene(sim: SimulationContext):
