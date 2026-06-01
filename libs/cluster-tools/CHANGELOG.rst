@@ -2,6 +2,7 @@
 
 - Implement serial workflows via "psimulate workflow" command
 - Add facade to interact with Jobmon SDK
+- Reduce simulation task runtime resource during restart with backups
 
 **4.1.0 - 06/04/26**
 

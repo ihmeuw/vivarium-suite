@@ -11,8 +11,11 @@ from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
 from vivarium_cluster_tools.psimulate import TASK_RUNNER_MODULE
-from vivarium_cluster_tools.psimulate.jobmon_config.workflow import build_workflow
-from vivarium_cluster_tools.psimulate.jobs import JobParameters
+from vivarium_cluster_tools.psimulate.jobmon_config.workflow import (
+    build_workflow,
+    get_task_list,
+)
+from vivarium_cluster_tools.psimulate.jobs import BackupConfiguration, JobParameters
 from vivarium_cluster_tools.psimulate.paths import OutputPaths
 
 FROZEN_TIME = datetime(2025, 1, 1)
@@ -202,3 +205,78 @@ class TestBuildWorkflow:
 
         expected_tasks = task_template.create_tasks.return_value
         workflow.add_tasks.assert_called_once_with(expected_tasks)
+
+
+class TestGetTaskListBackupAwareRetryScaling:
+    """Verify the simulation-task retry-scaling policy.
+
+    A retry of a simulation task that has a backup pickle resumes mid-run
+    and finishes in less than the original runtime allocation; without a
+    backup it must start over and needs Jobmon's default escalation.
+    """
+
+    @staticmethod
+    def _call_get_task_list(
+        mock_tool: MagicMock,
+        output_paths: OutputPaths,
+        native_spec: MagicMock,
+        jobs: list[JobParameters],
+    ) -> None:
+        get_task_list(
+            tool=mock_tool,
+            command="run",
+            job_parameters_list=jobs,
+            metadata_dir=output_paths.metadata_dir,
+            results_dir=output_paths.results_dir,
+            worker_logging_root=output_paths.worker_logging_root,
+            native_specification=native_spec,
+        )
+
+    def test_backups_enabled_halves_runtime_on_retry(
+        self,
+        mock_tool_cls: MagicMock,
+        mock_write_metadata: MagicMock,
+        output_paths: OutputPaths,
+        native_spec: MagicMock,
+    ) -> None:
+        """With ``backup_freq`` set, retries ask Jobmon for half the
+        original runtime (worker resumes from the most-recent backup)."""
+        jobs_with_backups = [
+            make_job_parameters(
+                input_draw=0,
+                random_seed=seed,
+                backup_configuration=BackupConfiguration(
+                    backup_dir="/tmp/backups",
+                    backup_freq=300.0,
+                    backup_metadata_path="/tmp/backup_metadata.csv",
+                ),
+            )
+            for seed in (0, 1)
+        ]
+        self._call_get_task_list(
+            mock_tool_cls.return_value, output_paths, native_spec, jobs_with_backups
+        )
+        kwargs = (
+            mock_tool_cls.return_value.get_task_template.return_value.create_tasks.call_args.kwargs
+        )
+        assert kwargs["resource_scales"] == {"memory": 0.5, "runtime": -0.5}
+
+    def test_backups_disabled_omits_resource_scales(
+        self,
+        mock_tool_cls: MagicMock,
+        mock_write_metadata: MagicMock,
+        output_paths: OutputPaths,
+        native_spec: MagicMock,
+        two_jobs: list[JobParameters],
+    ) -> None:
+        """With ``backup_freq=None`` (the default test fixture), no
+        ``resource_scales`` is forwarded — Jobmon applies its built-in
+        ``{"memory": 0.5, "runtime": 0.5}`` default, so failed tasks get
+        the usual 1.5x escalation on retry."""
+        self._call_get_task_list(
+            mock_tool_cls.return_value, output_paths, native_spec, two_jobs
+        )
+        kwargs = (
+            mock_tool_cls.return_value.get_task_template.return_value.create_tasks.call_args.kwargs
+        )
+        assert "resource_scales" not in kwargs
