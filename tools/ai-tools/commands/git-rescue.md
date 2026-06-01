@@ -21,7 +21,8 @@ know how to untangle: $ARGUMENTS
 4. Execute. Resolve conflicts file-by-file with Read/Edit, narrating
    each choice.
 5. Verify with `git log --oneline -10` and `git diff @{u}...HEAD --stat`.
-   Ask before pushing. On explicit OK, `git push --force-with-lease`.
+6. Summarize changes for user.
+7. Ask before pushing. On explicit OK, `git push --force-with-lease`.
 
 ## Non-obvious diagnostic worth knowing
 
