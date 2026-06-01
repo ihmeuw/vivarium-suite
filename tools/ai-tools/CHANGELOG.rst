@@ -1,3 +1,7 @@
+**0.13.0 - 06/01/26**
+
+ - Add ``/viv:type-hinter`` slash command and ``_type_hint_file`` teammate for type-hinting a target (a package, sub-folder, or individual files) under one package until ``make mypy`` passes. The command runs as the lead of an agent team: it resolves the inter-file dependency graph, spawns one autonomous teammate per file, and the teammates coordinate shared type contracts directly via the team mailbox. Adds ``py.typed`` only if the whole package ends mypy-clean, and hands the resulting diff to ``/viv:commit-splitter``. Requires Claude Code agent teams (``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1``, v2.1.32+)
+
 **0.11.1 - 06/01/26**
 
  - Update ``git-rescue`` skill to run `make check` and summarize changes before pushing

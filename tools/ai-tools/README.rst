@@ -41,6 +41,21 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
   on explicit user confirmation. User-invoked only — there is no
   auto-trigger.
 
+**Type Hinter**
+
+- ``_type_hint_file`` — per-file **teammate** that takes one Python file
+  to mypy-clean, settling shared type contracts with sibling teammates
+  via the team mailbox. Edits only its own file; proposes overrides,
+  logic changes, and ``# type: ignore`` candidates up to the lead.
+- Slash command (Claude Code only): ``/viv:type-hinter <target>`` (a
+  package, sub-folder, or ``.py`` files under one ``libs/<pkg>/``). Runs
+  as the **lead of an agent team**: resolves the inter-file dependency
+  graph, spawns one teammate per file, verifies with ``make mypy``, and
+  adds ``py.typed`` only if the package ends clean. **Requires agent
+  teams** (``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1``, v2.1.32+; no
+  fallback). It **writes**, then hands the diff to
+  ``/viv:commit-splitter``.
+
 **Skills**
 
 - ``plugin-setup`` — walks the user through post-install configuration that the
@@ -173,6 +188,10 @@ Code:
   perform is a read-only git command (``git diff``, ``git log``,
   ``git show``, ``git status``), which Claude Code auto-approves via
   its built-in read-only command allowlist.
+- ``_type_hint_file`` declares ``Edit`` and ``Bash``. It edits **only its
+  one assigned ``.py`` file** and runs ``make mypy`` to check itself — no
+  git writes, no ``pyproject.toml`` edits, no commits; those stay with
+  the lead command.
 - The ``code_reviewer`` and ``model_regression_debugger`` orchestrator
   agents are Copilot-only and have no Claude tools — on Claude Code
   they redirect to the slash command and exit. The Bash work on the
