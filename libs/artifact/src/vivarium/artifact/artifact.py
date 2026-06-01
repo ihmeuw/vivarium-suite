@@ -27,7 +27,7 @@ class ArtifactException(Exception):
 
 
 class Artifact:
-    """In-memory handle for a :mod:`vivarium` data artifact archive on disk.
+    """In-memory handle for a vivarium data artifact archive on disk.
 
     Holds the path to an HDF5 archive and provides keyed read / write / load /
     remove access via the free functions in :mod:`vivarium.artifact.hdf` (no
@@ -35,7 +35,7 @@ class Artifact:
     memory for repeat access; call :meth:`clear_cache` to drop the cache.
 
     This is the data-model class; for the simulation-lifecycle integration see
-    ``ArtifactManager`` and ``ArtifactInterface`` in :mod:`vivarium_engine.framework.artifact`.
+    ``ArtifactManager`` and ``ArtifactInterface`` in :mod:`vivarium.engine.framework.artifact`.
     """
 
     def __init__(self, path: str | Path, filter_terms: list[str] | None = None) -> None:

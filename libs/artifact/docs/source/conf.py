@@ -111,10 +111,7 @@ intersphinx_mapping = {
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "tables": ("https://www.pytables.org/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    # Used by docstrings that reference :mod:`vivarium` and
-    # :mod:`vivarium.framework.artifact`. When vivarium migrates into the
-    # monorepo as vivarium-core, swap this URL to that lib's RTD project.
-    "vivarium": ("https://vivarium.readthedocs.io/en/latest/", None),
+    "vivarium_engine": ("https://vivarium-engine.readthedocs.io/en/latest/", None),
 }
 
 
