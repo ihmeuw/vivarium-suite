@@ -148,9 +148,26 @@ def get_task_list(
         metadata_dir=str(metadata_dir),
         results_dir=str(results_dir),
         command=command,
+        resource_scales=_simulation_resource_scales(job_parameters_list),
     )
 
     return tasks
+
+
+def _simulation_resource_scales(
+    job_parameters_list: list[JobParameters],
+) -> dict[str, float] | None:
+    """Per-task retry scaling for simulation tasks.
+
+    Jobmon's scale formula is ``ceil(orig * (1 + scale))``. Supplying any
+    ``resource_scales`` dict suppresses Jobmon's full default, so memory
+    is defined at ``0.5`` to preserve its default value +50% retry growth;
+    runtime is set to ``-0.5`` to shrink the retry's request to half
+    because the worker resumes from backup.
+    """
+    if job_parameters_list[0].backup_configuration["backup_freq"] is None:
+        return None
+    return {"memory": 0.5, "runtime": -0.5}
 
 
 def build_workflow(
