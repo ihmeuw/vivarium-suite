@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import warnings
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any, TypeAlias, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -17,6 +17,14 @@ from vivarium.risk_distributions.formatting import (
     format_call_data,
     format_data,
 )
+
+# A scalar or vector of numeric values flowing through the distribution API.
+# The element dtype is intentionally unconstrained: pandas-stubs propagates
+# ``Series``'s type parameter only weakly, so ``Any`` is the honest choice.
+# ``Numeric`` is what the ``pdf``/``ppf``/``cdf`` family returns; ``NumericInput``
+# additionally accepts an ``int`` scalar on input.
+Numeric: TypeAlias = "pd.Series[Any] | npt.NDArray[Any] | float"
+NumericInput: TypeAlias = "Numeric | int"
 
 
 class BaseDistribution:
@@ -135,9 +143,7 @@ class BaseDistribution:
         """
         return data
 
-    def pdf(
-        self, x: pd.Series[Any] | npt.NDArray[Any] | float | int
-    ) -> pd.Series[Any] | npt.NDArray[Any] | float:
+    def pdf(self, x: NumericInput) -> Numeric:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -166,16 +172,14 @@ class BaseDistribution:
                 p.loc[computable], parameters.loc[computable], "pdf_postprocess"
             )
 
-        result: pd.Series[Any] | npt.NDArray[Any] | float = p
+        result: Numeric = p
         if single_val:
             result = p.iloc[0]
         if values_only:
             result = cast("npt.NDArray[Any]", p.values)
         return result
 
-    def ppf(
-        self, q: pd.Series[Any] | npt.NDArray[Any] | float | int
-    ) -> pd.Series[Any] | npt.NDArray[Any] | float:
+    def ppf(self, q: NumericInput) -> Numeric:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
 
@@ -204,16 +208,14 @@ class BaseDistribution:
                 x.loc[computable], parameters.loc[computable], "ppf_postprocess"
             )
 
-        result: pd.Series[Any] | npt.NDArray[Any] | float = x
+        result: Numeric = x
         if single_val:
             result = x.iloc[0]
         if values_only:
             result = cast("npt.NDArray[Any]", x.values)
         return result
 
-    def cdf(
-        self, x: pd.Series[Any] | npt.NDArray[Any] | float | int
-    ) -> pd.Series[Any] | npt.NDArray[Any] | float:
+    def cdf(self, x: NumericInput) -> Numeric:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -242,7 +244,7 @@ class BaseDistribution:
                 c.loc[computable], parameters.loc[computable], "cdf_postprocess"
             )
 
-        result: pd.Series[Any] | npt.NDArray[Any] | float = c
+        result: Numeric = c
         if single_val:
             result = c.iloc[0]
         if values_only:
@@ -717,9 +719,7 @@ class EnsembleDistribution:
                     indexable[col] = 0.0
         return weights
 
-    def pdf(
-        self, x: pd.Series[Any] | npt.NDArray[Any] | float | int
-    ) -> pd.Series[Any] | npt.NDArray[Any] | float:
+    def pdf(self, x: NumericInput) -> Numeric:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -738,7 +738,7 @@ class EnsembleDistribution:
                     x.loc[computable]
                 )
 
-        result: pd.Series[Any] | npt.NDArray[Any] | float = p
+        result: Numeric = p
         if single_val:
             result = p.iloc[0]
         if values_only:
@@ -747,9 +747,9 @@ class EnsembleDistribution:
 
     def ppf(
         self,
-        q: pd.Series[Any] | npt.NDArray[Any] | float | int,
-        q_dist: pd.Series[Any] | npt.NDArray[Any] | float | int,
-    ) -> pd.Series[Any] | npt.NDArray[Any] | float:
+        q: NumericInput,
+        q_dist: NumericInput,
+    ) -> Numeric:
         """Quantile function using 2 propensities.
 
         Parameters
@@ -788,16 +788,14 @@ class EnsembleDistribution:
                     )
                     x[idx] = self._distribution_map[name](parameters=params).ppf(q[idx])
 
-        result: pd.Series[Any] | npt.NDArray[Any] | float = x
+        result: Numeric = x
         if single_val:
             result = x.iloc[0]
         if values_only:
             result = cast("npt.NDArray[Any]", x.values)
         return result
 
-    def cdf(
-        self, x: pd.Series[Any] | npt.NDArray[Any] | float | int
-    ) -> pd.Series[Any] | npt.NDArray[Any] | float:
+    def cdf(self, x: NumericInput) -> Numeric:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -817,7 +815,7 @@ class EnsembleDistribution:
                     x.loc[computable]
                 )
 
-        result: pd.Series[Any] | npt.NDArray[Any] | float = c
+        result: Numeric = c
         if single_val:
             result = c.iloc[0]
         if values_only:
