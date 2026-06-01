@@ -13,3 +13,12 @@ py:class Parameters
 py:class pandas.core.frame.DataFrame
 py:class pandas.core.series.Series
 py:class pandas.core.indexes.base.Index
+
+# Type hints use the abbreviated ``pd.``/``npt.`` aliases. Because of
+# ``from __future__ import annotations`` these stay as strings, so
+# ``autodoc_typehints = "description"`` renders them verbatim and sphinx
+# cannot resolve the alias to a documented class.
+py:class pd.DataFrame
+py:class pd.Series
+py:class pd.Index
+py:class npt.NDArray
