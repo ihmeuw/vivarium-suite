@@ -4,10 +4,6 @@ Vivarium Cluster Tools
 .. image:: https://badge.fury.io/py/vivarium-cluster-tools.svg
     :target: https://badge.fury.io/py/vivarium-cluster-tools
 
-.. image:: https://github.com/ihmeuw/vivarium_cluster_tools/actions/workflows/build.yml/badge.svg?branch=main
-    :target: https://github.com/ihmeuw/vivarium_cluster_tools
-    :alt: Latest Version
-
 .. image:: https://readthedocs.org/projects/vivarium-cluster-tools/badge/?version=latest
     :target: https://vivarium-cluster-tools.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
@@ -15,14 +11,21 @@ Vivarium Cluster Tools
 Vivarium cluster tools is a python package that makes running ``vivarium``
 simulations at scale on a Slurm cluster easy.
 
-Installation
-------------
+**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
 
-You can install this package with
+You can install ``vivarium-cluster-tools`` from PyPI with pip:
 
-.. code-block:: console
+.. code-block:: bash
 
-    pip install vivarium-cluster-tools
+   pip install vivarium-cluster-tools
+
+or build it from source by cloning the monorepo and installing this package:
+
+.. code-block:: bash
+
+   git clone https://github.com/ihmeuw/vivarium-suite.git
+   cd vivarium-suite/libs/cluster-tools
+   pip install -e .
 
 A simple example
 ----------------

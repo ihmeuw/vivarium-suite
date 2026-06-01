@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.vipin.cli
+.. automodule:: vivarium.cluster_tools.vipin.cli

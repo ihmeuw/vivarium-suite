@@ -8,17 +8,17 @@ import yaml
 from click.testing import CliRunner
 from pandas.testing import assert_frame_equal
 
-from vivarium_cluster_tools.psimulate.cli import psimulate
-from vivarium_cluster_tools.psimulate.cluster.interface import NativeSpecification
-from vivarium_cluster_tools.psimulate.jobs import JobParameters, generate_task_id
-from vivarium_cluster_tools.psimulate.paths import InputPaths
-from vivarium_cluster_tools.psimulate.runner import (
+from vivarium.cluster_tools.psimulate.cli import psimulate
+from vivarium.cluster_tools.psimulate.cluster.interface import NativeSpecification
+from vivarium.cluster_tools.psimulate.jobs import JobParameters, generate_task_id
+from vivarium.cluster_tools.psimulate.paths import InputPaths
+from vivarium.cluster_tools.psimulate.runner import (
     report_initial_status,
     write_backup_metadata,
     write_configuration,
 )
 
-_RUNNER_MAIN = "vivarium_cluster_tools.psimulate.runner.main"
+_RUNNER_MAIN = "vivarium.cluster_tools.psimulate.runner.main"
 
 
 def _write_yaml(tmp_path: Path, data: dict[str, Any], name: str = "config.yaml") -> Path:

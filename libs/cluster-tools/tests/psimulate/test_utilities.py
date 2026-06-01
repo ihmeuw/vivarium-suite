@@ -9,7 +9,7 @@ import pytest
 from pytest import FixtureRequest
 from pytest_mock import MockerFixture
 
-from vivarium_cluster_tools.utilities import backoff_and_retry, mkdir
+from vivarium.cluster_tools.utilities import backoff_and_retry, mkdir
 
 
 class MkdirParams(TypedDict, total=False):
@@ -95,7 +95,7 @@ def test_backoff_and_retry(mocker: MockerFixture) -> None:
         def warn(self, message: str, *args: Any, **kwargs: Any) -> None:
             self.caught_warnings.append(message)
 
-    mock_sleep = mocker.patch("vivarium_cluster_tools.utilities.time.sleep")
+    mock_sleep = mocker.patch("vivarium.cluster_tools.utilities.time.sleep")
 
     wc = WarningCatcher()
 

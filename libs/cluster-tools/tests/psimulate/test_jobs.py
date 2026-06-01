@@ -4,8 +4,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from vivarium_cluster_tools.psimulate.branches import Keyspace
-from vivarium_cluster_tools.psimulate.jobs import (
+from vivarium.cluster_tools.psimulate.branches import Keyspace
+from vivarium.cluster_tools.psimulate.jobs import (
     JobParameters,
     build_job_list,
     generate_task_id,

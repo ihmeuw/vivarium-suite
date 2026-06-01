@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.psimulate.results.writing
+.. automodule:: vivarium.cluster_tools.psimulate.results.writing

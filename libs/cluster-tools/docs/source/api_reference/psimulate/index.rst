@@ -1,4 +1,4 @@
-.. automodule:: vivarium_cluster_tools.psimulate
+.. automodule:: vivarium.cluster_tools.psimulate
 
 .. toctree::
    :maxdepth: 2

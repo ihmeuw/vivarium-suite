@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.psimulate.cluster.cli_options
+.. automodule:: vivarium.cluster_tools.psimulate.cluster.cli_options

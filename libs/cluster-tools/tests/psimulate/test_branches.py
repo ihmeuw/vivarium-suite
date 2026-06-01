@@ -1,9 +1,9 @@
 from typing import Any
 
 import pytest
-from vivarium.framework.utilities import collapse_nested_dict
+from vivarium.engine.framework.utilities import collapse_nested_dict
 
-from vivarium_cluster_tools.psimulate.branches import (
+from vivarium.cluster_tools.psimulate.branches import (
     Keyspace,
     calculate_random_seeds,
     expand_branch_templates,

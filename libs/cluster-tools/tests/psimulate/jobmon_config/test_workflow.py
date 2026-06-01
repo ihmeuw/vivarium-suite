@@ -11,9 +11,9 @@ import pytest
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
-from vivarium_cluster_tools.psimulate.jobmon_config.workflow import build_workflow
-from vivarium_cluster_tools.psimulate.jobs import JobParameters
-from vivarium_cluster_tools.psimulate.paths import OutputPaths
+from vivarium.cluster_tools.psimulate.jobmon_config.workflow import build_workflow
+from vivarium.cluster_tools.psimulate.jobs import JobParameters
+from vivarium.cluster_tools.psimulate.paths import OutputPaths
 
 if TYPE_CHECKING:
     from jobmon.client.workflow import Workflow
@@ -25,21 +25,21 @@ FROZEN_TIME = datetime(2025, 1, 1)
 @pytest.fixture()
 def mock_tool_cls(mocker: MockerFixture) -> MagicMock:
     """Patch the Jobmon ``Tool`` class at its import site."""
-    return mocker.patch("vivarium_cluster_tools.psimulate.jobmon_config.workflow.Tool")
+    return mocker.patch("vivarium.cluster_tools.psimulate.jobmon_config.workflow.Tool")
 
 
 @pytest.fixture()
 def mock_write_metadata(mocker: MockerFixture) -> MagicMock:
     """Patch ``write_metadata`` at its import site."""
     return mocker.patch(
-        "vivarium_cluster_tools.psimulate.jobmon_config.workflow.write_metadata"
+        "vivarium.cluster_tools.psimulate.jobmon_config.workflow.write_metadata"
     )
 
 
 @pytest.fixture()
 def output_paths(tmp_path: Path) -> OutputPaths:
     """Return an ``OutputPaths`` rooted under ``tmp_path``."""
-    with patch("vivarium_cluster_tools.psimulate.paths.datetime") as mock_dt:
+    with patch("vivarium.cluster_tools.psimulate.paths.datetime") as mock_dt:
         mock_dt.now.return_value = FROZEN_TIME
         return OutputPaths.from_entry_point_args(
             command="restart",
@@ -107,7 +107,7 @@ class TestBuildWorkflow:
         self._call_build_workflow(
             mock_tool_cls, mock_write_metadata, output_paths, native_spec, two_jobs
         )
-        mock_tool_cls.assert_called_once_with(name="vivarium_cluster_tools")
+        mock_tool_cls.assert_called_once_with(name="vivarium.cluster_tools")
 
     def test_task_template_args(
         self,

@@ -8,7 +8,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
-from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
+from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
     ParallelSimulationContext,
     get_backup,
     get_sim_from_backup,
@@ -54,7 +54,7 @@ def test_get_backup(
     # Patch sleep so we can assert it is skipped on the no-backup rename path
     # and so passing rows do not actually wait 5 seconds.
     sleep_mock = mocker.patch(
-        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.sleep"
+        "vivarium.cluster_tools.psimulate.worker.vivarium_work_horse.sleep"
     )
     if make_dir:
         (tmp_path / "backups").mkdir(exist_ok=False)
