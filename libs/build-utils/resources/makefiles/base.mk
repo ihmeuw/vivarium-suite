@@ -124,7 +124,15 @@ install: UV_FLAGS?=
 install: # Install package and dependencies
 	pip install uv
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
-	uv pip install -e .[${ENV_REQS}] ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
+	# NOTE: editable_mode=compat: produces a classic .pth-based editable install
+	#   (sys.path entry pointing at src/) instead of the PEP 660 default
+	#   (sys.meta_path finder). The PEP 660 mode breaks mypy's discovery of
+	#   sibling-namespace packages in monorepo dev setups - mypy's static
+	#   path-walk doesn't invoke meta_path finders, so it sees an empty
+	#   site-packages/<namespace>/ directory and reports the lib as untyped
+	#   even when py.typed is shipped in source. Classic mode produces real
+	#   sys.path entries that mypy traverses normally.
+	uv pip install -e .[${ENV_REQS}] --config-settings editable_mode=compat ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
 	@$(MAKE) setup-slack
 
 # Path to shared Slack bot token on the team filesystem.
