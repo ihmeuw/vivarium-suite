@@ -96,11 +96,16 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["dill", "jobmon_installer_ihme.*"]
+# jobmon and jobmon_installer_ihme live on IHME's private PyPI mirror and
+# aren't installable in GitHub Actions runners (no IHME network access).
+# The `[ci_github]` extras intentionally omit `[cluster]` so installs work
+# on public CI; mute the resulting "Cannot find implementation" errors so
+# mypy runs on the rest of the source.
+module = ["dill", "jobmon.*", "jobmon_installer_ihme.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["vivarium_cluster_tools"]
+source = ["vivarium.cluster_tools"]
 
 [tool.coverage.report]
 show_missing = true
