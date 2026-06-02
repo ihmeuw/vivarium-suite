@@ -148,6 +148,14 @@ intersphinx_mapping = {
 
 # -- Autodoc configuration ------------------------------------------------
 
+# jobmon and jobmon_installer_ihme live on IHME's private PyPI mirror and
+# aren't installable on RTD / public CI / most dev machines. Tell autodoc to
+# substitute mock modules so it can still import `psimulate.cli`,
+# `psimulate.runner`, and `psimulate.jobmon_config.workflow` (all of which
+# have top-level `from jobmon... import ...` statements) for docstring
+# extraction. No effect on cluster envs where jobmon is actually installed.
+autodoc_mock_imports = ["jobmon", "jobmon_installer_ihme"]
+
 autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
