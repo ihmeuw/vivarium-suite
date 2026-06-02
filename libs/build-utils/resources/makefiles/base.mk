@@ -9,9 +9,10 @@ LOCATIONS=src tests
 SAFE_NAME = $(shell python -c "from pkg_resources import safe_name; print(safe_name(\"$(PACKAGE_NAME)\"))")
 
 # DIST_NAME is the PyPI distribution name read from pyproject.toml's `[project].name`
-# (e.g. "vivarium-cluster-tools" for libs/cluster-tools/).
-DIST_NAME ?= $(shell python -c "import tomllib; data=tomllib.load(open('pyproject.toml','rb')); print(data.get('project',{}).get('name',''))" 2>/dev/null)
-# Fall back to PACKAGE_NAME for legacy repos that don't declare `[project]` in a pyproject.toml.
+# (e.g. "vivarium-cluster-tools" for libs/cluster-tools/). Parsed with sed/grep
+# rather than tomllib so this works on Python <3.11 too.
+DIST_NAME ?= $(shell sed -n '/^\[project\]/,/^\[/p' pyproject.toml 2>/dev/null | grep -E '^name *=' | head -1 | sed -E 's/^name *= *"([^"]+)".*$$/\1/')
+# Fall back to PACKAGE_NAME for legacy repos that don't declare `[project]` in pyproject.toml.
 DIST_NAME := $(if $(DIST_NAME),$(DIST_NAME),$(PACKAGE_NAME))
 
 PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
@@ -143,7 +144,7 @@ install: # Install package and dependencies
 	#   passing it globally leaks it to transitive sdist builds whose backends
 	#   don't recognize it (numpy 1.x's meson-python errors on it with
 	#   "Unknown option editable_mode").
-	uv pip install -e .[${ENV_REQS}] --config-settings-package ${DIST_NAME}=editable_mode=compat ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
+	uv pip install -e .[${ENV_REQS}] --config-settings-package ${DIST_NAME}:editable_mode=compat ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
 	@$(MAKE) setup-slack
 
 # Path to shared Slack bot token on the team filesystem.
