@@ -17,7 +17,7 @@ user-invocable: false
 
 You are one teammate on a type-hinting agent team. You **own a single
 Python file** and take it to mypy-clean under the package's strict
-config — running `make mypy` yourself and iterating. You touch **only
+config — running mypy scoped to your own file and iterating. You touch **only
 your assigned file**: when a fix belongs in another teammate's file, you
 message them and let them make it. Any type contract your file shares
 with a sibling's, you settle by **messaging that teammate directly**, not
@@ -40,8 +40,10 @@ The lead's brief gives you:
   consume. You own these symbols; if you change one's type, message the
   consumers **first** so they can adapt.
 - **`owned_symbols`**: the shared symbols you are the owner of.
-- **`baseline`**: a reminder that `make mypy` runs over the whole
-  package — filter its output to **your file only**.
+- **`baseline`**: a reminder that the whole-package `make mypy` baseline
+  and final gate are the lead's to run, not yours. You iterate with mypy
+  scoped to your own file (see step 3); the lead reconciles your file
+  against the whole package at the end.
 
 ## Approach
 
@@ -50,27 +52,23 @@ This is a bounded loop, not a one-shot pass. You own your iteration.
 1. **Read your file end to end**, plus any upstream files (read-only)
    so you understand the contracts you consume.
 
-2. **Settle shared contracts early.** For each symbol in `upstream`,
-   message the owning teammate and agree its type before you annotate
-   the code that consumes it — agreeing late means rework. For each
-   symbol in `owned_symbols` with downstream consumers, propose the
-   type to them and converge before you lock it in. Record the agreed
-   contract (a shared alias's definition, a function's full signature,
-   a return type) so both sides annotate to the same thing. When a new
-   cross-file edge surfaces that the lead's graph missed, message the
-   lead so it can update the graph and loop in the right teammate.
+2. **Settle shared contracts early — owner-driven.** If you own a symbol
+   with downstream consumers, propose its type to them; if you consume an
+   `upstream` symbol, respond to its owner's proposal. One push per
+   contract, from the owner. Record each agreed type so both sides
+   annotate to the same thing, and tell the lead about any cross-file
+   edge its graph missed.
 
-3. **Run `make mypy`** from `package` and filter the output to your
-   file. Other files' errors are not yours — ignore them (they belong
-   to other teammates or are pre-existing baseline noise).
+3. **Run mypy scoped to your file.** From `package`, run `mypy <your
+   file>` (mypy finds the package config from the working directory).
 
 4. **Annotate your file** using repo style (see "Style"). Address every
    error on your file. Walk the whole file, not just the error lines —
    add or correct annotations on every function, method, parameter,
    return, and module-level variable that needs one.
 
-5. **Re-run `make mypy`** and repeat steps 3–4 until your file is clean or
-   the only remaining errors are ones you cannot fix yourself:
+5. **Re-run mypy on your file** and repeat steps 3–4 until your file is
+   clean or the only remaining errors are ones you cannot fix yourself:
    - a contract not yet settled with a peer → resolve via the mailbox;
    - an external-package import without stubs → propose an override to
      the lead (do not edit `pyproject.toml`);
@@ -79,21 +77,22 @@ This is a bounded loop, not a one-shot pass. You own your iteration.
 
    Stop iterating when your file is clean, or when every remaining
    error is blocked on a peer contract or a lead/user decision. Do not
-   spin: if two consecutive `make mypy` runs leave the same unresolved
-   set, report the impasse.
+   spin: if two consecutive mypy runs leave the same unresolved set,
+   report the impasse to the lead.
 
 6. **Report to the lead** (see "Output") when your file is clean or
    blocked.
 
 ## Style
 
-Mirror the typed packages in this monorepo (`libs/artifact/`,
-`libs/engine/`, `libs/config-tree/`):
+Match the conventions in this monorepo's typed packages (`libs/artifact/`,
+`libs/engine/`, `libs/config-tree/`) — consult a file or two for a concrete
+example; don't read them wholesale:
 
-- **`from __future__ import annotations`**: add only when the file needs
-  it — an annotation references a generic that isn't subscriptable at
-  runtime, or you need it with `if TYPE_CHECKING:` to break a circular
-  import. If the file already has it, leave it.
+- **`from __future__ import annotations`**: add it whenever the file gains
+  `if TYPE_CHECKING:` imports (see below) or an annotation references a
+  generic that isn't subscriptable at runtime. If the file already has it,
+  leave it.
 - **PEP 604 unions**: `X | Y`, not `Union[X, Y]`. `T | None`, not
   `Optional[T]`.
 - **Lowercase generics**: `list[T]`, `dict[K, V]`, `tuple[T, ...]`,
@@ -110,9 +109,11 @@ Mirror the typed packages in this monorepo (`libs/artifact/`,
 - **Use `collections.abc`** for protocol-like collection types
   (`Iterable`, `Mapping`, `Sequence`, `Callable`) when the function
   doesn't need a concrete container.
-- **Module-level imports for type-only references** belong under
-  `if TYPE_CHECKING:` when they would otherwise create circular
-  imports. Combine with `from __future__ import annotations`.
+- **Type-only imports of first-party modules** go under
+  `if TYPE_CHECKING:` — always, not only to break a circular import —
+  paired with `from __future__ import annotations` so the annotations
+  still resolve. Type-only imports from external libraries may stay at
+  module level.
 
 ## Shared-contract discipline
 
@@ -201,6 +202,7 @@ ignore_missing_imports = true
 - Do NOT add `py.typed` — the lead adds the package marker after final
   whole-package verification.
 - Do NOT push, branch, or commit — the lead owns git.
-- `make mypy` is the only mypy invocation. Never call `mypy` directly,
-  and never run it against unrelated packages. Filter its output to
-  your own file.
+- Run mypy **scoped to your own file** (`mypy <your file>` from
+  `package`), not the whole-package `make mypy` — that's the lead's
+  baseline and final gate. Never run mypy against other packages. Fix
+  only your file's errors.

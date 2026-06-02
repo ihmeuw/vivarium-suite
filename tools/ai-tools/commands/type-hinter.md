@@ -50,9 +50,12 @@ against it.
 
 ## Step 3 — Capture the baseline
 
-Run `make mypy` from `${PKG_ROOT}` once and record the error count in
-**non-target** files. That count is pre-existing noise the workflow must
-not regress; you check against it in step 8.
+Run `make mypy` from `${PKG_ROOT}` once and record the **set** of errors
+in **non-target** files — each error's file, line, and code, not just the
+count. That set is pre-existing noise the workflow must not add to. You
+check against it in step 8: incidentally fixing a baseline error is fine,
+but introducing a *new* non-target error is a regression even if the total
+count holds or drops.
 
 ## Step 4 — Resolve the inter-file dependency graph
 
@@ -92,8 +95,9 @@ Spawn one `_type_hint_file` teammate per target file as a **team**
 Brief each with: `file`; `package` (`${PKG_ROOT}`); `target_files` (the
 set plus each teammate's name); `upstream` (files/symbols it consumes and
 the owning teammate); `downstream` (consumers and the symbols they take);
-`owned_symbols`; and a `baseline` note that `make mypy` covers the whole
-package, so it must filter output to its own file.
+`owned_symbols`; and a `baseline` note that it iterates with mypy scoped
+to its own file (`mypy <file>` from `${PKG_ROOT}`) — the whole-package
+`make mypy` baseline and final gate are yours, not theirs.
 
 Then let the team run. As lead you:
 
@@ -110,7 +114,10 @@ candidates, `# type: ignore` proposals. Hold these for step 7.
 ## Step 7 — Reconcile with the user
 
 When teammates report clean (or blocked only on decisions), walk the
-unresolved items with the user, in order:
+unresolved items with the user, in order. **Keep the team alive through
+this step** — accepted fixes route back to the owning teammate, who holds
+the file's context. Tear the team down only once every accepted change is
+in; then run step 8 yourself.
 
 1. **External-package overrides**: present each proposed
    `[[tool.mypy.overrides]]` with its mypy error and the precedent
@@ -120,7 +127,7 @@ unresolved items with the user, in order:
 2. **Logic-change candidates**: present each with file:line, the current
    code, and what mypy expects. Never apply unilaterally. If the user
    declines, offer a `# type: ignore` (code + reason) or to leave the
-   error. Route an accepted fix back to the owning teammate, or apply it
+   error. Route an accepted fix back to the owning teammate. Only apply it
    yourself if the team is already torn down.
 3. **`# type: ignore` candidates**: present each (file:line, code,
    justification); apply only the accepted ones.
@@ -128,8 +135,9 @@ unresolved items with the user, in order:
 ## Step 8 — Final verification and `py.typed`
 
 Run a final `make mypy` and `make check` over the whole package. Confirm
-zero errors in target files and a non-target error count `<=` the step-3
-baseline. If either fails, return to step 7 (or re-engage the relevant
+zero errors in target files and that the non-target errors are a **subset**
+of the step-3 baseline — no error you didn't start with, even if the total
+count dropped. If either fails, return to step 7 (or re-engage the relevant
 teammate). Don't proceed until this passes, or until the only remaining
 errors are ones the user explicitly accepted.
 

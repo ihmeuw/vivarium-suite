@@ -43,10 +43,6 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
 
 **Type Hinter**
 
-- ``_type_hint_file`` — per-file **teammate** that takes one Python file
-  to mypy-clean, settling shared type contracts with sibling teammates
-  via the team mailbox. Edits only its own file; proposes overrides,
-  logic changes, and ``# type: ignore`` candidates up to the lead.
 - Slash command (Claude Code only): ``/viv:type-hinter <target>`` (a
   package, sub-folder, or ``.py`` files under one ``libs/<pkg>/``). Runs
   as the **lead of an agent team**: resolves the inter-file dependency
