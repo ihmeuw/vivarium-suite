@@ -1,4 +1,4 @@
-**4.0.0 - 06/01/26**
+**4.0.0 - 06/02/26**
 
 Initial release from the vivarium-suite monorepo; the standalone
 ``vivarium_cluster_tools`` repository has been archived.
@@ -7,10 +7,6 @@ Breaking changes:
 
 - PyPI distribution renamed from ``vivarium_cluster_tools`` to ``vivarium-cluster-tools``.
 - Import path changed from ``vivarium_cluster_tools`` to ``vivarium.cluster_tools``.
-- Internal references to the legacy ``vivarium.framework.*`` and ``vivarium.interface.*``
-  paths have been rewritten to ``vivarium.engine.framework.*`` and
-  ``vivarium.engine.interface.*`` (the new post-monorepo homes).
-- Internal references to ``layered_config_tree`` have been rewritten to ``vivarium.config_tree``.
 
 **3.1.5 - 05/20/26**
 

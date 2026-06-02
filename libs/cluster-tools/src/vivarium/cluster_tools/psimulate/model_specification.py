@@ -9,9 +9,9 @@ import typing
 from pathlib import Path
 
 import yaml
-from vivarium.config_tree import LayeredConfigTree
-from vivarium.config_tree.exceptions import ConfigurationError, ConfigurationKeyError
 from loguru import logger
+from vivarium.config_tree import ConfigTree
+from vivarium.config_tree.exceptions import ConfigurationError, ConfigurationKeyError
 from vivarium.engine.framework.artifact import parse_artifact_path_config
 from vivarium.engine.framework.configuration import build_model_specification
 
@@ -36,7 +36,7 @@ def parse(
     model_specification_path: Path,
     results_root: Path,
     keyspace: "Keyspace",
-) -> LayeredConfigTree:
+) -> ConfigTree:
     if command in [COMMANDS.restart, COMMANDS.expand]:
         return build_model_specification(model_specification_path)
     if command == COMMANDS.load_test:
@@ -78,7 +78,7 @@ def parse(
 
 
 def persist(
-    model_specification: LayeredConfigTree,
+    model_specification: ConfigTree,
     model_specification_path: Path,
 ) -> None:
     model_specification_path.write_text(

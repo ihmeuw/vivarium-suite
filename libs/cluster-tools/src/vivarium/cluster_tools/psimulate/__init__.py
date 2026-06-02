@@ -3,7 +3,7 @@
 psimulate
 =========
 
-Parallel runner for :mod:`vivarium` jobs.
+Parallel runner for :mod:`vivarium.engine` jobs.
 
 """
 from typing import NamedTuple

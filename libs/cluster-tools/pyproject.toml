@@ -28,7 +28,7 @@ dependencies = [
 cluster = ["jobmon_installer_ihme"]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "vivarium-testing-utils>=0.3.4",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]"]
 interactive = ["vivarium-dependencies[interactive]"]
@@ -98,3 +98,9 @@ explicit_package_bases = true
 [[tool.mypy.overrides]]
 module = ["dill", "jobmon_installer_ihme.*"]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["vivarium_cluster_tools"]
+
+[tool.coverage.report]
+show_missing = true

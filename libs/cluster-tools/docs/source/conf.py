@@ -80,6 +80,17 @@ exclude_patterns = []
 pygments_style = "sphinx"
 todo_include_todos = True
 
+# vipin/perf_counters.py guards `scpufreq`/`scpustats`/`sdiskio`/`snetio`
+# imports behind TYPE_CHECKING because they only exist in psutil on Linux.
+# sphinx-autodoc-typehints tries to resolve those forward references at docs
+# build time and warns when running on a platform (e.g. macOS) where the
+# names don't exist. The annotations are still correct via psutil's runtime
+# attribute access; only the docs builder can't follow them.
+suppress_warnings = [
+    "sphinx_autodoc_typehints.guarded_import",
+    "sphinx_autodoc_typehints.forward_reference",
+]
+
 
 # -- Options for HTML output ----------------------------------------------
 
