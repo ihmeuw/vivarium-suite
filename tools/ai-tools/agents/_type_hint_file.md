@@ -69,7 +69,7 @@ This is a bounded loop, not a one-shot pass. You own your iteration.
    add or correct annotations on every function, method, parameter,
    return, and module-level variable that needs one.
 
-5. **Re-run `make mypy`** and repeat 3–4 until your file is clean or
+5. **Re-run `make mypy`** and repeat steps 3–4 until your file is clean or
    the only remaining errors are ones you cannot fix yourself:
    - a contract not yet settled with a peer → resolve via the mailbox;
    - an external-package import without stubs → propose an override to
