@@ -11,47 +11,18 @@
 # serve to show the default.
 
 import datetime
+import importlib.metadata
 import os
 import subprocess
-
-import vivarium.cluster_tools
-
-
-def _copyright_end_year() -> str:
-    """Resolve the copyright end year for reproducible docs builds.
-
-    Two builds of the same git SHA must produce identical output, which rules
-    out ``datetime.date.today().year``. Order of precedence:
-
-    1. ``SOURCE_DATE_EPOCH`` (reproducible-builds standard).
-    2. Year of the HEAD commit (stable for a given SHA).
-    3. Current year (fallback for sdist / detached source builds).
-    """
-    if epoch := os.environ.get("SOURCE_DATE_EPOCH"):
-        return datetime.datetime.fromtimestamp(
-            int(epoch), tz=datetime.timezone.utc
-        ).strftime("%Y")
-    try:
-        out = subprocess.check_output(
-            ["git", "log", "-1", "--format=%cd", "--date=format:%Y"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        if out:
-            return out
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
-    return str(datetime.date.today().year)
-
 
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.cluster_tools"
 author = "The vivarium developers"
-copyright = f"2021-{_copyright_end_year()}, Institute for Health Metrics and Evaluation"
+copyright = f"2021, Institute for Health Metrics and Evaluation"
 
-version = vivarium.cluster_tools.__version__
-release = vivarium.cluster_tools.__version__
+version = importlib.metadata.version("vivarium-cluster-tools")
+release = version
 
 
 # -- General configuration ------------------------------------------------
@@ -80,12 +51,15 @@ exclude_patterns: list[str] = []
 pygments_style = "sphinx"
 todo_include_todos = True
 
-# vipin/perf_counters.py guards `scpufreq`/`scpustats`/`sdiskio`/`snetio`
-# imports behind TYPE_CHECKING because they only exist in psutil on Linux.
-# sphinx-autodoc-typehints tries to resolve those forward references at docs
-# build time and warns when running on a platform (e.g. macOS) where the
-# names don't exist. The annotations are still correct via psutil's runtime
-# attribute access; only the docs builder can't follow them.
+# Scoped suppression for sphinx-autodoc-typehints emitting noise when it can't
+# resolve psutil's Linux-only forward-referenced types (scpufreq/scpustats/
+# sdiskio/snetio in vipin/perf_counters.py, which guards them behind
+# TYPE_CHECKING because they only exist on Linux). The annotations are correct
+# via psutil's runtime attribute access; only the docs builder can't follow
+# them on non-Linux hosts.
+#
+# Do NOT add unrelated warning categories here without first verifying the underlying
+# issue — these suppressions narrowly target a known platform-specific quirk.
 suppress_warnings = [
     "sphinx_autodoc_typehints.guarded_import",
     "sphinx_autodoc_typehints.forward_reference",
@@ -138,8 +112,8 @@ intersphinx_mapping = {
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "tables": ("https://www.pytables.org/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "vivarium-engine": ("https://vivarium-engine.readthedocs.io/en/latest/", None),
-    "vivarium-config-tree": (
+    "vivarium_engine": ("https://vivarium-engine.readthedocs.io/en/latest/", None),
+    "vivarium_config_tree": (
         "https://vivarium-config-tree.readthedocs.io/en/latest/",
         None,
     ),

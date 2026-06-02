@@ -16,7 +16,7 @@ Glossary
 
   Parameter Uncertainty
     Parameter uncertainty is uncertainty due to the input data. The Global
-    Burden of Disease represents uncertainy distributions around the parameters
+    Burden of Disease represents uncertainty distributions around the parameters
     it produces with :term:`draws<Input Draw>`. By running a simulation with
     several different draws of the input data, we can propagate the parameter
     uncertainty through our model and to our outputs.

@@ -1,12 +1,12 @@
 **4.0.0 - 06/02/26**
 
-Initial release from the vivarium-suite monorepo; the standalone
-``vivarium_cluster_tools`` repository has been archived.
+First release from the vivarium-suite monorepo; the standalone
+``ihmeuw/vivarium_cluster_tools`` GitHub repository has been archived.
 
 Breaking changes:
 
-- PyPI distribution renamed from ``vivarium_cluster_tools`` to ``vivarium-cluster-tools``.
 - Import path changed from ``vivarium_cluster_tools`` to ``vivarium.cluster_tools``.
+- ``jobmon_installer_ihme`` moved from a hard dependency into the ``cluster`` extra.
 
 **3.1.5 - 05/20/26**
 

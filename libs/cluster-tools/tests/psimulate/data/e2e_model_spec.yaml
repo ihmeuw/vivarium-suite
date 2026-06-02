@@ -3,7 +3,7 @@
 # Includes mortality component and observer for output format verification.
 # Mortality rate is set high (10% per time step) to ensure at least one death is likely.
 components:
-    vivarium.examples.disease_model:
+    vivarium.engine.examples.disease_model:
         population:
             - BasePopulation()
         observer:

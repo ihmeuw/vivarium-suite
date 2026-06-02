@@ -3,8 +3,6 @@
 vivarium.cluster_tools Utilities
 ================================
 
-Making directories is hard.
-
 """
 
 import functools
@@ -88,7 +86,7 @@ def backoff_and_retry(
                     time.sleep(backoff_seconds)
                     retries -= 1
                     if not retries:
-                        log_function(f"Retries exhausted.")
+                        log_function("Retries exhausted.")
                         raise e
             return result
 

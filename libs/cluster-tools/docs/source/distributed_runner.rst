@@ -49,7 +49,7 @@ output directory with the ``-o`` flag and which project you'd like to run on wit
         - | The maximum number of workers to run concurrently.
     *   - | **-\-hardware** or **-h**
         - | A comma-separated list of the specific cluster hardware to run on.
-          | Refer to the --help for currently-supported opions.
+          | Refer to the --help for currently-supported options.
     *   - | **-\-peak-memory** or **-m**
         - | The maximum amount of memory to request per worker (in GB).
     *   - | **-\-max-runtime** or **-r**

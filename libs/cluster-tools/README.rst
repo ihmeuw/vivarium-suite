@@ -24,13 +24,22 @@ or build it from source by cloning the monorepo and installing this package:
 .. code-block:: bash
 
    git clone https://github.com/ihmeuw/vivarium-suite.git
-   cd vivarium-suite/libs/cluster-tools
-   pip install -e .
+   cd vivarium-suite
+   pip install libs/cluster-tools
+
+.. note::
+
+    The ``[cluster]`` extra (i.e. `pip install libs/cluster-tools[cluster]`) pulls
+    in ``jobmon_installer_ihme`` (hosted on IHME's internal PyPI mirror), which
+    is required to actually submit jobs on the IHME cluster. The base install
+    (``pip install vivarium-cluster-tools``) resolves on public PyPI and is sufficient
+    for read-only inspection of results / docs generation, but ``psimulate run``
+    etc. need the cluster extra.
 
 A simple example
 ----------------
 
-If you have a ``vivarium`` model specifcation file defining a particular model,
+If you have a ``vivarium`` model specification file defining a particular model,
 you can use that along side a **branches file** to launch a run of many
 simulations at once with variations in the input data, random seed, or with
 different parameter settings.
@@ -89,9 +98,9 @@ and efficacy for the vaccine.  That file would look like
     random_seed_count: 10
 
     branches:
-      lri_vaccine:
-        coverage: [0.0, 0.2, 0.4, 0.8, 1.0]
-        efficacy: [0.4, 0.6, 0.8]
+      - lri_vaccine:
+          coverage: [0.0, 0.2, 0.4, 0.8, 1.0]
+          efficacy: [0.4, 0.6, 0.8]
 
 The branches file would overwrite your original ``lri_vaccine`` configuration
 with each combination of coverage and efficacy in the branches file and launch

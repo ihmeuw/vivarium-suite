@@ -9,6 +9,10 @@ Vivarium Cluster Tools Documentation
 Vivarium cluster tools is a python package that makes running ``vivarium``
 simulations at scale on a Slurm cluster easy.
 
+This package is part of the `vivarium-suite monorepo
+<https://github.com/ihmeuw/vivarium-suite>`_ and sits alongside
+``vivarium-engine`` (the simulation framework) and other ``vivarium-*`` libs.
+
 .. toctree::
    :maxdepth: 2
 
