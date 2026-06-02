@@ -44,6 +44,14 @@ If the subagent flagged inseparable hunks, raise those explicitly — don't bury
 
 Run the commits in the main thread so the user sees each one happen.
 
+First, **create a backup branch** at the current `HEAD` so the entire pre-split state is recoverable:
+
+```bash
+git branch commit-splitter-backup        # marker at HEAD before any commits
+```
+
+Because the splitting steps below only *add* and *commit* (never discard), `git reset --soft commit-splitter-backup` collapses every new commit back into the working tree, restoring the exact original diff if anything goes wrong. Delete the branch in step 6 once the user has signed off.
+
 - **File-aligned groups** (most common): `git reset HEAD` to unstage everything, then for each group: `git add <files>` → `git commit -m "<subject>" -m "<body>"`. Leftover changes stay in the working tree until the next group claims them.
 - **Hunk-aligned groups within a file**: `git add -p <file>` for the user to walk through interactively, *or* draft the hunks into a patch and `git apply --cached`. Hunk splits are fiddly; prefer file-aligned splits when possible.
 - After each commit: `git --no-pager log -1 --stat` so the user can verify before the next group lands.
@@ -52,14 +60,19 @@ If a commit fails (lint hook, type check), stop and surface the failure. Do not 
 
 ### 5. Branch and PR (hand off)
 
-When the plan calls for multiple PRs, each PR needs its own branch. Defer branch naming, ticket linkage, PR body, and `#vivarium_dev` flagging to `viv:team-conventions` — don't re-derive them here. Typical shape:
+When the plan calls for multiple PRs, each PR needs its own branch. Defer branch naming, ticket linkage, PR body, and pinging Slack to `viv:team-conventions` — don't re-derive them here. Typical shape:
 
 - **One PR, many commits:** stay on the current branch; push and open a single PR.
 - **Multiple PRs:** for each group, create a branch off the appropriate base (usually `main`; sometimes the prior PR's branch if there's a hard dependency), cherry-pick the relevant commits onto it, push, and open the PR. Call out the dependency chain in each PR body so reviewers know the merge order.
+
+### 6. Clean up
+
+Once the user has confirmed the commits and PRs look right, delete the safety branch: `git branch -D commit-splitter-backup`. Don't delete it earlier — it's the recovery path if a split needs to be unwound. If the user is unsure, leave it in place and tell them the command to remove it later.
 
 ## Safety constraints
 
 - Never discard unstaged changes. Never `git checkout -- .`, `git clean -f`, or `git reset --hard` to "tidy up" the working tree.
 - Never force-push. Never skip hooks.
 - If something looks wrong mid-flow (commits not landing, hooks failing, hunks not applying), stop and ask. The user's working state is the source of truth.
-- Do not edit code as part of splitting. The skill rearranges history; it does not change behavior.
+- Do not edit code as part of splitting. The skill rearranges history; it does not change behavior. The commits and branches you produce must, taken together, reproduce the original working tree exactly — nothing dropped, duplicated, or modified.
+- Keep the `commit-splitter-backup` branch until the user signs off (step 6). It is the recovery path: `git reset --soft commit-splitter-backup` restores the full pre-split diff.
