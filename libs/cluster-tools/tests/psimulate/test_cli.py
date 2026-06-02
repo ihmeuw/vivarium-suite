@@ -1,12 +1,17 @@
 """Tests for psimulate CLI features.
 """
 
+import pytest
+
+# Skip module on envs without jobmon (e.g. public GH Actions runners that
+# can't reach IHME's private PyPI mirror to install jobmon_installer_ihme).
+pytest.importorskip("jobmon")
+
 import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import pytest
 import yaml
 from click.testing import CliRunner
 

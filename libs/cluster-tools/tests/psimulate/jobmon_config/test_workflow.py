@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
+
+# Skip module on envs without jobmon (e.g. public GH Actions runners that
+# can't reach IHME's private PyPI mirror to install jobmon_installer_ihme).
+pytest.importorskip("jobmon")
+
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, call, patch
 
-import pytest
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
