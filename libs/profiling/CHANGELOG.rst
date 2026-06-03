@@ -1,4 +1,4 @@
-**0.4.12 - 06/02/26**
+**0.4.12 - 06/03/26**
 
 - Fix test fixture component path so profiling tests pass on Python 3.11
 
