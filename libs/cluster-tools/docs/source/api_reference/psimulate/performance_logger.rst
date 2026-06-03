@@ -1,1 +1,1 @@
-.. automodule:: vivarium.cluster_tools.psimulate.performance_logger
+.. automodule:: vivarium_cluster_tools.psimulate.performance_logger

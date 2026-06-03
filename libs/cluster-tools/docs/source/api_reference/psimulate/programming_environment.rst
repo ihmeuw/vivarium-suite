@@ -1,1 +1,1 @@
-.. automodule:: vivarium.cluster_tools.psimulate.pip_env
+.. automodule:: vivarium_cluster_tools.psimulate.pip_env

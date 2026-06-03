@@ -20,14 +20,14 @@ in ``cluster_logs`` and ``worker_logs`` directories, described below.
 
 Cluster logs
 -------------
-The ``cluster_logs`` directory contains logs from the array job processes. Each worker job
+The ``cluster_logs`` directory contains logs from the the array job processes. Each worker job
 has its own file. The contents of these are similar to what you will find in the ``worker_logs``
 directory, but a superset. The logs in the ``cluster_logs`` directory contain
 cluster-related information.
 
 Worker logs
 -------------
-The ``worker_logs`` directory contains logs from the worker processes as they relate
+The ``worker_logs`` directory contains logs from the the worker processes as they relate
 running simulations. Additionally this directory contains performance logs that
 are described in the next section.
 

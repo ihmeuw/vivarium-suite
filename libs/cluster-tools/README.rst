@@ -4,6 +4,10 @@ Vivarium Cluster Tools
 .. image:: https://badge.fury.io/py/vivarium-cluster-tools.svg
     :target: https://badge.fury.io/py/vivarium-cluster-tools
 
+.. image:: https://github.com/ihmeuw/vivarium_cluster_tools/actions/workflows/build.yml/badge.svg?branch=main
+    :target: https://github.com/ihmeuw/vivarium_cluster_tools
+    :alt: Latest Version
+
 .. image:: https://readthedocs.org/projects/vivarium-cluster-tools/badge/?version=latest
     :target: https://vivarium-cluster-tools.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
@@ -11,35 +15,19 @@ Vivarium Cluster Tools
 Vivarium cluster tools is a python package that makes running ``vivarium``
 simulations at scale on a Slurm cluster easy.
 
-**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
+Installation
+------------
 
-You can install ``vivarium-cluster-tools`` from PyPI with pip:
+You can install this package with
 
-.. code-block:: bash
+.. code-block:: console
 
-   pip install vivarium-cluster-tools
-
-or build it from source by cloning the monorepo and installing this package:
-
-.. code-block:: bash
-
-   git clone https://github.com/ihmeuw/vivarium-suite.git
-   cd vivarium-suite
-   pip install libs/cluster-tools
-
-.. note::
-
-    The ``[cluster]`` extra (i.e. `pip install libs/cluster-tools[cluster]`) pulls
-    in ``jobmon_installer_ihme`` (hosted on IHME's internal PyPI mirror), which
-    is required to actually submit jobs on the IHME cluster. The base install
-    (``pip install vivarium-cluster-tools``) resolves on public PyPI and is sufficient
-    for read-only inspection of results / docs generation, but ``psimulate run``
-    etc. need the cluster extra.
+    pip install vivarium-cluster-tools
 
 A simple example
 ----------------
 
-If you have a ``vivarium`` model specification file defining a particular model,
+If you have a ``vivarium`` model specifcation file defining a particular model,
 you can use that along side a **branches file** to launch a run of many
 simulations at once with variations in the input data, random seed, or with
 different parameter settings.
@@ -98,9 +86,9 @@ and efficacy for the vaccine.  That file would look like
     random_seed_count: 10
 
     branches:
-      - lri_vaccine:
-          coverage: [0.0, 0.2, 0.4, 0.8, 1.0]
-          efficacy: [0.4, 0.6, 0.8]
+      lri_vaccine:
+        coverage: [0.0, 0.2, 0.4, 0.8, 1.0]
+        efficacy: [0.4, 0.6, 0.8]
 
 The branches file would overwrite your original ``lri_vaccine`` configuration
 with each combination of coverage and efficacy in the branches file and launch
