@@ -1,3 +1,7 @@
+**0.12.1 - 06/03/26**
+
+ - Add `make check` guidance to CLAUDE.md
+
 **0.11.1 - 06/01/26**
 
  - Update ``git-rescue`` skill to run `make check` and summarize changes before pushing
