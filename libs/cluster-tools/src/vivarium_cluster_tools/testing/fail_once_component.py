@@ -23,7 +23,7 @@ to include in a model specification that is also used without the env var.
 import os
 from pathlib import Path
 
-from vivarium import Component
+from vivarium.engine import Component
 
 
 class FailOnceComponent(Component):
