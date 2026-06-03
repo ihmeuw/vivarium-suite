@@ -1,4 +1,4 @@
-**5.0.2 - 06/02/26**
+**5.0.2 - 06/03/26**
 
 - Fix stray "f" in component parser ImportError message
 
