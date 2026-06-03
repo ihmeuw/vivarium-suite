@@ -1,3 +1,7 @@
+**0.4.12 - 06/03/26**
+
+- Fix test fixture component path so profiling tests pass on Python 3.11
+
 **0.4.11 - 06/01/26**
 
 - Update vivarium imports to use new vivarium-engine package

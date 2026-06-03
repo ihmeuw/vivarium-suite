@@ -65,6 +65,8 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
 - ``brainstorming`` — structured design exploration that produces a Jira
   plan comment, a new Jira ticket, or a Confluence design doc; ships a
   browser-based Mermaid diagramming companion
+- ``commit-splitter`` — dole out a bulk uncommitted diff into reviewable
+  commits, and PR-sized branches when scope warrants.
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
@@ -168,11 +170,13 @@ Code:
 - The 5 ``_review_*`` sub-agents have **no Bash access at all**. They
   are fed PR context by the slash command and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
-- ``_diff_analyzer`` and ``_hypothesis_tester`` declare ``Bash`` to run
-  ``git`` and ``gh`` commands. In practice, every operation they
-  perform is a read-only git command (``git diff``, ``git log``,
-  ``git show``, ``git status``), which Claude Code auto-approves via
-  its built-in read-only command allowlist.
+- ``_diff_analyzer``, ``_hypothesis_tester``, and ``_split_proposer``
+  declare ``Bash`` to run ``git`` and ``gh`` commands. In practice, every
+  operation they perform is a read-only git command (``git diff``,
+  ``git log``, ``git show``, ``git status``), which Claude Code
+  auto-approves via its built-in read-only command allowlist.
+  ``_split_proposer`` is additionally constrained by its own prompt to
+  never run a state-changing git command.
 - The ``code_reviewer`` and ``model_regression_debugger`` orchestrator
   agents are Copilot-only and have no Claude tools — on Claude Code
   they redirect to the slash command and exit. The Bash work on the

@@ -277,6 +277,6 @@ class ComponentConfigurationParser:
         component = import_by_path(component_path)(*args)
         if not isinstance(component, Component):
             raise ImportError(
-                f"Attempted to import f{component_path}, which is not a component."
+                f"Attempted to import {component_path}, which is not a component."
             )
         return component

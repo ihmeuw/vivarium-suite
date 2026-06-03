@@ -1,0 +1,4 @@
+# Minimal branch configuration for E2E testing.
+# 2 draws x 2 seeds x 1 branch (empty) = 4 total jobs.
+input_draw_count: 2
+random_seed_count: 2
