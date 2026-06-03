@@ -1,1 +1,1 @@
-.. automodule:: vivarium.cluster_tools.psimulate.cluster.interface
+.. automodule:: vivarium_cluster_tools.psimulate.cluster.interface

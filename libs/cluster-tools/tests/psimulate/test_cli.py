@@ -1,27 +1,22 @@
 """Tests for psimulate CLI features.
 """
 
-import pytest
-
-# jobmon lives in the [cluster] extra and isn't installed on envs without it
-# (includeing Github Actions runners).
-pytest.importorskip("jobmon")
-
 import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 import yaml
 from click.testing import CliRunner
 
-from vivarium.cluster_tools.psimulate.cli import psimulate
+from vivarium_cluster_tools.psimulate.cli import psimulate
 
 # ---------------------------------------------------------------------------
 # The runner.main call is the "leaf" of every CLI command.  We mock it so
 # tests exercise only the CLI-parsing / config-loading layer.
 # ---------------------------------------------------------------------------
-_RUNNER_MAIN = "vivarium.cluster_tools.psimulate.runner.main"
+_RUNNER_MAIN = "vivarium_cluster_tools.psimulate.runner.main"
 
 
 # ---------------------------------------------------------------------------

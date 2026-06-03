@@ -13,15 +13,14 @@ py:class pandas.core.generic.PandasObject
 py:class Path
 py:class pathlib._local.Path
 # typing
-py:class vivarium.cluster_tools.cli_tools.R
+py:class vivarium_cluster_tools.cli_tools.R
 # psutil
 py:class scpustats
 py:class sdiskio
 py:class scpufreq
 py:class snetio
-
-py:class ConfigTree
+# layered_config_tree
+py:class layered_config_tree.main.LayeredConfigTree
+py:class LayeredConfigTree
+# vivarium
 py:class Component
-
-py:class click.core.Context
-py:class click.core.Parameter

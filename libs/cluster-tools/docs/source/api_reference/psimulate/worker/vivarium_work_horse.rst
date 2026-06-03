@@ -1,1 +1,1 @@
-.. automodule:: vivarium.cluster_tools.psimulate.worker.vivarium_work_horse
+.. automodule:: vivarium_cluster_tools.psimulate.worker.vivarium_work_horse
