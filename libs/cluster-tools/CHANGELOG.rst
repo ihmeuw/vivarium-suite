@@ -1,4 +1,4 @@
-**4.0.0 - 06/02/26**
+**4.0.0 - 06/03/26**
 
 First release from the vivarium-suite monorepo; the standalone
 ``ihmeuw/vivarium_cluster_tools`` GitHub repository has been archived.
