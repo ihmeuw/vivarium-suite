@@ -19,9 +19,8 @@ py:class scpustats
 py:class sdiskio
 py:class scpufreq
 py:class snetio
-# layered_config_tree
-py:class layered_config_tree.main.LayeredConfigTree
-py:class LayeredConfigTree
+# config_tree
+py:class vivarium.config_tree.main.ConfigTree
 py:class ConfigTree
 py:class Component
 # jobmon
