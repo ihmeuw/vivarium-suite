@@ -4,6 +4,9 @@ from unittest.mock import patch
 
 import pandas as pd
 import pytest
+
+pytest.importorskip("jobmon")
+
 import yaml
 from click.testing import CliRunner
 from pandas.testing import assert_frame_equal

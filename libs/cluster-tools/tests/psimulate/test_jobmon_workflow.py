@@ -7,6 +7,9 @@ from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+
+pytest.importorskip("jobmon")
+
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
