@@ -8,6 +8,9 @@ from typing import Any, Callable
 from unittest.mock import MagicMock
 
 import pytest
+
+pytest.importorskip("jobmon")
+
 from pytest_mock import MockerFixture
 
 from vivarium_cluster_tools.dagger.config.builder import STEP_TYPE_API_FNS

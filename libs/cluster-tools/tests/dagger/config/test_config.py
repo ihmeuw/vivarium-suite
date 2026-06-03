@@ -8,6 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytest.importorskip("jobmon")
+
 from tests.dagger.config.utilities import (
     make_notebook_step_dict,
     make_pytest_step_dict,

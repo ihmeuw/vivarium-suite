@@ -7,6 +7,9 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+
+pytest.importorskip("jobmon")
+
 import yaml
 from click.testing import CliRunner
 
