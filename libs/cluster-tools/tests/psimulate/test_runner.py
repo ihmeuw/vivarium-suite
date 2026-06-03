@@ -1,7 +1,7 @@
 import pytest
 
-# Skip module on envs without jobmon (e.g. public GH Actions runners that
-# can't reach IHME's private PyPI mirror to install jobmon_installer_ihme).
+# jobmon lives in the [cluster] extra and isn't installed on envs without it
+# (includeing Github Actions runners).
 pytest.importorskip("jobmon")
 
 from pathlib import Path

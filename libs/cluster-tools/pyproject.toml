@@ -20,12 +20,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# jobmon_installer_ihme is hosted on the IHME-internal PyPI mirror and is not
-# resolvable from public PyPI (so RTD can't install it). Keeping it in a
-# `cluster` extra means the [docs] install path doesn't pull it and RTD builds
-# work, while local/Jenkins envs that need to actually submit jobs install
-# `[cluster]` (or `[dev]` / `[ci_jenkins]`, which include it). Do NOT add `jobmon`
-# directly — that would bypass the installer's IHME-specific pinning/configuration.
+# jobmon_installer_ihme (which in turn installs jobmon) is gated behind `[cluster]`
+# because jobmon 3.2.4 (latest) imports `pkg_resources` which was removed in setuptools
+# 80+ and is absent from Python 3.13's default install. Forcing jobmon onto every
+# install breaks local dev on 3.13, but on the cluster the installer pins a tested
+# jobmon and sidesteps the issue.
 cluster = ["jobmon_installer_ihme"]
 test = [
     "vivarium-dependencies[pytest]",
@@ -39,10 +38,6 @@ lint = [
     "types-psutil",
     "pyarrow-stubs",
 ]
-# `dev` includes [cluster] for local IHME-cluster development; `ci_github`
-# intentionally OMITS [cluster] so installs work on public GH Actions runners
-# (no access to IHME's private PyPI mirror); `ci_jenkins` re-adds [cluster] on
-# top of ci_github since Jenkins agents do have IHME network access.
 dev = ["vivarium-cluster-tools[test,docs,interactive,lint,cluster]"]
 ci_github = ["vivarium-cluster-tools[test,docs,lint]"]
 ci_jenkins = ["vivarium-cluster-tools[ci_github,cluster]"]
@@ -101,11 +96,9 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-# jobmon and jobmon_installer_ihme live on IHME's private PyPI mirror and
-# aren't installable in GitHub Actions runners (no IHME network access).
-# The `[ci_github]` extras intentionally omit `[cluster]` so installs work
-# on public CI; mute the resulting "Cannot find implementation" errors so
-# mypy runs on the rest of the source.
+# jobmon is in [cluster], which [ci_github] doesn't install — see the
+# rationale on the `cluster` extra above. Mute "Cannot find implementation"
+# so mypy can still check the rest of the source on non-cluster envs.
 module = ["dill", "jobmon.*", "jobmon_installer_ihme.*"]
 ignore_missing_imports = true
 

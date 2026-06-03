@@ -58,7 +58,8 @@ def test_submodule_importable(modpath: str) -> None:
     of the rename) and broken namespace setup. jobmon-dependent modules
     (``psimulate.cli``, ``psimulate.runner``, ``psimulate.jobmon_config.*``,
     ``psimulate.worker.vivarium_work_horse``, ``psimulate.worker.load_test_work_horse``)
-    are excluded from this list because jobmon isn't installable on GH Actions.
+    are excluded from this list because jobmon is in the ``[cluster]`` extra
+    and may not be installed.
     """
     importlib.import_module(modpath)
 
