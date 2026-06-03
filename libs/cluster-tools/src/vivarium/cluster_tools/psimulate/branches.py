@@ -132,12 +132,10 @@ class Keyspace:
 
     def __len__(self) -> int:
         """Returns the number of individual simulation runs this keyspace represents."""
-        return len(
-            list(
-                product(
-                    self._keyspace["input_draw"], self._keyspace["random_seed"], self.branches
-                )
-            )
+        return (
+            len(self._keyspace["input_draw"])
+            * len(self._keyspace["random_seed"])
+            * len(self.branches)
         )
 
 
