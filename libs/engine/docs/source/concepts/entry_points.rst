@@ -129,8 +129,6 @@ are available in the :ref:`interactive tutorial <interactive_tutorial>`.
 a distributed system, mostly because each cluster is unique. However, many
 common simulation tasks will require running many variations of the same
 simulation (parameter searches, intervention analysis, uncertainty analysis,
-etc.).  For an example of a distributed system built on top of
-:mod:`vivarium.engine`, see the
-`vivarium_cluster_tools <https://github.com/ihmeuw/vivarium_cluster_tools>`_
-package and its associated
+etc.).  For an example of a distributed system built on top of :mod:`vivarium.engine`,
+see the `vivarium.cluster_tools` sibling package and its associated
 `documentation <https://vivarium-cluster-tools.readthedocs.io/en/latest/?badge=latest>`_.
