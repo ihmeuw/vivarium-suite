@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pandas as pd
 from loguru import logger
-from vivarium.framework import utilities
+from vivarium.engine.framework import utilities
 
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
 

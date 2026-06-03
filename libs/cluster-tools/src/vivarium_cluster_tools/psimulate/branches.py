@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 import yaml
-from vivarium.framework.utilities import collapse_nested_dict
+from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.psimulate.model_specification import FULL_ARTIFACT_PATH_KEY
 
