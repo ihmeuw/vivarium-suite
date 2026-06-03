@@ -18,7 +18,7 @@ from typing import Any
 import pandas as pd
 import yaml
 from loguru import logger
-from vivarium.framework.utilities import collapse_nested_dict
+from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.core import cluster, logs
 from vivarium_cluster_tools.core.jobmon import client

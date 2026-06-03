@@ -10,7 +10,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import NamedTuple
 
-from vivarium.interface.utilities import get_output_model_name_string
+from vivarium.engine.interface.utilities import get_output_model_name_string
 
 from vivarium_cluster_tools import utilities as vct_utils
 from vivarium_cluster_tools.psimulate import COMMANDS

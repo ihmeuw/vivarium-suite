@@ -14,7 +14,7 @@ from typing import Any, NamedTuple, TypedDict
 
 import numpy as np
 import pandas as pd
-from vivarium.framework.utilities import collapse_nested_dict
+from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.psimulate import branches
 

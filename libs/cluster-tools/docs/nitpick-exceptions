@@ -22,7 +22,7 @@ py:class snetio
 # layered_config_tree
 py:class layered_config_tree.main.LayeredConfigTree
 py:class LayeredConfigTree
-# vivarium
+py:class ConfigTree
 py:class Component
 # jobmon
 py:class jobmon.client.api.Tool

@@ -16,8 +16,8 @@ from typing import Any, cast
 import dill
 import pandas as pd
 from loguru import logger
-from vivarium.framework.engine import SimulationContext
-from vivarium.framework.utilities import collapse_nested_dict
+from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.psimulate.jobs import JobParameters

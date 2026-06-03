@@ -13,7 +13,7 @@ from collections.abc import Callable
 import numpy as np
 import pandas as pd
 from loguru import logger
-from vivarium.framework.randomness import get_hash
+from vivarium.engine.framework.randomness import get_hash
 
 from vivarium_cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium_cluster_tools.psimulate.jobs import JobParameters
