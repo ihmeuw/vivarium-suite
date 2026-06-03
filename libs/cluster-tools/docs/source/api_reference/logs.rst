@@ -1,1 +1,1 @@
-.. automodule:: vivarium.cluster_tools.logs
+.. automodule:: vivarium_cluster_tools.logs

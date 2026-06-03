@@ -7,8 +7,8 @@ from _pytest.logging import LogCaptureFixture
 from loguru import logger
 from pandas.testing import assert_frame_equal
 
-from vivarium.cluster_tools.psimulate.paths import OutputPaths
-from vivarium.cluster_tools.psimulate.performance_logger import (
+from vivarium_cluster_tools.psimulate.paths import OutputPaths
+from vivarium_cluster_tools.psimulate.performance_logger import (
     append_child_job_data,
     append_perf_data_to_central_logs,
     generate_runner_job_data,
@@ -144,11 +144,11 @@ def test_valid_log_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
+        "vivarium_cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
         tmp_path,
     )
     monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE", 4
+        "vivarium_cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE", 4
     )
     # add some data to central logs directory to allow appending
     output_paths = get_output_paths_from_output_directory(result_directory)
@@ -201,11 +201,11 @@ def test_appending(
 ) -> None:
     max_num_rows = 4
     monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE",
+        "vivarium_cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE",
         max_num_rows,
     )
     monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
+        "vivarium_cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
         tmp_path,
     )
 

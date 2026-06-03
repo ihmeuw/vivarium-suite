@@ -1,17 +1,3 @@
-**4.0.0 - 06/03/26**
-
-First release from the vivarium-suite monorepo; the standalone
-``ihmeuw/vivarium_cluster_tools`` GitHub repository has been archived.
-
-Breaking changes:
-
-- Import path changed from ``vivarium_cluster_tools`` to ``vivarium.cluster_tools``.
-- ``jobmon_installer_ihme`` moved from a hard dependency into the ``cluster`` extra.
-
-**3.1.5 - 05/20/26**
-
-- Add tests covering the ``backup_freq=None`` (no-backup) code path
-
 **3.1.4 - 05/18/26**
 
 - Fix mypy error for generic ParamType in cli_tools

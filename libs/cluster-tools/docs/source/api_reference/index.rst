@@ -1,7 +1,7 @@
 API Reference
 =============
 
-.. automodule:: vivarium.cluster_tools
+.. automodule:: vivarium_cluster_tools
 
 .. toctree::
    :maxdepth: 2

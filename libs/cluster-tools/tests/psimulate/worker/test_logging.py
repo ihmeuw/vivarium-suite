@@ -5,7 +5,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
-from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import work_horse
+from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import work_horse
 
 
 @pytest.mark.parametrize("log_level", [0, 1, 2])
@@ -26,15 +26,15 @@ def test_logging_level(mocker: MockerFixture, tmp_path: Path, log_level: int) ->
     )
 
     mocker.patch(
-        "vivarium.cluster_tools.psimulate.worker.vivarium_work_horse.ENV_VARIABLES",
+        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.ENV_VARIABLES",
     )
-    mocker.patch("vivarium.cluster_tools.psimulate.worker.vivarium_work_horse.run_simulation")
-    mocker.patch("vivarium.cluster_tools.psimulate.worker.vivarium_work_horse.remove_backups")
+    mocker.patch("vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.run_simulation")
+    mocker.patch("vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.remove_backups")
     mocker.patch(
-        "vivarium.cluster_tools.psimulate.worker.vivarium_work_horse.get_sim_results"
+        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.get_sim_results"
     )
     with patch(
-        "vivarium.cluster_tools.psimulate.worker.vivarium_work_horse.ParallelSimulationContext"
+        "vivarium_cluster_tools.psimulate.worker.vivarium_work_horse.ParallelSimulationContext"
     ) as mock_parallel_sim:
         work_horse(job_parameters)
         mock_parallel_sim.assert_called_once_with(

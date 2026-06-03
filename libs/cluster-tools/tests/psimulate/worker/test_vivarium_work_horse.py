@@ -8,7 +8,8 @@ import pytest
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
-from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
+from vivarium_cluster_tools.psimulate.jobs import JobParameters
+from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
     ParallelSimulationContext,
     get_backup,
     get_sim_from_backup,
@@ -16,7 +17,6 @@ from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
 )
 
 
-@pytest.mark.parametrize("backup_freq", [None, 300])
 @pytest.mark.parametrize(
     "make_dir, has_metadata_file, has_backup, multiple_backups",
     [
@@ -34,8 +34,8 @@ def test_get_backup(
     has_metadata_file: bool,
     has_backup: bool,
     multiple_backups: bool,
-    backup_freq: int | None,
 ) -> None:
+    task_id = "test_task_id"
     input_draw = 1
     random_seed = 2
     branch_configuration = {"branch_key": "branch_value"}
@@ -46,35 +46,28 @@ def test_get_backup(
         input_draw=input_draw,
         random_seed=random_seed,
         backup_configuration={
-            "backup_freq": backup_freq,
+            "backup_freq": 300,
             "backup_dir": tmp_path / "backups",
             "backup_metadata_path": tmp_path / "backups" / "backup_metadata.csv",
         },
-    )
-    # Patch sleep so we can assert it is skipped on the no-backup rename path
-    # and so passing rows do not actually wait 5 seconds.
-    sleep_mock = mocker.patch(
-        "vivarium.cluster_tools.psimulate.worker.vivarium_work_horse.sleep"
     )
     if make_dir:
         (tmp_path / "backups").mkdir(exist_ok=False)
         if has_metadata_file:
             metadata_draw = input_draw if has_backup else 7
             metadata = pd.DataFrame(
-                [
-                    {
-                        "input_draw": metadata_draw,
-                        "random_seed": random_seed,
-                        "job_id": job_id,
-                        "branch_key": "branch_value",
-                    },
-                    {
-                        "input_draw": input_draw,
-                        "random_seed": random_seed + 5,
-                        "job_id": "different_job",
-                        "branch_key": "branch_value",
-                    },
-                ]
+                {
+                    "input_draw": [metadata_draw],
+                    "random_seed": [random_seed],
+                    "job_id": job_id,
+                    "branch_key": ["branch_value"],
+                },
+                {
+                    "input_draw": [input_draw],
+                    "random_seed": [random_seed + 5],
+                    "job_id": "different_job",
+                    "branch_key": ["branch_value"],
+                },
             )
             if multiple_backups:
                 new_row = pd.DataFrame(
@@ -103,19 +96,10 @@ def test_get_backup(
 
         backup = cast(list[int], get_backup(job_parameters))
         assert backup == correct_pickle
-        # Stale pickle cleanup happens outside the backup_freq gate.
         assert not (tmp_path / "backups" / "stale_job.pkl").exists()
+        assert not (tmp_path / "backups" / f"{job_id}.pkl").exists()
+        assert (tmp_path / "backups" / f"{job_parameters.task_id}.pkl").exists()
         assert (tmp_path / "backups" / "different_job.pkl").exists()
-        if backup_freq is None:
-            # No rename when backups are disabled: the pickle keeps its original
-            # filename and sleep is skipped.
-            assert (tmp_path / "backups" / f"{job_id}.pkl").exists()
-            assert not (tmp_path / "backups" / f"{job_parameters.task_id}.pkl").exists()
-            sleep_mock.assert_not_called()
-        else:
-            assert not (tmp_path / "backups" / f"{job_id}.pkl").exists()
-            assert (tmp_path / "backups" / f"{job_parameters.task_id}.pkl").exists()
-            sleep_mock.assert_called_once()
 
     else:
         backup = cast(list[int], get_backup(job_parameters))

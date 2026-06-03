@@ -1,1 +1,1 @@
-.. automodule:: vivarium.cluster_tools.utilities
+.. automodule:: vivarium_cluster_tools.utilities

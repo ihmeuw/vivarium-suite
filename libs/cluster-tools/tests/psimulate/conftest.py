@@ -1,11 +1,13 @@
 """Shared fixtures for the psimulate test suite."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Generator
 
 import pytest
+from _pytest.logging import LogCaptureFixture
+from loguru import logger
 
-from vivarium.cluster_tools.psimulate.jobs import JobParameters
+from vivarium_cluster_tools.psimulate.jobs import JobParameters
 
 
 def make_job_parameters(**overrides: Any) -> JobParameters:

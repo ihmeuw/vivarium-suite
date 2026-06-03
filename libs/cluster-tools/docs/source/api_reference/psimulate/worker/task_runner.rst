@@ -1,1 +1,1 @@
-.. automodule:: vivarium.cluster_tools.psimulate.worker.task_runner
+.. automodule:: vivarium_cluster_tools.psimulate.worker.task_runner

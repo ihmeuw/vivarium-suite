@@ -1,1 +1,1 @@
-.. automodule:: vivarium.cluster_tools.psimulate.jobs
+.. automodule:: vivarium_cluster_tools.psimulate.jobs
