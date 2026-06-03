@@ -16,7 +16,7 @@ from typing import Any
 
 import click
 from loguru import logger
-from vivarium.framework.utilities import handle_exceptions
+from vivarium.engine.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools.core import cli_tools, cluster, logs
 from vivarium_cluster_tools.core.cli_tools import Decorator

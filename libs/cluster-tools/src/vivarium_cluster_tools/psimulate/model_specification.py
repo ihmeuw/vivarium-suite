@@ -12,8 +12,8 @@ import yaml
 from layered_config_tree import LayeredConfigTree
 from layered_config_tree.exceptions import ConfigurationError, ConfigurationKeyError
 from loguru import logger
-from vivarium.framework.artifact import parse_artifact_path_config
-from vivarium.framework.configuration import build_model_specification
+from vivarium.engine.framework.artifact import parse_artifact_path_config
+from vivarium.engine.framework.configuration import build_model_specification
 
 from vivarium_cluster_tools.psimulate import COMMANDS
 

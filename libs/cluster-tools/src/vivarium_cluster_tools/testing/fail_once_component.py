@@ -45,7 +45,7 @@ class FailOnceComponent(Component):
     def columns_required(self) -> list[str]:
         return []
 
-    def setup(self, builder: "vivarium.framework.engine.Builder") -> None:  # type: ignore[name-defined]  # noqa: F821
+    def setup(self, builder: "vivarium.engine.framework.engine.Builder") -> None:  # type: ignore[name-defined]  # noqa: F821
         sentinel_dir = os.environ.get("FAIL_ONCE_SENTINEL_DIR")
         if not sentinel_dir:
             return

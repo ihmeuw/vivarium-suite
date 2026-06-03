@@ -15,7 +15,7 @@ from pathlib import Path
 
 import click
 from loguru import logger
-from vivarium.framework.utilities import handle_exceptions
+from vivarium.engine.framework.utilities import handle_exceptions
 
 from vivarium_cluster_tools.core import cli_tools, logs
 from vivarium_cluster_tools.dagger import runner
