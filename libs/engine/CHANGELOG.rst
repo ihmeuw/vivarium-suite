@@ -1,3 +1,7 @@
+**5.0.3 - 06/03/26**
+
+- Refer to vivarium.cluster_tools instead of vivarium_cluster_tools in documentation
+
 **5.0.2 - 06/03/26**
 
 - Fix stray "f" in component parser ImportError message
