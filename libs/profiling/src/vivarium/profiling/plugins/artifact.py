@@ -1,6 +1,6 @@
 import re
 
-from vivarium.framework.artifact import ArtifactManager as VivariumArtifactManager
+from vivarium.engine.framework.artifact import ArtifactManager as VivariumArtifactManager
 
 
 class ArtifactManager(VivariumArtifactManager):

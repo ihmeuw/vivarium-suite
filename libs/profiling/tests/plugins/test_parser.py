@@ -1,6 +1,6 @@
 import pytest
 from vivarium.config_tree import ConfigTree
-from vivarium.interface.interactive import InteractiveContext
+from vivarium.engine.interface.interactive import InteractiveContext
 from vivarium_public_health.disease import DiseaseModel
 from vivarium_public_health.results import DiseaseObserver
 from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
@@ -153,6 +153,9 @@ def test_multi_component_parser_risks():
     assert observer_risks == {"unsafe_water_source_1", "unsafe_water_source_2"}
 
 
+@pytest.mark.xfail(
+    reason="MIC-7161: vivarium and vivarium-engine installed until vph migrates"
+)
 def test_risk_affects_normally_defined_cause():
     """Test that risks can affect causes defined normally (not via causes key)."""
 
@@ -197,6 +200,9 @@ def test_risk_affects_normally_defined_cause():
     )
 
 
+@pytest.mark.xfail(
+    reason="MIC-7161: vivarium and vivarium-engine installed until vph migrates"
+)
 def test_risk_error_when_affected_cause_number_exceeds_available():
     """Test validation error when affected_causes number exceeds available instances."""
 
@@ -264,6 +270,9 @@ def test_risk_error_when_affected_cause_undefined():
         parser.parse_component_config(config)
 
 
+@pytest.mark.xfail(
+    reason="MIC-7161: vivarium and vivarium-engine installed until vph migrates"
+)
 def test_error_when_cause_defined_in_both_multi_config_and_standard():
     """Test validation error when the same cause is defined in both places."""
 

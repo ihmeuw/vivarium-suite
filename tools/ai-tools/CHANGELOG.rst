@@ -1,6 +1,10 @@
-**0.12.0 - 06/01/26**
+**0.12.0 - 06/03/26**
 
  - Add ``commit-splitter`` skill and ``_split_proposer`` specialist sub-agent for doling out a bulk uncommitted diff into reviewable commits and PR-sized branches
+ 
+**0.11.1 - 06/01/26**
+
+ - Update ``git-rescue`` skill to run `make check` and summarize changes before pushing
 
 **0.11.0 - 06/01/26**
 

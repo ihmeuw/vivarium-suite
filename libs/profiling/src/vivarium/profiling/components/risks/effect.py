@@ -1,7 +1,7 @@
 import re
 
 import pandas as pd
-from vivarium.framework.engine import Builder
+from vivarium.engine.framework.engine import Builder
 from vivarium_public_health.risks.effect import (
     NonLogLinearRiskEffect as NonLogLinearRiskEffect_,
 )
