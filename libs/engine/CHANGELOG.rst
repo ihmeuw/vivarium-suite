@@ -1,3 +1,7 @@
+**5.0.2 - 06/03/26**
+
+- Fix stray "f" in component parser ImportError message
+
 **5.0.1 - 05/29/26**
 
 - Fixed unstratified observations with no required attributes being silently skipped
