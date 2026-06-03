@@ -20,7 +20,7 @@ from vivarium.profiling.utilities import sanitize_location
 
 
 def running_from_cluster() -> bool:
-    import vivarium_cluster_tools as vct
+    import vivarium.cluster_tools as vct
 
     return "slurm" in vct.get_cluster_name()
 
@@ -96,7 +96,7 @@ def build_artifacts(
     verbose
         How noisy the logger should be.
     """
-    import vivarium_cluster_tools as vct
+    import vivarium.cluster_tools as vct
 
     output_dir = Path(output_dir)
     vct.mkdir(output_dir, parents=True, exists_ok=True)
@@ -134,7 +134,7 @@ def build_all_artifacts(output_dir: Path, verbose: int) -> None:
         called by the :func:`build_artifacts` function located in the same
         module.
     """
-    from vivarium_cluster_tools.utilities import get_drmaa
+    from vivarium.cluster_tools.utilities import get_drmaa
 
     drmaa = get_drmaa()
 
