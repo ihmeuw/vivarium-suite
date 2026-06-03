@@ -25,9 +25,10 @@ def test_model_specs(tmp_path) -> list[Path]:
     baseline_spec = """
 components:
     vivarium:
-        examples:
-            disease_model:
-                - BasePopulation()
+        engine:
+            examples:
+                disease_model:
+                    - BasePopulation()
 
 configuration:
     time:
