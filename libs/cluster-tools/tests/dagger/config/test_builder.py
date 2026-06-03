@@ -6,6 +6,9 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
+pytest.importorskip("jobmon")
+
 from pytest_mock import MockerFixture
 
 from vivarium_cluster_tools.dagger.config.builder import build_workflow_from_config
