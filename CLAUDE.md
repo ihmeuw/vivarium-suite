@@ -35,7 +35,7 @@ To run a single test, activate the env and use pytest directly: `pytest tests/pa
 
 ## Verifying working state
 
-Before any externally-facing action (pushing, opening a PR, tagging a release), run `make check` from inside `libs/<pkg>`. It is the canonical pre-flight: it runs `lint`, `mypy` (when the package has a `py.typed` marker), the fast test suite, and the docs build + doctests - so it also validates that docstring/doc cross-references still resolve under Sphinx's warnings-as-errors mode. It no-ops the docs steps for packages without a `docs/` directory, so the same command is safe in every package. Because it is comprehensive it is slow; iterate with targeted `pytest`/`make lint` and use `make check` as the final gate.
+Before any externally-facing action (pushing, opening a PR, tagging a release), run `make check` from inside `libs/<pkg>`. It is the canonical pre-flight: it runs `lint`, `mypy` (when the package has a `py.typed` marker), the fast test suite, and the docs build + doctests - so it also validates that docstring/doc cross-references still resolve under Sphinx's warnings-as-errors mode. It no-ops the docs steps for packages without a `docs/` directory, so the same command is safe in every package. Because it is comprehensive it is slow; iterate with targeted `pytest`/`make lint` and use `make check` as the final gate. This is a multi-step operation that streams significant output and takes tens of seconds, so run this check in the background.
 
 ## Per-package conventions
 
