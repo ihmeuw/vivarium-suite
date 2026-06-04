@@ -28,7 +28,8 @@ def dagger() -> None:
 
     Workflows are defined by a YAML configuration file that lists each
     step's command, compute resources, and conda environment. Use the
-    ``run`` sub-command to launch a fresh workflow.
+    ``run`` sub-command to launch a fresh workflow, or ``restart`` to resume
+    a previously started workflow from its output directory.
     """
     pass
 
@@ -74,12 +75,6 @@ def dagger() -> None:
     default=None,
     help="Override maximum Jobmon task attempts from config file.",
 )
-@click.option(
-    "--resume",
-    is_flag=True,
-    default=False,
-    help="Resume a previously failed workflow, skipping completed tasks.",
-)
 @cli_tools.with_verbose_and_pdb
 def run(
     config_path: Path,
@@ -89,7 +84,6 @@ def run(
     output_directory: Path | None,
     default_environment: str | None,
     max_attempts: int | None,
-    resume: bool,
     verbose: int,
     with_debugger: bool,
 ) -> None:
@@ -119,5 +113,58 @@ def run(
     main(
         workflow_config=workflow_config,
         verbose=verbose,
-        resume=resume,
+    )
+
+
+@dagger.command()
+@click.argument(
+    "results_directory",
+    type=click.Path(exists=True, file_okay=False, writable=True),
+    callback=cli_tools.coerce_to_full_path,
+)
+@click.option(
+    "--project",
+    "-P",
+    default=None,
+    help="Override project from the saved configuration.",
+)
+@click.option(
+    "--queue",
+    "-q",
+    default=None,
+    help="Override queue from the saved configuration.",
+)
+@click.option(
+    "--max-attempts",
+    "-m",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Override maximum Jobmon task attempts from the saved configuration.",
+)
+@cli_tools.with_verbose_and_pdb
+def restart(
+    results_directory: Path,
+    project: str | None,
+    queue: str | None,
+    max_attempts: int | None,
+    verbose: int,
+    with_debugger: bool,
+) -> None:
+    """Restart a previously started workflow.
+
+    RESULTS_DIRECTORY is the output directory of a previous ``dagger run``.
+    Reloads the saved configuration and persisted Jobmon workflow and resumes
+    it, skipping tasks that already completed. ``--project``, ``--queue``, and
+    ``--max-attempts`` override the saved configuration.
+    """
+    logs.configure_main_process_logging_to_terminal(verbose)
+
+    main = handle_exceptions(runner.restart_workflow, logger, with_debugger)
+
+    main(
+        results_directory=results_directory,
+        project=project,
+        queue=queue,
+        max_attempts=max_attempts,
+        verbose=verbose,
     )
