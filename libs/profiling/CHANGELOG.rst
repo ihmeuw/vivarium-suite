@@ -1,3 +1,8 @@
+**0.4.14 - 06/04/26**
+
+- Delegate terminal logging to ``vivarium.engine.framework.logging``
+- Use the shared ``verbose_option`` Click decorator
+
 **0.4.13 - 06/03/26**
 
 - Update vivarium_cluster_tools imports to vivarium.cluster_tools
