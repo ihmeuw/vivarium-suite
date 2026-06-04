@@ -132,12 +132,10 @@ class Keyspace:
 
     def __len__(self) -> int:
         """Returns the number of individual simulation runs this keyspace represents."""
-        return len(
-            list(
-                product(
-                    self._keyspace["input_draw"], self._keyspace["random_seed"], self.branches
-                )
-            )
+        return (
+            len(self._keyspace["input_draw"])
+            * len(self._keyspace["random_seed"])
+            * len(self.branches)
         )
 
 
@@ -173,8 +171,7 @@ def calculate_input_draws(
         min_input_draw_count_allowed = 0
     else:
         min_input_draw_count_allowed = 1
-    np.random.seed(123456)
-    np.random.shuffle(possible)
+    np.random.default_rng(123456).shuffle(possible)
     if min_input_draw_count_allowed <= input_draw_count <= len(possible):
         return possible[:input_draw_count]
     else:
@@ -213,8 +210,7 @@ def calculate_random_seeds(
     possible = list(range(max_seed_count))
     if existing_seeds:
         possible = sorted(list(set(possible).difference(existing_seeds)))
-    np.random.seed(654321)
-    np.random.shuffle(possible)
+    np.random.default_rng(654321).shuffle(possible)
     return possible[:random_seed_count]
 
 

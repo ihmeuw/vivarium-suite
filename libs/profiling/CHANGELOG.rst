@@ -1,3 +1,7 @@
+**0.4.13 - 06/03/26**
+
+- Update vivarium_cluster_tools imports to vivarium.cluster_tools
+
 **0.4.12 - 06/03/26**
 
 - Fix test fixture component path so profiling tests pass on Python 3.11
