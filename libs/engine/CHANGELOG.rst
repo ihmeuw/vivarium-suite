@@ -5,8 +5,13 @@
 - Add ``verbose_option`` Click decorator
 - Make ``get_log_level`` and ``add_logging_sink`` public
 - Add the function name and elapsed time to the shared log line format
-- Default to WARNING (not INFO) level for ``simulate run``
-- Deprecate ``simulate run --quiet`` / ``-q`` option
+
+Breaking changes:
+
+- ``simulate run`` now defaults to the WARNING level (was INFO); pass ``-v`` for
+  INFO and ``-vv`` for DEBUG. A single ``-v`` now selects INFO rather than DEBUG.
+- Removed the ``simulate run --quiet`` / ``-q`` option (WARNING is now the default
+  logging level).
 
 **5.0.3 - 06/03/26**
 
