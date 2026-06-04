@@ -1,4 +1,4 @@
-**4.0.2 - 06/04/26**
+**4.0.1 - 06/04/26**
 
 - Bugfix: Use ``np.random.default_rng`` instead of the global numpy random state when shuffling draws, seeds, and jobs
 - Optimization: Compute keyspace length arithmetically instead of materializing the full product
