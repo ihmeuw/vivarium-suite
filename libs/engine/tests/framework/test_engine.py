@@ -343,9 +343,27 @@ def test_get_results(
     ]
     sim = SimulationContext(base_config, components, configuration=HARRY_POTTER_CONFIG)
     sim.run_simulation()
+
+    def stringify_index(series: pd.Series) -> pd.Series:
+        """Rebuild the index as a plain (non-categorical) string Index.
+
+        get_results() returns ordered-categorical index levels while
+        _raw_results does not. Coercing both sides to a plain string Index
+        avoids categorical-specific sort order and dtype mismatches so the
+        value-per-stratum mapping can be compared directly.
+        """
+        series = series.copy()
+        if isinstance(series.index, pd.MultiIndex):
+            series.index = pd.Index([tuple(str(v) for v in key) for key in series.index])
+        else:
+            series.index = pd.Index([str(v) for v in series.index])
+        return series.sort_index()
+
     for measure, results in sim.get_results().items():
-        raw_results = sim._results._raw_results[measure].sort_index()
-        assert results.set_index(raw_results.index.names)[[VALUE_COLUMN]].equals(raw_results)
+        raw_results = sim._results._raw_results[measure]
+        formatted = stringify_index(results.set_index(raw_results.index.names)[VALUE_COLUMN])
+        raw_value = stringify_index(raw_results[VALUE_COLUMN])
+        assert formatted.equals(raw_value)
 
 
 def test_SimulationContext_report_no_write_warning(
@@ -566,3 +584,128 @@ def _get_num_steps(sim: SimulationContext_) -> int:
     num_steps = math.ceil((end_date - start_date).days / time_dict["step_size"])
     assert isinstance(num_steps, int)
     return num_steps
+
+
+# MIC-6499: save non-value columns as ordered categoricals
+
+
+def _hogwarts_components() -> list[Component]:
+    return [
+        Hogwarts(),
+        HousePointsObserver(),
+        NoStratificationsQuidditchWinsObserver(),
+        QuidditchWinsObserver(),
+        HogwartsResultsStratifier(),
+    ]
+
+
+def test_get_results_non_value_columns_are_ordered_categorical(
+    SimulationContext: type[SimulationContext_], base_config: ConfigTree
+) -> None:
+    """get_results casts every non-value column to ordered categorical, for both
+    stratified and unstratified observations, leaving the value column numeric."""
+    sim = SimulationContext(
+        base_config, _hogwarts_components(), configuration=HARRY_POTTER_CONFIG
+    )
+    sim.run_simulation()
+    results = sim.get_results()
+
+    # All three measures, including the unstratified one, are exercised.
+    assert set(results) == {
+        "house_points",
+        "quidditch_wins",
+        "no_stratifications_quidditch_wins",
+    }
+    # The unstratified measure has a single 'stratification' column valued 'all'.
+    no_strat = results["no_stratifications_quidditch_wins"]
+    assert (no_strat["stratification"] == "all").all()
+
+    for measure, df in results.items():
+        assert VALUE_COLUMN in df.columns
+        for col in df.columns:
+            if col == VALUE_COLUMN:
+                # The value column stays numeric (float), never categorical.
+                assert not isinstance(df[col].dtype, pd.CategoricalDtype)
+                assert pd.api.types.is_float_dtype(df[col].dtype)
+            else:
+                assert isinstance(
+                    df[col].dtype, pd.CategoricalDtype
+                ), f"{measure}.{col} should be categorical"
+                assert df[col].cat.ordered, f"{measure}.{col} should be ordered"
+
+
+def test_get_results_preserves_meaningful_stratification_order(
+    SimulationContext: type[SimulationContext_], base_config: ConfigTree
+) -> None:
+    """A binned stratification column keeps its registered order
+    (low < medium < high < very high), not alphabetical order."""
+    sim = SimulationContext(
+        base_config, _hogwarts_components(), configuration=HARRY_POTTER_CONFIG
+    )
+    sim.run_simulation()
+
+    house_points = sim.get_results()["house_points"]
+    power_level_group = house_points["power_level_group"]
+    assert isinstance(power_level_group.dtype, pd.CategoricalDtype)
+    assert power_level_group.cat.ordered
+    # The registered (domain-meaningful) order, NOT alphabetical.
+    assert list(power_level_group.cat.categories) == POWER_LEVEL_GROUP_LABELS
+    assert list(power_level_group.cat.categories) != sorted(POWER_LEVEL_GROUP_LABELS)
+
+
+def test_get_results_student_house_keeps_registered_order(
+    SimulationContext: type[SimulationContext_], base_config: ConfigTree
+) -> None:
+    """The student_house column keeps its REGISTERED order, not alphabetical order."""
+    sim = SimulationContext(
+        base_config, _hogwarts_components(), configuration=HARRY_POTTER_CONFIG
+    )
+    sim.run_simulation()
+
+    house_points = sim.get_results()["house_points"]
+    student_house = house_points["student_house"]
+    assert isinstance(student_house.dtype, pd.CategoricalDtype)
+    assert student_house.cat.ordered
+    # The registered (domain-meaningful) order, NOT alphabetical.
+    assert list(student_house.cat.categories) == list(STUDENT_HOUSES)
+    assert list(student_house.cat.categories) != sorted(STUDENT_HOUSES)
+
+
+def test_written_parquet_loads_non_value_columns_as_ordered_categorical(
+    SimulationContext: type[SimulationContext_],
+    base_config: ConfigTree,
+    tmp_path: Path,
+) -> None:
+    """Results written to parquet load back with non-value columns as ordered
+    categoricals (order preserved) and the value column numeric."""
+    results_root = tmp_path
+    configuration: dict[str, object] = {
+        "output_data": {"results_directory": str(results_root)}
+    }
+    configuration.update(HARRY_POTTER_CONFIG)
+    sim = SimulationContext(base_config, _hogwarts_components(), configuration)
+    sim.run_simulation()
+
+    results = sim.get_results()
+    for measure in [
+        "house_points",
+        "quidditch_wins",
+        "no_stratifications_quidditch_wins",
+    ]:
+        expected = results[measure]
+        loaded = pd.read_parquet(results_root / f"{measure}.parquet")
+        for col in loaded.columns:
+            if col == VALUE_COLUMN:
+                assert not isinstance(loaded[col].dtype, pd.CategoricalDtype)
+                assert pd.api.types.is_float_dtype(loaded[col].dtype)
+            else:
+                assert isinstance(
+                    loaded[col].dtype, pd.CategoricalDtype
+                ), f"{measure}.{col} should load as categorical"
+                assert loaded[col].cat.ordered, f"{measure}.{col} should load ordered"
+                # The category order survives the parquet round-trip.
+                assert list(loaded[col].cat.categories) == list(expected[col].cat.categories)
+        # The row VALUES survive the round-trip, not just the dtype metadata: a
+        # serialization regression that kept dtypes but corrupted rows must fail.
+        aligned_loaded = loaded[list(expected.columns)].reset_index(drop=True)
+        pd.testing.assert_frame_equal(aligned_loaded, expected.reset_index(drop=True))

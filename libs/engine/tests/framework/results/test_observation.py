@@ -17,7 +17,9 @@ from vivarium.engine.framework.results.observation import (
     Observation,
     StratifiedObservation,
     UnstratifiedObservation,
+    to_ordered_categoricals,
 )
+from vivarium.engine.framework.results.stratification import Stratification
 
 
 @pytest.fixture
@@ -284,3 +286,200 @@ def test_concatenating_observation_results_updater(
         existing_results, new_observations
     )
     assert updated_results.equals(expected_results)
+
+
+# MIC-6499: save non-value columns as ordered categoricals
+
+
+def test_to_ordered_categoricals_converts_all_non_value_columns() -> None:
+    """Every column except VALUE_COLUMN becomes an ordered categorical dtype."""
+    results = pd.DataFrame(
+        {
+            "measure": ["m", "m", "m"],
+            "student_house": ["gryffindor", "slytherin", "ravenclaw"],
+            VALUE_COLUMN: [1.0, 2.0, 3.0],
+        }
+    )
+    converted = to_ordered_categoricals(results, {})
+    for col in ["measure", "student_house"]:
+        assert isinstance(converted[col].dtype, pd.CategoricalDtype)
+        assert converted[col].cat.ordered
+
+
+def test_to_ordered_categoricals_leaves_value_column_unchanged() -> None:
+    """The VALUE_COLUMN is left untouched (its numeric dtype is preserved)."""
+    results = pd.DataFrame(
+        {
+            "student_house": ["gryffindor", "slytherin", "ravenclaw"],
+            VALUE_COLUMN: [1.0, 2.0, 3.0],
+        }
+    )
+    converted = to_ordered_categoricals(results, {})
+    assert not isinstance(converted[VALUE_COLUMN].dtype, pd.CategoricalDtype)
+    assert converted[VALUE_COLUMN].equals(results[VALUE_COLUMN])
+
+
+def test_to_ordered_categoricals_uses_provided_order_verbatim() -> None:
+    """A column with a provided ordering uses it verbatim, not alphabetical sort."""
+    order = ["low", "medium", "high", "very high"]
+    results = pd.DataFrame(
+        {
+            "power_level_group": ["very high", "low", "high", "medium"],
+            VALUE_COLUMN: [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    converted = to_ordered_categoricals(results, {"power_level_group": order})
+    assert isinstance(converted["power_level_group"].dtype, pd.CategoricalDtype)
+    assert converted["power_level_group"].cat.ordered
+    assert list(converted["power_level_group"].cat.categories) == order
+
+
+def test_to_ordered_categoricals_falls_back_to_sorted_order() -> None:
+    """A column absent from the ordering map becomes an ordered categorical in sorted order."""
+    results = pd.DataFrame(
+        {
+            "student_house": ["slytherin", "gryffindor", "ravenclaw"],
+            VALUE_COLUMN: [1.0, 2.0, 3.0],
+        }
+    )
+    converted = to_ordered_categoricals(results, {})
+    assert isinstance(converted["student_house"].dtype, pd.CategoricalDtype)
+    assert converted["student_house"].cat.ordered
+    assert list(converted["student_house"].cat.categories) == sorted(
+        ["slytherin", "gryffindor", "ravenclaw"]
+    )
+
+
+def test_to_ordered_categoricals_appends_unregistered_observed_values() -> None:
+    """Observed values missing from a provided ordering are appended, never dropped to NaN."""
+    order = ["low", "medium", "high", "very high"]
+    # "extreme" and "tiny" are observed but not registered in the ordering.
+    results = pd.DataFrame(
+        {
+            "power_level_group": ["very high", "extreme", "low", "tiny"],
+            VALUE_COLUMN: [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    converted = to_ordered_categoricals(results, {"power_level_group": order})
+    # No observed value is dropped to NaN.
+    assert converted["power_level_group"].notna().all()
+    # Unregistered observed values are appended after the registered order, sorted.
+    assert list(converted["power_level_group"].cat.categories) == order + sorted(
+        ["extreme", "tiny"]
+    )
+
+
+def test_to_ordered_categoricals_leaves_numeric_and_datetime_columns_unchanged() -> None:
+    """Numeric, datetime, and timedelta non-value columns are left unchanged."""
+    results = pd.DataFrame(
+        {
+            "student_house": ["gryffindor", "slytherin", "ravenclaw"],
+            "event_time": pd.to_datetime(["2021-01-01", "2021-01-02", "2021-01-03"]),
+            "elapsed": pd.to_timedelta([1, 2, 3], unit="D"),
+            "power_level": [1, 2, 3],
+            VALUE_COLUMN: [1.0, 2.0, 3.0],
+        }
+    )
+    converted = to_ordered_categoricals(results, {})
+    # The object/label column is cast to an ordered categorical.
+    assert isinstance(converted["student_house"].dtype, pd.CategoricalDtype)
+    assert converted["student_house"].cat.ordered
+    # Numeric, datetime, and timedelta columns retain their original dtypes.
+    for col in ["event_time", "elapsed", "power_level"]:
+        assert not isinstance(converted[col].dtype, pd.CategoricalDtype)
+        assert converted[col].dtype == results[col].dtype
+
+
+def test_to_ordered_categoricals_leaves_numeric_non_value_column_unchanged() -> None:
+    """A numeric non-value column is protected by the dtype guard, not cast to categorical."""
+    results = pd.DataFrame(
+        {
+            "student_house": ["gryffindor", "slytherin", "ravenclaw"],
+            "spell_power": [10, 20, 30],
+            VALUE_COLUMN: [1.0, 2.0, 3.0],
+        }
+    )
+    converted = to_ordered_categoricals(results, {})
+    # The object/label column is still cast to an ordered categorical.
+    assert isinstance(converted["student_house"].dtype, pd.CategoricalDtype)
+    assert converted["student_house"].cat.ordered
+    # The numeric non-value column retains its numeric dtype.
+    assert not isinstance(converted["spell_power"].dtype, pd.CategoricalDtype)
+    assert converted["spell_power"].dtype == results["spell_power"].dtype
+
+
+def test_to_ordered_categoricals_handles_empty_frame() -> None:
+    """An empty frame is handled without raising; label columns become ordered categoricals."""
+    results = pd.DataFrame(
+        {
+            "student_house": pd.Series([], dtype=object),
+            VALUE_COLUMN: pd.Series([], dtype=float),
+        }
+    )
+    converted = to_ordered_categoricals(results, {})
+    assert isinstance(converted["student_house"].dtype, pd.CategoricalDtype)
+    assert converted["student_house"].cat.ordered
+    assert pd.api.types.is_float_dtype(converted[VALUE_COLUMN].dtype)
+
+    # An all-NaN label column is likewise cast to an (ordered) categorical without raising.
+    all_nan = pd.DataFrame(
+        {
+            "student_house": pd.Series([np.nan, np.nan, np.nan], dtype=object),
+            VALUE_COLUMN: [1.0, 2.0, 3.0],
+        }
+    )
+    converted_nan = to_ordered_categoricals(all_nan, {})
+    assert isinstance(converted_nan["student_house"].dtype, pd.CategoricalDtype)
+    assert converted_nan["student_house"].cat.ordered
+
+
+def test_get_category_orderings_returns_registered_stratification_categories() -> None:
+    """A stratified observation reports each stratification's registered categories in order."""
+    power_level_order = ["low", "medium", "high", "very high"]
+    house_order = ["gryffindor", "slytherin", "ravenclaw"]
+    observation = StratifiedObservation(
+        name="obs",
+        population_filter=PopulationFilter(),
+        when="collect_metrics",
+        requires_attributes=[],
+        results_updater=lambda _, __: pd.DataFrame(),
+        results_formatter=lambda _, __: pd.DataFrame(),
+        aggregator_sources=None,
+        aggregator=lambda _: 0.0,
+    )
+    observation.stratifications = (
+        Stratification(
+            name="power_level_group",
+            requires_attributes=["power_level"],
+            categories=power_level_order,
+            excluded_categories=[],
+            mapper=None,
+        ),
+        Stratification(
+            name="student_house",
+            requires_attributes=["student_house"],
+            categories=house_order,
+            excluded_categories=[],
+            mapper=None,
+        ),
+    )
+    orderings = observation.get_category_orderings()
+    assert orderings == {
+        "power_level_group": power_level_order,
+        "student_house": house_order,
+    }
+
+
+def test_get_category_orderings_empty_when_unstratified() -> None:
+    """An observation with no stratifications reports an empty ordering map."""
+    observation = UnstratifiedObservation(
+        name="obs",
+        population_filter=PopulationFilter(),
+        when="collect_metrics",
+        requires_attributes=[],
+        results_gatherer=lambda df: df,
+        results_updater=lambda _, __: pd.DataFrame(),
+        results_formatter=lambda _, __: pd.DataFrame(),
+    )
+    assert observation.stratifications is None
+    assert observation.get_category_orderings() == {}

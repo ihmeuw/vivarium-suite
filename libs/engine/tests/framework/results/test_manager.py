@@ -461,9 +461,17 @@ def test_gather_results_different_include_untracked_observations() -> None:
     include_untracked = results["simulant_counter_include_untracked"]
     assert "slytherin" not in exclude_untracked["student_house"].values
     assert "slytherin" in include_untracked["student_house"].values
-    assert exclude_untracked.equals(
-        include_untracked[include_untracked["student_house"] != "slytherin"]
+    # student_house is now an ordered categorical; the two frames carry
+    # different observed categories (only include_untracked ever saw
+    # "slytherin"), so align both onto the same ordered categorical dtype
+    # before comparing rows.
+    house_dtype = CategoricalDtype(categories=STUDENT_HOUSES, ordered=True)
+    expected = include_untracked[include_untracked["student_house"] != "slytherin"]
+    expected = expected.assign(student_house=expected["student_house"].astype(house_dtype))
+    actual = exclude_untracked.assign(
+        student_house=exclude_untracked["student_house"].astype(house_dtype)
     )
+    assert actual.equals(expected)
 
 
 @pytest.fixture(scope="module")
@@ -680,7 +688,7 @@ def test_stratified_observation_results() -> None:
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(
-        CategoricalDtype(categories=STUDENT_HOUSES)
+        CategoricalDtype(categories=STUDENT_HOUSES, ordered=True)
     )
     assert expected.equals(
         sim.get_results()["cat_bomb"].sort_values("value").reset_index(drop=True)
@@ -695,7 +703,7 @@ def test_stratified_observation_results() -> None:
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(
-        CategoricalDtype(categories=STUDENT_HOUSES)
+        CategoricalDtype(categories=STUDENT_HOUSES, ordered=True)
     )
     assert expected.equals(
         sim.get_results()["cat_bomb"].sort_values("value").reset_index(drop=True)
