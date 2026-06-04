@@ -87,5 +87,3 @@ def test_remove_deprecated_quiet_option() -> None:
     )
     # Sanity check that the option is in fact still present to be removed.
     assert "quiet" in {param.name for param in simulate.commands["run"].params}
-
-
