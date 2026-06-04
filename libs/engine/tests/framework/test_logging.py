@@ -1,4 +1,3 @@
-import datetime
 import io
 import re
 
@@ -8,10 +7,7 @@ from click.testing import CliRunner
 from loguru import logger
 
 from vivarium.engine.framework.logging import add_logging_sink, get_log_level
-from vivarium.engine.interface.cli import simulate
 from vivarium.engine.interface.cli_tools import verbose_option
-
-DEPRECATION_DATE_QUIET_OPTION = datetime.date(2026, 12, 4)
 
 
 @pytest.mark.parametrize(
@@ -72,18 +68,3 @@ def test_log_format_includes_elapsed() -> None:
         logger.remove(sink_id)
     # The shared format includes an elapsed-time column (H:MM:SS.ffffff).
     assert re.search(r"\| \d+:\d{2}:\d{2}\.\d+ \|", sink.getvalue())
-
-
-def test_remove_deprecated_quiet_option() -> None:
-    """Reminder to delete the deprecated ``simulate run --quiet/-q`` option.
-
-    This fails once the deprecation window closes; when it does, remove the
-    ``--quiet``/``-q`` option and its handling from ``cli.run`` and delete this
-    test.
-    """
-    assert datetime.date.today() < DEPRECATION_DATE_QUIET_OPTION, (
-        "The deprecation window for 'simulate run --quiet/-q' has closed. Remove "
-        "the option (and this test)."
-    )
-    # Sanity check that the option is in fact still present to be removed.
-    assert "quiet" in {param.name for param in simulate.commands["run"].params}

@@ -42,7 +42,6 @@ def test_simulate_run(runner: CliRunner, model_spec: str, hdf_file_path: Path) -
         "artifact_path",
         "results_directory",
         "verbose",
-        "quiet",
         "with_debugger",
     }
     different_params = run_parameters.symmetric_difference(expected_parameters)

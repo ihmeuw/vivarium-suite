@@ -28,7 +28,6 @@ simulations from the command line.
 """
 
 import os
-import warnings
 from pathlib import Path
 from time import time
 
@@ -78,13 +77,6 @@ def simulate() -> None:
 )
 @verbose_option()
 @click.option(
-    "--quiet",
-    "-q",
-    is_flag=True,
-    hidden=True,
-    help="Deprecated. WARNING is now the default logging level.",
-)
-@click.option(
     "--pdb",
     "with_debugger",
     is_flag=True,
@@ -95,7 +87,6 @@ def run(
     artifact_path: Path,
     results_directory: Path,
     verbose: int,
-    quiet: bool,
     with_debugger: bool,
 ) -> None:
     """Run a simulation from the command line.
@@ -107,15 +98,6 @@ def run(
     MODEL_SPECIFICATION if one does not exist. Results will be written to a
     further subdirectory named after the start time of the simulation run.
     """
-    if quiet:
-        warnings.warn(
-            "The '--quiet'/'-q' option is deprecated; WARNING is now the default "
-            "logging level, so the flag has no effect and should not be used. "
-            "Do not pass a '-v' flag to get the same behavior.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        verbose = 0
     configure_logging_to_terminal(verbosity=verbose, long_format=False)
 
     start = time()
