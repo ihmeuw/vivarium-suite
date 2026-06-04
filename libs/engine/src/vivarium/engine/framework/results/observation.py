@@ -43,6 +43,83 @@ if TYPE_CHECKING:
 VALUE_COLUMN = "value"
 
 
+def to_ordered_categoricals(
+    results: pd.DataFrame, category_orderings: dict[str, list[str]]
+) -> pd.DataFrame:
+    """Cast the discrete label columns of a results frame to ordered categoricals.
+
+    Every column except :data:`VALUE_COLUMN` is converted to an ordered
+    :class:`~pandas.CategoricalDtype`, EXCEPT numeric (including boolean),
+    datetime, and timedelta columns, which are left unchanged. Casting only
+    discrete label columns avoids breaking continuous or time columns -- for
+    example, a ``ConcatenatingObservation`` produces a datetime ``event_time``
+    column that must remain datetime so arithmetic such as ``event_time +
+    Timedelta(...)`` keeps working. A column listed in ``category_orderings`` is
+    always cast regardless of its dtype, since it represents a registered
+    stratification.
+
+    Ordered categoricals are written verbatim into ``.parquet`` files and read
+    back as ordered categoricals, which keeps label columns memory-cheap and
+    group-able on load and gives a stable, shared ordering for summary tables and
+    plots (e.g. ``age_group`` sorts youngest to oldest rather than
+    alphabetically).
+
+    The category order for a column is taken from ``category_orderings`` when an
+    entry is present for that column name -- this is the authoritative,
+    domain-meaningful order (a stratification's registered categories). Any
+    values observed in the column but absent from the provided ordering are
+    appended after it in sorted order so that no observed value is ever dropped
+    to ``NaN``. Columns without an entry in ``category_orderings`` are ordered by
+    their sorted unique values, giving a deterministic, consistent ordering.
+
+    Parameters
+    ----------
+    results
+        The formatted results frame for a single measure. The frame is expected
+        to be column-shaped (any index already reset by the formatter).
+    category_orderings
+        Mapping from column name to the authoritative ordered list of that
+        column's categories. Columns absent from the mapping fall back to sorted
+        ordering.
+
+    Returns
+    -------
+        The results frame with discrete label columns cast to ordered
+        categorical dtype and the value, numeric, datetime, and timedelta columns
+        left unchanged.
+    """
+    results = results.copy()
+    for column in results.columns:
+        if column == VALUE_COLUMN:
+            continue
+        if column in category_orderings:
+            # A registered stratification is always cast, regardless of dtype, to
+            # honor its declared category order -- the numeric/datetime guard
+            # below applies only to columns without a registered ordering.
+            observed = results[column].dropna().unique()
+            categories = list(category_orderings[column])
+            # Append any observed values missing from the registered ordering in
+            # sorted order so an astype-to-CategoricalDtype never silently
+            # coerces an observed value to NaN.
+            extra = sorted(set(observed) - set(categories))
+            categories = categories + extra
+        else:
+            # Leave continuous and time columns untouched; categorical is only
+            # appropriate for discrete label columns.
+            dtype = results[column].dtype
+            if (
+                pd.api.types.is_numeric_dtype(dtype)
+                or pd.api.types.is_datetime64_any_dtype(dtype)
+                or pd.api.types.is_timedelta64_dtype(dtype)
+            ):
+                continue
+            categories = sorted(results[column].dropna().unique())
+        results[column] = results[column].astype(
+            CategoricalDtype(categories=categories, ordered=True)
+        )
+    return results
+
+
 @dataclass
 class Observation(ABC):
     """An abstract base dataclass to be inherited by concrete observations.
@@ -107,6 +184,22 @@ class Observation(ABC):
             The results of the observation.
         """
         return self.results_gatherer(df, stratifications)
+
+    def get_category_orderings(self) -> dict[str, list[str]]:
+        """Return the authoritative category order for this observation's columns.
+
+        Maps each of this observation's stratification column names to the
+        ordered list of categories registered for that stratification. This is
+        the domain-meaningful order used to build ordered categoricals for the
+        formatted results (see :func:`to_ordered_categoricals`). Observations
+        with no stratifications return an empty mapping.
+        """
+        if self.stratifications is None:
+            return {}
+        return {
+            stratification.name: list(stratification.categories)
+            for stratification in self.stratifications
+        }
 
     @classmethod
     @abstractmethod

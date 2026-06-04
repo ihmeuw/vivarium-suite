@@ -1,3 +1,8 @@
+**5.1.0 - 06/04/26**
+
+- Return and write non-``value`` results columns as ordered categoricals (MIC-6499)
+- Preserve registered stratification category order (e.g. age groups sort youngest to oldest); leave numeric, datetime, and timedelta columns unchanged
+
 **5.0.3 - 06/03/26**
 
 - Refer to vivarium.cluster_tools instead of vivarium_cluster_tools in documentation
