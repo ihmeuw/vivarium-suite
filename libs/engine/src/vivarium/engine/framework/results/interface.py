@@ -55,18 +55,11 @@ def _required_function_placeholder(
     return pd.DataFrame()
 
 
-def _convert_object_cols_to_categorical(results: pd.DataFrame) -> pd.DataFrame:
-    """Convert object dtype columns to categorical dtype."""
-    object_cols = results.select_dtypes(include=["object"]).columns
-    results[object_cols] = results[object_cols].astype("category")
-    return results
-
-
 def _default_stratified_observation_formatter(
     measure: str, results: pd.DataFrame
 ) -> pd.DataFrame:
-    """Reset the results index and convert object columns to categorical dtype."""
-    return _convert_object_cols_to_categorical(results.reset_index())
+    """Reset the results index."""
+    return results.reset_index()
 
 
 def _default_unstratified_observation_formatter(

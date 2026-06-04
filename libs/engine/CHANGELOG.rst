@@ -1,3 +1,7 @@
+**5.1.0 - 06/04/26**
+
+- Feature: Return non-value result columns from ResultsManager.get_results as pandas Categoricals - ordered for registered stratifications (using the stratification's category order) and unordered for other object columns - while leaving numeric and datetime columns unchanged; the dtype and ordering survive the parquet round-trip
+
 **5.0.3 - 06/03/26**
 
 - Refer to vivarium.cluster_tools instead of vivarium_cluster_tools in documentation

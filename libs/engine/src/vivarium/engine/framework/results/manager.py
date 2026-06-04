@@ -15,6 +15,7 @@ import pandas as pd
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results.context import ResultsContext
+from vivarium.engine.framework.results.formatting import cast_non_value_columns_to_categorical
 from vivarium.engine.framework.results.observation import Observation
 from vivarium.engine.framework.results.stratification import (
     Stratification,
@@ -59,12 +60,24 @@ class ResultsManager(Manager):
         Returns
         -------
             A dictionary of measure-specific formatted results. The keys are the
-            measure names and the values are the respective results.
+            measure names and the values are the respective results. In each
+            result, non-value columns are returned as pandas Categoricals:
+            ordered for registered stratifications, using the stratification's
+            category order, and unordered for other object or categorical
+            columns. Numeric, datetime, and other non-categorical columns are
+            left unchanged.
         """
         formatted = {}
+        orderings = {
+            name: stratification.categories
+            for name, stratification in self._results_context.stratifications.items()
+        }
         for name, observation in self._results_context.observations.items():
             results = self._raw_results[name].copy()
-            formatted[name] = observation.results_formatter(name, results)
+            formatted_results = observation.results_formatter(name, results)
+            formatted[name] = cast_non_value_columns_to_categorical(
+                formatted_results, orderings
+            )
         return formatted
 
     # noinspection PyAttributeOutsideInit

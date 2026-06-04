@@ -490,8 +490,10 @@ def test_register_concatenating_observation(mocker: MockerFixture) -> None:
     assert obs.results_formatter is not None
 
 
-def test_default_stratified_formatter_converts_object_to_categorical() -> None:
-    """Test that the default stratified formatter converts object columns to categorical."""
+def test_default_stratified_formatter_resets_index() -> None:
+    """Test that the default stratified formatter resets the index, moving the
+    stratification index levels to columns without casting them to categorical.
+    """
     results = pd.DataFrame(
         {
             "value": [1.0, 2.0, 3.0, 4.0],
@@ -507,7 +509,8 @@ def test_default_stratified_formatter_converts_object_to_categorical() -> None:
         ),
     )
 
-    # Before formatting: index levels are object, measure is object
+    # Before formatting: stratifications are index levels (object dtype)
+    assert results.index.names == ["student_house", "power_level"]
     assert results.index.get_level_values("student_house").dtype == "object"
     assert results.index.get_level_values("power_level").dtype == "object"
     assert results["measure"].dtype == "object"
@@ -516,10 +519,16 @@ def test_default_stratified_formatter_converts_object_to_categorical() -> None:
 
     formatted = _default_stratified_observation_formatter("test_measure", results)
 
-    # Object columns should be converted to categorical
-    assert isinstance(formatted["student_house"].dtype, pd.CategoricalDtype)
-    assert isinstance(formatted["power_level"].dtype, pd.CategoricalDtype)
-    assert isinstance(formatted["measure"].dtype, pd.CategoricalDtype)
-    # Non-object columns should be unchanged
+    # The stratification index levels are moved to columns
+    assert "student_house" in formatted.columns
+    assert "power_level" in formatted.columns
+    assert not isinstance(formatted.index, pd.MultiIndex)
+
+    # Object columns remain object dtype (categorical casting now happens in
+    # ResultsManager.get_results, not in the formatter)
+    assert formatted["student_house"].dtype == "object"
+    assert formatted["power_level"].dtype == "object"
+    assert formatted["measure"].dtype == "object"
+    # Numeric columns are unchanged
     assert formatted["value"].dtype == float
     assert formatted["count"].dtype == int

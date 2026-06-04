@@ -345,7 +345,15 @@ def test_get_results(
     sim.run_simulation()
     for measure, results in sim.get_results().items():
         raw_results = sim._results._raw_results[measure].sort_index()
-        assert results.set_index(raw_results.index.names)[[VALUE_COLUMN]].equals(raw_results)
+        # ``results`` index levels are now Categorical (MIC-6499) while
+        # ``raw_results`` may not be, so compare values dtype-agnostically.
+        pd.testing.assert_frame_equal(
+            results.set_index(raw_results.index.names)[[VALUE_COLUMN]],
+            raw_results,
+            check_dtype=False,
+            check_categorical=False,
+            check_index_type=False,
+        )
 
 
 def test_SimulationContext_report_no_write_warning(

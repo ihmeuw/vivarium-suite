@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -459,10 +460,19 @@ def test_gather_results_different_include_untracked_observations() -> None:
     results = mgr.get_results()
     exclude_untracked = results["simulant_counter"]
     include_untracked = results["simulant_counter_include_untracked"]
-    assert "slytherin" not in exclude_untracked["student_house"].values
-    assert "slytherin" in include_untracked["student_house"].values
-    assert exclude_untracked.equals(
+    assert "slytherin" not in exclude_untracked["student_house"].astype(str).values
+    assert "slytherin" in include_untracked["student_house"].astype(str).values
+    # "student_house" is now a (possibly differently-categoried) Categorical on
+    # each side, so compare dtype-agnostically by casting to str.
+    expected = (
         include_untracked[include_untracked["student_house"] != "slytherin"]
+        .astype({"student_house": str})
+        .reset_index(drop=True)
+    )
+    assert (
+        exclude_untracked.astype({"student_house": str})
+        .reset_index(drop=True)
+        .equals(expected)
     )
 
 
@@ -680,7 +690,7 @@ def test_stratified_observation_results() -> None:
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(
-        CategoricalDtype(categories=STUDENT_HOUSES)
+        CategoricalDtype(categories=STUDENT_HOUSES, ordered=True)
     )
     assert expected.equals(
         sim.get_results()["cat_bomb"].sort_values("value").reset_index(drop=True)
@@ -695,12 +705,65 @@ def test_stratified_observation_results() -> None:
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(
-        CategoricalDtype(categories=STUDENT_HOUSES)
+        CategoricalDtype(categories=STUDENT_HOUSES, ordered=True)
     )
     assert expected.equals(
         sim.get_results()["cat_bomb"].sort_values("value").reset_index(drop=True)
     )
     _assert_standard_index(sim.get_results()["cat_bomb"])
+
+
+def test_get_results_orders_stratification_columns_as_categoricals(tmp_path: Path) -> None:
+    """End-to-end: a stratified measure from ``get_results`` has its stratification column(s) as *ordered* Categoricals whose category order matches the registered stratification, and that ordering survives a parquet round-trip."""
+    components = [
+        Hogwarts(),
+        CatBombObserver(),
+        HogwartsResultsStratifier(),
+    ]
+    sim = InteractiveContext(configuration=HARRY_POTTER_CONFIG, components=components)
+    sim.step()
+
+    results = sim.get_results()
+    cat_bomb = results["cat_bomb"]
+
+    # The "student_house" column is a registered stratification with STUDENT_HOUSES ordering.
+    # After get_results it must be an ordered Categorical matching that registration order.
+    assert (
+        "student_house" in cat_bomb.columns
+    ), "expected 'student_house' column in cat_bomb results"
+    assert isinstance(
+        cat_bomb["student_house"].dtype, pd.CategoricalDtype
+    ), "student_house column should be Categorical"
+    assert cat_bomb[
+        "student_house"
+    ].cat.ordered, "student_house column should be an *ordered* Categorical"
+    expected_order = list(STUDENT_HOUSES)
+    assert list(cat_bomb["student_house"].cat.categories) == expected_order, (
+        f"expected category order {expected_order}, "
+        f"got {list(cat_bomb['student_house'].cat.categories)}"
+    )
+
+    # Parquet round-trip: ordered Categorical and category order must be preserved.
+    parquet_path = tmp_path / "cat_bomb.parquet"
+    cat_bomb.to_parquet(parquet_path)
+    reloaded = pd.read_parquet(parquet_path)
+
+    assert isinstance(
+        reloaded["student_house"].dtype, pd.CategoricalDtype
+    ), "student_house should reload as Categorical after parquet round-trip"
+    assert reloaded[
+        "student_house"
+    ].cat.ordered, (
+        "student_house should reload as *ordered* Categorical after parquet round-trip"
+    )
+    assert (
+        list(reloaded["student_house"].cat.categories) == expected_order
+    ), "category order should be preserved through parquet round-trip"
+
+    # The value column must not be cast to Categorical.
+    assert not isinstance(
+        reloaded[VALUE_COLUMN].dtype, pd.CategoricalDtype
+    ), "value column must not be Categorical after parquet round-trip"
 
 
 def test_unstratified_observation_results() -> None:
