@@ -28,6 +28,7 @@ simulations from the command line.
 """
 
 import os
+import warnings
 from pathlib import Path
 from time import time
 
@@ -42,6 +43,7 @@ from vivarium.engine.framework.logging import (
     configure_logging_to_terminal,
 )
 from vivarium.engine.framework.utilities import handle_exceptions
+from vivarium.engine.interface.cli_tools import verbose_option
 from vivarium.engine.interface.utilities import get_output_root
 
 
@@ -74,17 +76,13 @@ def simulate() -> None:
     help="The directory to write results to. A folder will be created "
     "in this directory with the same name as the configuration file.",
 )
-@click.option(
-    "--verbose",
-    "-v",
-    is_flag=True,
-    help="Logs verbosely. Useful for debugging and development.",
-)
+@verbose_option()
 @click.option(
     "--quiet",
     "-q",
     is_flag=True,
-    help="Suppresses all logging except for warnings and errors.",
+    hidden=True,
+    help="Deprecated. WARNING is now the default logging level.",
 )
 @click.option(
     "--pdb",
@@ -96,7 +94,7 @@ def run(
     model_specification: Path,
     artifact_path: Path,
     results_directory: Path,
-    verbose: bool,
+    verbose: int,
     quiet: bool,
     with_debugger: bool,
 ) -> None:
@@ -109,10 +107,16 @@ def run(
     MODEL_SPECIFICATION if one does not exist. Results will be written to a
     further subdirectory named after the start time of the simulation run.
     """
-    if verbose and quiet:
-        raise click.UsageError("Cannot be both verbose and quiet.")
-    verbosity = 1 + int(verbose) - int(quiet)
-    configure_logging_to_terminal(verbosity=verbosity, long_format=False)
+    if quiet:
+        warnings.warn(
+            "The '--quiet'/'-q' option is deprecated; WARNING is now the default "
+            "logging level, so the flag has no effect and should not be used. "
+            "Do not pass a '-v' flag to get the same behavior.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        verbose = 0
+    configure_logging_to_terminal(verbosity=verbose, long_format=False)
 
     start = time()
 
