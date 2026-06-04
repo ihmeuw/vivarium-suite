@@ -621,3 +621,59 @@ class TestDeprecationDeadline:
             f"--model-specification/-M, --branch-configuration/-B, and "
             f"--results-root/-R exclusively."
         )
+
+
+class TestSimVerbosity:
+    """Per-simulation verbosity must reach the assembled ``extra_args`` on the
+    ``run`` subcommand, both via the ``-s`` count and the deprecated
+    ``--sim-verbosity`` value option."""
+
+    @staticmethod
+    def _full_config(
+        tmp_path: Path, model_spec: Path, branch_config: Path, result_dir: Path
+    ) -> Path:
+        return _write_yaml(
+            tmp_path,
+            {
+                "model_specification": str(model_spec),
+                "branch_configuration": str(branch_config),
+                "result_directory": str(result_dir),
+                "project": "proj_simscience",
+                "peak_memory": 5,
+                "max_runtime": "01:00:00",
+                "queue": "all.q",
+                "max_workers": 100,
+                "max_attempts": 2,
+                "hardware": "r650",
+            },
+        )
+
+    @pytest.mark.parametrize("args, expected", [([], 0), (["-s"], 1), (["-ss"], 2)])
+    def test_count_reaches_extra_args(
+        self,
+        tmp_path: Path,
+        model_spec: Path,
+        branch_config: Path,
+        result_dir: Path,
+        args: list[str],
+        expected: int,
+    ) -> None:
+        config = self._full_config(tmp_path, model_spec, branch_config, result_dir)
+        with patch(_RUNNER_MAIN) as mock_main:
+            result = CliRunner().invoke(
+                psimulate, ["run", "--run-config", str(config), *args]
+            )
+        assert result.exit_code == 0, result.output
+        assert mock_main.call_args.kwargs["extra_args"]["sim_verbosity"] == expected
+
+    def test_deprecated_value_reaches_extra_args(
+        self, tmp_path: Path, model_spec: Path, branch_config: Path, result_dir: Path
+    ) -> None:
+        config = self._full_config(tmp_path, model_spec, branch_config, result_dir)
+        with patch(_RUNNER_MAIN) as mock_main:
+            result = CliRunner().invoke(
+                psimulate,
+                ["run", "--run-config", str(config), "--sim-verbosity", "2"],
+            )
+        assert result.exit_code == 0, result.output
+        assert mock_main.call_args.kwargs["extra_args"]["sim_verbosity"] == 2
