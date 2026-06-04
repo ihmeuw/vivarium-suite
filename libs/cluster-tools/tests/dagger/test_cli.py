@@ -20,6 +20,7 @@ from click.testing import CliRunner
 from vivarium_cluster_tools.dagger.cli import dagger
 
 _WORKFLOW_MAIN = "vivarium_cluster_tools.dagger.cli.runner.run_workflow"
+_RESTART_MAIN = "vivarium_cluster_tools.dagger.cli.runner.restart_workflow"
 
 
 def _write_yaml(tmp_path: Path, data: dict[str, Any], name: str = "pipeline.yaml") -> Path:
@@ -207,3 +208,55 @@ class TestDaggerRun:
         assert result.exit_code == 0, result.output
         call_kwargs = mock_main.call_args.kwargs
         assert getattr(call_kwargs["workflow_config"], missing_field) == cli_value
+
+    @pytest.mark.xfail(reason="not implemented: --resume removed from run")
+    def test_run_no_longer_accepts_resume(self, tmp_path: Path) -> None:
+        """The removed ``--resume`` flag is now an unknown option on ``dagger run``."""
+        workflow_yaml = _write_yaml(tmp_path, _make_workflow_dict(tmp_path))
+        result = CliRunner().invoke(
+            dagger, ["run", "--config", str(workflow_yaml), "--resume"]
+        )
+        assert result.exit_code != 0
+        assert "no such option" in result.output.lower()
+
+
+class TestDaggerRestart:
+    """Tests for the ``restart`` subcommand's CLI surface (Phase 1: xfail)."""
+
+    @pytest.mark.xfail(reason="not implemented: restart subcommand")
+    def test_restart_dispatches_results_directory(self, tmp_path: Path) -> None:
+        """``dagger restart <dir>`` calls ``runner.restart_workflow`` with the resolved dir."""
+        results = tmp_path / "results"
+        results.mkdir()
+        with patch(_RESTART_MAIN) as mock_main:
+            result = CliRunner().invoke(dagger, ["restart", str(results)])
+        assert result.exit_code == 0, result.output
+        assert mock_main.call_args.kwargs["results_directory"] == results.resolve()
+
+    @pytest.mark.xfail(reason="not implemented: restart positional required")
+    def test_restart_requires_results_directory(self) -> None:
+        """``dagger restart`` with no positional is a usage error."""
+        result = CliRunner().invoke(dagger, ["restart"])
+        assert result.exit_code != 0
+        assert "missing" in result.output.lower() or "required" in result.output.lower()
+
+    @pytest.mark.xfail(reason="not implemented: restart dir must exist")
+    def test_restart_nonexistent_directory_errors(self, tmp_path: Path) -> None:
+        """``dagger restart <missing>`` is rejected by Click (exists=True)."""
+        result = CliRunner().invoke(dagger, ["restart", str(tmp_path / "nope")])
+        assert result.exit_code != 0
+        assert "does not exist" in result.output.lower()
+
+    @pytest.mark.xfail(reason="not implemented: restart overrides")
+    def test_restart_passes_overrides(self, tmp_path: Path) -> None:
+        """``dagger restart <dir> -P proj -q long.q -m 5`` forwards overrides to restart_workflow."""
+        results = tmp_path / "results"
+        results.mkdir()
+        with patch(_RESTART_MAIN) as mock_main:
+            result = CliRunner().invoke(
+                dagger,
+                ["restart", str(results), "-P", "proj_x", "-q", "long.q", "-m", "5"],
+            )
+        assert result.exit_code == 0, result.output
+        kw = mock_main.call_args.kwargs
+        assert (kw["project"], kw["queue"], kw["max_attempts"]) == ("proj_x", "long.q", 5)

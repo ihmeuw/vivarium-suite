@@ -34,6 +34,10 @@ WORKFLOW_ARGS_FILENAME = ".workflow_args"
 """File written to the output directory to persist the Jobmon workflow_args
 for resume support."""
 
+CONFIGURATION_FILENAME = "configuration.yaml"
+"""File written to the output directory holding the full, override-resolved
+workflow configuration. Reloaded by ``dagger restart`` to resume the workflow."""
+
 
 _SCALAR_TYPES: tuple[type, ...] = (str, int, float, bool)
 """Scalar value types accepted in step args (e.g. notebook ``parameters``,
