@@ -265,7 +265,6 @@ def _seed_resumable_output(
         (results_dir / WORKFLOW_ARGS_FILENAME).write_text(workflow_args)
 
 
-@pytest.mark.xfail(reason="not implemented: restart loads saved configuration")
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
 @patch(f"{_RUNNER}.send_slack_notification")
 @patch(f"{_RUNNER}.client.bind_and_run_workflow")
@@ -287,7 +286,6 @@ def test_restart_loads_saved_configuration(
     assert mock_build.call_args.args[0].name == "test_workflow"
 
 
-@pytest.mark.xfail(reason="not implemented: restart reuses workflow_args + resumes")
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
 @patch(f"{_RUNNER}.send_slack_notification")
 @patch(f"{_RUNNER}.client.bind_and_run_workflow")
@@ -311,7 +309,6 @@ def test_restart_reuses_persisted_workflow_args(
     assert mock_bind_and_run.call_args.kwargs["resume"] is True
 
 
-@pytest.mark.xfail(reason="not implemented: restart forces output directory")
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
 @patch(f"{_RUNNER}.send_slack_notification")
 @patch(f"{_RUNNER}.client.bind_and_run_workflow")
@@ -333,7 +330,6 @@ def test_restart_forces_output_directory_to_results_dir(
     assert mock_build.call_args.args[0].output_directory == results_dir
 
 
-@pytest.mark.xfail(reason="not implemented: restart applies overrides over saved config")
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
 @patch(f"{_RUNNER}.send_slack_notification")
 @patch(f"{_RUNNER}.client.bind_and_run_workflow")
@@ -355,7 +351,6 @@ def test_restart_applies_project_override(
     assert mock_build.call_args.args[0].project == "proj_simscience_prod"
 
 
-@pytest.mark.xfail(reason="not implemented: restart slack label")
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
 @patch(f"{_RUNNER}.send_slack_notification")
 @patch(f"{_RUNNER}.client.bind_and_run_workflow")
@@ -377,7 +372,6 @@ def test_restart_notifies_with_restart_label(
     assert mock_slack.call_args.kwargs["command_label"] == "dagger restart"
 
 
-@pytest.mark.xfail(reason="not implemented: restart guards missing .workflow_args")
 def test_restart_missing_workflow_args_errors(tmp_path: Path) -> None:
     """A results dir without .workflow_args raises a clear error (not resumable)."""
     results_dir = tmp_path / "results"
@@ -387,7 +381,6 @@ def test_restart_missing_workflow_args_errors(tmp_path: Path) -> None:
         restart_workflow(results_dir)
 
 
-@pytest.mark.xfail(reason="not implemented: run/restart config round-trip")
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
 @patch(f"{_RUNNER}.send_slack_notification")
 @patch(f"{_RUNNER}.client.bind_and_run_workflow")

@@ -1,9 +1,10 @@
 """
-End-to-end tests for ``dagger run``.
+End-to-end tests for ``dagger run`` and ``dagger restart``.
 
 These tests run against a real SLURM cluster and exercise the full workflow
 pipeline: YAML config parsing, Jobmon workflow construction, SLURM submission,
-sequential step execution, and output file generation.
+sequential step execution, output file generation, and (for restart) resuming
+a previously failed workflow while skipping already-completed steps.
 
 They are gated behind the ``@pytest.mark.cluster`` marker and require:
 1. Execution on a SLURM cluster (automatically detected)
@@ -310,3 +311,113 @@ class TestDaggerRun:
                 f"got {len(metadata)}"
             )
             _assert_result_task_counts(step_output_dir / "results", _EXPECTED_TOTAL_JOBS)
+
+
+def _write_flaky_workflow_config(output_dir: Path, config_path: Path, project: str) -> None:
+    """Write a 3-step workflow whose middle step fails on its first attempt.
+
+    Steps (sequential):
+      1. ``init``   – appends a line to ``step_1_runs.txt`` each time it runs
+         (so we can prove it is *not* re-run on restart).
+      2. ``flaky``  – fails (exit 1) the first time it runs by dropping a
+         sentinel file; on any later run the sentinel exists, so it writes
+         ``step_2_process.txt`` and succeeds.
+      3. ``report`` – verifies step 2's output, writes ``step_3_report.txt``.
+
+    ``max_attempts: 1`` disables Jobmon retries, so the flaky step's first
+    failure fails the whole workflow (rather than being retried into success).
+    """
+    init_cmd = f"bash -c 'echo ran >> {output_dir}/step_1_runs.txt'"
+    flaky_cmd = (
+        "bash -c '"
+        f"S={output_dir}/.flaky_sentinel; "
+        'if [ -f "$S" ]; then '
+        f"echo recovered > {output_dir}/step_2_process.txt; "
+        'else touch "$S"; echo failing-first-attempt >&2; exit 1; fi'
+        "'"
+    )
+    report_cmd = (
+        "bash -c '"
+        f"test -f {output_dir}/step_2_process.txt "
+        f"&& echo step_3_complete > {output_dir}/step_3_report.txt"
+        "'"
+    )
+    config = {
+        "workflow": {
+            "name": "e2e_restart_test",
+            "project": project,
+            "queue": "all.q",
+            "output_directory": str(output_dir),
+            "max_attempts": 1,
+            "steps": [
+                {
+                    "name": "init",
+                    "command": init_cmd,
+                    "resources": {"memory_gb": 1, "runtime": "00:05:00"},
+                },
+                {
+                    "name": "flaky",
+                    "command": flaky_cmd,
+                    "resources": {"memory_gb": 1, "runtime": "00:05:00"},
+                },
+                {
+                    "name": "report",
+                    "command": report_cmd,
+                    "resources": {"memory_gb": 1, "runtime": "00:05:00"},
+                },
+            ],
+        }
+    }
+    config_path.write_text(yaml.dump(config))
+
+
+class TestDaggerRestart:
+    """E2E tests for ``dagger restart``."""
+
+    def test_restart_resumes_failed_workflow(
+        self, shared_tmp_path: Path, slurm_project: str
+    ) -> None:
+        """A workflow that fails partway is resumed to completion by restart.
+
+        First ``dagger run`` fails at the ``flaky`` step (``max_attempts: 1``),
+        leaving only ``init`` complete. ``dagger restart <results_dir>`` then
+        resumes the same Jobmon workflow: ``init`` is skipped (proven by its
+        run-count file staying at 1), ``flaky`` re-runs and succeeds, and
+        ``report`` runs, completing the workflow.
+        """
+        output_dir = shared_tmp_path / "workflow_output"
+        output_dir.mkdir()
+        config_path = shared_tmp_path / "workflow_config.yaml"
+        _write_flaky_workflow_config(output_dir, config_path, slurm_project)
+
+        # First run: expected to FAIL at the flaky step (no retries).
+        first = _run_dagger(
+            ["run", "--config", str(config_path), "-P", slurm_project, "-o", str(output_dir)]
+        )
+        assert first.returncode != 0, (
+            f"Expected the first run to fail at the flaky step.\n"
+            f"STDOUT:\n{first.stdout}\nSTDERR:\n{first.stderr}"
+        )
+        assert (output_dir / "step_1_runs.txt").exists(), "init should have completed"
+        assert not (
+            output_dir / "step_2_process.txt"
+        ).exists(), "flaky should not have succeeded"
+        assert not (output_dir / "step_3_report.txt").exists(), "report should not have run"
+
+        # Restart: resumes the workflow; init is skipped, flaky recovers, report runs.
+        restart = _run_dagger(["restart", str(output_dir), "-P", slurm_project])
+        assert restart.returncode == 0, (
+            f"Expected restart to complete the workflow.\n"
+            f"STDOUT:\n{restart.stdout}\nSTDERR:\n{restart.stderr}"
+        )
+
+        assert (
+            output_dir / "step_2_process.txt"
+        ).exists(), "flaky did not recover on restart"
+        assert (
+            "step_3_complete" in (output_dir / "step_3_report.txt").read_text()
+        ), "report did not run after restart"
+        # init was DONE before the failure, so resume must NOT re-run it.
+        assert (output_dir / "step_1_runs.txt").read_text().count(
+            "ran"
+        ) == 1, "init was re-run on restart instead of being skipped"

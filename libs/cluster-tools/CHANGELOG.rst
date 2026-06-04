@@ -1,6 +1,6 @@
 **3.2.0 - TBD/TBD/TBD**
 
-- Implement serial workflows via the "dagger run" command
+- Implement serial workflows via the dagger CLI group
 - Add facade to interact with Jobmon SDK
 - Reduce simulation task runtime resource during restart with backups
 
