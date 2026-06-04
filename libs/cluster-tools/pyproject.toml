@@ -13,7 +13,7 @@ dynamic = ["version"]
 dependencies = [
     "vivarium-dependencies[numpy_lt_2,pandas,pyyaml,click,tables,loguru,pyarrow,requests]",
     "vivarium-build-utils>=3.0.2,<4.0.0",
-    "vivarium-engine>=5.0.0",
+    "vivarium-engine>=5.1.0",
     "vivarium-config-tree>=5.0.0",
     "dill",
     "psutil",

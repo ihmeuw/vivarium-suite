@@ -149,7 +149,9 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
     report_df["measure"] = report_df["measure"].replace("seconds", "s", regex=True)
 
     report_df = report_df.set_index(cols).sort_index()
-    logger.info(f"\n{report_df}")
+    # Emitted at WARNING so the end-of-run performance report stays visible under
+    # the default (WARNING) terminal verbosity.
+    logger.warning(f"\n{report_df}")
 
 
 def report_performance(
