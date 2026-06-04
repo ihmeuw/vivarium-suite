@@ -14,11 +14,13 @@ pytest.importorskip("jobmon")
 import yaml
 from click.testing import CliRunner
 
+from vivarium_cluster_tools.dagger.cli import dagger
 from vivarium_cluster_tools.dagger.config.config import (
     ParsedStep,
     ResourceConfig,
     WorkflowConfig,
 )
+from vivarium_cluster_tools.dagger.config.serialization import workflow_config_to_dict
 from vivarium_cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
 from vivarium_cluster_tools.dagger.runner import (
     _write_workflow_configuration,
@@ -76,12 +78,6 @@ def test_write_workflow_configuration_writes_round_trippable_yaml(tmp_path: Path
     output_dir = tmp_path / "workflow_output"
     output_dir.mkdir()
 
-    from vivarium_cluster_tools.dagger.config.config import (
-        ParsedStep,
-        ResourceConfig,
-        WorkflowConfig,
-    )
-
     step_kwargs: dict[str, Any] = {
         "name": "test_step",
         "command": "pytest tests/",
@@ -124,8 +120,6 @@ def test_write_workflow_configuration_writes_round_trippable_yaml(tmp_path: Path
 
 def test_workflow_configuration_includes_cli_overrides(tmp_path: Path) -> None:
     """CLI overrides are reflected in the written configuration.yaml."""
-    from vivarium_cluster_tools.dagger.cli import dagger
-
     output_dir = tmp_path / "workflow_output"
     output_dir.mkdir()
 
@@ -392,7 +386,7 @@ def test_run_then_restart_roundtrip(
     mock_timeout: Any,
     workflow_config: WorkflowConfig,
 ) -> None:
-    """A config written by run_workflow loads back for restart_workflow without error."""
+    """restart rebuilds the configuration that run wrote (full round-trip equivalence)."""
     mock_bind_and_run.return_value = ("D", "url")
 
     run_workflow(
@@ -400,4 +394,5 @@ def test_run_then_restart_roundtrip(
     )  # writes configuration.yaml + .workflow_args
     restart_workflow(workflow_config.output_directory)
 
-    assert mock_build.call_args.args[0].name == workflow_config.name
+    rebuilt = mock_build.call_args.args[0]
+    assert workflow_config_to_dict(rebuilt) == workflow_config_to_dict(workflow_config)
