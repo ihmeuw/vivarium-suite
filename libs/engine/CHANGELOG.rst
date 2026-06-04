@@ -1,14 +1,12 @@
 **5.1.0 - 06/04/26**
 
 - Standardize CLI logging verbosity on a ``-v`` count and a single canonical
-  level map (0 = WARNING, 1 = INFO, 2+ = DEBUG, clamped)
-- Add ``verbose_option`` Click decorator in ``vivarium.engine.interface.cli_tools``
-- Make ``get_log_level`` and ``add_logging_sink`` public and add a ``format_override``
-  argument to ``configure_logging_to_terminal``/``add_logging_sink``
-- Add the function name to the terminal log line format
+  level map (0 = WARNING, 1 = INFO, 2+ = DEBUG)
+- Add ``verbose_option`` Click decorator
+- Make ``get_log_level`` and ``add_logging_sink`` public
+- Add the function name and elapsed time to the shared log line format
 - Default to WARNING (not INFO) level for ``simulate run``
-- ``simulate run --quiet``/``-q`` is deprecated (WARNING is now the default)
-  and will be removed in a future release
+- Deprecate ``simulate run --quiet`` / ``-q`` option
 
 **5.0.3 - 06/03/26**
 

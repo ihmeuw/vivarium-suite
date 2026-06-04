@@ -16,9 +16,7 @@ from typing import TYPE_CHECKING, TextIO
 from loguru import logger
 
 
-def configure_logging_to_terminal(
-    verbosity: int, long_format: bool = True, format_override: str | None = None
-) -> None:
+def configure_logging_to_terminal(verbosity: int, long_format: bool = True) -> None:
     """Configure logging to print to the sys.stdout.
 
     Parameters
@@ -29,10 +27,6 @@ def configure_logging_to_terminal(
     long_format
         Whether to use the long format for logging messages, which includes explicit
         information about the simulation context and component in the log messages.
-    format_override
-        An explicit loguru format string to use instead of the default formatter.
-        Useful for callers that need additional fields in the log line (for example,
-        ``{elapsed}``).
     """
     _clear_default_configuration()
     add_logging_sink(
@@ -41,7 +35,6 @@ def configure_logging_to_terminal(
         long_format=long_format,
         colorize=True,
         serialize=False,
-        format_override=format_override,
     )
 
 
@@ -76,7 +69,6 @@ def add_logging_sink(
     long_format: bool,
     colorize: bool,
     serialize: bool,
-    format_override: str | None = None,
 ) -> int:
     """Add a logging sink to the logger.
 
@@ -96,25 +88,20 @@ def add_logging_sink(
     serialize
         Whether to serialize log messages.  This is useful when logging to
         a file or a database.
-    format_override
-        An explicit loguru format string to use instead of the default formatter.
-        When ``None``, the standard short/long formatter is used.
     """
-    log_format = (
-        format_override if format_override is not None else _LogFormatter(long_format).format
-    )
     logging_level = get_log_level(verbosity)
     return logger.add(
         sink,
         colorize=colorize,
         level=logging_level,
-        format=log_format,
+        format=_LogFormatter(long_format).format,
         serialize=serialize,
     )
 
 
 class _LogFormatter:
     time = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green>"
+    elapsed = "<green>{elapsed}</green>"
     level = "<level>{level: <8}</level>"
     simulation = "<cyan>{extra[simulation]}</cyan> - <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan>"
     simulation_and_component = "<cyan>{extra[simulation]}</cyan>-<cyan>{extra[component]}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan>"
@@ -128,7 +115,7 @@ class _LogFormatter:
         from loguru import Record
 
     def format(self, record: Record) -> str:
-        fmt = self.time + " | "
+        fmt = self.time + " | " + self.elapsed + " | "
 
         if self.long_format:
             fmt += self.level + " | "

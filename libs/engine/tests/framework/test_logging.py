@@ -1,5 +1,6 @@
 import datetime
 import io
+import re
 
 import click
 import pytest
@@ -60,6 +61,19 @@ def test_log_format_includes_function() -> None:
     assert ":test_log_format_includes_function:" in sink.getvalue()
 
 
+def test_log_format_includes_elapsed() -> None:
+    sink = io.StringIO()
+    sink_id = add_logging_sink(
+        sink, verbosity=1, long_format=False, colorize=False, serialize=False
+    )
+    try:
+        logger.info("hello")
+    finally:
+        logger.remove(sink_id)
+    # The shared format includes an elapsed-time column (H:MM:SS.ffffff).
+    assert re.search(r"\| \d+:\d{2}:\d{2}\.\d+ \|", sink.getvalue())
+
+
 def test_remove_deprecated_quiet_option() -> None:
     """Reminder to delete the deprecated ``simulate run --quiet/-q`` option.
 
@@ -75,18 +89,3 @@ def test_remove_deprecated_quiet_option() -> None:
     assert "quiet" in {param.name for param in simulate.commands["run"].params}
 
 
-def test_add_logging_sink_format_override() -> None:
-    sink = io.StringIO()
-    sink_id = add_logging_sink(
-        sink,
-        verbosity=1,
-        long_format=False,
-        colorize=False,
-        serialize=False,
-        format_override="OVERRIDE | {message}",
-    )
-    try:
-        logger.info("hello")
-    finally:
-        logger.remove(sink_id)
-    assert "OVERRIDE | hello" in sink.getvalue()
