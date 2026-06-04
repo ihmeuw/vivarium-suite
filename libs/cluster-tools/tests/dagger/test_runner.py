@@ -193,7 +193,7 @@ def test_run_workflow_fresh_run_generates_workflow_args(
     forwards it to the builder, and tags the Slack notification as "dagger run"."""
     mock_bind_and_run.return_value = ("D", "https://jobmon.example/wf/1")
 
-    run_workflow(workflow_config=workflow_config, resume=False)
+    run_workflow(workflow_config=workflow_config)
 
     workflow_args = mock_build.call_args.kwargs["workflow_args"]
     pattern = rf"^workflow_{workflow_config.name}_[0-9a-f]{{8}}_\d{{8}}_\d{{6}}$"
@@ -205,29 +205,6 @@ def test_run_workflow_fresh_run_generates_workflow_args(
     slack_kwargs = mock_slack.call_args.kwargs
     assert slack_kwargs["command_label"] == "dagger run"
     assert slack_kwargs["status"] == "D"
-
-
-@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
-@patch(f"{_RUNNER}.send_slack_notification")
-@patch(f"{_RUNNER}.client.bind_and_run_workflow")
-@patch(f"{_RUNNER}.build_workflow_from_config")
-def test_run_workflow_resume_reads_existing_workflow_args(
-    mock_build: Any,
-    mock_bind_and_run: Any,
-    mock_slack: Any,
-    mock_timeout: Any,
-    workflow_config: WorkflowConfig,
-) -> None:
-    """Resume reads the prior workflow_args from disk and forwards it to the
-    builder; bind_and_run_workflow is invoked with resume=True."""
-    prior_args = "workflow_test_workflow_abcd1234_20260101_120000"
-    (workflow_config.output_directory / WORKFLOW_ARGS_FILENAME).write_text(prior_args)
-    mock_bind_and_run.return_value = ("D", None)
-
-    run_workflow(workflow_config=workflow_config, resume=True)
-
-    assert mock_build.call_args.kwargs["workflow_args"] == prior_args
-    assert mock_bind_and_run.call_args.kwargs["resume"] is True
 
 
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
@@ -246,7 +223,7 @@ def test_run_workflow_raises_when_status_not_done(
     mock_bind_and_run.return_value = ("F", "https://jobmon.example/wf/2")
 
     with pytest.raises(RuntimeError, match="'F'"):
-        run_workflow(workflow_config=workflow_config, resume=False)
+        run_workflow(workflow_config=workflow_config)
 
     slack_kwargs = mock_slack.call_args.kwargs
     assert slack_kwargs["status"] == "F"
@@ -310,7 +287,7 @@ def test_restart_loads_saved_configuration(
     assert mock_build.call_args.args[0].name == "test_workflow"
 
 
-@pytest.mark.xfail(reason="not implemented: restart reuses persisted workflow_args")
+@pytest.mark.xfail(reason="not implemented: restart reuses workflow_args + resumes")
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
 @patch(f"{_RUNNER}.send_slack_notification")
 @patch(f"{_RUNNER}.client.bind_and_run_workflow")
@@ -322,7 +299,8 @@ def test_restart_reuses_persisted_workflow_args(
     mock_timeout: Any,
     tmp_path: Path,
 ) -> None:
-    """restart reads .workflow_args and forwards it to the builder."""
+    """restart reads the persisted .workflow_args, forwards it to the builder,
+    and resumes the Jobmon workflow (resume=True)."""
     results_dir = tmp_path / "results"
     _seed_resumable_output(results_dir, workflow_args="workflow_reused_args")
     mock_bind_and_run.return_value = ("D", "url")
@@ -330,27 +308,6 @@ def test_restart_reuses_persisted_workflow_args(
     restart_workflow(results_dir)
 
     assert mock_build.call_args.kwargs["workflow_args"] == "workflow_reused_args"
-
-
-@pytest.mark.xfail(reason="not implemented: restart resumes jobmon workflow")
-@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
-@patch(f"{_RUNNER}.send_slack_notification")
-@patch(f"{_RUNNER}.client.bind_and_run_workflow")
-@patch(f"{_RUNNER}.build_workflow_from_config")
-def test_restart_resumes_jobmon_workflow(
-    mock_build: Any,
-    mock_bind_and_run: Any,
-    mock_slack: Any,
-    mock_timeout: Any,
-    tmp_path: Path,
-) -> None:
-    """restart calls bind_and_run_workflow with resume=True."""
-    results_dir = tmp_path / "results"
-    _seed_resumable_output(results_dir)
-    mock_bind_and_run.return_value = ("D", "url")
-
-    restart_workflow(results_dir)
-
     assert mock_bind_and_run.call_args.kwargs["resume"] is True
 
 
@@ -390,12 +347,12 @@ def test_restart_applies_project_override(
 ) -> None:
     """A project override is merged over the saved config before building."""
     results_dir = tmp_path / "results"
-    _seed_resumable_output(results_dir, project="proj_old")
+    _seed_resumable_output(results_dir, project="proj_simscience")
     mock_bind_and_run.return_value = ("D", "url")
 
-    restart_workflow(results_dir, project="proj_new")
+    restart_workflow(results_dir, project="proj_simscience_prod")
 
-    assert mock_build.call_args.args[0].project == "proj_new"
+    assert mock_build.call_args.args[0].project == "proj_simscience_prod"
 
 
 @pytest.mark.xfail(reason="not implemented: restart slack label")
