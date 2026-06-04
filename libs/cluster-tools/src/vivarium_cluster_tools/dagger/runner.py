@@ -94,6 +94,38 @@ def run_workflow(
     logger.info(f"Workflow completed successfully. Results in {output_root}")
 
 
+def restart_workflow(
+    results_directory: Path,
+    *,
+    project: str | None = None,
+    queue: str | None = None,
+    max_attempts: int | None = None,
+    verbose: int = 0,
+) -> None:
+    """Resume a previously started ``dagger`` workflow from its output directory.
+
+    Reloads the ``configuration.yaml`` and persisted Jobmon ``workflow_args``
+    written by the original ``dagger run`` invocation, applies any CLI
+    overrides, forces the output directory to ``results_directory``, and resumes
+    the Jobmon workflow, skipping completed tasks.
+
+    Parameters
+    ----------
+    results_directory
+        Output directory from a previous ``dagger run``. The workflow's output
+        directory is forced to this path.
+    project
+        Override for the workflow project.
+    queue
+        Override for the workflow queue.
+    max_attempts
+        Override for the maximum number of Jobmon task attempts.
+    verbose
+        Verbosity level.
+    """
+    raise NotImplementedError  # [stub] Implement in Phase 2.
+
+
 def _write_workflow_configuration(output_root: Path, workflow_config: WorkflowConfig) -> None:
     """Write workflow configuration to a YAML file in the output directory.
 

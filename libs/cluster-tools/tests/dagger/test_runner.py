@@ -20,7 +20,11 @@ from vivarium_cluster_tools.dagger.config.config import (
     WorkflowConfig,
 )
 from vivarium_cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
-from vivarium_cluster_tools.dagger.runner import _write_workflow_configuration, run_workflow
+from vivarium_cluster_tools.dagger.runner import (
+    _write_workflow_configuration,
+    restart_workflow,
+    run_workflow,
+)
 
 _RUNNER = "vivarium_cluster_tools.dagger.runner"
 
@@ -247,3 +251,203 @@ def test_run_workflow_raises_when_status_not_done(
     slack_kwargs = mock_slack.call_args.kwargs
     assert slack_kwargs["status"] == "F"
     assert slack_kwargs["command_label"] == "dagger run"
+
+
+# ---------------------------------------------------------------------------
+# dagger restart (Phase 1: xfail until restart_workflow is implemented)
+# ---------------------------------------------------------------------------
+
+
+def _seed_resumable_output(
+    results_dir: Path,
+    *,
+    name: str = "test_workflow",
+    project: str = "proj_simscience",
+    queue: str = "all.q",
+    output_directory: str | None = None,
+    workflow_args: str = "workflow_test_workflow_abcd1234_20260101_120000",
+    write_args: bool = True,
+) -> None:
+    """Lay out *results_dir* as a previous ``dagger run`` left it.
+
+    Writes a ``configuration.yaml`` (and, by default, a ``.workflow_args``)
+    so the directory looks like a resumable workflow output.
+    """
+    results_dir.mkdir(parents=True, exist_ok=True)
+    workflow: dict[str, Any] = {
+        "name": name,
+        "project": project,
+        "queue": queue,
+        "output_directory": output_directory or str(results_dir),
+        "steps": [
+            {"name": "test_step", "command": "echo test", "resources": {"memory_gb": 4}}
+        ],
+    }
+    (results_dir / "configuration.yaml").write_text(yaml.dump({"workflow": workflow}))
+    if write_args:
+        (results_dir / WORKFLOW_ARGS_FILENAME).write_text(workflow_args)
+
+
+@pytest.mark.xfail(reason="not implemented: restart loads saved configuration")
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_loads_saved_configuration(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """restart reads configuration.yaml from the results dir and builds from it."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir)
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_build.call_args.args[0].name == "test_workflow"
+
+
+@pytest.mark.xfail(reason="not implemented: restart reuses persisted workflow_args")
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_reuses_persisted_workflow_args(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """restart reads .workflow_args and forwards it to the builder."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir, workflow_args="workflow_reused_args")
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_build.call_args.kwargs["workflow_args"] == "workflow_reused_args"
+
+
+@pytest.mark.xfail(reason="not implemented: restart resumes jobmon workflow")
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_resumes_jobmon_workflow(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """restart calls bind_and_run_workflow with resume=True."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir)
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_bind_and_run.call_args.kwargs["resume"] is True
+
+
+@pytest.mark.xfail(reason="not implemented: restart forces output directory")
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_forces_output_directory_to_results_dir(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """Even if the saved config points elsewhere, restart uses the given results dir."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir, output_directory="/stale/path")
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_build.call_args.args[0].output_directory == results_dir
+
+
+@pytest.mark.xfail(reason="not implemented: restart applies overrides over saved config")
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_applies_project_override(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """A project override is merged over the saved config before building."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir, project="proj_old")
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir, project="proj_new")
+
+    assert mock_build.call_args.args[0].project == "proj_new"
+
+
+@pytest.mark.xfail(reason="not implemented: restart slack label")
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_notifies_with_restart_label(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """restart sends a Slack notification labelled 'dagger restart'."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir)
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_slack.call_args.kwargs["command_label"] == "dagger restart"
+
+
+@pytest.mark.xfail(reason="not implemented: restart guards missing .workflow_args")
+def test_restart_missing_workflow_args_errors(tmp_path: Path) -> None:
+    """A results dir without .workflow_args raises a clear error (not resumable)."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir, write_args=False)
+
+    with pytest.raises(FileNotFoundError, match="workflow_args"):
+        restart_workflow(results_dir)
+
+
+@pytest.mark.xfail(reason="not implemented: run/restart config round-trip")
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_run_then_restart_roundtrip(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    workflow_config: WorkflowConfig,
+) -> None:
+    """A config written by run_workflow loads back for restart_workflow without error."""
+    mock_bind_and_run.return_value = ("D", "url")
+
+    run_workflow(
+        workflow_config=workflow_config
+    )  # writes configuration.yaml + .workflow_args
+    restart_workflow(workflow_config.output_directory)
+
+    assert mock_build.call_args.args[0].name == workflow_config.name
