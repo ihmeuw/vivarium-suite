@@ -23,13 +23,13 @@ def configure_logging_to_terminal(verbosity: int, long_format: bool = True) -> N
     ----------
     verbosity
         The verbosity level of the logging. 0 logs at the WARNING level, 1 logs
-        at the INFO level, and 2 logs at the DEBUG level.
+        at the INFO level, and 2 or more logs at the DEBUG level.
     long_format
         Whether to use the long format for logging messages, which includes explicit
         information about the simulation context and component in the log messages.
     """
     _clear_default_configuration()
-    _add_logging_sink(
+    add_logging_sink(
         sink=sys.stdout,
         verbosity=verbosity,
         long_format=long_format,
@@ -47,7 +47,7 @@ def configure_logging_to_file(output_directory: Path) -> None:
         The directory to write the log file to.
     """
     log_file = output_directory / "simulation.log"
-    _add_logging_sink(
+    add_logging_sink(
         log_file,
         verbosity=2,
         long_format=True,
@@ -63,7 +63,7 @@ def _clear_default_configuration() -> None:
         pass
 
 
-def _add_logging_sink(
+def add_logging_sink(
     sink: Path | TextIO,
     verbosity: int,
     long_format: bool,
@@ -78,7 +78,7 @@ def _add_logging_sink(
         The sink to add.  Can be a file path, a file object, or a callable.
     verbosity
         The verbosity level.  0 is the default and will only log warnings and errors.
-        1 will log info messages.  2 will log debug messages.
+        1 will log info messages.  2 or more will log debug messages.
     long_format
         Whether to use the long format for logging messages.  The long format includes
         the simulation name and component name.  The short format only includes the
@@ -89,25 +89,23 @@ def _add_logging_sink(
         Whether to serialize log messages.  This is useful when logging to
         a file or a database.
     """
-    log_formatter = _LogFormatter(long_format)
-    logging_level = _get_log_level(verbosity)
+    logging_level = get_log_level(verbosity)
     return logger.add(
         sink,
         colorize=colorize,
         level=logging_level,
-        format=log_formatter.format,
+        format=_LogFormatter(long_format).format,
         serialize=serialize,
     )
 
 
 class _LogFormatter:
     time = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green>"
+    elapsed = "<green>{elapsed}</green>"
     level = "<level>{level: <8}</level>"
-    simulation = "<cyan>{extra[simulation]}</cyan> - <cyan>{name}</cyan>:<cyan>{line}</cyan>"
-    simulation_and_component = (
-        "<cyan>{extra[simulation]}</cyan>-<cyan>{extra[component]}</cyan>:<cyan>{line}</cyan>"
-    )
-    short_name_and_line = "<cyan>{name}</cyan>:<cyan>{line}</cyan>"
+    simulation = "<cyan>{extra[simulation]}</cyan> - <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan>"
+    simulation_and_component = "<cyan>{extra[simulation]}</cyan>-<cyan>{extra[component]}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan>"
+    short_name_and_line = "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan>"
     message = "<level>{message}</level>"
 
     def __init__(self, long_format: bool = False):
@@ -117,7 +115,7 @@ class _LogFormatter:
         from loguru import Record
 
     def format(self, record: Record) -> str:
-        fmt = self.time + " | "
+        fmt = self.time + " | " + self.elapsed + " | "
 
         if self.long_format:
             fmt += self.level + " | "
@@ -134,15 +132,23 @@ class _LogFormatter:
         return fmt
 
 
-def _get_log_level(verbosity: int) -> str:
-    if verbosity == 0:
+def get_log_level(verbosity: int) -> str:
+    """Map a verbosity count to a loguru log level.
+
+    The mapping is clamped at both ends: any value of 0 or below logs at the
+    WARNING level, 1 logs at INFO, and 2 or above logs at DEBUG.
+
+    Parameters
+    ----------
+    verbosity
+        The verbosity level, typically a ``-v`` count from the command line.
+    """
+    if verbosity <= 0:
         return "WARNING"
     elif verbosity == 1:
         return "INFO"
-    elif verbosity >= 2:
-        return "DEBUG"
     else:
-        raise ValueError(f"Invalid verbosity level: {verbosity}")
+        return "DEBUG"
 
 
 def list_loggers() -> None:
