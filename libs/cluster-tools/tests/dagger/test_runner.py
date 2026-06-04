@@ -224,11 +224,6 @@ def test_run_workflow_raises_when_status_not_done(
     assert slack_kwargs["command_label"] == "dagger run"
 
 
-# ---------------------------------------------------------------------------
-# dagger restart (Phase 1: xfail until restart_workflow is implemented)
-# ---------------------------------------------------------------------------
-
-
 def _seed_resumable_output(
     results_dir: Path,
     *,
