@@ -8,6 +8,7 @@ import click
 from loguru import logger
 from vivarium.engine.framework.logging import configure_logging_to_file
 from vivarium.engine.framework.utilities import handle_exceptions
+from vivarium.engine.interface.cli_tools import verbose_option
 
 from vivarium.profiling.constants import metadata, paths
 from vivarium.profiling.tools import build_artifacts, configure_logging_to_terminal
@@ -181,7 +182,7 @@ def profile_sim(
     help="Append to the artifact instead of overwriting.",
 )
 @click.option("-r", "--replace-keys", multiple=True, help="Specify keys to overwrite")
-@click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
+@verbose_option(help="Configure logging verbosity.")
 @click.option(
     "--pdb",
     "with_debugger",
@@ -242,7 +243,7 @@ def make_artifacts(
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     help="Path to YAML file defining extraction patterns. If not provided, uses default patterns.",
 )
-@click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
+@verbose_option(help="Configure logging verbosity.")
 @click.option(
     "--pdb",
     "with_debugger",
@@ -329,7 +330,7 @@ def _expand_model_specs(model_patterns: list[str]) -> list[Path]:
     "benchmark_results",
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
 )
-@click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
+@verbose_option(help="Configure logging verbosity.")
 @click.option(
     "--pdb",
     "with_debugger",

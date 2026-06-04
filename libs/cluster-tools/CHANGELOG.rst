@@ -1,3 +1,19 @@
+**4.1.0 - 06/04/26**
+
+- Standardize CLI logging verbosity on the shared ``vivarium.engine`` convention
+- Per-simulation verbosity is now a ``-s`` count instead of choice
+- Delegate terminal/sink logging to ``vivarium.engine.framework.logging`` rather
+  than reimplementing it
+- Emit the vipin performance report at WARNING so it stays visible under the
+  new default verbosity
+
+Breaking changes:
+
+  - ``psimulate`` / ``vipin`` now default to the WARNING level (was INFO)
+  - Per-simulation verbosity must be given as ``-s`` / ``-ss``; the value form
+    ``-s 0|1|2`` no longer works. The long ``--sim-verbosity 0|1|2`` option still
+    works but is deprecated and will be removed in a future release.
+
 **4.0.1 - 06/04/26**
 
 - Bugfix: Use ``np.random.default_rng`` instead of the global numpy random state when shuffling draws, seeds, and jobs

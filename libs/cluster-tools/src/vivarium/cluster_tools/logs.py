@@ -9,40 +9,24 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TextIO
 
 from loguru import logger
-
-
-def add_logging_sink(
-    sink: TextIO | str | Path, verbose: int, colorize: bool = False, serialize: bool = False
-) -> None:
-    message_format = (
-        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
-        "- <level>{message}</level>"
-    )
-    if verbose == 0:
-        logger.add(
-            sink,
-            colorize=colorize,
-            level="INFO",
-            format=message_format,
-            serialize=serialize,
-        )
-    else:
-        logger.add(
-            sink, colorize=colorize, level="DEBUG", format=message_format, serialize=serialize
-        )
+from vivarium.engine.framework.logging import add_logging_sink
 
 
 def configure_main_process_logging_to_terminal(verbose: int) -> None:
-    logger.remove()  # Clear default configuration
-    add_logging_sink(sys.stdout, verbose, colorize=True)
+    logger.remove()  # Clear all existing sinks
+    add_logging_sink(
+        sys.stdout, verbosity=verbose, long_format=False, colorize=True, serialize=False
+    )
 
 
 def configure_main_process_logging_to_file(output_directory: Path) -> None:
     main_log = output_directory / "main.log"
     serial_log = output_directory / "main.log.json"
-    add_logging_sink(main_log, verbose=2)
-    add_logging_sink(serial_log, verbose=2, serialize=True)
+    add_logging_sink(
+        main_log, verbosity=2, long_format=False, colorize=False, serialize=False
+    )
+    add_logging_sink(
+        serial_log, verbosity=2, long_format=False, colorize=False, serialize=True
+    )

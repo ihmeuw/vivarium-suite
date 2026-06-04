@@ -21,7 +21,7 @@ dependencies = [
     "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
     "vivarium-build-utils>=3.0.2,<4.0.0",
     "vivarium-gbd-mapping>=6.0.0",
-    "vivarium-engine>=5.0.0",
+    "vivarium-engine>=5.1.0",
     "vivarium-public-health>=5.0.0",
     "vivarium-config-tree>=5.0.1",
     "jinja2",
