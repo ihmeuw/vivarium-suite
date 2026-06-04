@@ -1,3 +1,7 @@
+**4.0.1 - 06/03/26**
+
+- Optimization: Compute keyspace length arithmetically instead of materializing the full product
+
 **4.0.0 - 06/03/26**
 
 First release from the vivarium-suite monorepo; the standalone
