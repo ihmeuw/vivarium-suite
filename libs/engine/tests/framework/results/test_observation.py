@@ -350,27 +350,6 @@ def test_to_ordered_categoricals_falls_back_to_sorted_order() -> None:
     )
 
 
-def test_to_ordered_categoricals_leaves_numeric_and_datetime_columns_unchanged() -> None:
-    """Numeric, datetime, and timedelta non-value columns are left unchanged."""
-    results = pd.DataFrame(
-        {
-            "student_house": ["gryffindor", "slytherin", "ravenclaw"],
-            "event_time": pd.to_datetime(["2021-01-01", "2021-01-02", "2021-01-03"]),
-            "elapsed": pd.to_timedelta([1, 2, 3], unit="D"),
-            "power_level": [1, 2, 3],
-            VALUE_COLUMN: [1.0, 2.0, 3.0],
-        }
-    )
-    converted = to_ordered_categoricals(results, {})
-    # The object/label column is cast to an ordered categorical.
-    assert isinstance(converted["student_house"].dtype, pd.CategoricalDtype)
-    assert converted["student_house"].cat.ordered
-    # Numeric, datetime, and timedelta columns retain their original dtypes.
-    for col in ["event_time", "elapsed", "power_level"]:
-        assert not isinstance(converted[col].dtype, pd.CategoricalDtype)
-        assert converted[col].dtype == results[col].dtype
-
-
 def test_to_ordered_categoricals_leaves_numeric_non_value_column_unchanged() -> None:
     """A numeric non-value column is protected by the dtype guard, not cast to categorical."""
     results = pd.DataFrame(

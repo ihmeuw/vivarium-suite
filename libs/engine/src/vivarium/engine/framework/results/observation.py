@@ -46,15 +46,14 @@ VALUE_COLUMN = "value"
 def to_ordered_categoricals(
     results: pd.DataFrame, category_orderings: dict[str, list[str]]
 ) -> pd.DataFrame:
-    """Cast the discrete label columns of a results frame to ordered categoricals.
+    """Cast the label columns of a stratified results frame to ordered categoricals.
 
     Every column except :data:`VALUE_COLUMN` is converted to an ordered
-    :class:`~pandas.CategoricalDtype`, EXCEPT numeric (including boolean),
-    datetime, and timedelta columns, which are left unchanged. Casting only
-    discrete label columns leaves numeric value columns (including the extra
-    columns of a multi-output observation) and any continuous or time columns
-    untouched. A column listed in ``category_orderings`` is always cast
-    regardless of its dtype, since it represents a registered stratification.
+    :class:`~pandas.CategoricalDtype`, except numeric columns, which are left
+    unchanged so the extra numeric columns of a multi-output observation are
+    preserved. A column listed in ``category_orderings`` is cast in its
+    registered order; any other label column (e.g. ``measure``) is cast in
+    sorted order.
 
     Ordered categoricals are written verbatim into ``.parquet`` files and read
     back as ordered categoricals, which keeps label columns memory-cheap and
@@ -80,29 +79,22 @@ def to_ordered_categoricals(
 
     Returns
     -------
-        The results frame with discrete label columns cast to ordered
-        categorical dtype and the value, numeric, datetime, and timedelta columns
-        left unchanged.
+        The results frame with label columns cast to ordered categorical dtype
+        and the value and other numeric columns left unchanged.
     """
     results = results.copy()
     for column in results.columns:
         if column == VALUE_COLUMN:
             continue
         if column in category_orderings:
-            # A registered stratification is always cast, regardless of dtype, to
-            # honor its declared category order. Its values are validated against
-            # those categories upstream, so the ordering can be used as-is.
+            # A registered stratification is cast in its declared order; its
+            # values are validated against those categories upstream.
             categories = list(category_orderings[column])
+        elif pd.api.types.is_numeric_dtype(results[column]):
+            # A multi-output observation carries extra numeric columns alongside
+            # the value column; leave those numeric.
+            continue
         else:
-            # Leave continuous and time columns untouched; categorical is only
-            # appropriate for discrete label columns.
-            dtype = results[column].dtype
-            if (
-                pd.api.types.is_numeric_dtype(dtype)
-                or pd.api.types.is_datetime64_any_dtype(dtype)
-                or pd.api.types.is_timedelta64_dtype(dtype)
-            ):
-                continue
             categories = sorted(results[column].dropna().unique())
         results[column] = results[column].astype(
             CategoricalDtype(categories=categories, ordered=True)
