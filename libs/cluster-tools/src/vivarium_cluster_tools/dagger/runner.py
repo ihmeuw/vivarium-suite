@@ -10,7 +10,6 @@ and notify on completion.
 
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,6 +28,7 @@ from vivarium_cluster_tools.dagger.config.utilities import (
     CONFIGURATION_FILENAME,
     WORKFLOW_ARGS_FILENAME,
 )
+from vivarium_cluster_tools.utilities import hash_output_path
 
 
 def run_workflow(workflow_config: WorkflowConfig, verbose: int = 0) -> None:
@@ -43,16 +43,14 @@ def run_workflow(workflow_config: WorkflowConfig, verbose: int = 0) -> None:
     """
     logger.info(f"Starting workflow: {workflow_config.name}")
 
-    # Generate a unique workflow_args using a timestamp so each fresh run is
-    # distinct even with the same config and output directory.
     output_root = workflow_config.output_directory
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    output_hash = hashlib.md5(str(output_root).encode()).hexdigest()[:8]
-    workflow_args = f"workflow_{workflow_config.name}_{output_hash}_{timestamp}"
+    output_hash = hash_output_path(output_root)
+    workflow_id = f"workflow_{workflow_config.name}_{output_hash}_{timestamp}"
 
     _execute_workflow(
         workflow_config,
-        workflow_args=workflow_args,
+        workflow_id=workflow_id,
         resume=False,
         command_label="dagger run",
     )
@@ -108,8 +106,8 @@ def restart_workflow(
             f"missing {WORKFLOW_ARGS_FILENAME} (persisted workflow_args)."
         )
 
-    workflow_args = workflow_args_path.read_text().strip()
-    logger.info(f"Resuming workflow with args: {workflow_args}")
+    workflow_id = workflow_args_path.read_text().strip()
+    logger.info(f"Resuming workflow with args: {workflow_id}")
 
     # Reload the saved config, forcing the output directory to the results dir
     workflow_config = load_workflow_config(
@@ -122,7 +120,7 @@ def restart_workflow(
 
     _execute_workflow(
         workflow_config,
-        workflow_args=workflow_args,
+        workflow_id=workflow_id,
         resume=True,
         command_label="dagger restart",
     )
@@ -131,25 +129,25 @@ def restart_workflow(
 def _execute_workflow(
     workflow_config: WorkflowConfig,
     *,
-    workflow_args: str,
+    workflow_id: str,
     resume: bool,
     command_label: str,
 ) -> None:
     """Build, bind, run, and report a workflow; shared by run and restart.
 
-    Persists the configuration and ``workflow_args`` to the output directory
-    *before* building, so that a workflow which fails early is still
-    restartable by ``dagger restart``.
+    Persists the configuration and ``workflow_id`` (Jobmon's ``workflow_args``)
+    to the output directory *before* building, so that a workflow which fails
+    early is still restartable by ``dagger restart``.
     """
     output_root = workflow_config.output_directory
     output_root.mkdir(parents=True, exist_ok=True)
 
     _write_workflow_configuration(output_root, workflow_config)
-    (output_root / WORKFLOW_ARGS_FILENAME).write_text(workflow_args)
+    (output_root / WORKFLOW_ARGS_FILENAME).write_text(workflow_id)
 
     logger.debug("Building workflow.")
     workflow = build_workflow_from_config(
-        workflow_config, workflow_args=workflow_args, resume=resume
+        workflow_config, workflow_args=workflow_id, resume=resume
     )
 
     wf_status, monitoring_url = client.bind_and_run_workflow(

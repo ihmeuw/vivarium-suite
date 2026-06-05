@@ -8,6 +8,7 @@ Making directories is hard.
 """
 
 import functools
+import hashlib
 import os
 import socket
 import time
@@ -25,6 +26,27 @@ T = TypeVar("T")
 def get_cluster_name() -> str:
     """Returns the hostname"""
     return socket.gethostname()
+
+
+def hash_output_path(output_path: str | Path, length: int = 8) -> str:
+    """Return a short, stable hash of an output path.
+
+    Used to disambiguate Jobmon workflow identifiers between concurrent
+    pipelines that share the same name and timestamp but write to different
+    output directories.
+
+    Parameters
+    ----------
+    output_path
+        The output path to hash.
+    length
+        Number of leading hex characters of the digest to return.
+
+    Returns
+    -------
+        The first ``length`` characters of the MD5 hex digest of ``output_path``.
+    """
+    return hashlib.md5(str(output_path).encode()).hexdigest()[:length]
 
 
 def mkdir(
