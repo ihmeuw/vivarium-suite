@@ -50,7 +50,7 @@ import pandas as pd
 import tables
 from tables.nodes import filenode
 
-from vivarium.artifact.entity_key import EntityKey, is_entity_key
+from vivarium.artifact.entity_key import EntityKey
 
 ####################
 # Public interface #

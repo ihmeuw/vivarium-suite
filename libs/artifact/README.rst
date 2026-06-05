@@ -15,6 +15,7 @@ A data artifact is an archive on disk that packages data. This package provides:
 - ``Artifact``: the in-memory model wrapping the on-disk archive
 - ``ArtifactException``: raised on inconsistent artifact use
 - ``EntityKey``: the structured key type used to address artifact contents
+- ``is_entity_key``: helper to check whether a string is a valid entity key
 
 The above names are re-exported at the package root (``from vivarium.artifact
 import Artifact``).
