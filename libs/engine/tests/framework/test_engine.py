@@ -602,21 +602,22 @@ def _hogwarts_components() -> list[Component]:
 def test_get_results_non_value_columns_are_ordered_categorical(
     SimulationContext: type[SimulationContext_], base_config: ConfigTree
 ) -> None:
-    """get_results casts every non-value column to ordered categorical, for both
-    stratified and unstratified observations, leaving the value column numeric."""
+    """get_results casts stratified observations' non-value label columns to ordered
+    categorical, leaving the value column numeric. All three Hogwarts measures are
+    stratified observations (the 'no stratifications' one is an adding observation
+    with an empty stratification set)."""
     sim = SimulationContext(
         base_config, _hogwarts_components(), configuration=HARRY_POTTER_CONFIG
     )
     sim.run_simulation()
     results = sim.get_results()
 
-    # All three measures, including the unstratified one, are exercised.
     assert set(results) == {
         "house_points",
         "quidditch_wins",
         "no_stratifications_quidditch_wins",
     }
-    # The unstratified measure has a single 'stratification' column valued 'all'.
+    # The 'no stratifications' measure has a single 'stratification' column valued 'all'.
     no_strat = results["no_stratifications_quidditch_wins"]
     assert (no_strat["stratification"] == "all").all()
 
@@ -676,8 +677,9 @@ def test_written_parquet_loads_non_value_columns_as_ordered_categorical(
     base_config: ConfigTree,
     tmp_path: Path,
 ) -> None:
-    """Results written to parquet load back with non-value columns as ordered
-    categoricals (order preserved) and the value column numeric."""
+    """Stratified results written to parquet load back with non-value columns as
+    ordered categoricals (order preserved) and the value column numeric; every
+    measure's row values survive the round-trip."""
     results_root = tmp_path
     configuration: dict[str, object] = {
         "output_data": {"results_directory": str(results_root)}

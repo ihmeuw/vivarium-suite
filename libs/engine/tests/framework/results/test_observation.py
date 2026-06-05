@@ -350,25 +350,6 @@ def test_to_ordered_categoricals_falls_back_to_sorted_order() -> None:
     )
 
 
-def test_to_ordered_categoricals_appends_unregistered_observed_values() -> None:
-    """Observed values missing from a provided ordering are appended, never dropped to NaN."""
-    order = ["low", "medium", "high", "very high"]
-    # "extreme" and "tiny" are observed but not registered in the ordering.
-    results = pd.DataFrame(
-        {
-            "power_level_group": ["very high", "extreme", "low", "tiny"],
-            VALUE_COLUMN: [1.0, 2.0, 3.0, 4.0],
-        }
-    )
-    converted = to_ordered_categoricals(results, {"power_level_group": order})
-    # No observed value is dropped to NaN.
-    assert converted["power_level_group"].notna().all()
-    # Unregistered observed values are appended after the registered order, sorted.
-    assert list(converted["power_level_group"].cat.categories) == order + sorted(
-        ["extreme", "tiny"]
-    )
-
-
 def test_to_ordered_categoricals_leaves_numeric_and_datetime_columns_unchanged() -> None:
     """Numeric, datetime, and timedelta non-value columns are left unchanged."""
     results = pd.DataFrame(
@@ -470,8 +451,65 @@ def test_get_category_orderings_returns_registered_stratification_categories() -
     }
 
 
-def test_get_category_orderings_empty_when_unstratified() -> None:
-    """An observation with no stratifications reports an empty ordering map."""
+def test_get_category_orderings_empty_when_stratifications_unset() -> None:
+    """A stratified observation reports an empty ordering map before stratifications are set."""
+    observation = StratifiedObservation(
+        name="obs",
+        population_filter=PopulationFilter(),
+        when="collect_metrics",
+        requires_attributes=[],
+        results_updater=lambda _, __: pd.DataFrame(),
+        results_formatter=lambda _, __: pd.DataFrame(),
+        aggregator_sources=None,
+        aggregator=lambda _: 0.0,
+    )
+    assert observation.stratifications is None
+    assert observation.get_category_orderings() == {}
+
+
+def test_stratified_observation_format_results_casts_ordered_categoricals() -> None:
+    """A stratified observation's format_results casts label columns to ordered categoricals."""
+    raw = pd.DataFrame(
+        {
+            "power_level_group": ["very high", "low", "medium"],
+            "measure": ["m", "m", "m"],
+            VALUE_COLUMN: [1.0, 2.0, 3.0],
+        }
+    )
+    order = ["low", "medium", "high", "very high"]
+    observation = StratifiedObservation(
+        name="obs",
+        population_filter=PopulationFilter(),
+        when="collect_metrics",
+        requires_attributes=[],
+        results_updater=lambda _, __: pd.DataFrame(),
+        results_formatter=lambda _, results: results,
+        aggregator_sources=None,
+        aggregator=lambda _: 0.0,
+    )
+    observation.stratifications = (
+        Stratification(
+            name="power_level_group",
+            requires_attributes=["power_level"],
+            categories=order,
+            excluded_categories=[],
+            mapper=None,
+        ),
+    )
+    formatted = observation.format_results("obs", raw)
+    # Registered stratification column keeps its declared order.
+    assert formatted["power_level_group"].cat.ordered
+    assert list(formatted["power_level_group"].cat.categories) == order
+    # Non-registered label column is an ordered categorical (sorted fallback).
+    assert isinstance(formatted["measure"].dtype, pd.CategoricalDtype)
+    assert formatted["measure"].cat.ordered
+    # The value column is left numeric.
+    assert pd.api.types.is_float_dtype(formatted[VALUE_COLUMN].dtype)
+
+
+def test_unstratified_observation_format_results_leaves_columns_unchanged() -> None:
+    """An unstratified observation's format_results does not categoricalize its columns."""
+    raw = pd.DataFrame({"stratification": ["all"], VALUE_COLUMN: [1.0]})
     observation = UnstratifiedObservation(
         name="obs",
         population_filter=PopulationFilter(),
@@ -479,7 +517,9 @@ def test_get_category_orderings_empty_when_unstratified() -> None:
         requires_attributes=[],
         results_gatherer=lambda df: df,
         results_updater=lambda _, __: pd.DataFrame(),
-        results_formatter=lambda _, __: pd.DataFrame(),
+        results_formatter=lambda _, results: results,
     )
-    assert observation.stratifications is None
-    assert observation.get_category_orderings() == {}
+    formatted = observation.format_results("obs", raw)
+    # No column is cast to categorical; the formatter output is returned as-is.
+    assert not isinstance(formatted["stratification"].dtype, pd.CategoricalDtype)
+    assert formatted.equals(raw)

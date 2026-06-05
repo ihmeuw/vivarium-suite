@@ -15,7 +15,7 @@ import pandas as pd
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results.context import ResultsContext
-from vivarium.engine.framework.results.observation import Observation, to_ordered_categoricals
+from vivarium.engine.framework.results.observation import Observation
 from vivarium.engine.framework.results.stratification import (
     Stratification,
     get_mapped_col_name,
@@ -56,10 +56,12 @@ class ResultsManager(Manager):
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Gets the measure-specific formatted results in a dictionary.
 
-        Non-``value`` columns are cast to ordered categorical dtype (see
-        :func:`~vivarium.engine.framework.results.observation.to_ordered_categoricals`);
-        registered stratifications preserve their declared category order, while
-        numeric, datetime, and timedelta columns are left unchanged.
+        Each observation formats its own results via
+        :meth:`~vivarium.engine.framework.results.observation.Observation.format_results`.
+        For stratified observations this casts non-``value`` label columns to
+        ordered categorical dtype, preserving each stratification's declared
+        category order; numeric, datetime, and timedelta columns are left
+        unchanged.
 
         Returns
         -------
@@ -69,10 +71,7 @@ class ResultsManager(Manager):
         formatted = {}
         for name, observation in self._results_context.observations.items():
             results = self._raw_results[name].copy()
-            formatted_results = observation.results_formatter(name, results)
-            formatted[name] = to_ordered_categoricals(
-                formatted_results, observation.get_category_orderings()
-            )
+            formatted[name] = observation.format_results(name, results)
         return formatted
 
     # noinspection PyAttributeOutsideInit
