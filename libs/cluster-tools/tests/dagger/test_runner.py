@@ -14,13 +14,19 @@ pytest.importorskip("jobmon")
 import yaml
 from click.testing import CliRunner
 
+from vivarium_cluster_tools.dagger.cli import dagger
 from vivarium_cluster_tools.dagger.config.config import (
     ParsedStep,
     ResourceConfig,
     WorkflowConfig,
 )
+from vivarium_cluster_tools.dagger.config.serialization import workflow_config_to_dict
 from vivarium_cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
-from vivarium_cluster_tools.dagger.runner import _write_workflow_configuration, run_workflow
+from vivarium_cluster_tools.dagger.runner import (
+    _write_workflow_configuration,
+    restart_workflow,
+    run_workflow,
+)
 
 _RUNNER = "vivarium_cluster_tools.dagger.runner"
 
@@ -72,12 +78,6 @@ def test_write_workflow_configuration_writes_round_trippable_yaml(tmp_path: Path
     output_dir = tmp_path / "workflow_output"
     output_dir.mkdir()
 
-    from vivarium_cluster_tools.dagger.config.config import (
-        ParsedStep,
-        ResourceConfig,
-        WorkflowConfig,
-    )
-
     step_kwargs: dict[str, Any] = {
         "name": "test_step",
         "command": "pytest tests/",
@@ -120,8 +120,6 @@ def test_write_workflow_configuration_writes_round_trippable_yaml(tmp_path: Path
 
 def test_workflow_configuration_includes_cli_overrides(tmp_path: Path) -> None:
     """CLI overrides are reflected in the written configuration.yaml."""
-    from vivarium_cluster_tools.dagger.cli import dagger
-
     output_dir = tmp_path / "workflow_output"
     output_dir.mkdir()
 
@@ -189,7 +187,7 @@ def test_run_workflow_fresh_run_generates_workflow_args(
     forwards it to the builder, and tags the Slack notification as "dagger run"."""
     mock_bind_and_run.return_value = ("D", "https://jobmon.example/wf/1")
 
-    run_workflow(workflow_config=workflow_config, resume=False)
+    run_workflow(workflow_config=workflow_config)
 
     workflow_args = mock_build.call_args.kwargs["workflow_args"]
     pattern = rf"^workflow_{workflow_config.name}_[0-9a-f]{{8}}_\d{{8}}_\d{{6}}$"
@@ -201,29 +199,6 @@ def test_run_workflow_fresh_run_generates_workflow_args(
     slack_kwargs = mock_slack.call_args.kwargs
     assert slack_kwargs["command_label"] == "dagger run"
     assert slack_kwargs["status"] == "D"
-
-
-@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
-@patch(f"{_RUNNER}.send_slack_notification")
-@patch(f"{_RUNNER}.client.bind_and_run_workflow")
-@patch(f"{_RUNNER}.build_workflow_from_config")
-def test_run_workflow_resume_reads_existing_workflow_args(
-    mock_build: Any,
-    mock_bind_and_run: Any,
-    mock_slack: Any,
-    mock_timeout: Any,
-    workflow_config: WorkflowConfig,
-) -> None:
-    """Resume reads the prior workflow_args from disk and forwards it to the
-    builder; bind_and_run_workflow is invoked with resume=True."""
-    prior_args = "workflow_test_workflow_abcd1234_20260101_120000"
-    (workflow_config.output_directory / WORKFLOW_ARGS_FILENAME).write_text(prior_args)
-    mock_bind_and_run.return_value = ("D", None)
-
-    run_workflow(workflow_config=workflow_config, resume=True)
-
-    assert mock_build.call_args.kwargs["workflow_args"] == prior_args
-    assert mock_bind_and_run.call_args.kwargs["resume"] is True
 
 
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
@@ -242,8 +217,177 @@ def test_run_workflow_raises_when_status_not_done(
     mock_bind_and_run.return_value = ("F", "https://jobmon.example/wf/2")
 
     with pytest.raises(RuntimeError, match="'F'"):
-        run_workflow(workflow_config=workflow_config, resume=False)
+        run_workflow(workflow_config=workflow_config)
 
     slack_kwargs = mock_slack.call_args.kwargs
     assert slack_kwargs["status"] == "F"
     assert slack_kwargs["command_label"] == "dagger run"
+
+
+def _seed_resumable_output(
+    results_dir: Path,
+    *,
+    name: str = "test_workflow",
+    project: str = "proj_simscience",
+    queue: str = "all.q",
+    output_directory: str | None = None,
+    workflow_args: str = "workflow_test_workflow_abcd1234_20260101_120000",
+    write_args: bool = True,
+) -> None:
+    """Lay out *results_dir* as a previous ``dagger run`` left it.
+
+    Writes a ``configuration.yaml`` (and, by default, a ``.workflow_args``)
+    so the directory looks like a resumable workflow output.
+    """
+    results_dir.mkdir(parents=True, exist_ok=True)
+    workflow: dict[str, Any] = {
+        "name": name,
+        "project": project,
+        "queue": queue,
+        "output_directory": output_directory or str(results_dir),
+        "steps": [
+            {"name": "test_step", "command": "echo test", "resources": {"memory_gb": 4}}
+        ],
+    }
+    (results_dir / "configuration.yaml").write_text(yaml.dump({"workflow": workflow}))
+    if write_args:
+        (results_dir / WORKFLOW_ARGS_FILENAME).write_text(workflow_args)
+
+
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_loads_saved_configuration(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """restart reads configuration.yaml from the results dir and builds from it."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir)
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_build.call_args.args[0].name == "test_workflow"
+
+
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_reuses_persisted_workflow_args(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """restart reads the persisted .workflow_args, forwards it to the builder,
+    and resumes the Jobmon workflow (resume=True)."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir, workflow_args="workflow_reused_args")
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_build.call_args.kwargs["workflow_args"] == "workflow_reused_args"
+    assert mock_bind_and_run.call_args.kwargs["resume"] is True
+
+
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_forces_output_directory_to_results_dir(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """Even if the saved config points elsewhere, restart uses the given results dir."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir, output_directory="/stale/path")
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_build.call_args.args[0].output_directory == results_dir
+
+
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_applies_project_override(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """A project override is merged over the saved config before building."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir, project="proj_simscience")
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir, project="proj_simscience_prod")
+
+    assert mock_build.call_args.args[0].project == "proj_simscience_prod"
+
+
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_notifies_with_restart_label(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """restart sends a Slack notification labelled 'dagger restart'."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir)
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(results_dir)
+
+    assert mock_slack.call_args.kwargs["command_label"] == "dagger restart"
+
+
+def test_restart_missing_workflow_args_errors(tmp_path: Path) -> None:
+    """A results dir without .workflow_args raises a clear error (not resumable)."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir, write_args=False)
+
+    with pytest.raises(FileNotFoundError, match="workflow_args"):
+        restart_workflow(results_dir)
+
+
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_run_then_restart_roundtrip(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    workflow_config: WorkflowConfig,
+) -> None:
+    """restart rebuilds the configuration that run wrote (full round-trip equivalence)."""
+    mock_bind_and_run.return_value = ("D", "url")
+
+    run_workflow(
+        workflow_config=workflow_config
+    )  # writes configuration.yaml + .workflow_args
+    restart_workflow(workflow_config.output_directory)
+
+    rebuilt = mock_build.call_args.args[0]
+    assert workflow_config_to_dict(rebuilt) == workflow_config_to_dict(workflow_config)

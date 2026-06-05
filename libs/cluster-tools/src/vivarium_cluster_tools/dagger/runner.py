@@ -10,7 +10,6 @@ and notify on completion.
 
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,16 +22,17 @@ from vivarium_cluster_tools.core.jobmon import client
 from vivarium_cluster_tools.core.notifications import send_slack_notification
 from vivarium_cluster_tools.dagger.config.builder import build_workflow_from_config
 from vivarium_cluster_tools.dagger.config.config import WorkflowConfig
+from vivarium_cluster_tools.dagger.config.parsing import load_workflow_config
 from vivarium_cluster_tools.dagger.config.serialization import workflow_config_to_dict
-from vivarium_cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
+from vivarium_cluster_tools.dagger.config.utilities import (
+    CONFIGURATION_FILENAME,
+    WORKFLOW_ARGS_FILENAME,
+)
+from vivarium_cluster_tools.utilities import hash_output_path
 
 
-def run_workflow(
-    workflow_config: WorkflowConfig,
-    verbose: int = 0,
-    resume: bool = False,
-) -> None:
-    """Entry point for the ``dagger run`` subcommand.
+def run_workflow(workflow_config: WorkflowConfig, verbose: int = 0) -> None:
+    """Entry point for the ``dagger run`` subcommand: start a fresh workflow.
 
     Parameters
     ----------
@@ -40,36 +40,113 @@ def run_workflow(
         The parsed and validated workflow configuration (with CLI overrides applied).
     verbose
         Verbosity level.
-    resume
-        Whether to resume a previously started workflow.
     """
     logger.info(f"Starting workflow: {workflow_config.name}")
 
-    # Create output directory if it doesn't exist
+    output_root = workflow_config.output_directory
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    output_hash = hash_output_path(output_root)
+    workflow_id = f"workflow_{workflow_config.name}_{output_hash}_{timestamp}"
+
+    _execute_workflow(
+        workflow_config,
+        workflow_id=workflow_id,
+        resume=False,
+        command_label="dagger run",
+    )
+
+
+def restart_workflow(
+    results_directory: Path,
+    *,
+    project: str | None = None,
+    queue: str | None = None,
+    max_attempts: int | None = None,
+    verbose: int = 0,
+) -> None:
+    """Resume a previously started ``dagger`` workflow from its output directory.
+
+    Reloads the ``configuration.yaml`` and persisted Jobmon ``workflow_args``
+    written by the original ``dagger run`` invocation, applies any CLI
+    overrides, forces the output directory to ``results_directory``, and resumes
+    the Jobmon workflow, skipping completed tasks.
+
+    Parameters
+    ----------
+    results_directory
+        Output directory from a previous ``dagger run``. The workflow's output
+        directory is forced to this path.
+    project
+        Override for the workflow project.
+    queue
+        Override for the workflow queue.
+    max_attempts
+        Override for the maximum number of Jobmon task attempts.
+    verbose
+        Verbosity level.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``results_directory`` is not a resumable ``dagger run`` output (it
+        lacks a saved configuration or the persisted workflow args).
+    """
+    logger.info(f"Restarting workflow from {results_directory}")
+
+    config_path = results_directory / CONFIGURATION_FILENAME
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"{results_directory} is not a resumable dagger run output: "
+            f"missing {CONFIGURATION_FILENAME}."
+        )
+    workflow_args_path = results_directory / WORKFLOW_ARGS_FILENAME
+    if not workflow_args_path.exists():
+        raise FileNotFoundError(
+            f"{results_directory} is not a resumable dagger run output: "
+            f"missing {WORKFLOW_ARGS_FILENAME} (persisted workflow_args)."
+        )
+
+    workflow_id = workflow_args_path.read_text().strip()
+    logger.info(f"Resuming workflow with args: {workflow_id}")
+
+    # Reload the saved config, forcing the output directory to the results dir
+    workflow_config = load_workflow_config(
+        config_path,
+        project=project,
+        queue=queue,
+        max_attempts=max_attempts,
+        output_directory=results_directory,
+    )
+
+    _execute_workflow(
+        workflow_config,
+        workflow_id=workflow_id,
+        resume=True,
+        command_label="dagger restart",
+    )
+
+
+def _execute_workflow(
+    workflow_config: WorkflowConfig,
+    *,
+    workflow_id: str,
+    resume: bool,
+    command_label: str,
+) -> None:
+    """Build, bind, run, and report a workflow; shared by run and restart.
+
+    Persists the configuration and ``workflow_id`` (Jobmon's ``workflow_args``)
+    to the output directory *before* building, so that a workflow which fails
+    early is still restartable by ``dagger restart``.
+    """
     output_root = workflow_config.output_directory
     output_root.mkdir(parents=True, exist_ok=True)
 
-    workflow_args_path = output_root / WORKFLOW_ARGS_FILENAME
-
-    if resume:
-        workflow_args = workflow_args_path.read_text().strip()
-        logger.info(f"Resuming workflow with args: {workflow_args}")
-    else:
-        # Generate a unique workflow_args using a timestamp so each fresh
-        # run is distinct even with the same config and output directory.
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        output_hash = hashlib.md5(str(output_root).encode()).hexdigest()[:8]
-        workflow_args = f"workflow_{workflow_config.name}_{output_hash}_{timestamp}"
-
-    # Write the requested configuration to output directory
     _write_workflow_configuration(output_root, workflow_config)
+    (output_root / WORKFLOW_ARGS_FILENAME).write_text(workflow_id)
 
-    # Build the workflow
     logger.debug("Building workflow.")
-    workflow = build_workflow_from_config(workflow_config, workflow_args=workflow_args)
-
-    # Persist workflow_args before running so --resume can find it
-    workflow_args_path.write_text(workflow_args)
+    workflow = build_workflow_from_config(workflow_config, workflow_args=workflow_id)
 
     wf_status, monitoring_url = client.bind_and_run_workflow(
         workflow,
@@ -81,7 +158,7 @@ def run_workflow(
     send_slack_notification(
         workflow_name=workflow_config.name,
         status=wf_status,
-        command_label="dagger run",
+        command_label=command_label,
         monitoring_url=monitoring_url,
         results_dir=str(output_root),
     )
@@ -97,8 +174,8 @@ def run_workflow(
 def _write_workflow_configuration(output_root: Path, workflow_config: WorkflowConfig) -> None:
     """Write workflow configuration to a YAML file in the output directory.
 
-    Creates a ``configuration.yaml`` that can be reused directly with
-    ``dagger run --config configuration.yaml``.
+    Creates a ``configuration.yaml`` that ``dagger restart`` reloads to resume
+    the workflow (and that can also be reused directly with ``dagger run -c``).
 
     Parameters
     ----------
@@ -108,6 +185,6 @@ def _write_workflow_configuration(output_root: Path, workflow_config: WorkflowCo
         The parsed and validated workflow configuration.
     """
     config: dict[str, Any] = {"workflow": workflow_config_to_dict(workflow_config)}
-    config_file = output_root / "configuration.yaml"
+    config_file = output_root / CONFIGURATION_FILENAME
     config_file.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
     logger.info(f"Run configuration written to {config_file}")
