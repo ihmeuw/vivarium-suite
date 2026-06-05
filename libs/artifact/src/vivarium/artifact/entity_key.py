@@ -28,8 +28,8 @@ def is_entity_key(key: str) -> bool:
     -------
         True if the string matches the entity key format, False otherwise.
     """
-    elements = [e for e in key.split(".") if e]
-    return len(elements) in [2, 3] and len(key.split(".")) == len(elements)
+    parts = key.split(".")
+    return len(parts) in (2, 3) and all(parts)
 
 
 class EntityKey(str):
@@ -68,7 +68,7 @@ class EntityKey(str):
 
     @property
     def name(self) -> str:
-        """The name of the entity represented by the key"""
+        """The name of the entity represented by the key."""
         return self.split(".")[1] if len(self.split(".")) == 3 else ""
 
     @property
