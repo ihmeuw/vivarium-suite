@@ -180,10 +180,22 @@ def testDocs() {
     }
 }
 
-def deployPackage() {
+def deployPackage(Map options = [:]) {
+    // Resolve the credential used to checkout the repo. This is typically the
+    // "Github App Enterprise" credential configured in the Multibranch Pipeline
+    // branch source.  Same credentials are needed to push tags
+    def gitCredentialsId = options.gitCredentialsId ?: scm.userRemoteConfigs[0].credentialsId
+    if (!gitCredentialsId) {
+        error("deployPackage: No git credential available for pushing tags. " +
+              "Either configure a credential on the Multibranch Pipeline branch source, " +
+              "or pass github_credentials_id in the reusable_pipeline() config.")
+    }
+
     stage("Tagging Version and Pushing") {
         withWorkingDirectory {
-            sh "${ACTIVATE} && make tag-version"
+            withCredentials([gitUsernamePassword(credentialsId: gitCredentialsId)]) {
+                sh "${ACTIVATE} && make tag-version"
+            }
         }
     }
 

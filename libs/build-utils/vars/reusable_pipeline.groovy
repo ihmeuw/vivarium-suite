@@ -24,7 +24,8 @@ def call(Map config = [:]){
     'deployable',
     'skip_doc_build',
     'run_mypy',
-    'env_reqs'
+    'env_reqs',
+    'github_credentials_id'
   ]
 
   def scheduled_branches = config.scheduled_branches ?: []
@@ -37,6 +38,9 @@ def call(Map config = [:]){
   // Empty string leaves base.mk's default ("dev") in effect. installPackage in
   // build_stages.groovy only sets ENV_REQS=... when this is non-empty.
   def env_reqs = config.env_reqs ?: ""
+  // Optional override for the GitHub credential used for git push during deploy.
+  // When empty, deployPackage() falls back to the credential from scm (branch source).
+  def github_credentials_id = config.github_credentials_id ?: ""
 
   // task_node, conda_env_dir, and run_weekly are resolved in the Initialization
   // stage after user parameters are available (needed for RUN_WEEKLY override).
@@ -271,7 +275,8 @@ def call(Map config = [:]){
                               if (!has_changelog_update()) {
                                 error "Deploy failed: Changelog does not contain a proper version update."
                               }
-                              buildStages.deployPackage()
+                              def deployOpts = github_credentials_id ? [gitCredentialsId: github_credentials_id] : [:]
+                              buildStages.deployPackage(deployOpts)
 
                               if (!skip_doc_build) {
                                 buildStages.deployDocs()
