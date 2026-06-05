@@ -2,6 +2,7 @@
 
 - Treat string data sources matching the entity key format as artifact keys and
   all other strings as literal values instead of unconditionally assuming artifact
+  keys.
 
 **5.1.0 - 06/04/26**
 

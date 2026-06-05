@@ -517,17 +517,20 @@ class Component(ABC):
             raise ConfigurationError(f"Error building lookup table '{name}': {e}")
 
     def get_data(self, builder: Builder, data_source: DataInput) -> LookupTableData:
-        """Retrieves data from a data source.
+        """Retrieve data from a data source.
 
-        If the data source is a float or a DataFrame, it is treated as the data
-        itself. If the data source is a string, containing the substring '::',
-        it is treated as a function to call to retrieve the data. The string to
-        the left of '::' is the module to import, and the string to the right is
-        the function to call. 'self' can be provided to the left of '::' to call
-        a method on the component itself. If the data source is a string matching
-        the artifact entity key format (``"type.measure"`` or
-        ``"type.name.measure"``), it is treated as a key in the artifact.
-        Otherwise, the string is treated as a literal value.
+        String data sources are checked in the following order:
+
+        1. If the string contains ``"::"`` it is treated as a callable reference.
+           The left side is the module (or ``"self"``), the right side is the
+           function/method name.
+        2. If the string matches the artifact entity key format
+           (``"type.measure"`` or ``"type.name.measure"``), it is loaded from
+           the artifact.
+        3. Otherwise the string is passed through as a literal value.
+
+        Non-string data sources that are callable are invoked with the builder;
+        all other values are returned as-is.
 
         Parameters
         ----------
@@ -564,12 +567,15 @@ class Component(ABC):
                     )
                 data: LookupTableData = data_source_callable(builder)
             elif is_entity_key(data_source):
+                # NOTE: Strings with 2-3 dot-separated parts (e.g. "male.default")
+                # will be interpreted as artifact keys. Use a callable reference
+                # ("self::method") or a non-dotted string to avoid this.
                 try:
                     data = builder.data.load(data_source)
-                except ArtifactException:
+                except ArtifactException as e:
                     raise ConfigurationError(
-                        f"Failed to find key '{data_source}' in artifact."
-                    )
+                        f"Failed to load key '{data_source}' from artifact: {e}"
+                    ) from e
             else:
                 data = data_source
         elif callable(data_source):
