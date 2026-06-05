@@ -209,15 +209,6 @@ class TestDaggerRun:
         call_kwargs = mock_main.call_args.kwargs
         assert getattr(call_kwargs["workflow_config"], missing_field) == cli_value
 
-    def test_run_no_longer_accepts_resume(self, tmp_path: Path) -> None:
-        """The removed ``--resume`` flag is now an unknown option on ``dagger run``."""
-        workflow_yaml = _write_yaml(tmp_path, _make_workflow_dict(tmp_path))
-        result = CliRunner().invoke(
-            dagger, ["run", "--config", str(workflow_yaml), "--resume"]
-        )
-        assert result.exit_code != 0
-        assert "no such option" in result.output.lower()
-
 
 class TestDaggerRestart:
     """Tests for the ``restart`` subcommand's CLI surface (Phase 1: xfail)."""

@@ -9,7 +9,6 @@ The main process loop for `psimulate` runs.
 
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
 from pathlib import Path
@@ -37,6 +36,7 @@ from vivarium_cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
 from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
+from vivarium_cluster_tools.utilities import hash_output_path
 from vivarium_cluster_tools.vipin.perf_report import report_performance
 
 
@@ -309,7 +309,7 @@ def main(
     wf_command = COMMANDS.run if restart else command
     # Include a hash of the full output path to avoid workflow_args collisions
     # between concurrent pipelines that happen to share the same timestamp.
-    root_hash = hashlib.md5(str(output_paths.root).encode()).hexdigest()[:8]
+    root_hash = hash_output_path(output_paths.root)
     workflow_name = f"psimulate_{wf_command}_{output_paths.root.name}_{root_hash}"
     logger.debug("Building Jobmon workflow.")
     workflow = build_workflow(
