@@ -20,7 +20,6 @@ from vivarium_cluster_tools.dagger.config.interface import (
     get_python_step_tasks,
     get_simulation_step_tasks,
 )
-from vivarium_cluster_tools.dagger.config.utilities import is_resume
 
 if TYPE_CHECKING:
     from jobmon.client.task import Task
@@ -39,7 +38,9 @@ Paired with the dispatch tables in
 :mod:`vivarium_cluster_tools.dagger.config.parsing`."""
 
 
-def build_workflow_from_config(config: WorkflowConfig, workflow_args: str) -> Workflow:
+def build_workflow_from_config(
+    config: WorkflowConfig, workflow_args: str, *, resume: bool = False
+) -> Workflow:
     """Build a complete Jobmon workflow from a workflow configuration.
 
     For each step in the workflow, dispatches to the matching interface API
@@ -54,6 +55,10 @@ def build_workflow_from_config(config: WorkflowConfig, workflow_args: str) -> Wo
     workflow_args
         Deterministic string that Jobmon uses to identify the workflow.
         Must be identical across runs for resume to work.
+    resume
+        Whether this build is a resume (``dagger restart``). Forwarded only to
+        the simulation step, the one step type whose output layout varies on
+        resume.
     """
     tool = client.make_tool()
     workflow = client.make_workflow(
@@ -62,7 +67,6 @@ def build_workflow_from_config(config: WorkflowConfig, workflow_args: str) -> Wo
         name=config.name,
         max_attempts=config.max_attempts,
     )
-    resuming = is_resume(config.output_directory)
     previous_step_tasks: list[Task] = []
     all_tasks: list[Task] = []
 
@@ -73,7 +77,11 @@ def build_workflow_from_config(config: WorkflowConfig, workflow_args: str) -> Wo
         kwargs = parsed_step.api_kwargs
         if kwargs.get("environment") is None:
             kwargs = {**kwargs, "environment": config.default_environment}
-        step_tasks = api_fn(**kwargs, tool=tool, is_resume=resuming)
+        # Only the simulation step varies its behavior on resume.
+        if parsed_step.step_type == "simulation":
+            step_tasks = api_fn(**kwargs, tool=tool, is_resume=resume)
+        else:
+            step_tasks = api_fn(**kwargs, tool=tool)
 
         # Wire sequential dependencies: every task in this step
         # depends on every task from the previous step.

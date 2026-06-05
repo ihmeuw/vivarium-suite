@@ -21,6 +21,7 @@ from vivarium_cluster_tools.dagger.config.interface import (
     get_pytest_step_tasks,
     get_python_step_tasks,
     get_simulation_step_tasks,
+    get_step_resources,
 )
 from vivarium_cluster_tools.dagger.config.parsing import STEP_TYPE_YAML_PARSERS
 from vivarium_cluster_tools.dagger.config.utilities import (
@@ -417,3 +418,41 @@ def test_validate_signature_matches_api_fn_signature(step_type: str) -> None:
     validate_params = set(inspect.signature(validator).parameters)
     api_params = set(inspect.signature(api_fn).parameters)
     assert validate_params == api_params - {"tool", "is_resume", "output_directory"}
+
+
+def test_get_step_resources_builds_resource_config() -> None:
+    """The factory returns a ``ResourceConfig`` carrying the given fields."""
+    resources = get_step_resources(
+        memory_gb=8,
+        project="proj_simscience",
+        queue="all.q",
+        runtime="02:00:00",
+        cores=4,
+        hardware=["r650"],
+        requires_archive_node=True,
+    )
+    assert isinstance(resources, ResourceConfig)
+    assert resources.memory_gb == 8
+    assert resources.project == "proj_simscience"
+    assert resources.queue == "all.q"
+    assert resources.runtime == "02:00:00"
+    assert resources.cores == 4
+    assert resources.hardware == ["r650"]
+    assert resources.requires_archive_node is True
+
+
+def test_get_step_resources_applies_defaults() -> None:
+    """Optional fields fall back to their documented defaults."""
+    resources = get_step_resources(memory_gb=4, project="proj_simscience", queue="all.q")
+    assert resources.runtime == "01:00:00"
+    assert resources.cores == 1
+    assert resources.hardware is None
+    assert resources.requires_archive_node is False
+
+
+def test_get_step_resources_requires_project_and_queue() -> None:
+    """``project`` and ``queue`` are required keyword arguments."""
+    with pytest.raises(TypeError):
+        get_step_resources(memory_gb=4, queue="all.q")  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        get_step_resources(memory_gb=4, project="proj_simscience")  # type: ignore[call-arg]
