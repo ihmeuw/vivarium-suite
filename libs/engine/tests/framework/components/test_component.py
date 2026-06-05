@@ -359,51 +359,27 @@ def test_failing_component_lookup_table_configurations(
         sim.setup()
 
 
-def test_literal_string_data_source(hdf_file_path: Path) -> None:
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "blue",
+        "a.b.c.d",
+        "no_dots_here",
+        ".leading.dot",
+        "trailing.dot.",
+    ],
+)
+def test_literal_string_data_source(literal: str, hdf_file_path: Path) -> None:
     """Test that non-entity-key strings are treated as literal values."""
     component = SingleLookupCreator()
     sim = InteractiveContext(components=[component], setup=False)
     override_config = {
         "input_data": {"artifact_path": hdf_file_path},
-        component.name: {"data_sources": {"favorite_color": "blue"}},
+        component.name: {"data_sources": {"favorite_color": literal}},
     }
     sim.configuration.update(override_config)
     sim.setup()
-    assert component.favorite_color_table.data == "blue"
-
-
-@pytest.mark.parametrize(
-    "data_source, expected_route",
-    [
-        # '::' strings -- callable reference
-        ("module::func", "callable"),
-        ("self::method", "callable"),
-        # 2-part dotted -- artifact key
-        ("cause.prevalence", "artifact"),
-        ("population.structure", "artifact"),
-        # 3-part dotted -- artifact key
-        ("cause.measles.prevalence", "artifact"),
-        ("risk_factor.high_bmi.exposure", "artifact"),
-        # Everything else -- literal
-        ("hello", "literal"),
-        ("blue", "literal"),
-        ("a.b.c.d", "literal"),
-        ("no_dots_here", "literal"),
-        ("", "literal"),
-    ],
-)
-def test_data_source_string_routing(data_source: str, expected_route: str) -> None:
-    """Test that string data sources are routed to the correct handler."""
-    from vivarium.artifact import is_entity_key
-
-    if expected_route == "callable":
-        assert "::" in data_source
-    elif expected_route == "artifact":
-        assert "::" not in data_source
-        assert is_entity_key(data_source)
-    else:
-        assert "::" not in data_source
-        assert not is_entity_key(data_source)
+    assert component.favorite_color_table.data == literal
 
 
 def test_value_column_order_is_maintained() -> None:
