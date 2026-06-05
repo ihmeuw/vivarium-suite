@@ -568,8 +568,7 @@ class Component(ABC):
                 data: LookupTableData = data_source_callable(builder)
             elif is_entity_key(data_source):
                 # NOTE: Strings with 2-3 dot-separated parts (e.g. "male.default")
-                # will be interpreted as artifact keys. Use a callable reference
-                # ("self::method") or a non-dotted string to avoid this.
+                # will be interpreted as artifact keys.
                 try:
                     data = builder.data.load(data_source)
                 except ArtifactException as e:
