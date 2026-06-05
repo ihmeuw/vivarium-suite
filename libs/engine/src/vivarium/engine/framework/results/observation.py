@@ -43,65 +43,6 @@ if TYPE_CHECKING:
 VALUE_COLUMN = "value"
 
 
-def to_ordered_categoricals(
-    results: pd.DataFrame, category_orderings: dict[str, list[str]]
-) -> pd.DataFrame:
-    """Cast the label columns of a stratified results frame to ordered categoricals.
-
-    Every column except :data:`VALUE_COLUMN` is converted to an ordered
-    :class:`~pandas.CategoricalDtype`, except numeric columns, which are left
-    unchanged so the extra numeric columns of a multi-output observation are
-    preserved. A column listed in ``category_orderings`` is cast in its
-    registered order; any other label column (e.g. ``measure``) is cast in
-    sorted order.
-
-    Ordered categoricals are written verbatim into ``.parquet`` files and read
-    back as ordered categoricals, which keeps label columns memory-cheap and
-    group-able on load and gives a stable, shared ordering for summary tables and
-    plots (e.g. ``age_group`` sorts youngest to oldest rather than
-    alphabetically).
-
-    The category order for a column is taken from ``category_orderings`` when an
-    entry is present for that column name -- this is the authoritative,
-    domain-meaningful order (a stratification's registered categories). Columns
-    without an entry are ordered by their sorted unique values, giving a
-    deterministic, consistent ordering.
-
-    Parameters
-    ----------
-    results
-        The formatted results frame for a single measure. The frame is expected
-        to be column-shaped (any index already reset by the formatter).
-    category_orderings
-        Mapping from column name to the authoritative ordered list of that
-        column's categories. Columns absent from the mapping fall back to sorted
-        ordering.
-
-    Returns
-    -------
-        The results frame with label columns cast to ordered categorical dtype
-        and the value and other numeric columns left unchanged.
-    """
-    results = results.copy()
-    for column in results.columns:
-        if column == VALUE_COLUMN:
-            continue
-        if column in category_orderings:
-            # A registered stratification is cast in its declared order; its
-            # values are validated against those categories upstream.
-            categories = list(category_orderings[column])
-        elif pd.api.types.is_numeric_dtype(results[column]):
-            # A multi-output observation carries extra numeric columns alongside
-            # the value column; leave those numeric.
-            continue
-        else:
-            categories = sorted(results[column].dropna().unique())
-        results[column] = results[column].astype(
-            CategoricalDtype(categories=categories, ordered=True)
-        )
-    return results
-
-
 @dataclass
 class Observation(ABC):
     """An abstract base dataclass to be inherited by concrete observations.
@@ -331,30 +272,35 @@ class StratifiedObservation(Observation):
         """Format stratified results and cast label columns to ordered categoricals.
 
         Extends the base formatting by casting the formatted frame's non-value
-        label columns to ordered categorical dtype (see
-        :func:`to_ordered_categoricals`), using this observation's registered
-        stratification order. This keeps stratified results memory-cheap and
-        group-able and gives them a stable, domain-meaningful ordering when
-        written to and read back from ``.parquet``.
+        label columns to an ordered categorical dtype, using each registered
+        stratification's declared category order. This keeps stratified results
+        memory-cheap and group-able and gives them a stable, domain-meaningful
+        ordering when written to and read back from ``.parquet`` (e.g.
+        ``age_group`` sorts youngest to oldest rather than alphabetically). The
+        value column and any other numeric columns (such as the extra columns of
+        a multi-output observation) are left unchanged.
         """
-        formatted = super().format_results(measure, results)
-        return to_ordered_categoricals(formatted, self.get_category_orderings())
-
-    def get_category_orderings(self) -> dict[str, list[str]]:
-        """Return the registered category order for each stratification column.
-
-        Maps each of this observation's stratification column names to the
-        ordered list of categories registered for that stratification -- the
-        domain-meaningful order used to build the ordered categoricals in
-        :meth:`format_results`. Returns an empty mapping if the stratifications
-        have not yet been set.
-        """
-        if self.stratifications is None:
-            return {}
-        return {
+        results = super().format_results(measure, results).copy()
+        category_orderings = {
             stratification.name: list(stratification.categories)
-            for stratification in self.stratifications
+            for stratification in self.stratifications or ()
         }
+        for column in results.columns:
+            if column == VALUE_COLUMN:
+                continue
+            if column in category_orderings:
+                # A registered stratification is cast in its declared order; its
+                # values are validated against those categories upstream.
+                categories = category_orderings[column]
+            elif pd.api.types.is_numeric_dtype(results[column]):
+                continue
+            else:
+                # Any other label column (e.g. ``measure``) is cast in sorted order.
+                categories = sorted(results[column].dropna().unique())
+            results[column] = results[column].astype(
+                CategoricalDtype(categories=categories, ordered=True)
+            )
+        return results
 
     def observe(
         self,
