@@ -12,7 +12,7 @@ from tables.file import File
 from tables.nodes import filenode
 
 from vivarium.artifact import hdf
-from vivarium.artifact.hdf import EntityKey
+from vivarium.artifact.entity_key import EntityKey
 
 _KEYS = [
     "population.age_bins",

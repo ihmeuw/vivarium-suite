@@ -1,3 +1,7 @@
+**1.0.2 - 06/05/26**
+
+- Extract ``EntityKey`` into its own module and export ``is_entity_key`` helper
+
 **1.0.1 - 06/01/26**
 
 - Migrate the Artifact tutorial from vivarium (engine) docs
