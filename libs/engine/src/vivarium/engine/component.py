@@ -18,7 +18,7 @@ from inspect import signature
 from typing import TYPE_CHECKING, Any, overload
 
 import pandas as pd
-from vivarium.artifact import ArtifactException
+from vivarium.artifact import ArtifactException, is_entity_key
 from vivarium.config_tree import ConfigTree, ConfigurationError
 
 from vivarium.engine.framework.lifecycle import LifeCycleError, lifecycle_states
@@ -524,8 +524,10 @@ class Component(ABC):
         it is treated as a function to call to retrieve the data. The string to
         the left of '::' is the module to import, and the string to the right is
         the function to call. 'self' can be provided to the left of '::' to call
-        a method on the component itself. If the data source is a string without
-        the substring '::', it is treated as a key in the artifact.
+        a method on the component itself. If the data source is a string matching
+        the artifact entity key format (``"type.measure"`` or
+        ``"type.name.measure"``), it is treated as a key in the artifact.
+        Otherwise, the string is treated as a literal value.
 
         Parameters
         ----------
@@ -561,13 +563,15 @@ class Component(ABC):
                         f"There is no method '{method}' for the {module_string}."
                     )
                 data: LookupTableData = data_source_callable(builder)
-            else:
+            elif is_entity_key(data_source):
                 try:
                     data = builder.data.load(data_source)
                 except ArtifactException:
                     raise ConfigurationError(
                         f"Failed to find key '{data_source}' in artifact."
                     )
+            else:
+                data = data_source
         elif callable(data_source):
             data = data_source(builder)
         else:

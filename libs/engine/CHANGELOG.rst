@@ -1,3 +1,8 @@
+**5.1.1 - 06/05/26**
+
+- Treat string data sources matching the entity key format as artifact keys and
+  all other strings as literal values instead of unconditionally assuming artifact
+
 **5.1.0 - 06/04/26**
 
 - Standardize CLI logging verbosity on a ``-v`` count and a single canonical
