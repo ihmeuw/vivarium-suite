@@ -71,12 +71,6 @@ def get_or_create_build_timestamp(output_directory: Path) -> str:
     return build_timestamp
 
 
-def is_resume(output_directory: Path) -> bool:
-    """Return ``True`` when ``output_directory`` already holds a persisted
-    build timestamp, indicating a previous build has run there."""
-    return (output_directory / BUILD_TIMESTAMP_FILENAME).exists()
-
-
 def resolve_step_env_prefix(
     *,
     name: str,
