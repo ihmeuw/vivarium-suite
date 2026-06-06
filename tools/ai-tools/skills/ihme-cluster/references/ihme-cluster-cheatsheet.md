@@ -1,44 +1,21 @@
 # IHME cluster cheat-sheet
 
 Companion to `SKILL.md`. Concrete commands, diagnostics, and heuristics for
-running parallel simulations on the IHME Slurm cluster. Hostnames, partition
-names, account names, and numbers are environment-specific and change — the
-canonical source of truth is **`docs.cluster.ihme.washington.edu`**; verify there
-and measure for your own workload.
+working on the IHME Slurm cluster. Hostnames, partition names, account names,
+and numbers are environment-specific and change — the canonical source of truth
+is **`docs.cluster.ihme.washington.edu`**; verify there and measure for your own
+workload.
 
 ## Contents
 
-1. Everyday commands
-2. Contention diagnostics (run before a big submission)
-3. Fairshare / "why is my job PENDING" diagnostics
-4. Partition + account selection by workload
-5. Resource-budget heuristics (examples — measure your own)
-6. Footgun catalog
-7. Inclusive-language substitutions (BLISS)
-8. Storage map, access tiers, and sources of truth
+1. Contention diagnostics (run before a big submission)
+2. Fairshare / "why is my job PENDING" diagnostics
+3. Partition + account selection by workload
+4. Resource-budget heuristics (examples — measure your own)
+5. Footgun catalog
+6. Storage map, access tiers, and sources of truth
 
-## 1. Everyday commands
-
-```bash
-squeue -u <user>                 # your running and pending jobs
-squeue -p <partition> -h | wc -l # queue depth on a partition (quick busy check)
-sacct -j <jobid>                 # history + exit state (incl. OOM / TIMEOUT) + peak usage
-scancel <jobid>                  # cancel a job you own
-sinfo -o "%P %a %F %D %T"        # partition / availability / node-state breakdown
-scontrol show job <jobid>        # full job detail, incl. estimated StartTime when PENDING
-```
-
-Interactive shell on a compute node (never compute on the login node):
-
-```bash
-srun --account <proj_account> -p i.q -c 1 --mem=8G -t <time> --pty bash
-```
-
-For usage and efficiency over time, use the IHME tools rather than just
-`squeue`: `slurmtool.ihme.washington.edu` (priority + reports on unused time and
-percent of failed jobs) and the Grafana Slurm dashboard.
-
-## 2. Contention diagnostics (run before a big submission)
+## 1. Contention diagnostics (run before a big submission)
 
 A larger partition is not necessarily a faster start — institute-wide queues are
 shared widely and are often more contended than smaller team queues. Check before
@@ -62,7 +39,7 @@ hundreds on a team queue) combined with a pending:running ratio above ~1 means t
 queue is backed up. Idle CPUs near zero in `sinfo` confirms it. Prefer the
 partition with real idle capacity, or submit a single probe job (below) first.
 
-## 3. Fairshare / "why is my job PENDING" diagnostics
+## 2. Fairshare / "why is my job PENDING" diagnostics
 
 If jobs sit PENDING with `Reason=Priority`, the scheduler is fairshare-throttling
 your account — it is **not** waiting for free cores, so "the cluster looks empty"
@@ -78,19 +55,22 @@ sshare -u <user> -p          # your fairshare slice and usage
   ahead.
 
 Cluster priority is allocated per **cluster project**, not per user or per job,
-and **only schedules jobs sooner — it does not make them run faster.** Request it
-in the `#cluster_requests` Slack channel (state the project, the end date, and
-why). Also use `#cluster_requests` to give ~a week's notice for runs that would
-consume ≳50% of the cluster (~12,000 threads or ~80 TB RAM) for more than a few
-hours.
+and **only schedules jobs sooner — it does not make them run faster.** Priority
+is requested via `#cluster_requests` (Slack, human action) — state the project,
+the end date, and why. Also use `#cluster_requests` to give ~a week's notice for
+runs that would consume ≳50% of the cluster (~12,000 threads or ~80 TB RAM) for
+more than a few hours. These are human-to-human communications; the agent should
+surface the recommendation and let the user decide to post.
 
 **Probe-then-commit:** submit one test job, watch its `StartTime` estimate via
 `scontrol show job`, then decide whether to fan the whole batch out here or on the
 alternate partition.
 
-## 4. Partition + account selection by workload
+## 3. Partition + account selection by workload
 
-These are starting heuristics; re-evaluate per submission with §2–3.
+These are starting heuristics; re-evaluate per submission with §1–2. Account
+choice is also a matter of **team convention** — confirm with your team which
+account is appropriate for each type of work.
 
 | Workload | Suggested combo | Why |
 |---|---|---|
@@ -99,7 +79,7 @@ These are starting heuristics; re-evaluate per submission with §2–3.
 | Multi-hour individual sims (single notebook / single `psimulate` sim) | team long-running queue + standard project account | Fewer short-runtime users churning slots; less interactive contention. |
 | When in doubt | submit one probe job | Decide from its `StartTime` estimate. |
 
-## 5. Resource-budget heuristics (examples — measure your own)
+## 4. Resource-budget heuristics (examples — measure your own)
 
 From real Vivarium microsimulation work. Numbers depend heavily on model
 complexity and `step_size` (stepping time scales ~linearly with step count), so
@@ -120,7 +100,7 @@ use these as orders of magnitude and confirm with `sacct` peak usage.
 - **Parallel notebook regen:** run N concurrent single-CPU `nbconvert` processes
   (e.g. 4 × `--mem=16G --cpus-per-task=1`), not one N-CPU job.
 
-## 6. Footgun catalog
+## 5. Footgun catalog
 
 - **No `--account` → cryptic failure.** Slurm errors with no useful message. Pass
   one on every `srun`/`sbatch`.
@@ -128,7 +108,7 @@ use these as orders of magnitude and confirm with `sacct` peak usage.
   sourced. Use `export PATH="$ENV/bin:$PATH"` where `ENV` is the env directory.
 - **Outputs in the wrong tier.** Don't write run outputs to your home directory
   (small, quota-limited) — use `/ihme/scratch` for intermediates and
-  `/mnt/team/<team>/` for shared/team outputs (see §8). `/tmp` is node-local and
+  `/mnt/team/<team>/` for shared/team outputs (see §6). `/tmp` is node-local and
   vanishes when the job ends; use it only as scratch you copy back from, never as
   a batch job's final output location.
 - **Multi-CPU allocations for single-threaded sims are wasted.** GIL pins the step
@@ -147,47 +127,18 @@ use these as orders of magnitude and confirm with `sacct` peak usage.
   Disable it (`psimulate --backup-freq none`) unless you need resume. Diagnose a
   live run with `du -sh <run>/.../sim_backups/`; clean up stale `*.pkl` checkpoint
   files for completed workers.
-- **Out-of-disk kills.** A full quota can kill a build with no clear message (the
-  OOM killer fires inside the job's cgroup). Run `df -h /ihme/scratch` and your
-  team directory before large builds; if a target is nearly full, stage to
-  node-local `/tmp` and copy the finished result to scratch/team storage.
-- **Co-located jobs and the "shared node" myth.** Slurm enforces per-job CPU and
-  memory allocations via cgroups, so a batch job and your interactive shell on the
-  same node do *not* share cores or memory budgets. If you still see slowdowns,
+- **Out-of-disk kills.** A full quota can terminate a build with no clear message.
+  Run `df -h /ihme/scratch` and your team directory before large builds; if a
+  target is nearly full, stage to node-local `/tmp` and copy the finished result
+  to scratch/team storage.
+- **Co-located jobs and the "shared node" concern.** Slurm enforces per-job CPU
+  and memory allocations via cgroups, so a batch job and your interactive shell on
+  the same node do *not* share cores or memory budgets. If you still see slowdowns,
   the cause is shared memory bandwidth / cache / I/O, or an under-resourced job —
-  fix it by requesting resources explicitly, not by trying to control node
-  placement. (Confirm the cluster's exact isolation config in the cluster docs.)
+  fix it by requesting resources explicitly. (Confirm the cluster's exact
+  isolation config in the cluster docs.)
 
-## 7. Inclusive-language substitutions (BLISS)
-
-In comments, docstrings, commit messages, and notebook prose, prefer plain
-language over idioms that lean on metaphors of mental illness or disability.
-
-| Avoid | Prefer |
-| --- | --- |
-| sanity check | consistency check, soundness check, smoke test, pre-flight check |
-| crazy, insane, nuts, bonkers | extreme, surprising, unexpected, unusual |
-| dumb, stupid, idiotic | simple, basic, trivial, naive |
-| lame | weak, shallow, half-hearted |
-| blind to / deaf to | unaware of / missing |
-| tone-deaf | mismatched, off-key |
-| crippled | limited, hobbled, blocked |
-| dummy (data / variable) | stub, placeholder, fake |
-| whitelist / blacklist | allowlist / blocklist |
-| master / slave | primary / replica, leader / follower |
-
-Notes:
-- "Kill" is fine for a unix process (`kill -9`, `subprocess.kill()`) — it's the
-  API name. Use "stop"/"terminate"/"cancel" for user-facing behavior.
-- "Abort" can be sensitive in clinical/trial contexts; "cancel" is usually a clean
-  substitute.
-- "Native" is fine in compiler/OS contexts; avoid it as a synonym for
-  "default"/"built-in" when those are clearer.
-- If a metaphor is just signaling rather than doing real semantic work, replace
-  it. When you spot one in someone else's prose during review, fix it without
-  ceremony.
-
-## 8. Storage map, access tiers, and sources of truth
+## 6. Storage map, access tiers, and sources of truth
 
 **Where things go** (per IHME Scientific Computing guidance — `/ihme/...` and
 `/mnt/share/...` are aliases of the same shared storage):
@@ -210,5 +161,7 @@ team-storage security groups are granted via helpdesk tickets.
   isolation, storage.
 - `slurmtool.ihme.washington.edu` + Grafana Slurm dashboard — priority, usage,
   job-efficiency reports.
-- `#cluster_requests` (Slack) — priority requests and large-run notice.
-- `helpdesk.ihme.washington.edu` — accounts, cluster projects, team-storage access.
+- `#cluster_requests` (Slack, read-only reference) — priority requests and
+  large-run notices; posting is a human action.
+- IHME IT help desk — accounts, cluster projects, team-storage access (human-
+  facing ticketing system; no programmatic API).

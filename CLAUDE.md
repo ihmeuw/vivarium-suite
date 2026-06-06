@@ -62,3 +62,29 @@ Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst
 ## Note on packaging
 
 `libs/<pkg>/pyproject.toml` deliberately uses `include = ["vivarium.<pkg>*"]` so the wheel ships only the `vivarium/<pkg>/` subtree and *not* `vivarium/__init__.py`. The canonical `vivarium/__init__.py` is owned by `vivarium-core` (today the standalone `vivarium` package); shipping our own would clobber it and break `from vivarium import Component`. Apply this same pattern to any other package that lives under the `vivarium.*` namespace.
+
+## Inclusive language
+
+In comments, docstrings, commit messages, and notebook prose, prefer plain
+language over idioms that lean on metaphors of mental illness or disability.
+
+| Avoid | Prefer |
+| --- | --- |
+| sanity check | consistency check, soundness check, smoke test, pre-flight check |
+| crazy, insane, nuts, bonkers | extreme, surprising, unexpected, unusual |
+| dumb, stupid, idiotic | simple, basic, trivial, naive |
+| lame | weak, shallow, half-hearted |
+| blind to / deaf to | unaware of / missing |
+| tone-deaf | mismatched, off-key |
+| crippled | limited, hobbled, blocked |
+| dummy (data / variable) | stub, placeholder, fake |
+| whitelist / blacklist | allowlist / blocklist |
+| master / slave | primary / replica, leader / follower |
+
+Notes:
+- "Kill" is fine for a unix process (`kill -9`, `subprocess.kill()`) — it's the
+  API name. Use "stop"/"terminate"/"cancel" for user-facing behavior.
+- "Abort" can be sensitive in clinical/trial contexts; "cancel" is usually a clean
+  substitute.
+- "Native" is fine in compiler/OS contexts; avoid it as a synonym for
+  "default"/"built-in" when those are clearer.
