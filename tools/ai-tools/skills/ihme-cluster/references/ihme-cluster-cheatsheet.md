@@ -127,7 +127,7 @@ use these as orders of magnitude and confirm with `sacct` peak usage.
   Disable it (`psimulate --backup-freq none`) unless you need resume. Diagnose a
   live run with `du -sh <run>/.../sim_backups/`; clean up stale `*.pkl` checkpoint
   files for completed workers.
-- **Out-of-disk kills.** A full quota can terminate a build with no clear message.
+- **Out-of-disk kills.** A full quota can cause a build to fail with no clear message.
   Run `df -h /ihme/scratch` and your team directory before large builds; if a
   target is nearly full, stage to node-local `/tmp` and copy the finished result
   to scratch/team storage.
