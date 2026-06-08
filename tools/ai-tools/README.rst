@@ -22,11 +22,7 @@ It includes:
   - Testing coverage and quality
   - Documentation
 
-  The orchestrator also runs its own functional-correctness pass. For PRs in
-  a model repo, this includes checking the changed code against the relevant
-  research documentation
-  (https://vivarium-research.readthedocs.io) to confirm the implementation
-  matches the documented modelling strategy for that concept model.
+  The orchestrator also runs its own functional-correctness pass. 
 
 Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
