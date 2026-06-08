@@ -61,6 +61,12 @@ explicit_package_bases = true
 module = ["scipy", "scipy.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# docutils (used only in docs/source/conf.py) ships no py.typed marker or
+# stubs; treat as Any-typed.
+module = ["docutils", "docutils.*"]
+ignore_missing_imports = true
+
 [tool.black]
 line-length = 94
 
