@@ -9,7 +9,17 @@ py:class vivarium.risk_distributions.formatting.Parameters
 py:class Parameter
 py:class Parameters
 
+# numeric type aliases
+py:class Numeric
+py:class NumericInput
+
 # pandas
 py:class pandas.core.frame.DataFrame
 py:class pandas.core.series.Series
 py:class pandas.core.indexes.base.Index
+
+# abbreviated type-hint aliases
+py:class pd.DataFrame
+py:class pd.Series
+py:class pd.Index
+py:class npt.NDArray

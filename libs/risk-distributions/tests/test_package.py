@@ -1,9 +1,11 @@
 """Package-level smoke tests."""
 
+from __future__ import annotations
+
 import vivarium.risk_distributions
 
 
-def test_version_resolves_to_installed_distribution():
+def test_version_resolves_to_installed_distribution() -> None:
     """Verify ``__version__`` came from importlib.metadata, not the fallback.
 
     Guards against a misspelled distribution name in ``__init__.py`` silently
@@ -17,7 +19,7 @@ def test_version_resolves_to_installed_distribution():
     Version(vivarium.risk_distributions.__version__)
 
 
-def test_public_api_reexports():
+def test_public_api_reexports() -> None:
     """Verify each documented re-export is reachable on the package.
 
     A regression that removes a name from ``__init__.py`` raises

@@ -1,13 +1,22 @@
+from __future__ import annotations
+
 import copy
+from typing import Any, cast
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import pytest
 from conftest import assert_equal
 
 from vivarium.risk_distributions import EnsembleDistribution, risk_distributions
+from vivarium.risk_distributions.formatting import Parameter
+from vivarium.risk_distributions.risk_distributions import (
+    BaseDistribution,
+    MirroredDistribution,
+)
 
-distributions = [
+distributions: list[type[BaseDistribution]] = [
     risk_distributions.Exponential,
     risk_distributions.Gamma,
     risk_distributions.Gumbel,
@@ -24,7 +33,7 @@ distributions = [
 
 
 @pytest.fixture
-def test_data():
+def test_data() -> tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
     test_mean = np.linspace(1, 50, num=100)
     test_sd = np.linspace(1, 10, num=100)
     test_q = np.linspace(0.001, 0.999, num=100)
@@ -45,7 +54,12 @@ test_qs = [0.1, 4, np.array([0.1, 0.2, 0.3]), pd.Series([0.1, 0.2, 0.3])]
 @pytest.mark.parametrize("distribution", distributions)
 @pytest.mark.parametrize("mean, sd", parameters)
 @pytest.mark.parametrize("test_q", test_qs)
-def test_no_state_mutations(mean, sd, test_q, distribution):
+def test_no_state_mutations(
+    mean: Parameter,
+    sd: Parameter,
+    test_q: float | npt.NDArray[Any] | pd.Series[Any],
+    distribution: type[BaseDistribution],
+) -> None:
     expected_mean, expected_sd, expected_q = copy.deepcopy((mean, sd, test_q))
     test_distribution = distribution(mean=mean, sd=sd)
 
@@ -66,7 +80,10 @@ def test_no_state_mutations(mean, sd, test_q, distribution):
 
 
 @pytest.mark.parametrize("distribution", distributions)
-def test_cdf(test_data, distribution):
+def test_cdf(
+    test_data: tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]],
+    distribution: type[BaseDistribution],
+) -> None:
     mean, sd, test_q = test_data
     test_distribution = distribution(mean=mean, sd=sd)
     x_min, x_max = (
@@ -79,11 +96,14 @@ def test_cdf(test_data, distribution):
     #  ppf can generate the value outside of the range(x_min, x_max) which will make nan if we use it in cdf.
     #  thus we only test the value within our range(x_min, x_max)
     computable = (test_x >= x_min) & (test_x <= x_max)
-    assert np.allclose(test_q[computable], test_distribution.cdf(test_x)[computable])
+    # cdf returns a Series here because test_x is array-like; the float arm of
+    # its return union (single scalar input) is unreachable in this test.
+    cdf_values = cast("pd.Series[Any] | npt.NDArray[Any]", test_distribution.cdf(test_x))
+    assert np.allclose(test_q[computable], cdf_values[computable])
 
 
 @pytest.mark.skip(reason="outdated api usage")
-def test_mismatched_mean_sd():
+def test_mismatched_mean_sd() -> None:
     mean = [5, 4, 2]
     sd = 1.1
     with pytest.raises(ValueError) as error:
@@ -95,7 +115,7 @@ def test_mismatched_mean_sd():
 
 
 @pytest.mark.skip(reason="outdated api usage")
-def test_get_min_max():
+def test_get_min_max() -> None:
     test_mean = pd.Series([5, 10, 20, 50, 100], index=range(5))
     test_sd = pd.Series([1, 3, 5, 10, 15], index=range(5))
     expected = pd.DataFrame()
@@ -105,7 +125,9 @@ def test_get_min_max():
     expected["x_max"] = np.array(
         [9.0414898, 23.72824267, 41.5251411, 90.41489799, 156.80510239]
     )
-    test = risk_distributions.BaseDistribution._get_min_max(test_mean, test_sd)
+    test = risk_distributions.BaseDistribution._get_min_max(  # type: ignore[attr-defined]  # outdated API: BaseDistribution._get_min_max removed; test is skipped
+        test_mean, test_sd
+    )
 
     assert np.allclose(test["x_min"], expected["x_min"])
     assert np.allclose(test["x_max"], expected["x_max"])
@@ -117,48 +139,48 @@ exposure_levels = [(0, 10, 1), (1, 20, 3), (2, 30, 5), (3, 40, 7)]
 
 @pytest.mark.skip(reason="outdated api usage")
 @pytest.mark.parametrize("i, mean, sd", exposure_levels)
-def test_individual_distribution_get_params(i, mean, sd):
+def test_individual_distribution_get_params(i: int, mean: int, sd: int) -> None:
     expected = dict()
     generated = dict()
     # now look into the details of each distribution parameters
     # this is a dictionary of distributions considered for ensemble distribution
 
     # Beta
-    generated["betasr"] = risk_distributions.Beta.get_params(mean, sd)
+    generated["betasr"] = risk_distributions.Beta.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Beta.get_params removed; test is skipped
     expected["betasr"] = pd.DataFrame()
     expected["betasr"]["scale"] = [6.232114, 18.886999, 31.610845, 44.354704]
     expected["betasr"]["a"] = [3.679690, 3.387153, 3.291559, 3.244209]
     expected["betasr"]["b"] = [4.8479, 5.113158, 5.197285, 5.238462]
 
     # Exponential
-    generated["exp"] = risk_distributions.Exponential.get_params(mean, sd)
+    generated["exp"] = risk_distributions.Exponential.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Exponential.get_params removed; test is skipped
 
     expected["exp"] = pd.DataFrame()
     expected["exp"]["scale"] = [10, 20, 30, 40]
 
     # Gamma
-    generated["gamma"] = risk_distributions.Gamma.get_params(mean, sd)
+    generated["gamma"] = risk_distributions.Gamma.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Gamma.get_params removed; test is skipped
 
     expected["gamma"] = pd.DataFrame()
     expected["gamma"]["a"] = [100, 44.444444, 36, 32.653061]
     expected["gamma"]["scale"] = [0.1, 0.45, 0.833333, 1.225]
 
     # Gumbel
-    generated["gumbel"] = risk_distributions.Gumbel.get_params(mean, sd)
+    generated["gumbel"] = risk_distributions.Gumbel.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Gumbel.get_params removed; test is skipped
 
     expected["gumbel"] = pd.DataFrame()
     expected["gumbel"]["loc"] = [9.549947, 18.649840, 27.749734, 36.849628]
     expected["gumbel"]["scale"] = [0.779697, 2.339090, 3.898484, 5.457878]
 
     # InverseGamma
-    generated["invgamma"] = risk_distributions.InverseGamma.get_params(mean, sd)
+    generated["invgamma"] = risk_distributions.InverseGamma.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: InverseGamma.get_params removed; test is skipped
 
     expected["invgamma"] = pd.DataFrame()
     expected["invgamma"]["a"] = [102.000001, 46.444443, 38.000001, 34.653062]
     expected["invgamma"]["scale"] = [1010.000013, 908.888853, 1110.000032, 1346.122489]
 
     # LogLogistic
-    generated["llogis"] = risk_distributions.LogLogistic.get_params(mean, sd)
+    generated["llogis"] = risk_distributions.LogLogistic.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: LogLogistic.get_params removed; test is skipped
 
     expected["llogis"] = pd.DataFrame()
     expected["llogis"]["c"] = [18.246506, 12.254228, 11.062771, 10.553378]
@@ -166,35 +188,35 @@ def test_individual_distribution_get_params(i, mean, sd):
     expected["llogis"]["scale"] = [9.950669, 19.781677, 29.598399, 39.411819]
 
     # LogNormal
-    generated["lnorm"] = risk_distributions.LogNormal.get_params(mean, sd)
+    generated["lnorm"] = risk_distributions.LogNormal.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: LogNormal.get_params removed; test is skipped
 
     expected["lnorm"] = pd.DataFrame()
     expected["lnorm"]["s"] = [0.099751, 0.149166, 0.165526, 0.173682]
     expected["lnorm"]["scale"] = [9.950372, 19.778727, 29.591818, 39.401219]
 
     # MirroredGumbel
-    generated["mgumbel"] = risk_distributions.MirroredGumbel.get_params(mean, sd)
+    generated["mgumbel"] = risk_distributions.MirroredGumbel.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: MirroredGumbel.get_params removed; test is skipped
 
     expected["mgumbel"] = pd.DataFrame()
     expected["mgumbel"]["loc"] = [3.092878, 10.010861, 17.103436, 24.240816]
     expected["mgumbel"]["scale"] = [0.779697, 2.339090, 3.898484, 5.457878]
 
     # MirroredGamma
-    generated["mgamma"] = risk_distributions.MirroredGamma.get_params(mean, sd)
+    generated["mgamma"] = risk_distributions.MirroredGamma.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: MirroredGamma.get_params removed; test is skipped
 
     expected["mgamma"] = pd.DataFrame()
     expected["mgamma"]["a"] = [12.552364, 14.341421, 14.982632, 15.311779]
     expected["mgamma"]["scale"] = [0.282252, 0.792182, 1.291743, 1.788896]
 
     # Normal
-    generated["norm"] = risk_distributions.Normal.get_params(mean, sd)
+    generated["norm"] = risk_distributions.Normal.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Normal.get_params removed; test is skipped
 
     expected["norm"] = pd.DataFrame()
     expected["norm"]["loc"] = [10, 20, 30, 40]
     expected["norm"]["scale"] = [1, 3, 5, 7]
 
     # Weibull
-    generated["weibull"] = risk_distributions.Weibull.get_params(mean, sd)
+    generated["weibull"] = risk_distributions.Weibull.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Weibull.get_params removed; test is skipped
 
     expected["weibull"] = pd.DataFrame()
     expected["weibull"]["c"] = [12.153402, 7.906937, 7.061309, 6.699559]
@@ -209,7 +231,9 @@ def test_individual_distribution_get_params(i, mean, sd):
     "distribution",
     [risk_distributions.MirroredGumbel, risk_distributions.MirroredGamma],
 )
-def test_mirrored_distribution_from_parameters_only(distribution):
+def test_mirrored_distribution_from_parameters_only(
+    distribution: type[MirroredDistribution],
+) -> None:
     """Regression test: MirroredDistribution must be instantiable with only parameters."""
     mean = pd.Series([10, 20, 30])
     sd = pd.Series([1, 3, 5])
@@ -220,7 +244,7 @@ def test_mirrored_distribution_from_parameters_only(distribution):
     assert not np.isnan(result).any()
 
 
-def test_ensemble_distribution_with_mirrored_components_is_callable():
+def test_ensemble_distribution_with_mirrored_components_is_callable() -> None:
     """Regression test: EnsembleDistribution.ppf must work when mirrored sub-distributions carry weight.
 
     EnsembleDistribution.ppf rebuilds each sub-distribution from a
