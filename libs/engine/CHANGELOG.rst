@@ -1,4 +1,4 @@
-**5.1.1 - 06/05/26**
+**5.1.1 - 06/08/26**
 
 - Treat string data sources matching the entity key format as artifact keys and
   all other strings as literal values instead of unconditionally assuming artifact
