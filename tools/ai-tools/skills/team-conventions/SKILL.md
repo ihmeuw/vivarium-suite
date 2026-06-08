@@ -86,4 +86,4 @@ Format: `<short description> PR <github-link>` — e.g. `AI Tools Team Conventio
 
 ## 5. Responding to review comments
 
-Address a review comment by making the change and pushing it. **Do not resolve the review thread yourself** — the team leaves each thread for its author (the reviewer who raised it) to resolve once they're satisfied. The author resolving their own comment is the signal that it's settled. If you've already resolved a thread, undo it (e.g. GitHub's `unresolveReviewThread`). Replying on the thread is fine; resolving it is not your call.
+Address a review comment by making the change and pushing it. **Do not resolve the review thread yourself** — the team leaves each thread for its author (the reviewer who raised it) to resolve once they're satisfied. The author resolving their own comment is the signal that it's settled. Replying on the thread is fine; resolving it is not your call.
