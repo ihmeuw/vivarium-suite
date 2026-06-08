@@ -1,5 +1,5 @@
-# Expected CHANGELOG.rst first-line format: "**X.Y.Z - MM/DD/YY**"
-# Both the detect job (version parsing) and the release job (date validation) depend on this.
+# Expected CHANGELOG.rst first-line format: "**X.Y.Z - MM/DD/YY**".
+# The detect job parses the X.Y.Z version from this line; the release job validates the MM/DD/YY date.
 name: Release
 
 on:
@@ -32,12 +32,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect packages to release
-        id: detect
+      - name: Collect packages to release
+        # Writes "<lib> <version>" lines to release_pairs.txt - the contract the
+        # "Order releases" step (via build_release_matrix.sh) reads. Truncate first
+        # so a reused/retried workspace can't accumulate stale pairs.
         env:
           PACKAGE: ${{ github.event.inputs.package }}
           VERSION: ${{ github.event.inputs.version }}
         run: |
+          rm -f release_pairs.txt
           if [ "${{ github.event_name }}" = "release" ]; then
             # Tag was created by the GitHub UI release. Parse it to find the lib and version.
             # Tag format: "vivarium-<lib>-v<X.Y.Z>" where <lib> matches the libs/<lib>/ dir.
@@ -99,47 +102,25 @@ jobs:
             done <<< "$CHANGED_CHANGELOGS"
           fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install vivarium_build_utils
-        # FIXME: Update to main once epic/monorepo is merged
-        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
+      - name: Set up vivarium_build_utils
+        uses: ./.github/actions/setup-vbu
 
       - name: Order releases dependencies-first
         id: order
+        # build_release_matrix.sh orders the batch dependencies-first over runtime
+        # + the ci_github extra (matching ENV_REQS=ci_github in the release install),
+        # validates the result, and prints the matrix JSON. It fails loudly on a
+        # cycle, a topo set mismatch, or a missing version. The release job runs the
+        # order with max-parallel=1 so dependents only start once their deps publish.
         run: |
-          # Order the batch so each dependency releases (and becomes installable
-          # on PyPI) before any dependent. Edges follow runtime + ci_github deps -
-          # the dependency set the release install activates - and the vbu helper
-          # fails loudly on a cycle. The release job runs this order with
-          # max-parallel=1 so dependents only start once their deps are published.
-          if [ ! -s release_pairs.txt ]; then
-            echo "No packages to release"
-            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "has-releases=false" >> $GITHUB_OUTPUT
-            exit 0
+          matrix=$(bash tools/ci/build_release_matrix.sh release_pairs.txt)
+          echo "Ordered release matrix: ${matrix}"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          if [ "$(echo "$matrix" | jq '.include | length')" -eq 0 ]; then
+            echo "has-releases=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-releases=true" >> "$GITHUB_OUTPUT"
           fi
-          LIBS=$(cut -d' ' -f1 release_pairs.txt)
-          ORDERED=$(python -m vivarium_build_utils.dependencies topo $LIBS --extra ci_github)
-          MATRIX_INCLUDE="["
-          FIRST=true
-          while read -r lib; do
-            [ -z "$lib" ] && continue
-            # Look the version back up from the pairs file (first column match).
-            version=$(awk -v target="$lib" '$1 == target { print $2; exit }' release_pairs.txt)
-            [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
-            MATRIX_INCLUDE+="{\"library\":\"${lib}\",\"version\":\"${version}\"}"
-          done <<< "$ORDERED"
-          MATRIX_INCLUDE+="]"
-          echo "Ordered release matrix: ${MATRIX_INCLUDE}"
-          echo "matrix={\"include\":${MATRIX_INCLUDE}}" >> $GITHUB_OUTPUT
-          echo "has-releases=true" >> $GITHUB_OUTPUT
 
   release:
     name: Release ${{ matrix.library }} v${{ matrix.version }}
@@ -163,13 +144,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
+      - name: Set up vivarium_build_utils
+        # Installs vbu early so `make validate-tag` is available later.
+        uses: ./.github/actions/setup-vbu
 
       - name: Validate CHANGELOG date
         run: |
@@ -182,11 +159,6 @@ jobs:
             echo "CHANGELOG date ($CHANGELOG_DATE) does not match today ($TODAY)"
             exit 1
           fi
-
-      - name: Install vivarium_build_utils
-        # Install early so `make validate-tag` is available
-        # FIXME: Update to main once epic/monorepo is merged
-        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
 
       - name: Create and push tag
         env:
@@ -229,6 +201,9 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: libs/${{ matrix.library }}/dist/
+          # Insurance against re-publishing an already-released version (e.g. a
+          # manual UI re-release of an existing tag): skip instead of failing.
+          skip-existing: true
 
       - name: Wait for PyPI availability
         # A freshly published version is often installable within seconds, but
@@ -238,11 +213,14 @@ jobs:
         run: |
           PKG="vivarium-${{ matrix.library }}"
           VER="${{ matrix.version }}"
-          MAX_ATTEMPTS=9  # 1 immediate try + 8 retries * 15s = up to ~2 min
+          SLEEP_SECONDS=15
+          MAX_ATTEMPTS=9  # 1 immediate try + 8 retries; ~8*SLEEP_SECONDS (~2 min)
           echo "Waiting for ${PKG}==${VER} to be installable from PyPI..."
           attempt=1
           while true; do
-            if uv pip install --system --dry-run --no-deps "${PKG}==${VER}" >/dev/null 2>&1; then
+            # --no-cache so each retry re-fetches the index; otherwise uv can cache
+            # the initial "not found" and never see the freshly published version.
+            if uv pip install --system --dry-run --no-deps --no-cache "${PKG}==${VER}" >/dev/null 2>&1; then
               echo "${PKG}==${VER} is installable."
               exit 0
             fi
@@ -250,9 +228,9 @@ jobs:
               echo "Timed out after ~2 min waiting for ${PKG}==${VER} on PyPI"
               exit 1
             fi
-            echo "  not visible yet (attempt ${attempt}/${MAX_ATTEMPTS}); sleeping 15s"
+            echo "  not visible yet (attempt ${attempt}/${MAX_ATTEMPTS}); sleeping ${SLEEP_SECONDS}s"
             attempt=$((attempt + 1))
-            sleep 15
+            sleep "${SLEEP_SECONDS}"
           done
 
       - name: Create GitHub Release
@@ -272,7 +250,13 @@ jobs:
           server_port: 465
           username: ${{ secrets.NOTIFY_EMAIL }}
           password: ${{ secrets.NOTIFY_PASSWORD }}
-          subject: ${{ github.job }} job of ${{ github.repository }} has ${{ job.status }}
-          body: ${{ github.job }} job in workflow ${{ github.workflow }} of ${{ github.repository }} has ${{ job.status }}
+          subject: "Release of vivarium-${{ matrix.library }} v${{ matrix.version }} ${{ job.status }} (${{ github.repository }})"
+          body: |
+            Release of vivarium-${{ matrix.library }} v${{ matrix.version }} ${{ job.status }}
+            in workflow ${{ github.workflow }} of ${{ github.repository }}.
+
+            In an ordered multi-package batch, packages after this one in the
+            dependency order were cancelled; packages before it already published.
+            Build details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           to: uw_ihme_simulationscience@uw.edu
           from: Vivarium Notifications

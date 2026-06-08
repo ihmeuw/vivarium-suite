@@ -1,0 +1,25 @@
+name: Set up vivarium_build_utils
+description: >
+  Set up Python and uv, then install vivarium_build_utils. Centralizes the vbu
+  install so its version pin lives in exactly one place.
+inputs:
+  python-version:
+    description: Python version to set up.
+    required: false
+    default: "3.11"
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v4
+
+    - name: Install vivarium_build_utils
+      shell: bash
+      # FIXME(MIC-7143): pin to a released vbu (drop the @epic/monorepo ref) once
+      # that branch is merged. Single source of truth for the pin across all jobs.
+      run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"

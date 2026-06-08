@@ -104,17 +104,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up vivarium_build_utils
+        uses: ./.github/actions/setup-vbu
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install vivarium_build_utils
-        # FIXME: Update to main once epic/monorepo is merged
-        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
 
       - name: Install ${{ matrix.library }}
         # UV_FLAGS=--system installs into the runner's system Python (no venv).
@@ -128,6 +121,36 @@ jobs:
         #   release. The release workflow deliberately omits this flag so it still
         #   validates that published version pins resolve from real PyPI.
         run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github IN_TREE_SIBLINGS=1 UV_FLAGS=--system IHME_PYPI=
+
+      - name: Verify in-tree siblings resolved from source
+        # Positive check that IN_TREE_SIBLINGS actually used in-tree source rather
+        # than silently falling back to PyPI: every in-tree sibling of this package
+        # must be an editable install. No-op for leaf packages (no in-tree siblings).
+        run: |
+          python - "${{ matrix.library }}" <<'PY'
+          import importlib.metadata as md
+          import json
+          import sys
+
+          from vivarium_build_utils import dependencies as deps
+
+          target = sys.argv[1]
+          siblings = deps.reachable_siblings(target, deps.load_libs(), extras=("ci_github",))
+          if not siblings:
+              print(f"{target} has no in-tree siblings; nothing to verify")
+              sys.exit(0)
+
+          failed = False
+          for sibling in siblings:
+              direct_url = md.distribution(sibling.name).read_text("direct_url.json")
+              editable = bool(direct_url and json.loads(direct_url).get("dir_info", {}).get("editable"))
+              installed = md.version(sibling.name)
+              print(f"{sibling.name}: version={installed} editable={editable}")
+              if not editable:
+                  print(f"::error::{sibling.name} is not an editable install - it resolved from PyPI, not in-tree source")
+                  failed = True
+          sys.exit(1 if failed else 0)
+          PY
 
       - name: Lint ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make lint

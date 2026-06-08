@@ -37,12 +37,15 @@ Changelog Format
 Each package under ``libs/`` maintains its own ``CHANGELOG.rst``. The release workflow parses the
 first line of this file to determine the version and date. The expected format is::
 
-    **X.Y.Z - MM/DD/YYYY**
+    **X.Y.Z - MM/DD/YY**
 
 For example::
 
-    **4.1.0 - 04/28/2024**
+    **4.1.0 - 04/28/26**
 
 A release is triggered automatically when a ``CHANGELOG.rst`` is updated on ``main`` and the
-parsed tag does not already exist. The date must match the day of the push (Pacific time). See
-``.github/workflows/release.yml`` for details.
+parsed tag does not already exist. The date must match the day of the push (Pacific time, and a
+two-digit year). When a single push updates several packages' changelogs, they are released
+sequentially in dependency order (each dependency publishes before its dependents); if one
+fails, the remaining packages in the batch are halted. See ``.github/workflows/release.yml``
+for details.

@@ -58,3 +58,10 @@ CI uses [uv](https://docs.astral.sh/uv/) as the package manager.
 Releases are triggered automatically when a `CHANGELOG.rst` is updated on `main`. A release can
 also be triggered manually via `workflow_dispatch` on `.github/workflows/release.yml` (useful for
 recovery or retries). See that file for details.
+
+When a single push updates several packages' changelogs, the release workflow orders them
+dependencies-first and releases them **sequentially** (one at a time), waiting for each package
+to become installable on PyPI before starting any dependent. If a release in the chain fails,
+the remaining packages are halted (earlier ones have already published). This lets a single PR
+bump interdependent packages together; CI validates the combined state by resolving in-tree
+siblings from source (`IN_TREE_SIBLINGS=1`), while the release path installs from real PyPI.
