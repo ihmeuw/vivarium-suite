@@ -4,7 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Code Style
 
-On our team, we type-hint all new python code. We generally use NumPy Doc style, with the exception that we do not add types in the dosctrings for parameters or returns, since they are given by the type hinting. Don't add a return section if the function returns None. Always add a full docstring to new public methods and functions, but for private methods and functions a single line is usually sufficient. Docstrings should be in the imperative mood.
+On our team, we type-hint all new python code. We generally use NumPy Doc style, with the exception that we do not add types in the docstrings for parameters or returns, since they are given by the type hinting. Don't add a return section if the function returns None. Always add a full docstring to new public methods and functions, but for private methods and functions a single line is usually sufficient. Docstrings should be in the imperative mood.
+
+### Docstrings and comments — short by default
+
+These guard against verbosity. Prefer fewer words; a reader should never have to skim past filler to reach the point.
+
+- **Docstrings start with the one-line imperative summary, and for most functions that is the whole docstring.** Add Parameters/Returns/Raises sections only when they convey something the signature and type hints do not — units, side effects, constraints, raised exceptions. Never write a section that just restates a parameter name as prose (`data : the data to process`).
+- **No boilerplate openers.** Don't begin with "This function…", "This method…", or "A helper that…". Lead with the verb: "Compute…", "Return…", "Validate…".
+- **Comment on *why*, not *what*.** Write a comment only when the code can't speak for itself — a non-obvious reason, a workaround, an invariant, a reference. Default to none.
+- **Never narrate the code** (`# loop over the rows`, `# increment the counter`). If a comment restates the line below it, delete the comment; if the code is confusing, prefer a clearer name or a small refactor over a comment that explains it.
 
 ## Repository shape
 

@@ -39,6 +39,8 @@ Return a numbered list of findings. For each:
 
 ## Constraints
 
+- Be terse. State each finding's problem and fix in ≤2 sentences; add a "why it matters" clause only when the impact is non-obvious. Use a code snippet only when the fix isn't clear from a sentence.
+- If there are no findings, say so in one line. Do not restate or summarize the diff.
 - DO NOT request tests for unchanged behavior outside the PR scope
 - DO NOT enforce a specific test framework style unless it affects correctness or clarity
 - ONLY flag test issues that materially affect confidence in the PR behavior
