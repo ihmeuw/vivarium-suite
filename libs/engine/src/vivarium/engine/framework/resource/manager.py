@@ -35,7 +35,7 @@ class ResourceManager(Manager):
         """Dictionary of all resources managed by this manager, keyed by resource_id."""
         self._initializer_count = 0
         """Initializer counter. Tracker is here to ensure they have unique ids."""
-        self._graph = nx.DiGraph()
+        self._graph: nx.DiGraph[Resource] = nx.DiGraph()
         """Attribute used for lazy (but cached) graph initialization."""
         self._sorted_nodes: list[Resource] = []
         """Attribute used for lazy (but cached) graph topological sort."""
@@ -47,7 +47,7 @@ class ResourceManager(Manager):
     def name(self) -> str:
         return "resource_manager"
 
-    def get_graph(self) -> nx.DiGraph:
+    def get_graph(self) -> nx.DiGraph[Resource]:
         """The networkx graph representation of the resource pool."""
         if self._required_resources_dirty:
             self._graph = self._to_graph()
@@ -65,7 +65,7 @@ class ResourceManager(Manager):
         """
         if self._required_resources_dirty:
             try:
-                self._sorted_nodes = list(nx.algorithms.topological_sort(self.get_graph()))  # type: ignore[call-overload, func-returns-value]
+                self._sorted_nodes = list(nx.algorithms.topological_sort(self.get_graph()))
             except nx.NetworkXUnfeasible:
                 raise ResourceError(
                     "The resource pool contains at least one cycle:\n"
@@ -154,7 +154,7 @@ class ResourceManager(Manager):
         """Mark that the resource dependency graph needs to be rebuilt."""
         self._required_resources_dirty = True
 
-    def _to_graph(self) -> nx.DiGraph:
+    def _to_graph(self) -> nx.DiGraph[Resource]:
         """Constructs the full resource graph from information in the groups.
 
         Components specify local dependency information during setup time.
@@ -169,7 +169,7 @@ class ResourceManager(Manager):
         <vivarium.engine.framework.values.ValuesManager>` finalizes pipeline
         dependencies and population creation time.
         """
-        resource_graph = nx.DiGraph()
+        resource_graph: nx.DiGraph[Resource] = nx.DiGraph()
         # networkx ignores duplicates
         resource_graph.add_nodes_from(self._resources.values())
 
