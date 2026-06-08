@@ -347,6 +347,31 @@ class TestSlackOptions:
         assert call_kwargs["slack_channel"] == "my-channel"
         assert call_kwargs["slack_tag"] == "coworker"
 
+    def test_run_no_slack_mutes_notification(
+        self, model_spec: Path, branch_config: Path, result_dir: Path
+    ) -> None:
+        """``--no-slack`` forwards mute_slack=True to runner.main."""
+        cli_runner = CliRunner()
+        with patch(_RUNNER_MAIN) as mock_main:
+            result = cli_runner.invoke(
+                psimulate,
+                [
+                    "run",
+                    "-M",
+                    str(model_spec),
+                    "-B",
+                    str(branch_config),
+                    "-o",
+                    str(result_dir),
+                    "-P",
+                    "proj_simscience",
+                    "--no-slack",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        assert mock_main.call_args.kwargs["mute_slack"] is True
+
     def test_run_slack_tag_without_channel_errors(
         self, model_spec: Path, branch_config: Path, result_dir: Path
     ) -> None:

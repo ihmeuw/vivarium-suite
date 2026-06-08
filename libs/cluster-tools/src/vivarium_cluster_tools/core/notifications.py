@@ -42,6 +42,7 @@ def send_slack_notification(
     results_dir: str | None = None,
     slack_channel: str | None = None,
     slack_tag: str | None = None,
+    mute_slack: bool = False,
 ) -> None:
     """Send a Slack notification after a workflow completes.
 
@@ -77,10 +78,17 @@ def send_slack_notification(
     slack_tag
         Optional username to @-mention in the channel notification on success.
         Only honored alongside ``slack_channel``; ignored on failure. If the
-        user cannot be resolved to a Slack ID, the notification is still posted
-        without the mention and a warning is logged.
+        user cannot be resolved to a Slack ID, a warning is logged and the
+        notification is direct-messaged to the launching user instead of
+        posted to the channel.
+    mute_slack
+        If ``True``, suppress the notification entirely (no message is sent).
     """
     try:
+        if mute_slack:
+            logger.debug("Slack notification suppressed via --no-slack.")
+            return
+
         token = os.environ.get("PSIMULATE_SLACK_BOT_TOKEN")
         if not token:
             logger.debug("PSIMULATE_SLACK_BOT_TOKEN not set. Skipping Slack notification.")
@@ -90,23 +98,30 @@ def send_slack_notification(
         success = status == "D"
 
         mention = ""
+        destination: str | None = None
         if success and slack_channel:
             # Post to the requested channel; the bot must already be a member.
             # Users pass the bare channel name; prepend the '#' Slack expects.
-            channel = f"#{slack_channel.lstrip('#')}"
+            target_channel = f"#{slack_channel.lstrip('#')}"
             if slack_tag:
                 tag_id = _resolve_user_id(token, slack_tag)
                 if tag_id is None:
-                    # Couldn't resolve the tag user; post the notification
-                    # without the mention rather than dropping it entirely.
+                    # Couldn't resolve the tag user; fall back to DMing the
+                    # launching user rather than posting an un-tagged message.
                     logger.warning(
                         f"Could not resolve Slack user '{slack_tag}'; "
-                        f"posting to {channel} without the mention."
+                        f"direct-messaging the launching user instead of "
+                        f"posting to {target_channel}."
                     )
                 else:
                     mention = f"<@{tag_id}> "
-        else:
-            # Default path, and every failure: DM the launching user.
+                    destination = target_channel
+            else:
+                destination = target_channel
+
+        if destination is None:
+            # Default path, every failure, and the tag-resolution fallback:
+            # DM the launching user.
             user_id = _resolve_user_id(token, launcher)
             if user_id is None:
                 return
@@ -114,7 +129,7 @@ def send_slack_notification(
             if not dm_data.get("ok"):
                 logger.warning(f"Slack conversations.open failed: {dm_data.get('error')}")
                 return
-            channel = str(dm_data["channel"]["id"])
+            destination = str(dm_data["channel"]["id"])
 
         # Build the message
         status_text = "DONE" if success else "ERROR"
@@ -128,7 +143,7 @@ def send_slack_notification(
 
         # Post the message
         msg_data = _slack_post(
-            token, "chat.postMessage", json={"channel": channel, "text": message}
+            token, "chat.postMessage", json={"channel": destination, "text": message}
         )
         if not msg_data.get("ok"):
             logger.warning(f"Slack chat.postMessage failed: {msg_data.get('error')}")

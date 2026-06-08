@@ -4,7 +4,7 @@
 - API for constructing Jobmon workflows and tasks directly from Python
 - Add facade to interact with Jobmon SDK
 - Reduce simulation task runtime resource during restart with backups
-- Add ``--slack-channel`` and ``--slack-tag`` options to post completion notifications to a channel (failures always DM the launching user)
+- Add ``--slack-channel`` and ``--slack-tag`` options to post completion notifications to a channel
 
 **4.1.0 - 06/04/26**
 
