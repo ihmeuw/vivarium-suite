@@ -10,7 +10,7 @@ On our team, we type-hint all new python code. We generally use NumPy Doc style,
 
 These guard against verbosity. Prefer fewer words; a reader should never have to skim past filler to reach the point.
 
-- **Docstrings start with the one-line imperative summary, and for most functions that is the whole docstring.** Add Parameters/Returns/Raises sections only when they convey something the signature and type hints do not — units, side effects, constraints, raised exceptions. Never write a section that just restates a parameter name as prose (`data : the data to process`).
+- **Docstrings start with the one-line imperative summary, and for most functions that is the whole docstring.**
 - **No boilerplate openers.** Don't begin with "This function…", "This method…", or "A helper that…". Lead with the verb: "Compute…", "Return…", "Validate…".
 - **Comment on *why*, not *what*.** Write a comment only when the code can't speak for itself — a non-obvious reason, a workaround, an invariant, a reference. Default to none.
 - **Never narrate the code** (`# loop over the rows`, `# increment the counter`). If a comment restates the line below it, delete the comment; if the code is confusing, prefer a clearer name or a small refactor over a comment that explains it.
