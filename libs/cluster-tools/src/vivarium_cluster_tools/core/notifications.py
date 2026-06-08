@@ -79,10 +79,9 @@ def send_slack_notification(
     results_dir
         Optional path to the results directory for this workflow.
     slack_channel
-        Optional channel (e.g. ``"#my-channel"`` or a channel ID) to post a
-        successful-run notification to instead of DMing the launching user.
-        The Slack bot must already be a member of the channel. Ignored on
-        failure.
+        Optional channel name (e.g. ``"my-channel"``) to post a
+        successful-run notification to instead of DMing the launching user. The
+        Slack bot must already be a member of the channel. Ignored on failure.
     slack_tag
         Optional username to @-mention in the channel notification on success.
         Only honored alongside ``slack_channel``; ignored on failure.
@@ -99,7 +98,8 @@ def send_slack_notification(
         mention = ""
         if success and slack_channel:
             # Post to the requested channel; the bot must already be a member.
-            channel = slack_channel
+            # Users pass the bare channel name; prepend the '#' Slack expects.
+            channel = f"#{slack_channel.lstrip('#')}"
             if slack_tag:
                 tag_id = _resolve_user_id(token, slack_tag)
                 if tag_id is None:

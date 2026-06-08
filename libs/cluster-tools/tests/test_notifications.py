@@ -126,6 +126,28 @@ def test_success_with_channel_posts_to_channel(monkeypatch: pytest.MonkeyPatch) 
         assert "<@" not in msg_json["text"]
 
 
+def test_channel_without_hash_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A channel given without a leading '#' is normalized to include one."""
+    monkeypatch.setenv("PSIMULATE_SLACK_BOT_TOKEN", BOT_TOKEN)
+    monkeypatch.setenv("USER", "testuser")
+
+    post_resp = MagicMock()
+    post_resp.json.return_value = {"ok": True}
+    mock_post = MagicMock(side_effect=[post_resp])
+
+    with patch("vivarium_cluster_tools.core.notifications.requests.post", mock_post):
+        send_slack_notification(
+            workflow_name=WORKFLOW_NAME,
+            status="D",
+            command_label=COMMAND_LABEL,
+            slack_channel="my-channel",
+        )
+
+        assert mock_post.call_count == 1
+        msg_json = mock_post.call_args_list[0].kwargs["json"]
+        assert msg_json["channel"] == "#my-channel"
+
+
 def test_success_with_channel_and_tag_mentions_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
