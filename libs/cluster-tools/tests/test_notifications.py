@@ -53,6 +53,22 @@ def test_no_token_skips_notification(monkeypatch: pytest.MonkeyPatch) -> None:
         mock_post.assert_not_called()
 
 
+def test_mute_skips_notification(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When mute_slack is True, no Slack API calls are made even with a valid token."""
+    monkeypatch.setenv("PSIMULATE_SLACK_BOT_TOKEN", BOT_TOKEN)
+    monkeypatch.setenv("USER", "testuser")
+    with patch(
+        "vivarium_cluster_tools.core.notifications.requests.post",
+    ) as mock_post:
+        send_slack_notification(
+            workflow_name=WORKFLOW_NAME,
+            status="D",
+            command_label=COMMAND_LABEL,
+            mute_slack=True,
+        )
+        mock_post.assert_not_called()
+
+
 def test_notification_on_workflow_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """A successful workflow DMs the user via the Slack bot with a DONE message."""
     monkeypatch.setenv("PSIMULATE_SLACK_BOT_TOKEN", BOT_TOKEN)
@@ -185,18 +201,20 @@ def test_success_with_channel_and_tag_mentions_user(
         assert "<@U99999>" in msg_json["text"]
 
 
-def test_unresolvable_tag_posts_to_channel_without_mention(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """If the tagged user can't be resolved, the channel post still happens, sans mention."""
+def test_unresolvable_tag_dms_launcher(monkeypatch: pytest.MonkeyPatch) -> None:
+    """If the tagged user can't be resolved, fall back to DMing the launcher (no channel post)."""
     monkeypatch.setenv("PSIMULATE_SLACK_BOT_TOKEN", BOT_TOKEN)
     monkeypatch.setenv("USER", "testuser")
 
-    lookup_resp = MagicMock()
-    lookup_resp.json.return_value = {"ok": False, "error": "users_not_found"}
+    tag_fail_resp = MagicMock()
+    tag_fail_resp.json.return_value = {"ok": False, "error": "users_not_found"}
+    launcher_resp = MagicMock()
+    launcher_resp.json.return_value = {"ok": True, "user": {"id": "U12345"}}
+    convo_resp = MagicMock()
+    convo_resp.json.return_value = {"ok": True, "channel": {"id": "D67890"}}
     post_resp = MagicMock()
     post_resp.json.return_value = {"ok": True}
-    mock_post = MagicMock(side_effect=[lookup_resp, post_resp])
+    mock_post = MagicMock(side_effect=[tag_fail_resp, launcher_resp, convo_resp, post_resp])
 
     with patch("vivarium_cluster_tools.core.notifications.requests.post", mock_post):
         send_slack_notification(
@@ -207,15 +225,18 @@ def test_unresolvable_tag_posts_to_channel_without_mention(
             slack_tag="ghost",
         )
 
-        # Failed lookup, then the channel post still goes out (no DM open).
-        assert mock_post.call_count == 2
-        lookup_call = mock_post.call_args_list[0]
-        assert lookup_call[0][0] == f"{SLACK_API}/users.lookupByEmail"
+        # Failed tag lookup, then the full DM flow to the launcher.
+        assert mock_post.call_count == 4
+        assert mock_post.call_args_list[0][0][0] == f"{SLACK_API}/users.lookupByEmail"
+        assert "ghost@uw.edu" in str(mock_post.call_args_list[0])
+        assert mock_post.call_args_list[1][0][0] == f"{SLACK_API}/users.lookupByEmail"
+        assert "testuser@uw.edu" in str(mock_post.call_args_list[1])
+        assert mock_post.call_args_list[2][0][0] == f"{SLACK_API}/conversations.open"
 
-        msg_call = mock_post.call_args_list[1]
+        msg_call = mock_post.call_args_list[3]
         assert msg_call[0][0] == f"{SLACK_API}/chat.postMessage"
         msg_json = msg_call.kwargs["json"]
-        assert msg_json["channel"] == "#my-channel"
+        assert msg_json["channel"] == "D67890"
         assert "DONE" in msg_json["text"]
         assert "<@" not in msg_json["text"]
 
@@ -256,10 +277,25 @@ def test_validate_slack_options_rejects_tag_without_channel() -> None:
 
 
 def test_validate_slack_options_allows_valid_combinations() -> None:
-    """Channel-only, channel+tag, and neither are all accepted."""
+    """Channel-only, channel+tag, neither, and mute-alone are all accepted."""
     validate_slack_options(slack_channel=None, slack_tag=None)
     validate_slack_options(slack_channel="#my-channel", slack_tag=None)
     validate_slack_options(slack_channel="#my-channel", slack_tag="coworker")
+    validate_slack_options(slack_channel=None, slack_tag=None, mute_slack=True)
+
+
+@pytest.mark.parametrize(
+    "slack_channel, slack_tag",
+    [("#my-channel", None), (None, "coworker"), ("#my-channel", "coworker")],
+)
+def test_validate_slack_options_rejects_mute_with_channel_or_tag(
+    slack_channel: str | None, slack_tag: str | None
+) -> None:
+    """--no-slack cannot be combined with --slack-channel or --slack-tag."""
+    with pytest.raises(click.UsageError, match="--no-slack cannot be combined"):
+        validate_slack_options(
+            slack_channel=slack_channel, slack_tag=slack_tag, mute_slack=True
+        )
 
 
 def test_notification_on_workflow_failure(monkeypatch: pytest.MonkeyPatch) -> None:

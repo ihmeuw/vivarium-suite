@@ -390,11 +390,13 @@ def test_run_workflow_forwards_slack_options(
         workflow_config=workflow_config,
         slack_channel="my-channel",
         slack_tag="coworker",
+        mute_slack=True,
     )
 
     slack_kwargs = mock_slack.call_args.kwargs
     assert slack_kwargs["slack_channel"] == "my-channel"
     assert slack_kwargs["slack_tag"] == "coworker"
+    assert slack_kwargs["mute_slack"] is True
 
 
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
@@ -413,11 +415,17 @@ def test_restart_workflow_forwards_slack_options(
     _seed_resumable_output(results_dir)
     mock_bind_and_run.return_value = ("D", "url")
 
-    restart_workflow(results_dir, slack_channel="my-channel", slack_tag="coworker")
+    restart_workflow(
+        results_dir,
+        slack_channel="my-channel",
+        slack_tag="coworker",
+        mute_slack=True,
+    )
 
     slack_kwargs = mock_slack.call_args.kwargs
     assert slack_kwargs["slack_channel"] == "my-channel"
     assert slack_kwargs["slack_tag"] == "coworker"
+    assert slack_kwargs["mute_slack"] is True
 
 
 @patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)

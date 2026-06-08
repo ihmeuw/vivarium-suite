@@ -36,6 +36,7 @@ def run_workflow(
     verbose: int = 0,
     slack_channel: str | None = None,
     slack_tag: str | None = None,
+    mute_slack: bool = False,
 ) -> None:
     """Entry point for the ``dagger run`` subcommand: start a fresh workflow.
 
@@ -50,6 +51,8 @@ def run_workflow(
         of DMing the launching user.
     slack_tag
         Optional username to @-mention in the channel notification on success.
+    mute_slack
+        If ``True``, suppress the completion notification entirely.
     """
     logger.info(f"Starting workflow: {workflow_config.name}")
 
@@ -65,6 +68,7 @@ def run_workflow(
         command_label="dagger run",
         slack_channel=slack_channel,
         slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )
 
 
@@ -77,6 +81,7 @@ def restart_workflow(
     verbose: int = 0,
     slack_channel: str | None = None,
     slack_tag: str | None = None,
+    mute_slack: bool = False,
 ) -> None:
     """Resume a previously started ``dagger`` workflow from its output directory.
 
@@ -103,6 +108,8 @@ def restart_workflow(
         of DMing the launching user.
     slack_tag
         Optional username to @-mention in the channel notification on success.
+    mute_slack
+        If ``True``, suppress the completion notification entirely.
 
     Raises
     ------
@@ -144,6 +151,7 @@ def restart_workflow(
         command_label="dagger restart",
         slack_channel=slack_channel,
         slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )
 
 
@@ -155,6 +163,7 @@ def _execute_workflow(
     command_label: str,
     slack_channel: str | None = None,
     slack_tag: str | None = None,
+    mute_slack: bool = False,
 ) -> None:
     """Build, bind, run, and report a workflow; shared by run and restart.
 
@@ -188,6 +197,7 @@ def _execute_workflow(
         results_dir=str(output_root),
         slack_channel=slack_channel,
         slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )
 
     if wf_status != client.JOBMON_STATUS_DONE:

@@ -77,8 +77,29 @@ def with_slack_tag(func: CLIFunction) -> CLIFunction:
     )(func)
 
 
-def validate_slack_options(slack_channel: str | None, slack_tag: str | None) -> None:
-    """Raise a ``UsageError`` if ``--slack-tag`` is used without ``--slack-channel``."""
+def with_slack_mute(func: CLIFunction) -> CLIFunction:
+    """Decorator that adds the ``--no-slack`` flag to suppress the notification."""
+    return click.option(
+        "--no-slack",
+        "mute_slack",
+        is_flag=True,
+        default=False,
+        help="Suppress the Slack completion notification entirely.",
+    )(func)
+
+
+def validate_slack_options(
+    slack_channel: str | None, slack_tag: str | None, mute_slack: bool = False
+) -> None:
+    """Validate the mutual constraints among the Slack notification options.
+
+    Raises a ``UsageError`` if ``--no-slack`` is combined with a channel or tag,
+    or if ``--slack-tag`` is used without ``--slack-channel``.
+    """
+    if mute_slack and (slack_channel is not None or slack_tag is not None):
+        raise click.UsageError(
+            "--no-slack cannot be combined with --slack-channel or --slack-tag."
+        )
     if slack_tag is not None and slack_channel is None:
         raise click.UsageError("--slack-tag requires --slack-channel to be provided.")
 

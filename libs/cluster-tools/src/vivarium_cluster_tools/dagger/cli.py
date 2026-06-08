@@ -77,6 +77,7 @@ def dagger() -> None:
 )
 @cli_tools.with_slack_channel
 @cli_tools.with_slack_tag
+@cli_tools.with_slack_mute
 @cli_tools.with_verbose_and_pdb
 def run(
     config_path: Path,
@@ -88,6 +89,7 @@ def run(
     max_attempts: int | None,
     slack_channel: str | None,
     slack_tag: str | None,
+    mute_slack: bool,
     verbose: int,
     with_debugger: bool,
 ) -> None:
@@ -101,7 +103,7 @@ def run(
     overridden from the command line via the corresponding flag.
     """
     logs.configure_main_process_logging_to_terminal(verbose)
-    cli_tools.validate_slack_options(slack_channel, slack_tag)
+    cli_tools.validate_slack_options(slack_channel, slack_tag, mute_slack)
 
     workflow_config = load_workflow_config(
         config_path,
@@ -120,6 +122,7 @@ def run(
         verbose=verbose,
         slack_channel=slack_channel,
         slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )
 
 
@@ -150,6 +153,7 @@ def run(
 )
 @cli_tools.with_slack_channel
 @cli_tools.with_slack_tag
+@cli_tools.with_slack_mute
 @cli_tools.with_verbose_and_pdb
 def restart(
     results_directory: Path,
@@ -158,6 +162,7 @@ def restart(
     max_attempts: int | None,
     slack_channel: str | None,
     slack_tag: str | None,
+    mute_slack: bool,
     verbose: int,
     with_debugger: bool,
 ) -> None:
@@ -169,7 +174,7 @@ def restart(
     ``--max-attempts`` override the saved configuration.
     """
     logs.configure_main_process_logging_to_terminal(verbose)
-    cli_tools.validate_slack_options(slack_channel, slack_tag)
+    cli_tools.validate_slack_options(slack_channel, slack_tag, mute_slack)
 
     main = handle_exceptions(runner.restart_workflow, logger, with_debugger)
 
@@ -181,4 +186,5 @@ def restart(
         verbose=verbose,
         slack_channel=slack_channel,
         slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )

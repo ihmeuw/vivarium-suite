@@ -193,6 +193,7 @@ def main(
     extra_args: dict[str, Any],
     slack_channel: str | None = None,
     slack_tag: str | None = None,
+    mute_slack: bool = False,
 ) -> None:
     logger.debug("Validating cluster environment.")
     cluster.validate_cluster_environment()
@@ -339,6 +340,7 @@ def main(
         results_dir=str(output_paths.root),
         slack_channel=slack_channel,
         slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )
 
     # Spit out a performance report for the workers.

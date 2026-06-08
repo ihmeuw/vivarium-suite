@@ -293,6 +293,45 @@ class TestDaggerSlackOptions:
         assert kw["slack_channel"] == "my-channel"
         assert kw["slack_tag"] == "coworker"
 
+    def test_run_no_slack_mutes_notification(self, tmp_path: Path) -> None:
+        """``dagger run --no-slack`` forwards mute_slack=True to run_workflow."""
+        workflow_yaml = _write_yaml(tmp_path, _make_workflow_dict(tmp_path))
+        with patch(_WORKFLOW_MAIN) as mock_main:
+            result = CliRunner().invoke(
+                dagger,
+                ["run", "--config", str(workflow_yaml), "--no-slack"],
+            )
+        assert result.exit_code == 0, result.output
+        assert mock_main.call_args.kwargs["mute_slack"] is True
+
+    def test_restart_no_slack_mutes_notification(self, tmp_path: Path) -> None:
+        """``dagger restart --no-slack`` forwards mute_slack=True to restart_workflow."""
+        results = tmp_path / "results"
+        results.mkdir()
+        with patch(_RESTART_MAIN) as mock_main:
+            result = CliRunner().invoke(dagger, ["restart", str(results), "--no-slack"])
+        assert result.exit_code == 0, result.output
+        assert mock_main.call_args.kwargs["mute_slack"] is True
+
+    def test_run_no_slack_with_channel_errors(self, tmp_path: Path) -> None:
+        """``--no-slack`` combined with ``--slack-channel`` is a usage error."""
+        workflow_yaml = _write_yaml(tmp_path, _make_workflow_dict(tmp_path))
+        with patch(_WORKFLOW_MAIN) as mock_main:
+            result = CliRunner().invoke(
+                dagger,
+                [
+                    "run",
+                    "--config",
+                    str(workflow_yaml),
+                    "--no-slack",
+                    "--slack-channel",
+                    "my-channel",
+                ],
+            )
+        assert result.exit_code != 0
+        assert "--no-slack cannot be combined" in result.output
+        mock_main.assert_not_called()
+
     def test_run_slack_tag_without_channel_errors(self, tmp_path: Path) -> None:
         """``--slack-tag`` without ``--slack-channel`` is a usage error."""
         workflow_yaml = _write_yaml(tmp_path, _make_workflow_dict(tmp_path))
