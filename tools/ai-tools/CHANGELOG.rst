@@ -1,6 +1,6 @@
 **0.14.0 - 06/08/26**
 
- - Code reviewer now checks model-repo PRs against the relevant research documentation. The ``/viv:code-review`` functional-correctness pass (and the ``code_reviewer`` Copilot entry point) consults the concept model's modelling spec on vivarium-research.readthedocs.io and flags where the implementation diverges from the documented strategy
+ - Code reviewer now checks model-repo PRs against the relevant research documentation.
 
 **0.13.0 - 06/08/26**
 
