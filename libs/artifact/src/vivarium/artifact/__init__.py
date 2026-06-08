@@ -15,4 +15,4 @@ except PackageNotFoundError:
     __version__ = "0.0.0+not-installed"
 
 from vivarium.artifact.artifact import Artifact, ArtifactException
-from vivarium.artifact.hdf import EntityKey
+from vivarium.artifact.entity_key import EntityKey, is_entity_key
