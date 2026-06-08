@@ -100,11 +100,21 @@ If a reader can't understand what a unit does without reading its internals — 
 
 - **One question at a time.** Don't stack. If a topic needs more, ask the next one next turn.
 - **Multiple choice first.** Faster for the user, forces you to actually have options in mind.
-- **YAGNI ruthlessly.** Strip features the user didn't ask for. The design gets *smaller* as it gets clearer.
+- **YAGNI ruthlessly.** Strip features the user didn't ask for. The design gets *smaller* as it gets clearer. This applies to *abstractions* too — don't introduce a shared helper, base class, or indirection for a single caller; inline it until a second real caller exists.
 - **Recommend, don't punt.** Present alternatives, but lead with your pick and the reason.
 - **Incremental approval.** Section by section, not one giant wall.
 - **Be willing to back up.** When something doesn't fit, the answer is to revise, not to keep going.
 - **Approve before writing.** No MCP write call goes out without an explicit user yes. Show the payload, wait, then write.
+
+## Scope-tightening pass
+
+Before you settle the design (and even when the ticket is already groomed), run an explicit pass to find scope that's wider than the actual intent — this is the kind of thing that otherwise only surfaces in code review:
+
+- **Intent vs. literal acceptance criteria.** Treat each acceptance criterion as *intent to validate*, not law. A criterion phrased as "every X" or "all Y" is a prompt to ask whether the blanket really is the intent. Flag the gap and confirm with the user rather than implementing the literal wording.
+- **Uniformity check.** Where the change applies one transformation broadly, ask whether the broad application is required or whether a meaningful *subset* captures the real need — and whether the rest should be left alone. (Doing something to a column/case where it carries no real meaning is a signal the scope is too wide.)
+- **Abstraction timing.** Count the real callers of any new helper/class/indirection. One caller → inline it. Add the abstraction when the second caller actually arrives.
+
+When the user leans toward the narrower option, take it. Narrower-but-sufficient beats broad-and-uniform.
 
 ## Visual Companion
 
