@@ -124,6 +124,82 @@ The 0600-file approach above is the team default — short install, consistent b
 
 All of these end up at the same state: `JENKINS_MCP_AUTH` set in the environment of whatever shell launches `claude`, and the `.claude.json` entry continues to reference `${JENKINS_MCP_AUTH}` literally.
 
+## GitHub MCP server
+
+The `github` plugin (a dependency of this plugin) connects Claude Code to
+GitHub via the official hosted MCP server at
+`https://api.githubcopilot.com/mcp/`, so PRs, reviews, issues, diffs, and
+Actions runs are queryable as tools. Prefer it over the `gh` CLI: MCP tool
+calls run **outside** the Bash sandbox, so they work where `gh` cannot —
+the project sandbox `denyRead`s `~/.config/gh/hosts.yml`, which breaks `gh`
+in any sandboxed command. The one thing the MCP cannot do is push a local
+commit graph; keep `git push` for that.
+
+The plugin ships an `http` server whose auth is a single header,
+`Authorization: Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}`. Two problems make
+the bare env-var substitution unreliable, so we replace it with a
+`headersHelper` that reads a secret file — the same 0600-file pattern as
+the Jenkins credential above.
+
+**Why the bare env var fails:** with experimental agent teams
+(`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), opening the agents view triggers
+an MCP reconnect in a teammate context that does **not** inherit
+`GITHUB_PERSONAL_ACCESS_TOKEN`. The header then resolves to an empty
+`Bearer `, and the endpoint returns `HTTP 400: Authorization header is
+badly formatted` — surfacing as a `/mcp` connection failure. Plain `claude`
+works (its MCP server inherits the lead process's env), so the bug only
+appears once you use teams. A `headersHelper` avoids this because Claude
+Code runs it fresh on every connection — including the teammate reconnect.
+
+### 1. Stash the token as a 0600 file, refreshed from `gh`
+
+The helper reads a cache file rather than calling `gh` directly, because
+`gh` cannot run in a sandboxed context (it needs `~/.config/gh/hosts.yml`,
+which the sandbox denies). Refresh the file from `gh auth token` on each
+interactive shell. Have the user add this to `~/.zshrc` (interactive shells
+— mirrors the Jenkins file pattern in `~/.zshenv`):
+
+```bash
+# >>> github mcp token >>>
+mkdir -p "$HOME/.claude/secrets" && chmod 700 "$HOME/.claude/secrets"
+if command -v gh >/dev/null 2>&1; then
+  gh auth token > "$HOME/.claude/secrets/github-token" 2>/dev/null \
+    && chmod 600 "$HOME/.claude/secrets/github-token"
+fi
+# <<< github mcp token <<<
+```
+
+Using the `gh` token reuses a credential already SAML-SSO-authorized for
+the `ihmeuw` org — the same one that lets `git push` work.
+
+### 2. Point the plugin's MCP config at the helper
+
+Edit the github server's `.mcp.json` (in the plugin **cache**:
+`~/.claude/plugins/cache/claude-plugins-official/github/unknown/.mcp.json`),
+replacing the `Authorization` header with a `headersHelper`:
+
+```json
+{
+  "github": {
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "headersHelper": "printf '{\"Authorization\":\"Bearer %s\"}' \"$(cat $HOME/.claude/secrets/github-token)\""
+  }
+}
+```
+
+The `$(cat ...)` strips the file's trailing newline so the header isn't
+malformed. Restart Claude Code, then confirm with `claude mcp list` (look
+for `github … ✔ Connected`) — **not** `claude mcp get`, which would expand
+and leak the token.
+
+**Caveats.** (1) `.mcp.json` lives in the plugin cache, so a github plugin
+update or reinstall overwrites it — reapply the `headersHelper` line after
+any reinstall. (2) The token is now in a file any sandboxed command can
+read (the same exposure already accepted for the Jenkins credential). (3)
+If the `gh` token rotates and no interactive shell has refreshed the file,
+it can go stale — fine for static PATs.
+
 ## Brainstorming visual companion (Node.js)
 
 The `brainstorming` skill ships a browser-based visual companion that renders Mermaid diagrams. Its server is written in Node.js. Without Node, the brainstorming skill still works — just no live diagrams.
