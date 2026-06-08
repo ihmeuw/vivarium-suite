@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import requests
 from loguru import logger
@@ -11,35 +12,26 @@ SLACK_API_BASE = "https://slack.com/api"
 SLACK_TIMEOUT = 10  # seconds
 
 
+def _slack_post(token: str, method: str, **payload: Any) -> dict[str, Any]:
+    """POST to a Slack API ``method`` and return the parsed JSON response body."""
+    resp = requests.post(
+        f"{SLACK_API_BASE}/{method}",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=SLACK_TIMEOUT,
+        **payload,
+    )
+    data: dict[str, Any] = resp.json()
+    return data
+
+
 def _resolve_user_id(token: str, username: str) -> str | None:
     """Resolve a SLURM/UW username to a Slack user ID via ``{username}@uw.edu`` lookup."""
     email = f"{username}@uw.edu"
-    resp = requests.post(
-        f"{SLACK_API_BASE}/users.lookupByEmail",
-        headers={"Authorization": f"Bearer {token}"},
-        data={"email": email},
-        timeout=SLACK_TIMEOUT,
-    )
-    data = resp.json()
+    data = _slack_post(token, "users.lookupByEmail", data={"email": email})
     if not data.get("ok"):
         logger.warning(f"Slack user lookup failed for {email}: {data.get('error')}")
         return None
     return str(data["user"]["id"])
-
-
-def _open_dm(token: str, user_id: str) -> str | None:
-    """Open a direct-message conversation with a user and return its channel ID."""
-    resp = requests.post(
-        f"{SLACK_API_BASE}/conversations.open",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"users": user_id},
-        timeout=SLACK_TIMEOUT,
-    )
-    data = resp.json()
-    if not data.get("ok"):
-        logger.warning(f"Slack conversations.open failed: {data.get('error')}")
-        return None
-    return str(data["channel"]["id"])
 
 
 def send_slack_notification(
@@ -84,7 +76,9 @@ def send_slack_notification(
         Slack bot must already be a member of the channel. Ignored on failure.
     slack_tag
         Optional username to @-mention in the channel notification on success.
-        Only honored alongside ``slack_channel``; ignored on failure.
+        Only honored alongside ``slack_channel``; ignored on failure. If the
+        user cannot be resolved to a Slack ID, the notification is still posted
+        without the mention and a warning is logged.
     """
     try:
         token = os.environ.get("PSIMULATE_SLACK_BOT_TOKEN")
@@ -103,17 +97,24 @@ def send_slack_notification(
             if slack_tag:
                 tag_id = _resolve_user_id(token, slack_tag)
                 if tag_id is None:
-                    return
-                mention = f"<@{tag_id}> "
+                    # Couldn't resolve the tag user; post the notification
+                    # without the mention rather than dropping it entirely.
+                    logger.warning(
+                        f"Could not resolve Slack user '{slack_tag}'; "
+                        f"posting to {channel} without the mention."
+                    )
+                else:
+                    mention = f"<@{tag_id}> "
         else:
             # Default path, and every failure: DM the launching user.
             user_id = _resolve_user_id(token, launcher)
             if user_id is None:
                 return
-            dm_channel = _open_dm(token, user_id)
-            if dm_channel is None:
+            dm_data = _slack_post(token, "conversations.open", json={"users": user_id})
+            if not dm_data.get("ok"):
+                logger.warning(f"Slack conversations.open failed: {dm_data.get('error')}")
                 return
-            channel = dm_channel
+            channel = str(dm_data["channel"]["id"])
 
         # Build the message
         status_text = "DONE" if success else "ERROR"
@@ -126,13 +127,9 @@ def send_slack_notification(
         message = "\n".join(lines)
 
         # Post the message
-        msg_resp = requests.post(
-            f"{SLACK_API_BASE}/chat.postMessage",
-            headers={"Authorization": f"Bearer {token}"},
-            json={"channel": channel, "text": message},
-            timeout=SLACK_TIMEOUT,
+        msg_data = _slack_post(
+            token, "chat.postMessage", json={"channel": channel, "text": message}
         )
-        msg_data = msg_resp.json()
         if not msg_data.get("ok"):
             logger.warning(f"Slack chat.postMessage failed: {msg_data.get('error')}")
 

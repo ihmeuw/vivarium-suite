@@ -185,6 +185,41 @@ def test_success_with_channel_and_tag_mentions_user(
         assert "<@U99999>" in msg_json["text"]
 
 
+def test_unresolvable_tag_posts_to_channel_without_mention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the tagged user can't be resolved, the channel post still happens, sans mention."""
+    monkeypatch.setenv("PSIMULATE_SLACK_BOT_TOKEN", BOT_TOKEN)
+    monkeypatch.setenv("USER", "testuser")
+
+    lookup_resp = MagicMock()
+    lookup_resp.json.return_value = {"ok": False, "error": "users_not_found"}
+    post_resp = MagicMock()
+    post_resp.json.return_value = {"ok": True}
+    mock_post = MagicMock(side_effect=[lookup_resp, post_resp])
+
+    with patch("vivarium_cluster_tools.core.notifications.requests.post", mock_post):
+        send_slack_notification(
+            workflow_name=WORKFLOW_NAME,
+            status="D",
+            command_label=COMMAND_LABEL,
+            slack_channel="#my-channel",
+            slack_tag="ghost",
+        )
+
+        # Failed lookup, then the channel post still goes out (no DM open).
+        assert mock_post.call_count == 2
+        lookup_call = mock_post.call_args_list[0]
+        assert lookup_call[0][0] == f"{SLACK_API}/users.lookupByEmail"
+
+        msg_call = mock_post.call_args_list[1]
+        assert msg_call[0][0] == f"{SLACK_API}/chat.postMessage"
+        msg_json = msg_call.kwargs["json"]
+        assert msg_json["channel"] == "#my-channel"
+        assert "DONE" in msg_json["text"]
+        assert "<@" not in msg_json["text"]
+
+
 def test_failure_with_channel_and_tag_dms_launcher(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
