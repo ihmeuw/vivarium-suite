@@ -212,7 +212,7 @@ class ComponentManager(Manager):
         component_type = (
             component_type if isinstance(component_type, type) else tuple(component_type)
         )
-        return [c for c in self._components if isinstance(c, component_type)]  # type: ignore[misc]
+        return [c for c in self._components if isinstance(c, component_type)]
 
     def get_component(self, name: str) -> Component | Manager:
         """Get the component with name ``name``.

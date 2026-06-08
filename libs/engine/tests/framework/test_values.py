@@ -436,7 +436,8 @@ def test_rescale_post_processor_types(
             pd.testing.assert_frame_equal(attributes, expected)
         else:
             assert isinstance(expected, pd.Series)
-            assert attributes.equals(expected)
+            assert isinstance(attributes, pd.Series)
+            assert (attributes == expected).all()
     else:
         with pytest.raises(
             DynamicValueError,

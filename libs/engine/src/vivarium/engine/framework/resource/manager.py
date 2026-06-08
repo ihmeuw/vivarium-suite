@@ -65,7 +65,7 @@ class ResourceManager(Manager):
         """
         if self._required_resources_dirty:
             try:
-                self._sorted_nodes = list(nx.algorithms.topological_sort(self.get_graph()))  # type: ignore[func-returns-value]
+                self._sorted_nodes = list(nx.algorithms.topological_sort(self.get_graph()))  # type: ignore[call-overload, func-returns-value]
             except nx.NetworkXUnfeasible:
                 raise ResourceError(
                     "The resource pool contains at least one cycle:\n"
