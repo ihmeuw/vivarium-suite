@@ -1,4 +1,4 @@
-**1.0.2 - 06/05/26**
+**1.0.2 - 06/08/26**
 
 - Extract ``EntityKey`` into its own module and export ``is_entity_key`` helper
 
