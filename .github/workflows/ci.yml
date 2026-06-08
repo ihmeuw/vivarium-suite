@@ -119,10 +119,15 @@ jobs:
       - name: Install ${{ matrix.library }}
         # UV_FLAGS=--system installs into the runner's system Python (no venv).
         # IHME_PYPI= disables the artifactory extra-index, since IHME's
-        # artifactory is firewalled and unreachable from GH-hosted runners.
-        # Libs that depend on artifactory-only packages won't fully install in
-        # this environment by design - those are tested via Jenkins.
-        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=
+        #   artifactory is firewalled and unreachable from GH-hosted runners.
+        #   Libs that depend on artifactory-only packages won't fully install in
+        #   this environment by design - those are tested via Jenkins.
+        # IN_TREE_SIBLINGS=1 resolves intra-monorepo sibling dependencies from
+        #   in-tree source (with their pending CHANGELOG versions) instead of PyPI,
+        #   so a single PR can update interdependent packages without an interim
+        #   release. The release workflow deliberately omits this flag so it still
+        #   validates that published version pins resolve from real PyPI.
+        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github IN_TREE_SIBLINGS=1 UV_FLAGS=--system IHME_PYPI=
 
       - name: Lint ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make lint

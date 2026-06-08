@@ -24,8 +24,8 @@ jobs:
     name: Detect Packages to Release
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.detect.outputs.matrix }}
-      has-releases: ${{ steps.detect.outputs.has-releases }}
+      matrix: ${{ steps.order.outputs.matrix }}
+      has-releases: ${{ steps.order.outputs.has-releases }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -54,8 +54,7 @@ jobs:
               exit 1
             fi
 
-            echo "matrix={\"include\":[{\"library\":\"${LIBRARY}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
-            echo "has-releases=true" >> $GITHUB_OUTPUT
+            echo "${LIBRARY} ${VERSION}" >> release_pairs.txt
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # Manual release.yml dispatch. Validate inputs and use them directly.
             if [ ! -d "libs/${PACKAGE}" ]; then
@@ -69,8 +68,7 @@ jobs:
               exit 1
             fi
 
-            echo "matrix={\"include\":[{\"library\":\"${PACKAGE}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
-            echo "has-releases=true" >> $GITHUB_OUTPUT
+            echo "${PACKAGE} ${VERSION}" >> release_pairs.txt
           else
             # Push to main. Detect all changed CHANGELOG.rst files and parse versions.
             BEFORE="${{ github.event.before }}"
@@ -81,8 +79,6 @@ jobs:
 
             CHANGED_CHANGELOGS=$(git diff --name-only "$BEFORE" "$AFTER" | grep '^libs/.*/CHANGELOG\.rst$' || true)
 
-            MATRIX_INCLUDE="["
-            FIRST=true
             while IFS= read -r changelog; do
               [ -z "$changelog" ] && continue
               LIB=$(echo "$changelog" | sed 's|libs/||; s|/CHANGELOG.rst||')
@@ -99,19 +95,51 @@ jobs:
                 continue
               fi
 
-              [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
-              MATRIX_INCLUDE+="{\"library\":\"${LIB}\",\"version\":\"${VERSION}\"}"
+              echo "${LIB} ${VERSION}" >> release_pairs.txt
             done <<< "$CHANGED_CHANGELOGS"
-            MATRIX_INCLUDE+="]"
-
-            if [ "$MATRIX_INCLUDE" = "[]" ]; then
-              echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-              echo "has-releases=false" >> $GITHUB_OUTPUT
-            else
-              echo "matrix={\"include\":${MATRIX_INCLUDE}}" >> $GITHUB_OUTPUT
-              echo "has-releases=true" >> $GITHUB_OUTPUT
-            fi
           fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install vivarium_build_utils
+        # FIXME: Update to main once epic/monorepo is merged
+        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
+
+      - name: Order releases dependencies-first
+        id: order
+        run: |
+          # Order the batch so each dependency releases (and becomes installable
+          # on PyPI) before any dependent. Edges follow runtime + ci_github deps -
+          # the dependency set the release install activates - and the vbu helper
+          # fails loudly on a cycle. The release job runs this order with
+          # max-parallel=1 so dependents only start once their deps are published.
+          if [ ! -s release_pairs.txt ]; then
+            echo "No packages to release"
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            echo "has-releases=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          LIBS=$(cut -d' ' -f1 release_pairs.txt)
+          ORDERED=$(python -m vivarium_build_utils.dependencies topo $LIBS --extra ci_github)
+          MATRIX_INCLUDE="["
+          FIRST=true
+          while read -r lib; do
+            [ -z "$lib" ] && continue
+            # Look the version back up from the pairs file (first column match).
+            version=$(awk -v target="$lib" '$1 == target { print $2; exit }' release_pairs.txt)
+            [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
+            MATRIX_INCLUDE+="{\"library\":\"${lib}\",\"version\":\"${version}\"}"
+          done <<< "$ORDERED"
+          MATRIX_INCLUDE+="]"
+          echo "Ordered release matrix: ${MATRIX_INCLUDE}"
+          echo "matrix={\"include\":${MATRIX_INCLUDE}}" >> $GITHUB_OUTPUT
+          echo "has-releases=true" >> $GITHUB_OUTPUT
 
   release:
     name: Release ${{ matrix.library }} v${{ matrix.version }}
@@ -122,7 +150,12 @@ jobs:
       contents: write
       id-token: write
     strategy:
-      fail-fast: false
+      # Sequential, dependency-ordered releases (the detect job emits the matrix
+      # deps-first). max-parallel=1 runs them one at a time in that order;
+      # fail-fast halts the chain if a dependency release fails so dependents
+      # don't publish against a missing/unreleased version.
+      fail-fast: true
+      max-parallel: 1
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
     steps:
       - name: Checkout code
@@ -196,6 +229,31 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: libs/${{ matrix.library }}/dist/
+
+      - name: Wait for PyPI availability
+        # A freshly published version is often installable within seconds, but
+        # propagation can take a minute or two. Check immediately, then retry
+        # every 15s up to ~2 min, so the next (dependent) release in the ordered,
+        # serialized matrix can install it from real PyPI.
+        run: |
+          PKG="vivarium-${{ matrix.library }}"
+          VER="${{ matrix.version }}"
+          MAX_ATTEMPTS=9  # 1 immediate try + 8 retries * 15s = up to ~2 min
+          echo "Waiting for ${PKG}==${VER} to be installable from PyPI..."
+          attempt=1
+          while true; do
+            if uv pip install --system --dry-run --no-deps "${PKG}==${VER}" >/dev/null 2>&1; then
+              echo "${PKG}==${VER} is installable."
+              exit 0
+            fi
+            if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
+              echo "Timed out after ~2 min waiting for ${PKG}==${VER} on PyPI"
+              exit 1
+            fi
+            echo "  not visible yet (attempt ${attempt}/${MAX_ATTEMPTS}); sleeping 15s"
+            attempt=$((attempt + 1))
+            sleep 15
+          done
 
       - name: Create GitHub Release
         env:
