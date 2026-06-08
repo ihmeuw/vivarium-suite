@@ -7,6 +7,28 @@ description: Use when the user is performing post-install configuration for comp
 
 Some components shipped by this plugin need configuration that the plugin install itself doesn't perform. When the user asks about completing setup for one of the items below, walk them through it.
 
+## Experimental agent teams (for `/viv:type-hinter`)
+
+The `/viv:type-hinter` command runs as an agent team — one autonomous
+teammate per file, coordinating directly. Agent teams are an
+experimental, opt-in Claude Code feature, and the command has no
+single-agent fallback, so enable it before using the command. Two
+requirements:
+
+1. **Claude Code v2.1.32 or newer** (`claude --version`; update if older).
+2. **`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`** in the environment Claude
+   Code launches from. Add it to shell init so every session has it:
+
+```bash
+# >>> claude code agent teams >>>
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+# <<< claude code agent teams <<<
+```
+
+Use `~/.zshenv` (or the shell equivalent — the same file as the Jenkins
+credential below), then restart Claude Code. The command's Step 0
+preflight confirms both before doing any work.
+
 ## Jenkins MCP server
 
 Connect Claude Code to the IHME SimSci Jenkins (`jenkins.simsci.ihme.washington.edu`) via the [Jenkins MCP Server plugin](https://plugins.jenkins.io/mcp-server/) so build status, console logs, and job structure are queryable from chat. The plugin only supports HTTP Basic auth, so the steps below protect a long-lived API token.

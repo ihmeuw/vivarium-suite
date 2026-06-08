@@ -41,6 +41,17 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
   on explicit user confirmation. User-invoked only — there is no
   auto-trigger.
 
+**Type Hinter**
+
+- Slash command (Claude Code only): ``/viv:type-hinter <target>`` (a
+  package, sub-folder, or ``.py`` files under one ``libs/<pkg>/``). Runs
+  as the **lead of an agent team**: resolves the inter-file dependency
+  graph, spawns one teammate per file, verifies with ``make mypy``, and
+  adds ``py.typed`` only if the package ends clean. **Requires agent
+  teams** (``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1``, v2.1.32+; no
+  fallback). It **writes**, then hands the diff to
+  ``/viv:commit-splitter``.
+
 **Skills**
 
 - ``plugin-setup`` — walks the user through post-install configuration that the
