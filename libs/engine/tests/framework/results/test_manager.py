@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -36,6 +37,7 @@ from tests.framework.results.helpers import (
     sorting_hat_vectorized,
     verify_stratification_added,
 )
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -285,24 +287,40 @@ def test_stratified__raw_results_initialization() -> None:
 
     # Check that indexes are as expected
 
-    # Multi-stratification index is type MultiIndex where each layer dtype is Category
+    # Multi-stratification index is type MultiIndex where each layer is an
+    # *ordered* categorical in its registered (non-alphabetical) category order.
+    # The stratification names are sorted alphabetically, so 'power_level_group'
+    # is the first level and 'student_house' is the second.
     expected_house_points_multi_idx = pd.MultiIndex.from_product(
         [POWER_LEVEL_GROUP_LABELS, STUDENT_HOUSES_LIST],
-        names=["power_level", "student_house"],
+        names=["power_level_group", "student_house"],
     )
     # HACK: We need to set the levels to be CategoricalDtype but you can't set that
-    # directly on the MultiIndex. Convert to df, set type, convert back
+    # directly on the MultiIndex. Convert to df, set type, convert back. Each level
+    # is cast to an ordered categorical in its registered order.
     expected_house_points_idx = (
         pd.DataFrame(index=expected_house_points_multi_idx)
         .reset_index()
-        .astype(CategoricalDtype)
-        .set_index(["power_level", "student_house"])
+        .astype(
+            {
+                "power_level_group": CategoricalDtype(
+                    categories=POWER_LEVEL_GROUP_LABELS, ordered=True
+                ),
+                "student_house": CategoricalDtype(
+                    categories=STUDENT_HOUSES_LIST, ordered=True
+                ),
+            }
+        )
+        .set_index(["power_level_group", "student_house"])
         .index
     )
     assert raw_results["house_points"].index.equals(expected_house_points_idx)
 
-    # Single-stratification index is type CategoricalIndex
-    expected_quidditch_idx = pd.CategoricalIndex(FAMILIARS, name="familiar")
+    # Single-stratification index is an *ordered* CategoricalIndex over FAMILIARS
+    # in its registered order.
+    expected_quidditch_idx = pd.CategoricalIndex(
+        FAMILIARS, categories=FAMILIARS, ordered=True, name="familiar"
+    )
     assert raw_results["quidditch_wins"].index.equals(expected_quidditch_idx)
 
 
@@ -680,7 +698,7 @@ def test_stratified_observation_results() -> None:
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(
-        CategoricalDtype(categories=STUDENT_HOUSES)
+        CategoricalDtype(categories=STUDENT_HOUSES, ordered=True)
     )
     assert expected.equals(
         sim.get_results()["cat_bomb"].sort_values("value").reset_index(drop=True)
@@ -695,7 +713,7 @@ def test_stratified_observation_results() -> None:
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(
-        CategoricalDtype(categories=STUDENT_HOUSES)
+        CategoricalDtype(categories=STUDENT_HOUSES, ordered=True)
     )
     assert expected.equals(
         sim.get_results()["cat_bomb"].sort_values("value").reset_index(drop=True)
@@ -870,6 +888,102 @@ def test_update__raw_results_extra_columns() -> None:
     sim.step()
     raw_results = sim._results._raw_results["magical_attributes"]
     assert (raw_results[["spell_power", "potion_power"]].values == [2, 2]).all()
+
+
+###############################################
+# Categorical output (parquet round-trip)     #
+###############################################
+
+
+class TestCategoricalParquetOutput:
+    """Stratified observation results round-trip through .parquet as ordered categoricals
+    in their registered order; non-stratified results are not coerced."""
+
+    @staticmethod
+    def _roundtrip(
+        components: list[Component], measure: str, tmp_path: Path
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Run two steps, then write the measure's results to .parquet and read back."""
+        sim = InteractiveContext(configuration=HARRY_POTTER_CONFIG, components=components)
+        sim.step()
+        sim.step()
+        results = sim.get_results()[measure]
+        path = tmp_path / f"{measure}.parquet"
+        results.to_parquet(path, index=False)
+        return results, pd.read_parquet(path)
+
+    def test_single_stratification_ordered_categorical(self, tmp_path: Path) -> None:
+        """The single label column reloads as an ordered categorical in registered order."""
+        results, loaded = self._roundtrip(
+            [Hogwarts(), QuidditchWinsObserver(), HogwartsResultsStratifier()],
+            "quidditch_wins",
+            tmp_path,
+        )
+        familiar_order = list(FAMILIARS)
+        dtype = loaded["familiar"].dtype
+        assert isinstance(dtype, pd.CategoricalDtype)
+        assert dtype.ordered is True
+        assert list(dtype.categories) == familiar_order
+        assert list(dtype.categories) != sorted(familiar_order)
+        assert list(loaded["familiar"].astype(str)) == list(results["familiar"].astype(str))
+        assert pd.api.types.is_numeric_dtype(loaded["value"])
+
+    def test_multi_stratification_ordered_categorical(self, tmp_path: Path) -> None:
+        """Every label column reloads as an ordered categorical in registered order."""
+        results, loaded = self._roundtrip(
+            [Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+            "house_points",
+            tmp_path,
+        )
+        expected_orders = {
+            "student_house": list(STUDENT_HOUSES),
+            "power_level_group": list(POWER_LEVEL_GROUP_LABELS),
+        }
+        for label_col, expected_order in expected_orders.items():
+            dtype = loaded[label_col].dtype
+            assert isinstance(dtype, pd.CategoricalDtype)
+            assert dtype.ordered is True
+            assert list(dtype.categories) == expected_order
+            assert list(dtype.categories) != sorted(expected_order)
+            assert list(loaded[label_col].astype(str)) == list(results[label_col].astype(str))
+        assert pd.api.types.is_numeric_dtype(loaded["value"])
+
+    def test_no_stratifications_ordered_categorical(self, tmp_path: Path) -> None:
+        """The single-row aggregate reloads as an ordered categorical containing 'all'."""
+        _, loaded = self._roundtrip(
+            [
+                Hogwarts(),
+                NoStratificationsQuidditchWinsObserver(),
+                HogwartsResultsStratifier(),
+            ],
+            "no_stratifications_quidditch_wins",
+            tmp_path,
+        )
+        dtype = loaded["stratification"].dtype
+        assert isinstance(dtype, pd.CategoricalDtype)
+        assert dtype.ordered is True
+        assert list(dtype.categories) == ["all"]
+        assert list(loaded["stratification"].astype(str)) == ["all"]
+        assert pd.api.types.is_numeric_dtype(loaded["value"])
+
+    def test_unstratified_not_coerced(self, tmp_path: Path) -> None:
+        """An unstratified observation's columns are not coerced to categoricals."""
+        results, loaded = self._roundtrip(
+            [Hogwarts(), ValedictorianObserver()], "valedictorian", tmp_path
+        )
+        for frame in (results, loaded):
+            for col in frame.columns:
+                assert not isinstance(frame[col].dtype, pd.CategoricalDtype)
+            assert pd.api.types.is_datetime64_any_dtype(frame["event_time"])
+
+    def test_concatenating_not_coerced(self, tmp_path: Path) -> None:
+        """A concatenating observation's columns are not coerced to categoricals."""
+        results, loaded = self._roundtrip(
+            [Hogwarts(), ExamScoreObserver()], "exam_score", tmp_path
+        )
+        for frame in (results, loaded):
+            for col in frame.columns:
+                assert not isinstance(frame[col].dtype, pd.CategoricalDtype)
 
 
 ####################
