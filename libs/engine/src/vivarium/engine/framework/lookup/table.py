@@ -261,7 +261,7 @@ class LookupTable(Resource, Generic[T]):
         ):
             raise ValueError("Must supply some data")
 
-        acceptable_types = (Numeric, datetime, timedelta, list, tuple, pd.DataFrame)
+        acceptable_types = (Numeric, datetime, timedelta, str, list, tuple, pd.DataFrame)
         if not isinstance(data, acceptable_types):
             raise TypeError(
                 f"The only allowable types for data are {acceptable_types}. "
