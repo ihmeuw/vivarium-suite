@@ -159,9 +159,8 @@ class BaseDistribution:
 
         if not computable.empty:
             params = parameters.loc[computable, list(self.expected_parameters)]
-            p.loc[computable] = self.distribution(**params.to_dict("series")).pdf(
-                x.loc[computable]
-            )
+            kwargs = {parameter: params[parameter] for parameter in self.expected_parameters}
+            p.loc[computable] = self.distribution(**kwargs).pdf(x.loc[computable])
 
             p.loc[computable] = self.process(
                 p.loc[computable], parameters.loc[computable], "pdf_postprocess"
@@ -195,9 +194,8 @@ class BaseDistribution:
 
         if not computable.empty:
             params = parameters.loc[computable, list(self.expected_parameters)]
-            x.loc[computable] = self.distribution(**params.to_dict("series")).ppf(
-                q.loc[computable]
-            )
+            kwargs = {parameter: params[parameter] for parameter in self.expected_parameters}
+            x.loc[computable] = self.distribution(**kwargs).ppf(q.loc[computable])
 
             x.loc[computable] = self.process(
                 x.loc[computable], parameters.loc[computable], "ppf_postprocess"
@@ -231,9 +229,8 @@ class BaseDistribution:
 
         if not computable.empty:
             params = parameters.loc[computable, list(self.expected_parameters)]
-            c.loc[computable] = self.distribution(**params.to_dict("series")).cdf(
-                x.loc[computable]
-            )
+            kwargs = {parameter: params[parameter] for parameter in self.expected_parameters}
+            c.loc[computable] = self.distribution(**kwargs).cdf(x.loc[computable])
 
             c.loc[computable] = self.process(
                 c.loc[computable], parameters.loc[computable], "cdf_postprocess"
