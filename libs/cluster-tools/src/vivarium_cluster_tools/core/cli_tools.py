@@ -60,7 +60,7 @@ def with_slack_channel(func: CLIFunction) -> CLIFunction:
     return click.option(
         "--slack-channel",
         default=None,
-        help="Slack channel (e.g. '#my-channel') to post the completion "
+        help="Slack channel name (e.g. 'my-channel') to post the completion "
         "notification to instead of direct-messaging the launching user. The "
         "Slack bot must already be a member of the channel to post there.",
     )(func)
