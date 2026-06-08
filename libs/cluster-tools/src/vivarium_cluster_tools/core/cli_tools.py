@@ -76,6 +76,34 @@ def resolve_sim_verbosity(sim_verbosity: int, sim_verbosity_deprecated: str | No
     return sim_verbosity
 
 
+def with_slack_channel(func: CLIFunction) -> CLIFunction:
+    """Decorator that adds the ``--slack-channel`` option for completion notifications."""
+    return click.option(
+        "--slack-channel",
+        default=None,
+        help="Slack channel (e.g. '#my-channel') to post the completion "
+        "notification to instead of direct-messaging the launching user. The "
+        "Slack bot must already be a member of the channel to post there.",
+    )(func)
+
+
+def with_slack_tag(func: CLIFunction) -> CLIFunction:
+    """Decorator that adds the ``--slack-tag`` option for completion notifications."""
+    return click.option(
+        "--slack-tag",
+        default=None,
+        help="Username to @-mention in the channel notification on success. "
+        "Requires --slack-channel; ignored on failure, which always "
+        "direct-messages the launching user.",
+    )(func)
+
+
+def validate_slack_options(slack_channel: str | None, slack_tag: str | None) -> None:
+    """Raise a ``UsageError`` if ``--slack-tag`` is used without ``--slack-channel``."""
+    if slack_tag is not None and slack_channel is None:
+        raise click.UsageError("--slack-tag requires --slack-channel to be provided.")
+
+
 def coerce_to_full_path(
     ctx: click.Context, param: click.Parameter | None, value: str | None
 ) -> Path | None:

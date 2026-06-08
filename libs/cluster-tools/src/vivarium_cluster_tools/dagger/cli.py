@@ -75,6 +75,8 @@ def dagger() -> None:
     default=None,
     help="Override maximum Jobmon task attempts from config file.",
 )
+@cli_tools.with_slack_channel
+@cli_tools.with_slack_tag
 @cli_tools.with_verbose_and_pdb
 def run(
     config_path: Path,
@@ -84,6 +86,8 @@ def run(
     output_directory: Path | None,
     default_environment: str | None,
     max_attempts: int | None,
+    slack_channel: str | None,
+    slack_tag: str | None,
     verbose: int,
     with_debugger: bool,
 ) -> None:
@@ -97,6 +101,7 @@ def run(
     overridden from the command line via the corresponding flag.
     """
     logs.configure_main_process_logging_to_terminal(verbose)
+    cli_tools.validate_slack_options(slack_channel, slack_tag)
 
     workflow_config = load_workflow_config(
         config_path,
@@ -113,6 +118,8 @@ def run(
     main(
         workflow_config=workflow_config,
         verbose=verbose,
+        slack_channel=slack_channel,
+        slack_tag=slack_tag,
     )
 
 
@@ -141,12 +148,16 @@ def run(
     default=None,
     help="Override maximum Jobmon task attempts from the saved configuration.",
 )
+@cli_tools.with_slack_channel
+@cli_tools.with_slack_tag
 @cli_tools.with_verbose_and_pdb
 def restart(
     results_directory: Path,
     project: str | None,
     queue: str | None,
     max_attempts: int | None,
+    slack_channel: str | None,
+    slack_tag: str | None,
     verbose: int,
     with_debugger: bool,
 ) -> None:
@@ -158,6 +169,7 @@ def restart(
     ``--max-attempts`` override the saved configuration.
     """
     logs.configure_main_process_logging_to_terminal(verbose)
+    cli_tools.validate_slack_options(slack_channel, slack_tag)
 
     main = handle_exceptions(runner.restart_workflow, logger, with_debugger)
 
@@ -167,4 +179,6 @@ def restart(
         queue=queue,
         max_attempts=max_attempts,
         verbose=verbose,
+        slack_channel=slack_channel,
+        slack_tag=slack_tag,
     )
