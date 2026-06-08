@@ -1,3 +1,8 @@
+**5.1.1 - 06/08/26**
+
+- Write stratified observation results' stratification columns as ordered
+  categoricals in their registered category order.
+
 **5.1.0 - 06/04/26**
 
 - Standardize CLI logging verbosity on a ``-v`` count and a single canonical
