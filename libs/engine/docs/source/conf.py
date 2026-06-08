@@ -20,9 +20,9 @@ def _copyright_end_year() -> str:
     3. Current year (fallback for sdist / detached source builds).
     """
     if epoch := os.environ.get("SOURCE_DATE_EPOCH"):
-        return datetime.datetime.fromtimestamp(
-            int(epoch), tz=datetime.timezone.utc
-        ).strftime("%Y")
+        return datetime.datetime.fromtimestamp(int(epoch), tz=datetime.timezone.utc).strftime(
+            "%Y"
+        )
     try:
         out = subprocess.check_output(
             ["git", "log", "-1", "--format=%cd", "--date=format:%Y"],
@@ -92,7 +92,9 @@ htmlhelp_basename = f"{project}doc"
 # -- Options for LaTeX / man / texinfo output -----------------------------
 
 latex_elements: dict[str, str] = {}
-latex_documents = [(master_doc, f"{project}.tex", f"{project} Documentation", author, "manual")]
+latex_documents = [
+    (master_doc, f"{project}.tex", f"{project} Documentation", author, "manual")
+]
 man_pages = [(master_doc, project, f"{project} Documentation", [author], 1)]
 texinfo_documents = [
     (

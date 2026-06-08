@@ -228,7 +228,7 @@ def test_interpolated_tables__only_categorical_parameters(
         assert (output_data.loc[sub_table_mask, "some_value"] == i**2).all()
 
 
-@pytest.mark.parametrize("data", [(1, 2), [1, 2]])
+@pytest.mark.parametrize("data", [(1, 2), [1, 2], ("hello", "world"), ["hello", "world"]])
 def test_lookup_table_scalar_from_list(
     base_config: ConfigTree, data: list[ScalarValue] | tuple[ScalarValue, ...]
 ) -> None:
@@ -241,27 +241,22 @@ def test_lookup_table_scalar_from_list(
 
     assert isinstance(table, pd.DataFrame)
     assert table.columns.values.tolist() == ["a", "b"]
-    assert np.all(table.a == 1)
-    assert np.all(table.b == 2)
+    assert np.all(table.a == data[0])
+    assert np.all(table.b == data[1])
 
 
-def test_lookup_table_scalar_from_single_value(base_config: ConfigTree) -> None:
+@pytest.mark.parametrize("data", [1, "hello"])
+def test_lookup_table_scalar_from_single_value(
+    base_config: ConfigTree, data: ScalarValue
+) -> None:
     component = TestPopulation()
     simulation = InteractiveContext(components=[component], configuration=base_config)
     manager = simulation._tables
-    table = manager._build_table(component, 1, "", value_columns="a")(
+    table = manager._build_table(component, data, "", value_columns="a")(
         simulation.get_population_index()
     )
     assert isinstance(table, pd.Series)
-    assert np.all(table == 1)
-
-
-def test_invalid_data_type_build_table(base_config: ConfigTree) -> None:
-    component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
-    manager = simulation._tables
-    with pytest.raises(TypeError):
-        manager._build_table(component, "break", "", value_columns=())  # type: ignore [arg-type]
+    assert np.all(table == data)
 
 
 def test_lookup_table_interpolated_return_types(base_config: ConfigTree) -> None:
@@ -382,7 +377,7 @@ class TestValidateBuildTableParameters:
             mock_table._value_columns = val_cols
             LookupTable._validate_data_inputs(mock_table, data)
 
-    @pytest.mark.parametrize("data", ["FAIL", pd.Interval(5, 10), "2019-05-17"])
+    @pytest.mark.parametrize("data", [pd.Interval(5, 10)])
     def test_validate_parameters_fail_other_data(
         self, data: LookupTableData, mocker: MockerFixture
     ) -> None:
@@ -391,10 +386,13 @@ class TestValidateBuildTableParameters:
             mock_table._value_columns = []
             LookupTable._validate_data_inputs(mock_table, data)
 
-    def test_validate_parameters_pass_scalar_data(self, mocker: MockerFixture) -> None:
+    @pytest.mark.parametrize("data", [[1, 2, 3], ["cat1", "cat2", "cat3"]])
+    def test_validate_parameters_pass_scalar_data(
+        self, data: list[ScalarValue], mocker: MockerFixture
+    ) -> None:
         mock_table = mocker.Mock(spec=LookupTable)
         mock_table._value_columns = ["a", "b", "c"]
-        LookupTable._validate_data_inputs(mock_table, [1, 2, 3])
+        LookupTable._validate_data_inputs(mock_table, data)
 
     def test_validate_parameters_pass_dataframe_data(self, mocker: MockerFixture) -> None:
         data = pd.DataFrame(
