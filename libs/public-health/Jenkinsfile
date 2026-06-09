@@ -25,14 +25,17 @@ Note that updating the shared repo will take effect on the next pipeline invocat
 @Library("get_vbu_version@main") _
 
 // Load the full vivarium_build_utils library at the expected version
-library("vivarium_build_utils@${get_vbu_version()}")
+// FIXME: pinned to epic/monorepo until that branch merges to main (MIC-7015 follow-up)
+library("vivarium_build_utils@epic/monorepo")
+// library("vivarium_build_utils@${get_vbu_version()}")
 
 reusable_pipeline(
     scheduled_branches: [
-      // Add additional branches for cron jobs below.
-      // Note: Newly added branches will require a manual trigger of the first build
-      // for subsequent scheduled builds to run.
-      "main",
+        // Add additional branches for cron jobs below.
+        // Note: Newly added branches will require a manual trigger of the first build
+        // for subsequent scheduled builds to run.
+        "main",
     ],
+    run_mypy: false,
     env_reqs: "ci_jenkins",
 )

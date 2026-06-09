@@ -17,7 +17,7 @@ Treatment
 
 The ``vivarium.public_health`` treatment package provides
 :ref:`components <components_concept>` for modeling health interventions and
-their effects within a simulation. While :mod:`vivarium` supplies the value
+their effects within a simulation. While :mod:`vivarium.engine` supplies the value
 :ref:`pipeline <values_concept>` framework for combining modifiers,
 the treatment package uses those pipelines to model specific styles of
 intervention.

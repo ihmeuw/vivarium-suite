@@ -219,3 +219,6 @@ __marimo__/
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# FuzzyChecker diagnostics csv
+**/tests/proportion_test_diagnostics.csv

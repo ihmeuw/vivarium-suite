@@ -15,7 +15,7 @@ from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
-import risk_distributions as rd
+import vivarium.risk_distributions as rd
 from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder

@@ -14,10 +14,10 @@ component is the foundation of the public health population package. It is
 responsible for two distinct jobs: *initializing* new simulants with
 demographically consistent attributes, and *aging* them forward on each time
 step. A companion component, :class:`~vivarium.public_health.population.base_population.AgeOutSimulants`,
-handles removing simulants that exceed a configured age threshold (via :mod:`vivarium`'s
+handles removing simulants that exceed a configured age threshold (via :mod:`vivarium.engine`'s
 untracking mechanism).
 
-Because :mod:`vivarium` itself is agnostic to the meaning of the columns in the
+Because :mod:`vivarium.engine` itself is agnostic to the meaning of the columns in the
 :ref:`state table <population_concept>`, it is this component that gives
 simulants their demographic identity.
 

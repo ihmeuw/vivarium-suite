@@ -14,8 +14,6 @@ Vivarium Public Health
 
 This library contains several components for modelling diseases and their interventions.
 
-**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
-
 You can install ``vivarium-public-health`` from PyPI with pip:
 
 .. code-block:: bash
@@ -30,6 +28,8 @@ or build it from source by cloning the monorepo and installing this package:
    cd vivarium-suite
    pip install libs/public-health
 
+For broader monorepo development setup, see the monorepo README at
+https://github.com/ihmeuw/vivarium-suite.
 
 `Check out the docs! <https://vivarium-public-health.readthedocs.io/en/latest/>`_
 ---------------------------------------------------------------------------------

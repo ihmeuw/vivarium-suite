@@ -15,7 +15,7 @@ dependencies = [
     "vivarium-build-utils>=3.0.2,<4.0.0",
     "vivarium-engine>=5.1.1",
     "vivarium-config-tree>=5.0.0",
-    "risk_distributions>=2.0.11",
+    "vivarium-risk-distributions",
 ]
 
 [project.optional-dependencies]
@@ -28,9 +28,10 @@ test = [
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
+cluster = []
 dev = ["vivarium-public-health[test,docs,interactive,lint]"]
 ci_github = ["vivarium-public-health[test,docs,lint]"]
-ci_jenkins = ["vivarium-public-health[ci_github]"]
+ci_jenkins = ["vivarium-public-health[ci_github,cluster]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -64,13 +65,19 @@ profile = "black"
 line_length = 94
 multi_line_output = 3
 
+[tool.coverage.run]
+source = ["vivarium.public_health"]
+
+[tool.coverage.report]
+show_missing = true
+
 [tool.mypy]
 # WARNING: settings here that aren't mypy_path / explicit_package_bases must be
 # kept in sync manually with the monorepo-root [tool.mypy]. The local
 # `make mypy` passes --config-file pyproject.toml (this file), so mypy doesn't
 # read the root config. If you change the root, change this too.
 #
-# mypy_path lets absolute self-imports (e.g. "from vivarium.public_health import X")
+# mypy_path lets absolute self-imports (e.g. "from vivarium.config_tree import X")
 # resolve to the source tree rather than the PEP 660 editable install (which
 # hides files like py.typed behind a finder, making mypy think the package is
 # untyped).
@@ -80,9 +87,3 @@ implicit_reexport = true
 exclude = ["build"]
 mypy_path = "src"
 explicit_package_bases = true
-
-[tool.coverage.run]
-source = ["vivarium.public_health"]
-
-[tool.coverage.report]
-show_missing = true

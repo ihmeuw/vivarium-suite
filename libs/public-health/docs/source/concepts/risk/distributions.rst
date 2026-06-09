@@ -86,12 +86,12 @@ are reproducible and consistent with the
 
 :class:`~vivarium.public_health.causal_factor.distributions.ContinuousDistribution`
 supports ``normal`` and ``lognormal`` distribution types from the
-``risk_distributions`` package. During setup, the component:
+``vivarium.risk_distributions`` package. During setup, the component:
 
 1. Loads mean exposure and standard deviation data from the artifact.
 2. Computes the distribution's native parameters (e.g., *μ* and *σ* for
-   log-normal) via ``risk_distributions.Normal.get_parameters`` or
-   ``risk_distributions.LogNormal.get_parameters``.
+   log-normal) via ``vivarium.risk_distributions.Normal.get_parameters`` or
+   ``vivarium.risk_distributions.LogNormal.get_parameters``.
 3. Builds a lookup table of those parameters, keyed by demographic bins.
 4. When determining exposure, looks up the parameters for each simulant and
    passes the simulant's :term:`propensity <Propensity>` through the
@@ -109,15 +109,15 @@ to avoid numerical issues at the distribution tails.
 :class:`~vivarium.public_health.causal_factor.distributions.EnsembleDistribution`
 models exposure using a weighted combination of several parametric
 distributions (for example, normal, log-normal, gamma, and others supported
-by the ``risk_distributions`` package). The component:
+by the ``vivarium.risk_distributions`` package). The component:
 
 1. Loads distribution weights and exposure data from the artifact.
 2. Computes per-distribution parameters via
-   ``risk_distributions.EnsembleDistribution.get_parameters``.
+   ``vivarium.risk_distributions.EnsembleDistribution.get_parameters``.
 3. At initialization, draws a second propensity per simulant
    (``ensemble_propensity``) that selects which child distribution to use.
 4. When determining exposure, the
-   ``risk_distributions.EnsembleDistribution.ppf`` method uses both the
+   ``vivarium.risk_distributions.EnsembleDistribution.ppf`` method uses both the
    simulant's :term:`propensity <Propensity>` (quantile) and ensemble
    propensity (distribution selection) to produce an exposure value.
 
