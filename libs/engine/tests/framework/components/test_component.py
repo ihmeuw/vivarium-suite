@@ -316,9 +316,9 @@ def test_component_lookup_table_configuration(hdf_file_path: Path) -> None:
     "configuration, match, error_type",
     [
         (
-            {"favorite_color": "key.not.in.artifact"},
+            {"favorite_color": "nonexistent.artifact_key"},
             "Error building lookup table 'favorite_color'. "
-            "Failed to find key 'key.not.in.artifact' in artifact.",
+            "Failed to load key 'nonexistent.artifact_key' from artifact.",
             ConfigurationError,
         ),
         (
@@ -357,6 +357,29 @@ def test_failing_component_lookup_table_configurations(
     sim.configuration.update(override_config)
     with pytest.raises(error_type, match=match):
         sim.setup()
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "blue",
+        "a.b.c.d",
+        "no_dots_here",
+        ".leading.dot",
+        "trailing.dot.",
+    ],
+)
+def test_literal_string_data_source(literal: str, hdf_file_path: Path) -> None:
+    """Test that non-entity-key strings are treated as literal values."""
+    component = SingleLookupCreator()
+    sim = InteractiveContext(components=[component], setup=False)
+    override_config = {
+        "input_data": {"artifact_path": hdf_file_path},
+        component.name: {"data_sources": {"favorite_color": literal}},
+    }
+    sim.configuration.update(override_config)
+    sim.setup()
+    assert component.favorite_color_table.data == literal
 
 
 def test_value_column_order_is_maintained() -> None:

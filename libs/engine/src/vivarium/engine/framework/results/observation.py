@@ -303,6 +303,9 @@ class StratifiedObservation(Observation):
         -----
         If no stratifications are requested, then we are aggregating over the
         entire population and a single-row index named 'stratification' is created.
+
+        Each stratification index level is an ordered categorical in the
+        stratification's registered category order.
         """
 
         # Set up the complete index of all used stratifications
@@ -317,15 +320,22 @@ class StratifiedObservation(Observation):
         }
         if stratification_values:
             stratification_names = list(stratification_values.keys())
+            # Cast each stratification column to an ordered categorical (registered order).
             df = pd.DataFrame(
                 list(itertools.product(*stratification_values.values())),
                 columns=stratification_names,
-            ).astype(CategoricalDtype())
+            ).astype(
+                {
+                    name: CategoricalDtype(categories=categories, ordered=True)
+                    for name, categories in stratification_values.items()
+                }
+            )
         else:
-            # We are aggregating the entire population so create a single-row index
+            # We are aggregating the entire population so create a single-row index.
+            aggregate_label = "all"
             stratification_names = ["stratification"]
-            df = pd.DataFrame(["all"], columns=stratification_names).astype(
-                CategoricalDtype()
+            df = pd.DataFrame([aggregate_label], columns=stratification_names).astype(
+                CategoricalDtype(categories=[aggregate_label], ordered=True)
             )
 
         # Initialize a zeros dataframe

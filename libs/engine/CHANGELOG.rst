@@ -1,3 +1,18 @@
+**5.1.3 - 06/09/26**
+
+- Unpin mypy and fix associated failures, including those for new networkx type stubs
+
+**5.1.2 - 06/08/26**
+
+- Write stratified observation results' stratification columns as ordered
+  categoricals in their registered category order.
+
+**5.1.1 - 06/08/26**
+
+- Treat string data sources matching the entity key format as artifact keys and
+  all other strings as literal values instead of unconditionally assuming artifact
+  keys.
+
 **5.1.0 - 06/04/26**
 
 - Standardize CLI logging verbosity on a ``-v`` count and a single canonical

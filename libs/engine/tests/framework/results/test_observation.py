@@ -7,7 +7,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tests.framework.results.helpers import BASE_POPULATION, FAMILIARS, HOUSE_CATEGORIES
+from tests.framework.results.helpers import (
+    BASE_POPULATION,
+    FAMILIARS,
+    HOUSE_CATEGORIES,
+    POWER_LEVEL_GROUP_LABELS,
+    STUDENT_HOUSES,
+)
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
 from vivarium.engine.framework.results.interface import PopulationFilter
@@ -18,6 +24,7 @@ from vivarium.engine.framework.results.observation import (
     StratifiedObservation,
     UnstratifiedObservation,
 )
+from vivarium.engine.framework.results.stratification import Stratification
 
 
 @pytest.fixture
@@ -284,3 +291,72 @@ def test_concatenating_observation_results_updater(
         existing_results, new_observations
     )
     assert updated_results.equals(expected_results)
+
+
+class TestCreateExpandedDfOrderedCategoricals:
+    """create_expanded_df casts the stratification index to ordered categoricals in the
+    registered category order."""
+
+    @staticmethod
+    def _make_stratification(name: str, categories: list[str]) -> Stratification:
+        return Stratification(
+            name=name,
+            requires_attributes=[name],
+            categories=categories,
+            excluded_categories=[],
+            mapper=None,
+            is_vectorized=True,
+        )
+
+    def _observation(
+        self, stratifications: tuple[Stratification, ...]
+    ) -> StratifiedObservation:
+        observation = StratifiedObservation(
+            name="some-observation",
+            population_filter=PopulationFilter(),
+            when="collect_metrics",
+            requires_attributes=[],
+            results_updater=lambda existing, _: existing,
+            results_formatter=lambda _, __: pd.DataFrame(),
+            aggregator_sources=None,
+            aggregator=len,
+        )
+        observation.stratifications = stratifications
+        return observation
+
+    def test_index_levels_use_registered_order(self) -> None:
+        """Every index level is an ordered categorical in its registered order."""
+        student_house_order = list(STUDENT_HOUSES)
+        power_level_group_order = list(POWER_LEVEL_GROUP_LABELS)
+        observation = self._observation(
+            (
+                self._make_stratification("student_house", student_house_order),
+                self._make_stratification("power_level_group", power_level_group_order),
+            )
+        )
+
+        expanded = observation.create_expanded_df()
+
+        assert list(expanded.index.names) == ["student_house", "power_level_group"]
+        house_dtype = expanded.index.get_level_values("student_house").dtype
+        power_dtype = expanded.index.get_level_values("power_level_group").dtype
+        assert isinstance(house_dtype, pd.CategoricalDtype)
+        assert isinstance(power_dtype, pd.CategoricalDtype)
+        assert house_dtype.ordered is True
+        assert list(house_dtype.categories) == student_house_order
+        assert power_dtype.ordered is True
+        assert list(power_dtype.categories) == power_level_group_order
+
+    def test_no_stratifications_is_single_ordered_all(self) -> None:
+        """With no stratifications, the single-row 'stratification' index is an ordered
+        categorical whose sole category is 'all'."""
+        observation = self._observation(())
+
+        expanded = observation.create_expanded_df()
+
+        assert list(expanded.index) == ["all"]
+        assert expanded.index.name == "stratification"
+        dtype = expanded.index.dtype
+        assert isinstance(dtype, pd.CategoricalDtype)
+        assert dtype.ordered is True
+        assert list(dtype.categories) == ["all"]

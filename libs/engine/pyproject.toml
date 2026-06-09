@@ -32,7 +32,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-artifact",
+    "vivarium-artifact>=1.0.2",
     "vivarium-config-tree",
     "vivarium-dependencies[numpy_lt_2,pandas,pyyaml,scipy,click,tables,loguru,pyarrow,networkx]",
     "vivarium-build-utils>=3.0.2,<4.0.0",
@@ -51,10 +51,6 @@ docs = [
 ]
 lint = [
     "vivarium-dependencies[lint]",
-    # FIXME [MIC-6218]: mypy 1.17 introduced a regression that produces false
-    # positives on our Component / population-management code paths. Pin
-    # until that's fixed upstream or worked around locally.
-    "mypy<1.17.0",
 ]
 dev = ["vivarium-engine[docs,interactive,test,lint]"]
 cluster = []

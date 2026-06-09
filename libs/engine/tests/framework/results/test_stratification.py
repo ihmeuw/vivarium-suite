@@ -54,7 +54,7 @@ def test_stratification(
     )
     output = my_stratification.stratify(STUDENT_TABLE)
     assert isinstance(output, pd.Series)
-    assert output.eq(STUDENT_HOUSES).all()
+    assert (output == STUDENT_HOUSES).all()
 
 
 @pytest.mark.parametrize(

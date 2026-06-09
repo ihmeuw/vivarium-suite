@@ -39,6 +39,11 @@ While the sub-agents run, perform your own functional-correctness review:
 - Are edge cases handled (zero values, empty inputs, single-element collections)?
 - Are type annotations consistent with actual runtime behavior?
 - Are there silent data transformations (rounding, coercion) that could lose precision?
+- **If the PR is in a model repo** (a concept-model implementation rather than
+  the framework), check the changed code against the relevant research
+  documentation using  the `vivarium-research` skill  and flag any place the implementation 
+  diverges from the documented modelling strategy. If you can't determine the 
+   relevant concept model, say so rather than guessing.
 
 ## Step 4 — Synthesize
 

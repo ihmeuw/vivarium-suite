@@ -22,6 +22,8 @@ It includes:
   - Testing coverage and quality
   - Documentation
 
+  The orchestrator also runs its own functional-correctness pass. 
+
 Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
 
 **Regression Debugger**
