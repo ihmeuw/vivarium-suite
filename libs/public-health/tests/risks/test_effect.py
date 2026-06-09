@@ -9,19 +9,19 @@ from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population import SimulantData
 
-from vivarium_public_health.disease import SI
-from vivarium_public_health.population import BasePopulation
-from vivarium_public_health.risks import RiskEffect
-from vivarium_public_health.risks.base_risk import Risk
+from vivarium.public_health.disease import SI
+from vivarium.public_health.population import BasePopulation
+from vivarium.public_health.risks import RiskEffect
+from vivarium.public_health.risks.base_risk import Risk
 
 #
 # from vivarium.engine.framework.utilities import from_yearly
 # from vivarium.engine.testing_utilities import build_table, BasePopulation
 # from vivarium.interface.interactive import initialize_simulation
 #
-# from vivarium_public_health.disease import RateTransition
-from vivarium_public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
-from vivarium_public_health.utilities import EntityString
+# from vivarium.public_health.disease import RateTransition
+from vivarium.public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
+from vivarium.public_health.utilities import EntityString
 
 #
 #

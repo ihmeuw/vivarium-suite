@@ -22,16 +22,16 @@ Note that fertility components are optional — a model that does not need birth
    * - Component
      - Stochasticity
      - Typical Use
-   * - :class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityDeterministic`
+   * - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityDeterministic`
      - Deterministic
      - Adds a fixed, known number of new simulants per year. Useful for
        controlled experiments or simple projections.
-   * - :class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
+   * - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
      - Stochastic (Poisson)
      - Uses population-level live-birth covariate data and the scaling
        relationship between the modeled and true population to determine
        births each time step.
-   * - :class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`
+   * - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`
      - Stochastic (per-simulant hazard)
      - Applies age-specific fertility hazards to individual living females,
        creates newborn simulants with parent links, and enforces a gestational
@@ -40,7 +40,7 @@ Note that fertility components are optional — a model that does not need birth
 Deterministic Fertility Model
 -----------------------------
 
-:class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityDeterministic`
+:class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityDeterministic`
 is the simplest fertility model. It adds a fixed number of new simulants per
 year, controlled by the ``fertility.number_of_new_simulants_each_year``
 configuration key. On each time step the component scales that
@@ -52,7 +52,7 @@ All newborns enter the simulation at age zero.
 :term:`Crude Birth Rate` Model
 ------------------------------
 
-:class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
+:class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
 computes the expected number of births from live-birth covariate data and the
 ratio of the simulation's ``population.population_size`` to the true population
 count. On each time step it draws from a Poisson distribution
@@ -66,7 +66,7 @@ or allowed to vary.
 :term:`Age-Specific Fertility Rate` Model
 -----------------------------------------
 
-:class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`
+:class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`
 operates at the individual simulant level. It registers a :term:`fertility rate <Age-Specific Fertility Rate>`
 :ref:`attribute pipeline <values_concept>` and, on each time step, evaluates whether each
 eligible female simulant gives birth based on a hazard draw. Eligibility
@@ -81,4 +81,4 @@ See Also
 
 - :ref:`base_population_concept`
 - :ref:`mortality_concept`
-- :mod:`vivarium_public_health.population.add_new_birth_cohorts`
+- :mod:`vivarium.public_health.population.add_new_birth_cohorts`

@@ -16,9 +16,9 @@ reference exposure level. A relative risk of 1 means no additional risk; values
 greater than 1 indicate elevated risk; values between 0 and 1 indicate
 protective effects.
 
-The :class:`~vivarium_public_health.causal_factor.effect.CausalFactorEffect`
+The :class:`~vivarium.public_health.causal_factor.effect.CausalFactorEffect`
 base class (and its subclass
-:class:`~vivarium_public_health.risks.effect.RiskEffect`) registers a
+:class:`~vivarium.public_health.risks.effect.RiskEffect`) registers a
 ``{risk_name}_on_{target_name}.relative_risk``
 :ref:`pipeline <values_concept>` whose source computes RR values for each
 simulant. This pipeline is then registered as a modifier on the target rate
@@ -27,7 +27,7 @@ multiplied by each simulant's relative risk every time the rate is evaluated.
 Relative risk data is loaded from the simulation artifact by default, but can
 be overridden with a scalar value or a ``scipy.stats`` distribution name in the
 configuration (see the
-:class:`~vivarium_public_health.causal_factor.effect.CausalFactorEffect` class
+:class:`~vivarium.public_health.causal_factor.effect.CausalFactorEffect` class
 documentation for details).
 
 How relative risk is computed depends on whether the risk factor's exposure is
@@ -52,7 +52,7 @@ Log-Linear Model (Continuous Exposure)
 --------------------------------------
 
 For continuous risk factors, the default
-:class:`~vivarium_public_health.risks.effect.RiskEffect` component uses a
+:class:`~vivarium.public_health.risks.effect.RiskEffect` component uses a
 :term:`log-linear model <Log-Linear Model>`. In this model, the logarithm of
 the relative risk is proportional to the difference between the simulant's
 exposure and the :term:`TMREL`:
@@ -82,7 +82,7 @@ Non-Log-Linear Model (Piecewise Interpolation)
 
 When the dose–response relationship between exposure and relative risk is not
 well described by a log-linear curve, the
-:class:`~vivarium_public_health.risks.effect.NonLogLinearRiskEffect` component
+:class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect` component
 can be used instead. This component:
 
 1. Loads :term:`TMRED` data from the artifact and computes the :term:`TMREL`
@@ -123,5 +123,5 @@ See Also
 
 - :ref:`calibration_constant_concept`
 - :ref:`vph_risk_exposure_concept`
-- :mod:`vivarium_public_health.causal_factor.effect`
-- :mod:`vivarium_public_health.risks.effect`
+- :mod:`vivarium.public_health.causal_factor.effect`
+- :mod:`vivarium.public_health.risks.effect`

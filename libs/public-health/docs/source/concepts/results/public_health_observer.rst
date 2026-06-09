@@ -9,7 +9,7 @@ Public Health Observer
    :local:
    :backlinks: none
 
-The :class:`~vivarium_public_health.results.observer.PublicHealthObserver` is a
+The :class:`~vivarium.public_health.results.observer.PublicHealthObserver` is a
 convenience base class for building :ref:`observers <results_concept>` in
 public health simulations. It extends vivarium's
 :class:`~vivarium.engine.framework.results.observer.Observer` with two capabilities
@@ -31,7 +31,7 @@ observation: one that sums new results into a running total each time step
 (e.g. counting deaths or accumulating person-time). Rather than calling the
 :ref:`results interface <results_concept>` directly (via the builder),
 ``PublicHealthObserver`` exposes
-:meth:`~vivarium_public_health.results.observer.PublicHealthObserver.register_adding_observation`,
+:meth:`~vivarium.public_health.results.observer.PublicHealthObserver.register_adding_observation`,
 which wraps that call with sensible defaults and automatically applies the
 standardized formatter.
 
@@ -74,19 +74,19 @@ columns:
 ``PublicHealthObserver`` produces these columns through a chain of overridable
 methods that subclasses customize:
 
-- :meth:`~vivarium_public_health.results.observer.PublicHealthObserver.format` —
+- :meth:`~vivarium.public_health.results.observer.PublicHealthObserver.format` —
   general-purpose reshaping of the raw results (default: ``reset_index``).
-- :meth:`~vivarium_public_health.results.observer.PublicHealthObserver.get_measure_column` —
+- :meth:`~vivarium.public_health.results.observer.PublicHealthObserver.get_measure_column` —
   returns the ``measure`` values (default: the observation name).
-- :meth:`~vivarium_public_health.results.observer.PublicHealthObserver.get_entity_type_column` —
+- :meth:`~vivarium.public_health.results.observer.PublicHealthObserver.get_entity_type_column` —
   returns the ``entity_type`` values (default: empty string).
-- :meth:`~vivarium_public_health.results.observer.PublicHealthObserver.get_entity_column` —
+- :meth:`~vivarium.public_health.results.observer.PublicHealthObserver.get_entity_column` —
   returns the ``entity`` values (default: empty string).
-- :meth:`~vivarium_public_health.results.observer.PublicHealthObserver.get_sub_entity_column` —
+- :meth:`~vivarium.public_health.results.observer.PublicHealthObserver.get_sub_entity_column` —
   returns the ``sub_entity`` values (default: empty string).
 
 The top-level
-:meth:`~vivarium_public_health.results.observer.PublicHealthObserver.format_results`
+:meth:`~vivarium.public_health.results.observer.PublicHealthObserver.format_results`
 method calls each of these in sequence and reorders the final columns so that
 metadata columns appear first, stratification columns in the middle, and the
 ``value`` column last.
@@ -108,9 +108,9 @@ To create a new public health observer:
 Concrete Observers
 ------------------
 
-The ``vivarium_public_health`` results package ships several concrete
+The ``vivarium.public_health`` results package ships several concrete
 observers that cover the most common public health measures. Each inherits
-from :class:`~vivarium_public_health.results.observer.PublicHealthObserver`
+from :class:`~vivarium.public_health.results.observer.PublicHealthObserver`
 and registers one or more
 :class:`adding observations <vivarium.engine.framework.results.observation.AddingObservation>`
 during setup.
@@ -126,12 +126,12 @@ accepts an ``include`` list of additional stratification names and an
 Disability Observer
 +++++++++++++++++++
 
-:class:`~vivarium_public_health.results.disability.DisabilityObserver` counts
+:class:`~vivarium.public_health.results.disability.DisabilityObserver` counts
 :term:`years lived with disability <Years Lived with Disability>` (YLDs).
 
 It discovers all components that contribute disability weights — by default
-:class:`~vivarium_public_health.disease.state.DiseaseState` and
-:class:`~vivarium_public_health.disease.special_disease.RiskAttributableDisease`
+:class:`~vivarium.public_health.disease.state.DiseaseState` and
+:class:`~vivarium.public_health.disease.special_disease.RiskAttributableDisease`
 instances — and adds an ``all_causes`` aggregate on top.
 
 **Observation registered:** ``ylds``
@@ -155,7 +155,7 @@ The observer's configuration key is ``disability``.
 Disease Observer
 ++++++++++++++++
 
-:class:`~vivarium_public_health.results.disease.DiseaseObserver` tracks
+:class:`~vivarium.public_health.results.disease.DiseaseObserver` tracks
 disease-state person time and transition counts for a single disease model.
 
 Each instance is constructed with the name of the disease to observe
@@ -197,7 +197,7 @@ The observer's configuration key matches the disease name (e.g.
 Mortality Observer
 ++++++++++++++++++
 
-:class:`~vivarium_public_health.results.mortality.MortalityObserver` counts
+:class:`~vivarium.public_health.results.mortality.MortalityObserver` counts
 cause-specific deaths and :term:`years of life lost <Years of Life Lost>`
 (YLLs).
 
@@ -237,10 +237,10 @@ The observer's configuration key is ``mortality``.
 Categorical Risk Observer
 +++++++++++++++++++++++++
 
-:class:`~vivarium_public_health.results.causal_factor.CategoricalRiskObserver`
+:class:`~vivarium.public_health.results.causal_factor.CategoricalRiskObserver`
 tracks person-time spent in each exposure category of a categorical risk
 factor. It is a convenience subclass of
-:class:`~vivarium_public_health.results.causal_factor.CategoricalCausalFactorObserver`,
+:class:`~vivarium.public_health.results.causal_factor.CategoricalCausalFactorObserver`,
 which provides the core logic.
 
 Each instance is constructed with the name of the risk factor
@@ -264,8 +264,8 @@ See Also
 
 - :ref:`results_concept` — vivarium's results management system
 - :ref:`results_stratifier_concept` — common public health stratifications
-- :mod:`vivarium_public_health.results.observer`
-- :mod:`vivarium_public_health.results.disability`
-- :mod:`vivarium_public_health.results.disease`
-- :mod:`vivarium_public_health.results.mortality`
-- :mod:`vivarium_public_health.results.causal_factor`
+- :mod:`vivarium.public_health.results.observer`
+- :mod:`vivarium.public_health.results.disability`
+- :mod:`vivarium.public_health.results.disease`
+- :mod:`vivarium.public_health.results.mortality`
+- :mod:`vivarium.public_health.results.causal_factor`

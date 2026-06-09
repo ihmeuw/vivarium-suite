@@ -15,7 +15,7 @@ Results
    public_health_observer
    stratification
 
-The ``vivarium_public_health`` results package provides
+The ``vivarium.public_health`` results package provides
 :term:`components <Component>` for recording public health
 measures during a simulation. It builds on vivarium's
 :ref:`results management system <results_concept>` — which supplies the
@@ -31,7 +31,7 @@ stratification component.
 The package is organized around two cooperating concerns:
 
 1. **Observers** — a convenience base class
-   (:class:`~vivarium_public_health.results.observer.PublicHealthObserver`)
+   (:class:`~vivarium.public_health.results.observer.PublicHealthObserver`)
    that wraps the framework's
    :class:`~vivarium.engine.framework.results.observer.Observer` with a simplified
    registration method and a standardized results-formatting pipeline, plus a

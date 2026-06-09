@@ -10,7 +10,7 @@ from vivarium.engine.framework.state_machine import Transient, Transition
 
 from tests.mock_artifact import MockArtifact
 from tests.mock_artifact import MockArtifactManager as MockArtifactManager_
-from vivarium_public_health.disease import (
+from vivarium.public_health.disease import (
     BaseDiseaseState,
     DiseaseModel,
     DiseaseState,
@@ -20,7 +20,7 @@ from vivarium_public_health.disease import (
     SusceptibleState,
     TransientDiseaseState,
 )
-from vivarium_public_health.plugins import CausesConfigurationParser
+from vivarium.public_health.plugins import CausesConfigurationParser
 
 SIR_MODEL = "simple_sir_model"
 SIR_SUSCEPTIBLE_NAME = "susceptible_to_simple_sir_model"
@@ -364,7 +364,7 @@ def causes_config_parser_plugins() -> ConfigTree:
                 "builder_interface": "vivarium.engine.framework.artifact.ArtifactInterface",
             },
             "component_configuration_parser": {
-                "controller": "vivarium_public_health.plugins.CausesConfigurationParser",
+                "controller": "vivarium.public_health.plugins.CausesConfigurationParser",
             },
         }
     }
@@ -373,7 +373,7 @@ def causes_config_parser_plugins() -> ConfigTree:
 
 @pytest.fixture
 def files_mock(tmp_path, mocker):
-    files_mock = mocker.patch("vivarium_public_health.plugins.parser.files")
+    files_mock = mocker.patch("vivarium.public_health.plugins.parser.files")
 
     # Create a mock that returns a path-like object with joinpath method
     def mock_files(package):
@@ -387,7 +387,7 @@ def files_mock(tmp_path, mocker):
 
 ALL_COMPONENTS_CONFIG_DICT = {
     "causes": {**SIR_MODEL_CONFIG, **COMPLEX_MODEL_CONFIG},
-    "vivarium_public_health": {"population": "BasePopulation()"},
+    "vivarium.public_health": {"population": "BasePopulation()"},
 }
 
 
@@ -434,7 +434,7 @@ def test_parsing_config_single_external_causes_config_file(tmp_path, files_mock)
     component_config = create_simulation_config_tree(
         {
             "external_configuration": {"some_repo": ["causes_config.yaml"]},
-            "vivarium_public_health": {"population": "BasePopulation()"},
+            "vivarium.public_health": {"population": "BasePopulation()"},
         }
     )
     _test_parsing_of_config_file(component_config)
@@ -450,7 +450,7 @@ def test_parsing_config_multiple_external_causes_config_file(tmp_path, files_moc
     component_config = create_simulation_config_tree(
         {
             "external_configuration": {"some_repo": ["sir.yaml", "complex.yaml"]},
-            "vivarium_public_health": {"population": "BasePopulation()"},
+            "vivarium.public_health": {"population": "BasePopulation()"},
         }
     )
     _test_parsing_of_config_file(component_config)
@@ -464,7 +464,7 @@ def test_parsing_config_external_and_local_causes_config_file(tmp_path, files_mo
         {
             "external_configuration": {"some_repo": ["sir.yaml"]},
             "causes": COMPLEX_MODEL_CONFIG,
-            "vivarium_public_health": {"population": "BasePopulation()"},
+            "vivarium.public_health": {"population": "BasePopulation()"},
         }
     )
 
@@ -473,7 +473,7 @@ def test_parsing_config_external_and_local_causes_config_file(tmp_path, files_mo
 
 def test_parsing_no_causes_config_file(tmp_path, files_mock):
     component_config = create_simulation_config_tree(
-        {"vivarium_public_health": {"population": "BasePopulation()"}}
+        {"vivarium.public_health": {"population": "BasePopulation()"}}
     )
     _test_parsing_of_config_file(
         component_config, expected_component_names=("base_population",)
@@ -493,7 +493,7 @@ def test_parsing_invalid_external_configuration(config_dict, expected_error_mess
     component_config = create_simulation_config_tree(
         {
             "external_configuration": config_dict,
-            "vivarium_public_health": {"population": "BasePopulation()"},
+            "vivarium.public_health": {"population": "BasePopulation()"},
         }
     )
     with pytest.raises(ParsingError, match=expected_error_message):

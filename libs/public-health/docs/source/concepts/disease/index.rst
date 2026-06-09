@@ -15,7 +15,7 @@ Disease
    model
    risk_attributable_disease
 
-The ``vivarium_public_health`` disease package provides
+The ``vivarium.public_health`` disease package provides
 :term:`components <Component>` for modeling disease progression in a
 population of simulants. It builds on vivarium's
 :class:`~vivarium.engine.framework.state_machine.Machine` framework to represent

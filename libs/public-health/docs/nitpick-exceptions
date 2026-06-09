@@ -9,10 +9,10 @@ py:class pandas._libs.interval.Interval
 py:class pandas.core.frame.DataFrame
 py:class pandas.core.series.Series
 py:class pandas.core.generic.PandasObject
-# layered-config-tree
-py:class layered_config_tree.main.LayeredConfigTree
+# vivarium-config-tree
 py:exc ConfigurationError
-py:class vivarium.framework.values.pipeline.Pipeline
+py:class ConfigTree
+py:class vivarium.engine.framework.values.pipeline.Pipeline
 
 # TODO: Need to revisit this. Nitpicking here to avoid failing builds on 3.9 in LBWSGRisk
 py:class PopulationView
@@ -20,23 +20,22 @@ py:class Logger
 py:class pd.DataFrame
 py:class pd.Index
 py:class pd.Series
-py:class LayeredConfigTree
 # TODO: Need to revisit this. Nitpicking here to avoid failing everywhere
 py:class Builder
 py:class SimulantData
 py:class Event
-py:class vivarium.framework.event.manager.Event
+py:class vivarium.engine.framework.event.manager.Event
 py:class LookupTable
-py:mod vivarium_public_health._example_data
-py:class vivarium_public_health._example_data.ConstantRatePipeline
+py:mod vivarium.public_health._example_data
+py:class vivarium.public_health._example_data.ConstantRatePipeline
 
 # results module - classes referenced in tutorials
-py:class vivarium.framework.results.Observer
-py:class vivarium_public_health.results.DiseaseObserver
-py:class vivarium_public_health.results.MortalityObserver
-py:class vivarium_public_health.results.DisabilityObserver
-py:class vivarium_public_health.results.CategoricalRiskObserver
-py:class vivarium_public_health.results.ResultsStratifier
+py:class vivarium.engine.framework.results.Observer
+py:class vivarium.public_health.results.DiseaseObserver
+py:class vivarium.public_health.results.MortalityObserver
+py:class vivarium.public_health.results.DisabilityObserver
+py:class vivarium.public_health.results.CategoricalRiskObserver
+py:class vivarium.public_health.results.ResultsStratifier
 
 # vivarium types and classes used in type hints
 py:class DataInput

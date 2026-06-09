@@ -9,11 +9,11 @@ Base Population
    :local:
    :backlinks: none
 
-The :class:`~vivarium_public_health.population.base_population.BasePopulation`
+The :class:`~vivarium.public_health.population.base_population.BasePopulation`
 component is the foundation of the public health population package. It is
 responsible for two distinct jobs: *initializing* new simulants with
 demographically consistent attributes, and *aging* them forward on each time
-step. A companion component, :class:`~vivarium_public_health.population.base_population.AgeOutSimulants`,
+step. A companion component, :class:`~vivarium.public_health.population.base_population.AgeOutSimulants`,
 handles removing simulants that exceed a configured age threshold (via :mod:`vivarium`'s
 untracking mechanism).
 
@@ -37,7 +37,7 @@ initializer assigns each new simulant the following attributes:
 
 The ``entrance_time`` marks when the simulant enters the simulation. The
 ``exit_time`` is initially set to :data:`pandas.NaT` and is later updated by
-other components (e.g. :class:`~vivarium_public_health.population.mortality.Mortality`) 
+other components (e.g. :class:`~vivarium.public_health.population.mortality.Mortality`) 
 when the simulant leaves the simulation.
 
 Demographic Sampling
@@ -46,7 +46,7 @@ Demographic Sampling
 The initializer loads population structure data from the configured data source
 (by default from the ``population.structure`` artifact key) and computes
 conditional sampling distributions with
-:func:`~vivarium_public_health.population.data_transformations.assign_demographic_proportions`.
+:func:`~vivarium.public_health.population.data_transformations.assign_demographic_proportions`.
 Three probability views are produced:
 
 .. list-table::
@@ -85,7 +85,7 @@ simulation branches.
 Scaled Population
 +++++++++++++++++
 
-:class:`~vivarium_public_health.population.base_population.ScaledPopulation`
+:class:`~vivarium.public_health.population.base_population.ScaledPopulation`
 extends the base initialization flow by multiplying the population structure by
 an external scaling factor before sampling. This is useful when the number of
 simulants in the model represents a known fraction of the true population size
@@ -103,7 +103,7 @@ within a single time step.
 Aging Out and Untracking
 ------------------------
 
-:class:`~vivarium_public_health.population.base_population.AgeOutSimulants`
+:class:`~vivarium.public_health.population.base_population.AgeOutSimulants`
 runs during ``time_step__cleanup``. When ``population.untracking_age`` is
 configured, any simulant whose age meets or exceeds that threshold is marked
 and subsequently untracked by the framework. This provides a clean way to bound 
@@ -114,5 +114,5 @@ See Also
 
 - :ref:`mortality_concept`
 - :ref:`fertility_concept`
-- :mod:`vivarium_public_health.population.base_population`
-- :mod:`vivarium_public_health.population.data_transformations`
+- :mod:`vivarium.public_health.population.base_population`
+- :mod:`vivarium.public_health.population.data_transformations`

@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.risks.base_risk
+.. automodule:: vivarium.public_health.risks.base_risk

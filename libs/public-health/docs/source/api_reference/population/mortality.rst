@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.population.mortality
+.. automodule:: vivarium.public_health.population.mortality

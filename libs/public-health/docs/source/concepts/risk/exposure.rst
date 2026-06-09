@@ -9,8 +9,8 @@ Exposure
    :local:
    :backlinks: none
 
-The :class:`~vivarium_public_health.risks.base_risk.Risk` component (and its
-parent class :class:`~vivarium_public_health.causal_factor.exposure.CausalFactor`)
+The :class:`~vivarium.public_health.risks.base_risk.Risk` component (and its
+parent class :class:`~vivarium.public_health.causal_factor.exposure.CausalFactor`)
 is the entry point for modeling risk exposure. It has two responsibilities:
 assigning each :term:`simulant <Simulant>` a stable :term:`propensity <Propensity>`
 and registering an exposure :ref:`pipeline <values_concept>` that converts that
@@ -24,7 +24,7 @@ Propensity
 
 Every simulant carries a separate propensity for each risk factor in the
 model. When new simulants are created, each
-:class:`~vivarium_public_health.causal_factor.exposure.CausalFactor` instance
+:class:`~vivarium.public_health.causal_factor.exposure.CausalFactor` instance
 draws a uniform random value in [0, 1] for every simulant and stores it in a
 ``{risk_name}.propensity`` column on the
 :ref:`state table <population_concept>`. For example, a model with two risk
@@ -41,7 +41,7 @@ branches that share a random seed and are statistically independent across
 risks.
 
 The distribution component
-(:class:`~vivarium_public_health.causal_factor.distributions.CausalFactorDistribution`)
+(:class:`~vivarium.public_health.causal_factor.distributions.CausalFactorDistribution`)
 reads the propensity column from the state table and uses it as the quantile
 input to the distribution's :term:`percent-point function <PPF>`. How that
 conversion works depends on the distribution type:
@@ -79,7 +79,7 @@ Configuration
 Risk exposure data is loaded from the simulation artifact by default, but can
 be overridden with a scalar value or a covariate name in the configuration.
 The distribution type is similarly configurable. See the
-:class:`~vivarium_public_health.risks.base_risk.Risk` class documentation for
+:class:`~vivarium.public_health.risks.base_risk.Risk` class documentation for
 the full set of configuration keys and YAML examples.
 
 .. _exposure_rebinning_concept:
@@ -104,5 +104,5 @@ See Also
 --------
 
 - :ref:`risk_distributions_concept`
-- :mod:`vivarium_public_health.causal_factor.exposure`
-- :mod:`vivarium_public_health.risks.base_risk`
+- :mod:`vivarium.public_health.causal_factor.exposure`
+- :mod:`vivarium.public_health.risks.base_risk`

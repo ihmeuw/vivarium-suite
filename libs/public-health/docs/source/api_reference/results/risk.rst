@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.results.causal_factor
+.. automodule:: vivarium.public_health.results.causal_factor

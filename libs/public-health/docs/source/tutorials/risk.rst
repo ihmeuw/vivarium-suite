@@ -2,7 +2,7 @@
 Risk Exposure
 ==============
 
-:mod:`vivarium_public_health` provides components for modeling how risk factor
+:mod:`vivarium.public_health` provides components for modeling how risk factor
 exposures modify disease outcomes. This tutorial covers **risk exposure** -
 how simulants are assigned exposure values. For how exposure modifies disease
 rates, see the :doc:`risk_effect` tutorial.
@@ -16,20 +16,20 @@ rates, see the :doc:`risk_effect` tutorial.
    import numpy as np
    import pandas as pd
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.risks import Risk, RiskEffect, NonLogLinearRiskEffect
-   from vivarium_public_health.disease import *
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import *
+   from vivarium.public_health.risks import Risk, RiskEffect, NonLogLinearRiskEffect
+   from vivarium.public_health.disease import *
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import *
    base_plugins = BASE_PLUGINS
 
 
 Overview
 --------
 
-A risk model in ``vivarium_public_health`` has two primary components:
+A risk model in ``vivarium.public_health`` has two primary components:
 
 **Exposure** - the risk factor and how simulants are exposed to it.
-:class:`~vivarium_public_health.risks.base_risk.Risk` assigns each
+:class:`~vivarium.public_health.risks.base_risk.Risk` assigns each
 simulant an exposure category (for dichotomous/polytomous risks) or a
 continuous exposure value.
 
@@ -37,11 +37,11 @@ continuous exposure value.
 specific rate modified by the risk, identified by an entity and a measure
 (e.g., ``cause.lung_cancer.incidence_rate``). See the :doc:`risk_effect`
 tutorial for details on
-:class:`~vivarium_public_health.risks.effect.RiskEffect` and
-:class:`~vivarium_public_health.risks.effect.NonLogLinearRiskEffect`.
+:class:`~vivarium.public_health.risks.effect.RiskEffect` and
+:class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect`.
 
 This tutorial focuses on the exposure side: how the
-:class:`~vivarium_public_health.risks.base_risk.Risk` component determines
+:class:`~vivarium.public_health.risks.base_risk.Risk` component determines
 *who* is exposed.
 
 
@@ -54,10 +54,10 @@ To run any example in a standalone script, include all of these at the top:
 .. testcode::
 
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.risks import Risk, RiskEffect
-   from vivarium_public_health.disease import SI, SIS
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import BASE_PLUGINS, make_base_config
+   from vivarium.public_health.risks import Risk, RiskEffect
+   from vivarium.public_health.disease import SI, SIS
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import BASE_PLUGINS, make_base_config
 
    # BASE_PLUGINS overrides the data plugin to use ExampleArtifactManager,
    # which serves example data from memory instead of requiring a real HDF file.
@@ -76,7 +76,7 @@ Artifact Data Format
 --------------------
 
 This section documents the **key name** and **column layout** that the
-:class:`~vivarium_public_health.risks.base_risk.Risk` component expects.
+:class:`~vivarium.public_health.risks.base_risk.Risk` component expects.
 Risk components support the ``data_sources`` configuration pattern that lets
 you override individual keys with a scalar, DataFrame, or callable without
 rebuilding the artifact (see `Data sources`_).
@@ -86,7 +86,7 @@ Data keys
 ^^^^^^^^^
 
 The table below lists every data key used by the
-:class:`~vivarium_public_health.risks.base_risk.Risk` component.
+:class:`~vivarium.public_health.risks.base_risk.Risk` component.
 
 .. list-table::
    :header-rows: 1
@@ -109,12 +109,12 @@ Artifact data shapes
 ^^^^^^^^^^^^^^^^^^^^
 
 The examples below use the data builders from the
-:mod:`~vivarium_public_health._example_data` module; a production artifact
+:mod:`~vivarium.public_health._example_data` module; a production artifact
 has the same column layout but with real GBD values.
 
 .. testcode::
 
-   from vivarium_public_health._example_data import risk_exposure_dichotomous
+   from vivarium.public_health._example_data import risk_exposure_dichotomous
 
    # risk_factor.{name}.exposure - proportion per exposure category.
    exposure = risk_exposure_dichotomous(0.6)
@@ -142,7 +142,7 @@ override any key with:
 - **Callable** - call the function at setup time to produce the data.
 - **Artifact key** (string) - load a different key from the artifact.
 
-:class:`~vivarium_public_health.risks.base_risk.Risk` declares a
+:class:`~vivarium.public_health.risks.base_risk.Risk` declares a
 configurable exposure data source:
 
 .. code-block:: yaml
@@ -167,7 +167,7 @@ This can be overridden with a scalar in the simulation configuration:
 Risk
 ----
 
-A :class:`~vivarium_public_health.risks.base_risk.Risk` component assigns
+A :class:`~vivarium.public_health.risks.base_risk.Risk` component assigns
 each simulant an exposure value. In the simplest case - a **dichotomous**
 risk - each simulant falls into one of two categories:
 exposed or unexposed. The proportion exposed is determined by the exposure

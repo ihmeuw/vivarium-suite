@@ -1,4 +1,4 @@
-from vivarium_public_health.treatment import LinearScaleUp
+from vivarium.public_health.treatment import LinearScaleUp
 
 
 def test_linear_scale_up_instantiation():

@@ -6,9 +6,9 @@
 # from vivarium.engine.testing_utilities import build_table
 # from vivarium.interface.interactive import setup_simulation
 #
-# from vivarium_public_health.population import BasePopulation
-# from vivarium_public_health.disease import ExcessMortalityState, DiseaseModel, DiseaseState
-# from vivarium_public_health.metrics import Disability
+# from vivarium.public_health.population import BasePopulation
+# from vivarium.public_health.disease import ExcessMortalityState, DiseaseModel, DiseaseState
+# from vivarium.public_health.metrics import Disability
 #
 #
 # def set_up_test_parameters(base_config, flu=False, mumps=False, deadly=False):

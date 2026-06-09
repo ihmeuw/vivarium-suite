@@ -29,7 +29,7 @@ The ``_RiskAffectedPipeline``
 class manages the interaction between the target rate pipeline and its
 calibration constant. When a target rate pipeline is registered as
 risk-affected (via
-:func:`~vivarium_public_health.causal_factor.calibration_constant.register_risk_affected_rate_producer`),
+:func:`~vivarium.public_health.causal_factor.calibration_constant.register_risk_affected_rate_producer`),
 the class:
 
 1. Creates a companion ``{target}.calibration_constant`` pipeline whose value
@@ -60,4 +60,4 @@ See Also
 
 - :ref:`relative_risk_concept`
 - :ref:`vph_risk_exposure_concept`
-- :mod:`vivarium_public_health.causal_factor.calibration_constant`
+- :mod:`vivarium.public_health.causal_factor.calibration_constant`

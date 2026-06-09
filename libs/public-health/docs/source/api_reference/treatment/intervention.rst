@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.treatment.intervention
+.. automodule:: vivarium.public_health.treatment.intervention

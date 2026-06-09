@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.utilities
+.. automodule:: vivarium.public_health.utilities

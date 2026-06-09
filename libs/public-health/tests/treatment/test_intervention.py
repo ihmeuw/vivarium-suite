@@ -1,6 +1,6 @@
 import pytest
 
-from vivarium_public_health.treatment.intervention import Intervention, InterventionEffect
+from vivarium.public_health.treatment.intervention import Intervention, InterventionEffect
 
 
 def test_intervention_validate_entity_type():

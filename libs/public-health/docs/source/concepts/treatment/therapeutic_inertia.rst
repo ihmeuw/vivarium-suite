@@ -9,7 +9,7 @@ Therapeutic Inertia
    :local:
    :backlinks: none
 
-The :class:`~vivarium_public_health.treatment.therapeutic_inertia.TherapeuticInertia`
+The :class:`~vivarium.public_health.treatment.therapeutic_inertia.TherapeuticInertia`
 component models the phenomenon where treatment algorithms deviate from
 clinical guidelines — for example, when a clinician does not escalate
 treatment even though guidelines recommend it.
@@ -49,4 +49,4 @@ See Also
 
 - :ref:`vph_treatment_concept`
 - :ref:`scale_up_concept`
-- :mod:`vivarium_public_health.treatment.therapeutic_inertia`
+- :mod:`vivarium.public_health.treatment.therapeutic_inertia`

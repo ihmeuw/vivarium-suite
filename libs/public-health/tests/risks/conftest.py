@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from tests.test_utilities import build_table_with_age
-from vivarium_public_health.risks.base_risk import Risk
+from vivarium.public_health.risks.base_risk import Risk
 
 
 def make_test_data_table(values: list, parameter="cat") -> pd.DataFrame:

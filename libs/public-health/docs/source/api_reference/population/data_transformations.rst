@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.population.data_transformations
+.. automodule:: vivarium.public_health.population.data_transformations

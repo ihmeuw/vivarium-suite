@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.results.observer
+.. automodule:: vivarium.public_health.results.observer

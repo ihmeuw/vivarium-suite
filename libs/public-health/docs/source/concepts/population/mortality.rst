@@ -9,11 +9,11 @@ Mortality
    :local:
    :backlinks: none
 
-The :class:`~vivarium_public_health.population.mortality.Mortality` component
+The :class:`~vivarium.public_health.population.mortality.Mortality` component
 models :term:`all-cause mortality <ACMR>` and allows for :term:`cause-specific <CSMR>` 
 contributions from both explicitly modeled disease components and an aggregated set 
 of :term:`unmodeled causes <Unmodeled Cause>`. It is instantiated as a sub-component of
-:class:`~vivarium_public_health.population.base_population.BasePopulation` and
+:class:`~vivarium.public_health.population.base_population.BasePopulation` and
 participates in the ``time_step`` :ref:`event <event_concept>` to determine
 which simulants die, record their cause of death, and calculate
 :term:`years of life lost <Years of Life Lost>`.
@@ -57,7 +57,7 @@ Unmodeled Causes
 modeled in the simulation but should still be represented in mortality accounting.
 At setup, the component loads the :term:`cause-specific mortality rate <CSMR>` for
 each named cause and aggregates them into a single unmodeled CSMR term. 
-:class:`~vivarium_public_health.risks.effect.RiskEffect`  components can then modify 
+:class:`~vivarium.public_health.risks.effect.RiskEffect`  components can then modify 
 this term by registering modifiers on the  ``affected_unmodeled.cause_specific_mortality_rate`` 
 :ref:`attribute pipeline <values_concept>`, thereby allowing risks to influence mortality 
 from causes that are not themselves full disease models.
@@ -77,7 +77,7 @@ mortality contributions, no simulant will ever die:
            data_sources:
                all_cause_mortality_rate: 0
 
-Alternatively, you can subclass :class:`~vivarium_public_health.population.base_population.BasePopulation` 
+Alternatively, you can subclass :class:`~vivarium.public_health.population.base_population.BasePopulation` 
 and omit ``Mortality`` from its sub-components entirely.
 
 See Also
@@ -85,4 +85,4 @@ See Also
 
 - :ref:`base_population_concept`
 - :ref:`fertility_concept`
-- :mod:`vivarium_public_health.population.mortality`
+- :mod:`vivarium.public_health.population.mortality`

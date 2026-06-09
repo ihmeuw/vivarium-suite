@@ -8,8 +8,8 @@ from vivarium.engine.framework.engine import Builder
 from vivarium.engine.testing_utilities import TestPopulation, metadata
 
 from tests.test_utilities import build_table_with_age, make_uniform_pop_data
-from vivarium_public_health import utilities
-from vivarium_public_health.population import (
+from vivarium.public_health import utilities
+from vivarium.public_health.population import (
     BasePopulation,
     FertilityAgeSpecificRates,
     FertilityCrudeBirthRate,

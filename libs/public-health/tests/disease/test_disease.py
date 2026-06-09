@@ -10,15 +10,15 @@ from vivarium.engine.framework.utilities import from_yearly
 from vivarium.engine.testing_utilities import metadata
 
 from tests.test_utilities import build_table_with_age
-from vivarium_public_health.disease import (
+from vivarium.public_health.disease import (
     BaseDiseaseState,
     DiseaseModel,
     DiseaseState,
     RateTransition,
 )
-from vivarium_public_health.disease.state import SusceptibleState
-from vivarium_public_health.disease.transition import TransitionString
-from vivarium_public_health.population import BasePopulation
+from vivarium.public_health.disease.state import SusceptibleState
+from vivarium.public_health.disease.transition import TransitionString
+from vivarium.public_health.population import BasePopulation
 
 
 @pytest.fixture
@@ -567,7 +567,7 @@ def test_transition_rate_to_probability_configuration(
 
     assert transition.rate_conversion_type == rate_conversion_type
     with patch(
-        "vivarium_public_health.disease.transition.rate_to_probability", return_value=1.0
+        "vivarium.public_health.disease.transition.rate_to_probability", return_value=1.0
     ) as mock_rate_to_probability:
         idx = pd.Index(list(range(10)))
         transition._probability(idx)

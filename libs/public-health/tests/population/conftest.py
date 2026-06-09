@@ -23,21 +23,21 @@ def config(base_config):
 @pytest.fixture
 def generate_population_mock(mocker):
     return mocker.patch(
-        "vivarium_public_health.population.base_population.generate_population"
+        "vivarium.public_health.population.base_population.generate_population"
     )
 
 
 @pytest.fixture
 def age_bounds_mock(mocker):
     return mocker.patch(
-        "vivarium_public_health.population.base_population._assign_demography_with_age_bounds"
+        "vivarium.public_health.population.base_population._assign_demography_with_age_bounds"
     )
 
 
 @pytest.fixture
 def initial_age_mock(mocker):
     return mocker.patch(
-        "vivarium_public_health.population.base_population._assign_demography_with_initial_age"
+        "vivarium.public_health.population.base_population._assign_demography_with_initial_age"
     )
 
 

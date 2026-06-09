@@ -2,7 +2,7 @@
 Manager Plugins
 ===============
 
-.. automodule:: vivarium_public_health.plugins
+.. automodule:: vivarium.public_health.plugins
 
 .. toctree::
    :maxdepth: 2

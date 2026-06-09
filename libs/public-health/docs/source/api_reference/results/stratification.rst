@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.results.stratification
+.. automodule:: vivarium.public_health.results.stratification

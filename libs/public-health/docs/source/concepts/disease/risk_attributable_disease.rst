@@ -9,7 +9,7 @@ Risk Attributable Disease
    :local:
    :backlinks: none
 
-:class:`~vivarium_public_health.disease.special_disease.RiskAttributableDisease`
+:class:`~vivarium.public_health.disease.special_disease.RiskAttributableDisease`
 provides an alternative to the standard
 :ref:`state-machine disease model <disease_model_concept>`. Rather than defining
 explicit states and transitions, it derives a simulant's disease status directly
@@ -29,7 +29,7 @@ effectively 1.
 How It Differs from DiseaseModel
 ---------------------------------
 
-In a standard :class:`~vivarium_public_health.disease.model.DiseaseModel`, you
+In a standard :class:`~vivarium.public_health.disease.model.DiseaseModel`, you
 explicitly create :ref:`states <disease_state_concept>` and
 :ref:`transitions <disease_transition_concept>`, then compose them into a model.
 A ``RiskAttributableDisease`` handles this automatically:
@@ -47,7 +47,7 @@ Construction requires the full entity strings for cause and risk:
 
 .. code-block:: python
 
-   from vivarium_public_health.disease import RiskAttributableDisease
+   from vivarium.public_health.disease import RiskAttributableDisease
 
    rad = RiskAttributableDisease(
        "cause.protein_energy_malnutrition",
@@ -100,7 +100,7 @@ Mortality and Disability
 
 ``RiskAttributableDisease`` uses the ``ExcessMortalityState`` mixin and
 provides the same mortality and disability pipelines as a standard
-:class:`~vivarium_public_health.disease.state.DiseaseState`:
+:class:`~vivarium.public_health.disease.state.DiseaseState`:
 
 - **Disability weight** — loaded from the artifact at
   ``{cause}.disability_weight`` and applied only to simulants with the
@@ -133,4 +133,4 @@ See Also
 
 - :ref:`disease_model_concept`
 - :ref:`disease_state_concept`
-- :mod:`vivarium_public_health.disease.special_disease`
+- :mod:`vivarium.public_health.disease.special_disease`

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from vivarium.engine.testing_utilities import get_randomness
 
-import vivarium_public_health.population.data_transformations as dt
+import vivarium.public_health.population.data_transformations as dt
 from tests.test_utilities import make_uniform_pop_data
 
 

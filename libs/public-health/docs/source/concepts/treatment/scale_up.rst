@@ -9,7 +9,7 @@ Linear Scale-Up
    :local:
    :backlinks: none
 
-The :class:`~vivarium_public_health.treatment.scale_up.LinearScaleUp` component
+The :class:`~vivarium.public_health.treatment.scale_up.LinearScaleUp` component
 models a gradual, linear change in intervention coverage over a specified time
 period. This is useful when an intervention is not introduced all at once but
 is instead rolled out progressively.
@@ -64,4 +64,4 @@ See Also
 
 - :ref:`vph_treatment_concept`
 - :ref:`therapeutic_inertia_concept`
-- :mod:`vivarium_public_health.treatment.scale_up`
+- :mod:`vivarium.public_health.treatment.scale_up`

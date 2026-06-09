@@ -12,7 +12,7 @@ Distributions
 Distribution components translate a :term:`simulant's <Simulant>`
 :term:`propensity <Propensity>` into an exposure value. All distributions
 inherit from
-:class:`~vivarium_public_health.causal_factor.distributions.CausalFactorDistribution`
+:class:`~vivarium.public_health.causal_factor.distributions.CausalFactorDistribution`
 and implement an ``exposure_ppf`` method that evaluates the
 :term:`percent-point function <PPF>` at the simulant's propensity.
 The PPF is the inverse of a cumulative distribution function: given a
@@ -30,19 +30,19 @@ type is selected automatically from the risk's configuration or artifact data.
    * - Distribution
      - Exposure Type
      - Description
-   * - :class:`~vivarium_public_health.causal_factor.distributions.DichotomousDistribution`
+   * - :class:`~vivarium.public_health.causal_factor.distributions.DichotomousDistribution`
      - Categorical (2)
      - Assigns simulants to "exposed" or "unexposed" based on a single
        probability threshold. Supports rebinning from polytomous data.
-   * - :class:`~vivarium_public_health.causal_factor.distributions.PolytomousDistribution`
+   * - :class:`~vivarium.public_health.causal_factor.distributions.PolytomousDistribution`
      - Categorical (N)
      - Assigns simulants to one of *N* ordered or unordered categories using
        cumulative exposure probabilities.
-   * - :class:`~vivarium_public_health.causal_factor.distributions.ContinuousDistribution`
+   * - :class:`~vivarium.public_health.causal_factor.distributions.ContinuousDistribution`
      - Continuous
      - Models exposure with a ``normal`` or ``lognormal`` parametric
        distribution.
-   * - :class:`~vivarium_public_health.causal_factor.distributions.EnsembleDistribution`
+   * - :class:`~vivarium.public_health.causal_factor.distributions.EnsembleDistribution`
      - Continuous
      - Combines multiple weighted parametric distributions to capture
        complex exposure shapes.
@@ -52,7 +52,7 @@ type is selected automatically from the risk's configuration or artifact data.
 :term:`Dichotomous Distribution`
 --------------------------------
 
-:class:`~vivarium_public_health.causal_factor.distributions.DichotomousDistribution`
+:class:`~vivarium.public_health.causal_factor.distributions.DichotomousDistribution`
 models exposure as two mutually exclusive categories. When determining a
 simulant's exposure, the component compares the simulant's
 :term:`propensity <Propensity>` to the exposure probability. if the propensity
@@ -69,7 +69,7 @@ selected categories into a single "exposed" group. See
 Polytomous Distribution
 -----------------------
 
-:class:`~vivarium_public_health.causal_factor.distributions.PolytomousDistribution`
+:class:`~vivarium.public_health.causal_factor.distributions.PolytomousDistribution`
 handles ordered and unordered categorical risks with *N* categories. Exposure
 probabilities for each category are loaded from the artifact, pivoted into a
 wide-format lookup table, and their cumulative sum is compared against each
@@ -84,7 +84,7 @@ are reproducible and consistent with the
 :term:`Continuous Distribution`
 -------------------------------
 
-:class:`~vivarium_public_health.causal_factor.distributions.ContinuousDistribution`
+:class:`~vivarium.public_health.causal_factor.distributions.ContinuousDistribution`
 supports ``normal`` and ``lognormal`` distribution types from the
 ``risk_distributions`` package. During setup, the component:
 
@@ -106,7 +106,7 @@ to avoid numerical issues at the distribution tails.
 :term:`Ensemble Distribution`
 -----------------------------
 
-:class:`~vivarium_public_health.causal_factor.distributions.EnsembleDistribution`
+:class:`~vivarium.public_health.causal_factor.distributions.EnsembleDistribution`
 models exposure using a weighted combination of several parametric
 distributions (for example, normal, log-normal, gamma, and others supported
 by the ``risk_distributions`` package). The component:
@@ -128,4 +128,4 @@ See Also
 --------
 
 - :ref:`risk_exposure_model_concept`
-- :mod:`vivarium_public_health.causal_factor.distributions`
+- :mod:`vivarium.public_health.causal_factor.distributions`

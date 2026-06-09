@@ -24,16 +24,16 @@ documentation for details on the underlying results system).
    logger.disable("vivarium")
    from vivarium.engine import Component, InteractiveContext
    from vivarium.engine.framework.engine import Builder
-   from vivarium_public_health.disease import (
+   from vivarium.public_health.disease import (
        DiseaseModel, DiseaseState, SusceptibleState, SI, SIS,
    )
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health.results import (
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health.results import (
        DiseaseObserver, MortalityObserver, DisabilityObserver,
        CategoricalRiskObserver, ResultsStratifier,
    )
-   from vivarium_public_health.risks import Risk
-   from vivarium_public_health._example_data import (
+   from vivarium.public_health.risks import Risk
+   from vivarium.public_health._example_data import (
        BASE_PLUGINS, make_base_config, build_cause_table,
        disease_disability_weight,
    )
@@ -47,16 +47,16 @@ Common Setup
 
    from vivarium.engine import Component, InteractiveContext
    from vivarium.engine.framework.engine import Builder
-   from vivarium_public_health.disease import (
+   from vivarium.public_health.disease import (
        DiseaseModel, DiseaseState, SusceptibleState, SI, SIS,
    )
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health.results import (
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health.results import (
        DiseaseObserver, MortalityObserver, DisabilityObserver,
        CategoricalRiskObserver, ResultsStratifier,
    )
-   from vivarium_public_health.risks import Risk
-   from vivarium_public_health._example_data import (
+   from vivarium.public_health.risks import Risk
+   from vivarium.public_health._example_data import (
        BASE_PLUGINS, make_base_config, build_cause_table,
        disease_disability_weight,
    )
@@ -68,7 +68,7 @@ Common Setup
 DiseaseObserver
 ---------------
 
-A :class:`~vivarium_public_health.results.DiseaseObserver` registers two
+A :class:`~vivarium.public_health.results.DiseaseObserver` registers two
 observations for a disease model:
 
 - ``person_time_{disease}`` - person-years spent in each disease state,
@@ -130,7 +130,7 @@ observations for a disease model:
 MortalityObserver
 -----------------
 
-A :class:`~vivarium_public_health.results.MortalityObserver` registers two
+A :class:`~vivarium.public_health.results.MortalityObserver` registers two
 observations, stratified by cause of death:
 
 - ``deaths`` - count of simulants who died during each time step. The
@@ -187,7 +187,7 @@ non-zero ``excess_mortality_rate``.
 DisabilityObserver
 ------------------
 
-A :class:`~vivarium_public_health.results.DisabilityObserver` registers one
+A :class:`~vivarium.public_health.results.DisabilityObserver` registers one
 observation:
 
 - ``ylds`` - years lived with disability, computed as each simulant's
@@ -240,7 +240,7 @@ It requires at least one disease state with a non-zero
 CategoricalRiskObserver
 -----------------------
 
-A :class:`~vivarium_public_health.results.CategoricalRiskObserver` registers
+A :class:`~vivarium.public_health.results.CategoricalRiskObserver` registers
 one observation:
 
 - ``person_time_{risk}`` - person-years spent in each exposure category,

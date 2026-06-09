@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vivarium_public_health.disease import RiskAttributableDisease
-from vivarium_public_health.disease.transition import TransitionString
+from vivarium.public_health.disease import RiskAttributableDisease
+from vivarium.public_health.disease.transition import TransitionString
 
 
 @pytest.fixture

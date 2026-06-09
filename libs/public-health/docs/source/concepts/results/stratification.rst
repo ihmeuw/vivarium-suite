@@ -9,7 +9,7 @@ Results Stratifier
    :local:
    :backlinks: none
 
-The :class:`~vivarium_public_health.results.stratification.ResultsStratifier`
+The :class:`~vivarium.public_health.results.stratification.ResultsStratifier`
 is a :term:`component <Component>` that registers the common
 :ref:`stratifications <results_concept>` shared across public health observers.
 It serves as the single place where default grouping dimensions — age, sex,
@@ -91,9 +91,9 @@ Mappers
 
 Two mappers are provided:
 
-- :meth:`~vivarium_public_health.results.stratification.ResultsStratifier.map_age_groups` —
+- :meth:`~vivarium.public_health.results.stratification.ResultsStratifier.map_age_groups` —
   vectorized mapper that bins ages into age-group name strings.
-- :meth:`~vivarium_public_health.results.stratification.ResultsStratifier.map_year` —
+- :meth:`~vivarium.public_health.results.stratification.ResultsStratifier.map_year` —
   vectorized mapper that extracts the year from a datetime column and returns
   it as a string.
 
@@ -106,4 +106,4 @@ See Also
 - :ref:`results_concept` — vivarium's results management system
 - :ref:`public_health_observer_concept` — the base observer class
 - :ref:`concrete_observers_concept` — the concrete public health observers
-- :mod:`vivarium_public_health.results.stratification`
+- :mod:`vivarium.public_health.results.stratification`

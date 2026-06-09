@@ -1,5 +1,5 @@
 """
-Tests for :mod:`vivarium_public_health.risks.calibration_constant`.
+Tests for :mod:`vivarium.public_health.risks.calibration_constant`.
 
 Redundancy notes
 ----------------
@@ -21,12 +21,12 @@ from vivarium.engine.framework.utilities import from_yearly
 from vivarium.engine.framework.values import AttributePostProcessor, ValuesManager
 
 from tests.test_utilities import build_table_with_age
-from vivarium_public_health.causal_factor.calibration_constant import (
+from vivarium.public_health.causal_factor.calibration_constant import (
     get_calibration_constant_pipeline_name,
     register_risk_affected_attribute_producer,
     register_risk_affected_rate_producer,
 )
-from vivarium_public_health.population import BasePopulation
+from vivarium.public_health.population import BasePopulation
 
 # ---------------------------------------------------------------------------
 # Helpers

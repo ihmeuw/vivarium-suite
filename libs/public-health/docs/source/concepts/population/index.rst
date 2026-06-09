@@ -16,7 +16,7 @@ Population
    mortality
    fertility
 
-The ``vivarium_public_health`` population package provides :ref:`components <components_concept>` 
+The ``vivarium.public_health`` population package provides :ref:`components <components_concept>` 
 to create and maintain a population of :term:`simulants <Simulant>` over the course 
 of a simulation. While the core :mod:`vivarium` framework supplies the
 :ref:`population management <population_concept>` machinery (the state table,

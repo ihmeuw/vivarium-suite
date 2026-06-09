@@ -2,7 +2,7 @@
 Disease Models and State Machines
 ==================================
 
-:mod:`vivarium_public_health` provides a flexible framework for modelling
+:mod:`vivarium.public_health` provides a flexible framework for modelling
 diseases as state machines. This tutorial demonstrates how to build disease
 models from states and transitions, and how to use the pre-built models for
 common disease progressions.
@@ -21,16 +21,16 @@ The disease components in this package extend the base
    import numpy as np
    import pandas as pd
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.disease import *
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import *
+   from vivarium.public_health.disease import *
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import *
    base_plugins = BASE_PLUGINS
 
 
 Overview
 --------
 
-A disease model in ``vivarium_public_health`` is a state machine. Each
+A disease model in ``vivarium.public_health`` is a state machine. Each
 simulant occupies exactly one disease state at any time within a given model,
 and moves between states according to transition rules. A simulation may
 contain multiple independent disease models, each tracking its own state
@@ -59,9 +59,9 @@ To run any example in a standalone script, include all of these at the top:
 .. testcode::
 
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.disease import *
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import BASE_PLUGINS, make_base_config
+   from vivarium.public_health.disease import *
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import BASE_PLUGINS, make_base_config
 
    # BASE_PLUGINS overrides the data plugin to use ExampleArtifactManager,
    # which serves example data from memory instead of requiring a real HDF file.
@@ -104,39 +104,39 @@ section of the configuration; the artifact key shown is simply the default.
    * - ``cause.{cause}.prevalence``
      - age, sex, year
      - ``value`` (fraction)
-     - :class:`~vivarium_public_health.disease.state.DiseaseState`
+     - :class:`~vivarium.public_health.disease.state.DiseaseState`
      - Yes - ``{state}.data_sources.prevalence``
    * - ``cause.{cause}.birth_prevalence``
      - age, sex, year
      - ``value`` (fraction)
-     - :class:`~vivarium_public_health.disease.state.DiseaseState` (neonatal models)
+     - :class:`~vivarium.public_health.disease.state.DiseaseState` (neonatal models)
      - Yes - ``{state}.data_sources.birth_prevalence``
    * - ``cause.{cause}.disability_weight``
      - age, sex, year (or single row)
      - ``value`` (weight)
-     - :class:`~vivarium_public_health.disease.state.DiseaseState`
+     - :class:`~vivarium.public_health.disease.state.DiseaseState`
      - Yes - ``{state}.data_sources.disability_weight``
    * - ``cause.{cause}.excess_mortality_rate``
      - age, sex, year
      - ``value`` (rate)
-     - :class:`~vivarium_public_health.disease.state.DiseaseState`
+     - :class:`~vivarium.public_health.disease.state.DiseaseState`
      - Yes - ``{state}.data_sources.excess_mortality_rate``
    * - ``cause.{cause}.incidence_rate``
      - age, sex, year
      - ``value`` (rate)
-     - :class:`~vivarium_public_health.disease.transition.RateTransition` (from
+     - :class:`~vivarium.public_health.disease.transition.RateTransition` (from
        susceptible state)
      - Yes - ``{transition}.data_sources.transition_rate``
    * - ``cause.{cause}.remission_rate``
      - age, sex, year
      - ``value`` (rate)
-     - :class:`~vivarium_public_health.disease.transition.RateTransition` (from
+     - :class:`~vivarium.public_health.disease.transition.RateTransition` (from
        infected state)
      - Yes - ``{transition}.data_sources.transition_rate``
    * - ``cause.{cause}.cause_specific_mortality_rate``
      - age, sex, year
      - ``value`` (rate)
-     - :class:`~vivarium_public_health.disease.model.DiseaseModel`
+     - :class:`~vivarium.public_health.disease.model.DiseaseModel`
      - Yes - ``{cause}.data_sources.cause_specific_mortality_rate``
 
 
@@ -146,12 +146,12 @@ Artifact data shapes
 Most cause-level measures share the same column layout: one row per
 age × sex × year combination with a ``value`` column. The
 examples below use the data builders from the
-:mod:`~vivarium_public_health._example_data` module; a production artifact
+:mod:`~vivarium.public_health._example_data` module; a production artifact
 has the same column layout but with real GBD values.
 
 .. testcode::
 
-   from vivarium_public_health._example_data import (
+   from vivarium.public_health._example_data import (
        build_cause_table,
        disease_disability_weight,
        disease_restrictions,
@@ -228,7 +228,7 @@ artifact key. You can override any of them with:
 - **Callable** - call the function at setup time to produce the data.
 - **Artifact key** (string) - load a different key from the artifact.
 
-For example, :class:`~vivarium_public_health.disease.state.DiseaseState` declares
+For example, :class:`~vivarium.public_health.disease.state.DiseaseState` declares
 five configurable data sources:
 
 .. code-block:: yaml
@@ -255,7 +255,7 @@ directly to the constructor:
          disability_weight: 0.05
          excess_mortality_rate: 0.0
 
-:class:`~vivarium_public_health.disease.transition.RateTransition` has a single
+:class:`~vivarium.public_health.disease.transition.RateTransition` has a single
 configurable data source:
 
 .. code-block:: yaml
@@ -273,7 +273,7 @@ component expects, so you can see the concrete layout.
 DiseaseModel
 ------------
 
-:class:`~vivarium_public_health.disease.model.DiseaseModel` is the state machine
+:class:`~vivarium.public_health.disease.model.DiseaseModel` is the state machine
 driver that ties states and transitions together. It initializes simulants
 into disease states based on prevalence data and steps them through
 transitions each time step.
@@ -308,7 +308,7 @@ Building a model from scratch
 
 The most explicit way to create a disease model is to instantiate states,
 wire up transitions, and wrap them in a
-:class:`~vivarium_public_health.disease.model.DiseaseModel`.
+:class:`~vivarium.public_health.disease.model.DiseaseModel`.
 
 The following example builds an SIS (Susceptible |harr| Infected |harr|
 Susceptible) model, passing data directly to constructors instead of
@@ -376,7 +376,7 @@ reading from the artifact:
 .. note::
 
    When ``prevalence`` is set on a ``DiseaseState``, the
-   :class:`~vivarium_public_health.disease.model.DiseaseModel` uses it to assign
+   :class:`~vivarium.public_health.disease.model.DiseaseModel` uses it to assign
    simulants to that state at initialization. The ``SusceptibleState`` gets
    the residual (1 minus the sum of all other state prevalences).
 
@@ -439,7 +439,7 @@ Pre-Built Models
 -----------------
 
 For common disease progressions,
-:mod:`vivarium_public_health.disease.models` provides convenience functions
+:mod:`vivarium.public_health.disease.models` provides convenience functions
 that create fully wired models in a single call. When using these, data is
 typically supplied via the ``data_sources`` configuration or from the
 artifact.
@@ -821,7 +821,7 @@ duration before they can transition out. This is useful for modelling
 conditions with a known minimum duration (e.g., a 14-day infection).
 
 Dwell time can be specified as a :class:`pandas.Timedelta`, a numeric
-value (days), or directly in the :class:`~vivarium_public_health.disease.state.DiseaseState`
+value (days), or directly in the :class:`~vivarium.public_health.disease.state.DiseaseState`
 constructor:
 
 .. testcode::
@@ -888,7 +888,7 @@ constructor:
 Excess mortality
 ^^^^^^^^^^^^^^^^^
 
-A :class:`~vivarium_public_health.disease.state.DiseaseState` can carry an
+A :class:`~vivarium.public_health.disease.state.DiseaseState` can carry an
 **excess mortality rate** - an additional hazard of death for simulants in
 that state. This is added on top of the all-cause mortality rate.
 
@@ -944,7 +944,7 @@ that state. This is added on top of the all-cause mortality rate.
 Proportion transitions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-A :class:`~vivarium_public_health.disease.transition.ProportionTransition` moves a
+A :class:`~vivarium.public_health.disease.transition.ProportionTransition` moves a
 fixed fraction of eligible simulants to a new state each time step, rather
 than converting a rate to a probability:
 
@@ -1000,7 +1000,7 @@ than converting a rate to a probability:
 Transient states
 ^^^^^^^^^^^^^^^^^
 
-A :class:`~vivarium_public_health.disease.state.TransientDiseaseState` is a
+A :class:`~vivarium.public_health.disease.state.TransientDiseaseState` is a
 pass-through state: simulants enter it and immediately transition onward
 in the same time step. This is useful for routing logic where different
 fractions of simulants should end up in different destination states:
@@ -1069,7 +1069,7 @@ Multiple disease states (sequelae)
 
 A single disease can have multiple sequelae, each with its own prevalence,
 disability weight, and transitions. The
-:class:`~vivarium_public_health.disease.model.DiseaseModel` assigns simulants to
+:class:`~vivarium.public_health.disease.model.DiseaseModel` assigns simulants to
 states at initialization based on relative prevalences:
 
 .. testcode::
@@ -1180,8 +1180,8 @@ sensitivity analyses or testing:
 Event tracking columns
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Each :class:`~vivarium_public_health.disease.state.DiseaseState` and
-:class:`~vivarium_public_health.disease.state.BaseDiseaseState` automatically
+Each :class:`~vivarium.public_health.disease.state.DiseaseState` and
+:class:`~vivarium.public_health.disease.state.BaseDiseaseState` automatically
 adds two columns to the simulation state table:
 
 - ``{state_id}_event_time`` - the timestamp of the last transition *into*

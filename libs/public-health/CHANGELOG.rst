@@ -1,3 +1,15 @@
+**6.0.0 - 06/09/26**
+
+First release from the vivarium-suite monorepo; the standalone
+``ihmeuw/vivarium_public_health`` GitHub repository has been archived.
+
+Breaking changes:
+
+- Import path changed from ``vivarium_public_health`` to ``vivarium.public_health``.
+  (The PyPI project name is unchanged in practice: PyPI normalizes hyphens and
+  underscores per PEP 503, so ``pip install vivarium_public_health`` and
+  ``pip install vivarium-public-health`` resolve to the same project.)
+
 **5.1.13 - 06/09/26**
 
 - Add data_sources configuration to population components for artifactless usage

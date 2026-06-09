@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.treatment.therapeutic_inertia
+.. automodule:: vivarium.public_health.treatment.therapeutic_inertia

@@ -9,7 +9,7 @@ Disease Model
    :local:
    :backlinks: none
 
-The :class:`~vivarium_public_health.disease.model.DiseaseModel` is the top-level
+The :class:`~vivarium.public_health.disease.model.DiseaseModel` is the top-level
 :term:`component <Component>` that orchestrates disease states and transitions
 into a complete disease model. It extends vivarium's
 :class:`~vivarium.engine.framework.state_machine.Machine` class.
@@ -41,7 +41,7 @@ The typical workflow for constructing a disease model is:
 
 .. code-block:: python
 
-   from vivarium_public_health.disease import (
+   from vivarium.public_health.disease import (
        DiseaseModel,
        DiseaseState,
        RecoveredState,
@@ -79,7 +79,7 @@ attributes such as :term:`prevalence <Prevalence>`,
 Base Disease State
 ++++++++++++++++++
 
-:class:`~vivarium_public_health.disease.state.BaseDiseaseState` provides the
+:class:`~vivarium.public_health.disease.state.BaseDiseaseState` provides the
 common foundation for all disease states. It manages:
 
 - **Prevalence data** — used during :ref:`initialization <state_initialization>`
@@ -92,16 +92,16 @@ common foundation for all disease states. It manages:
 
 ``BaseDiseaseState`` also provides convenience methods for attaching transitions:
 
-- :meth:`~vivarium_public_health.disease.state.BaseDiseaseState.add_rate_transition`
-- :meth:`~vivarium_public_health.disease.state.BaseDiseaseState.add_proportion_transition`
-- :meth:`~vivarium_public_health.disease.state.BaseDiseaseState.add_dwell_time_transition`
+- :meth:`~vivarium.public_health.disease.state.BaseDiseaseState.add_rate_transition`
+- :meth:`~vivarium.public_health.disease.state.BaseDiseaseState.add_proportion_transition`
+- :meth:`~vivarium.public_health.disease.state.BaseDiseaseState.add_dwell_time_transition`
 
 These are the primary way disease states are connected together.
 
 Susceptible State
 +++++++++++++++++
 
-:class:`~vivarium_public_health.disease.state.SusceptibleState` represents the
+:class:`~vivarium.public_health.disease.state.SusceptibleState` represents the
 absence of disease. It automatically prepends ``susceptible_to_`` to the
 provided cause name to form the state ID. For example,
 ``SusceptibleState("measles")`` creates a state with ID
@@ -113,7 +113,7 @@ The susceptible state serves as the **residual state** in a disease model: its
 ensures the total initialization weights across all states always sum to 1.
 
 When adding a transition from a ``SusceptibleState`` to a
-:class:`~vivarium_public_health.disease.state.DiseaseState` without specifying
+:class:`~vivarium.public_health.disease.state.DiseaseState` without specifying
 a rate, the default rate type is :term:`incidence rate <Incidence Rate>`:
 
 .. code-block:: python
@@ -125,7 +125,7 @@ a rate, the default rate type is :term:`incidence rate <Incidence Rate>`:
 Disease State
 +++++++++++++
 
-:class:`~vivarium_public_health.disease.state.DiseaseState` represents the
+:class:`~vivarium.public_health.disease.state.DiseaseState` represents the
 active presence of a disease. In addition to the base state attributes, it
 provides:
 
@@ -164,7 +164,7 @@ configuration. The defaults load from the artifact:
 Recovered State
 +++++++++++++++
 
-:class:`~vivarium_public_health.disease.state.RecoveredState` represents
+:class:`~vivarium.public_health.disease.state.RecoveredState` represents
 post-infection immunity or recovery. It automatically prepends
 ``recovered_from_`` to the provided cause name. For example,
 ``RecoveredState("measles")`` creates a state with ID
@@ -177,7 +177,7 @@ models.
 Transient Disease State
 +++++++++++++++++++++++
 
-:class:`~vivarium_public_health.disease.state.TransientDiseaseState` uses
+:class:`~vivarium.public_health.disease.state.TransientDiseaseState` uses
 vivarium's :class:`~vivarium.engine.framework.state_machine.Transient` mixin to create
 states that simulants pass through instantaneously within a single time step.
 This is useful for intermediate states in multi-step disease progressions, e.g.
@@ -198,7 +198,7 @@ probabilities and support for fixed-proportion and dwell-time-based transitions.
 Rate Transition
 +++++++++++++++
 
-:class:`~vivarium_public_health.disease.transition.RateTransition` models
+:class:`~vivarium.public_health.disease.transition.RateTransition` models
 transitions governed by a time-varying rate. At each time step, the rate is
 converted into a probability to determine which simulants transition.
 
@@ -226,16 +226,16 @@ is named and what data it looks up by default:
      - Any other state-to-state transition
 
 When using the convenience methods on
-:class:`~vivarium_public_health.disease.state.BaseDiseaseState`, the rate type
+:class:`~vivarium.public_health.disease.state.BaseDiseaseState`, the rate type
 is selected automatically based on the type of state:
 
 - ``SusceptibleState.add_rate_transition()``
   defaults to ``"incidence_rate"``
 - :meth:`DiseaseState.add_rate_transition()
-  <vivarium_public_health.disease.state.DiseaseState.add_rate_transition>`
+  <vivarium.public_health.disease.state.DiseaseState.add_rate_transition>`
   defaults to ``"remission_rate"``
 - :meth:`BaseDiseaseState.add_rate_transition()
-  <vivarium_public_health.disease.state.BaseDiseaseState.add_rate_transition>`
+  <vivarium.public_health.disease.state.BaseDiseaseState.add_rate_transition>`
   defaults to ``"transition_rate"``
 
 Rate Conversion
@@ -250,7 +250,7 @@ Rates are converted to probabilities using one of two methods, controlled by the
 where :math:`r` is the rate and :math:`\Delta t` is the time step size.
 
 All ``RateTransitions`` within a single
-:class:`~vivarium_public_health.disease.model.DiseaseModel` must use the same
+:class:`~vivarium.public_health.disease.model.DiseaseModel` must use the same
 conversion type. The model validates this during ``on_post_setup``.
 
 .. code-block:: yaml
@@ -271,7 +271,7 @@ risks.
 Proportion Transition
 +++++++++++++++++++++
 
-:class:`~vivarium_public_health.disease.transition.ProportionTransition` models
+:class:`~vivarium.public_health.disease.transition.ProportionTransition` models
 transitions where a fixed proportion of eligible simulants move to the output
 state at each time step. The proportion is loaded from configuration or provided
 directly:
@@ -293,7 +293,7 @@ the source state. Simulants remain in the state for the specified duration, then
 transition unconditionally.
 
 Dwell time transitions are created using
-:meth:`~vivarium_public_health.disease.state.BaseDiseaseState.add_dwell_time_transition`:
+:meth:`~vivarium.public_health.disease.state.BaseDiseaseState.add_dwell_time_transition`:
 
 .. code-block:: python
 
@@ -308,7 +308,7 @@ Adding Transitions to States
 +++++++++++++++++++++++++++++
 
 Transitions are typically added to states using the convenience methods on
-:class:`~vivarium_public_health.disease.state.BaseDiseaseState`, rather than
+:class:`~vivarium.public_health.disease.state.BaseDiseaseState`, rather than
 being constructed directly:
 
 .. code-block:: python
@@ -340,7 +340,7 @@ Initialization
 --------------
 
 When a simulation starts, the
-:class:`~vivarium_public_health.disease.model.DiseaseModel` assigns each
+:class:`~vivarium.public_health.disease.model.DiseaseModel` assigns each
 simulant to an initial disease state based on :term:`prevalence <Prevalence>`
 data:
 
@@ -373,13 +373,13 @@ The ``cause_specific_mortality_rate`` data source is configurable:
        data_sources:
            cause_specific_mortality_rate: cause.measles.cause_specific_mortality_rate
 
-See :mod:`vivarium_public_health.population.mortality` for details on how
+See :mod:`vivarium.public_health.population.mortality` for details on how
 cause-specific mortality rates are aggregated.
 
 Pre-built Models
 ----------------
 
-The :mod:`~vivarium_public_health.disease.models` module provides factory
+The :mod:`~vivarium.public_health.disease.models` module provides factory
 functions for commonly used disease model parameterizations. These functions
 create the appropriate states, add transitions, and return a configured
 ``DiseaseModel``:
@@ -391,28 +391,28 @@ create the appropriate states, add transitions, and return a configured
    * - Function
      - States
      - Description
-   * - :func:`~vivarium_public_health.disease.models.SI`
+   * - :func:`~vivarium.public_health.disease.models.SI`
      - Susceptible → Infected
      - One-way infection with no recovery. Suitable for chronic or
        irreversible conditions.
-   * - :func:`~vivarium_public_health.disease.models.SIR`
+   * - :func:`~vivarium.public_health.disease.models.SIR`
      - Susceptible → Infected → Recovered
      - Infection followed by permanent immunity.
-   * - :func:`~vivarium_public_health.disease.models.SIS`
+   * - :func:`~vivarium.public_health.disease.models.SIS`
      - Susceptible ↔ Infected
      - Cyclic infection and recovery with no lasting immunity.
-   * - :func:`~vivarium_public_health.disease.models.SIS_fixed_duration`
+   * - :func:`~vivarium.public_health.disease.models.SIS_fixed_duration`
      - Susceptible ↔ Infected (dwell)
      - SIS variant where infection lasts a configurable number of days
        using :term:`dwell time <Dwell Time>`.
-   * - :func:`~vivarium_public_health.disease.models.SIR_fixed_duration`
+   * - :func:`~vivarium.public_health.disease.models.SIR_fixed_duration`
      - Susceptible → Infected (dwell) → Recovered
      - SIR variant where infection lasts a configurable number of days.
-   * - :func:`~vivarium_public_health.disease.models.NeonatalSWC_without_incidence`
+   * - :func:`~vivarium.public_health.disease.models.NeonatalSWC_without_incidence`
      - Susceptible, With Condition
      - Neonatal model with :term:`birth prevalence <Birth Prevalence>` only.
        No transitions — simulants remain in their initial state.
-   * - :func:`~vivarium_public_health.disease.models.NeonatalSWC_with_incidence`
+   * - :func:`~vivarium.public_health.disease.models.NeonatalSWC_with_incidence`
      - Susceptible → With Condition
      - Neonatal model with :term:`birth prevalence <Birth Prevalence>` and
        an :term:`incidence rate <Incidence Rate>` transition from susceptible
@@ -423,7 +423,7 @@ Each factory function takes a ``cause`` string and returns a fully configured
 
 .. code-block:: python
 
-   from vivarium_public_health.disease.models import SIR
+   from vivarium.public_health.disease.models import SIR
 
    measles_model = SIR("measles")
 
@@ -434,8 +434,8 @@ See Also
 --------
 
 - :ref:`risk_attributable_disease_concept`
-- :mod:`vivarium_public_health.population.mortality`
-- :mod:`vivarium_public_health.disease.model`
-- :mod:`vivarium_public_health.disease.models`
-- :mod:`vivarium_public_health.disease.state`
-- :mod:`vivarium_public_health.disease.transition`
+- :mod:`vivarium.public_health.population.mortality`
+- :mod:`vivarium.public_health.disease.model`
+- :mod:`vivarium.public_health.disease.models`
+- :mod:`vivarium.public_health.disease.state`
+- :mod:`vivarium.public_health.disease.transition`

@@ -8,18 +8,18 @@ from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder
 
 from tests.test_utilities import build_table_with_age
-from vivarium_public_health.causal_factor.calibration_constant import (
+from vivarium.public_health.causal_factor.calibration_constant import (
     get_calibration_constant_pipeline_name,
 )
-from vivarium_public_health.causal_factor.distributions import (
+from vivarium.public_health.causal_factor.distributions import (
     EnsembleDistribution,
     PolytomousDistribution,
 )
-from vivarium_public_health.disease import SIS
-from vivarium_public_health.population import BasePopulation
-from vivarium_public_health.risks import RiskEffect
-from vivarium_public_health.risks.base_risk import Risk
-from vivarium_public_health.utilities import EntityString
+from vivarium.public_health.disease import SIS
+from vivarium.public_health.population import BasePopulation
+from vivarium.public_health.risks import RiskEffect
+from vivarium.public_health.risks.base_risk import Risk
+from vivarium.public_health.utilities import EntityString
 
 
 def test_validate_entity_type():

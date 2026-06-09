@@ -22,7 +22,7 @@ Risk
 Risk Exposure
 =============
 
-The ``vivarium_public_health`` risk exposure package provides
+The ``vivarium.public_health`` risk exposure package provides
 :ref:`components <components_concept>` to assign risk factor exposure values to
 :term:`simulants <Simulant>` during a simulation. While the core :mod:`vivarium`
 framework supplies the :ref:`values <values_concept>` and
@@ -46,7 +46,7 @@ The package is organized around two key concepts:
 Risk Effect
 ===========
 
-The ``vivarium_public_health`` risk effect package provides
+The ``vivarium.public_health`` risk effect package provides
 :ref:`components <components_concept>` that modify target rates (such as
 disease incidence or mortality) based on a :term:`simulant's <Simulant>`
 :ref:`exposure <vph_risk_exposure_concept>` to a risk factor. While the core

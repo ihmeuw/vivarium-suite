@@ -2,14 +2,14 @@
 Non-standard Risk Exposure and Effect Models
 ============================================
 
-:mod:`vivarium_public_health` provides three components for modeling the impact
+:mod:`vivarium.public_health` provides three components for modeling the impact
 of some health attributes on others:
 
-- :class:`~vivarium_public_health.risks.base_risk.Risk`: Model of the
+- :class:`~vivarium.public_health.risks.base_risk.Risk`: Model of the
   underlying exposure based on a continuous or categorical distribution.
-- :class:`~vivarium_public_health.risks.effect.RiskEffect`: Model of the
+- :class:`~vivarium.public_health.risks.effect.RiskEffect`: Model of the
   impact of different exposure levels on another health attribute.
-- :class:`~vivarium_public_health.risks.effect.NonLogLinearRiskEffect`: 
+- :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect`: 
   Special-case risk effect model where the risk factors are parameterized
   by exposure levels.
 
@@ -19,9 +19,9 @@ we've found many situations to extend this model to other attributes, such as
 interventions and their impacts on other risks, diseases, or mortality itself.
 
 In order to support these extended models, we've made the
-:class:`~vivarium_public_health.risks.base_risk.Risk`, 
-:class:`~vivarium_public_health.risks.effect.RiskEffect`, and
-:class:`~vivarium_public_health.risks.effect.NonLogLinearRiskEffect` components
+:class:`~vivarium.public_health.risks.base_risk.Risk`, 
+:class:`~vivarium.public_health.risks.effect.RiskEffect`, and
+:class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect` components
 configurable. This tutorial explains the various configuration options you can
 use with these components.
 
@@ -33,7 +33,7 @@ Exposure Models
 ---------------
 
 We model exposure using the
-:class:`~vivarium_public_health.risks.base_risk.Risk` or component.
+:class:`~vivarium.public_health.risks.base_risk.Risk` or component.
 Consider its configuration options:
 
 - ``"exposure"``: This option represents the exposure data source. It defaults
@@ -46,7 +46,7 @@ Consider its configuration options:
   continuous exposure models into a categorical model. It defaults to an
   empty list, indicating that the underlying exposure model should be used.
 
-The name input when the :class:`~vivarium_public_health.risks.base_risk.Risk`
+The name input when the :class:`~vivarium.public_health.risks.base_risk.Risk`
 is created also has an impact on the behavior. Names are provided
 as ``<type>.<name>`` where ``type`` refers to the type of entity being
 modeled and ``name`` is the name of the entity.  Available types are
@@ -93,7 +93,7 @@ model specification, we can specify the component to use its defaults with
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            risks:
                - Risk("risk_factor.my_risk_factor")
 
@@ -107,7 +107,7 @@ If we change the ``"exposure"`` option to the name of a covariate as
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            risks:
                - Risk("risk_factor.my_risk_factor")
 
@@ -127,7 +127,7 @@ to directly set the proportion of people exposed.
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            risks:
                - Risk("risk_factor.my_risk_factor")
 
@@ -144,7 +144,7 @@ a list of strings to the ``"rebinned_exposure"`` option.
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            risks:
                - Risk("risk_factor.my_polytomous_risk_factor")
 
@@ -156,7 +156,7 @@ This will reformat the exposure data to consider anyone in "cat1", "cat2", or
 "cat3" as exposed, and all other exposure categories as unexposed.
 
 Using the ``"rebinned_exposure"`` option will cause the relative risk
-for all :class:`~vivarium_public_health.risks.effect.RiskEffect`
+for all :class:`~vivarium.public_health.risks.effect.RiskEffect`
 components to also be rebinned.
 
 .. note::
@@ -197,7 +197,7 @@ default values.
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            risks:
                - Risk("alternative_risk_factor.my_risk_factor")
 
@@ -225,8 +225,8 @@ configuration options all correspond to generating a relative risk for
 the exposed population from a set of parameters.
 
 We model exposure effects using the
-:class:`~vivarium_public_health.risks.effect.RiskEffect` or
-:class:`~vivarium_public_health.risks.effect.NonLogLinearRiskEffect` components.
+:class:`~vivarium.public_health.risks.effect.RiskEffect` or
+:class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect` components.
 
 For this tutorial, we'll focus on the ``RiskEffect`` component. The
 ``NonLogLinearRiskEffect`` component is a special case of the ``RiskEffect``
@@ -259,15 +259,15 @@ Let's look at its configuration options:
   supplied when specifying a relative risk to be drawn with a lognormal
   distribution with ``"log_mean"`` and ``"log_se"``.
 
-When a :class:`~vivarium_public_health.risks.effect.RiskEffect` is created, it
+When a :class:`~vivarium.public_health.risks.effect.RiskEffect` is created, it
 takes two arguments: the name of the exposure model and the name of the
 target attribute that should be altered. The exposure model should be named
-the same as the argument to :class:`~vivarium_public_health.risks.base_risk.Risk`
+the same as the argument to :class:`~vivarium.public_health.risks.base_risk.Risk`
 and the target attribute should be in the form ``<type>.<name>.<measure>``.
 ``type`` and ``name`` specify the entity the effect targets and ``measure``
-tells the :class:`~vivarium_public_health.risks.effect.RiskEffect` which specific
+tells the :class:`~vivarium.public_health.risks.effect.RiskEffect` which specific
 attribute of the entity to alter. Common targets are exposure for other
-:class:`~vivarium_public_health.risks.base_risk.Risk` entities and incidence rates for
+:class:`~vivarium.public_health.risks.base_risk.Risk` entities and incidence rates for
 diseases.
 
 The Default Case
@@ -279,24 +279,24 @@ up with something like:
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            disease:
                - SIS('my_infectious_disease')
            risks:
                - Risk('risk_factor.my_risk_factor')
                - RiskEffect('risk_factor.my_risk_factor', 'cause.my_infectious_disease.incidence_rate')
 
-In this situation, the :mod:`vivarium_public_health` components will assume
+In this situation, the :mod:`vivarium.public_health` components will assume
 all parameters will come from data.  The
-:class:`~vivarium_public_health.disease.models.SIS` component will load measures
+:class:`~vivarium.public_health.disease.models.SIS` component will load measures
 like prevalence, incidence rate, excess mortality rate, and others to inform
 the initialization and dynamics of the model.  The
-:class:`~vivarium_public_health.risks.base_risk.Risk` will load exposure information.
-The :class:`~vivarium_public_health.risks.effect.RiskEffect` will load the
+:class:`~vivarium.public_health.risks.base_risk.Risk` will load exposure information.
+The :class:`~vivarium.public_health.risks.effect.RiskEffect` will load the
 population attributable fraction and the relative risk associated with the
 risk-cause pair, and link the disease and risk model with this data.
 
-The configuration block for :class:`~vivarium_public_health.risks.effect.RiskEffect`
+The configuration block for :class:`~vivarium.public_health.risks.effect.RiskEffect`
 is specified as
 
 .. code-block:: yaml
@@ -307,9 +307,9 @@ is specified as
                ...options...
 
 where ``<exposure_entity_name>`` is the ``<name>`` provided to the associated
-:class:`~vivarium_public_health.risks.base_risk.Risk` component and the
+:class:`~vivarium.public_health.risks.base_risk.Risk` component and the
 ``<target_entity_name>`` is the name provided to the component used in
-the target, usually another :class:`~vivarium_public_health.risks.base_risk.Risk` or
+the target, usually another :class:`~vivarium.public_health.risks.base_risk.Risk` or
 a disease model.
 
 Specifying a Relative Risk Value
@@ -322,7 +322,7 @@ is to specify a single value for the relative risk.
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            disease:
                - SIS('my_infectious_disease')
            risks:
@@ -335,7 +335,7 @@ is to specify a single value for the relative risk.
                relative_risk: 20
 
 For this to work, the exposure modeled by the
-:class:`~vivarium_public_health.risks.base_risk.Risk` must be a dichotomous exposure
+:class:`~vivarium.public_health.risks.base_risk.Risk` must be a dichotomous exposure
 (only exposed or not exposed).  The ``"relative_risk"`` option provided will
 be assigned and used for the exposed group.  Specifying a relative risk
 this way will cause the population attributable fraction to be calculated
@@ -355,7 +355,7 @@ providing the following configuration options:
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            disease:
                - SIS('my_infectious_disease')
            risks:
@@ -380,7 +380,7 @@ This can be done with the following configuration options:
 .. code-block:: yaml
 
    components:
-       vivarium_public_health:
+       vivarium.public_health:
            disease:
                - SIS('my_infectious_disease')
            risks:
@@ -411,7 +411,7 @@ All three parameters, the ``"log_mean"``, the ``"log_sd"`` and the
 
 .. note::
 
-   The parameterized :class:`~vivarium_public_health.risks.effect.RiskEffect` can
+   The parameterized :class:`~vivarium.public_health.risks.effect.RiskEffect` can
    be used with a parameterized version of the
-   :class:`vivarium_public_health.risks.base_risk.Risk`.  The only requirement
+   :class:`vivarium.public_health.risks.base_risk.Risk`.  The only requirement
    for use is that exposure model be dichotomous.

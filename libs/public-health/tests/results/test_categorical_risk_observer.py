@@ -6,12 +6,12 @@ import pytest
 from vivarium.engine import InteractiveContext
 
 from tests.test_utilities import build_table_with_age
-from vivarium_public_health.population import BasePopulation
-from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
-from vivarium_public_health.results.columns import COLUMNS
-from vivarium_public_health.results.stratification import ResultsStratifier
-from vivarium_public_health.risks.base_risk import Risk
-from vivarium_public_health.utilities import to_years
+from vivarium.public_health.population import BasePopulation
+from vivarium.public_health.results.causal_factor import CategoricalRiskObserver
+from vivarium.public_health.results.columns import COLUMNS
+from vivarium.public_health.results.stratification import ResultsStratifier
+from vivarium.public_health.risks.base_risk import Risk
+from vivarium.public_health.utilities import to_years
 
 
 @pytest.fixture

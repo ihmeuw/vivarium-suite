@@ -2,7 +2,7 @@
 Population Structures and Fertility
 ===================================
 
-:mod:`vivarium_public_health` provides several components for creating and
+:mod:`vivarium.public_health` provides several components for creating and
 managing simulated populations. This tutorial demonstrates the minimal
 configuration required for each approach.
 
@@ -15,8 +15,8 @@ configuration required for each approach.
    import numpy as np
    import pandas as pd
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.population import *
-   from vivarium_public_health._example_data import *
+   from vivarium.public_health.population import *
+   from vivarium.public_health._example_data import *
    base_plugins = BASE_PLUGINS
 
 
@@ -28,26 +28,26 @@ There are two categories of population components:
 **Initial population** components create the starting set of simulants when the
 simulation begins:
 
-- :class:`~vivarium_public_health.population.base_population.BasePopulation` - the standard
+- :class:`~vivarium.public_health.population.base_population.BasePopulation` - the standard
   component that samples simulants from demographic data.
-- :class:`~vivarium_public_health.population.base_population.ScaledPopulation` - a variant
+- :class:`~vivarium.public_health.population.base_population.ScaledPopulation` - a variant
   that rescales the demographic data before sampling.
 
 **Fertility** components add new simulants during the simulation:
 
-- :class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityDeterministic` - adds a
+- :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityDeterministic` - adds a
   fixed number of births per year.
-- :class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate` - adds
+- :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate` - adds
   births based on a population-level crude birth rate without accounting for
   the age or sex composition of the population.
-- :class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates` -
+- :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates` -
   adds births at the individual level based on age-specific fertility rates.
 
 .. note::
 
-   :class:`~vivarium_public_health.population.base_population.BasePopulation`
+   :class:`~vivarium.public_health.population.base_population.BasePopulation`
    includes three sub-components:
-   :class:`~vivarium_public_health.population.mortality.Mortality`,
+   :class:`~vivarium.public_health.population.mortality.Mortality`,
    ``AgeOutSimulants``, and ``Disability``. You do not need to add these.
 
 
@@ -60,11 +60,11 @@ section shows the key names and column layouts for every data key so that
 you know exactly what format your data should have.
 
 Every code example in this tutorial uses two helpers imported from
-:mod:`vivarium_public_health._example_data`:
+:mod:`vivarium.public_health._example_data`:
 
 .. testcode::
 
-   from vivarium_public_health._example_data import BASE_PLUGINS, make_base_config
+   from vivarium.public_health._example_data import BASE_PLUGINS, make_base_config
 
    # BASE_PLUGINS configures the data plugin to serve example data from memory.
    # Pass it as plugin_configuration to InteractiveContext.
@@ -103,33 +103,33 @@ default.
    * - ``population.structure``
      - age, sex, year, location
      - ``value`` (population count)
-     - :class:`~vivarium_public_health.population.base_population.BasePopulation`,
-       :class:`~vivarium_public_health.population.base_population.ScaledPopulation`
+     - :class:`~vivarium.public_health.population.base_population.BasePopulation`,
+       :class:`~vivarium.public_health.population.base_population.ScaledPopulation`
      - ``population.population_structure``
    * - ``population.location``
      - *(scalar)*
      - A string (e.g. ``"Kenya"``)
-     - :class:`~vivarium_public_health.population.base_population.BasePopulation`
+     - :class:`~vivarium.public_health.population.base_population.BasePopulation`
      - ``population.location``
    * - ``cause.all_causes.cause_specific_mortality_rate``
      - age, sex, year
      - ``value`` (rate)
-     - :class:`~vivarium_public_health.population.mortality.Mortality`
+     - :class:`~vivarium.public_health.population.mortality.Mortality`
      - ``mortality.data_sources.all_cause_mortality_rate``
    * - ``population.theoretical_minimum_risk_life_expectancy``
      - age
      - ``value`` (years of remaining life)
-     - :class:`~vivarium_public_health.population.mortality.Mortality`
+     - :class:`~vivarium.public_health.population.mortality.Mortality`
      - ``mortality.data_sources.life_expectancy``
    * - ``covariate.live_births_by_sex.estimate``
      - year, sex, ``parameter``
      - ``value``
-     - :class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
+     - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
      - ``fertility.data_sources.live_births_by_sex``
    * - ``covariate.age_specific_fertility_rate.estimate``
      - age, sex, year, ``parameter``
      - ``value``
-     - :class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`
+     - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`
      - ``fertility_age_specific_rates.data_sources.age_specific_fertility_rate``
 
 
@@ -148,7 +148,7 @@ corresponding data key string. You can override any of them with:
 - **Callable** - call the function at setup time to produce the data.
 - **Data key** (string) - load a different key from the data plugin.
 
-For example, :class:`~vivarium_public_health.population.mortality.Mortality` declares
+For example, :class:`~vivarium.public_health.population.mortality.Mortality` declares
 three configurable data sources:
 
 .. code-block:: yaml
@@ -184,7 +184,7 @@ component expects, so you can see the concrete layout.
 BasePopulation
 --------------
 
-:class:`~vivarium_public_health.population.base_population.BasePopulation` is the standard way
+:class:`~vivarium.public_health.population.base_population.BasePopulation` is the standard way
 to create an initial population. It loads a population structure and samples
 simulants whose age, sex, and location distributions match the source data.
 
@@ -194,11 +194,11 @@ Data consumed by BasePopulation
 
 ``BasePopulation`` and its sub-components use the following data. The examples
 below show the expected column layout. The data builders come from
-:mod:`~vivarium_public_health._example_data`.
+:mod:`~vivarium.public_health._example_data`.
 
 .. testcode::
 
-   from vivarium_public_health._example_data import (
+   from vivarium.public_health._example_data import (
        population_structure,
        theoretical_minimum_risk_life_expectancy,
    )
@@ -254,8 +254,8 @@ literal string:
 
    import pandas as pd
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import population_structure
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import population_structure
 
    # Build population structure data (same layout as the data key).
    pop_data = population_structure()
@@ -300,7 +300,7 @@ defaults (ages 0-125, both sexes, no age-out):
 .. testcode::
 
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.population import BasePopulation
+   from vivarium.public_health.population import BasePopulation
 
    config = make_base_config()
    config.update(
@@ -546,8 +546,8 @@ Configuration summary for BasePopulation
 ScaledPopulation
 ----------------
 
-:class:`~vivarium_public_health.population.base_population.ScaledPopulation` works like
-:class:`~vivarium_public_health.population.base_population.BasePopulation` but multiplies
+:class:`~vivarium.public_health.population.base_population.ScaledPopulation` works like
+:class:`~vivarium.public_health.population.base_population.BasePopulation` but multiplies
 the population structure by a scaling factor before sampling. This is useful
 when simulants represent a subset of the real population (for example, only
 the population eligible for an intervention).
@@ -567,8 +567,8 @@ directly or as a string data key:
    import numpy as np
    import pandas as pd
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.population import ScaledPopulation
-   from vivarium_public_health._example_data import population_structure
+   from vivarium.public_health.population import ScaledPopulation
+   from vivarium.public_health._example_data import population_structure
 
    config = make_base_config()
    config.update(
@@ -629,7 +629,7 @@ Fertility Components
 
 Fertility components add new simulants during the simulation to model births.
 They are paired with a population component such as
-:class:`~vivarium_public_health.population.base_population.BasePopulation`.
+:class:`~vivarium.public_health.population.base_population.BasePopulation`.
 
 .. note::
 
@@ -640,14 +640,14 @@ They are paired with a population component such as
 FertilityDeterministic
 ^^^^^^^^^^^^^^^^^^^^^^
 
-:class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityDeterministic` adds a
+:class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityDeterministic` adds a
 fixed number of new simulants each year. This is the simplest fertility model
 and does not require any external data.
 
 .. testcode::
 
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.population import BasePopulation, FertilityDeterministic
+   from vivarium.public_health.population import BasePopulation, FertilityDeterministic
 
    config = make_base_config()
    config.update(
@@ -685,13 +685,13 @@ and does not require any external data.
 FertilityCrudeBirthRate
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-:class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate` models
+:class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate` models
 births at the population level using a crude birth rate - the number of live
 births per unit of population, regardless of age or sex structure. Because it
 does not consider the demographic composition of the population, the number of
 births depends only on the total population size and the overall birth rate.
 This contrasts with
-:class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`, which
+:class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`, which
 models births at the individual level using rates that vary by age.
 
 It requires ``initialization_age_min`` to be 0.
@@ -701,7 +701,7 @@ year × sex combination:
 
 .. testcode::
 
-   from vivarium_public_health._example_data import live_births_by_sex
+   from vivarium.public_health._example_data import live_births_by_sex
 
    # covariate.live_births_by_sex.estimate - each row gives the number of
    # live births for a year × sex combination.
@@ -723,8 +723,8 @@ Both data sources can be supplied via configuration:
 .. testcode::
 
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.population import BasePopulation, FertilityCrudeBirthRate
-   from vivarium_public_health._example_data import population_structure, live_births_by_sex
+   from vivarium.public_health.population import BasePopulation, FertilityCrudeBirthRate
+   from vivarium.public_health._example_data import population_structure, live_births_by_sex
 
    config = make_base_config()
    config.update(
@@ -775,7 +775,7 @@ Both data sources can be supplied via configuration:
 FertilityAgeSpecificRates
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:class:`~vivarium_public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates` models
+:class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates` models
 fertility at the individual level. Each living female simulant who has not
 given birth in the last nine months has a chance of giving birth determined
 by age-specific fertility rates. Newborns are linked to their parent via a
@@ -785,7 +785,7 @@ The expected data shape is one row per age × year × sex × parameter combinati
 
 .. testcode::
 
-   from vivarium_public_health._example_data import age_specific_fertility_rate
+   from vivarium.public_health._example_data import age_specific_fertility_rate
 
    # covariate.age_specific_fertility_rate.estimate - each row gives a
    # fertility rate for an age × year × sex × parameter cell.
@@ -808,7 +808,7 @@ The tutorial example below supplies a constant rate directly:
 .. testcode::
 
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.population import BasePopulation, FertilityAgeSpecificRates
+   from vivarium.public_health.population import BasePopulation, FertilityAgeSpecificRates
 
    config = make_base_config()
    config.update(

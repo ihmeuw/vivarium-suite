@@ -6,13 +6,13 @@ import pytest
 from vivarium.engine import InteractiveContext
 
 from tests.test_utilities import build_table_with_age
-from vivarium_public_health.disease import DiseaseModel, DiseaseState
-from vivarium_public_health.disease.state import SusceptibleState
-from vivarium_public_health.population import BasePopulation
-from vivarium_public_health.results.columns import COLUMNS
-from vivarium_public_health.results.disease import DiseaseObserver
-from vivarium_public_health.results.stratification import ResultsStratifier
-from vivarium_public_health.utilities import to_years
+from vivarium.public_health.disease import DiseaseModel, DiseaseState
+from vivarium.public_health.disease.state import SusceptibleState
+from vivarium.public_health.population import BasePopulation
+from vivarium.public_health.results.columns import COLUMNS
+from vivarium.public_health.results.disease import DiseaseObserver
+from vivarium.public_health.results.stratification import ResultsStratifier
+from vivarium.public_health.utilities import to_years
 
 
 @pytest.fixture

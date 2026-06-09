@@ -10,11 +10,11 @@ from vivarium.engine.framework.engine import Builder
 from vivarium.engine.testing_utilities import get_randomness
 from vivarium_testing_utils import FuzzyChecker
 
-import vivarium_public_health.population.base_population as bp
-import vivarium_public_health.population.data_transformations as dt
+import vivarium.public_health.population.base_population as bp
+import vivarium.public_health.population.data_transformations as dt
 from tests.mock_artifact import MockArtifact
 from tests.test_utilities import make_uniform_pop_data, simple_pop_structure
-from vivarium_public_health import utilities
+from vivarium.public_health import utilities
 
 
 def test_select_sub_population_data():

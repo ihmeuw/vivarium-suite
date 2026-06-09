@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.results.disability
+.. automodule:: vivarium.public_health.results.disability

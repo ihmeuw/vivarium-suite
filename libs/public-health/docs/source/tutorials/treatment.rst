@@ -2,7 +2,7 @@
 Treatment
 =========
 
-:mod:`vivarium_public_health` provides components for modeling treatment
+:mod:`vivarium.public_health` provides components for modeling treatment
 interventions in public health simulations. This tutorial covers the
 treatment package - how to model intervention coverage, how interventions
 reduce disease rates, and how to apply direct shifts or scale-ups to
@@ -22,13 +22,13 @@ For how risk factor *exposures* modify disease outcomes, see the
    from loguru import logger
    logger.disable("vivarium")
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.treatment import (
+   from vivarium.public_health.treatment import (
        Intervention, InterventionEffect, AbsoluteShift,
        LinearScaleUp, TherapeuticInertia,
    )
-   from vivarium_public_health.disease import *
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import *
+   from vivarium.public_health.disease import *
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import *
    base_plugins = BASE_PLUGINS
 
 
@@ -39,28 +39,28 @@ The treatment package provides several components for modeling interventions:
 
 **Intervention** - a dichotomous coverage model that assigns each simulant
 a covered or uncovered status.
-:class:`~vivarium_public_health.treatment.intervention.Intervention` is the
+:class:`~vivarium.public_health.treatment.intervention.Intervention` is the
 treatment analogue of
-:class:`~vivarium_public_health.risks.base_risk.Risk`.
+:class:`~vivarium.public_health.risks.base_risk.Risk`.
 
 **InterventionEffect** - how intervention coverage modifies a target rate
 or measure (via a relative risk).
-:class:`~vivarium_public_health.treatment.intervention.InterventionEffect`
+:class:`~vivarium.public_health.treatment.intervention.InterventionEffect`
 is the treatment analogue of
-:class:`~vivarium_public_health.risks.effect.RiskEffect`.
+:class:`~vivarium.public_health.risks.effect.RiskEffect`.
 
 **AbsoluteShift** - a simple component that directly replaces a target
 measure with a configured value for simulants in a specified age range.
-:class:`~vivarium_public_health.treatment.magic_wand.AbsoluteShift`
+:class:`~vivarium.public_health.treatment.magic_wand.AbsoluteShift`
 
 **LinearScaleUp** - linearly interpolates intervention coverage between
 a start and end value over a configured date range.
-:class:`~vivarium_public_health.treatment.scale_up.LinearScaleUp`
+:class:`~vivarium.public_health.treatment.scale_up.LinearScaleUp`
 
 **TherapeuticInertia** - draws a population-level therapeutic inertia
 value from a triangular distribution, representing the probability that
 treatment is *not* escalated during a healthcare visit.
-:class:`~vivarium_public_health.treatment.therapeutic_inertia.TherapeuticInertia`
+:class:`~vivarium.public_health.treatment.therapeutic_inertia.TherapeuticInertia`
 
 
 Common Setup
@@ -72,13 +72,13 @@ To run any example in a standalone script, include all of these at the top:
 .. testcode::
 
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.treatment import (
+   from vivarium.public_health.treatment import (
        Intervention, InterventionEffect, AbsoluteShift,
        LinearScaleUp, TherapeuticInertia,
    )
-   from vivarium_public_health.disease import SI, SIS
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import (
+   from vivarium.public_health.disease import SI, SIS
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import (
        BASE_PLUGINS, ConstantRatePipeline, make_base_config,
    )
 
@@ -94,14 +94,14 @@ To run any example in a standalone script, include all of these at the top:
 Intervention
 ------------
 
-An :class:`~vivarium_public_health.treatment.intervention.Intervention`
+An :class:`~vivarium.public_health.treatment.intervention.Intervention`
 component assigns each simulant a coverage status - either ``"covered"``
 or ``"uncovered"``. The proportion covered is determined by the exposure
 data source. Each simulant's propensity (a random value drawn at
 initialization) determines whether they receive coverage.
 
 ``Intervention`` is a specialization of
-:class:`~vivarium_public_health.causal_factor.exposure.CausalFactor`
+:class:`~vivarium.public_health.causal_factor.exposure.CausalFactor`
 restricted to the ``"intervention"`` entity type.
 
 The configuration key for an intervention is its full entity string
@@ -199,14 +199,14 @@ draw:
 InterventionEffect
 ------------------
 
-An :class:`~vivarium_public_health.treatment.intervention.InterventionEffect`
+An :class:`~vivarium.public_health.treatment.intervention.InterventionEffect`
 modifies disease dynamics based on intervention coverage. Unlike a risk
 factor (where exposed simulants typically have a *higher* rate), an
 intervention typically *reduces* the target rate for covered simulants
 (relative risk < 1).
 
 ``InterventionEffect`` is a specialization of
-:class:`~vivarium_public_health.causal_factor.effect.CausalFactorEffect`
+:class:`~vivarium.public_health.causal_factor.effect.CausalFactorEffect`
 for interventions. Its configuration key combines the intervention name and
 the target:
 
@@ -286,7 +286,7 @@ at a lower rate than uncovered simulants:
 AbsoluteShift
 -------------
 
-An :class:`~vivarium_public_health.treatment.magic_wand.AbsoluteShift`
+An :class:`~vivarium.public_health.treatment.magic_wand.AbsoluteShift`
 provides a direct override of a target epidemiological measure. When
 ``target_value`` is set to a numeric value, the component replaces the
 target pipeline's value for all simulants within the configured age range.
@@ -317,7 +317,7 @@ Eliminating disease incidence
 
 The following example replaces a rate pipeline's value using
 ``AbsoluteShift``.  We use a
-:class:`~vivarium_public_health._example_data.ConstantRatePipeline` to
+:class:`~vivarium.public_health._example_data.ConstantRatePipeline` to
 create a simple attribute pipeline with value 0.5, then override it with 0.3:
 
 .. testcode::
@@ -404,12 +404,12 @@ retain the original value of 0.5:
 LinearScaleUp
 -------------
 
-A :class:`~vivarium_public_health.treatment.scale_up.LinearScaleUp`
+A :class:`~vivarium.public_health.treatment.scale_up.LinearScaleUp`
 linearly interpolates an intervention's coverage between a start value and
 an end value over a configured date range. Before the start date, the start
 value applies; after the end date, the end value applies. It works by
 modifying the ``exposure_parameters`` pipeline of an
-:class:`~vivarium_public_health.treatment.intervention.Intervention`
+:class:`~vivarium.public_health.treatment.intervention.Intervention`
 component.
 
 The ``LinearScaleUp`` component checks whether the simulation is running
@@ -532,7 +532,7 @@ over the scale-up period:
 TherapeuticInertia
 ------------------
 
-:class:`~vivarium_public_health.treatment.therapeutic_inertia.TherapeuticInertia`
+:class:`~vivarium.public_health.treatment.therapeutic_inertia.TherapeuticInertia`
 models the variety of reasons why a treatment algorithm might deviate from
 clinical guidelines. At setup, a single scalar value is drawn from a
 triangular distribution and exposed via the ``therapeutic_inertia`` pipeline.
@@ -635,8 +635,8 @@ Configuration Summary
 .. note::
 
    ``Intervention`` and ``InterventionEffect`` are specializations of the
-   more general :class:`~vivarium_public_health.causal_factor.exposure.CausalFactor`
-   and :class:`~vivarium_public_health.causal_factor.effect.CausalFactorEffect`
+   more general :class:`~vivarium.public_health.causal_factor.exposure.CausalFactor`
+   and :class:`~vivarium.public_health.causal_factor.effect.CausalFactorEffect`
    base classes. For interventions, the exposure categories are ``"covered"``
    and ``"uncovered"`` (rather than ``"exposed"`` / ``"unexposed"`` for risk
    factors).

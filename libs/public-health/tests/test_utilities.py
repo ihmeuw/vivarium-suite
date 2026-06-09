@@ -8,7 +8,7 @@ import pytest
 from hypothesis import given
 from vivarium.engine.testing_utilities import build_table
 
-from vivarium_public_health.utilities import EntityString, TargetString
+from vivarium.public_health.utilities import EntityString, TargetString
 
 
 @st.composite

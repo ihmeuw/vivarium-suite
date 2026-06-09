@@ -3,8 +3,8 @@
 # import pytest
 #
 # from vivarium.engine.testing_utilities import build_table
-# from vivarium_public_health.risks import distributions
-# from vivarium_public_health.risks.data_transformations import pivot_categorical
+# from vivarium.public_health.risks import distributions
+# from vivarium.public_health.risks.data_transformations import pivot_categorical
 #
 #
 # def test_get_distribution_ensemble_risk():
@@ -99,7 +99,7 @@
 #
 #
 # def test_get_distribution_polytomous_risk(mocker):
-#     rebin_mock = mocker.patch('vivarium_public_health.risks.distributions.should_rebin')
+#     rebin_mock = mocker.patch('vivarium.public_health.risks.distributions.should_rebin')
 #     rebin_mock.return_value = False
 #
 #     test_exposure = []
@@ -120,7 +120,7 @@
 #
 #
 # def test_get_distribution_polytomous_risk_rebinned(mocker):
-#     rebin_mock = mocker.patch('vivarium_public_health.risks.distributions.should_rebin')
+#     rebin_mock = mocker.patch('vivarium.public_health.risks.distributions.should_rebin')
 #     rebin_mock.return_value = True
 #
 #     test_exposure = []

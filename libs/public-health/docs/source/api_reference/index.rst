@@ -1,7 +1,7 @@
 API Reference
 =============
 
-.. automodule:: vivarium_public_health
+.. automodule:: vivarium.public_health
 
 .. toctree::
    :maxdepth: 2

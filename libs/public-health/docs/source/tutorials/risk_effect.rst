@@ -2,7 +2,7 @@
 Risk Effects
 ============
 
-:mod:`vivarium_public_health` provides components for modeling how risk factor
+:mod:`vivarium.public_health` provides components for modeling how risk factor
 exposures modify disease outcomes. This tutorial covers **risk effects** -
 the components that translate exposure into changes in disease rates.
 
@@ -17,10 +17,10 @@ For how simulants are assigned exposure values, see the :doc:`risk` tutorial.
    import numpy as np
    import pandas as pd
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.risks import Risk, RiskEffect, NonLogLinearRiskEffect
-   from vivarium_public_health.disease import *
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import *
+   from vivarium.public_health.risks import Risk, RiskEffect, NonLogLinearRiskEffect
+   from vivarium.public_health.disease import *
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import *
    base_plugins = BASE_PLUGINS
 
 
@@ -34,18 +34,18 @@ form: ``{entity_type}.{entity_name}.{measure}`` (e.g.,
 
 There are two effect components:
 
-- :class:`~vivarium_public_health.risks.effect.RiskEffect` - multiplies a
+- :class:`~vivarium.public_health.risks.effect.RiskEffect` - multiplies a
   target rate (e.g., disease incidence) by a relative risk for exposed
   simulants.
-- :class:`~vivarium_public_health.risks.effect.NonLogLinearRiskEffect` -
+- :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect` -
   a variant where relative risk is parameterized by exposure level, using
   piecewise linear interpolation.
 
-A typical risk model pairs a :class:`~vivarium_public_health.risks.base_risk.Risk`
-with one or more :class:`~vivarium_public_health.risks.effect.RiskEffect`
+A typical risk model pairs a :class:`~vivarium.public_health.risks.base_risk.Risk`
+with one or more :class:`~vivarium.public_health.risks.effect.RiskEffect`
 components to modify disease rates. The
-:class:`~vivarium_public_health.risks.base_risk.Risk` determines *who* is
-exposed, and the :class:`~vivarium_public_health.risks.effect.RiskEffect`
+:class:`~vivarium.public_health.risks.base_risk.Risk` determines *who* is
+exposed, and the :class:`~vivarium.public_health.risks.effect.RiskEffect`
 determines *how much* that exposure changes the outcome.
 
 
@@ -58,10 +58,10 @@ To run any example in a standalone script, include all of these at the top:
 .. testcode::
 
    from vivarium.engine import InteractiveContext
-   from vivarium_public_health.risks import Risk, RiskEffect
-   from vivarium_public_health.disease import SI, SIS
-   from vivarium_public_health.population import BasePopulation
-   from vivarium_public_health._example_data import BASE_PLUGINS, make_base_config
+   from vivarium.public_health.risks import Risk, RiskEffect
+   from vivarium.public_health.disease import SI, SIS
+   from vivarium.public_health.population import BasePopulation
+   from vivarium.public_health._example_data import BASE_PLUGINS, make_base_config
 
    # BASE_PLUGINS overrides the data plugin to use ExampleArtifactManager,
    # which serves example data from memory instead of requiring a real HDF file.
@@ -98,12 +98,12 @@ The table below lists every data key used by the risk effect components.
    * - ``risk_factor.{name}.relative_risk``
      - age, sex, year, parameter, affected_entity, affected_measure
      - ``value`` (relative risk per category)
-     - :class:`~vivarium_public_health.risks.effect.RiskEffect`
+     - :class:`~vivarium.public_health.risks.effect.RiskEffect`
      - Yes - ``risk_effect.{name}_on_{target}.data_sources.relative_risk``
    * - ``risk_factor.{name}.population_attributable_fraction``
      - age, sex, year, affected_entity, affected_measure
      - ``value`` (fraction)
-     - :class:`~vivarium_public_health.risks.effect.RiskEffect`
+     - :class:`~vivarium.public_health.risks.effect.RiskEffect`
      - Yes - ``risk_effect.{name}_on_{target}.data_sources.population_attributable_fraction``
 
 
@@ -111,12 +111,12 @@ Artifact data shapes
 ^^^^^^^^^^^^^^^^^^^^
 
 The examples below use the data builders from the
-:mod:`~vivarium_public_health._example_data` module; a production artifact
+:mod:`~vivarium.public_health._example_data` module; a production artifact
 has the same column layout but with real GBD values.
 
 .. testcode::
 
-   from vivarium_public_health._example_data import (
+   from vivarium.public_health._example_data import (
        risk_relative_risk_dichotomous,
        risk_paf,
    )
@@ -158,7 +158,7 @@ can override any key with:
 - **Callable** - call the function at setup time to produce the data.
 - **Artifact key** (string) - load a different key from the artifact.
 
-:class:`~vivarium_public_health.risks.effect.RiskEffect` declares:
+:class:`~vivarium.public_health.risks.effect.RiskEffect` declares:
 
 .. code-block:: yaml
 
@@ -194,7 +194,7 @@ configuration - see the `NonLogLinearRiskEffect`_ section for the
 RiskEffect
 ----------
 
-A :class:`~vivarium_public_health.risks.effect.RiskEffect` modifies disease
+A :class:`~vivarium.public_health.risks.effect.RiskEffect` modifies disease
 dynamics based on exposure. In the standard pattern, exposed simulants have
 a higher incidence rate (multiplied by the relative risk) than unexposed
 simulants.
@@ -263,9 +263,9 @@ at a higher rate than unexposed simulants:
 Multiple risk effects
 ^^^^^^^^^^^^^^^^^^^^^
 
-A single :class:`~vivarium_public_health.risks.base_risk.Risk` can have
+A single :class:`~vivarium.public_health.risks.base_risk.Risk` can have
 effects on multiple targets, and multiple risks can target the same disease.
-Each :class:`~vivarium_public_health.risks.effect.RiskEffect` multiplies the
+Each :class:`~vivarium.public_health.risks.effect.RiskEffect` multiplies the
 target rate independently:
 
 .. testcode::
@@ -438,7 +438,7 @@ baseline is scaled down to compensate.
 NonLogLinearRiskEffect
 ----------------------
 
-A :class:`~vivarium_public_health.risks.effect.NonLogLinearRiskEffect` models
+A :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect` models
 the relationship between a **continuous** exposure and a target rate using
 piecewise linear interpolation. Unlike ``RiskEffect`` (which applies a single
 RR to exposed simulants), this component assigns each simulant an
@@ -461,7 +461,7 @@ column (exposure thresholds) rather than categorical labels:
 
    # Build RR data: 1000 exposure thresholds from 1 to 9.
    # RR increases linearly from 1.0 (at exposure=1) to 5.0 (at exposure=9).
-   from vivarium_public_health._example_data import risk_relative_risk_continuous
+   from vivarium.public_health._example_data import risk_relative_risk_continuous
 
    rr_data = risk_relative_risk_continuous(
        exposure_min=1, exposure_max=9, rr_min=1.0, rr_max=5.0
@@ -531,7 +531,7 @@ before components initialize:
            pass
 
    # Build RR data using the helper from _example_data.
-   from vivarium_public_health._example_data import risk_relative_risk_continuous
+   from vivarium.public_health._example_data import risk_relative_risk_continuous
    rr_data = risk_relative_risk_continuous(
        exposure_min=1, exposure_max=9, rr_min=1.0, rr_max=5.0
    )

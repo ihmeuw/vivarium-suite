@@ -7,12 +7,12 @@ from vivarium.engine.testing_utilities import TestPopulation
 
 from tests.risks.test_effect import _setup_risk_effect_simulation
 from tests.test_utilities import make_age_bins
-from vivarium_public_health.risks.implementations.low_birth_weight_and_short_gestation import (
+from vivarium.public_health.risks.implementations.low_birth_weight_and_short_gestation import (
     LBWSGDistribution,
     LBWSGRisk,
     LBWSGRiskEffect,
 )
-from vivarium_public_health.utilities import to_snake_case
+from vivarium.public_health.utilities import to_snake_case
 
 
 @pytest.mark.parametrize(
@@ -255,7 +255,7 @@ def test_lbwsg_exposure_data_logging(exposure_key, base_config, mocker, caplog) 
 
     # Patch get_category intervals so we do not need the mock artifact
     mocker.patch(
-        "vivarium_public_health.risks.implementations.low_birth_weight_and_short_gestation.LBWSGDistribution.get_category_intervals"
+        "vivarium.public_health.risks.implementations.low_birth_weight_and_short_gestation.LBWSGDistribution.get_category_intervals"
     )
     assert not caplog.records
     if exposure_key != "missing":

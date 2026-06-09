@@ -5,8 +5,8 @@ from vivarium.engine import Component, InteractiveContext
 from vivarium_testing_utils import FuzzyChecker
 
 from tests.test_utilities import build_table_with_age
-from vivarium_public_health.disease import BaseDiseaseState, DiseaseModel, DiseaseState
-from vivarium_public_health.population import BasePopulation
+from vivarium.public_health.disease import BaseDiseaseState, DiseaseModel, DiseaseState
+from vivarium.public_health.population import BasePopulation
 
 
 @pytest.fixture

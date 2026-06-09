@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.disease.transition
+.. automodule:: vivarium.public_health.disease.transition

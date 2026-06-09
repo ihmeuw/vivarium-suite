@@ -1,1 +1,1 @@
-.. automodule:: vivarium_public_health.results.disease
+.. automodule:: vivarium.public_health.results.disease

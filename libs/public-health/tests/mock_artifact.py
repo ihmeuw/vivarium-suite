@@ -4,7 +4,7 @@ Mock Data Artifact
 ==================
 
 This module contains a mock version of the artifact manager for use with
-testing vivarium_public_health components.
+testing vivarium.public_health components.
 
 """
 

@@ -2,7 +2,7 @@
 Risk Modeling Tools
 ===================
 
-.. automodule:: vivarium_public_health.risks
+.. automodule:: vivarium.public_health.risks
 
 .. toctree::
    :maxdepth: 2

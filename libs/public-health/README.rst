@@ -5,31 +5,31 @@ Vivarium Public Health
 .. image:: https://badge.fury.io/py/vivarium-public-health.svg
     :target: https://badge.fury.io/py/vivarium-public-health
 
-.. image:: https://github.com/ihmeuw/vivarium_public_health/actions/workflows/build.yml/badge.svg?branch=main
-    :target: https://github.com/ihmeuw/vivarium_public_health
-    :alt: Latest Version
-
-.. image:: https://readthedocs.org/projects/vivarium_public_health/badge/?version=latest
-    :target: https://vivarium_public_health.readthedocs.io/en/latest/?badge=latest
-    :alt: Latest Docs
+.. image:: https://readthedocs.org/projects/vivarium-public-health/badge/?version=latest
+    :target: https://vivarium-public-health.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
 
 .. image:: https://zenodo.org/badge/141212278.svg
    :target: https://zenodo.org/badge/latestdoi/141212278
 
-This library contains several components for for modelling diseases and their interventions.
+This library contains several components for modelling diseases and their interventions.
 
-You can install ``vivarium_public_health`` from PyPI with pip:
+**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
 
-  ``> pip install vivarium_public_health``
+You can install ``vivarium-public-health`` from PyPI with pip:
 
-or build it from source with
+.. code-block:: bash
 
-  ``> git clone https://github.com/ihmeuw/vivarium_public_health.git``
+   pip install vivarium-public-health
 
-  ``> cd vivarium_public_health``
+or build it from source by cloning the monorepo and installing this package:
 
-  ``> python setup.py install``
+.. code-block:: bash
+
+   git clone https://github.com/ihmeuw/vivarium-suite.git
+   cd vivarium-suite
+   pip install libs/public-health
 
 
-`Check out the docs! <https://vivarium.readthedocs.io/projects/vivarium-public-health/en/latest/>`_
----------------------------------------------------------------------------------------------------
+`Check out the docs! <https://vivarium-public-health.readthedocs.io/en/latest/>`_
+---------------------------------------------------------------------------------

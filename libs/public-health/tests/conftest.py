@@ -9,8 +9,8 @@ from vivarium.engine.framework.configuration import build_simulation_configurati
 from vivarium_testing_utils import FuzzyChecker
 
 from tests.test_utilities import build_table_with_age
-from vivarium_public_health.disease import DiseaseModel, DiseaseState
-from vivarium_public_health.disease.state import SusceptibleState
+from vivarium.public_health.disease import DiseaseModel, DiseaseState
+from vivarium.public_health.disease.state import SusceptibleState
 
 
 @pytest.fixture(scope="session")
