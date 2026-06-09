@@ -1,4 +1,4 @@
-**1.0.8 - 06/08/26**
+**1.0.8 - 06/09/26**
  
  - Replace networkx-stubs with types-networkx in the networkx extra
 
