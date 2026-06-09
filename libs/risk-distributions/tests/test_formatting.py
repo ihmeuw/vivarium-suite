@@ -1,21 +1,26 @@
+from __future__ import annotations
+
 from itertools import product
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import pytest
 
 from vivarium.risk_distributions.formatting import (
+    Parameter,
     cast_to_series,
     format_call_data,
     format_data,
     format_data_frame,
 )
 
-valid_inputs = (np.array([1]), pd.Series([1]), [1], (1,), 1)
+valid_inputs: tuple[Parameter, ...] = (np.array([1]), pd.Series([1]), [1], (1,), 1)
 
 
 @pytest.mark.parametrize("mean, sd", product(valid_inputs, valid_inputs))
-def test_cast_to_series_single_ints(mean, sd):
+def test_cast_to_series_single_ints(mean: Parameter, sd: Parameter) -> None:
     expected_mean, expected_sd = pd.Series([1]), pd.Series([1])
     out_mean, out_sd = cast_to_series(mean, sd)
     assert expected_mean.equals(out_mean)
@@ -26,7 +31,7 @@ valid_inputs = (np.array([1.0]), pd.Series([1.0]), [1.0], (1.0,), 1.0)
 
 
 @pytest.mark.parametrize("mean, sd", product(valid_inputs, valid_inputs))
-def test_cast_to_series_single_floats(mean, sd):
+def test_cast_to_series_single_floats(mean: Parameter, sd: Parameter) -> None:
     expected_mean, expected_sd = pd.Series([1.0]), pd.Series([1.0])
     out_mean, out_sd = cast_to_series(mean, sd)
     assert expected_mean.equals(out_mean)
@@ -37,19 +42,19 @@ valid_inputs = (np.array([1, 2, 3]), pd.Series([1, 2, 3]), [1, 2, 3], (1, 2, 3))
 
 
 @pytest.mark.parametrize("mean, sd", product(valid_inputs, valid_inputs))
-def test_cast_to_series_array_like(mean, sd):
+def test_cast_to_series_array_like(mean: Parameter, sd: Parameter) -> None:
     expected_mean, expected_sd = pd.Series([1, 2, 3]), pd.Series([1, 2, 3])
     out_mean, out_sd = cast_to_series(mean, sd)
     assert expected_mean.equals(out_mean)
     assert expected_sd.equals(out_sd)
 
 
-reference = pd.Series([1, 2, 3], index=["a", "b", "c"])
+reference: pd.Series[Any] = pd.Series([1, 2, 3], index=["a", "b", "c"])
 valid_inputs = (np.array([1, 2, 3]), reference, [1, 2, 3], (1, 2, 3))
 
 
 @pytest.mark.parametrize("reference, other", product([reference], valid_inputs))
-def test_cast_to_series_indexed(reference, other):
+def test_cast_to_series_indexed(reference: pd.Series[Any], other: Parameter) -> None:
     out_mean, out_sd = cast_to_series(reference, other)
     assert reference.equals(out_mean)
     assert reference.equals(out_sd)
@@ -59,11 +64,11 @@ def test_cast_to_series_indexed(reference, other):
     assert reference.equals(out_sd)
 
 
-null_inputs = (np.array([]), pd.Series([]), [], ())
+null_inputs: tuple[Parameter, ...] = (np.array([]), pd.Series([]), [], ())
 
 
 @pytest.mark.parametrize("val, null", product([1], null_inputs))
-def test_cast_to_series_nulls(val, null):
+def test_cast_to_series_nulls(val: Parameter, null: Parameter) -> None:
     with pytest.raises(ValueError, match="Empty data structure"):
         cast_to_series(val, null)
 
@@ -71,7 +76,7 @@ def test_cast_to_series_nulls(val, null):
         cast_to_series(null, val)
 
 
-def test_cast_to_series_mismatched_index():
+def test_cast_to_series_mismatched_index() -> None:
     reference = pd.Series([1, 2, 3], index=["a", "b", "c"])
     other = pd.Series([1, 2, 3])
 
@@ -82,8 +87,13 @@ def test_cast_to_series_mismatched_index():
         cast_to_series(other, reference)
 
 
-reference = (np.array([1, 2, 3]), pd.Series([1, 2, 3]), [1, 2, 3], (1, 2, 3))
-invalid = (
+length_references: tuple[Parameter, ...] = (
+    np.array([1, 2, 3]),
+    pd.Series([1, 2, 3]),
+    [1, 2, 3],
+    (1, 2, 3),
+)
+invalid: tuple[Parameter, ...] = (
     np.array([1]),
     pd.Series([1]),
     [1],
@@ -97,8 +107,8 @@ invalid = (
 )
 
 
-@pytest.mark.parametrize("reference, other", product(reference, invalid))
-def test_cast_to_series_mismatched_length(reference, other):
+@pytest.mark.parametrize("reference, other", product(length_references, invalid))
+def test_cast_to_series_mismatched_length(reference: Parameter, other: Parameter) -> None:
     with pytest.raises(ValueError, match="same number of values"):
         cast_to_series(reference, other)
 
@@ -114,7 +124,9 @@ def test_cast_to_series_mismatched_length(reference, other):
         ([], ["a"], "No data"),
     ],
 )
-def test_format_data_frame(data_columns, required_columns, match):
+def test_format_data_frame(
+    data_columns: list[str], required_columns: list[str], match: str
+) -> None:
     data = pd.DataFrame(data={c: [1] for c in data_columns}, index=[0])
 
     with pytest.raises(ValueError, match=match):
@@ -122,7 +134,7 @@ def test_format_data_frame(data_columns, required_columns, match):
 
 
 @pytest.mark.parametrize("data", ["string", {1, 2, 3}, None])
-def test_format_data_unsupported_types(data):
+def test_format_data_unsupported_types(data: str | set[int] | None) -> None:
     """Test format_data with unsupported data types."""
     with pytest.raises(TypeError, match="Unsupported data type"):
         format_data(data, ["param1"], "test")
@@ -155,7 +167,9 @@ def test_format_data_unsupported_types(data):
         ),
     ],
 )
-def test_format_array_success(data, required_columns, expected):
+def test_format_array_success(
+    data: npt.NDArray[Any], required_columns: list[str], expected: pd.DataFrame
+) -> None:
     """Test successful format_array operations."""
     result = format_data(data, required_columns, "test")
     pd.testing.assert_frame_equal(result, expected)
@@ -188,7 +202,9 @@ def test_format_array_success(data, required_columns, expected):
         (np.array([[[1, 2], [3, 4]]]), ["param1"], "Invalid data shape"),
     ],
 )
-def test_format_array_errors(data, required_columns, expected_error):
+def test_format_array_errors(
+    data: npt.NDArray[Any], required_columns: list[str], expected_error: str
+) -> None:
     """Test format_array error cases."""
     with pytest.raises(ValueError, match=expected_error):
         format_data(data, required_columns, "test")
@@ -220,7 +236,9 @@ def test_format_array_errors(data, required_columns, expected_error):
         ),
     ],
 )
-def test_format_series_success(data, required_columns, expected):
+def test_format_series_success(
+    data: pd.Series[Any], required_columns: list[str], expected: pd.DataFrame
+) -> None:
     """Test successful format_series operations."""
     result = format_data(data, required_columns, "test")
     pd.testing.assert_frame_equal(result, expected)
@@ -237,7 +255,9 @@ def test_format_series_success(data, required_columns, expected):
         ),
     ],
 )
-def test_format_series_errors(data, required_columns, expected_error):
+def test_format_series_errors(
+    data: pd.Series[Any], required_columns: list[str], expected_error: str
+) -> None:
     """Test format_series error cases."""
     with pytest.raises(ValueError, match=expected_error):
         format_data(data, required_columns, "test")
@@ -264,7 +284,9 @@ def test_format_series_errors(data, required_columns, expected_error):
         ),
     ],
 )
-def test_format_data_frame_success(data, required_columns, expected):
+def test_format_data_frame_success(
+    data: pd.DataFrame, required_columns: list[str], expected: pd.DataFrame
+) -> None:
     """Test successful format_data_frame operations."""
     result = format_data_frame(data, required_columns, "test")
     pd.testing.assert_frame_equal(result, expected)
@@ -291,7 +313,9 @@ def test_format_data_frame_success(data, required_columns, expected):
         ),
     ],
 )
-def test_format_list_like_success(data, required_columns, expected):
+def test_format_list_like_success(
+    data: list[Any] | tuple[Any, ...], required_columns: list[str], expected: pd.DataFrame
+) -> None:
     """Test successful format_list_like operations."""
     result = format_data(data, required_columns, "test")
     pd.testing.assert_frame_equal(result, expected)
@@ -306,7 +330,9 @@ def test_format_list_like_success(data, required_columns, expected):
         ([1, 2], ["a", "b", "c"], "2 values provided for test when 3 were expected"),
     ],
 )
-def test_format_list_like_errors(data, required_columns, expected_error):
+def test_format_list_like_errors(
+    data: list[Any] | tuple[Any, ...], required_columns: list[str], expected_error: str
+) -> None:
     """Test format_list_like error cases."""
     with pytest.raises(ValueError, match=expected_error):
         format_data(data, required_columns, "test")
@@ -338,7 +364,9 @@ def test_format_list_like_errors(data, required_columns, expected_error):
         ),
     ],
 )
-def test_format_dict_success(data, required_columns, expected):
+def test_format_dict_success(
+    data: dict[str, Any], required_columns: list[str], expected: pd.DataFrame
+) -> None:
     """Test successful format_dict operations."""
     result = format_data(data, required_columns, "test")
     pd.testing.assert_frame_equal(result, expected)
@@ -357,7 +385,9 @@ def test_format_dict_success(data, required_columns, expected):
         ),
     ],
 )
-def test_format_dict_errors(data, required_columns, expected_error):
+def test_format_dict_errors(
+    data: dict[str, Any], required_columns: list[str], expected_error: str
+) -> None:
     """Test format_dict error cases."""
     with pytest.raises(ValueError, match=expected_error):
         format_data(data, required_columns, "test")
@@ -396,7 +426,11 @@ def test_format_dict_errors(data, required_columns, expected_error):
         ),
     ],
 )
-def test_format_call_data_success(call_data, parameters, expected_call_index):
+def test_format_call_data_success(
+    call_data: pd.Series[Any] | npt.NDArray[Any] | list[int] | int,
+    parameters: pd.DataFrame,
+    expected_call_index: list[str] | None,
+) -> None:
     """Test successful format_call_data operations."""
     result_call, result_params = format_call_data(call_data, parameters)
     assert isinstance(result_call, pd.Series)
@@ -417,7 +451,9 @@ def test_format_call_data_success(call_data, parameters, expected_call_index):
         ),
     ],
 )
-def test_format_call_data_errors(call_data, parameters, expected_error):
+def test_format_call_data_errors(
+    call_data: pd.Series[Any], parameters: pd.DataFrame, expected_error: str
+) -> None:
     """Test format_call_data error cases."""
     with pytest.raises(ValueError, match=expected_error):
         format_call_data(call_data, parameters)

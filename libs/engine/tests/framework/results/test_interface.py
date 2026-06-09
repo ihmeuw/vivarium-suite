@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from pathlib import Path
 from types import MethodType
 
 import pandas as pd
@@ -12,6 +13,7 @@ from vivarium.config_tree.main import ConfigTree
 
 from tests.framework.results.helpers import BASE_POPULATION, FAMILIARS
 from tests.framework.results.helpers import HOUSE_CATEGORIES as HOUSES
+from tests.framework.results.helpers import STUDENT_HOUSES
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results import ResultsInterface, ResultsManager
@@ -516,10 +518,65 @@ def test_default_stratified_formatter_converts_object_to_categorical() -> None:
 
     formatted = _default_stratified_observation_formatter("test_measure", results)
 
-    # Object columns should be converted to categorical
-    assert isinstance(formatted["student_house"].dtype, pd.CategoricalDtype)
-    assert isinstance(formatted["power_level"].dtype, pd.CategoricalDtype)
-    assert isinstance(formatted["measure"].dtype, pd.CategoricalDtype)
+    # Object columns should be converted to categorical. They arrive without a
+    # registered order, so they are unordered.
+    for col in ["student_house", "power_level", "measure"]:
+        dtype = formatted[col].dtype
+        assert isinstance(dtype, pd.CategoricalDtype)
+        assert dtype.ordered is False
     # Non-object columns should be unchanged
     assert formatted["value"].dtype == float
     assert formatted["count"].dtype == int
+
+
+class TestDefaultStratifiedFormatterParquetRoundtrip:
+    """The default stratified formatter's output, written to .parquet and read back,
+    preserves an ordered-categorical index level's registered order, converts other
+    object label columns to unordered categoricals, and leaves numeric columns numeric."""
+
+    student_house_order = list(STUDENT_HOUSES)
+
+    @pytest.fixture
+    def loaded(self, tmp_path: Path) -> pd.DataFrame:
+        student_house = pd.Categorical(
+            ["ravenclaw", "gryffindor", "slytherin"],
+            categories=self.student_house_order,
+            ordered=True,
+        )
+        results = pd.DataFrame(
+            {
+                "value": [3.0, 1.0, 2.0],
+                "count": [30, 10, 20],
+                "measure": ["house_points"] * 3,
+            },
+            index=pd.CategoricalIndex(student_house, name="student_house"),
+        )
+        formatted = _default_stratified_observation_formatter("house_points", results)
+        path = tmp_path / "house_points.parquet"
+        formatted.to_parquet(path, index=False)
+        return pd.read_parquet(path)
+
+    def test_label_columns_are_categorical(self, loaded: pd.DataFrame) -> None:
+        """The stratification column keeps its registered (non-alphabetical) order; a
+        non-stratification object label column becomes an unordered categorical."""
+        house_dtype = loaded["student_house"].dtype
+        assert isinstance(house_dtype, pd.CategoricalDtype)
+        assert house_dtype.ordered is True
+        assert list(house_dtype.categories) == self.student_house_order
+        assert list(house_dtype.categories) != sorted(self.student_house_order)
+        assert list(loaded["student_house"].astype(str)) == [
+            "ravenclaw",
+            "gryffindor",
+            "slytherin",
+        ]
+
+        measure_dtype = loaded["measure"].dtype
+        assert isinstance(measure_dtype, pd.CategoricalDtype)
+        assert measure_dtype.ordered is False
+
+    def test_numeric_columns_stay_numeric(self, loaded: pd.DataFrame) -> None:
+        """The value column and any additional numeric output column stay numeric."""
+        assert pd.api.types.is_numeric_dtype(loaded["value"])
+        assert pd.api.types.is_numeric_dtype(loaded["count"])
+        assert list(loaded["value"]) == [3.0, 1.0, 2.0]
+        assert list(loaded["count"]) == [30, 10, 20]

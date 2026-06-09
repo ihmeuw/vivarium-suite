@@ -1,8 +1,12 @@
-**0.13.1 - 06/08/26**
+**0.14.1 - 06/09/26**
 
  - Add a scope-tightening pass to the ``brainstorming`` skill (intent vs. literal acceptance criteria, uniformity check, defer single-caller abstractions)
  - Document test organization in the ``pytest`` skill (parallel test/src files; test classes with shared setup and one requirement per test)
  - Document in ``team-conventions`` that PR review threads are left for the comment's author to resolve
+ 
+**0.14.0 - 06/09/26**
+
+ - Code reviewer now checks model-repo PRs against the relevant research documentation.
 
 **0.13.0 - 06/08/26**
 

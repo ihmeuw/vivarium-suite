@@ -1,3 +1,8 @@
+**5.1.2 - 06/08/26**
+
+- Write stratified observation results' stratification columns as ordered
+  categoricals in their registered category order.
+
 **5.1.1 - 06/08/26**
 
 - Treat string data sources matching the entity key format as artifact keys and
