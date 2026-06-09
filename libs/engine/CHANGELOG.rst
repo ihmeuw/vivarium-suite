@@ -1,3 +1,7 @@
+**5.1.3 - 06/09/26**
+
+- Unpin mypy and fix associated failures, including those for new networkx type stubs
+
 **5.1.2 - 06/08/26**
 
 - Write stratified observation results' stratification columns as ordered
