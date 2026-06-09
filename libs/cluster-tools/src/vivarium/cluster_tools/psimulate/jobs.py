@@ -57,24 +57,18 @@ class BackupConfiguration(TypedDict):
 
     Backups periodically pickle a running simulation so that an interrupted
     job can resume from a saved state instead of restarting from the
-    beginning.
+    beginning. The mapping has three keys: ``backup_dir``, the directory in
+    which backup pickle files are written and looked up; ``backup_freq``, the
+    interval in seconds between successive backups (``None`` disables backups
+    for the run); and ``backup_metadata_path``, the path to the CSV mapping job
+    parameters to the ``job_id`` used to locate each backup pickle in
+    ``backup_dir``.
 
     Path values are stored as strings rather than ``Path`` objects because a
     ``JobParameters`` is serialized to JSON and reconstructed on the worker
     (see ``results.writing`` and ``worker.task_runner``); this matches the
     string typing of the sibling ``results_path`` and ``worker_logging_root``
     fields. Consumers wrap them in ``Path`` at the point of use.
-
-    Attributes
-    ----------
-    backup_dir
-        Directory in which backup pickle files are written and looked up.
-    backup_freq
-        Interval, in seconds, between successive backups, or ``None`` to
-        disable backups for the run.
-    backup_metadata_path
-        Path to the CSV mapping job parameters to the ``job_id`` used to
-        locate each backup pickle in ``backup_dir``.
     """
 
     backup_dir: str
