@@ -28,7 +28,6 @@ py:class loguru.Logger
 # as a bare ``:class:`nx.DiGraph``` cross-ref that intersphinx (whose target is
 # the qualified ``networkx.DiGraph``) can't match. autodoc-typehints also strips
 # the ``[Resource]`` parameter, so the unresolved target is always ``nx.DiGraph``.
-# Same situation as the pandas / ConfigTree entries.
 py:class nx.DiGraph
 
 # vivarium
