@@ -64,11 +64,9 @@ If unsure, default to proceeding (Copilot path).
    - Are type annotations consistent with actual runtime behavior?
    - Do tests adequately cover the new behavior, including edge cases?
    - Are there silent data transformations (e.g., rounding, coercion) that could lose precision?
-   - **If the PR is in a model repo** (a concept-model implementation rather than
-  the framework), check the changed code against the relevant research
-  documentation using  the `vivarium-research` skill  and flag any place the implementation 
-  diverges from the documented modelling strategy. If you can't determine the 
-   relevant concept model, say so rather than guessing.
+   - **If the PR template has a "research reference" section that contains a link, check the changed code against the relevant research
+  documentation using  the `vivarium-research` skill and flag any place the implementation 
+  diverges from the documented modelling strategy.
 4. **Synthesize.** Merge the sub-agent findings with your functional correctness review. Deduplicate, resolve any contradictions, and organize into the output format below. Attribute the perspective (maintainability, DRY, design, functionality) to each finding.
 
 ## Output Format
