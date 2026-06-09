@@ -245,23 +245,32 @@ you grant the few write paths the toolchain needs. A working baseline for
        "filesystem": {
          "allowWrite": ["~/miniconda3", "~/.conda", "~/.cache"],
          "denyRead": ["~/.ssh", "~/.aws", "~/.config/gh/hosts.yml"]
+       },
+       "network": {
+         "allowedDomains": ["github.com", "api.github.com", "pypi.org",
+                            "artifactory.ihme.washington.edu"]
        }
      }
    }
 
-``allowWrite`` lets ``conda``/``pip`` manage environments (they write
-outside the repo); ``denyRead`` closes the credential-exfil path that an
-open-read, open-network sandbox would otherwise leave open.
+``filesystem.allowWrite`` lets ``conda``/``pip`` manage environments (they
+write outside the repo); ``filesystem.denyRead`` closes the
+credential-exfil path that an open-read, open-network sandbox would
+otherwise leave open; ``network.allowedDomains`` is the egress allowlist
+for sandboxed Bash (add the hosts your workflow needs — package indexes,
+``github.com`` for git over HTTPS, etc.).
 
-That ``denyRead`` of ``gh``'s credential is also why the ``gh`` CLI does
-not work under the sandbox — and why this plugin depends on the GitHub
-MCP server, whose tool calls run outside the Bash sandbox and so can read
+That ``denyRead`` of ``gh``'s credential is why the ``gh`` CLI does not
+work under the sandbox — and why this plugin depends on the GitHub MCP
+server, whose tool calls run outside the Bash sandbox and so can read
 PRs, post reviews, and open PRs without un-sandboxing anything. See the
 ``plugin-setup`` skill for the GitHub MCP wiring (including the
 ``headersHelper`` that keeps auth working across agent-team reconnects).
-The one operation the MCP cannot perform is pushing a local commit graph,
-so ``git push`` remains the residual step that still needs network egress
-and credentials.
+The one operation the MCP cannot perform is pushing a local commit graph
+— but ``git push`` itself still runs fully sandboxed once ``github.com``
+is in ``allowedDomains`` and git's credential helper is pointed at a
+sandbox-readable token file (again, see ``plugin-setup``). No
+un-sandboxing escape hatch is needed for normal git/GitHub work.
 
 Installing in VS Code GitHub Copilot
 ====================================

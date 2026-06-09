@@ -200,6 +200,36 @@ read (the same exposure already accepted for the Jenkins credential). (3)
 If the `gh` token rotates and no interactive shell has refreshed the file,
 it can go stale — fine for static PATs.
 
+### Sandboxed `git push`
+
+The GitHub MCP covers PRs, reviews, and reads, but it cannot push a local
+commit graph — that still needs `git push`. Out of the box `git push`
+fails under the sandbox: the `github.com` credential helper is
+`gh auth git-credential`, which reads the `denyRead`-ed
+`~/.config/gh/hosts.yml`, and the sandbox blocks egress to `github.com`
+unless it is allowlisted. Both are fixable without un-denying the `gh`
+credential or dropping the sandbox:
+
+1. **Point git at the sandbox-readable token file** (the same one the MCP
+   helper uses). Appending it leaves `gh` as the primary helper for
+   un-sandboxed shells, with this as the fallback that fires when `gh`
+   can't read its file:
+
+   ```bash
+   git config --global --add credential.https://github.com.helper \
+     '!f() { echo username=x-access-token; echo "password=$(cat "$HOME/.claude/secrets/github-token")"; }; f'
+   ```
+
+2. **Allow `github.com` egress** in the sandbox network allowlist —
+   `sandbox.network.allowedDomains` in `~/.claude/settings.json` (or the
+   project's `.claude/settings.local.json`); see the "Recommended sandbox
+   configuration" section of the README. This applies live; no restart
+   needed.
+
+Verify with a non-mutating, in-sandbox `git ls-remote
+https://github.com/<org>/<repo> HEAD` — a returned SHA means egress and
+the credential fallthrough both work, and `git push` will too.
+
 ## Brainstorming visual companion (Node.js)
 
 The `brainstorming` skill ships a browser-based visual companion that renders Mermaid diagrams. Its server is written in Node.js. Without Node, the brainstorming skill still works — just no live diagrams.
