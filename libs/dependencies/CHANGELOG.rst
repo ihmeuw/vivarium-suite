@@ -1,3 +1,7 @@
+**1.0.8 - 06/08/26**
+ 
+ - Replace networkx-stubs with types-networkx in the networkx extra
+
 **1.0.7 - 04/14/26**
  
  - Add vbu pin
