@@ -54,11 +54,15 @@ flagged each issue.
 
 ## Output Format
 
+**Omit any section that has no findings** — no empty headings, no "no issues
+found" filler. A clean PR can be three lines. Spend words in proportion to
+severity: a correctness bug earns a sentence of rationale; a nit gets none.
+
 ```
 ## PR Review: <title>
 
 ### Summary
-<1-2 paragraph description of what the PR does>
+<2-3 sentences on what the PR does — skip entirely if the title already says it>
 
 ### Design
 <numbered findings from _review_design>
@@ -79,15 +83,18 @@ flagged each issue.
 <numbered findings from your own analysis>
 
 ### Minor Nits
-<numbered findings>
+<one line each: `file:line` — the fix. No rationale, no code block.>
 
 ### Overall
-<brief assessment and key areas for improvement>
+<one or two sentences, only if there's a cross-cutting theme worth naming. Omit if the findings already speak for themselves.>
 ```
 
-For each finding include the specific file:line reference, what the
-issue is, why it matters, and a concrete suggestion (with code snippet
-when helpful).
+Per-finding budget, scaled to severity:
+- **Substantive findings** (Design through Functionality): `file:line`, then the
+  problem and the fix in **≤2 sentences**. Add a "why it matters" clause only when
+  the impact is non-obvious. Include a code snippet only when the fix isn't clear
+  from a sentence — never to illustrate the problem.
+- **Nits**: one line each, fix only.
 
 ## Constraints
 
@@ -95,5 +102,7 @@ when helpful).
 - Do not edit any files — this command is read-only and advisory
 - Distinguish pre-existing issues encountered in changed code from issues introduced by the PR
 - Be specific and actionable — avoid vague feedback like "this could be improved"
+- No preamble and no recap of the diff. Do not restate what the code does — report only what should change. A reviewer should be able to read the whole review in under a minute.
+- Omit a weak finding entirely rather than padding a section to look thorough
 - `_review_tests` focuses solely on the test code and test coverage gaps — do not duplicate test findings in your functional correctness pass
 - `_review_documentation` covers all forms of documentation (docstrings, comments, changelogs, READMEs) — do not duplicate documentation findings in the Maintainability section
