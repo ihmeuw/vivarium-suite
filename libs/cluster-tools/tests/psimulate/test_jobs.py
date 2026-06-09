@@ -4,26 +4,18 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from tests.psimulate.conftest import make_job_parameters
 from vivarium.cluster_tools.psimulate.branches import Keyspace
-from vivarium.cluster_tools.psimulate.jobs import (
-    JobParameters,
-    build_job_list,
-    generate_task_id,
-)
+from vivarium.cluster_tools.psimulate.jobs import build_job_list, generate_task_id
 
 
 def test_branch_config_immutable() -> None:
     "Test that the branch_configuration doesn't get mutated in place."
     original_branch_config = {"foo": "bar", "input_data": {"spam": "eggs"}}
-    params = JobParameters(
-        model_specification="model_spec.yaml",
+    params = make_job_parameters(
         branch_configuration=deepcopy(original_branch_config),
         input_draw=0,
         random_seed=1,
-        results_path="results",
-        backup_configuration={},
-        extras={},
-        worker_logging_root="/tmp/worker_logs",
     )
     params.sim_config  # This was previously causing branch_config to change
     assert params.branch_configuration == original_branch_config
@@ -75,15 +67,10 @@ class TestGenerateTaskId:
 class TestJobParametersTaskId:
     def test_task_id_property(self) -> None:
         """JobParameters.task_id matches generate_task_id for the same params."""
-        job_parameters = JobParameters(
-            model_specification="test.yaml",
+        job_parameters = make_job_parameters(
             branch_configuration={"scenario": "A"},
             input_draw=5,
             random_seed=10,
-            results_path="/tmp/results",
-            backup_configuration={},
-            extras={},
-            worker_logging_root="/tmp/worker_logs",
         )
         expected = generate_task_id(5, 10, {"scenario": "A"})
         assert job_parameters.task_id == expected
@@ -132,9 +119,9 @@ class TestBuildJobList:
         assert {(job.input_draw, job.random_seed) for job in jobs} == self._EXPECTED_JOB_KEYS
         for job in jobs:
             assert job.backup_configuration == {
-                "backup_dir": backup_dir,
+                "backup_dir": str(backup_dir),
                 "backup_freq": backup_freq,
-                "backup_metadata_path": backup_metadata_path,
+                "backup_metadata_path": str(backup_metadata_path),
             }
 
     @pytest.mark.parametrize("backup_freq", [None, 300])

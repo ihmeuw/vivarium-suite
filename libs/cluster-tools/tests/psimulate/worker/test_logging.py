@@ -17,8 +17,8 @@ def test_logging_level(mocker: MockerFixture, tmp_path: Path, log_level: int) ->
         branch_configuration={"branch_key": "branch_value"},
         backup_configuration={
             "backup_freq": 300,
-            "backup_dir": tmp_path / "backups",
-            "backup_metadata_path": tmp_path / "backups" / "backup_metadata.csv",
+            "backup_dir": str(tmp_path / "backups"),
+            "backup_metadata_path": str(tmp_path / "backups" / "backup_metadata.csv"),
         },
         extras={
             "sim_verbosity": log_level,

@@ -13,9 +13,10 @@ import yaml
 from click.testing import CliRunner
 from pandas.testing import assert_frame_equal
 
+from tests.psimulate.conftest import make_job_parameters
 from vivarium.cluster_tools.psimulate.cli import psimulate
 from vivarium.cluster_tools.psimulate.cluster.interface import NativeSpecification
-from vivarium.cluster_tools.psimulate.jobs import JobParameters, generate_task_id
+from vivarium.cluster_tools.psimulate.jobs import generate_task_id
 from vivarium.cluster_tools.psimulate.paths import InputPaths
 from vivarium.cluster_tools.psimulate.runner import (
     report_initial_status,
@@ -89,15 +90,10 @@ def test_report_initial_status() -> None:
 def test_write_backup_metadata(tmp_path: Path) -> None:
     metadata_path = tmp_path / "metadata.csv"
     job_parameters_list = [
-        JobParameters(
-            model_specification="test_model_spec.yaml",
+        make_job_parameters(
             branch_configuration={"category": {"detail": 9}},
             input_draw=1337,
             random_seed=42,
-            results_path="~/tmp",
-            worker_logging_root="/tmp/worker_logs",
-            backup_configuration={},
-            extras={},
         ),
     ]
     expected_task_id_1 = generate_task_id(1337, 42, {"category": {"detail": 9}})
@@ -117,15 +113,10 @@ def test_write_backup_metadata(tmp_path: Path) -> None:
     # Check that we append to the existing metadata
     # upon second execution
     append_job_parameters_list = [
-        JobParameters(
-            model_specification="test_model_spec.yaml",
+        make_job_parameters(
             branch_configuration={"category": {"detail": 10}},
             input_draw=1338,
             random_seed=43,
-            results_path="~/tmp",
-            worker_logging_root="/tmp/worker_logs",
-            backup_configuration={},
-            extras={},
         ),
     ]
     expected_task_id_2 = generate_task_id(1338, 43, {"category": {"detail": 10}})
