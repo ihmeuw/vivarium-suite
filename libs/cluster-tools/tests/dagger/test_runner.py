@@ -192,6 +192,7 @@ def test_run_workflow_fresh_run_generates_workflow_args(
     workflow_args = mock_build.call_args.kwargs["workflow_args"]
     pattern = rf"^workflow_{workflow_config.name}_[0-9a-f]{{8}}_\d{{8}}_\d{{6}}$"
     assert re.match(pattern, workflow_args), workflow_args
+    assert mock_build.call_args.kwargs["resume"] is False
 
     args_file = workflow_config.output_directory / WORKFLOW_ARGS_FILENAME
     assert args_file.read_text() == workflow_args
@@ -295,6 +296,7 @@ def test_restart_reuses_persisted_workflow_args(
     restart_workflow(results_dir)
 
     assert mock_build.call_args.kwargs["workflow_args"] == "workflow_reused_args"
+    assert mock_build.call_args.kwargs["resume"] is True
     assert mock_bind_and_run.call_args.kwargs["resume"] is True
 
 

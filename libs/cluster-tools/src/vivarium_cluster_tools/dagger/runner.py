@@ -146,7 +146,9 @@ def _execute_workflow(
     (output_root / WORKFLOW_ARGS_FILENAME).write_text(workflow_id)
 
     logger.debug("Building workflow.")
-    workflow = build_workflow_from_config(workflow_config, workflow_args=workflow_id)
+    workflow = build_workflow_from_config(
+        workflow_config, workflow_args=workflow_id, resume=resume
+    )
 
     wf_status, monitoring_url = client.bind_and_run_workflow(
         workflow,

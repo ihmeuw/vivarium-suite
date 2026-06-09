@@ -11,7 +11,10 @@ pytest.importorskip("jobmon")
 
 from pytest_mock import MockerFixture
 
-from vivarium_cluster_tools.dagger.config.builder import build_workflow_from_config
+from vivarium_cluster_tools.dagger.config.builder import (
+    STEP_TYPE_API_FNS,
+    build_workflow_from_config,
+)
 from vivarium_cluster_tools.dagger.config.config import (
     ParsedStep,
     ResourceConfig,
@@ -95,10 +98,6 @@ def mock_build_timestamp(mocker: MockerFixture) -> str:
     mocker.patch(
         "vivarium_cluster_tools.dagger.config.interface.get_or_create_build_timestamp",
         return_value=ts,
-    )
-    mocker.patch(
-        "vivarium_cluster_tools.dagger.config.builder.is_resume",
-        return_value=False,
     )
     return ts
 
@@ -255,3 +254,65 @@ class TestEnvironmentResolution:
 
         with pytest.raises(ValueError, match="non-base conda environment is required"):
             build_workflow_from_config(config, workflow_args="test_workflow_args")
+
+
+class TestResumeInjection:
+    """Verify how the ``resume`` flag is threaded to per-step API functions."""
+
+    @staticmethod
+    def _two_step_config() -> WorkflowConfig:
+        """A bash step followed by a (stubbed) simulation step."""
+        resources = ResourceConfig(memory_gb=1, project="proj_simscience", queue="all.q")
+        return WorkflowConfig(
+            name="test",
+            project="proj_simscience",
+            queue="all.q",
+            output_directory=Path("/tmp/results"),
+            default_environment="env",
+            steps=[
+                _bash_parsed_step(
+                    name="bash_step",
+                    resources=resources,
+                    command="echo hi",
+                    output_directory=Path("/tmp/results"),
+                    environment="env",
+                ),
+                ParsedStep(
+                    step_type="simulation",
+                    name="sim_step",
+                    api_kwargs={"name": "sim_step", "environment": "env"},
+                ),
+            ],
+        )
+
+    @pytest.fixture()
+    def patched_api_fns(self, mocker: MockerFixture) -> dict[str, MagicMock]:
+        """Replace the bash and simulation API functions with task-returning mocks."""
+        fns = {
+            "bash": MagicMock(return_value=[MagicMock(name="bash_task")]),
+            "simulation": MagicMock(return_value=[MagicMock(name="sim_task")]),
+        }
+        mocker.patch.dict(
+            "vivarium_cluster_tools.dagger.config.builder.STEP_TYPE_API_FNS",
+            fns,
+        )
+        return fns
+
+    def test_resume_true_injects_is_resume_into_simulation_only(
+        self, mock_tool_cls: MagicMock, patched_api_fns: dict[str, MagicMock]
+    ) -> None:
+        """``resume=True`` forwards ``is_resume=True`` to the simulation step only."""
+        build_workflow_from_config(self._two_step_config(), workflow_args="args", resume=True)
+
+        sim_kwargs = patched_api_fns["simulation"].call_args.kwargs
+        assert sim_kwargs["is_resume"] is True
+        bash_kwargs = patched_api_fns["bash"].call_args.kwargs
+        assert "is_resume" not in bash_kwargs
+
+    def test_resume_defaults_to_false(
+        self, mock_tool_cls: MagicMock, patched_api_fns: dict[str, MagicMock]
+    ) -> None:
+        """Without ``resume``, the simulation step receives ``is_resume=False``."""
+        build_workflow_from_config(self._two_step_config(), workflow_args="args")
+
+        assert patched_api_fns["simulation"].call_args.kwargs["is_resume"] is False

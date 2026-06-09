@@ -48,6 +48,53 @@ _NOTEBOOK_DEFAULT_KERNEL = "python3"
 """Jupyter kernel used for notebook execution. Not user-configurable."""
 
 
+def get_step_resources(
+    *,
+    memory_gb: int,
+    project: str,
+    queue: str,
+    runtime: str = "01:00:00",
+    cores: int = 1,
+    hardware: list[str] | None = None,
+    requires_archive_node: bool = False,
+) -> ResourceConfig:
+    """Build the compute resources for a workflow step.
+
+    Pass the return value as the ``resources`` argument to any
+    ``get_*_step_tasks`` function. ``project`` and ``queue`` are required.
+
+    Parameters
+    ----------
+    memory_gb
+        Memory in GB.
+    project
+        Cluster project to charge.
+    queue
+        Cluster queue to submit to.
+    runtime
+        Maximum runtime in ``hh:mm:ss`` format. Default is ``01:00:00``.
+    cores
+        Number of CPU cores to request. Default is 1.
+    hardware
+        Optional list of hardware types to target (e.g. ``["r650"]``).
+    requires_archive_node
+        Whether to enforce landing on an archive node. Default is ``False``.
+
+    Returns
+    -------
+        The compute resource specification for a step.
+    """
+    return ResourceConfig(
+        memory_gb=memory_gb,
+        project=project,
+        queue=queue,
+        runtime=runtime,
+        cores=cores,
+        hardware=hardware,
+        requires_archive_node=requires_archive_node,
+    )
+
+
 def get_bash_step_tasks(
     *,
     name: str,
@@ -56,7 +103,6 @@ def get_bash_step_tasks(
     output_directory: Path,
     tool: Tool,
     environment: str | None = None,
-    is_resume: bool = False,
 ) -> list[Task]:
     """Build a bash workflow step and return its Jobmon tasks.
 
@@ -75,8 +121,6 @@ def get_bash_step_tasks(
     environment
         Optional conda environment name to use for this step. If unset,
         falls back to the runner's active ``CONDA_DEFAULT_ENV``.
-    is_resume
-        Whether this is a resumed workflow build.
 
     Returns
     -------
@@ -215,7 +259,6 @@ def get_pytest_step_tasks(
     path: str | list[str] | None = None,
     k: str | None = None,
     runslow: bool = False,
-    is_resume: bool = False,
 ) -> list[Task]:
     """Build a pytest-based workflow step and return its Jobmon tasks.
 
@@ -244,8 +287,6 @@ def get_pytest_step_tasks(
         Pytest ``-k`` expression used to filter tests by name.
     runslow
         If ``True``, pass ``--runslow`` to pytest. Default is ``False``.
-    is_resume
-        Whether this is a resumed workflow build.
 
     Returns
     -------
@@ -292,7 +333,6 @@ def get_python_step_tasks(
     environment: str | None = None,
     positional_args: list[Any] | None = None,
     keyword_args: dict[str, Any] | None = None,
-    is_resume: bool = False,
 ) -> list[Task]:
     """Build a Python-script workflow step and return its Jobmon tasks.
 
@@ -323,12 +363,11 @@ def get_python_step_tasks(
         falls back to the runner's active ``CONDA_DEFAULT_ENV``.
     positional_args
         Optional list of scalar values appended in order as positional
-        CLI arguments.
+        CLI arguments. Defaults to none (empty).
     keyword_args
         Optional dict mapping identifier-style keys to scalar values,
-        rendered as ``--key value`` flags (see flag rules above).
-    is_resume
-        Whether this is a resumed workflow build.
+        rendered as ``--key value`` flags (see flag rules above). Defaults
+        to none (empty).
 
     Returns
     -------
@@ -343,11 +382,13 @@ def get_python_step_tasks(
         keyword_args=keyword_args,
     )
     ensure_output_directory_exists(output_directory)
+    positional_args = positional_args or []
+    keyword_args = keyword_args or {}
     parts = ["python", shlex.quote(path)]
-    for value in positional_args or []:
+    for value in positional_args:
         parts.append(shlex.quote(str(value)))
-    for key in sorted(keyword_args or {}):
-        value = (keyword_args or {})[key]
+    for key in sorted(keyword_args):
+        value = keyword_args[key]
         if value is True or value is None:
             parts.append(f"--{key}")
         elif value is False:
@@ -375,7 +416,6 @@ def get_notebook_step_tasks(
     environment: str | None = None,
     parameters: dict[str, Any] | None = None,
     cwd: Path | None = None,
-    is_resume: bool = False,
 ) -> list[Task]:
     """Build a notebook-based workflow step and return its Jobmon tasks.
 
@@ -411,8 +451,6 @@ def get_notebook_step_tasks(
     cwd
         Optional working directory for notebook execution. If not
         provided, defaults to the parent directory of ``path``.
-    is_resume
-        Whether this is a resumed workflow build.
 
     Returns
     -------
