@@ -20,7 +20,9 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 from pathlib import Path
 
-from docutils.nodes import Text
+from docutils.nodes import Element, Text
+from sphinx.application import Sphinx
+from sphinx.environment import BuildEnvironment
 from sphinx.ext.intersphinx import missing_reference
 
 import vivarium.risk_distributions
@@ -108,7 +110,7 @@ language = "en"
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = []
+exclude_patterns: list[str] = []
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
@@ -159,7 +161,7 @@ htmlhelp_basename = f"{project}doc"
 
 # -- Options for LaTeX output ---------------------------------------------
 
-latex_elements = {
+latex_elements: dict[str, str] = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
@@ -255,11 +257,13 @@ for line in open("../nitpick-exceptions"):
 
 
 # Fix sphinx warnings when for literal Ellipses in type hints.
-def setup(app):
+def setup(app: Sphinx) -> None:
     app.connect("missing-reference", __sphinx_issue_8127)
 
 
-def __sphinx_issue_8127(app, env, node, contnode):
+def __sphinx_issue_8127(
+    app: Sphinx, env: BuildEnvironment, node: Element, contnode: Element
+) -> Element | None:
     reftarget = node.get("reftarget", None)
     if reftarget == "..":
         node["reftype"] = "data"
@@ -271,3 +275,4 @@ def __sphinx_issue_8127(app, env, node, contnode):
         else:  # e.g. happens in rtype fields
             contnode = replacement_node
         return missing_reference(app, env, node, contnode)
+    return None

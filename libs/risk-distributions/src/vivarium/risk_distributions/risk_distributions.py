@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import copy
 import warnings
 from collections.abc import Callable
+from typing import Any, TypeAlias, cast
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from scipy import optimize, special, stats
 
@@ -14,30 +18,34 @@ from vivarium.risk_distributions.formatting import (
     format_data,
 )
 
+Numeric: TypeAlias = "pd.Series[Any] | npt.NDArray[Any] | float"
+NumericInput: TypeAlias = "Numeric | int"
+
 
 class BaseDistribution:
     """Generic vectorized wrapper around scipy distributions."""
 
-    distribution = None
-    expected_parameters = ()
-    _extra_parameters = ()
+    # scipy distributions (e.g. ``stats.beta``) are unstubbed; subclasses assign one.
+    distribution: Any = None
+    expected_parameters: tuple[str, ...] = ()
+    _extra_parameters: tuple[str, ...] = ()
 
     def __init__(
         self,
-        parameters: Parameters = None,
-        mean: Parameter = None,
-        sd: Parameter = None,
+        parameters: Parameters | None = None,
+        mean: Parameter | None = None,
+        sd: Parameter | None = None,
         computability_bound: float = 0.001,
-    ):
+    ) -> None:
         self.parameters = self.get_parameters(parameters, mean, sd, computability_bound)
         self.computability_bound = computability_bound
 
     @classmethod
     def get_parameters(
         cls,
-        parameters: Parameters = None,
-        mean: Parameter = None,
-        sd: Parameter = None,
+        parameters: Parameters | None = None,
+        mean: Parameter | None = None,
+        sd: Parameter | None = None,
         computability_bound: float = 0.001,
     ) -> pd.DataFrame:
         required_parameters = list(
@@ -82,8 +90,11 @@ class BaseDistribution:
         return parameters
 
     @staticmethod
-    def computable_parameter_index(mean: pd.Series, sd: pd.Series) -> pd.Index:
-        return mean[(mean != 0) & ~np.isnan(mean) & (sd != 0) & ~np.isnan(sd)].index
+    def computable_parameter_index(mean: pd.Series[Any], sd: pd.Series[Any]) -> pd.Index[Any]:
+        index: pd.Index[Any] = mean[
+            (mean != 0) & ~np.isnan(mean) & (sd != 0) & ~np.isnan(sd)
+        ].index
+        return index
 
     @classmethod
     def get_computability_bounds(
@@ -99,13 +110,13 @@ class BaseDistribution:
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         raise NotImplementedError()
 
     def process(
-        self, data: pd.Series, parameters: pd.DataFrame, process_type: str
-    ) -> pd.Series:
+        self, data: pd.Series[Any], parameters: pd.DataFrame, process_type: str
+    ) -> pd.Series[Any]:
         """Function called before and after distribution looks to handle pre- and post-processing.
 
         This function should look like an if sieve on the `process_type` and fall back with a call to
@@ -127,7 +138,7 @@ class BaseDistribution:
         """
         return data
 
-    def pdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
+    def pdf(self, x: NumericInput) -> Numeric:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -148,21 +159,21 @@ class BaseDistribution:
 
         if not computable.empty:
             params = parameters.loc[computable, list(self.expected_parameters)]
-            p.loc[computable] = self.distribution(**params.to_dict("series")).pdf(
-                x.loc[computable]
-            )
+            kwargs = {parameter: params[parameter] for parameter in self.expected_parameters}
+            p.loc[computable] = self.distribution(**kwargs).pdf(x.loc[computable])
 
             p.loc[computable] = self.process(
                 p.loc[computable], parameters.loc[computable], "pdf_postprocess"
             )
 
+        result: Numeric = p
         if single_val:
-            p = p.iloc[0]
+            result = p.iloc[0]
         if values_only:
-            p = p.values
-        return p
+            result = cast("npt.NDArray[Any]", p.values)
+        return result
 
-    def ppf(self, q: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
+    def ppf(self, q: NumericInput) -> Numeric:
         single_val = isinstance(q, (float, int))
         values_only = isinstance(q, np.ndarray)
 
@@ -171,8 +182,8 @@ class BaseDistribution:
         computable = parameters[
             (parameters.sum(axis=1) != 0)
             & ~np.isnan(q)
-            & (self.computability_bound <= q.values)
-            & (q.values <= 1 - self.computability_bound)
+            & (self.computability_bound <= q.to_numpy())
+            & (q.to_numpy() <= 1 - self.computability_bound)
         ].index
 
         q.loc[computable] = self.process(
@@ -183,21 +194,21 @@ class BaseDistribution:
 
         if not computable.empty:
             params = parameters.loc[computable, list(self.expected_parameters)]
-            x.loc[computable] = self.distribution(**params.to_dict("series")).ppf(
-                q.loc[computable]
-            )
+            kwargs = {parameter: params[parameter] for parameter in self.expected_parameters}
+            x.loc[computable] = self.distribution(**kwargs).ppf(q.loc[computable])
 
             x.loc[computable] = self.process(
                 x.loc[computable], parameters.loc[computable], "ppf_postprocess"
             )
 
+        result: Numeric = x
         if single_val:
-            x = x.iloc[0]
+            result = x.iloc[0]
         if values_only:
-            x = x.values
-        return x
+            result = cast("npt.NDArray[Any]", x.values)
+        return result
 
-    def cdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
+    def cdf(self, x: NumericInput) -> Numeric:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -218,19 +229,19 @@ class BaseDistribution:
 
         if not computable.empty:
             params = parameters.loc[computable, list(self.expected_parameters)]
-            c.loc[computable] = self.distribution(**params.to_dict("series")).cdf(
-                x.loc[computable]
-            )
+            kwargs = {parameter: params[parameter] for parameter in self.expected_parameters}
+            c.loc[computable] = self.distribution(**kwargs).cdf(x.loc[computable])
 
             c.loc[computable] = self.process(
                 c.loc[computable], parameters.loc[computable], "cdf_postprocess"
             )
 
+        result: Numeric = c
         if single_val:
-            c = c.iloc[0]
+            result = c.iloc[0]
         if values_only:
-            c = c.values
-        return c
+            result = cast("npt.NDArray[Any]", c.values)
+        return result
 
 
 class MirroredDistribution(BaseDistribution):
@@ -238,11 +249,11 @@ class MirroredDistribution(BaseDistribution):
 
     def __init__(
         self,
-        parameters: Parameters = None,
-        mean: Parameter = None,
-        sd: Parameter = None,
+        parameters: Parameters | None = None,
+        mean: Parameter | None = None,
+        sd: Parameter | None = None,
         computability_bound: float = 0.001,
-    ):
+    ) -> None:
         super().__init__(parameters, mean, sd, computability_bound)
         # When called from EnsembleDistribution.ppf, only parameters are provided.
         if mean is not None and sd is not None:
@@ -253,8 +264,8 @@ class MirroredDistribution(BaseDistribution):
 
     @staticmethod
     def compute_mirror_point(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
-    ) -> pd.Series:
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
+    ) -> pd.Series[Any]:
         """Computes the point around which the distribution is mirrored.
 
         NOTE: In the corresponding GBD code, this is called 'x_max'.
@@ -262,10 +273,11 @@ class MirroredDistribution(BaseDistribution):
         alpha = 1 + sd**2 / mean**2
         scale = mean / np.sqrt(alpha)
         s = np.sqrt(np.log(alpha))
-        return pd.Series(
+        mirror_point: pd.Series[Any] = pd.Series(
             stats.lognorm(s=s, scale=scale).ppf(1 - computability_bound),
             index=mean.index,
         )
+        return mirror_point
 
 
 class Beta(BaseDistribution):
@@ -274,7 +286,7 @@ class Beta(BaseDistribution):
 
     @staticmethod
     def compute_scaling_bounds(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         """Gets the upper and lower bounds of the distribution support."""
         # noinspection PyTypeChecker
@@ -287,7 +299,7 @@ class Beta(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         x_bounds = Beta.compute_scaling_bounds(mean, sd, computability_bound)
         x_min = x_bounds["x_min"]
@@ -314,7 +326,7 @@ class Exponential(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         return pd.DataFrame({"scale": mean}, index=mean.index)
 
@@ -325,7 +337,7 @@ class Gamma(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         # noinspection PyTypeChecker
         params = pd.DataFrame(
@@ -344,7 +356,7 @@ class Gumbel(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         params = pd.DataFrame(
             {
@@ -362,13 +374,13 @@ class InverseGamma(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
-        def target_function(guess, m, s):
+        def target_function(guess: npt.NDArray[Any], m: float, s: float) -> float:
             alpha, beta = np.abs(guess)
             mean_guess = beta / (alpha - 1)
             var_guess = beta**2 / ((alpha - 1) ** 2 * (alpha - 2))
-            return (m - mean_guess) ** 2 + (s**2 - var_guess) ** 2
+            return float((m - mean_guess) ** 2 + (s**2 - var_guess) ** 2)
 
         opt_results = _get_optimization_result(
             mean, sd, target_function, lambda m, s: np.array((m, m * s))
@@ -394,15 +406,15 @@ class InverseWeibull(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         # moments from  Stat Papers (2011) 52: 591. https://doi.org/10.1007/s00362-009-0271-3
         # it is much faster than using stats.invweibull.mean/var
-        def target_function(guess, m, s):
+        def target_function(guess: npt.NDArray[Any], m: float, s: float) -> float:
             shape, scale = np.abs(guess)
             mean_guess = scale * special.gamma(1 - 1 / shape)
             var_guess = scale**2 * special.gamma(1 - 2 / shape) - mean_guess**2
-            return (m - mean_guess) ** 2 + (s**2 - var_guess) ** 2
+            return float((m - mean_guess) ** 2 + (s**2 - var_guess) ** 2)
 
         opt_results = _get_optimization_result(
             mean, sd, target_function, lambda m, s: np.array((max(2.2, s / m), m))
@@ -428,14 +440,14 @@ class LogLogistic(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
-        def target_function(guess, m, s):
+        def target_function(guess: npt.NDArray[Any], m: float, s: float) -> float:
             shape, scale = np.abs(guess)
             b = np.pi / shape
             mean_guess = scale * b / np.sin(b)
             var_guess = scale**2 * 2 * b / np.sin(2 * b) - mean_guess**2
-            return (m - mean_guess) ** 2 + (s**2 - var_guess) ** 2
+            return float((m - mean_guess) ** 2 + (s**2 - var_guess) ** 2)
 
         opt_results = _get_optimization_result(
             mean, sd, target_function, lambda m, s: np.array((max(2, m), m))
@@ -462,7 +474,7 @@ class LogNormal(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         # noinspection PyTypeChecker
         alpha = 1 + sd**2 / mean**2
@@ -482,7 +494,7 @@ class MirroredGumbel(MirroredDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         # Persist mirror_point in params so it's available when re-instantiated with only parameters.
         mirror_point = MirroredGumbel.compute_mirror_point(mean, sd, computability_bound)
@@ -497,8 +509,8 @@ class MirroredGumbel(MirroredDistribution):
         return params
 
     def process(
-        self, data: pd.Series, parameters: pd.DataFrame, process_type: str
-    ) -> pd.Series:
+        self, data: pd.Series[Any], parameters: pd.DataFrame, process_type: str
+    ) -> pd.Series[Any]:
         if process_type in ["pdf_preprocess", "cdf_preprocess"]:
             value = self.mirror_point - data
         elif process_type in ["ppf_preprocess", "cdf_postprocess"]:
@@ -517,7 +529,7 @@ class MirroredGamma(MirroredDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         # noinspection PyTypeChecker
         mirror_point = MirroredGamma.compute_mirror_point(mean, sd, computability_bound)
@@ -532,8 +544,8 @@ class MirroredGamma(MirroredDistribution):
         return params
 
     def process(
-        self, data: pd.Series, parameters: pd.DataFrame, process_type: str
-    ) -> pd.Series:
+        self, data: pd.Series[Any], parameters: pd.DataFrame, process_type: str
+    ) -> pd.Series[Any]:
         if process_type in ["pdf_preprocess", "cdf_preprocess"]:
             value = self.mirror_point - data
         elif process_type in ["ppf_preprocess", "cdf_postprocess"]:
@@ -552,7 +564,7 @@ class Normal(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
         params = pd.DataFrame(
             {
@@ -570,13 +582,13 @@ class Weibull(BaseDistribution):
 
     @staticmethod
     def _get_parameters(
-        mean: pd.Series, sd: pd.Series, computability_bound: float
+        mean: pd.Series[Any], sd: pd.Series[Any], computability_bound: float
     ) -> pd.DataFrame:
-        def target_function(guess, m, s):
+        def target_function(guess: npt.NDArray[Any], m: float, s: float) -> float:
             shape, scale = np.abs(guess)
             mean_guess = scale * special.gamma(1 + 1 / shape)
             var_guess = scale**2 * special.gamma(1 + 2 / shape) - mean_guess**2
-            return (m - mean_guess) ** 2 + (s**2 - var_guess) ** 2
+            return float((m - mean_guess) ** 2 + (s**2 - var_guess) ** 2)
 
         opt_results = _get_optimization_result(
             mean, sd, target_function, lambda m, s: np.array((m, m / s))
@@ -621,7 +633,7 @@ class EnsembleDistribution:
         mean: Parameter | None = None,
         sd: Parameter | None = None,
         computability_bound: float = 0.001,
-    ):
+    ) -> None:
         self.weights, self.parameters = self.get_parameters(
             weights, parameters, mean, sd, computability_bound
         )
@@ -630,9 +642,9 @@ class EnsembleDistribution:
     def get_parameters(
         cls,
         weights: Parameters,
-        parameters: Parameters = None,
-        mean: Parameter = None,
-        sd: Parameter = None,
+        parameters: dict[str, Parameters] | None = None,
+        mean: Parameter | None = None,
+        sd: Parameter | None = None,
         computability_bound: float = 0.001,
     ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
         expected_columns = list(cls._distribution_map.keys())
@@ -640,7 +652,7 @@ class EnsembleDistribution:
         weights = cls.fill_missing_weights(weights, expected_columns)
         weights = format_data(weights, expected_columns, "weights")
 
-        params = {}
+        params: dict[str, pd.DataFrame] = {}
         for name, dist in cls._distribution_map.items():
             try:
                 param = parameters[name] if parameters else None
@@ -657,7 +669,10 @@ class EnsembleDistribution:
 
         # Rescale weights in case we floored any of them:
         non_zero_rows = weights[weights.sum(axis=1) != 0]
-        weights.loc[non_zero_rows.index] = non_zero_rows.divide(
+        # pandas-stubs' _LocIndexerFrame.__setitem__ accepts list/mask/slice keys but
+        # not a bare Index; .loc[Index] = DataFrame is valid at runtime. weights is a
+        # DataFrame here (from format_data above).
+        weights.loc[non_zero_rows.index] = non_zero_rows.divide(  # type: ignore[call-overload]
             non_zero_rows.sum(axis=1), axis=0
         )
 
@@ -673,7 +688,7 @@ class EnsembleDistribution:
         ]
 
     @staticmethod
-    def fill_missing_weights(weights: Parameters, expected_columns) -> Parameters:
+    def fill_missing_weights(weights: Parameters, expected_columns: list[str]) -> Parameters:
         weights = copy.deepcopy(weights)
 
         # Get existing keys/columns/index based on weights type
@@ -686,14 +701,17 @@ class EnsembleDistribution:
         else:
             column_names = None  # For list, tuple, np.array, we can't fill missing columns
 
-        # Add missing columns with 0.0 value
+        # Add missing columns with 0.0 value. ``column_names`` is only populated in
+        # the dict/DataFrame/Series branches above, so when it is truthy ``weights``
+        # is one of those indexable types; cast documents that for the assignment.
         if column_names and column_names < set(expected_columns):
+            indexable = cast("dict[str, Any] | pd.DataFrame | pd.Series[Any]", weights)
             for col in expected_columns:
                 if col not in column_names:
-                    weights[col] = 0.0
+                    indexable[col] = 0.0
         return weights
 
-    def pdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
+    def pdf(self, x: NumericInput) -> Numeric:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -712,17 +730,18 @@ class EnsembleDistribution:
                     x.loc[computable]
                 )
 
+        result: Numeric = p
         if single_val:
-            p = p.iloc[0]
+            result = p.iloc[0]
         if values_only:
-            p = p.values
-        return p
+            result = cast("npt.NDArray[Any]", p.values)
+        return result
 
     def ppf(
         self,
-        q: pd.Series | np.ndarray | float | int,
-        q_dist: pd.Series | np.ndarray | float | int,
-    ) -> pd.Series | np.ndarray | float:
+        q: NumericInput,
+        q_dist: NumericInput,
+    ) -> Numeric:
         """Quantile function using 2 propensities.
 
         Parameters
@@ -761,13 +780,14 @@ class EnsembleDistribution:
                     )
                     x[idx] = self._distribution_map[name](parameters=params).ppf(q[idx])
 
+        result: Numeric = x
         if single_val:
-            x = x.iloc[0]
+            result = x.iloc[0]
         if values_only:
-            x = x.values
-        return x
+            result = cast("npt.NDArray[Any]", x.values)
+        return result
 
-    def cdf(self, x: pd.Series | np.ndarray | float | int) -> pd.Series | np.ndarray | float:
+    def cdf(self, x: NumericInput) -> Numeric:
         single_val = isinstance(x, (float, int))
         values_only = isinstance(x, np.ndarray)
 
@@ -787,11 +807,12 @@ class EnsembleDistribution:
                     x.loc[computable]
                 )
 
+        result: Numeric = c
         if single_val:
-            c = c.iloc[0]
+            result = c.iloc[0]
         if values_only:
-            c = c.values
-        return c
+            result = cast("npt.NDArray[Any]", c.values)
+        return result
 
 
 class NonConvergenceError(Exception):
@@ -803,8 +824,11 @@ class NonConvergenceError(Exception):
 
 
 def _get_optimization_result(
-    mean: pd.Series, sd: pd.Series, func: Callable, initial_func: Callable
-) -> tuple:
+    mean: pd.Series[Any],
+    sd: pd.Series[Any],
+    func: Callable[[npt.NDArray[Any], float, float], float],
+    initial_func: Callable[[float, float], npt.NDArray[Any]],
+) -> tuple[Any, ...]:
     """Finds the shape parameters of distributions which generates mean/sd close to actual mean/sd.
 
     Parameters
@@ -822,17 +846,17 @@ def _get_optimization_result(
     --------
         A tuple of the optimization results.
     """
-    mean, sd = mean.values, sd.values
+    mean_values, sd_values = mean.values, sd.values
     results = []
     with np.errstate(all="warn"):
-        for i in range(len(mean)):
-            initial_guess = initial_func(mean[i], sd[i])
+        for i in range(len(mean_values)):
+            initial_guess = initial_func(mean_values[i], sd_values[i])
             result = optimize.minimize(
                 func,
                 initial_guess,
                 (
-                    mean[i],
-                    sd[i],
+                    mean_values[i],
+                    sd_values[i],
                 ),
                 method="Nelder-Mead",
                 options={"maxiter": 10000},
