@@ -1,8 +1,7 @@
 **4.1.1 - 06/09/26**
 
 - Replace the free-form ``backup_configuration: dict[str, Any]`` on
-  ``JobParameters`` with a ``BackupConfiguration`` ``TypedDict`` documenting its
-  ``backup_dir`` / ``backup_freq`` / ``backup_metadata_path`` keys
+  ``JobParameters`` with a ``BackupConfiguration`` ``TypedDict``
 
 **4.1.0 - 06/04/26**
 
