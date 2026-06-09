@@ -24,6 +24,13 @@ py:class stats.rv_continuous
 # loguru
 py:class loguru.Logger
 
+# networkx: the ``nx.DiGraph`` return annotation on the resource manager renders
+# as a bare ``:class:`nx.DiGraph``` cross-ref that intersphinx (whose target is
+# the qualified ``networkx.DiGraph``) can't match. autodoc-typehints also strips
+# the ``[Resource]`` parameter, so the unresolved target is always ``nx.DiGraph``.
+# Same situation as the pandas / ConfigTree entries.
+py:class nx.DiGraph
+
 # vivarium
 # Type aliases don't play nicely with sphinx when you import them
 # elsewhere.  Works fine for static type checker though.  I think this
