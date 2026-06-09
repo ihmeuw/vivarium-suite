@@ -1,3 +1,8 @@
+**3.1.0 - 06/08/26**
+
+- Add complete type annotations across the package and ship a ``py.typed`` marker (PEP 561), enabling downstream type checking
+- Configure strict ``mypy`` in ``pyproject.toml`` (scipy and docutils treated as untyped)
+
 **3.0.3 - 05/20/26**
 
 - Tighten tag pattern

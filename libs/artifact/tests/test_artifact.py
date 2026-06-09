@@ -11,7 +11,7 @@ from vivarium.artifact.artifact import (
     _parse_draw_filters,
     _to_tree,
 )
-from vivarium.artifact.hdf import EntityKey
+from vivarium.artifact.entity_key import EntityKey
 
 
 @pytest.fixture()

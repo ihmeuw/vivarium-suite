@@ -48,6 +48,25 @@ tag_regex = '^vivarium-risk-distributions-v(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-risk-distributions-v*"'
 fallback_version = "0.0.0+no-git-tag"
 
+[tool.mypy]
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = ["build"]
+mypy_path = "src:tests"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# scipy ships no py.typed marker or stubs; treat as Any-typed.
+module = ["scipy", "scipy.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# docutils (used only in docs/source/conf.py) ships no py.typed marker or
+# stubs; treat as Any-typed.
+module = ["docutils", "docutils.*"]
+ignore_missing_imports = true
+
 [tool.black]
 line-length = 94
 

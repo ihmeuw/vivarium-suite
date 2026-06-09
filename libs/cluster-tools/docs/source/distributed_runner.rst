@@ -41,8 +41,14 @@ output directory with the ``-o`` flag and which project you'd like to run on wit
           | file does not contain the artifact path or you want to override it.
     *   - | **-\-pdb**
         - | If an error occurs, drop into the python debugger.
-    *   - | **-\-verbose** or **-v**
-        - | Report each time step as it occurs during the run.
+    *   - | **-v**
+        - | Increase the logging verbosity of the main runner process. By default
+          | only warnings and errors are logged; pass **-v** to also log
+          | informational messages and **-vv** to additionally log debug messages.
+    *   - | **-s**
+        - | Increase the logging verbosity of each individual simulation, on the
+          | same scale as **-v** (**-s** for info, **-ss** for debug). Defaults to
+          | logging only warnings and errors.
     *   - | **-\-backup-freq**
         - | The frequency with which to save a backup of the simulation state to disk.
     *   - | **-\-max-workers** or **-w**

@@ -1,3 +1,33 @@
+**5.1.3 - 06/09/26**
+
+- Unpin mypy and fix associated failures, including those for new networkx type stubs
+
+**5.1.2 - 06/08/26**
+
+- Write stratified observation results' stratification columns as ordered
+  categoricals in their registered category order.
+
+**5.1.1 - 06/08/26**
+
+- Treat string data sources matching the entity key format as artifact keys and
+  all other strings as literal values instead of unconditionally assuming artifact
+  keys.
+
+**5.1.0 - 06/04/26**
+
+- Standardize CLI logging verbosity on a ``-v`` count and a single canonical
+  level map (0 = WARNING, 1 = INFO, 2+ = DEBUG)
+- Add ``verbose_option`` Click decorator
+- Make ``get_log_level`` and ``add_logging_sink`` public
+- Add the function name and elapsed time to the shared log line format
+
+Breaking changes:
+
+- ``simulate run`` now defaults to the WARNING level (was INFO); pass ``-v`` for
+  INFO and ``-vv`` for DEBUG. A single ``-v`` now selects INFO rather than DEBUG.
+- Removed the ``simulate run --quiet`` / ``-q`` option (WARNING is now the default
+  logging level).
+
 **5.0.3 - 06/03/26**
 
 - Refer to vivarium.cluster_tools instead of vivarium_cluster_tools in documentation

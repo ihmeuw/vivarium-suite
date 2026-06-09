@@ -1,5 +1,7 @@
 """Risk distributions for use with the ``vivarium`` simulation framework."""
 
+from __future__ import annotations
+
 from importlib.metadata import PackageNotFoundError, version
 
 try:

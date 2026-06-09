@@ -76,10 +76,10 @@ options for the run. These are:
           | model specification file will be created. Within this, a further
           | subdirectory named for the time at which the run was started will
           | be created.
-    *   - | **-\-verbose** or **-v**
-        - | Report each time step as it occurs during the run.
-    *   - | **-\-quiet** or **-q**
-        - | Suppress all logging except for warnings and errors.
+    *   - | **-v**
+        - | Increase logging verbosity. By default only warnings and errors are
+          | logged; pass **-v** to also log informational messages (such as each
+          | time step) and **-vv** to additionally log debug messages.
     *   - | **-\-pdb**
         - | If an error occurs, drop into the python debugger.
     *   - | **-\-help**
@@ -94,7 +94,7 @@ Let's illustrate how to use them. Say we run the following:
 
 .. code-block:: console
 
-    simulate run /path/to/your/model/specification.yaml -i /path/to/artifact.hdf -o /path/to/output/directory --pdb -v
+    simulate run /path/to/your/model/specification.yaml -i /path/to/artifact.hdf -o /path/to/output/directory --pdb -vv
 
 Let's walk through how each of these flags will change the behavior from our
 initial plain ``simulate run``. First, we have provided an artifact path via the 
@@ -103,23 +103,24 @@ is specified in the model specification). Second, we have specified an output
 directory via the **-o** flag. In our first example, outputs went to
 ``~/vivarium_results``. Now they will go to our specified directory. Next, we have 
 provided the **-\-pdb** flag so that if something goes wrong in our run, we will drop 
-into the python debugger where we can investigate. Finally, we have turned on the
-verbose option via the **-v** flag. Whereas before, we saw nothing printed to
+into the python debugger where we can investigate. Finally, we have increased the
+logging verbosity to the debug level via the **-vv** flag (a single **-v** would
+log at the info level instead). Whereas before, we saw nothing printed to
 the console while our simulation was running, we will now see something like
 the following:
 
 .. code-block:: console
 
-    DEBUG:vivarium.engine.framework.values:Registering PopulationManager.metrics as modifier to metrics
-    DEBUG:vivarium.engine.framework.values:Registering value pipeline mortality_rate
-    DEBUG:vivarium.engine.framework.values:Registering value pipeline metrics
-    DEBUG:vivarium.engine.framework.values:Unsourced pipelines: []
-    DEBUG:vivarium.engine.framework.engine:2005-07-01 00:00:00
-    DEBUG:vivarium.engine.framework.engine:2005-07-04 00:00:00
-    DEBUG:vivarium.engine.framework.engine:2005-07-07 00:00:00
-    DEBUG:vivarium.engine.framework.engine:2005-07-10 00:00:00
-    DEBUG:vivarium.engine.framework.engine:2005-07-13 00:00:00
-    DEBUG:vivarium.engine.framework.engine:Some configuration keys not used during run: {'input_data.cache_data', 'output_data.results_directory', 'input_data.intermediary_data_cache_path'}
+    2025-01-15 09:23:41.512 | 0:00:00.842113 | vivarium.engine.framework.values:register_value_modifier:218 - Registering PopulationManager.metrics as modifier to metrics
+    2025-01-15 09:23:41.514 | 0:00:00.844006 | vivarium.engine.framework.values:register_value_producer:171 - Registering value pipeline mortality_rate
+    2025-01-15 09:23:41.515 | 0:00:00.845298 | vivarium.engine.framework.values:register_value_producer:171 - Registering value pipeline metrics
+    2025-01-15 09:23:41.517 | 0:00:00.847441 | vivarium.engine.framework.values:setup:96 - Unsourced pipelines: []
+    2025-01-15 09:23:41.602 | 0:00:00.932110 | vivarium.engine.framework.engine:step:312 - 2005-07-01 00:00:00
+    2025-01-15 09:23:41.640 | 0:00:00.970558 | vivarium.engine.framework.engine:step:312 - 2005-07-04 00:00:00
+    2025-01-15 09:23:41.679 | 0:00:01.009732 | vivarium.engine.framework.engine:step:312 - 2005-07-07 00:00:00
+    2025-01-15 09:23:41.718 | 0:00:01.048264 | vivarium.engine.framework.engine:step:312 - 2005-07-10 00:00:00
+    2025-01-15 09:23:41.757 | 0:00:01.087900 | vivarium.engine.framework.engine:step:312 - 2005-07-13 00:00:00
+    2025-01-15 09:23:41.880 | 0:00:01.210456 | vivarium.engine.framework.engine:report:340 - Some configuration keys not used during run: {'input_data.cache_data', 'output_data.results_directory', 'input_data.intermediary_data_cache_path'}
 
 The specifics of these messages will depend on your model specification, but
 you should see a series of timestamps that correspond to the time steps the

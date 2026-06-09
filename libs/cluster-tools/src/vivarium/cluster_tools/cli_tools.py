@@ -12,6 +12,7 @@ from typing import Any
 
 import click
 import yaml
+from vivarium.engine.interface.cli_tools import verbose_option
 
 # NOTE: The argument type hints for the cli wrappers are not precise; they should
 # be type-hinted using Protocols. However, the functions being wrapped are never
@@ -21,11 +22,8 @@ Decorator = Callable[[CLIFunction], CLIFunction]
 
 
 def with_verbose_and_pdb(func: CLIFunction) -> CLIFunction:
-    func = click.option(
-        "-v",
-        "verbose",
-        count=True,
-        help="Configure logging verbosity of main runner for a parallel simulation.",
+    func = verbose_option(
+        help="Configure logging verbosity of main runner for a parallel simulation."
     )(func)
     func = click.option(
         "--pdb",
@@ -38,21 +36,44 @@ def with_verbose_and_pdb(func: CLIFunction) -> CLIFunction:
 
 def with_sim_verbosity(func: CLIFunction) -> CLIFunction:
     func = click.option(
-        "--sim-verbosity",
         "-s",
-        type=click.Choice(
-            [
-                "0",
-                "1",
-                "2",
-            ],
-        ),
-        required=False,
-        default="0",
-        show_default=True,
-        help="Logging verbosity level of each individual simulation.",
+        "sim_verbosity",
+        count=True,
+        help="Increase per-simulation logging verbosity. Use -s for INFO and -ss for DEBUG.",
+    )(func)
+    func = click.option(
+        "--sim-verbosity",
+        "sim_verbosity_deprecated",
+        type=click.Choice(["0", "1", "2"]),
+        default=None,
+        hidden=True,
+        help="Deprecated. Use -s/-ss instead.",
     )(func)
     return func
+
+
+def resolve_sim_verbosity(sim_verbosity: int, sim_verbosity_deprecated: str | None) -> int:
+    """Resolve per-simulation verbosity from the new ``-s`` count and the
+    deprecated ``--sim-verbosity`` value option.
+
+    Returns the resolved verbosity count and emits a deprecation warning if the
+    old value form was used. Raises a click.UsageError if verbosity is supplied
+    both as ``-s``/``-ss`` and via the deprecated ``--sim-verbosity`` option.
+    """
+    if sim_verbosity_deprecated is not None:
+        if sim_verbosity > 0:
+            raise click.UsageError(
+                "Per-simulation verbosity was provided both as '-s'/'-ss' and via "
+                "the deprecated '--sim-verbosity' option. Use only '-s'/'-ss'."
+            )
+        warnings.warn(
+            "The '--sim-verbosity' option is deprecated; use '-s' (INFO) or '-ss' "
+            "(DEBUG) instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return int(sim_verbosity_deprecated)
+    return sim_verbosity
 
 
 def coerce_to_full_path(

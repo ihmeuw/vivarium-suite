@@ -1,13 +1,21 @@
-import sys
+from __future__ import annotations
+
+from pathlib import Path
 from typing import TextIO
 
-from loguru import logger
+from vivarium.engine.framework.logging import add_logging_sink as _add_logging_sink
+from vivarium.engine.framework.logging import (
+    configure_logging_to_terminal as _configure_logging_to_terminal,
+)
 
 
 def add_logging_sink(
-    sink: TextIO, verbose: int, colorize: bool = False, serialize: bool = False
-):
-    """Adds a logging sink to the global process logger.
+    sink: TextIO | str | Path,
+    verbose: int,
+    colorize: bool = False,
+    serialize: bool = False,
+) -> None:
+    """Add a logging sink to the global process logger.
 
     Parameters
     ----------
@@ -20,56 +28,25 @@ def add_logging_sink(
     serialize
         Whether the logs should be converted to JSON before they're dumped
         to the logging sink.
-
     """
-    message_format = (
-        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <green>{elapsed}</green> | "
-        "<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+    _add_logging_sink(
+        sink,
+        verbosity=verbose,
+        long_format=False,
+        colorize=colorize,
+        serialize=serialize,
     )
-    if verbose == 0:
-        logger.add(
-            sink,
-            colorize=colorize,
-            level="WARNING",
-            format=message_format,
-            serialize=serialize,
-        )
-    elif verbose == 1:
-        logger.add(
-            sink,
-            colorize=colorize,
-            level="INFO",
-            format=message_format,
-            serialize=serialize,
-        )
-    elif verbose >= 2:
-        logger.add(
-            sink,
-            colorize=colorize,
-            level="DEBUG",
-            format=message_format,
-            serialize=serialize,
-        )
 
 
-def configure_logging_to_terminal(verbose: int):
-    """Sets up logging to ``sys.stdout``.
+def configure_logging_to_terminal(verbose: int) -> None:
+    """Set up logging to ``sys.stdout``.
 
     Parameters
     ----------
     verbose
         Verbosity of the logger.
-
     """
-    _clear_default_configuration()
-    add_logging_sink(sys.stdout, verbose, colorize=True)
-
-
-def _clear_default_configuration() -> None:
-    try:
-        logger.remove(0)  # Clear default configuration
-    except ValueError:
-        pass
+    _configure_logging_to_terminal(verbosity=verbose, long_format=False)
 
 
 def decode_status(drmaa, job_status):

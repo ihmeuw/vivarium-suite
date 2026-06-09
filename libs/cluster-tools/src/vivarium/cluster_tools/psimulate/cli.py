@@ -178,7 +178,9 @@ def run(
         max_attempts=options["max_attempts"],
         backup_freq=options["backup_freq"],
         extra_args={
-            "sim_verbosity": int(options["sim_verbosity"]),
+            "sim_verbosity": cli_tools.resolve_sim_verbosity(
+                options["sim_verbosity"], options["sim_verbosity_deprecated"]
+            ),
         },
     )
 
@@ -247,7 +249,9 @@ def restart(
         max_attempts=options["max_attempts"],
         backup_freq=options["backup_freq"],
         extra_args={
-            "sim_verbosity": int(options["sim_verbosity"]),
+            "sim_verbosity": cli_tools.resolve_sim_verbosity(
+                options["sim_verbosity"], options["sim_verbosity_deprecated"]
+            ),
         },
     )
 
@@ -333,7 +337,9 @@ def expand(
         extra_args={
             "num_draws": options["add_draws"],
             "num_seeds": options["add_seeds"],
-            "sim_verbosity": int(options["sim_verbosity"]),
+            "sim_verbosity": cli_tools.resolve_sim_verbosity(
+                options["sim_verbosity"], options["sim_verbosity_deprecated"]
+            ),
         },
     )
 

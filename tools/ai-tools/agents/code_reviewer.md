@@ -64,9 +64,16 @@ If unsure, default to proceeding (Copilot path).
    - Are type annotations consistent with actual runtime behavior?
    - Do tests adequately cover the new behavior, including edge cases?
    - Are there silent data transformations (e.g., rounding, coercion) that could lose precision?
+   - **If the PR template has a "research reference" section that contains a link, check the changed code against the relevant research
+  documentation using  the `vivarium-research` skill and flag any place the implementation 
+  diverges from the documented modelling strategy.
 4. **Synthesize.** Merge the sub-agent findings with your functional correctness review. Deduplicate, resolve any contradictions, and organize into the output format below. Attribute the perspective (maintainability, DRY, design, functionality) to each finding.
 
 ## Output Format
+
+**Omit any section that has no findings** — no empty headings, no "no issues
+found" filler. A clean PR can be three lines. Spend words in proportion to
+severity: a correctness bug earns a sentence of rationale; a nit gets none.
 
 Structure your review as:
 
@@ -74,7 +81,7 @@ Structure your review as:
 ## PR Review: <title>
 
 ### Summary
-<1-2 paragraph description of what the PR does>
+<2-3 sentences on what the PR does — skip entirely if the title already says it>
 
 ### Design
 <numbered findings from _review_design>
@@ -95,20 +102,23 @@ Structure your review as:
 <numbered findings from your own analysis>
 
 ### Minor Nits
-<numbered findings>
+<one line each: `file:line` — the fix. No rationale, no code block.>
 
 ### Overall
-<brief assessment and key areas for improvement>
+<one or two sentences, only if there's a cross-cutting theme worth naming. Omit if the findings already speak for themselves.>
 ```
 
-For each finding, include:
-- The specific file and line reference
-- What the issue is
-- Why it matters
-- A concrete suggestion for improvement (with code snippet when helpful)
+Per-finding budget, scaled to severity:
+- **Substantive findings** (Design through Functionality): `file:line`, then the
+  problem and the fix in **≤2 sentences**. Add a "why it matters" clause only when
+  the impact is non-obvious. Include a code snippet only when the fix isn't clear
+  from a sentence — never to illustrate the problem.
+- **Nits**: one line each, fix only.
 
 ## Constraints
 
+- No preamble and no recap of the diff. Do not restate what the code does — report only what should change. A reviewer should be able to read the whole review in under a minute.
+- Omit a weak finding entirely rather than padding a section to look thorough
 - DO NOT suggest changes outside the scope of the PR diff
 - DO NOT make edits to any files — this agent is read-only and advisory
 - DO NOT review code style or formatting unless it impacts readability significantly
