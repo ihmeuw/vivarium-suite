@@ -16,6 +16,7 @@ simulations at scale on a Slurm cluster easy.
    distributed_runner
    yaml_basics
    branch
+   dagger
    logging
    api_reference/index
    glossary
