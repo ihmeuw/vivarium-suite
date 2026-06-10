@@ -18,6 +18,7 @@ import yaml
 from click.testing import CliRunner
 
 from vivarium_cluster_tools.dagger.cli import dagger
+from vivarium_cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
 
 _WORKFLOW_MAIN = "vivarium_cluster_tools.dagger.cli.runner.run_workflow"
 _RESTART_MAIN = "vivarium_cluster_tools.dagger.cli.runner.restart_workflow"
@@ -208,6 +209,35 @@ class TestDaggerRun:
         assert result.exit_code == 0, result.output
         call_kwargs = mock_main.call_args.kwargs
         assert getattr(call_kwargs["workflow_config"], missing_field) == cli_value
+
+
+class TestDaggerRunOverwriteGuard:
+    """``dagger run`` confirms before reusing a directory that holds a prior run."""
+
+    @pytest.mark.parametrize("answer, expect_run", [("y\n", True), ("n\n", False)])
+    def test_existing_run_confirmation(
+        self, tmp_path: Path, answer: str, expect_run: bool
+    ) -> None:
+        """A prior run triggers a prompt; 'y' launches the workflow, 'n' aborts it."""
+        output = tmp_path / "output"
+        output.mkdir()
+        (output / WORKFLOW_ARGS_FILENAME).write_text("workflow_previous_run")
+        workflow_yaml = _write_yaml(
+            tmp_path, _make_workflow_dict(tmp_path, output_directory=str(output))
+        )
+
+        with patch(_WORKFLOW_MAIN) as mock_main:
+            result = CliRunner().invoke(
+                dagger, ["run", "--config", str(workflow_yaml)], input=answer
+            )
+
+        assert "may overwrite existing files" in result.output
+        if expect_run:
+            assert result.exit_code == 0, result.output
+            mock_main.assert_called_once()
+        else:
+            assert result.exit_code != 0
+            mock_main.assert_not_called()
 
 
 class TestDaggerRestart:

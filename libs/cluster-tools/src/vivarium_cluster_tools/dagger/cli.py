@@ -20,6 +20,7 @@ from vivarium.engine.framework.utilities import handle_exceptions
 from vivarium_cluster_tools.core import cli_tools, logs
 from vivarium_cluster_tools.dagger import runner
 from vivarium_cluster_tools.dagger.config.parsing import load_workflow_config
+from vivarium_cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
 
 
 @click.group()
@@ -114,6 +115,15 @@ def run(
         default_environment=default_environment,
         max_attempts=max_attempts,
     )
+
+    if (workflow_config.output_directory / WORKFLOW_ARGS_FILENAME).exists():
+        click.confirm(
+            f"{workflow_config.output_directory} already contains a previous "
+            "dagger run. Continuing will start a new run in this directory and "
+            "may overwrite existing files there, including prior results and the "
+            "files needed to restart the previous run. Continue?",
+            abort=True,
+        )
 
     main = handle_exceptions(runner.run_workflow, logger, with_debugger)
 
