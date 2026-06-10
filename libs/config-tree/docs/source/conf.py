@@ -10,9 +10,6 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import datetime
-import os
-import subprocess
 import sys
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -23,38 +20,11 @@ from pathlib import Path
 import vivarium.config_tree
 
 
-def _copyright_end_year() -> str:
-    """Resolve the copyright end year for reproducible docs builds.
-
-    Two builds of the same git SHA must produce identical output, which rules
-    out ``datetime.date.today().year``. Order of precedence:
-
-    1. ``SOURCE_DATE_EPOCH`` (reproducible-builds standard).
-    2. Year of the HEAD commit (stable for a given SHA).
-    3. Current year (fallback for sdist / detached source builds).
-    """
-    if epoch := os.environ.get("SOURCE_DATE_EPOCH"):
-        return datetime.datetime.fromtimestamp(
-            int(epoch), tz=datetime.timezone.utc
-        ).strftime("%Y")
-    try:
-        out = subprocess.check_output(
-            ["git", "log", "-1", "--format=%cd", "--date=format:%Y"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        if out:
-            return out
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
-    return str(datetime.date.today().year)
-
-
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.config_tree"
 author = "The vivarium developers"
-copyright = f"2016-{_copyright_end_year()}, {author}"
+copyright = f"2024, {author}"
 
 # The short X.Y version.
 version = vivarium.config_tree.__version__
