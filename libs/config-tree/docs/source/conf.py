@@ -10,15 +10,7 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import sys
-
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-from pathlib import Path
-
-import vivarium.config_tree
-
+import importlib.metadata
 
 # -- Project information -----------------------------------------------------
 
@@ -27,9 +19,9 @@ author = "The vivarium developers"
 copyright = f"2024, {author}"
 
 # The short X.Y version.
-version = vivarium.config_tree.__version__
+version = importlib.metadata.version("vivarium-config-tree")
 # The full version, including alpha/beta/rc tags.
-release = vivarium.config_tree.__version__
+release = version
 
 
 # -- General configuration ------------------------------------------------

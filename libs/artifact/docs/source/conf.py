@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Sphinx configuration for vivarium-artifact docs."""
 
-import vivarium.artifact
+import importlib.metadata
 
 
 # -- Project information -----------------------------------------------------
@@ -11,8 +11,8 @@ project = "vivarium.artifact"
 author = "The vivarium developers"
 copyright = "2026, Institute for Health Metrics and Evaluation"
 
-version = vivarium.artifact.__version__
-release = vivarium.artifact.__version__
+version = importlib.metadata.version("vivarium-artifact")
+release = version
 
 
 # -- General configuration ------------------------------------------------

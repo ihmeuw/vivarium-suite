@@ -10,10 +10,10 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import importlib.metadata
+
 from docutils.nodes import Text
 from sphinx.ext.intersphinx import missing_reference
-
-import vivarium.gbd_mapping
 
 
 # -- Project information -----------------------------------------------------
@@ -23,9 +23,9 @@ author = "The vivarium developers"
 copyright = "2023, Institute for Health Metrics and Evaluation"
 
 # The short X.Y version.
-version = vivarium.gbd_mapping.__version__
+version = importlib.metadata.version("vivarium-gbd-mapping")
 # The full version, including alpha/beta/rc tags.
-release = vivarium.gbd_mapping.__version__
+release = version
 
 
 # -- General configuration ------------------------------------------------

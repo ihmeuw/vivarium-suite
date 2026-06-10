@@ -10,19 +10,14 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import sys
+import importlib.metadata
 
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
 from pathlib import Path
 
 from docutils.nodes import Element, Text
 from sphinx.application import Sphinx
 from sphinx.environment import BuildEnvironment
 from sphinx.ext.intersphinx import missing_reference
-
-import vivarium.risk_distributions
 
 
 # -- Project information -----------------------------------------------------
@@ -31,8 +26,8 @@ project = "vivarium.risk_distributions"
 author = "The vivarium developers"
 copyright = "2018, Institute for Health Metrics and Evaluation"
 
-version = vivarium.risk_distributions.__version__
-release = vivarium.risk_distributions.__version__
+version = importlib.metadata.version("vivarium-risk-distributions")
+release = version
 
 
 # -- General configuration ------------------------------------------------
