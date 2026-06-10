@@ -1,4 +1,4 @@
-**3.1.1 - 06/10/26**
+**3.1.1 - 06/11/26**
 
 - Include py.typed marker as package data
 

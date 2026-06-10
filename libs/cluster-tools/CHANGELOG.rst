@@ -1,4 +1,4 @@
-**4.1.1 - 06/10/26**
+**4.1.1 - 06/11/26**
 
 - Update vivarium_public_health import to vivarium.public_health in README
 
