@@ -39,6 +39,8 @@ Return a numbered list of findings. For each:
 
 ## Constraints
 
+- Be terse. State each finding's problem and fix in ≤2 sentences; add a "why it matters" clause only when the impact is non-obvious. Use a code snippet only when the fix isn't clear from a sentence.
+- If there are no findings, say so in one line. Do not restate or summarize the diff.
 - DO NOT require extensive prose for minor internal refactors
 - DO NOT request documentation changes where behavior is unchanged
 - ONLY flag documentation gaps or inaccuracies that would plausibly mislead users or future maintainers
