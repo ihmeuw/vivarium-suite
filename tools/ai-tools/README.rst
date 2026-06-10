@@ -228,14 +228,11 @@ Recommended sandbox configuration
 ----------------------------------
 
 For agentic use we recommend running Claude Code with its Bash sandbox
-enabled (OS-level isolation of Bash and its children — bubblewrap on
-Linux/WSL2, Seatbelt on macOS). The sandbox confines writes to the
-working tree and denies reads of credential files, so a prompt-injected
-or buggy command cannot exfiltrate secrets or write outside the repo.
-
-The catch is that a strict sandbox blocks the normal dev workflow unless
-you grant the few write paths the toolchain needs. A working baseline for
-``~/.claude/settings.json``:
+enabled — OS-level isolation (bubblewrap on Linux/WSL2, Seatbelt on macOS)
+that confines writes to the working tree and denies reads of credential
+files. The catch: a strict sandbox blocks the normal workflow unless you
+grant the write paths and egress the toolchain needs. A working baseline
+for ``~/.claude/settings.json``:
 
 .. code-block:: json
 
@@ -253,24 +250,14 @@ you grant the few write paths the toolchain needs. A working baseline for
      }
    }
 
-``filesystem.allowWrite`` lets ``conda``/``pip`` manage environments (they
-write outside the repo); ``filesystem.denyRead`` closes the
-credential-exfil path that an open-read, open-network sandbox would
-otherwise leave open; ``network.allowedDomains`` is the egress allowlist
-for sandboxed Bash (add the hosts your workflow needs — package indexes,
-``github.com`` for git over HTTPS, etc.).
-
-That ``denyRead`` of ``gh``'s credential is why the ``gh`` CLI does not
-work under the sandbox — and why this plugin depends on the GitHub MCP
-server, whose tool calls run outside the Bash sandbox and so can read
-PRs, post reviews, and open PRs without un-sandboxing anything. See the
-``plugin-setup`` skill for the GitHub MCP wiring (including the
-``headersHelper`` that keeps auth working across agent-team reconnects).
-The one operation the MCP cannot perform is pushing a local commit graph
-— but ``git push`` itself still runs fully sandboxed once ``github.com``
-is in ``allowedDomains`` and git's credential helper is pointed at a
-sandbox-readable token file (again, see ``plugin-setup``). No
-un-sandboxing escape hatch is needed for normal git/GitHub work.
+``allowWrite`` covers ``conda``/``pip``; ``denyRead`` closes the
+credential-exfil path; ``network.allowedDomains`` is the egress allowlist
+for sandboxed Bash. That ``denyRead`` of ``gh``'s token is why the ``gh``
+CLI can't run sandboxed — hence the GitHub MCP dependency, whose calls run
+outside the sandbox. Even ``git push`` runs sandboxed once ``github.com``
+is allowlisted and git's credential helper points at a sandbox-readable
+token file (see ``plugin-setup``), so no un-sandboxing is needed for
+normal git/GitHub work.
 
 Installing in VS Code GitHub Copilot
 ====================================

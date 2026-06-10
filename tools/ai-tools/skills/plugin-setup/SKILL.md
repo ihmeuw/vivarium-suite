@@ -135,100 +135,31 @@ the project sandbox `denyRead`s `~/.config/gh/hosts.yml`, which breaks `gh`
 in any sandboxed command. The one thing the MCP cannot do is push a local
 commit graph; keep `git push` for that.
 
-The plugin ships an `http` server whose auth is a single header,
-`Authorization: Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}`. Two problems make
-the bare env-var substitution unreliable, so we replace it with a
-`headersHelper` that reads a secret file — the same 0600-file pattern as
-the Jenkins credential above.
-
-**Why the bare env var fails:** with experimental agent teams
-(`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), opening the agents view triggers
-an MCP reconnect in a teammate context that does **not** inherit
-`GITHUB_PERSONAL_ACCESS_TOKEN`. The header then resolves to an empty
-`Bearer `, and the endpoint returns `HTTP 400: Authorization header is
-badly formatted` — surfacing as a `/mcp` connection failure. Plain `claude`
-works (its MCP server inherits the lead process's env), so the bug only
-appears once you use teams. A `headersHelper` avoids this because Claude
-Code runs it fresh on every connection — including the teammate reconnect.
-
-### 1. Stash the token as a 0600 file, refreshed from `gh`
-
-The helper reads a cache file rather than calling `gh` directly, because
-`gh` cannot run in a sandboxed context (it needs `~/.config/gh/hosts.yml`,
-which the sandbox denies). Refresh the file from `gh auth token` on each
-interactive shell. Have the user add this to `~/.zshrc` (interactive shells
-— mirrors the Jenkins file pattern in `~/.zshenv`):
-
-```bash
-# >>> github mcp token >>>
-mkdir -p "$HOME/.claude/secrets" && chmod 700 "$HOME/.claude/secrets"
-if command -v gh >/dev/null 2>&1; then
-  gh auth token > "$HOME/.claude/secrets/github-token" 2>/dev/null \
-    && chmod 600 "$HOME/.claude/secrets/github-token"
-fi
-# <<< github mcp token <<<
-```
-
-Using the `gh` token reuses a credential already SAML-SSO-authorized for
-the `ihmeuw` org — the same one that lets `git push` work.
-
-### 2. Point the plugin's MCP config at the helper
-
-Edit the github server's `.mcp.json` (in the plugin **cache**:
-`~/.claude/plugins/cache/claude-plugins-official/github/unknown/.mcp.json`),
-replacing the `Authorization` header with a `headersHelper`:
-
-```json
-{
-  "github": {
-    "type": "http",
-    "url": "https://api.githubcopilot.com/mcp/",
-    "headersHelper": "printf '{\"Authorization\":\"Bearer %s\"}' \"$(cat $HOME/.claude/secrets/github-token)\""
-  }
-}
-```
-
-The `$(cat ...)` strips the file's trailing newline so the header isn't
-malformed. Restart Claude Code, then confirm with `claude mcp list` (look
-for `github … ✔ Connected`) — **not** `claude mcp get`, which would expand
-and leak the token.
-
-**Caveats.** (1) `.mcp.json` lives in the plugin cache, so a github plugin
-update or reinstall overwrites it — reapply the `headersHelper` line after
-any reinstall. (2) The token is now in a file any sandboxed command can
-read (the same exposure already accepted for the Jenkins credential). (3)
-If the `gh` token rotates and no interactive shell has refreshed the file,
-it can go stale — fine for static PATs.
+**The auth wrinkle.** The plugin authenticates with a single
+`Authorization: Bearer` header sourced from a `${GITHUB_PERSONAL_ACCESS_TOKEN}`
+env var. That env var resolves *empty* in an agent-team teammate reconnect
+(the teammate doesn't inherit it), and the empty bearer makes the server
+return HTTP 400 — a `/mcp` failure that only shows up once you use agent
+teams. Fix it by replacing the env-var header in the github server's
+`.mcp.json` (which lives in the plugin **cache**, so a plugin reinstall
+overwrites it — reapply afterward) with a `headersHelper`, which Claude Code
+re-runs fresh on every connection. Point that helper at a 0600 token file
+under `~/.claude/secrets/` that an interactive shell refreshes from
+`gh auth token` — the same secret-file pattern as the Jenkins credential
+above, reusing a token already SSO-authorized for `ihmeuw`. Verify with
+`claude mcp list`, not `claude mcp get` (which would leak the token).
 
 ### Sandboxed `git push`
 
-The GitHub MCP covers PRs, reviews, and reads, but it cannot push a local
-commit graph — that still needs `git push`. Out of the box `git push`
-fails under the sandbox: the `github.com` credential helper is
-`gh auth git-credential`, which reads the `denyRead`-ed
-`~/.config/gh/hosts.yml`, and the sandbox blocks egress to `github.com`
-unless it is allowlisted. Both are fixable without un-denying the `gh`
-credential or dropping the sandbox:
-
-1. **Point git at the sandbox-readable token file** (the same one the MCP
-   helper uses). Appending it leaves `gh` as the primary helper for
-   un-sandboxed shells, with this as the fallback that fires when `gh`
-   can't read its file:
-
-   ```bash
-   git config --global --add credential.https://github.com.helper \
-     '!f() { echo username=x-access-token; echo "password=$(cat "$HOME/.claude/secrets/github-token")"; }; f'
-   ```
-
-2. **Allow `github.com` egress** in the sandbox network allowlist —
-   `sandbox.network.allowedDomains` in `~/.claude/settings.json` (or the
-   project's `.claude/settings.local.json`); see the "Recommended sandbox
-   configuration" section of the README. This applies live; no restart
-   needed.
-
-Verify with a non-mutating, in-sandbox `git ls-remote
-https://github.com/<org>/<repo> HEAD` — a returned SHA means egress and
-the credential fallthrough both work, and `git push` will too.
+The MCP can't push local commits, and plain `git push` also fails under the
+sandbox: git's `github.com` credential helper is `gh` (which can't read its
+denied config), and `github.com` egress isn't allowlisted by default. Fix
+both without un-denying anything — point git's `github.com` credential helper
+at the same `~/.claude/secrets/` token file (appended *after* `gh`, so it's
+only the sandboxed fallback), and add `github.com` to
+`sandbox.network.allowedDomains` (see the README's "Recommended sandbox
+configuration"). An in-sandbox `git ls-remote` against a private repo
+confirms both halves.
 
 ## Brainstorming visual companion (Node.js)
 
