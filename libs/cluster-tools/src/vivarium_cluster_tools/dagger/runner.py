@@ -31,7 +31,13 @@ from vivarium_cluster_tools.dagger.config.utilities import (
 from vivarium_cluster_tools.utilities import hash_output_path
 
 
-def run_workflow(workflow_config: WorkflowConfig, verbose: int = 0) -> None:
+def run_workflow(
+    workflow_config: WorkflowConfig,
+    verbose: int = 0,
+    slack_channel: str | None = None,
+    slack_tag: str | None = None,
+    mute_slack: bool = False,
+) -> None:
     """Entry point for the ``dagger run`` subcommand: start a fresh workflow.
 
     Parameters
@@ -40,6 +46,13 @@ def run_workflow(workflow_config: WorkflowConfig, verbose: int = 0) -> None:
         The parsed and validated workflow configuration (with CLI overrides applied).
     verbose
         Verbosity level.
+    slack_channel
+        Optional Slack channel to post a successful-run notification to instead
+        of DMing the launching user.
+    slack_tag
+        Optional username to @-mention in the channel notification on success.
+    mute_slack
+        If ``True``, suppress the completion notification entirely.
     """
     logger.info(f"Starting workflow: {workflow_config.name}")
 
@@ -53,6 +66,9 @@ def run_workflow(workflow_config: WorkflowConfig, verbose: int = 0) -> None:
         workflow_id=workflow_id,
         resume=False,
         command_label="dagger run",
+        slack_channel=slack_channel,
+        slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )
 
 
@@ -63,6 +79,9 @@ def restart_workflow(
     queue: str | None = None,
     max_attempts: int | None = None,
     verbose: int = 0,
+    slack_channel: str | None = None,
+    slack_tag: str | None = None,
+    mute_slack: bool = False,
 ) -> None:
     """Resume a previously started ``dagger`` workflow from its output directory.
 
@@ -84,6 +103,13 @@ def restart_workflow(
         Override for the maximum number of Jobmon task attempts.
     verbose
         Verbosity level.
+    slack_channel
+        Optional Slack channel to post a successful-run notification to instead
+        of DMing the launching user.
+    slack_tag
+        Optional username to @-mention in the channel notification on success.
+    mute_slack
+        If ``True``, suppress the completion notification entirely.
 
     Raises
     ------
@@ -123,6 +149,9 @@ def restart_workflow(
         workflow_id=workflow_id,
         resume=True,
         command_label="dagger restart",
+        slack_channel=slack_channel,
+        slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )
 
 
@@ -132,6 +161,9 @@ def _execute_workflow(
     workflow_id: str,
     resume: bool,
     command_label: str,
+    slack_channel: str | None = None,
+    slack_tag: str | None = None,
+    mute_slack: bool = False,
 ) -> None:
     """Build, bind, run, and report a workflow; shared by run and restart.
 
@@ -163,6 +195,9 @@ def _execute_workflow(
         command_label=command_label,
         monitoring_url=monitoring_url,
         results_dir=str(output_root),
+        slack_channel=slack_channel,
+        slack_tag=slack_tag,
+        mute_slack=mute_slack,
     )
 
     if wf_status != client.JOBMON_STATUS_DONE:

@@ -1,8 +1,10 @@
 **3.2.0 - TBD/TBD/TBD**
 
 - Implement serial workflows via the dagger CLI group
+- API for constructing Jobmon workflows and tasks directly from Python
 - Add facade to interact with Jobmon SDK
 - Reduce simulation task runtime resource during restart with backups
+- Add ``--slack-channel`` and ``--slack-tag`` options to post completion notifications to a channel
 
 **4.0.1 - 06/04/26**
 

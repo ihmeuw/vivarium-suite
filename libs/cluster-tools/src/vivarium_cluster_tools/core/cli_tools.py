@@ -55,6 +55,55 @@ def with_sim_verbosity(func: CLIFunction) -> CLIFunction:
     return func
 
 
+def with_slack_channel(func: CLIFunction) -> CLIFunction:
+    """Decorator that adds the ``--slack-channel`` option for completion notifications."""
+    return click.option(
+        "--slack-channel",
+        default=None,
+        help="Slack channel name (e.g. 'my-channel') to post the completion "
+        "notification to instead of direct-messaging the launching user. The "
+        "Slack bot must already be a member of the channel to post there.",
+    )(func)
+
+
+def with_slack_tag(func: CLIFunction) -> CLIFunction:
+    """Decorator that adds the ``--slack-tag`` option for completion notifications."""
+    return click.option(
+        "--slack-tag",
+        default=None,
+        help="Username to @-mention in the channel notification on success. "
+        "Requires --slack-channel; ignored on failure, which always "
+        "direct-messages the launching user.",
+    )(func)
+
+
+def with_slack_mute(func: CLIFunction) -> CLIFunction:
+    """Decorator that adds the ``--no-slack`` flag to suppress the notification."""
+    return click.option(
+        "--no-slack",
+        "mute_slack",
+        is_flag=True,
+        default=False,
+        help="Suppress the Slack completion notification entirely.",
+    )(func)
+
+
+def validate_slack_options(
+    slack_channel: str | None, slack_tag: str | None, mute_slack: bool = False
+) -> None:
+    """Validate the mutual constraints among the Slack notification options.
+
+    Raises a ``UsageError`` if ``--no-slack`` is combined with a channel or tag,
+    or if ``--slack-tag`` is used without ``--slack-channel``.
+    """
+    if mute_slack and (slack_channel is not None or slack_tag is not None):
+        raise click.UsageError(
+            "--no-slack cannot be combined with --slack-channel or --slack-tag."
+        )
+    if slack_tag is not None and slack_channel is None:
+        raise click.UsageError("--slack-tag requires --slack-channel to be provided.")
+
+
 def coerce_to_full_path(
     ctx: click.Context, param: click.Parameter | None, value: str | None
 ) -> Path | None:

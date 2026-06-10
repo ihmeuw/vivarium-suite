@@ -376,6 +376,62 @@ def test_restart_missing_workflow_args_errors(tmp_path: Path) -> None:
 @patch(f"{_RUNNER}.send_slack_notification")
 @patch(f"{_RUNNER}.client.bind_and_run_workflow")
 @patch(f"{_RUNNER}.build_workflow_from_config")
+def test_run_workflow_forwards_slack_options(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    workflow_config: WorkflowConfig,
+) -> None:
+    """run_workflow threads slack_channel/slack_tag into the Slack notification."""
+    mock_bind_and_run.return_value = ("D", "url")
+
+    run_workflow(
+        workflow_config=workflow_config,
+        slack_channel="my-channel",
+        slack_tag="coworker",
+        mute_slack=True,
+    )
+
+    slack_kwargs = mock_slack.call_args.kwargs
+    assert slack_kwargs["slack_channel"] == "my-channel"
+    assert slack_kwargs["slack_tag"] == "coworker"
+    assert slack_kwargs["mute_slack"] is True
+
+
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
+def test_restart_workflow_forwards_slack_options(
+    mock_build: Any,
+    mock_bind_and_run: Any,
+    mock_slack: Any,
+    mock_timeout: Any,
+    tmp_path: Path,
+) -> None:
+    """restart_workflow threads slack_channel/slack_tag into the Slack notification."""
+    results_dir = tmp_path / "results"
+    _seed_resumable_output(results_dir)
+    mock_bind_and_run.return_value = ("D", "url")
+
+    restart_workflow(
+        results_dir,
+        slack_channel="my-channel",
+        slack_tag="coworker",
+        mute_slack=True,
+    )
+
+    slack_kwargs = mock_slack.call_args.kwargs
+    assert slack_kwargs["slack_channel"] == "my-channel"
+    assert slack_kwargs["slack_tag"] == "coworker"
+    assert slack_kwargs["mute_slack"] is True
+
+
+@patch(f"{_RUNNER}.get_workflow_timeout_seconds", return_value=3600)
+@patch(f"{_RUNNER}.send_slack_notification")
+@patch(f"{_RUNNER}.client.bind_and_run_workflow")
+@patch(f"{_RUNNER}.build_workflow_from_config")
 def test_run_then_restart_roundtrip(
     mock_build: Any,
     mock_bind_and_run: Any,

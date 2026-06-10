@@ -47,6 +47,9 @@ shared_options: list[Decorator] = [
     results.backup_freq,
     cli_tools.with_verbose_and_pdb,
     cli_tools.with_sim_verbosity,
+    cli_tools.with_slack_channel,
+    cli_tools.with_slack_tag,
+    cli_tools.with_slack_mute,
 ]
 
 
@@ -156,6 +159,10 @@ def run(
             "Provide it via --branch-configuration/-B."
         )
 
+    cli_tools.validate_slack_options(
+        options["slack_channel"], options["slack_tag"], options["mute_slack"]
+    )
+
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -180,6 +187,9 @@ def run(
         extra_args={
             "sim_verbosity": int(options["sim_verbosity"]),
         },
+        slack_channel=options["slack_channel"],
+        slack_tag=options["slack_tag"],
+        mute_slack=options["mute_slack"],
     )
 
 
@@ -228,6 +238,10 @@ def restart(
             "Missing required argument: results_root. " "Provide it via --results-root/-R."
         )
 
+    cli_tools.validate_slack_options(
+        options["slack_channel"], options["slack_tag"], options["mute_slack"]
+    )
+
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -249,6 +263,9 @@ def restart(
         extra_args={
             "sim_verbosity": int(options["sim_verbosity"]),
         },
+        slack_channel=options["slack_channel"],
+        slack_tag=options["slack_tag"],
+        mute_slack=options["mute_slack"],
     )
 
 
@@ -312,6 +329,10 @@ def expand(
             "Missing required argument: results_root. " "Provide it via --results-root/-R."
         )
 
+    cli_tools.validate_slack_options(
+        options["slack_channel"], options["slack_tag"], options["mute_slack"]
+    )
+
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -335,6 +356,9 @@ def expand(
             "num_seeds": options["add_seeds"],
             "sim_verbosity": int(options["sim_verbosity"]),
         },
+        slack_channel=options["slack_channel"],
+        slack_tag=options["slack_tag"],
+        mute_slack=options["mute_slack"],
     )
 
 
@@ -366,6 +390,9 @@ def test(
     **options: Any,
 ) -> None:
     logs.configure_main_process_logging_to_terminal(options["verbose"])
+    cli_tools.validate_slack_options(
+        options["slack_channel"], options["slack_tag"], options["mute_slack"]
+    )
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     # HACK: warn that we are changing the default as well as any provided
@@ -411,4 +438,7 @@ def test(
             "test_type": test_type,
             "num_workers": num_workers,
         },
+        slack_channel=options["slack_channel"],
+        slack_tag=options["slack_tag"],
+        mute_slack=options["mute_slack"],
     )
