@@ -32,7 +32,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from vivarium_cluster_tools.psimulate.results.writing import collect_metadata
+from vivarium.cluster_tools.psimulate.results.writing import collect_metadata
 
 _DATA_DIR = Path(__file__).parent / "data"
 _MODEL_SPEC = _DATA_DIR / "e2e_model_spec.yaml"

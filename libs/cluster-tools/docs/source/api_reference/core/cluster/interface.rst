@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.core.cluster.interface
+.. automodule:: vivarium.cluster_tools.core.cluster.interface

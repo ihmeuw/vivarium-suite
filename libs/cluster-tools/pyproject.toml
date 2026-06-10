@@ -43,17 +43,23 @@ ci_github = ["vivarium-cluster-tools[test,docs,lint]"]
 ci_jenkins = ["vivarium-cluster-tools[ci_github,cluster]"]
 
 [project.scripts]
-psimulate = "vivarium_cluster_tools.psimulate.cli:psimulate"
-dagger = "vivarium_cluster_tools.dagger.cli:dagger"
-vipin = "vivarium_cluster_tools.vipin.cli:vipin"
+psimulate = "vivarium.cluster_tools.psimulate.cli:psimulate"
+dagger = "vivarium.cluster_tools.dagger.cli:dagger"
+vipin = "vivarium.cluster_tools.vipin.cli:vipin"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# NOTE: the epic/phase-3 reorg keeps the standalone flat `vivarium_cluster_tools`
-# top-level package rather than the `vivarium.cluster_tools` namespace used by the
-# other monorepo libs. Conforming to the namespace convention is deferred to the
-# eventual epic -> main merge; until then we package the flat layout as-is.
-include = ["vivarium_cluster_tools", "vivarium_cluster_tools.*"]
+# Only include vivarium.cluster_tools and its subpackages. Excluding vivarium
+# itself means the wheel does not ship vivarium/__init__.py. The "namespace
+# owner" (vivarium-engine) ships the canonical vivarium/__init__.py. If we
+# shipped our own here, pip would overwrite the canonical one.
+include = ["vivarium.cluster_tools", "vivarium.cluster_tools.*"]
+
+[tool.setuptools.package-data]
+# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
+# users install it from PyPI and so mypy also finds the marker via the
+# editable install during in-repo type checks.
+"vivarium.cluster_tools" = ["py.typed"]
 
 [tool.setuptools_scm]
 # Monorepo tagging convention: tags must be prefixed with "vivarium-cluster-tools-v"
@@ -64,9 +70,6 @@ root = "../.."
 tag_regex = '^vivarium-cluster-tools-v(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-cluster-tools-v*"'
 fallback_version = "0.0.0+no-git-tag"
-# The flat package's __init__.py imports __version__ from a generated _version.py
-# (carried over from the standalone setup.py's write_to). Regenerate it on build.
-version_file = "src/vivarium_cluster_tools/_version.py"
 
 [tool.black]
 line-length = 94
@@ -101,7 +104,7 @@ module = ["dill", "jobmon.*", "jobmon_installer_ihme.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["vivarium_cluster_tools"]
+source = ["vivarium.cluster_tools"]
 
 [tool.coverage.report]
 show_missing = true

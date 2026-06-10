@@ -14,21 +14,21 @@ import pytest
 from loguru import logger
 
 from tests.psimulate.conftest import make_job_parameters
-from vivarium_cluster_tools.psimulate import COMMANDS
-from vivarium_cluster_tools.psimulate.jobs import JobParameters
-from vivarium_cluster_tools.psimulate.results.writing import write_metadata
-from vivarium_cluster_tools.psimulate.worker.task_runner import (
+from vivarium.cluster_tools.psimulate import COMMANDS
+from vivarium.cluster_tools.psimulate.jobs import JobParameters
+from vivarium.cluster_tools.psimulate.results.writing import write_metadata
+from vivarium.cluster_tools.psimulate.worker.task_runner import (
     _configure_dual_sink,
     main,
     parse_args,
 )
 
 # Patch targets are the names as imported into task_runner.
-_WORK_HORSE = "vivarium_cluster_tools.psimulate.worker.task_runner.work_horse"
+_WORK_HORSE = "vivarium.cluster_tools.psimulate.worker.task_runner.work_horse"
 _LOAD_TEST_WORK_HORSE = (
-    "vivarium_cluster_tools.psimulate.worker.task_runner.load_test_work_horse"
+    "vivarium.cluster_tools.psimulate.worker.task_runner.load_test_work_horse"
 )
-_WRITE_TASK_RESULTS = "vivarium_cluster_tools.psimulate.worker.task_runner.write_task_results"
+_WRITE_TASK_RESULTS = "vivarium.cluster_tools.psimulate.worker.task_runner.write_task_results"
 
 
 @pytest.fixture(scope="module")

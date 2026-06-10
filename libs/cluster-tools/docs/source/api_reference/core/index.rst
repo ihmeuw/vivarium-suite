@@ -1,4 +1,4 @@
-.. automodule:: vivarium_cluster_tools.core
+.. automodule:: vivarium.cluster_tools.core
 
 .. toctree::
    :maxdepth: 2

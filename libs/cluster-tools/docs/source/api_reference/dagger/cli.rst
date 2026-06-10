@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.dagger.cli
+.. automodule:: vivarium.cluster_tools.dagger.cli

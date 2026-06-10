@@ -11,11 +11,11 @@ pytest.importorskip("jobmon")
 
 from pytest_mock import MockerFixture
 
-from vivarium_cluster_tools.dagger.config.builder import (
+from vivarium.cluster_tools.dagger.config.builder import (
     STEP_TYPE_API_FNS,
     build_workflow_from_config,
 )
-from vivarium_cluster_tools.dagger.config.config import (
+from vivarium.cluster_tools.dagger.config.config import (
     ParsedStep,
     ResourceConfig,
     WorkflowConfig,
@@ -71,7 +71,7 @@ def three_step_config() -> WorkflowConfig:
 @pytest.fixture()
 def mock_tool_cls(mocker: MockerFixture) -> MagicMock:
     """Patch the Jobmon ``Tool`` class at the façade's import site."""
-    return mocker.patch("vivarium_cluster_tools.core.jobmon.client.Tool")
+    return mocker.patch("vivarium.cluster_tools.core.jobmon.client.Tool")
 
 
 @pytest.fixture(autouse=True)
@@ -82,7 +82,7 @@ def mock_resolve_env_prefix(mocker: MockerFixture) -> MagicMock:
     passed through, without invoking the real ``conda env list`` lookup.
     """
     return mocker.patch(
-        "vivarium_cluster_tools.dagger.config.utilities.resolve_env_prefix",
+        "vivarium.cluster_tools.dagger.config.utilities.resolve_env_prefix",
         side_effect=lambda env: env,
     )
 
@@ -96,7 +96,7 @@ def mock_build_timestamp(mocker: MockerFixture) -> str:
     """
     ts = "2026_04_24_10_00_00"
     mocker.patch(
-        "vivarium_cluster_tools.dagger.config.interface.get_or_create_build_timestamp",
+        "vivarium.cluster_tools.dagger.config.interface.get_or_create_build_timestamp",
         return_value=ts,
     )
     return ts
@@ -293,7 +293,7 @@ class TestResumeInjection:
             "simulation": MagicMock(return_value=[MagicMock(name="sim_task")]),
         }
         mocker.patch.dict(
-            "vivarium_cluster_tools.dagger.config.builder.STEP_TYPE_API_FNS",
+            "vivarium.cluster_tools.dagger.config.builder.STEP_TYPE_API_FNS",
             fns,
         )
         return fns

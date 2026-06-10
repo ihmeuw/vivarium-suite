@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.core.cluster.cli_options
+.. automodule:: vivarium.cluster_tools.core.cluster.cli_options

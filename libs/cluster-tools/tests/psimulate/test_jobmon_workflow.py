@@ -13,10 +13,10 @@ pytest.importorskip("jobmon")
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
-from vivarium_cluster_tools.psimulate import TASK_RUNNER_MODULE
-from vivarium_cluster_tools.psimulate.jobmon_workflow import build_workflow, get_task_list
-from vivarium_cluster_tools.psimulate.jobs import BackupConfiguration, JobParameters
-from vivarium_cluster_tools.psimulate.paths import OutputPaths
+from vivarium.cluster_tools.psimulate import TASK_RUNNER_MODULE
+from vivarium.cluster_tools.psimulate.jobmon_workflow import build_workflow, get_task_list
+from vivarium.cluster_tools.psimulate.jobs import BackupConfiguration, JobParameters
+from vivarium.cluster_tools.psimulate.paths import OutputPaths
 
 FROZEN_TIME = datetime(2025, 1, 1)
 
@@ -24,19 +24,19 @@ FROZEN_TIME = datetime(2025, 1, 1)
 @pytest.fixture()
 def mock_tool_cls(mocker: MockerFixture) -> MagicMock:
     """Patch the Jobmon ``Tool`` class at the façade's import site."""
-    return mocker.patch("vivarium_cluster_tools.core.jobmon.client.Tool")
+    return mocker.patch("vivarium.cluster_tools.core.jobmon.client.Tool")
 
 
 @pytest.fixture()
 def mock_write_metadata(mocker: MockerFixture) -> MagicMock:
     """Patch ``write_metadata`` at its import site."""
-    return mocker.patch("vivarium_cluster_tools.psimulate.jobmon_workflow.write_metadata")
+    return mocker.patch("vivarium.cluster_tools.psimulate.jobmon_workflow.write_metadata")
 
 
 @pytest.fixture()
 def output_paths(tmp_path: Path) -> OutputPaths:
     """Return an ``OutputPaths`` rooted under ``tmp_path``."""
-    with patch("vivarium_cluster_tools.psimulate.paths.datetime") as mock_dt:
+    with patch("vivarium.cluster_tools.psimulate.paths.datetime") as mock_dt:
         mock_dt.now.return_value = FROZEN_TIME
         return OutputPaths.from_entry_point_args(
             command="restart",
@@ -87,7 +87,7 @@ class TestBuildWorkflow:
             native_specification=native_spec,
             max_workers=10,
         )
-        mock_tool_cls.assert_called_once_with(name="vivarium_cluster_tools")
+        mock_tool_cls.assert_called_once_with(name="vivarium.cluster_tools")
 
     def test_task_template_args(
         self,

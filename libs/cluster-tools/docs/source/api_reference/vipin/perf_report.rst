@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.vipin.perf_report
+.. automodule:: vivarium.cluster_tools.vipin.perf_report

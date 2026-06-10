@@ -1,4 +1,4 @@
-.. automodule:: vivarium_cluster_tools.dagger
+.. automodule:: vivarium.cluster_tools.dagger
 
 .. toctree::
    :maxdepth: 2

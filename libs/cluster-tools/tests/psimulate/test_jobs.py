@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-from vivarium_cluster_tools.psimulate.jobs import (
+from vivarium.cluster_tools.psimulate.jobs import (
     BackupConfiguration,
     JobParameters,
     generate_task_id,

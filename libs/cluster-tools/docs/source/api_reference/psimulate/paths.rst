@@ -1,1 +1,1 @@
-.. automodule:: vivarium_cluster_tools.psimulate.paths
+.. automodule:: vivarium.cluster_tools.psimulate.paths

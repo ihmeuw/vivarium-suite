@@ -13,13 +13,13 @@ pytest.importorskip("jobmon")
 import yaml
 from click.testing import CliRunner
 
-from vivarium_cluster_tools.psimulate.cli import psimulate
+from vivarium.cluster_tools.psimulate.cli import psimulate
 
 # ---------------------------------------------------------------------------
 # The runner.main call is the "leaf" of every CLI command.  We mock it so
 # tests exercise only the CLI-parsing / config-loading layer.
 # ---------------------------------------------------------------------------
-_RUNNER_MAIN = "vivarium_cluster_tools.psimulate.runner.main"
+_RUNNER_MAIN = "vivarium.cluster_tools.psimulate.runner.main"
 
 
 # ---------------------------------------------------------------------------

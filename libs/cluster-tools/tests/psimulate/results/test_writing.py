@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from tests.psimulate.conftest import make_job_parameters
-from vivarium_cluster_tools.psimulate.results.writing import (
+from vivarium.cluster_tools.psimulate.results.writing import (
     collect_metadata,
     write_metadata,
     write_task_results,

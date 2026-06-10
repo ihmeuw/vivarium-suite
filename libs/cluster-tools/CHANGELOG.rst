@@ -1,4 +1,4 @@
-**4.1.0 - 06/09/26**
+**4.2.0 - 06/09/26**
 
 - Implement serial workflows via the dagger CLI group
 - API for constructing Jobmon workflows and tasks directly from Python

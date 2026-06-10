@@ -17,11 +17,11 @@ pytest.importorskip("jobmon")
 import yaml
 from click.testing import CliRunner
 
-from vivarium_cluster_tools.dagger.cli import dagger
-from vivarium_cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
+from vivarium.cluster_tools.dagger.cli import dagger
+from vivarium.cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
 
-_WORKFLOW_MAIN = "vivarium_cluster_tools.dagger.cli.runner.run_workflow"
-_RESTART_MAIN = "vivarium_cluster_tools.dagger.cli.runner.restart_workflow"
+_WORKFLOW_MAIN = "vivarium.cluster_tools.dagger.cli.runner.run_workflow"
+_RESTART_MAIN = "vivarium.cluster_tools.dagger.cli.runner.restart_workflow"
 
 
 def _write_yaml(tmp_path: Path, data: dict[str, Any], name: str = "pipeline.yaml") -> Path:

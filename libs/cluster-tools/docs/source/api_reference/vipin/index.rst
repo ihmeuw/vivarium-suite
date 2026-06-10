@@ -1,7 +1,7 @@
 vipin - Vivarium Performance Log Parser
 =======================================
 
-.. automodule:: vivarium_cluster_tools.vipin
+.. automodule:: vivarium.cluster_tools.vipin
 
 .. toctree::
    :maxdepth: 2

@@ -8,8 +8,8 @@ import pytest
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
-from vivarium_cluster_tools.psimulate.jobs import JobParameters
-from vivarium_cluster_tools.psimulate.worker.vivarium_work_horse import (
+from vivarium.cluster_tools.psimulate.jobs import JobParameters
+from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
     ParallelSimulationContext,
     get_backup,
     get_sim_from_backup,

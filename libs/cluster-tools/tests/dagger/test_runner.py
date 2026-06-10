@@ -14,21 +14,21 @@ pytest.importorskip("jobmon")
 import yaml
 from click.testing import CliRunner
 
-from vivarium_cluster_tools.dagger.cli import dagger
-from vivarium_cluster_tools.dagger.config.config import (
+from vivarium.cluster_tools.dagger.cli import dagger
+from vivarium.cluster_tools.dagger.config.config import (
     ParsedStep,
     ResourceConfig,
     WorkflowConfig,
 )
-from vivarium_cluster_tools.dagger.config.serialization import workflow_config_to_dict
-from vivarium_cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
-from vivarium_cluster_tools.dagger.runner import (
+from vivarium.cluster_tools.dagger.config.serialization import workflow_config_to_dict
+from vivarium.cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
+from vivarium.cluster_tools.dagger.runner import (
     _write_workflow_configuration,
     restart_workflow,
     run_workflow,
 )
 
-_RUNNER = "vivarium_cluster_tools.dagger.runner"
+_RUNNER = "vivarium.cluster_tools.dagger.runner"
 
 
 @pytest.fixture
@@ -145,7 +145,7 @@ def test_workflow_configuration_includes_cli_overrides(tmp_path: Path) -> None:
     )
 
     cli_runner = CliRunner()
-    with patch("vivarium_cluster_tools.dagger.runner.run_workflow") as mock_run_workflow:
+    with patch("vivarium.cluster_tools.dagger.runner.run_workflow") as mock_run_workflow:
 
         def mock_impl(**kwargs: Any) -> None:
             _write_workflow_configuration(output_dir, kwargs["workflow_config"])

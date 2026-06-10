@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, call, patch
 import click
 import pytest
 
-from vivarium_cluster_tools.core.cli_tools import validate_slack_options
-from vivarium_cluster_tools.core.notifications import send_slack_notification
+from vivarium.cluster_tools.core.cli_tools import validate_slack_options
+from vivarium.cluster_tools.core.notifications import send_slack_notification
 
 BOT_TOKEN = "xoxb-test-token"
 MONITORING_URL = "https://jobmon.example.com/#/workflow/123"
@@ -45,7 +45,7 @@ def test_no_token_skips_notification(monkeypatch: pytest.MonkeyPatch) -> None:
     """When PSIMULATE_SLACK_BOT_TOKEN is unset, no Slack API calls are made."""
     monkeypatch.delenv("PSIMULATE_SLACK_BOT_TOKEN", raising=False)
     with patch(
-        "vivarium_cluster_tools.core.notifications.requests.post",
+        "vivarium.cluster_tools.core.notifications.requests.post",
     ) as mock_post:
         send_slack_notification(
             workflow_name=WORKFLOW_NAME, status="D", command_label=COMMAND_LABEL
@@ -58,7 +58,7 @@ def test_mute_skips_notification(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PSIMULATE_SLACK_BOT_TOKEN", BOT_TOKEN)
     monkeypatch.setenv("USER", "testuser")
     with patch(
-        "vivarium_cluster_tools.core.notifications.requests.post",
+        "vivarium.cluster_tools.core.notifications.requests.post",
     ) as mock_post:
         send_slack_notification(
             workflow_name=WORKFLOW_NAME,
@@ -76,7 +76,7 @@ def test_notification_on_workflow_success(monkeypatch: pytest.MonkeyPatch) -> No
 
     mock_post = _mock_slack_responses()
     with patch(
-        "vivarium_cluster_tools.core.notifications.requests.post",
+        "vivarium.cluster_tools.core.notifications.requests.post",
         mock_post,
     ):
         send_slack_notification(
@@ -124,7 +124,7 @@ def test_success_with_channel_posts_to_channel(monkeypatch: pytest.MonkeyPatch) 
     post_resp.json.return_value = {"ok": True}
     mock_post = MagicMock(side_effect=[post_resp])
 
-    with patch("vivarium_cluster_tools.core.notifications.requests.post", mock_post):
+    with patch("vivarium.cluster_tools.core.notifications.requests.post", mock_post):
         send_slack_notification(
             workflow_name=WORKFLOW_NAME,
             status="D",
@@ -151,7 +151,7 @@ def test_channel_without_hash_is_normalized(monkeypatch: pytest.MonkeyPatch) -> 
     post_resp.json.return_value = {"ok": True}
     mock_post = MagicMock(side_effect=[post_resp])
 
-    with patch("vivarium_cluster_tools.core.notifications.requests.post", mock_post):
+    with patch("vivarium.cluster_tools.core.notifications.requests.post", mock_post):
         send_slack_notification(
             workflow_name=WORKFLOW_NAME,
             status="D",
@@ -177,7 +177,7 @@ def test_success_with_channel_and_tag_mentions_user(
     post_resp.json.return_value = {"ok": True}
     mock_post = MagicMock(side_effect=[lookup_resp, post_resp])
 
-    with patch("vivarium_cluster_tools.core.notifications.requests.post", mock_post):
+    with patch("vivarium.cluster_tools.core.notifications.requests.post", mock_post):
         send_slack_notification(
             workflow_name=WORKFLOW_NAME,
             status="D",
@@ -216,7 +216,7 @@ def test_unresolvable_tag_dms_launcher(monkeypatch: pytest.MonkeyPatch) -> None:
     post_resp.json.return_value = {"ok": True}
     mock_post = MagicMock(side_effect=[tag_fail_resp, launcher_resp, convo_resp, post_resp])
 
-    with patch("vivarium_cluster_tools.core.notifications.requests.post", mock_post):
+    with patch("vivarium.cluster_tools.core.notifications.requests.post", mock_post):
         send_slack_notification(
             workflow_name=WORKFLOW_NAME,
             status="D",
@@ -249,7 +249,7 @@ def test_failure_with_channel_and_tag_dms_launcher(
     monkeypatch.setenv("USER", "testuser")
 
     mock_post = _mock_slack_responses()
-    with patch("vivarium_cluster_tools.core.notifications.requests.post", mock_post):
+    with patch("vivarium.cluster_tools.core.notifications.requests.post", mock_post):
         send_slack_notification(
             workflow_name=WORKFLOW_NAME,
             status="F",
@@ -305,7 +305,7 @@ def test_notification_on_workflow_failure(monkeypatch: pytest.MonkeyPatch) -> No
 
     mock_post = _mock_slack_responses()
     with patch(
-        "vivarium_cluster_tools.core.notifications.requests.post",
+        "vivarium.cluster_tools.core.notifications.requests.post",
         mock_post,
     ):
         send_slack_notification(

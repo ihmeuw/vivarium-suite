@@ -7,7 +7,7 @@ import pytest
 from _pytest.logging import LogCaptureFixture
 from loguru import logger
 
-from vivarium_cluster_tools.psimulate.jobs import BackupConfiguration, JobParameters
+from vivarium.cluster_tools.psimulate.jobs import BackupConfiguration, JobParameters
 
 
 def make_job_parameters(**overrides: Any) -> JobParameters:

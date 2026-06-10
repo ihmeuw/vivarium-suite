@@ -13,7 +13,7 @@ py:class pandas.core.generic.PandasObject
 py:class Path
 py:class pathlib._local.Path
 # typing
-py:class vivarium_cluster_tools.cli_tools.R
+py:class vivarium.cluster_tools.cli_tools.R
 # psutil
 py:class scpustats
 py:class sdiskio
