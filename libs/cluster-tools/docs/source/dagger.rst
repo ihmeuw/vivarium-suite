@@ -1,8 +1,8 @@
 .. _dagger:
 
-===========================
+============================
 Dagger: Multi-Step Workflows
-===========================
+============================
 
 ``dagger`` runs **multi-step Jobmon workflows** on the cluster. A workflow is
 described by a single YAML file that lists an ordered series of *steps* -- each
