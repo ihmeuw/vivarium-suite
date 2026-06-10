@@ -155,7 +155,8 @@ def create_tasks(
     }
     if resource_scales is not None:
         kwargs["resource_scales"] = resource_scales
-    return template.create_tasks(**kwargs)
+    tasks: list[Task] = template.create_tasks(**kwargs)
+    return tasks
 
 
 def add_upstream(task: Task, upstream: Task) -> None:
@@ -218,7 +219,7 @@ def run_workflow(
     run_kwargs: dict[str, Any] = {"resume": resume}
     if seconds_until_timeout is not None:
         run_kwargs["seconds_until_timeout"] = seconds_until_timeout
-    status = workflow.run(**run_kwargs)
+    status: str | None = workflow.run(**run_kwargs)
     if status is None:
         raise RuntimeError("Jobmon workflow.run() returned None unexpectedly.")
     return status
