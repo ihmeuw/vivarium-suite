@@ -129,11 +129,7 @@ All of these end up at the same state: `JENKINS_MCP_AUTH` set in the environment
 The `github` plugin (a dependency of this plugin) connects Claude Code to
 GitHub via the official hosted MCP server at
 `https://api.githubcopilot.com/mcp/`, so PRs, reviews, issues, diffs, and
-Actions runs are queryable as tools. Prefer it over the `gh` CLI: MCP tool
-calls run **outside** the Bash sandbox, so they work where `gh` cannot —
-the project sandbox `denyRead`s `~/.config/gh/hosts.yml`, which breaks `gh`
-in any sandboxed command. The one thing the MCP cannot do is push a local
-commit graph; keep `git push` for that.
+Actions runs are queryable as tools.
 
 **The auth wrinkle.** The plugin authenticates with a single
 `Authorization: Bearer` header sourced from a `${GITHUB_PERSONAL_ACCESS_TOKEN}`
