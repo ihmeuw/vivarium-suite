@@ -1,3 +1,7 @@
+**4.1.1 - 06/10/26**
+
+- Update vivarium_public_health import to vivarium.public_health in README
+
 **4.1.0 - 06/04/26**
 
 - Standardize CLI logging verbosity on the shared ``vivarium.engine`` convention

@@ -125,7 +125,7 @@ Constructing Lookup Tables from a Component
 Components can build lookup tables as needed via the :meth:`~vivarium.engine.component.Component.build_lookup_table`
 method which will refer to the ``data_sources`` block in the component's
 :attr:`~vivarium.engine.component.Component.configuration_defaults` property. As a basic example,
-DiseaseModel in ``vivarium_public_health`` has the following ``data_sources`` configuration:
+DiseaseModel in ``vivarium.public_health`` has the following ``data_sources`` configuration:
 
 .. code-block:: python
 
@@ -213,7 +213,7 @@ column types.
 Example: Writing a Component with Data Sources
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-A more complete example is reproduced from the `Mortality <https://vivarium.readthedocs.io/projects/vivarium-public-health/en/latest/api_reference/population/mortality.html>`_ component in `vivarium_public_health <https://vivarium.readthedocs.io/projects/vivarium-public-health/en/latest/>`_:
+A more complete example is reproduced from the `Mortality <https://vivarium-public-health.readthedocs.io/en/latest/api_reference/population/mortality.html>`_ component in `vivarium.public_health <https://vivarium-public-health.readthedocs.io/en/latest/>`_:
 
 .. code-block:: python
 

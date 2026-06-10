@@ -69,7 +69,7 @@ your original model specification looked something like
       optional: ...
 
     components:
-      vivarium_public_health:
+      vivarium.public_health:
         population:
           - BasePopulation()
         disease.models:
