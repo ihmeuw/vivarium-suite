@@ -1,7 +1,7 @@
 .. _dagger:
 
 ===========================
-Dagger multi-step workflows
+Dagger: Multi-Step Workflows
 ===========================
 
 ``dagger`` runs **multi-step Jobmon workflows** on the cluster. A workflow is
@@ -423,20 +423,24 @@ parallel draw/seed tasks -- but sibling steps never overlap.
 Output directory layout
 ------------------------
 
-There is a single workflow-level ``output_directory``. ``simulation`` steps
-create a ``<model_name>/<timestamp>/`` subdirectory beneath it, where
-``model_name`` is derived from the artifact (or model specification) -- for
-per-location artifacts this is effectively the location name -- and
-``timestamp`` is shared by all steps in the run. Other step types write their
-worker logs and outputs directly under ``output_directory``.
+There is a single workflow-level ``output_directory``. Every run writes
+``configuration.yaml`` and ``.workflow_args`` there (used by ``dagger
+restart``). ``simulation`` steps additionally create a
+``<model_name>/<timestamp>/`` subdirectory beneath it, where ``model_name`` is
+derived from the artifact (or model specification) -- for per-location
+artifacts this is effectively the location name. The ``timestamp`` is recorded
+in a ``.build_timestamp`` marker so that all simulation steps in the run share
+it; that marker is **only written when the workflow contains a simulation
+step**. Other step types write their worker logs and outputs directly under
+``output_directory``.
 
 .. code-block:: text
 
    output_directory/
    ├── configuration.yaml          # the resolved workflow config (for restart)
    ├── .workflow_args              # persisted Jobmon workflow id (for restart)
-   ├── .build_timestamp            # the shared run timestamp
-   └── <model_name>/
+   ├── .build_timestamp            # shared run timestamp (simulation steps only)
+   └── <model_name>/               # simulation steps only
        └── <timestamp>/            # one simulation step's results
            ├── results/
            ├── sim_backups/
@@ -459,15 +463,17 @@ used to deliberately re-run a step that finished successfully.
 
 .. warning::
 
-   **Do not run two workflows into the same** ``output_directory``.
+   **Running a second** ``dagger run`` **into a populated directory overwrites
+   it.** ``configuration.yaml`` and ``.workflow_args`` are rewritten on every
+   run, so a second run leaves the first one no longer restartable. And if the
+   workflow contains a ``simulation`` step, that second run reuses the persisted
+   ``.build_timestamp`` rather than creating a new timestamped run -- so it
+   writes into the first run's ``<model_name>/<timestamp>/`` directory and
+   **overwrites those results in place**.
 
-   Running ``dagger run`` a second time against a directory that already holds a
-   completed (or partial) run does **not** create a new timestamped run. It
-   reuses the persisted ``.build_timestamp``, so the new run writes into the
-   first run's ``<model_name>/<timestamp>/`` directory and **overwrites those
-   results in place**. It also overwrites ``configuration.yaml`` and
-   ``.workflow_args``, which makes the first run no longer restartable. ``dagger``
-   does not currently guard against this.
-
-   Use a **fresh** ``output_directory`` for each new workflow, and use
-   ``dagger restart`` (not a second ``dagger run``) to resume an interrupted one.
+   To guard against this, ``dagger run`` detects a previous run in the target
+   ``output_directory`` (via the persisted ``.workflow_args``) and **prompts for
+   confirmation before continuing**; answering ``n`` aborts without changing
+   anything. Still, prefer a **fresh** ``output_directory`` for each new
+   workflow, and use ``dagger restart`` (not a second ``dagger run``) to resume
+   an interrupted one.
