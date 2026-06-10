@@ -55,11 +55,11 @@ If the hub MCP fetch fails, tell the user and link them to `https://hub.ihme.was
 
 ## 3. Submitting a pull request
 
-Use the GitHub MCP `create_pull_request` tool and the repo's PR template — not a hand-written PR body, and not the `gh` CLI (which can't run in a sandboxed context, since the sandbox denies its credential file).
+Use the GitHub MCP `create_pull_request` tool and the repo's PR template — not a hand-written PR body.
 
 1. Confirm the PR template exists: `.github/pull_request_template.md` at the repo root (or `tools/ai-tools/.github/...` for the plugin sub-tree). If it doesn't exist, fall back to the repo's `CONTRIBUTING.md` or ask the user — don't invent a template.
 2. Read the template's section headings (e.g. *Title*, *Description*, *Category*, *JIRA issue*, *Changes and notes*, *Testing*). Fill each one based on the actual diff, not on what the section heading sounds like — the HTML comments in the template are field-specific instructions (character limits, category enums) that must be followed.
-3. **Push the branch first.** The GitHub MCP opens a PR between refs that already exist on the remote — it cannot push a local commit graph. So push the branch with `git push -u origin <branch>` (this one step still uses git, not the MCP), then call `mcp__github__create_pull_request` with `head` = your branch, `base` = `main`, the `title` (imperative summary, ≤50 chars, no trailing period), and the templated `body`:
+3. **Push the branch first.** The GitHub MCP opens a PR between refs that already exist on the remote — it cannot push a local commit graph. So push the branch with `git push -u origin <branch>` (this one step still uses git, not the MCP), then call `mcp__github__create_pull_request`.
 
 ```
 ### Description
@@ -73,7 +73,7 @@ Use the GitHub MCP `create_pull_request` tool and the repo's PR template — not
 ...
 ```
 
-4. If the GitHub MCP is unavailable, `gh pr create --title ... --body "$(cat <<'EOF' ... EOF)"` is the fallback — it bundles the push and PR in one step — but it only works outside the sandbox.
+4. If the GitHub MCP is unavailable, `gh pr create via a HEREDOC is the fallback method.
 
 ## 4. Flagging a PR for review
 

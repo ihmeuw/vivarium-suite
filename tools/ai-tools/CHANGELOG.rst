@@ -1,8 +1,8 @@
-**0.15.0 - 06/08/26**
+**0.15.0 - 06/10/26**
 
- - Add the ``github`` plugin as a dependency and document GitHub MCP server setup in the ``plugin-setup`` skill, including the ``headersHelper`` workaround that keeps auth working across agent-team reconnects (a bare ``${GITHUB_PERSONAL_ACCESS_TOKEN}`` env var resolves empty in the teammate context and yields an HTTP 400)
- - Steer the ``code-reviewer`` command and ``team-conventions`` skill to use the GitHub MCP instead of the ``gh`` CLI for reading PR context and opening PRs — the MCP works inside the sandbox, where ``gh`` cannot read its credential file. ``git push`` is still required before opening a PR, since the MCP cannot push a local commit graph
- - Document the recommended Bash-sandbox configuration in the README security section — filesystem write paths for conda/pip, credential ``denyRead``, and a ``network.allowedDomains`` egress allowlist — plus a ``plugin-setup`` recipe for running ``git push`` fully sandboxed (point git's ``github.com`` credential helper at the same token file and allowlist ``github.com``), so no un-sandboxing is needed for normal git/GitHub work
+ - Add the ``github`` plugin as a dependency and document GitHub MCP server setup
+ - recommend the GitHub MCP instead of the ``gh`` CLI
+ - Document the recommended Bash-sandbox configuration in the README security section 
 
 **0.13.0 - 06/08/26**
 
