@@ -3,6 +3,10 @@
  - Add the ``github`` plugin as a dependency and document GitHub MCP server setup
  - recommend the GitHub MCP instead of the ``gh`` CLI
  - Document the recommended Bash-sandbox configuration in the README security section 
+ 
+**0.14.0 - 06/09/26**
+
+ - Code reviewer now checks model-repo PRs against the relevant research documentation.
 
 **0.13.0 - 06/08/26**
 

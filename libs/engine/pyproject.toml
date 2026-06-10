@@ -51,10 +51,6 @@ docs = [
 ]
 lint = [
     "vivarium-dependencies[lint]",
-    # FIXME [MIC-6218]: mypy 1.17 introduced a regression that produces false
-    # positives on our Component / population-management code paths. Pin
-    # until that's fixed upstream or worked around locally.
-    "mypy<1.17.0",
 ]
 dev = ["vivarium-engine[docs,interactive,test,lint]"]
 cluster = []

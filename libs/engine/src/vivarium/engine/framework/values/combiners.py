@@ -106,7 +106,7 @@ def multiplication_combiner(
     ):
         non_zero_index = value[value != 0].index
         if len(non_zero_index) > 0:
-            value.loc[non_zero_index] = value.loc[non_zero_index] * mutator(non_zero_index)  # type: ignore[assignment]
+            value.loc[non_zero_index] = value.loc[non_zero_index] * mutator(non_zero_index)
         return value
     return value * mutator(*args, **kwargs)
 
