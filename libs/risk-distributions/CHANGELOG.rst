@@ -1,3 +1,7 @@
+**3.1.1 - 06/10/26**
+
+- Include py.typed marker as package data
+
 **3.1.0 - 06/08/26**
 
 - Add complete type annotations across the package and ship a ``py.typed`` marker (PEP 561), enabling downstream type checking
