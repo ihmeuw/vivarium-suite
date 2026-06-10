@@ -20,7 +20,7 @@ build:
       # Cancel PR (external) builds that don't touch this lib (Exit 183 is RTD's
       # signal to cancel the build immediately).
       - |
-        if [ "$READTHEDOCS_VERSION_TYPE" = "external" ] && git diff --quiet origin/main -- libs/public-health/; then
+        if [ "$READTHEDOCS_VERSION_TYPE" = "external" ] && git diff --quiet "origin/main...HEAD" -- libs/public-health/; then
           echo "Skipping docs build: this PR changes nothing under libs/public-health/."
           exit 183
         fi

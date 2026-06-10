@@ -317,7 +317,7 @@ class BaseDiseaseState(State):
         triggered
             The trigger for the transition.
         proportion
-            The proportion source.  Can be the data itself, a function to
+            The proportion source. Can be the data itself, a function to
             retrieve the data, or the artifact key containing the data.
 
         Returns

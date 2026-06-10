@@ -215,7 +215,7 @@ class NonLogLinearRiskEffect(RiskEffect):
         builder
             Access point for utilizing framework interfaces during setup.
         configuration
-            Optional configuration override.  If ``None``, use
+            Optional configuration override. If ``None``, use
             ``self.configuration``.
 
         Returns

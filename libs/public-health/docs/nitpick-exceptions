@@ -14,7 +14,8 @@ py:exc ConfigurationError
 py:class ConfigTree
 py:class vivarium.engine.framework.values.pipeline.Pipeline
 
-# TODO: Need to revisit this. Nitpicking here to avoid failing builds on 3.9 in LBWSGRisk
+# TODO: revisit these — bare class names that should resolve via intersphinx
+# once their type-hint origins are fully qualified in source.
 py:class PopulationView
 py:class Logger
 py:class pd.DataFrame
@@ -30,7 +31,7 @@ py:mod vivarium.public_health._example_data
 py:class vivarium.public_health._example_data.ConstantRatePipeline
 
 # results module - classes referenced in tutorials
-py:class vivarium.engine.framework.results.Observer
+py:class vivarium.engine.framework.results.observer.Observer
 py:class vivarium.public_health.results.DiseaseObserver
 py:class vivarium.public_health.results.MortalityObserver
 py:class vivarium.public_health.results.DisabilityObserver

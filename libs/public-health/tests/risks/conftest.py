@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -266,6 +268,8 @@ def coverage_gap():
 
 @pytest.fixture
 def mock_rr_interpolators() -> pd.DataFrame:
-    rr_interpolators = pd.read_csv("tests/data/rr_interpolator.csv")
+    rr_interpolators = pd.read_csv(
+        Path(__file__).resolve().parent.parent / "data" / "rr_interpolator.csv"
+    )
     rr_interpolators = rr_interpolators.rename(columns={"draw_0": "value"})
     return rr_interpolators

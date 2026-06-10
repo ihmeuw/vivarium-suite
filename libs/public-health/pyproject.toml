@@ -15,7 +15,7 @@ dependencies = [
     "vivarium-build-utils>=3.0.2,<4.0.0",
     "vivarium-engine>=5.1.1",
     "vivarium-config-tree>=5.0.0",
-    "vivarium-risk-distributions",
+    "vivarium-risk-distributions>=3.0.0,<4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -64,6 +64,13 @@ line-length = 94
 profile = "black"
 line_length = 94
 multi_line_output = 3
+
+[tool.pytest.ini_options]
+# Pin the pytest rootdir contract: tests import from each other using absolute
+# `from tests.X` paths, which only resolve when pytest's rootdir is this lib.
+# Declaring testpaths here makes monorepo-root invocations (pytest libs/public-health/)
+# work the same as in-lib invocations.
+testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["vivarium.public_health"]

@@ -62,7 +62,7 @@ class CausalFactorDistribution(Component, ABC):
             The type of distribution (e.g., ``"normal"``,
             ``"dichotomous"``).
         exposure_data
-            Optional pre-loaded exposure data.  If ``None``, data is
+            Optional pre-loaded exposure data. If ``None``, data is
             loaded from the simulation during setup.
         """
         super().__init__()
@@ -315,7 +315,7 @@ class EnsembleDistribution(CausalFactorDistribution):
 class ContinuousDistribution(CausalFactorDistribution):
     """Model risk exposure using a continuous parametric distribution.
 
-    Support ``"normal"`` and ``"lognormal"`` distribution types.  Exposure
+    Support ``"normal"`` and ``"lognormal"`` distribution types. Exposure
     values are derived from the distribution's percent-point function
     evaluated at each simulant's propensity.
     """
@@ -636,7 +636,7 @@ class DichotomousDistribution(CausalFactorDistribution):
 
         If the data contains ``'cat1'`` in its ``'parameter'`` column, the
         values are replaced with the distribution's :attr:`exposed` and
-        :attr:`unexposed` names.  A :class:`FutureWarning` is emitted for
+        :attr:`unexposed` names. A :class:`FutureWarning` is emitted for
         non-intervention causal factors to signal that the old names will be
         removed in a future release.
 
@@ -931,7 +931,7 @@ def get_risk_distribution_parameter(data: float | pd.DataFrame) -> float | pd.Se
     """Convert risk distribution parameter data to a usable format.
 
     If the data is a DataFrame, set the non-value columns as the index
-    and squeeze to a Series.  Drop a ``"parameter"`` column if its only
+    and squeeze to a Series. Drop a ``"parameter"`` column if its only
     value is ``"continuous"``.
 
     Parameters

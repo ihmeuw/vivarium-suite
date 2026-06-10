@@ -4,7 +4,7 @@ Example data for tutorials and interactive exploration.
 This private module builds small, self-contained DataFrames that match the
 column layout expected by :mod:`vivarium.public_health` components.
 The data uses uniform rates and round population counts so that tutorial
-output is easy to follow.  Age bins follow standard GBD definitions.
+output is easy to follow. Age bins follow standard GBD definitions.
 
 See the :doc:`/tutorials/population`, :doc:`/tutorials/disease`, and
 :doc:`/tutorials/risk` tutorials for usage.
@@ -316,7 +316,7 @@ def risk_relative_risk_dichotomous(
     Parameters
     ----------
     rr_exposed
-        The relative risk for the exposed category.  The unexposed
+        The relative risk for the exposed category. The unexposed
         category always has a relative risk of 1.
     target_entity
         The name of the affected entity (e.g., a cause name).
@@ -437,7 +437,7 @@ _ARTIFACT_DATA: dict[str, object] = {
     "covariate.age_specific_fertility_rate.estimate": age_specific_fertility_rate,
     # Mortality data - zero by default so simulants stay alive in examples.
     "cause.all_causes.cause_specific_mortality_rate": lambda: 0.0,
-    # Tutorial-specific cause data.  Rates are high enough to guarantee visible
+    # Tutorial-specific cause data. Rates are high enough to guarantee visible
     # state transitions within 5-10 time steps (each ~30.5 days).
     "cause.test_cause.incidence_rate": lambda: build_cause_table(0.5),
     # Remission of 5.0/person-year ensures rapid recovery for SIS/SIR demos.
@@ -472,7 +472,7 @@ _CAUSE_DEFAULTS: dict[str, Callable[[], Any]] = {
 # Default risk factor data keyed by measure name.  _ExampleArtifact uses these
 # as fallbacks for any ``risk_factor.{name}.{measure}`` key not in _ARTIFACT_DATA.
 # NOTE: The "relative_risk" fallback always targets "test_cause" because the
-# callable is entity-unaware.  For other targets, register explicit artifact data
+# callable is entity-unaware. For other targets, register explicit artifact data
 # or use scalar/DataFrame overrides via data_sources configuration.
 _RISK_DEFAULTS: dict[str, Callable[[], Any]] = {
     "distribution": lambda: "dichotomous",

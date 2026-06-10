@@ -39,12 +39,12 @@ class RiskAttributableDisease(ExcessMortalityState):
     repeated measurements of fasting plasma glucose above 7 mmol/L.
     Similarly, ``protein_energy_malnutrition`` corresponds to a weight
     for height ratio that is more than two standard deviations below
-    the WHO guideline median weight for height.  In the Global Burden
+    the WHO guideline median weight for height. In the Global Burden
     of Disease, this corresponds to a categorical exposure to
     ``child_wasting`` in either ``cat1`` or ``cat2``.
 
     The definition of the disease in terms of exposure should be provided
-    in the ``threshold`` configuration flag.  For risks with continuous
+    in the ``threshold`` configuration flag. For risks with continuous
     exposure models, the threshold should be provided as a single
     ``float`` or ``int`` with a proper sign between ">" and "<", implying
     that disease is defined by the exposure level ">" than threshold level

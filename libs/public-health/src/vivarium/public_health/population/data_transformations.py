@@ -45,7 +45,7 @@ def assign_demographic_proportions(
     population_data
         Table with columns 'age', 'sex', 'year', 'location', and 'value'
     include_sex
-        'Female', 'Male', or 'Both'.  Sexes to include in the distribution.
+        'Female', 'Male', or 'Both'. Sexes to include in the distribution.
 
     Returns
     -------
@@ -98,7 +98,7 @@ def assign_demographic_proportions(
 
 
 #  FIXME: This step should definitely be happening after we get some approximation of the
-#   underlying distribution.  It makes an assumption of uniformity in the age bin.
+#   underlying distribution. It makes an assumption of uniformity in the age bin.
 #   This only happens at the edges, and is unlikely to be used to clip a neonatal age bin
 #   where the impact would be significant.
 def rescale_binned_proportions(
@@ -122,7 +122,7 @@ def rescale_binned_proportions(
     Returns
     -------
         Table with the same columns as `pop_data` where all bins outside the range
-        (age_start, age_end) have been discarded.  If age_start and age_end
+        (age_start, age_end) have been discarded. If age_start and age_end
         don't fall cleanly on age boundaries, the bins in which they lie are clipped and
         the 'population', 'P(sex, location, age| year)', and 'P(age | year, sex, location)'
         values are rescaled to reflect their smaller representation.
@@ -230,9 +230,9 @@ def _add_edge_age_groups(pop_data: pd.DataFrame) -> pd.DataFrame:
 
     # For the upper bin, we want our interpolation to go to zero.
     max_valid_age = pop_data["age_end"].max()
-    # This bin width is not arbitrary.  It effects the rate at which our interpolation
+    # This bin width is not arbitrary. It effects the rate at which our interpolation
     # zeros out. Since for the 2016 round the maximum age is 125, we're assuming almost no
-    # one lives past that age, so we make this bin 1 week.  A more robust technique for
+    # one lives past that age, so we make this bin 1 week. A more robust technique for
     # this would be better.
     max_pad_age = max_valid_age + 7 / 365
     max_pad_age_midpoint = (max_valid_age + max_pad_age) * 0.5
