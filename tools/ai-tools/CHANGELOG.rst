@@ -1,3 +1,7 @@
+**0.14.1 - 06/11/26**
+
+ - ``/viv:type-hinter``: when adding ``py.typed``, also add the matching ``[tool.setuptools.package-data]`` entry to the package's ``pyproject.toml`` so the marker ships in the wheel (PEP 561)
+
 **0.14.0 - 06/09/26**
 
  - Code reviewer now checks model-repo PRs against the relevant research documentation.
