@@ -6,7 +6,7 @@ from _pytest.logging import LogCaptureFixture
 from loguru import logger
 from vivarium.config_tree import ConfigTree
 from vivarium.engine.framework.configuration import build_simulation_configuration
-from vivarium_testing_utils import FuzzyChecker
+from vivarium.testing_utils import FuzzyChecker
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.disease import DiseaseModel, DiseaseState

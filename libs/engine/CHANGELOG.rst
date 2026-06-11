@@ -1,3 +1,7 @@
+**5.1.4 - 06/11/26**
+
+- Update vivarium_testing_utils imports to vivarium.testing_utils
+
 **5.1.3 - 06/09/26**
 
 - Unpin mypy and fix associated failures, including those for new networkx type stubs
