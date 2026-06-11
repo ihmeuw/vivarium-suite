@@ -1,3 +1,7 @@
+**0.15.1 - 06/11/26**
+
+ - Update ``team-conventions`` to file pull requests as drafts and only mark them ready for review when flagging in ``#vivarium_dev``
+
 **0.15.0 - 06/11/26**
 
  - Add the ``github`` plugin as a dependency and document GitHub MCP server setup
