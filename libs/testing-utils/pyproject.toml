@@ -32,14 +32,14 @@ pandera = ["pandera<0.23.0"]
 lint = ["vivarium-dependencies[lint]", "vivarium-testing-utils[pandera]"]
 validation = [
     "vivarium-artifact",
+    "vivarium-gbd-mapping",
     "vivarium-inputs>=7.1.0,<8.0.0",
     "vivarium-testing-utils[pandera]",
-    "vivarium-gbd-mapping",
     "jinja2>=3.0.0",
 ]
 dev = ["vivarium-testing-utils[test,docs,interactive,lint,validation]"]
 ci_github = ["vivarium-testing-utils[test,docs,lint]"]
-ci_jenkins = ["vivarium-testing-utils[ci_github,cluster]"]
+ci_jenkins = ["vivarium-testing-utils[ci_github,cluster,validation]"]
 
 [project.entry-points.pytest11]
 vivarium_testing_utils = "vivarium.testing_utils.pytest_plugin"
@@ -99,10 +99,16 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
+# These deps live in the `validation` extra and are not installed by `ci_github`
+# (GH Actions can't reach IHME artifactory for vivarium-inputs, so the whole
+# validation feature is Jenkins-only). On GH Actions mypy treats their types
+# as Any and moves on; on Jenkins mypy gets the real types via py.typed.
 module = [
     "py._path.local",
     "scipy.*",
+    "pandera.*",
     "vivarium_inputs.*",
+    "vivarium.artifact.*",
     "vivarium.gbd_mapping.*",
 ]
 ignore_missing_imports = true

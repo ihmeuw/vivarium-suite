@@ -97,7 +97,11 @@ class DataLoader:
         )
 
     def get_artifact_keys(self) -> list[str]:
-        return self._artifact.keys
+        # vivarium-artifact lives in the validation extra; the typed assignment
+        # narrows Any-on-GH-Actions back to list[str] without tripping
+        # warn_unused_ignores (Jenkins) or warn_redundant_casts (Jenkins).
+        keys: list[str] = self._artifact.keys
+        return keys
 
     def get_data(self, data_key: str, source: DataSource) -> Any:
         """Return the data from the cache if it exists, otherwise load it from the source."""

@@ -1,4 +1,4 @@
-**1.0.0 - 06/11/26**
+**0.6.0 - 06/11/26**
 
 Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_testing_utils``
 repository has been archived.
