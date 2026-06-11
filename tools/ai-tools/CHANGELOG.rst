@@ -1,3 +1,9 @@
+**0.15.0 - 06/11/26**
+
+ - Add the ``github`` plugin as a dependency and document GitHub MCP server setup
+ - recommend the GitHub MCP instead of the ``gh`` CLI
+ - Document the recommended Bash-sandbox configuration in the README security section 
+ 
 **0.14.1 - 06/11/26**
 
  - Add a scope-tightening pass to the ``brainstorming`` skill (intent vs. literal acceptance criteria, uniformity check, defer single-caller abstractions)

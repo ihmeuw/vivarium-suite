@@ -1,6 +1,6 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via `gh`, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
@@ -55,14 +55,13 @@ If the hub MCP fetch fails, tell the user and link them to `https://hub.ihme.was
 
 ## 3. Submitting a pull request
 
-Use `gh pr create` and the repo's PR template — not a hand-written PR body.
+Use the GitHub MCP `create_pull_request` tool and the repo's PR template — not a hand-written PR body.
 
 1. Confirm the PR template exists: `.github/pull_request_template.md` at the repo root (or `tools/ai-tools/.github/...` for the plugin sub-tree). If it doesn't exist, fall back to the repo's `CONTRIBUTING.md` or ask the user — don't invent a template.
 2. Read the template's section headings (e.g. *Title*, *Description*, *Category*, *JIRA issue*, *Changes and notes*, *Testing*). Fill each one based on the actual diff, not on what the section heading sounds like — the HTML comments in the template are field-specific instructions (character limits, category enums) that must be followed.
-3. Pass the body to `gh pr create` via a HEREDOC so multi-line formatting survives:
+3. **Push the branch first.** The GitHub MCP opens a PR between refs that already exist on the remote — it cannot push a local commit graph. So push the branch with `git push -u origin <branch>` (this one step still uses git, not the MCP), then call `mcp__github__create_pull_request`.
 
-```bash
-gh pr create --title "<imperative summary, ≤50 chars, no trailing period>" --body "$(cat <<'EOF'
+```
 ### Description
 - *Category*: feature
 - *JIRA issue*: https://jira.ihme.washington.edu/browse/MIC-####
@@ -72,11 +71,9 @@ gh pr create --title "<imperative summary, ≤50 chars, no trailing period>" --b
 
 ### Testing
 ...
-EOF
-)"
 ```
 
-4. Don't push first and then PR — `gh pr create` will push the current branch if needed and prompt for the upstream. Letting it handle the push keeps the tracking ref consistent.
+4. If the GitHub MCP is unavailable, `gh pr create via a HEREDOC is the fallback method.
 
 ## 4. Flagging a PR for review
 
