@@ -24,7 +24,7 @@ It includes:
 
   The orchestrator also runs its own functional-correctness pass.
 
-Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
+Slash command (Claude Code only): ``/viv:code-reviewer <PR or description>``.
 After the review, findings the user won't address in the current PR can be
 handed to the ``ticket-triage`` skill (see Skills below), which recommends
 and files approval-gated Jira tickets, using the ``_duplicate_finder``
@@ -34,7 +34,7 @@ sub-agent to check the backlog for duplicates.
 
 - ``model_regression_debugger`` — orchestrator that traces data pipeline changes across repos to find the cause of simulation regressions
 
-Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>``.
+Slash command (Claude Code only): ``/viv:model-regression-debugger <symptom and context>``.
 
 **Git Rescue**
 
@@ -132,7 +132,7 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
    /plugin install viv@vivarium-ai-tools
 
 Once installed, the canonical Claude Code entry points are the slash
-commands ``/viv:code-review`` and ``/viv:debug-regression``. These run
+commands ``/viv:code-reviewer`` and ``/viv:model-regression-debugger``. These run
 the parallel sub-agent fan-out at main-session level and produce a
 multi-lens review or investigation.
 

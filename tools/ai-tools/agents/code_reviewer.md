@@ -5,8 +5,8 @@ argument-hint: "A pull request to review, or a description of the changes to rev
 tools:
   # Copilot vocabulary only — this agent is the VS Code Copilot entry point.
   # Claude tools are intentionally omitted: on Claude Code, the canonical
-  # entry is the `/viv:code-review` slash command (see
-  # `commands/code-review.md`), which fans out at main-session level.
+  # entry is the `/viv:code-reviewer` slash command (see
+  # `commands/code-reviewer.md`), which fans out at main-session level.
   # Claude sub-agents cannot spawn further sub-agents, so making this agent
   # work on Claude would require duplicating the slash command's prompt
   # with no upside. The body below redirects Claude users to the slash
@@ -39,7 +39,7 @@ context which harness you are running in:
   message and STOP. Do not attempt the review:
 
   > This entry point is for VS Code Copilot. On Claude Code, please use
-  > `/viv:code-review <PR or description>` instead — that path fans out
+  > `/viv:code-reviewer <PR or description>` instead — that path fans out
   > to specialist sub-agents in parallel via the main session, which a
   > Claude sub-agent cannot do.
 

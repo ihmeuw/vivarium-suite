@@ -5,8 +5,8 @@ argument-hint: "Describe the regression symptom, which repos/branches are involv
 tools:
   # Copilot vocabulary only — this agent is the VS Code Copilot entry point.
   # Claude tools are intentionally omitted: on Claude Code, the canonical
-  # entry is the `/viv:debug-regression` slash command (see
-  # `commands/debug-regression.md`), which fans out at main-session level.
+  # entry is the `/viv:model-regression-debugger` slash command (see
+  # `commands/model-regression-debugger.md`), which fans out at main-session level.
   # Claude sub-agents cannot spawn further sub-agents, so making this agent
   # work on Claude would require duplicating the slash command's prompt
   # with no upside. The body below redirects Claude users to the slash
@@ -37,7 +37,7 @@ context which harness you are running in:
   message and STOP. Do not attempt the investigation:
 
   > This entry point is for VS Code Copilot. On Claude Code, please use
-  > `/viv:debug-regression <symptom and context>` instead — that path
+  > `/viv:model-regression-debugger <symptom and context>` instead — that path
   > fans out diff analyzers and hypothesis testers in parallel via the
   > main session, which a Claude sub-agent cannot do.
 

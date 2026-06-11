@@ -3,6 +3,7 @@
  - Add ``ticket-triage`` skill: triages code-review findings the user won't address in the current PR into Jira ticket recommendations — three-way classification with no silent drops, theme-based grouping, backlog dedup, and drafting/filing per team conventions with every write gated on explicit approval
  - Add ``_duplicate_finder`` sub-agent that checks candidate tickets against the MIC backlog via read-only Jira MCP searches and returns a compact match digest, keeping raw JQL traffic out of the orchestrator's context
  - Offer ticket triage at the end of the ``code-reviewer`` slash command, and add an advisory "Ticket recommendations" output section to the Copilot ``code_reviewer`` orchestrator
+ - Fix stale slash-command names in the README and the Copilot orchestrators' redirect messages: the live commands are ``/viv:code-reviewer`` and ``/viv:model-regression-debugger`` (named after their command files), not ``/viv:code-review`` / ``/viv:debug-regression``
 
 **0.16.0 - 06/11/26**
 
