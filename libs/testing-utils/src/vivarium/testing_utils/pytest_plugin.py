@@ -11,7 +11,7 @@ from datetime import datetime
 import pytest
 from _pytest.config import Config, argparsing
 from _pytest.python import Function
-from layered_config_tree import LayeredConfigTree
+from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
 
 SLOW_TEST_DAY = "Sunday"
@@ -141,5 +141,5 @@ def no_gbd_cache(mocker: MockerFixture) -> None:
     """
     mocker.patch(
         "vivarium_gbd_access.utilities.get_input_config",
-        return_value=LayeredConfigTree({"input_data": {"cache_data": False}}),
+        return_value=ConfigTree({"input_data": {"cache_data": False}}),
     )

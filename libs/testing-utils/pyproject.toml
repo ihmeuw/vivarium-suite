@@ -103,7 +103,7 @@ module = [
     "py._path.local",
     "scipy.*",
     "vivarium_inputs.*",
-    "gbd_mapping.*",
+    "vivarium.gbd_mapping.*",
 ]
 ignore_missing_imports = true
 

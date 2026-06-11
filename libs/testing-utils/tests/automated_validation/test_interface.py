@@ -1,5 +1,6 @@
 import io
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -11,8 +12,7 @@ import yaml
 from pandas.testing import assert_frame_equal
 from pytest import TempPathFactory
 from pytest_mock import MockFixture
-from vivarium.framework.artifact import Artifact
-from vivarium.framework.artifact.artifact import ArtifactException
+from vivarium.artifact import Artifact, ArtifactException
 from vivarium_inputs import get_age_bins
 
 from tests.automated_validation.conftest import get_model_spec
@@ -242,9 +242,10 @@ def test_metadata(sim_result_dir: Path, mocker: MockFixture) -> None:
         "vivarium.testing_utils.automated_validation.interface.Path.name",
         "2025_01_01_00_00_00",
     )
+    artifact_mtime = 1735718340  # Dec 31 23:59 2024 PST / Jan 01 07:59 2025 UTC
     mocker.patch(
         "vivarium.testing_utils.automated_validation.interface.os.path.getmtime",
-        return_value=1735718340,  # Represents Dec 31 23:59
+        return_value=artifact_mtime,
     )
     metadata = context.metadata(measure_key, "sim", "artifact")
 
@@ -260,7 +261,13 @@ def test_metadata(sim_result_dir: Path, mocker: MockFixture) -> None:
     }
     # Metadata is already tesed with comparison and bundle. Run time is the only metadata from interface
     assert metadata["Test Data"].loc["Run Time"] == "Jan 01 00:00 2025"
-    assert metadata["Reference Data"]["Run Time"] == "Dec 31 23:59 2024"
+    # Mirror the formatter in interface._get_artifact_creation_time, which uses
+    # datetime.fromtimestamp (local-tz) — derive the expected value the same way
+    # so the assertion is portable across CI host timezones.
+    expected_artifact_time = datetime.fromtimestamp(artifact_mtime).strftime(
+        "%b %d %H:%M %Y"
+    )
+    assert metadata["Reference Data"]["Run Time"] == expected_artifact_time
 
 
 def test_plot_comparison(sim_result_dir: Path, mocker: MockFixture) -> None:

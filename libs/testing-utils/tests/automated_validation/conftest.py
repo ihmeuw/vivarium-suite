@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import yaml
 from pytest import TempPathFactory
-from vivarium.framework.artifact import Artifact
+from vivarium.artifact import Artifact
 
 from vivarium.testing_utils.automated_validation.constants import (
     DAYS_PER_YEAR,

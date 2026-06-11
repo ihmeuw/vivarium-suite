@@ -4,10 +4,9 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from gbd_mapping import causes, covariates, risk_factors
-from layered_config_tree import LayeredConfigTree
-from vivarium import Artifact
-from vivarium.framework.artifact import EntityKey
+from vivarium.artifact import Artifact, EntityKey
+from vivarium.config_tree import ConfigTree
+from vivarium.gbd_mapping import causes, covariates, risk_factors
 from vivarium_inputs import interface
 from vivarium_inputs.mapping_extension import alternative_risk_factors
 
@@ -220,14 +219,14 @@ class DataLoader:
         return Artifact(artifact_path)
 
     @staticmethod
-    def _load_model_spec(results_dir: Path) -> LayeredConfigTree:
+    def _load_model_spec(results_dir: Path) -> ConfigTree:
         """Load the model specification from the results directory."""
         model_spec_path = results_dir / "model_specification.yaml"
         if not model_spec_path.exists():
             raise FileNotFoundError(
                 f"Model specification file not found at {model_spec_path}"
             )
-        return LayeredConfigTree(model_spec_path)
+        return ConfigTree(model_spec_path)
 
     def _load_from_artifact(self, data_key: str) -> Any:
         """Load data directly from artifact, assuming correctly formatted data."""
