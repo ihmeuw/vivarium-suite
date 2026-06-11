@@ -1,3 +1,9 @@
+**0.17.0 - 06/11/26**
+
+ - Add ``ticket-triage`` skill: triages code-review findings the user won't address in the current PR into Jira ticket recommendations — three-way classification with no silent drops, theme-based grouping, backlog dedup, and drafting/filing per team conventions with every write gated on explicit approval
+ - Add ``_duplicate_finder`` sub-agent that checks candidate tickets against the MIC backlog via read-only Jira MCP searches and returns a compact match digest, keeping raw JQL traffic out of the orchestrator's context
+ - Offer ticket triage at the end of the ``code-reviewer`` slash command, and add an advisory "Ticket recommendations" output section to the Copilot ``code_reviewer`` orchestrator
+
 **0.16.0 - 06/11/26**
 
  - Extract the multi-lens review fan-out from ``code-reviewer`` into a shared internal ``_review-core`` skill (hidden from the ``/`` menu via ``user-invocable: false``), invoked inline so the review is defined once and reusable by other main-session commands without duplicating the fan-out

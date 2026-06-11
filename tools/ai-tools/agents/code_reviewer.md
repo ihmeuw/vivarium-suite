@@ -111,6 +111,12 @@ Structure your review as:
 
 ### Overall
 <one or two sentences, only if there's a cross-cutting theme worth naming. Omit if the findings already speak for themselves.>
+
+### Ticket recommendations
+<only when findings look real but out of scope for this PR: one line per
+candidate naming the findings it would bundle. Advisory only — note that
+duplicate-checking and filing run in Claude Code via the `ticket-triage`
+skill (this surface has no Jira access).>
 ```
 
 Per-finding budget, scaled to severity:

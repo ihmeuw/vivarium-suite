@@ -22,9 +22,13 @@ It includes:
   - Testing coverage and quality
   - Documentation
 
-  The orchestrator also runs its own functional-correctness pass. 
+  The orchestrator also runs its own functional-correctness pass.
 
 Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
+After the review, findings the user won't address in the current PR can be
+handed to the ``ticket-triage`` skill (see Skills below), which recommends
+and files approval-gated Jira tickets, using the ``_duplicate_finder``
+sub-agent to check the backlog for duplicates.
 
 **Regression Debugger**
 
@@ -80,6 +84,11 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
   browser-based Mermaid diagramming companion
 - ``commit-splitter`` — dole out a bulk uncommitted diff into reviewable
   commits, and PR-sized branches when scope warrants.
+- ``ticket-triage`` — turn code-review findings that are out of scope for
+  the current PR into Jira ticket recommendations: classify
+  (address-now / ticket / drop, no silent drops), group by theme, check
+  the backlog for duplicates via ``_duplicate_finder``, then draft and
+  file per team conventions with every write gated on explicit approval.
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
@@ -192,6 +201,9 @@ Code:
 - The 5 ``_review_*`` sub-agents have **no Bash access at all**. They
   are fed PR context by the slash command and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
+- ``_duplicate_finder`` has **no shell or file access at all** — its only
+  tools are the read-only Jira MCP ``search`` and ``get_issue`` calls it
+  uses to check candidate tickets against the backlog.
 - ``_diff_analyzer``, ``_hypothesis_tester``, and ``_split_proposer``
   declare ``Bash`` to run ``git`` and ``gh`` commands. In practice, every
   operation they perform is a read-only git command (``git diff``,
