@@ -1,24 +1,21 @@
 """
-========================
+==================
 Jobmon Task Runner
-========================
+==================
 
-CLI entry point for individual Jobmon tasks. Each task loads its metadata
-JSON file, runs the appropriate work horse, and writes results directly
-to the results directory (one parquet per metric per task).
+CLI entry point for Jobmon worker tasks. Loads the task's metadata JSON
+and runs the appropriate work horse in-process. Invoked by every
+psimulate command that submits simulations (``run`` / ``restart`` /
+``expand`` / ``load_test``) as well as workflow simulation steps.
 
-Usage::
-
-    python -m vivarium.cluster_tools.psimulate.worker.task_runner \
-        --metadata-dir /path/to/metadata \
-        --task-id <task_id> \
-        --results-dir /path/to/results \
+Logging is configured via ``_configure_dual_sink`` so loguru INFO+
+messages land in the SLURM stdout file and WARNING+ messages land in the
+SLURM stderr file (which the Jobmon GUI surfaces).
 
 """
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -33,8 +30,20 @@ from vivarium.cluster_tools.psimulate.worker.load_test_work_horse import (
 from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import work_horse
 
 
+def _configure_dual_sink() -> None:
+    """Route INFO+ to stdout and WARNING+ to stderr.
+
+    Removes loguru's default stderr handler first so INFO-level messages
+    don't end up duplicated on stderr. Warnings and errors thus land in
+    the SLURM stderr file and the Jobmon GUI surfaces them.
+    """
+    logger.remove()
+    logger.add(sys.stdout, level="INFO")
+    logger.add(sys.stderr, level="WARNING")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run a single Jobmon task for psimulate.")
+    parser = argparse.ArgumentParser(description="Run a single Jobmon worker task.")
     parser.add_argument(
         "--metadata-dir",
         type=Path,
@@ -62,11 +71,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> int:
+    _configure_dual_sink()
     args = parse_args(argv)
-
-    logger.add(sys.stdout, level="INFO")
-    logger.add(sys.stderr, level="WARNING")
 
     metadata_path = args.metadata_dir / f"{args.task_id}.json"
     logger.info(f"Loading task metadata from {metadata_path}")
@@ -95,7 +102,8 @@ def main(argv: list[str] | None = None) -> None:
         results_dict=results_dict,
     )
     logger.info(f"Task {task_id} results written successfully.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

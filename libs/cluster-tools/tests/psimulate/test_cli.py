@@ -1,16 +1,14 @@
 """Tests for psimulate CLI features.
 """
 
-import pytest
-
-# jobmon lives in the [cluster] extra and isn't installed on envs without it
-# (includeing Github Actions runners).
-pytest.importorskip("jobmon")
-
 import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+
+import pytest
+
+pytest.importorskip("jobmon")
 
 import yaml
 from click.testing import CliRunner
@@ -314,6 +312,92 @@ class TestExpandSubcommand:
         call_kwargs = mock_main.call_args.kwargs
         assert call_kwargs["extra_args"]["num_draws"] == 10  # CLI override
         assert call_kwargs["extra_args"]["num_seeds"] == 3  # from config
+
+
+class TestSlackOptions:
+    """``--slack-channel``/``--slack-tag`` wiring on the psimulate subcommands."""
+
+    def test_run_forwards_slack_options(
+        self, model_spec: Path, branch_config: Path, result_dir: Path
+    ) -> None:
+        """``psimulate run`` forwards --slack-channel/--slack-tag to runner.main."""
+        cli_runner = CliRunner()
+        with patch(_RUNNER_MAIN) as mock_main:
+            result = cli_runner.invoke(
+                psimulate,
+                [
+                    "run",
+                    "-M",
+                    str(model_spec),
+                    "-B",
+                    str(branch_config),
+                    "-o",
+                    str(result_dir),
+                    "-P",
+                    "proj_simscience",
+                    "--slack-channel",
+                    "my-channel",
+                    "--slack-tag",
+                    "coworker",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        call_kwargs = mock_main.call_args.kwargs
+        assert call_kwargs["slack_channel"] == "my-channel"
+        assert call_kwargs["slack_tag"] == "coworker"
+
+    def test_run_no_slack_mutes_notification(
+        self, model_spec: Path, branch_config: Path, result_dir: Path
+    ) -> None:
+        """``--no-slack`` forwards mute_slack=True to runner.main."""
+        cli_runner = CliRunner()
+        with patch(_RUNNER_MAIN) as mock_main:
+            result = cli_runner.invoke(
+                psimulate,
+                [
+                    "run",
+                    "-M",
+                    str(model_spec),
+                    "-B",
+                    str(branch_config),
+                    "-o",
+                    str(result_dir),
+                    "-P",
+                    "proj_simscience",
+                    "--no-slack",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        assert mock_main.call_args.kwargs["mute_slack"] is True
+
+    def test_run_slack_tag_without_channel_errors(
+        self, model_spec: Path, branch_config: Path, result_dir: Path
+    ) -> None:
+        """``--slack-tag`` without ``--slack-channel`` is a usage error."""
+        cli_runner = CliRunner()
+        with patch(_RUNNER_MAIN) as mock_main:
+            result = cli_runner.invoke(
+                psimulate,
+                [
+                    "run",
+                    "-M",
+                    str(model_spec),
+                    "-B",
+                    str(branch_config),
+                    "-o",
+                    str(result_dir),
+                    "-P",
+                    "proj_simscience",
+                    "--slack-tag",
+                    "coworker",
+                ],
+            )
+
+        assert result.exit_code != 0
+        assert "--slack-tag requires --slack-channel" in result.output
+        mock_main.assert_not_called()
 
 
 class TestErrorHandling:

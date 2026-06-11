@@ -4,7 +4,7 @@ import click
 import pytest
 from click.testing import CliRunner
 
-from vivarium.cluster_tools import cli_tools
+from vivarium.cluster_tools.core import cli_tools
 
 DEPRECATION_DATE_SIM_VERBOSITY = datetime.date(2026, 12, 4)
 
