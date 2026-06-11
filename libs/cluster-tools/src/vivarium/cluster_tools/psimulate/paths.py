@@ -177,6 +177,8 @@ class OutputPaths(NamedTuple):
         input_artifact_path: Path | None,
         result_directory: Path,
         input_model_spec_path: Path | None,
+        launch_time: str | None = None,
+        is_resume: bool = False,
     ) -> "OutputPaths":
         """Create an instance of OutputPaths from the arguments passed to the entry point.
 
@@ -190,13 +192,23 @@ class OutputPaths(NamedTuple):
             The path to the results directory.
         input_model_spec_path
             The path to the model specification file.
+        launch_time
+            Optional timestamp string (``YYYY_MM_DD_HH_MM_SS``). When provided,
+            this timestamp is used for directory naming instead of generating a
+            new one from ``datetime.now()``. This ensures that all steps in a
+            workflow share the same timestamp, and that resume builds produce
+            identical paths.
+        is_resume
+            If True, generates a fresh timestamp for the logging directory so
+            that each resume attempt gets its own logs, mirroring ``psimulate
+            restart`` behavior. The output root still uses ``launch_time``.
 
         Returns
         -------
             An instance of OutputPaths.
 
         """
-        launch_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        launch_time = launch_time or datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
         output_directory = result_directory
         if command == COMMANDS.run:
@@ -211,7 +223,10 @@ class OutputPaths(NamedTuple):
         elif command == COMMANDS.load_test:
             output_directory = output_directory / "load_test" / launch_time
 
-        logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
+        logging_timestamp = (
+            datetime.now().strftime("%Y_%m_%d_%H_%M_%S") if is_resume else launch_time
+        )
+        logging_directory = output_directory / "logs" / f"{logging_timestamp}_{command}"
         logging_dirs = {
             "logging_root": logging_directory,
             "worker_logging_root": logging_directory / "worker_logs",

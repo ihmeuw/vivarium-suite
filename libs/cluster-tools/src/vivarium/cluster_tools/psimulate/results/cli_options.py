@@ -9,7 +9,7 @@ Command line options for configuring results handling in psimulate runs.
 
 import click
 
-from vivarium.cluster_tools.cli_tools import MINUTES_OR_NONE
+from vivarium.cluster_tools.core.cli_tools import MINUTES_OR_NONE
 
 backup_freq = click.option(
     "--backup-freq",

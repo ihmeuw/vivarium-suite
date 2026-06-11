@@ -6,18 +6,22 @@ plumbing, and logging setup.  The actual work horses and result writing
 are mocked — they have their own dedicated test suites.
 """
 
-import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
+from loguru import logger
 
 from tests.psimulate.conftest import make_job_parameters
 from vivarium.cluster_tools.psimulate import COMMANDS
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
 from vivarium.cluster_tools.psimulate.results.writing import write_metadata
-from vivarium.cluster_tools.psimulate.worker.task_runner import main, parse_args
+from vivarium.cluster_tools.psimulate.worker.task_runner import (
+    _configure_dual_sink,
+    main,
+    parse_args,
+)
 
 # Patch targets are the names as imported into task_runner.
 _WORK_HORSE = "vivarium.cluster_tools.psimulate.worker.task_runner.work_horse"
@@ -35,7 +39,6 @@ def job_params() -> JobParameters:
 def _build_argv(
     metadata_dir: Path,
     results_dir: Path,
-    worker_log_dir: Path,
     command: str,
     task_id: str,
 ) -> list[str]:
@@ -91,9 +94,7 @@ class TestParseArgs:
             parse_args(["--metadata-dir", str(tmp_path)])
 
     def test_unknown_arg_raises_system_exit(self, tmp_path: Path) -> None:
-        argv = _build_argv(tmp_path, tmp_path, tmp_path, command="run", task_id="x") + [
-            "--bogus"
-        ]
+        argv = _build_argv(tmp_path, tmp_path, command="run", task_id="x") + ["--bogus"]
         with pytest.raises(SystemExit):
             parse_args(argv)
 
@@ -117,7 +118,6 @@ class TestMainDispatch:
                 _build_argv(
                     dirs["metadata"],
                     dirs["results"],
-                    dirs["worker_logs"],
                     command=command,
                     task_id=job_params.task_id,
                 )
@@ -154,7 +154,6 @@ class TestMainDispatch:
                 _build_argv(
                     dirs["metadata"],
                     dirs["results"],
-                    dirs["worker_logs"],
                     command=COMMANDS.load_test,
                     task_id=job_params.task_id,
                 )
@@ -181,7 +180,6 @@ class TestMainDispatch:
                     _build_argv(
                         dirs["metadata"],
                         dirs["results"],
-                        dirs["worker_logs"],
                         command="bogus_command",
                         task_id=job_params.task_id,
                     )
@@ -196,8 +194,26 @@ class TestMainMissingMetadata:
                 _build_argv(
                     dirs["metadata"],
                     dirs["results"],
-                    dirs["worker_logs"],
                     command=COMMANDS.run,
                     task_id="nonexistent",
                 )
             )
+
+
+class TestConfigureDualSink:
+    """Tests for ``_configure_dual_sink`` — the loguru routing setup that
+    keeps INFO+ on stdout and WARNING+ on stderr."""
+
+    def test_routes_levels_to_correct_streams(
+        self, capfd: pytest.CaptureFixture[str]
+    ) -> None:
+        """INFO+ records go to stdout; WARNING+ records also go to stderr;
+        INFO records must NOT leak to stderr."""
+        _configure_dual_sink()
+        logger.info("info-msg")
+        logger.warning("warn-msg")
+        out, err = capfd.readouterr()
+        assert "info-msg" in out
+        assert "warn-msg" in out
+        assert "warn-msg" in err
+        assert "info-msg" not in err

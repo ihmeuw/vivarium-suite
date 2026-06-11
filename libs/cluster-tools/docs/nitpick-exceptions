@@ -19,9 +19,13 @@ py:class scpustats
 py:class sdiskio
 py:class scpufreq
 py:class snetio
-
+# config_tree
+py:class vivarium.config_tree.main.ConfigTree
 py:class ConfigTree
 py:class Component
-
-py:class click.core.Context
-py:class click.core.Parameter
+# jobmon
+py:class jobmon.client.api.Tool
+py:class jobmon.client.task.Task
+py:class jobmon.client.workflow.Workflow
+py:class Tool
+py:class Task

@@ -18,10 +18,10 @@ import click
 from loguru import logger
 from vivarium.engine.framework.utilities import handle_exceptions
 
-from vivarium.cluster_tools import cli_tools, logs
-from vivarium.cluster_tools.cli_tools import Decorator
-from vivarium.cluster_tools.psimulate import COMMANDS, cluster, paths, results, runner
-from vivarium.cluster_tools.psimulate.jobmon_config import with_max_attempts, with_max_workers
+from vivarium.cluster_tools.core import cli_tools, cluster, logs
+from vivarium.cluster_tools.core.cli_tools import Decorator
+from vivarium.cluster_tools.core.jobmon import with_max_attempts, with_max_workers
+from vivarium.cluster_tools.psimulate import COMMANDS, paths, results, runner
 from vivarium.cluster_tools.psimulate.worker.load_test_work_horse import (
     get_psimulate_test_dict,
 )
@@ -47,6 +47,9 @@ shared_options: list[Decorator] = [
     results.backup_freq,
     cli_tools.with_verbose_and_pdb,
     cli_tools.with_sim_verbosity,
+    cli_tools.with_slack_channel,
+    cli_tools.with_slack_tag,
+    cli_tools.with_slack_mute,
 ]
 
 
@@ -156,6 +159,10 @@ def run(
             "Provide it via --branch-configuration/-B."
         )
 
+    cli_tools.validate_slack_options(
+        options["slack_channel"], options["slack_tag"], options["mute_slack"]
+    )
+
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -182,6 +189,9 @@ def run(
                 options["sim_verbosity"], options["sim_verbosity_deprecated"]
             ),
         },
+        slack_channel=options["slack_channel"],
+        slack_tag=options["slack_tag"],
+        mute_slack=options["mute_slack"],
     )
 
 
@@ -230,6 +240,10 @@ def restart(
             "Missing required argument: results_root. " "Provide it via --results-root/-R."
         )
 
+    cli_tools.validate_slack_options(
+        options["slack_channel"], options["slack_tag"], options["mute_slack"]
+    )
+
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -253,6 +267,9 @@ def restart(
                 options["sim_verbosity"], options["sim_verbosity_deprecated"]
             ),
         },
+        slack_channel=options["slack_channel"],
+        slack_tag=options["slack_tag"],
+        mute_slack=options["mute_slack"],
     )
 
 
@@ -316,6 +333,10 @@ def expand(
             "Missing required argument: results_root. " "Provide it via --results-root/-R."
         )
 
+    cli_tools.validate_slack_options(
+        options["slack_channel"], options["slack_tag"], options["mute_slack"]
+    )
+
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     main(
@@ -341,6 +362,9 @@ def expand(
                 options["sim_verbosity"], options["sim_verbosity_deprecated"]
             ),
         },
+        slack_channel=options["slack_channel"],
+        slack_tag=options["slack_tag"],
+        mute_slack=options["mute_slack"],
     )
 
 
@@ -372,6 +396,9 @@ def test(
     **options: Any,
 ) -> None:
     logs.configure_main_process_logging_to_terminal(options["verbose"])
+    cli_tools.validate_slack_options(
+        options["slack_channel"], options["slack_tag"], options["mute_slack"]
+    )
     main = handle_exceptions(runner.main, logger, options["with_debugger"])
 
     # HACK: warn that we are changing the default as well as any provided
@@ -417,4 +444,7 @@ def test(
             "test_type": test_type,
             "num_workers": num_workers,
         },
+        slack_channel=options["slack_channel"],
+        slack_tag=options["slack_tag"],
+        mute_slack=options["mute_slack"],
     )

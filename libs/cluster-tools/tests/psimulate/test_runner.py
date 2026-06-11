@@ -1,21 +1,23 @@
-import pytest
-
-# jobmon lives in the [cluster] extra and isn't installed on envs without it
-# (includeing Github Actions runners).
-pytest.importorskip("jobmon")
-
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
+
+pytest.importorskip("jobmon")
+
 import yaml
 from click.testing import CliRunner
 from pandas.testing import assert_frame_equal
 
+from vivarium.cluster_tools.core.cluster.interface import NativeSpecification
 from vivarium.cluster_tools.psimulate.cli import psimulate
-from vivarium.cluster_tools.psimulate.cluster.interface import NativeSpecification
-from vivarium.cluster_tools.psimulate.jobs import JobParameters, generate_task_id
+from vivarium.cluster_tools.psimulate.jobs import (
+    BackupConfiguration,
+    JobParameters,
+    generate_task_id,
+)
 from vivarium.cluster_tools.psimulate.paths import InputPaths
 from vivarium.cluster_tools.psimulate.runner import (
     report_initial_status,
@@ -96,7 +98,9 @@ def test_write_backup_metadata(tmp_path: Path) -> None:
             random_seed=42,
             results_path="~/tmp",
             worker_logging_root="/tmp/worker_logs",
-            backup_configuration={},
+            backup_configuration=BackupConfiguration(
+                backup_dir="", backup_freq=None, backup_metadata_path=""
+            ),
             extras={},
         ),
     ]
@@ -124,7 +128,9 @@ def test_write_backup_metadata(tmp_path: Path) -> None:
             random_seed=43,
             results_path="~/tmp",
             worker_logging_root="/tmp/worker_logs",
-            backup_configuration={},
+            backup_configuration=BackupConfiguration(
+                backup_dir="", backup_freq=None, backup_metadata_path=""
+            ),
             extras={},
         ),
     ]
