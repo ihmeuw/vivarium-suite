@@ -11,8 +11,7 @@ license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
-    "vivarium-dependencies[numpy,pyyaml,scipy,click,tables,loguru,networkx]",
-    "pandas",
+    "vivarium-dependencies[numpy,pyyaml,scipy,click,tables,loguru,networkx,pandas]",
     "vivarium-build-utils>=3.0.2,<4.0.0",
     "pyarrow",
     "seaborn",
