@@ -6,6 +6,14 @@ repository has been archived.
 Breaking changes:
 
 - Import path changed from ``vivarium_testing_utils`` to ``vivarium.testing_utils``.
+- Sibling imports used inside the ``automated_validation`` feature changed to monorepo paths (``vivarium.<pkg>``)
+- ``__about__`` attributes (``__author__``, ``__copyright__``, ``__email__``,
+  ``__license__``, ``__summary__``, ``__title__``, ``__uri__``) are no longer
+  exposed on ``vivarium.testing_utils``. Use ``importlib.metadata.metadata("vivarium-testing-utils")``
+  for the equivalent values.
+- Heavier optional deps (``pyarrow``, ``seaborn``) moved into the ``validation``
+  extra alongside the rest of the validation feature; base installs no longer
+  pull them in.
 
 **0.5.4 - 05/06/26**
 

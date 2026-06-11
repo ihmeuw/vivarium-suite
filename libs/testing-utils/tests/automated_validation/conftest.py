@@ -1,13 +1,15 @@
 import pytest
 
 # The automated_validation test suite requires deps from the `validation` extra
-# (vivarium-inputs is artifactory-only and not installed on GitHub Actions CI).
-# Skip the entire subdirectory when those deps aren't available; Jenkins runs
-# the full suite via ci_jenkins, which installs the validation extra.
-pytest.importorskip("vivarium_inputs")
+# (vivarium-inputs is artifactory-only and not installed on GitHub Actions CI;
+# vivarium-artifact is also monorepo-local and only installed via `validation`).
+# Skip the entire subdirectory when either is unavailable; Jenkins runs the
+# full suite via ci_jenkins, which installs the validation extra. Both probes
+# are needed because either could be missing independently (e.g., partial
+# extras install during local dev).
 pytest.importorskip("vivarium.artifact")
+pytest.importorskip("vivarium_inputs")
 
-import shutil
 from pathlib import Path
 from typing import Any
 from unittest import mock

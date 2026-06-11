@@ -18,13 +18,30 @@ from vivarium.testing_utils.fuzzy_checker import FuzzyChecker, TestResult
 # vivarium-inputs) aren't installed on GitHub Actions. Tests that touch
 # TargetIntervalConfig are skipped where the import fails; Jenkins runs them
 # via the validation extra.
+#
+# vivarium_inputs is the canonical "is the validation extra installed" probe
+# because it is the artifactory-only dep that distinguishes ci_jenkins (has it)
+# from ci_github (doesn't). On Jenkins, missing TargetIntervalConfig is a real
+# regression rather than a missing-extra signal, so we re-raise instead of
+# silently flipping to _HAS_VALIDATION = False.
 try:
     from vivarium.testing_utils.automated_validation.comparison import TargetIntervalConfig
 
     _HAS_VALIDATION = True
 except ImportError:
+    import importlib.util
+
+    if importlib.util.find_spec("vivarium_inputs") is not None:
+        raise
     _HAS_VALIDATION = False
     TargetIntervalConfig = None  # type: ignore[assignment,misc]
+
+# Shared decorator for tests that depend on the validation feature. Single
+# source so adding a third TargetIntervalConfig-using class is one-line.
+requires_validation_extra = pytest.mark.skipif(
+    not _HAS_VALIDATION,
+    reason="requires the `validation` extra (Jenkins-only).",
+)
 
 OBSERVED_DENOMINATORS = [100_000, 1_000_000, 10_000_000]
 TARGET_PROPORTION = 0.1
@@ -326,10 +343,7 @@ class TestFuzzyCheckerTestProportionVectorized:
         assert len(fuzzy_checker.proportion_test_diagnostics) == 21
 
 
-@pytest.mark.skipif(
-    not _HAS_VALIDATION,
-    reason="TargetIntervalConfig requires the `validation` extra (Jenkins-only).",
-)
+@requires_validation_extra
 class TestApplyTargetIntervalConfig:
     """Tests for FuzzyChecker._apply_target_interval_config."""
 
@@ -388,10 +402,7 @@ class TestApplyTargetIntervalConfig:
         assert result == 0.5
 
 
-@pytest.mark.skipif(
-    not _HAS_VALIDATION,
-    reason="TargetIntervalConfig requires the `validation` extra (Jenkins-only).",
-)
+@requires_validation_extra
 class TestTargetIntervalVectorized:
     """Tests for target interval config integration with test_proportion_vectorized."""
 

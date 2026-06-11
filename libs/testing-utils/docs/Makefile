@@ -3,7 +3,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = vivarium-testing-utils
+SPHINXPROJ    = vivarium.testing_utils
 SOURCEDIR     = source
 BUILDDIR      = build
 

@@ -1,7 +1,7 @@
 """Pytest plugin providing common fixtures for vivarium projects.
 
 This module is automatically loaded by pytest when vivarium.testing_utils is installed,
-via the pytest11 entry point defined in setup.py.
+via the pytest11 entry point declared in pyproject.toml.
 """
 
 import os
