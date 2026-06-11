@@ -31,4 +31,4 @@ For broader monorepo development setup, see the monorepo README at
 https://github.com/ihmeuw/vivarium-suite.
 
 `Check out the docs! <https://vivarium-testing-utils.readthedocs.io/en/latest/>`_
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
