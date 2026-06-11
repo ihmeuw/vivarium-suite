@@ -16,7 +16,7 @@ dependencies = [
     "vivarium-build-utils>=3.0.2,<4.0.0",
     "pyarrow",
     "seaborn",
-    "layered-config-tree",
+    "vivarium-config-tree",
     "pytest-xdist",
     "types-setuptools",
 ]
