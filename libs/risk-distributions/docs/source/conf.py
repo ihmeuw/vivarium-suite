@@ -10,14 +10,8 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import datetime
-import os
-import subprocess
-import sys
+import importlib.metadata
 
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
 from pathlib import Path
 
 from docutils.nodes import Element, Text
@@ -25,44 +19,15 @@ from sphinx.application import Sphinx
 from sphinx.environment import BuildEnvironment
 from sphinx.ext.intersphinx import missing_reference
 
-import vivarium.risk_distributions
-
-
-def _copyright_end_year() -> str:
-    """Resolve the copyright end year for reproducible docs builds.
-
-    Two builds of the same git SHA must produce identical output, which rules
-    out ``datetime.date.today().year``. Order of precedence:
-
-    1. ``SOURCE_DATE_EPOCH`` (reproducible-builds standard).
-    2. Year of the HEAD commit (stable for a given SHA).
-    3. Current year (fallback for sdist / detached source builds).
-    """
-    if epoch := os.environ.get("SOURCE_DATE_EPOCH"):
-        return datetime.datetime.fromtimestamp(
-            int(epoch), tz=datetime.timezone.utc
-        ).strftime("%Y")
-    try:
-        out = subprocess.check_output(
-            ["git", "log", "-1", "--format=%cd", "--date=format:%Y"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        if out:
-            return out
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
-    return str(datetime.date.today().year)
-
 
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.risk_distributions"
 author = "The vivarium developers"
-copyright = f"2022-{_copyright_end_year()}, Institute for Health Metrics and Evaluation"
+copyright = "2018, Institute for Health Metrics and Evaluation"
 
-version = vivarium.risk_distributions.__version__
-release = vivarium.risk_distributions.__version__
+version = importlib.metadata.version("vivarium-risk-distributions")
+release = version
 
 
 # -- General configuration ------------------------------------------------

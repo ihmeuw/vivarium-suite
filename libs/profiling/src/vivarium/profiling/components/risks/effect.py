@@ -2,10 +2,10 @@ import re
 
 import pandas as pd
 from vivarium.engine.framework.engine import Builder
-from vivarium_public_health.risks.effect import (
+from vivarium.public_health.risks.effect import (
     NonLogLinearRiskEffect as NonLogLinearRiskEffect_,
 )
-from vivarium_public_health.risks.effect import RiskEffect as RiskEffect_
+from vivarium.public_health.risks.effect import RiskEffect as RiskEffect_
 
 """
 Basic Risk Effect Wrapper for use in the MultiComponentParser
@@ -39,7 +39,7 @@ class NonLogLinearRiskEffect(NonLogLinearRiskEffect_, RiskEffect):
     pass
 
 
-from vivarium_public_health.risks.effect import (
+from vivarium.public_health.risks.effect import (
     NonLogLinearRiskEffect as NonLogLinearRiskEffect_,
 )
-from vivarium_public_health.risks.effect import RiskEffect as RiskEffect_
+from vivarium.public_health.risks.effect import RiskEffect as RiskEffect_

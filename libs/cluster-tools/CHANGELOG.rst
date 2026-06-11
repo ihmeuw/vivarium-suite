@@ -1,3 +1,7 @@
+**4.2.1 - 06/11/26**
+
+- Update vivarium_public_health import to vivarium.public_health in README
+
 **4.2.0 - 06/11/26**
 
 - Implement serial workflows via the dagger CLI group

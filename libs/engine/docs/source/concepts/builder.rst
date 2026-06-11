@@ -13,7 +13,7 @@ The Builder
 Users of the Vivarium framework build simulations with components. Components are
 Python classes that represent aspects and behaviors of simulants. Components can be
 leveraged directly from external modules like
-`vivarium_public_health <https://vivarium.readthedocs.io/projects/vivarium-public-health/en/stable/>`_
+`vivarium.public_health <https://vivarium-public-health.readthedocs.io/en/stable/>`_
 or be user-written and customized. More information about components is available in the
 :ref:`component concept note <components_concept>`.
 
