@@ -1,7 +1,19 @@
-**0.14.1 - 06/11/26**
+**0.15.1 - 06/11/26**
 
  - ``/viv:type-hinter``: when adding ``py.typed``, also add the matching ``[tool.setuptools.package-data]`` entry to the package's ``pyproject.toml`` so the marker ships in the wheel (PEP 561)
 
+**0.15.0 - 06/11/26**
+
+ - Add the ``github`` plugin as a dependency and document GitHub MCP server setup
+ - recommend the GitHub MCP instead of the ``gh`` CLI
+ - Document the recommended Bash-sandbox configuration in the README security section 
+ 
+**0.14.1 - 06/11/26**
+
+ - Add a scope-tightening pass to the ``brainstorming`` skill (intent vs. literal acceptance criteria, uniformity check, defer single-caller abstractions)
+ - Document test organization in the ``pytest`` skill (parallel test/src files; test classes with shared setup and one requirement per test)
+ - Document in ``team-conventions`` that PR review threads are left for the comment's author to resolve
+ 
 **0.14.0 - 06/09/26**
 
  - Code reviewer now checks model-repo PRs against the relevant research documentation.

@@ -5,6 +5,7 @@
     "publisher": "ihmeuw",
     "dependencies": [
         { "name": "skill-creator", "marketplace": "claude-plugins-official" },
-        { "name": "slack", "marketplace": "claude-plugins-official" }
+        { "name": "slack", "marketplace": "claude-plugins-official" },
+        { "name": "github", "marketplace": "claude-plugins-official" }
     ]
 }
