@@ -2,49 +2,17 @@
 # -*- coding: utf-8 -*-
 """Sphinx configuration for vivarium-engine docs."""
 
-import datetime
-import os
-import subprocess
-
-import vivarium.engine
-
-
-def _copyright_end_year() -> str:
-    """Resolve the copyright end year for reproducible docs builds.
-
-    Two builds of the same git SHA must produce identical output, which rules
-    out ``datetime.date.today().year``. Order of precedence:
-
-    1. ``SOURCE_DATE_EPOCH`` (reproducible-builds standard).
-    2. Year of the HEAD commit (stable for a given SHA).
-    3. Current year (fallback for sdist / detached source builds).
-    """
-    if epoch := os.environ.get("SOURCE_DATE_EPOCH"):
-        return datetime.datetime.fromtimestamp(int(epoch), tz=datetime.timezone.utc).strftime(
-            "%Y"
-        )
-    try:
-        out = subprocess.check_output(
-            ["git", "log", "-1", "--format=%cd", "--date=format:%Y"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        if out:
-            return out
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
-    return str(datetime.date.today().year)
+import importlib.metadata
 
 
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.engine"
 author = "The vivarium developers"
-# Copyright start year mirrors the LICENSE file.
-copyright = f"2016-{_copyright_end_year()}, Institute for Health Metrics and Evaluation"
+copyright = "2023, Institute for Health Metrics and Evaluation"
 
-version = vivarium.engine.__version__
-release = vivarium.engine.__version__
+version = importlib.metadata.version("vivarium-engine")
+release = version
 
 
 # -- General configuration ------------------------------------------------

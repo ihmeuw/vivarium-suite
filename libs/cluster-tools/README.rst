@@ -69,7 +69,7 @@ your original model specification looked something like
       optional: ...
 
     components:
-      vivarium_public_health:
+      vivarium.public_health:
         population:
           - BasePopulation()
         disease.models:
@@ -108,8 +108,47 @@ a simulation. More, it would run each coverage-efficacy pair in the branches
 for each combination of input draw and random seed to produce 25 * 10 * 5 * 3 =
 3750 unique simulations.
 
+Multi-step workflows with ``dagger``
+------------------------------------
+
+For pipelines that chain several steps together, ``dagger`` runs a multi-step
+Jobmon workflow defined in a YAML configuration file. Each step lists its
+command and compute resources:
+
+.. code-block:: yaml
+
+    workflow:
+      name: my_pipeline
+      project: proj_simscience
+      queue: all.q
+      output_directory: /path/to/output
+      steps:
+        - name: launch_sims
+          command: psimulate run /path/to/model_specification.yaml /path/to/branches_file.yaml
+          resources:
+            memory_gb: 4
+            runtime: "01:00:00"
+        - name: post_process
+          command: my_post_processing_script /path/to/output
+          resources:
+            memory_gb: 8
+            runtime: "00:30:00"
+
+Launch the workflow with
+
+.. code-block:: console
+
+    dagger run -c /path/to/workflow.yaml
+
+If a run fails partway through, resume it from its output directory, skipping
+steps that already completed, with
+
+.. code-block:: console
+
+    dagger restart /path/to/output
+
 To read about more of the available features and get a better understanding
-of how to correctly write your own branches files, 
+of how to correctly write your own branches files,
 
 
 `Check out the docs! <https://vivarium-cluster-tools.readthedocs.io/en/latest/>`_

@@ -7,6 +7,9 @@ line_length = 94
 multi_line_output = 3
 
 [tool.mypy]
+# WARNING: these settings must be kept in sync manually with each libs pyproject.toml.
+# The local `make mypy` passes --config-file pyproject.toml (the lib-specific file),
+# so mypy doesn't read this config. If you change this, change the lib-specific ones too.
 strict = true
 disallow_any_unimported = false
 implicit_reexport = true

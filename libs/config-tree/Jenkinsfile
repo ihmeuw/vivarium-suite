@@ -1,5 +1,5 @@
 /* This Jenkinsfile simply loads the `reusable_pipeline` pipeline from the
-vivariu_build_utils repository (https://github.com/ihmeuw/vivarium_build_utils).
+vivarium_build_utils repository (https://github.com/ihmeuw/vivarium_build_utils).
 
 vivarium_build_utils is loaded as a Jenkins shared library
 (https://www.jenkins.io/doc/book/pipeline/shared-libraries/).

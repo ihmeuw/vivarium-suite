@@ -27,6 +27,11 @@ make test-all RUNSLOW=true RUNWEEKLY=true
 `make test-unit`/`-integration`/`-e2e` only work in repos that actually have the matching `tests/<type>/` subdir — most vivarium repos don't (test layouts are flat or domain-organized). Check `ls tests/` first; otherwise fall back to `make test-all` or direct pytest.
 
 
+## Test organization
+
+- **Mirror the source layout.** Add tests to the `test_<module>.py` file that parallels the source module you're changing (e.g. tests for `results/observation.py` go in `tests/.../results/test_observation.py`). Don't create a per-feature test file — the team organizes tests by the code under test, not by feature.
+- **Group a unit's tests in a class with shared setup.** When several tests exercise one unit or scenario, put them in a `class Test…:` and lift the common setup into a fixture or helper (DRY), but keep each distinct requirement in its own test method — e.g. one test asserts dtype/category order, another asserts numeric columns stay numeric. Shared setup, asserts doled out per test. (This is a common preference, not universal across existing code — match the surrounding file when it clearly does otherwise.)
+
 ## Markers
 
 `vivarium_testing_utils` auto-loads as a pytest plugin and registers markers with default-skip rules. Look at `vivarium_testing_utils/pytest_plugin.py` to understand their behavior. If a test is mysteriously skipping, you may also run pytest with `-v` (or `-rs`) and read the skip reason.

@@ -28,7 +28,7 @@ components:
                     effect_type: loglinear
                     number: 2
 
-    vivarium_public_health:
+    vivarium.public_health:
         population:
             - BasePopulation()
             - Mortality()

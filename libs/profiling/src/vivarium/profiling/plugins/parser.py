@@ -2,11 +2,11 @@ from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component
 from vivarium.engine.framework.components import ComponentConfigurationParser
 from vivarium.engine.framework.components.parser import ParsingError
-from vivarium_public_health.disease import DiseaseModel
-from vivarium_public_health.disease.models import SIS_fixed_duration
-from vivarium_public_health.results import DiseaseObserver
-from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
-from vivarium_public_health.risks.base_risk import Risk
+from vivarium.public_health.disease import DiseaseModel
+from vivarium.public_health.disease.models import SIS_fixed_duration
+from vivarium.public_health.results import DiseaseObserver
+from vivarium.public_health.results.causal_factor import CategoricalRiskObserver
+from vivarium.public_health.risks.base_risk import Risk
 
 from vivarium.profiling.components.risks.effect import NonLogLinearRiskEffect, RiskEffect
 

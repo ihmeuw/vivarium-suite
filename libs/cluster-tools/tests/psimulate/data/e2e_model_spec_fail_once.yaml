@@ -6,7 +6,7 @@
 # Jobmon resume) the sentinel files already exist, so the component is a no-op
 # and every task succeeds.
 components:
-    vivarium.engine.examples.disease_model:
+    vivarium.examples.disease_model:
         population:
             - BasePopulation()
         observer:
