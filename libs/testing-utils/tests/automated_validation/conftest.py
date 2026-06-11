@@ -1,10 +1,18 @@
+import pytest
+
+# The automated_validation test suite requires deps from the `validation` extra
+# (vivarium-inputs is artifactory-only and not installed on GitHub Actions CI).
+# Skip the entire subdirectory when those deps aren't available; Jenkins runs
+# the full suite via ci_jenkins, which installs the validation extra.
+pytest.importorskip("vivarium_inputs")
+pytest.importorskip("vivarium.artifact")
+
 import shutil
 from pathlib import Path
 from typing import Any
 from unittest import mock
 
 import pandas as pd
-import pytest
 import yaml
 from pytest import TempPathFactory
 from vivarium.artifact import Artifact

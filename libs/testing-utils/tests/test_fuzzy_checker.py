@@ -12,8 +12,19 @@ from scipy.stats._distn_infrastructure import rv_continuous_frozen
 if TYPE_CHECKING:
     from py._path.local import LocalPath
 
-from vivarium.testing_utils.automated_validation.comparison import TargetIntervalConfig
 from vivarium.testing_utils.fuzzy_checker import FuzzyChecker, TestResult
+
+# TargetIntervalConfig lives under the validation feature, whose deps (notably
+# vivarium-inputs) aren't installed on GitHub Actions. Tests that touch
+# TargetIntervalConfig are skipped where the import fails; Jenkins runs them
+# via the validation extra.
+try:
+    from vivarium.testing_utils.automated_validation.comparison import TargetIntervalConfig
+
+    _HAS_VALIDATION = True
+except ImportError:
+    _HAS_VALIDATION = False
+    TargetIntervalConfig = None  # type: ignore[assignment,misc]
 
 OBSERVED_DENOMINATORS = [100_000, 1_000_000, 10_000_000]
 TARGET_PROPORTION = 0.1
@@ -315,6 +326,10 @@ class TestFuzzyCheckerTestProportionVectorized:
         assert len(fuzzy_checker.proportion_test_diagnostics) == 21
 
 
+@pytest.mark.skipif(
+    not _HAS_VALIDATION,
+    reason="TargetIntervalConfig requires the `validation` extra (Jenkins-only).",
+)
 class TestApplyTargetIntervalConfig:
     """Tests for FuzzyChecker._apply_target_interval_config."""
 
