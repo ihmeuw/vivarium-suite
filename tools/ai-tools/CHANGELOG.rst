@@ -1,3 +1,7 @@
+**0.15.1 - 06/11/26**
+
+ - ``/viv:type-hinter``: when adding ``py.typed``, also add the matching ``[tool.setuptools.package-data]`` entry to the package's ``pyproject.toml`` so the marker ships in the wheel (PEP 561)
+
 **0.15.0 - 06/11/26**
 
  - Add the ``github`` plugin as a dependency and document GitHub MCP server setup
