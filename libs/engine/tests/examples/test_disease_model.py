@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 from vivarium.config_tree import ConfigTree
-from vivarium_testing_utils import FuzzyChecker
+from vivarium.testing_utils import FuzzyChecker
 
 from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.utilities import from_yearly

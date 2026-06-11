@@ -8,7 +8,7 @@ import pytest
 from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.testing_utilities import get_randomness
-from vivarium_testing_utils import FuzzyChecker
+from vivarium.testing_utils import FuzzyChecker
 
 import vivarium.public_health.population.base_population as bp
 import vivarium.public_health.population.data_transformations as dt
