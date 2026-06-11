@@ -1,0 +1,52 @@
+# numpy
+py:class numpy.random.mtrand.RandomState
+# pandas
+py:class pandas.core.indexes.base.Index
+py:class pandas.core.indexes.multi.MultiIndex
+py:class pandas._libs.tslibs.timestamps.Timestamp
+py:class pandas._libs.tslibs.timedeltas.Timedelta
+py:class pandas._libs.interval.Interval
+py:class pandas.core.frame.DataFrame
+py:class pandas.core.series.Series
+py:class pandas.core.generic.PandasObject
+# vivarium-config-tree
+py:exc ConfigurationError
+py:class ConfigTree
+py:class vivarium.engine.framework.values.pipeline.Pipeline
+
+# TODO: revisit these — bare class names that should resolve via intersphinx
+# once their type-hint origins are fully qualified in source.
+py:class PopulationView
+py:class Logger
+py:class pd.DataFrame
+py:class pd.Index
+py:class pd.Series
+# TODO: Need to revisit this. Nitpicking here to avoid failing everywhere
+py:class Builder
+py:class SimulantData
+py:class Event
+py:class vivarium.engine.framework.event.manager.Event
+py:class LookupTable
+py:mod vivarium.public_health._example_data
+py:class vivarium.public_health._example_data.ConstantRatePipeline
+
+# results module - classes referenced in tutorials
+py:class vivarium.engine.framework.results.observer.Observer
+py:class vivarium.public_health.results.DiseaseObserver
+py:class vivarium.public_health.results.MortalityObserver
+py:class vivarium.public_health.results.DisabilityObserver
+py:class vivarium.public_health.results.CategoricalRiskObserver
+py:class vivarium.public_health.results.ResultsStratifier
+
+# vivarium types and classes used in type hints
+py:class DataInput
+py:class Transition
+py:class Trigger
+py:class RandomnessStream
+
+py:meth __init__
+py:class Component
+py:attr lookup_tables
+
+# typing module - needed for Python 3.10 compatibility
+py:data typing.Union
