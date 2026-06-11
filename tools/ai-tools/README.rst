@@ -192,10 +192,11 @@ Code:
   never run a state-changing git command.
 - The ``code_reviewer`` and ``model_regression_debugger`` orchestrator
   agents are Copilot-only and have no Claude tools — on Claude Code
-  they redirect to the slash command and exit. The Bash work on the
-  Claude path is performed by the slash command body itself (running
-  in the main session), which similarly only invokes read-only git/gh
-  commands to gather PR/repo context.
+  they redirect to the slash command and exit. On the Claude path the
+  slash command body (running in the main session) gathers PR/repo
+  context through the GitHub MCP server (a plugin dependency; see the
+  ``plugin-setup`` skill), falling back to read-only git/``gh``
+  commands when the MCP is unavailable.
 
 For destructive or out-of-scope commands, Claude Code's default
 permission system prompts you before execution, so a prompt-injected
@@ -224,6 +225,41 @@ errant prompt-allow, add this snippet to ``~/.claude/settings.json``:
 
 Deny rules take precedence over allow rules and over hook decisions, so
 these will block the listed commands in every permission mode.
+
+Recommended sandbox configuration
+----------------------------------
+
+For agentic use we recommend running Claude Code with its Bash sandbox
+enabled — OS-level isolation (bubblewrap on Linux/WSL2, Seatbelt on macOS)
+that confines writes to the working tree and denies reads of credential
+files. The catch: a strict sandbox blocks the normal workflow unless you
+grant the write paths and egress the toolchain needs. A working baseline
+for ``~/.claude/settings.json``:
+
+.. code-block:: json
+
+   {
+     "sandbox": {
+       "enabled": true,
+       "filesystem": {
+         "allowWrite": ["~/miniconda3", "~/.conda", "~/.cache"],
+         "denyRead": ["~/.ssh", "~/.aws", "~/.config/gh/hosts.yml"]
+       },
+       "network": {
+         "allowedDomains": ["github.com", "api.github.com", "pypi.org",
+                            "artifactory.ihme.washington.edu"]
+       }
+     }
+   }
+
+``allowWrite`` covers ``conda``/``pip``; ``denyRead`` closes the
+credential-exfil path; ``network.allowedDomains`` is the egress allowlist
+for sandboxed Bash. That ``denyRead`` of ``gh``'s token is why the ``gh``
+CLI can't run sandboxed — hence the GitHub MCP dependency, whose calls run
+outside the sandbox. Even ``git push`` runs sandboxed once ``github.com``
+is allowlisted and git's credential helper points at a sandbox-readable
+token file (see ``plugin-setup``), so no un-sandboxing is needed for
+normal git/GitHub work.
 
 Installing in VS Code GitHub Copilot
 ====================================
