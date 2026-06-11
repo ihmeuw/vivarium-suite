@@ -124,6 +124,39 @@ The 0600-file approach above is the team default — short install, consistent b
 
 All of these end up at the same state: `JENKINS_MCP_AUTH` set in the environment of whatever shell launches `claude`, and the `.claude.json` entry continues to reference `${JENKINS_MCP_AUTH}` literally.
 
+## GitHub MCP server
+
+The `github` plugin (a dependency of this plugin) connects Claude Code to
+GitHub via the official hosted MCP server at
+`https://api.githubcopilot.com/mcp/`, so PRs, reviews, issues, diffs, and
+Actions runs are queryable as tools.
+
+**The auth wrinkle.** The plugin authenticates with a single
+`Authorization: Bearer` header sourced from a `${GITHUB_PERSONAL_ACCESS_TOKEN}`
+env var. That env var resolves *empty* in an agent-team teammate reconnect
+(the teammate doesn't inherit it), and the empty bearer makes the server
+return HTTP 400 — a `/mcp` failure that only shows up once you use agent
+teams. Fix it by replacing the env-var header in the github server's
+`.mcp.json` (which lives in the plugin **cache**, so a plugin reinstall
+overwrites it — reapply afterward) with a `headersHelper`, which Claude Code
+re-runs fresh on every connection. Point that helper at a 0600 token file
+under `~/.claude/secrets/` that an interactive shell refreshes from
+`gh auth token` — the same secret-file pattern as the Jenkins credential
+above, reusing a token already SSO-authorized for `ihmeuw`. Verify with
+`claude mcp list`, not `claude mcp get` (which would leak the token).
+
+### Sandboxed `git push`
+
+The MCP can't push local commits, and plain `git push` also fails under the
+sandbox: git's `github.com` credential helper is `gh` (which can't read its
+denied config), and `github.com` egress isn't allowlisted by default. Fix
+both without un-denying anything — point git's `github.com` credential helper
+at the same `~/.claude/secrets/` token file (appended *after* `gh`, so it's
+only the sandboxed fallback), and add `github.com` to
+`sandbox.network.allowedDomains` (see the README's "Recommended sandbox
+configuration"). An in-sandbox `git ls-remote` against a private repo
+confirms both halves.
+
 ## Brainstorming visual companion (Node.js)
 
 The `brainstorming` skill ships a browser-based visual companion that renders Mermaid diagrams. Its server is written in Node.js. Without Node, the brainstorming skill still works — just no live diagrams.

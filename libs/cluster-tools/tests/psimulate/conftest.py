@@ -4,8 +4,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _pytest.logging import LogCaptureFixture
+from loguru import logger
 
-from vivarium.cluster_tools.psimulate.jobs import JobParameters
+from vivarium.cluster_tools.psimulate.jobs import BackupConfiguration, JobParameters
 
 
 def make_job_parameters(**overrides: Any) -> JobParameters:
@@ -22,7 +24,11 @@ def make_job_parameters(**overrides: Any) -> JobParameters:
         "random_seed": 0,
         "results_path": "~/tmp",
         "worker_logging_root": "/tmp/worker_logs",
-        "backup_configuration": {},
+        "backup_configuration": BackupConfiguration(
+            backup_dir="/tmp/backups",
+            backup_freq=None,
+            backup_metadata_path="/tmp/backup_metadata.csv",
+        ),
         "extras": {},
     }
     defaults.update(overrides)

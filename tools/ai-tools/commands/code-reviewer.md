@@ -13,9 +13,14 @@ cannot do this on its own — that's why this slash command exists).
 ## Step 1 — Gather PR context
 
 If $ARGUMENTS references a pull request (e.g. "#6", "PR 6", a GitHub URL),
-use `gh pr view`, `gh pr diff`, and `git log` to fetch the changed-file
-list, the diff, the PR title and body, and recent commit messages on the
-branch. Otherwise work from $ARGUMENTS as a free-form description.
+use the GitHub MCP tools — `mcp__github__get_pull_request` for the title
+and body, `mcp__github__get_pull_request_diff` (or
+`get_pull_request_files`) for the diff and changed-file list — plus
+`git log` for recent commit messages on the branch. Prefer the MCP over
+the `gh` CLI: it works inside the sandbox (where `gh` cannot read its
+credential file) and needs no shell. Fall back to `gh pr view`/`gh pr
+diff` only if the GitHub MCP is unavailable. Otherwise work from
+$ARGUMENTS as a free-form description.
 
 ## Step 2 — Fan out to specialist sub-agents in parallel
 

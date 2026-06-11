@@ -7,7 +7,8 @@ The main process loop for `psimulate` runs.
 
 """
 
-import hashlib
+from __future__ import annotations
+
 import os
 import shutil
 from pathlib import Path
@@ -15,27 +16,27 @@ from typing import Any
 
 import pandas as pd
 import yaml
-from jobmon.core.configuration import JobmonConfig
-from jobmon.core.exceptions import ConfigError as JobmonConfigError
 from loguru import logger
 from vivarium.engine.framework.utilities import collapse_nested_dict
 
-from vivarium.cluster_tools import logs
+from vivarium.cluster_tools.core import cluster, logs
+from vivarium.cluster_tools.core.jobmon import client
+from vivarium.cluster_tools.core.notifications import send_slack_notification
 from vivarium.cluster_tools.psimulate import (
     COMMANDS,
     branches,
-    cluster,
     jobs,
     model_specification,
     paths,
     pip_env,
 )
-from vivarium.cluster_tools.psimulate.jobmon_config.workflow import build_workflow
+from vivarium.cluster_tools.psimulate.jobmon_workflow import build_workflow
 from vivarium.cluster_tools.psimulate.paths import OutputPaths
 from vivarium.cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
 from vivarium.cluster_tools.psimulate.results.writing import collect_metadata
+from vivarium.cluster_tools.utilities import hash_output_path
 from vivarium.cluster_tools.vipin.perf_report import report_performance
 
 
@@ -190,6 +191,9 @@ def main(
     max_attempts: int,
     backup_freq: int | None,
     extra_args: dict[str, Any],
+    slack_channel: str | None = None,
+    slack_tag: str | None = None,
+    mute_slack: bool = False,
 ) -> None:
     logger.debug("Validating cluster environment.")
     cluster.validate_cluster_environment()
@@ -308,7 +312,7 @@ def main(
     wf_command = COMMANDS.run if restart else command
     # Include a hash of the full output path to avoid workflow_args collisions
     # between concurrent pipelines that happen to share the same timestamp.
-    root_hash = hashlib.md5(str(output_paths.root).encode()).hexdigest()[:8]
+    root_hash = hash_output_path(output_paths.root)
     workflow_name = f"psimulate_{wf_command}_{output_paths.root.name}_{root_hash}"
     logger.debug("Building Jobmon workflow.")
     workflow = build_workflow(
@@ -321,41 +325,38 @@ def main(
         max_attempts=max_attempts,
     )
 
-    # Bind the workflow to get its ID before running, so we can display the
-    # monitoring URL immediately rather than waiting for run() to finish.
-    workflow.bind()
-
-    gui_url = JobmonConfig().get("http", "gui_url")
-    monitoring_url = f"{gui_url}/#/workflow/{workflow.workflow_id}" if gui_url else ""
-
-    logger.info(
-        f"Submitting Jobmon workflow. Results will be written to {str(output_paths.root)}",
+    wf_status, monitoring_url = client.bind_and_run_workflow(
+        workflow,
+        output_paths.root,
+        resume=restart,
+        seconds_until_timeout=cluster.get_workflow_timeout_seconds(),
     )
-    if monitoring_url:
-        logger.info(f"Monitor progress at: {monitoring_url}")
 
-    # Match the workflow timeout to the remaining time on the SLURM runner
-    # node so jobmon doesn't outlive (or underuse) the allocation.
-    seconds_until_timeout = cluster.get_workflow_timeout_seconds()
-    run_kwargs: dict[str, Any] = {"resume": restart}
-    if seconds_until_timeout is not None:
-        run_kwargs["seconds_until_timeout"] = seconds_until_timeout
-    wf_status = workflow.run(**run_kwargs)
+    send_slack_notification(
+        workflow_name=workflow_name,
+        status=wf_status,
+        command_label=f"psimulate {command}",
+        monitoring_url=monitoring_url,
+        results_dir=str(output_paths.root),
+        slack_channel=slack_channel,
+        slack_tag=slack_tag,
+        mute_slack=mute_slack,
+    )
 
     # Spit out a performance report for the workers.
     try_run_vipin(output_paths)
 
     # Count task outcomes from Jobmon's in-memory task statuses
-
-    num_done_total = sum(1 for t in workflow.tasks.values() if t.final_status == "D")
+    num_done_total = client.count_completed_tasks(workflow)
     num_completed_this_run = num_done_total - num_jobs_completed
     num_jobs_attempted = len(job_parameters) - num_jobs_completed
     num_failed = num_jobs_attempted - num_completed_this_run
     num_successful = num_jobs_completed + num_completed_this_run
 
-    if wf_status != "D":
+    if wf_status != client.JOBMON_STATUS_DONE:
         logger.info(
-            f"Workflow finished with status '{wf_status}' (expected 'D' for DONE).",
+            f"Workflow finished with status '{wf_status}' "
+            f"(expected '{client.JOBMON_STATUS_DONE}' for DONE).",
         )
 
     # Emit warning if any jobs failed

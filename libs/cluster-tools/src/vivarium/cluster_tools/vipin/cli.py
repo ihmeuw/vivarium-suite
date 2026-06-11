@@ -12,7 +12,7 @@ Command line interface for `vipin`.
 """
 import click
 
-from vivarium.cluster_tools import logs
+from vivarium.cluster_tools.core import logs
 from vivarium.cluster_tools.vipin import perf_report
 
 
