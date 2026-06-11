@@ -388,6 +388,10 @@ class TestApplyTargetIntervalConfig:
         assert result == 0.5
 
 
+@pytest.mark.skipif(
+    not _HAS_VALIDATION,
+    reason="TargetIntervalConfig requires the `validation` extra (Jenkins-only).",
+)
 class TestTargetIntervalVectorized:
     """Tests for target interval config integration with test_proportion_vectorized."""
 
