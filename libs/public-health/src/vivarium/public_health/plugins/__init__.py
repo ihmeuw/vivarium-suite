@@ -1,0 +1,1 @@
+from vivarium.public_health.plugins.parser import CausesConfigurationParser

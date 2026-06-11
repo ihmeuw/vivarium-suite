@@ -1,0 +1,309 @@
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+from vivarium.engine import InteractiveContext
+from vivarium.engine.framework.engine import Builder
+from vivarium.engine.testing_utilities import TestPopulation, metadata
+
+from tests.test_utilities import build_table_with_age, make_uniform_pop_data
+from vivarium.public_health import utilities
+from vivarium.public_health.population import (
+    BasePopulation,
+    FertilityAgeSpecificRates,
+    FertilityCrudeBirthRate,
+    FertilityDeterministic,
+)
+
+
+@pytest.fixture()
+def config(base_config):
+    base_config.update(
+        {
+            "population": {
+                "population_size": 10000,
+                "age_start": 0,
+                "age_end": 125,
+            },
+            "time": {
+                "step_size": 10,
+            },
+        },
+        source=str(Path(__file__).resolve()),
+        layer="override",
+    )
+    return base_config
+
+
+def crude_birth_rate_data(live_births=500):
+    return (
+        build_table_with_age(
+            ["mean_value", live_births],
+            value_columns=["parameter", "value"],
+        )
+        .query('age_start == 25 and sex != "Both"')
+        .drop(columns=["age_start", "age_end"])
+    )
+
+
+def test_FertilityDeterministic(config):
+    pop_size = config.population.population_size
+    annual_new_simulants = 1000
+    num_days = 100
+
+    config.update(
+        {"fertility": {"number_of_new_simulants_each_year": annual_new_simulants}},
+        **metadata(__file__),
+    )
+
+    components = [TestPopulation(), FertilityDeterministic()]
+    simulation = InteractiveContext(components=components, configuration=config)
+    start_time = simulation.current_time
+    simulation.run_for(duration=pd.Timedelta(days=num_days))
+    end_time = simulation.current_time
+    pop = simulation.get_population(["age", "is_alive"])
+
+    assert (end_time - start_time) / pd.Timedelta(days=1) == num_days
+    assert np.all(pop["is_alive"] == True)
+    assert (
+        int(num_days * annual_new_simulants / utilities.DAYS_PER_YEAR)
+        == len(pop["age"]) - pop_size
+    )
+
+
+def test_FertilityCrudeBirthRate(config, base_plugins):
+    pop_size = config.population.population_size
+    num_days = 100
+    components = [TestPopulation(), FertilityCrudeBirthRate()]
+    simulation = InteractiveContext(
+        components=components,
+        configuration=config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    simulation._data.write("covariate.live_births_by_sex.estimate", crude_birth_rate_data())
+
+    simulation.setup()
+    simulation.run_for(duration=pd.Timedelta(days=num_days))
+    pop = simulation.get_population(["age", "is_alive"])
+
+    assert np.all(pop["is_alive"] == True)
+    assert len(pop["age"]) > pop_size
+
+
+def test_FertilityCrudeBirthRate_extrapolate_fail(config, base_plugins):
+    config.update(
+        {
+            "interpolation": {"extrapolate": False},
+            "time": {
+                "start": {"year": 2016},
+                "end": {"year": 2025},
+            },
+        }
+    )
+    components = [TestPopulation(), FertilityCrudeBirthRate()]
+
+    simulation = InteractiveContext(
+        components=components,
+        configuration=config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    simulation._data.write("covariate.live_births_by_sex.estimate", crude_birth_rate_data())
+
+    with pytest.raises(ValueError):
+        simulation.setup()
+
+
+def test_FertilityCrudeBirthRate_extrapolate(base_config, base_plugins):
+    base_config.update(
+        {
+            "population": {
+                "population_size": 10000,
+                "age_start": 0,
+                "age_end": 125,
+            },
+            "interpolation": {"extrapolate": True},
+            "time": {
+                "start": {"year": 2016},
+                "end": {"year": 2026},
+                "step_size": 365,
+            },
+        }
+    )
+    pop_size = base_config.population.population_size
+    true_pop_size = 20_000  # What's available in the mock artifact
+    live_births_by_sex = 500
+    components = [TestPopulation(), FertilityCrudeBirthRate()]
+
+    simulation = InteractiveContext(
+        components=components,
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    simulation._data.write(
+        "covariate.live_births_by_sex.estimate", crude_birth_rate_data(live_births_by_sex)
+    )
+    simulation.setup()
+
+    birth_rate = []
+    for i in range(10):
+        pop_start = len(simulation.get_population_index())
+        simulation.step()
+        pop_end = len(simulation.get_population_index())
+        birth_rate.append((pop_end - pop_start) / pop_size)
+
+    given_birth_rate = 2 * live_births_by_sex / true_pop_size
+    np.testing.assert_allclose(birth_rate, given_birth_rate, atol=0.01)
+
+
+@pytest.mark.parametrize("initialization_age_min", [0.05, 1, 10])
+def test_FertilityCrudeBirthRate_with_non_zero_initialization_age_min_error(
+    base_config, base_plugins, initialization_age_min
+):
+    components = [TestPopulation(), FertilityCrudeBirthRate()]
+    base_config.update(
+        {
+            "population": {
+                "initialization_age_min": initialization_age_min,
+            },
+        },
+        layer="override",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=f"'initialization_age_min' must be 0 if using FertilityCrudeBirthRate. Provided value: {initialization_age_min}",
+    ):
+        simulation = InteractiveContext(
+            components=components,
+            configuration=base_config,
+            plugin_configuration=base_plugins,
+        )
+
+
+def test_fertility_module(base_config, base_plugins):
+    start_population_size = 1000
+    num_days = 1000
+    time_step = 10  # Days
+    base_config.update(
+        {
+            "population": {
+                "population_size": start_population_size,
+                "age_start": 0,
+                "age_end": 125,
+            },
+            "time": {"step_size": time_step},
+        },
+        layer="override",
+    )
+
+    components = [TestPopulation(), FertilityAgeSpecificRates()]
+    simulation = simulation = InteractiveContext(
+        components=components,
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+
+    asfr_data = build_table_with_age(
+        0.05,
+        key_columns={
+            "sex": ("Female", "Male"),
+            "parameter": ("lower_value", "mean_value", "upper_value"),
+        },
+    )
+    simulation._data.write("covariate.age_specific_fertility_rate.estimate", asfr_data)
+
+    simulation.setup()
+
+    time_start = simulation._clock.time
+
+    # Make sure Fertility module updates the state table
+    simulation.get_population(["last_birth_time", "parent_id"])
+
+    simulation.run_for(duration=pd.Timedelta(days=num_days))
+    pop = simulation.get_population(["age", "is_alive", "parent_id", "last_birth_time"])
+
+    # No death in this model.
+    assert np.all(pop["is_alive"] == True), "expect all simulants to be alive"
+
+    # TODO: Write a more rigorous test.
+    assert len(pop["age"]) > start_population_size, "expect new simulants"
+
+    for i in range(start_population_size, len(pop)):
+        assert pop.loc[pop.iloc[i]["parent_id"], "last_birth_time"] >= time_start, (
+            "expect all children to have mothers who"
+            " gave birth after the simulation starts."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Data sources tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def birth_data():
+    """Live births data matching the year range in the mock artifact."""
+    years = list(zip(range(1990, 2018), range(1991, 2019)))
+    rows = [
+        {
+            "year_start": ys,
+            "year_end": ye,
+            "sex": sex,
+            "parameter": "mean_value",
+            "value": 500.0,
+        }
+        for (ys, ye) in years
+        for sex in ("Female", "Male")
+    ]
+    return pd.DataFrame(rows)
+
+
+class TestFertilityCrudeBirthRateDataSources:
+    """Tests for FertilityCrudeBirthRate with DataFrame and callable data sources."""
+
+    @pytest.mark.parametrize(
+        "use_callable",
+        [False, True],
+        ids=["dataframe", "callable"],
+    )
+    def test_data_sources(self, base_config, base_plugins, birth_data, use_callable):
+        """FertilityCrudeBirthRate works with DataFrame and callable data sources."""
+        pop_data = make_uniform_pop_data()
+        pop_source = (lambda b: pop_data) if use_callable else pop_data
+        birth_source = (lambda b: birth_data) if use_callable else birth_data
+
+        base_config.update(
+            {
+                "population": {
+                    "population_size": 10_000,
+                    "initialization_age_min": 0,
+                    "initialization_age_max": 125,
+                    "data_sources": {
+                        "population_structure": pop_data,
+                    },
+                    "location": "BirthLand",
+                },
+                "time": {"step_size": 10},
+                "mortality": {"data_sources": {"all_cause_mortality_rate": 0}},
+                "fertility": {
+                    "data_sources": {
+                        "population_structure": pop_source,
+                        "live_births_by_sex": birth_source,
+                    }
+                },
+            },
+            layer="override",
+        )
+        sim = InteractiveContext(
+            components=[BasePopulation(), FertilityCrudeBirthRate()],
+            configuration=base_config,
+            plugin_configuration=base_plugins,
+        )
+        initial_pop_size = len(sim.get_population(["age"]))
+        sim.take_steps(number_of_steps=10)
+        assert len(sim.get_population(["age"])) > initial_pop_size
