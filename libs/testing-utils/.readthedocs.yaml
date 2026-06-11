@@ -17,8 +17,6 @@ build:
     python: "3.13"
   jobs:
     post_checkout:
-      # Best-effort fetch of main so the merge-base diff below can resolve
-      # under RTD's shallow checkout (PR builds may not fetch main by default).
       - git fetch --depth=1 origin main || true
       # Cancel PR (external) builds that don't touch this lib (Exit 183 is RTD's
       # signal to cancel the build immediately).

@@ -31,13 +31,13 @@ docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
 validation = [
-    "vivarium>=3.4.0",
+    "vivarium-engine>=5.1.0",
     "vivarium-inputs>=7.1.0,<8.0.0",
     "pandera<0.23.0",
-    "gbd-mapping",
+    "vivarium-gbd-mapping",
     "jinja2>=3.0.0",
 ]
-dev = ["vivarium-testing-utils[test,docs,interactive,lint,cluster,validation]"]
+dev = ["vivarium-testing-utils[test,docs,interactive,lint,validation]"]
 ci_github = ["vivarium-testing-utils[test,docs,lint]"]
 ci_jenkins = ["vivarium-testing-utils[ci_github,cluster]"]
 

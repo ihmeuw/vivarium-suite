@@ -1,10 +1,4 @@
-"""Testing utilities for the vivarium ecosystem.
-
-This package was migrated into the ``ihmeuw/vivarium-suite`` monorepo;
-the previously-standalone ``ihmeuw/vivarium_testing_utils`` GitHub repository
-has been archived. The import path changed from ``vivarium_testing_utils`` to
-``vivarium.testing_utils`` starting with v1.0.0.
-"""
+"""Testing utilities for the vivarium ecosystem."""
 from importlib.metadata import PackageNotFoundError, version
 
 try:
