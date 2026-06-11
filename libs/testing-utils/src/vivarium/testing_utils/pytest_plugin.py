@@ -11,8 +11,8 @@ from datetime import datetime
 import pytest
 from _pytest.config import Config, argparsing
 from _pytest.python import Function
-from vivarium.config_tree import ConfigTree
 from pytest_mock import MockerFixture
+from vivarium.config_tree import ConfigTree
 
 SLOW_TEST_DAY = "Sunday"
 

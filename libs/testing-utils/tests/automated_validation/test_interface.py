@@ -264,9 +264,7 @@ def test_metadata(sim_result_dir: Path, mocker: MockFixture) -> None:
     # Mirror the formatter in interface._get_artifact_creation_time, which uses
     # datetime.fromtimestamp (local-tz) — derive the expected value the same way
     # so the assertion is portable across CI host timezones.
-    expected_artifact_time = datetime.fromtimestamp(artifact_mtime).strftime(
-        "%b %d %H:%M %Y"
-    )
+    expected_artifact_time = datetime.fromtimestamp(artifact_mtime).strftime("%b %d %H:%M %Y")
     assert metadata["Reference Data"]["Run Time"] == expected_artifact_time
 
 
