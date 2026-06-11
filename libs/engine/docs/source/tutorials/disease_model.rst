@@ -11,7 +11,7 @@ Disease Model
 Here we'll produce a data-free disease model focusing on core Vivarium
 concepts. You can find more complicated versions of the
 :term:`components <component>` built here in the
-`vivarium_public_health <https://github.com/ihmeuw/vivarium_public_health>`_
+`vivarium.public_health <https://github.com/ihmeuw/vivarium-suite/tree/main/libs/public-health>`_
 library. Those components must additionally deal with
 manipulating complex data which makes understanding what's going on more
 complicated.
