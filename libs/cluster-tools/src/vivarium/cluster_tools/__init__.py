@@ -1,9 +1,11 @@
-"""vivarium.cluster_tools
+"""
+======================
+vivarium.cluster_tools
+======================
 
-Tools for running vivarium simulations on compute clusters.
+Tools for working with :mod:`vivarium` on compute clusters.
 
 """
-
 from importlib.metadata import PackageNotFoundError, version
 
 try:

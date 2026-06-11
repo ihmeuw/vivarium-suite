@@ -3,7 +3,7 @@
 psimulate
 =========
 
-Parallel runner for :mod:`vivarium.engine` jobs.
+Parallel runner for :mod:`vivarium` jobs.
 
 """
 from typing import NamedTuple
@@ -20,3 +20,5 @@ COMMANDS = __Commands(*__Commands._fields)
 
 del NamedTuple
 del __Commands
+
+TASK_RUNNER_MODULE: str = "vivarium.cluster_tools.psimulate.worker.task_runner"
