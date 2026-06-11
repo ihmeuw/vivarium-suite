@@ -1,4 +1,4 @@
-**0.14.1 - 06/09/26**
+**0.14.1 - 06/11/26**
 
  - Add a scope-tightening pass to the ``brainstorming`` skill (intent vs. literal acceptance criteria, uniformity check, defer single-caller abstractions)
  - Document test organization in the ``pytest`` skill (parallel test/src files; test classes with shared setup and one requirement per test)
