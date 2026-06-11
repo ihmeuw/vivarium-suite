@@ -83,3 +83,7 @@ EOF
 A Slack message in `#vivarium_dev` (private channel, ID `GCF5T9TDM`) is the team's primary signal that a PR is ready for review. Open the PR (§3) first, then post.
 
 Format: `<short description> PR <github-link>` — e.g. `AI Tools Team Conventions PR https://github.com/ihmeuw/vivarium-suite/pull/41`. Keep the description to a handful of words.
+
+## 5. Responding to review comments
+
+Address a review comment by making the change and pushing it. **Do not resolve the review thread yourself** — the team leaves each thread for its author (the reviewer who raised it) to resolve once they're satisfied. The author resolving their own comment is the signal that it's settled. Replying on the thread is fine; resolving it is not your call. Instead, to show that you have made a change to address the substance of the comment, use the "rocket ship" emoji reaction on the comment.
