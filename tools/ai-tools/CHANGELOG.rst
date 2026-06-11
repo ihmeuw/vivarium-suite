@@ -1,3 +1,7 @@
+**0.18.0 - 06/11/26**
+
+ - Add ``framework-development`` slash command (and ``framework_developer`` Copilot orchestrator) for an end-to-end, black-box-TDD design→implement→verify→PR loop on a well-scoped framework feature, with ``_test_writer`` / ``_feature_implementer`` (write-capable, no Bash) and ``_validator`` sub-agents; its review phase consumes the shared ``_review-core`` skill and leftover findings go to ``ticket-triage``
+
 **0.17.0 - 06/11/26**
 
  - Add ``ticket-triage`` skill: triages code-review findings the user won't address in the current PR into Jira ticket recommendations — three-way classification with no silent drops, theme-based grouping, backlog dedup, and drafting/filing per team conventions with every write gated on explicit approval
