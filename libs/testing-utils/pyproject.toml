@@ -31,7 +31,7 @@ interactive = ["vivarium-dependencies[interactive]"]
 pandera = ["pandera<0.23.0"]
 lint = ["vivarium-dependencies[lint]", "vivarium-testing-utils[pandera]"]
 validation = [
-    "vivarium-engine>=5.1.0",
+    "vivarium-artifact",
     "vivarium-inputs>=7.1.0,<8.0.0",
     "vivarium-testing-utils[pandera]",
     "vivarium-gbd-mapping",
