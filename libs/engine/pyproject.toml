@@ -43,7 +43,7 @@ dependencies = [
 interactive = ["vivarium-dependencies[interactive]"]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "vivarium-testing-utils>=0.6.0",
 ]
 docs = [
     "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",

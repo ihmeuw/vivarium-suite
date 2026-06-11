@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "vivarium-testing-utils>=0.6.0",
     "hypothesis",
     "pyyaml",
 ]
