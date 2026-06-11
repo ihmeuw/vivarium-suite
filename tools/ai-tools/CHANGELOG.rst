@@ -1,4 +1,4 @@
-**0.15.0 - 06/10/26**
+**0.15.0 - 06/11/26**
 
  - Add the ``github`` plugin as a dependency and document GitHub MCP server setup
  - recommend the GitHub MCP instead of the ``gh`` CLI
