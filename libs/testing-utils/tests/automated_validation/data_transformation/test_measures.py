@@ -4,11 +4,11 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from vivarium_testing_utils.automated_validation.constants import DRAW_INDEX
-from vivarium_testing_utils.automated_validation.data_transformation.formatting import (
+from vivarium.testing_utils.automated_validation.constants import DRAW_INDEX
+from vivarium.testing_utils.automated_validation.data_transformation.formatting import (
     TotalPopulationPersonTime,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.measures import (
+from vivarium.testing_utils.automated_validation.data_transformation.measures import (
     CategoricalRelativeRisk,
     CauseSpecificMortalityRate,
     ExcessMortalityRate,

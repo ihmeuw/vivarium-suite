@@ -4,23 +4,23 @@ from typing import Any, Literal
 
 import pandas as pd
 
-from vivarium_testing_utils.automated_validation.constants import (
+from vivarium.testing_utils.automated_validation.constants import (
     DRAW_INDEX,
     SEED_INDEX,
     DataSource,
 )
-from vivarium_testing_utils.automated_validation.data_loader import DataLoader
-from vivarium_testing_utils.automated_validation.data_transformation import (
+from vivarium.testing_utils.automated_validation.data_loader import DataLoader
+from vivarium.testing_utils.automated_validation.data_transformation import (
     age_groups,
     calculations,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.measures import (
+from vivarium.testing_utils.automated_validation.data_transformation.measures import (
     CategoricalRelativeRisk,
     Measure,
     RatioMeasure,
     RiskExposure,
 )
-from vivarium_testing_utils.automated_validation.visualization import dataframe_utils
+from vivarium.testing_utils.automated_validation.visualization import dataframe_utils
 
 
 class MeasureDataBundle(ABC):

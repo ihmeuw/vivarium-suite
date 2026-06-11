@@ -1,3 +1,12 @@
+**1.0.0 - 06/11/26**
+
+Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_testing_utils``
+repository has been archived.
+
+Breaking changes:
+
+- Import path changed from ``vivarium_testing_utils`` to ``vivarium.testing_utils``.
+
 **0.5.4 - 05/06/26**
 
   - Feature: Add option to manually run "weekly" tests

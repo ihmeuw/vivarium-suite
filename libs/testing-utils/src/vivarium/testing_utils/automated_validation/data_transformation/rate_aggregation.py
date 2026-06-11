@@ -4,8 +4,8 @@ from typing import Any
 
 import pandas as pd
 
-from vivarium_testing_utils.automated_validation.data_transformation import utils
-from vivarium_testing_utils.automated_validation.data_transformation.data_schema import (
+from vivarium.testing_utils.automated_validation.data_transformation import utils
+from vivarium.testing_utils.automated_validation.data_transformation.data_schema import (
     SingleNumericColumn,
 )
 

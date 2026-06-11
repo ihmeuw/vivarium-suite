@@ -10,36 +10,20 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import sys
-
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-from pathlib import Path
+import importlib.metadata
 
 from docutils.nodes import Text
 from sphinx.ext.intersphinx import missing_reference
 
-import vivarium_testing_utils
-
-base_dir = Path(vivarium_testing_utils.__file__).parent
-
-about = {}
-with (base_dir / "__about__.py").open() as f:
-    exec(f.read(), about)
-
-sys.path.insert(0, str(Path("..").resolve()))
 
 # -- Project information -----------------------------------------------------
 
-project = about["__title__"]
-copyright = f'2023, {about["__author__"]}'
-author = about["__author__"]
+project = "vivarium.testing_utils"
+author = "The vivarium developers"
+copyright = "2023, Institute for Health Metrics and Evaluation"
 
-# The short X.Y version.
-version = vivarium_testing_utils.__version__
-# The full version, including alpha/beta/rc tags.
-release = vivarium_testing_utils.__version__
+version = importlib.metadata.version("vivarium-testing-utils")
+release = version
 
 
 # -- General configuration ------------------------------------------------
@@ -133,7 +117,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = f'{about["__title__"]}doc'
+htmlhelp_basename = f'{project}doc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -159,9 +143,9 @@ latex_elements = {
 latex_documents = [
     (
         master_doc,
-        f'{about["__title__"]}.tex',
-        f'{about["__title__"]} Documentation',
-        about["__author__"],
+        f'{project}.tex',
+        f'{project} Documentation',
+        author,
         "manual",
     ),
 ]
@@ -172,7 +156,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, f'{about["__title__"]}', f'{about["__title__"]} Documentation', [author], 1)
+    (master_doc, f'{project}', f'{project} Documentation', [author], 1)
 ]
 
 
@@ -184,11 +168,11 @@ man_pages = [
 texinfo_documents = [
     (
         master_doc,
-        f'{about["__title__"]}',
-        f'{about["__title__"]} Documentation',
+        f'{project}',
+        f'{project} Documentation',
         author,
-        f'{about["__title__"]}',
-        about["__summary__"],
+        project,
+        "Project to store testing utilities for Vivarium software.",
         "Miscellaneous",
     ),
 ]

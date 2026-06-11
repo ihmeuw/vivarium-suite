@@ -6,7 +6,7 @@ import pandas as pd
 import pandera as pa
 from vivarium_inputs.globals import DEMOGRAPHIC_COLUMNS, VIVARIUM_COLUMNS
 
-from vivarium_testing_utils.automated_validation.constants import INPUT_DATA_INDEX_NAMES
+from vivarium.testing_utils.automated_validation.constants import INPUT_DATA_INDEX_NAMES
 
 F = TypeVar("F", bound=Callable[..., Any])
 

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from vivarium_testing_utils.automated_validation.comparison import TargetIntervalConfig
+    from vivarium.testing_utils.automated_validation.comparison import TargetIntervalConfig
 
 import numpy as np
 import pandas as pd

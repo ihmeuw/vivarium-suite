@@ -3,8 +3,8 @@ from typing import Any
 import pytest
 from pytest_check import check
 
-from vivarium_testing_utils.automated_validation.constants import DataSource
-from vivarium_testing_utils.automated_validation.visualization.dataframe_utils import (
+from vivarium.testing_utils.automated_validation.constants import DataSource
+from vivarium.testing_utils.automated_validation.visualization.dataframe_utils import (
     format_draws_sample,
     format_metadata,
 )

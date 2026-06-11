@@ -10,25 +10,25 @@ from pytest_check import check
 from pytest_mock import MockFixture
 from vivarium_inputs import interface
 
-from vivarium_testing_utils.automated_validation.bundle import RatioMeasureDataBundle
-from vivarium_testing_utils.automated_validation.comparison import (
+from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
+from vivarium.testing_utils.automated_validation.comparison import (
     FuzzyComparison,
     TargetIntervalConfig,
 )
-from vivarium_testing_utils.automated_validation.constants import (
+from vivarium.testing_utils.automated_validation.constants import (
     DAYS_PER_YEAR,
     DRAW_INDEX,
     INPUT_DATA_INDEX_NAMES,
     SEED_INDEX,
     DataSource,
 )
-from vivarium_testing_utils.automated_validation.data_loader import DataLoader
-from vivarium_testing_utils.automated_validation.data_transformation import age_groups
-from vivarium_testing_utils.automated_validation.data_transformation.measures import (
+from vivarium.testing_utils.automated_validation.data_loader import DataLoader
+from vivarium.testing_utils.automated_validation.data_transformation import age_groups
+from vivarium.testing_utils.automated_validation.data_transformation.measures import (
     Incidence,
     RatioMeasure,
 )
-from vivarium_testing_utils.fuzzy_checker import TestResult
+from vivarium.testing_utils.fuzzy_checker import TestResult
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def test_bundle(
 
     # mock loading of datasets
     mocker.patch(
-        "vivarium_testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
+        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
         return_value=test_data,
     )
 
@@ -69,13 +69,13 @@ def reference_bundle(
 
     # mock loading of datasets
     mocker.patch(
-        "vivarium_testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
+        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
         return_value={
             "data": reference_data,
         },
     )
     mocker.patch(
-        "vivarium_testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_aggregated_weights",
+        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_aggregated_weights",
         return_value=reference_weights,
     )
 

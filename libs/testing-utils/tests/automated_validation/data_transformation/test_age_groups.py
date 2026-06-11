@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vivarium_testing_utils.automated_validation.constants import (
+from vivarium.testing_utils.automated_validation.constants import (
     DAYS_PER_YEAR,
     INPUT_DATA_INDEX_NAMES,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.age_groups import (
+from vivarium.testing_utils.automated_validation.data_transformation.age_groups import (
     AgeGroup,
     AgeRange,
     AgeSchema,

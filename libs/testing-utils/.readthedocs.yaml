@@ -1,0 +1,39 @@
+# Paths are repo-root-relative even when this file lives in a subdirectory,
+# so the package path must be qualified with libs/testing-utils/.
+#
+# This file is read by RTD only when the vivarium-testing-utils RTD
+# project's Admin > Advanced Settings > "Path for .readthedocs.yaml" points
+# here. The root-level /.readthedocs.yaml is a placeholder used by the
+# import wizard and ignored for any project that has overridden the path.
+version: 2
+
+sphinx:
+  configuration: libs/testing-utils/docs/source/conf.py
+  fail_on_warning: true
+
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.13"
+  jobs:
+    post_checkout:
+      # Best-effort fetch of main so the merge-base diff below can resolve
+      # under RTD's shallow checkout (PR builds may not fetch main by default).
+      - git fetch --depth=1 origin main || true
+      # Cancel PR (external) builds that don't touch this lib (Exit 183 is RTD's
+      # signal to cancel the build immediately).
+      - |
+        if [ "$READTHEDOCS_VERSION_TYPE" = "external" ] && git diff --quiet "origin/main...HEAD" -- libs/testing-utils/; then
+          echo "Skipping docs build: this PR changes nothing under libs/testing-utils/."
+          exit 183
+        fi
+
+python:
+  install:
+    - method: pip
+      path: libs/testing-utils
+      extra_requirements:
+        - docs
+
+formats:
+  - pdf

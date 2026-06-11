@@ -16,33 +16,33 @@ from vivarium.framework.artifact.artifact import ArtifactException
 from vivarium_inputs import get_age_bins
 
 from tests.automated_validation.conftest import get_model_spec
-from vivarium_testing_utils.automated_validation.comparison import (
+from vivarium.testing_utils.automated_validation.comparison import (
     FuzzyComparison,
     TargetIntervalConfig,
 )
-from vivarium_testing_utils.automated_validation.constants import (
+from vivarium.testing_utils.automated_validation.constants import (
     DRAW_INDEX,
     INPUT_DATA_INDEX_NAMES,
     DataSource,
 )
-from vivarium_testing_utils.automated_validation.data_loader import DataLoader
-from vivarium_testing_utils.automated_validation.data_transformation import age_groups, utils
-from vivarium_testing_utils.automated_validation.data_transformation.data_schema import (
+from vivarium.testing_utils.automated_validation.data_loader import DataLoader
+from vivarium.testing_utils.automated_validation.data_transformation import age_groups, utils
+from vivarium.testing_utils.automated_validation.data_transformation.data_schema import (
     SingleNumericColumn,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.formatting import (
+from vivarium.testing_utils.automated_validation.data_transformation.formatting import (
     SimDataFormatter,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.measures import (
+from vivarium.testing_utils.automated_validation.data_transformation.measures import (
     MeasureMapper,
     RatioMeasure,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.rate_aggregation import (
+from vivarium.testing_utils.automated_validation.data_transformation.rate_aggregation import (
     RateAggregationWeights,
     population_weighted,
 )
-from vivarium_testing_utils.automated_validation.interface import ValidationContext
-from vivarium_testing_utils.fuzzy_checker import TestResult
+from vivarium.testing_utils.automated_validation.interface import ValidationContext
+from vivarium.testing_utils.fuzzy_checker import TestResult
 
 MEASURE_DATA_MAPPER = {
     "risk_factor.child_wasting.exposure": "exposure",
@@ -110,7 +110,7 @@ def test__get_age_groups_art(sim_result_dir: Path, mocker: MockFixture) -> None:
 
     # mock dataloader to return age groups
     mocker.patch(
-        "vivarium_testing_utils.automated_validation.data_loader.Artifact.load",
+        "vivarium.testing_utils.automated_validation.data_loader.Artifact.load",
         return_value=age_groups,
     )
     context = ValidationContext(sim_result_dir)
@@ -132,7 +132,7 @@ def test__get_age_groups_gbd(sim_result_dir: Path, mocker: MockFixture) -> None:
         return pd.DataFrame({"mock_data": [1, 2, 3]})
 
     mocker.patch(
-        "vivarium_testing_utils.automated_validation.data_loader.Artifact.load",
+        "vivarium.testing_utils.automated_validation.data_loader.Artifact.load",
         side_effect=selective_load_side_effect,
     )
 
@@ -239,11 +239,11 @@ def test_metadata(sim_result_dir: Path, mocker: MockFixture) -> None:
     context.add_comparison(measure_key, "sim", "artifact")
 
     mocker.patch(
-        "vivarium_testing_utils.automated_validation.interface.Path.name",
+        "vivarium.testing_utils.automated_validation.interface.Path.name",
         "2025_01_01_00_00_00",
     )
     mocker.patch(
-        "vivarium_testing_utils.automated_validation.interface.os.path.getmtime",
+        "vivarium.testing_utils.automated_validation.interface.os.path.getmtime",
         return_value=1735718340,  # Represents Dec 31 23:59
     )
     metadata = context.metadata(measure_key, "sim", "artifact")
@@ -268,7 +268,7 @@ def test_plot_comparison(sim_result_dir: Path, mocker: MockFixture) -> None:
     # Setup
     mock_figure = mocker.Mock(spec=plt.Figure)
     mock_plot_comparison = mocker.patch(
-        "vivarium_testing_utils.automated_validation.visualization.plot_utils.plot_comparison",
+        "vivarium.testing_utils.automated_validation.visualization.plot_utils.plot_comparison",
         return_value=mock_figure,
     )
 
@@ -765,7 +765,7 @@ def test_plot_all(sim_result_dir: Path, mocker: MockFixture) -> None:
     # Setup
     mock_figure = mocker.Mock(spec=plt.Figure)
     mock_plot_comparison = mocker.patch(
-        "vivarium_testing_utils.automated_validation.visualization.plot_utils.plot_comparison",
+        "vivarium.testing_utils.automated_validation.visualization.plot_utils.plot_comparison",
         return_value=mock_figure,
     )
 
@@ -826,7 +826,7 @@ def test_figures_to_base64_dict(sim_result_dir: Path, mocker: MockFixture) -> No
     figure_2.savefig.side_effect = _savefig_2
 
     mock_close = mocker.patch(
-        "vivarium_testing_utils.automated_validation.interface.plt.close"
+        "vivarium.testing_utils.automated_validation.interface.plt.close"
     )
 
     figures_dict = {

@@ -5,14 +5,14 @@ from typing import Any, Collection, Literal
 import pandas as pd
 from loguru import logger
 
-from vivarium_testing_utils.automated_validation.bundle import RatioMeasureDataBundle
-from vivarium_testing_utils.automated_validation.constants import DRAW_INDEX, DataSource
-from vivarium_testing_utils.automated_validation.data_transformation.calculations import (
+from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
+from vivarium.testing_utils.automated_validation.constants import DRAW_INDEX, DataSource
+from vivarium.testing_utils.automated_validation.data_transformation.calculations import (
     stratify,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.measures import Measure
-from vivarium_testing_utils.automated_validation.visualization import dataframe_utils
-from vivarium_testing_utils.fuzzy_checker import FuzzyChecker, TestResult
+from vivarium.testing_utils.automated_validation.data_transformation.measures import Measure
+from vivarium.testing_utils.automated_validation.visualization import dataframe_utils
+from vivarium.testing_utils.fuzzy_checker import FuzzyChecker, TestResult
 
 StratValue = str | int | float
 

@@ -12,8 +12,8 @@ from scipy.stats._distn_infrastructure import rv_continuous_frozen
 if TYPE_CHECKING:
     from py._path.local import LocalPath
 
-from vivarium_testing_utils.automated_validation.comparison import TargetIntervalConfig
-from vivarium_testing_utils.fuzzy_checker import FuzzyChecker, TestResult
+from vivarium.testing_utils.automated_validation.comparison import TargetIntervalConfig
+from vivarium.testing_utils.fuzzy_checker import FuzzyChecker, TestResult
 
 OBSERVED_DENOMINATORS = [100_000, 1_000_000, 10_000_000]
 TARGET_PROPORTION = 0.1

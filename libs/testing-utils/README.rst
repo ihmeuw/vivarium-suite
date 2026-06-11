@@ -2,21 +2,31 @@
 Vivarium Testing Utils
 ======================
 
-This is a repository that will store utility features to help test
-Vivarium software.
+.. image:: https://badge.fury.io/py/vivarium-testing-utils.svg
+    :target: https://badge.fury.io/py/vivarium-testing-utils
 
-**Vivarium Testing Utils requires Python 3.8-3.11 to run**
+.. image:: https://readthedocs.org/projects/vivarium-testing-utils/badge/?version=latest
+    :target: https://vivarium-testing-utils.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
 
-You can install ``vivarium_testing_utils`` from PyPI with pip:
+This library contains utility features to help test Vivarium software.
 
-  ``> pip install vivarium_testing_utils``
+You can install ``vivarium-testing-utils`` from PyPI with pip:
 
-or build it from source with
+.. code-block:: bash
 
-  ``> git clone https://github.com/ihmeuw/vivarium_testing_utils.git``
+   pip install vivarium-testing-utils
 
-  ``> cd vivarium_testing_utils``
+or build it from source by cloning the monorepo and installing this package:
 
-  ``> conda create -n ENVIRONMENT_NAME python=3.11``
+.. code-block:: bash
 
-  ``> pip install -e .[dev]``
+   git clone https://github.com/ihmeuw/vivarium-suite.git
+   cd vivarium-suite
+   pip install libs/testing-utils
+
+For broader monorepo development setup, see the monorepo README at
+https://github.com/ihmeuw/vivarium-suite.
+
+`Check out the docs! <https://vivarium-testing-utils.readthedocs.io/en/latest/>`_
+--------------------------------------------------------------------------------

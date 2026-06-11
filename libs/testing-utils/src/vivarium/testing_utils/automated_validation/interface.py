@@ -16,35 +16,35 @@ from loguru import logger
 from matplotlib.figure import Figure
 from vivarium_inputs import utilities as vi
 
-from vivarium_testing_utils.automated_validation.bundle import RatioMeasureDataBundle
-from vivarium_testing_utils.automated_validation.comparison import (
+from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
+from vivarium.testing_utils.automated_validation.comparison import (
     Comparison,
     FuzzyComparison,
     StratValue,
     TargetIntervalConfig,
 )
-from vivarium_testing_utils.automated_validation.constants import DAYS_PER_YEAR
-from vivarium_testing_utils.automated_validation.data_loader import DataLoader, DataSource
-from vivarium_testing_utils.automated_validation.data_transformation import report
-from vivarium_testing_utils.automated_validation.data_transformation.calculations import (
+from vivarium.testing_utils.automated_validation.constants import DAYS_PER_YEAR
+from vivarium.testing_utils.automated_validation.data_loader import DataLoader, DataSource
+from vivarium.testing_utils.automated_validation.data_transformation import report
+from vivarium.testing_utils.automated_validation.data_transformation.calculations import (
     filter_data,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.measures import (
+from vivarium.testing_utils.automated_validation.data_transformation.measures import (
     CategoricalRelativeRisk,
     Measure,
     MeasureMapper,
     RatioMeasure,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.utils import (
+from vivarium.testing_utils.automated_validation.data_transformation.utils import (
     add_comparison_metadata_levels,
     drop_extra_columns,
     get_measure_index_names,
     set_gbd_index,
     set_validation_index,
 )
-from vivarium_testing_utils.automated_validation.results import VerificationResults
-from vivarium_testing_utils.automated_validation.visualization import plot_utils
-from vivarium_testing_utils.fuzzy_checker import TestResult
+from vivarium.testing_utils.automated_validation.results import VerificationResults
+from vivarium.testing_utils.automated_validation.visualization import plot_utils
+from vivarium.testing_utils.fuzzy_checker import TestResult
 
 
 class ValidationContext:

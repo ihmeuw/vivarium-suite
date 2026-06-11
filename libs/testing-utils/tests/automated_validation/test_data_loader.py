@@ -4,19 +4,19 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from vivarium_testing_utils.automated_validation.constants import (
+from vivarium.testing_utils.automated_validation.constants import (
     DRAW_INDEX,
     POPULATION_STRUCTURE_ARTIFACT_KEY,
 )
-from vivarium_testing_utils.automated_validation.data_loader import (
+from vivarium.testing_utils.automated_validation.data_loader import (
     DataLoader,
     DataSource,
     _convert_to_total_person_time,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.age_groups import (
+from vivarium.testing_utils.automated_validation.data_transformation.age_groups import (
     AgeSchema,
 )
-from vivarium_testing_utils.automated_validation.data_transformation.measures import Incidence
+from vivarium.testing_utils.automated_validation.data_transformation.measures import Incidence
 
 
 def test_get_sim_outputs(sim_result_dir: Path) -> None:

@@ -3,7 +3,7 @@ import pandera as pa
 import pytest
 from pandera.errors import SchemaError
 
-from vivarium_testing_utils.automated_validation.data_transformation.data_schema import (
+from vivarium.testing_utils.automated_validation.data_transformation.data_schema import (
     DrawData,
     SimOutputData,
     SingleNumericColumn,

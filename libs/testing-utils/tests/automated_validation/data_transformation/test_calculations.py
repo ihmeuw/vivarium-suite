@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vivarium_testing_utils.automated_validation.constants import DRAW_INDEX, SEED_INDEX
-from vivarium_testing_utils.automated_validation.data_transformation.calculations import (
+from vivarium.testing_utils.automated_validation.constants import DRAW_INDEX, SEED_INDEX
+from vivarium.testing_utils.automated_validation.data_transformation.calculations import (
     aggregate_sum,
     filter_data,
     linear_combination,
