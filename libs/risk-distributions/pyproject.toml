@@ -67,6 +67,9 @@ ignore_missing_imports = true
 module = ["docutils", "docutils.*"]
 ignore_missing_imports = true
 
+[tool.setuptools.package-data]
+"vivarium.risk_distributions" = ["py.typed"]
+
 [tool.black]
 line-length = 94
 

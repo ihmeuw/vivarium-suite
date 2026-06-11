@@ -1,11 +1,11 @@
 import pytest
 from vivarium.config_tree import ConfigTree
 from vivarium.engine.interface.interactive import InteractiveContext
-from vivarium_public_health.disease import DiseaseModel
-from vivarium_public_health.results import DiseaseObserver
-from vivarium_public_health.results.causal_factor import CategoricalRiskObserver
-from vivarium_public_health.risks.base_risk import Risk
-from vivarium_public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
+from vivarium.public_health.disease import DiseaseModel
+from vivarium.public_health.results import DiseaseObserver
+from vivarium.public_health.results.causal_factor import CategoricalRiskObserver
+from vivarium.public_health.risks.base_risk import Risk
+from vivarium.public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
 
 from tests.conftest import IS_ON_SLURM, TEST_ARTIFACT_PATH
 from vivarium.profiling.plugins.parser import (
@@ -161,7 +161,7 @@ def test_risk_affects_normally_defined_cause():
 
     # Create a config with a normally-defined DiseaseModel and risks that affect it
     config_dict = {
-        "vivarium_public_health": {
+        "vivarium.public_health": {
             "disease": ["SIS_fixed_duration('lower_respiratory_infections', '28')"]
         },
         "risks": {
@@ -286,7 +286,7 @@ def test_error_when_cause_defined_in_both_multi_config_and_standard():
                 "observers": False,
             }
         },
-        "vivarium_public_health": {
+        "vivarium.public_health": {
             "disease": ["SIS_fixed_duration('lower_respiratory_infections', '28')"]
         },
     }
@@ -335,7 +335,7 @@ def test_multi_component_parser_simulation():
                 },
             }
         },
-        "vivarium_public_health": {
+        "vivarium.public_health": {
             "population": ["BasePopulation()", "Mortality()"],
             "results": ["ResultsStratifier()", "MortalityObserver()"],
         },
