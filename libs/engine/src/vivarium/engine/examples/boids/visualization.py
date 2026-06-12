@@ -1,5 +1,8 @@
+from collections.abc import Iterable
+
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.artist import Artist
 
 from vivarium.engine import InteractiveContext
 
@@ -41,8 +44,9 @@ def plot_boids_animated(simulation: InteractiveContext) -> FuncAnimation:
         simulation.step()
         frame_pops.append(simulation.get_population(["x", "y"]))
 
-    def animate(i: int) -> None:
+    def animate(i: int) -> Iterable[Artist]:
         s.set_offsets(frame_pops[i])
+        return (s,)
 
     return FuncAnimation(fig, animate, frames=frames, interval=10)
 
