@@ -42,7 +42,7 @@ You **MUST** track these as tasks (via TaskCreate) and complete in order:
 4. **Offer the Visual Companion** *only if* upcoming questions involve **structural diagrams** — class / sequence / state / data-flow / architecture / ER comparisons. UI mockups are supported but rarely needed for SimSci work. This offer is **its own message** — no clarifying question, no context summary appended. See [Visual Companion](#visual-companion) below.
 5. **Clarify, one question at a time.** Multiple choice when possible; open-ended is fine when not. Each question stands alone — no stacked sub-questions. Focus on purpose, constraints, success criteria, non-goals.
 6. **Propose 2–3 approaches** with tradeoffs. Lead with the recommended one and say why. Don't pad the list — three real options beat two real + one strawman.
-7. **Walk the design in sections.** Architecture, components, data flow, error handling, testing — scale each section to its complexity (one sentence for simple, ~200 words for nuanced). Ask after each section: *"Look right so far?"* Be ready to back up and revise.
+7. **Walk the design in sections.** Architecture, components, data flow, error handling, testing — scale each section to its complexity (one sentence for simple, ~200 words for nuanced). Ask after each section: *"Look right so far?"* Be ready to back up and revise. The section text must be visible at answer time — see [Background sessions](#background-sessions).
 8. **Routing checkpoint.** State a one-sentence scope read-out, recommend a tier, and let the user override. See [Routing checkpoint](#routing-checkpoint) below.
 9. **Produce the artifact** for the chosen tier. See [Producing the artifact](#producing-the-artifact) below.
 10. **Report.** Print the artifact's URL or Jira key. Stop. Don't chain into branch setup or implementation — the user invokes those explicitly if they want to.
@@ -105,6 +105,15 @@ If a reader can't understand what a unit does without reading its internals — 
 - **Incremental approval.** Section by section, not one giant wall.
 - **Be willing to back up.** When something doesn't fit, the answer is to revise, not to keep going.
 - **Approve before writing.** No MCP write call goes out without an explicit user yes. Show the payload, wait, then write.
+
+## Background sessions
+
+In background-job sessions, mid-turn text — anything written before a tool call in the same turn — may not be displayed; only interactive prompts (`AskUserQuestion`, permission requests) and the turn's *final* message reliably reach the user. Every step that presents content and then asks about it (context summary, design sections, the scope read-out, artifact payloads) must keep the content visible at answer time:
+
+- end the turn with the content and collect the answer as a chat reply, or
+- fold the content into the `AskUserQuestion` itself (question text or option previews).
+
+If the user says they can't see something you presented, assume this is why: re-send the content as a final message and use chat replies for the rest of the session.
 
 ## Scope-tightening pass
 

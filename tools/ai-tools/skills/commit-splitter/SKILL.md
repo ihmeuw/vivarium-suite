@@ -10,7 +10,7 @@ Agents tend to produce large, internally-consistent diffs because verification l
 ## When NOT to use
 
 - The diff is a coherent refactor whose intermediate states wouldn't compile, pass tests, or make sense to a reviewer in isolation. One commit is correct.
-- Hunks are tightly entangled inside the same files such that any split would produce commits that don't build. Surface this and ask the user whether to proceed anyway.
+- Hunks are tightly entangled inside the same files such that any split would produce commits that don't build. Surface this and ask the user whether to proceed anyway, keeping the explanation visible at answer time (see step 3).
 - The user is mid-implementation and not done. Splitting before the work is verified end-to-end risks freezing a broken intermediate state.
 
 ## Workflow
@@ -33,7 +33,7 @@ The skill does not need to repeat the agent's prompt — the agent file owns it.
 
 ### 3. Confirm the plan with the user
 
-Use `AskUserQuestion` to surface the proposed plan and let the user accept, edit, or reject it. At minimum, ask:
+Surface the proposed plan and let the user accept, edit, or reject it. The plan must be visible at answer time: put it in an `AskUserQuestion` (question text / option previews), or end the turn with the plan and collect the answer in chat — mid-turn text written before a tool call may not be displayed in background-job sessions. At minimum, ask:
 
 - Does the commit grouping look right? (accept / edit / abandon)
 - Single PR with multiple commits, or multiple PRs?
@@ -67,7 +67,7 @@ When the plan calls for multiple PRs, each PR needs its own branch. Defer branch
 
 ### 6. Clean up
 
-Once the user has confirmed the commits and PRs look right, delete the safety branch: `git branch -D commit-splitter-backup`. Don't delete it earlier — it's the recovery path if a split needs to be unwound. If the user is unsure, leave it in place and tell them the command to remove it later.
+Ask for sign-off with a final-message summary of the commit/PR layout — the per-commit narration in step 4 is mid-turn output the user may not have seen. Once the user has confirmed the commits and PRs look right, delete the safety branch: `git branch -D commit-splitter-backup`. Don't delete it earlier — it's the recovery path if a split needs to be unwound. If the user is unsure, leave it in place and tell them the command to remove it later.
 
 ## Safety constraints
 

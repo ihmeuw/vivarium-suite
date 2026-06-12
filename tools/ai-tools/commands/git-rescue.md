@@ -38,6 +38,10 @@ or read `git log B` to find where B's own work starts. Don't use
 ## Hard rules
 
 - Confirm before every destructive step, not just the first one.
+- Anything the user must approve (the diagnosis question, the plan, the
+  pre-push summary) goes in the turn's final message or inside the
+  question itself — mid-turn text before a tool call may not display in
+  background sessions.
 - Never `git push --force` plain — always `--force-with-lease`.
 - Refuse to force-push `main` or `master`.
 - Never `--no-verify` / `--no-gpg-sign` unless the user explicitly asks.

@@ -39,7 +39,7 @@ Pull it via the hub MCP server when the user asks to write a ticket:
 mcp__plugin_mcp-hub_mcp-hub__get_page(page_id="178128092")
 ```
 
-That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria, and the optional fields when they apply. Show the user the draft for review before creating the ticket.
+That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria, and the optional fields when they apply. Show the user the draft for review before creating the ticket — as the turn's final message or inside the question, since mid-turn text before a tool call may not display in background-job sessions.
 
 Format the draft in **Jira wiki markup** — not Markdown, not RST.
 

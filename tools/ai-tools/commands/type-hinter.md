@@ -114,7 +114,10 @@ candidates, `# type: ignore` proposals. Hold these for step 7.
 ## Step 7 — Reconcile with the user
 
 When teammates report clean (or blocked only on decisions), walk the
-unresolved items with the user, in order. **Keep the team alive through
+unresolved items with the user, in order. Each item must be visible at
+answer time — in the question itself or as the turn's final message;
+mid-turn text before a tool call (mailbox, monitoring) may not display
+in background sessions. **Keep the team alive through
 this step** — accepted fixes route back to the owning teammate, who holds
 the file's context. Tear the team down only once every accepted change is
 in; then run step 8 yourself.

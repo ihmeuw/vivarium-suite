@@ -1,3 +1,7 @@
+**0.15.2 - 06/12/26**
+
+ - Make present-then-ask robust in background-job sessions, where mid-turn text written before a tool call may not be displayed: ``brainstorming``, ``commit-splitter``, ``design-doc``, ``team-conventions``, and the ``git-rescue`` and ``type-hinter`` commands now keep approval-gated content in the turn's final message or inside the question itself
+
 **0.15.1 - 06/11/26**
 
  - ``/viv:type-hinter``: when adding ``py.typed``, also add the matching ``[tool.setuptools.package-data]`` entry to the package's ``pyproject.toml`` so the marker ships in the wheel (PEP 561)
