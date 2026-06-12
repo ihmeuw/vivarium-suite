@@ -44,7 +44,7 @@ def plot_boids_animated(simulation: InteractiveContext) -> FuncAnimation:
     def animate(i: int) -> None:
         s.set_offsets(frame_pops[i])
 
-    return FuncAnimation(fig, animate, frames=frames, interval=10)  # type: ignore[arg-type]
+    return FuncAnimation(fig, animate, frames=frames, interval=10)
 
 
 # docs-end: plot_boids_animated
