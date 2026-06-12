@@ -12,8 +12,8 @@ ecosystem.
 Usage
 =====
 
-Downstream pyproject.toml files pull in groups of pins by referencing one or
-more extras of ``vivarium-dependencies``:
+A downstream repository can pull in groups of pins by referencing one or
+more extras of ``vivarium-dependencies`` in its pyproject.toml, e.g.:
 
 .. code-block:: toml
 
@@ -28,7 +28,7 @@ more extras of ``vivarium-dependencies``:
    lint = ["vivarium-dependencies[lint]"]
 
 The package itself ships no Python modules; ``pip install vivarium-dependencies``
-is rarely useful on its own. The point is the extras.
+is not useful on its own. The point is the extras.
 
 Installation
 ============
