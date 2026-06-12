@@ -128,7 +128,7 @@ unavailable. The verdict derives mechanically from the grades: any FAIL →
 
 ### Dimensions
 | Dimension | Grade | Note |
-<one row each: PASS / WARN / FAIL / N-A — one-line note>
+<one row each: PASS / WARN / FAIL / N/A — one-line note>
 
 ### Findings
 <numbered; each: grade, evidence reference, what the definition says, what the run did>
