@@ -1,13 +1,116 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "vivarium-dependencies"
+description = "vivarium-dependencies is a convenience package for managing common setup constraints and dependencies for vivarium projects."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+# vivarium-dependencies is a code-less metapackage: it has no install_requires
+# and ships no Python source. Every useful dep is grouped under an extra below,
+# pulled in by downstream libs via `vivarium-dependencies[<name>]`.
+dependencies = []
+
+[project.optional-dependencies]
+# Define commonly-used pins here to be used in other repositories, e.g.
+# vivarium-dependencies[numpy,pandas]>=1.2.0,<2.0.0
+
+# core scientific stack
+numpy = ["numpy"]
+numpy_lt_2 = ["numpy<2.0.0"]
+pandas = [
+    "pandas<3.0.0",
+    "pandas-stubs<=2.2.3.250308",
+]
+pyyaml = [
+    "pyyaml>=5.1",
+    "types-PyYAML",
+]
+scipy = ["scipy<1.17.0"]  # Temporary pin until FuzzyChecker is updated
+click = ["click"]
+tables = ["tables"]
+loguru = ["loguru"]
+pyarrow = ["pyarrow"]
+networkx = [
+    "networkx",
+    "types-networkx",
+]
+requests = [
+    "requests",
+    "types-requests",
+]
+docutils = [
+    "docutils",
+    "types-docutils",
+]
+ipython = ["ipython"]
+jupyter = [
+    "vivarium-dependencies[ipython]",
+    "jupyter",
+    "ipywidgets",
+]
+matplotlib = ["matplotlib"]
+vivarium_build_utils = [
+    "vivarium_build_utils>=3.0.1,<4.0.0",
+]
+
+# testing
+pytest = ["pytest", "pytest-cov", "pytest-mock"]
+
+# formatting and linting
+black = ["black==22.3.0"]
+isort = ["isort==5.13.2"]
+mypy = ["mypy"]
+
+# docs
+sphinx = [
+    "sphinx<9.0.0",
+    "sphinx-autodoc-typehints",
+    "sphinx-rtd-theme>=2.0.0",
+]
+sphinx-click = ["sphinx-click"]
+
+# gbd (IHME artifactory)
+db_queries = ["db_queries>=31.0.4,<32.0.0"]
+db_tools = ["db_tools>=1.0.2,<2.0.0"]
+get_draws = ["get_draws>=5.1.4,<6.0.0"]
+
+# convenience sets
+lint = [
+    "vivarium-dependencies[black]",
+    "vivarium-dependencies[isort]",
+    "vivarium-dependencies[mypy]",
+]
+interactive = [
+    "vivarium-dependencies[jupyter,scipy,matplotlib]",
+    "seaborn",
+]
+gbd = [
+    "vivarium-dependencies[db_queries]",
+    "vivarium-dependencies[db_tools]",
+    "vivarium-dependencies[get_draws]",
+]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with "vivarium-dependencies-v"
+# (e.g. vivarium-dependencies-v1.1.0). tag_regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so
+# siblings' releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-dependencies-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-dependencies-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
 [tool.black]
-line_length = 94
+line-length = 94
 exclude = '''.*examples.*'''
 
 [tool.isort]
-line_length = 94
 profile = "black"
-multi_line_output = 3 # Vertical Hanging Indent, see https://pypi.org/project/isort/
+line_length = 94
+multi_line_output = 3
 skip_glob = ["*/examples/*", "**/examples/*"]

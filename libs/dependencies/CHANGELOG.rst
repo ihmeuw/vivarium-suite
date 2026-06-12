@@ -1,5 +1,18 @@
+**1.1.0 - 06/11/26**
+
+Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_dependencies``
+repository has been archived.
+
+- No dependency or extras-shape changes for downstream consumers.
+  ``vivarium-dependencies[<extra>]`` references in sibling ``pyproject.toml``
+  files continue to resolve unchanged.
+- Replaced ``setup.py`` with a PEP 621 ``pyproject.toml`` (build backend and
+  extras unchanged).
+- Scrubbed standalone scaffolding (``__about__.py``, ``setup.py``,
+  ``CODE_OF_CONDUCT.rst``, ``CONTRIBUTING.rst``, ``.github/``).
+
 **1.0.8 - 06/09/26**
- 
+
  - Replace networkx-stubs with types-networkx in the networkx extra
 
 **1.0.7 - 04/14/26**

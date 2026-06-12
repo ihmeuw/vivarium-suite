@@ -2,34 +2,50 @@
 Vivarium Dependencies
 =====================
 
-Vivarium Dependencies contains dependency constraints commonly used in Simulation 
-Science repositories.
+.. image:: https://badge.fury.io/py/vivarium-dependencies.svg
+    :target: https://badge.fury.io/py/vivarium-dependencies
+
+Vivarium Dependencies is a code-less convenience metapackage that defines
+the dependency pins commonly shared across the Simulation Science vivarium
+ecosystem.
 
 Usage
 =====
 
-A downstream repository can use Vivarium Dependencies to define a setup dependency
-by including the desired constraint(s) in the `install_requires` dictionary of its setup.py::
+Downstream pyproject.toml files pull in groups of pins by referencing one or
+more extras of ``vivarium-dependencies``:
 
-  # setup.py
-  ...
-  if __name__ == "__main__":
-    ...
-    install_requirements = [
-      "vivarium_build_utils[layered_config_tree,pandas]"
-      ...
-    ]
-    ...
-    interactive_requirements = ["vivarium_dependencies[interactive]"]
-    ...
-  ...
+.. code-block:: toml
+
+   [project]
+   dependencies = [
+       "vivarium-dependencies[numpy,pandas,scipy]",
+       ...
+   ]
+
+   [project.optional-dependencies]
+   interactive = ["vivarium-dependencies[interactive]"]
+   lint = ["vivarium-dependencies[lint]"]
+
+The package itself ships no Python modules; ``pip install vivarium-dependencies``
+is rarely useful on its own. The point is the extras.
 
 Installation
 ============
 
-You can build ``vivarium_dependencies`` from source with::
+You can install ``vivarium-dependencies`` from PyPI:
 
-  $ git clone https://github.com/ihmeuw/vivarium_dependencies.git
-  $ cd vivarium_dependencies
-  $ conda create -n ENVIRONMENT_NAME
-  $ pip install -e .
+.. code-block:: bash
+
+   pip install vivarium-dependencies
+
+or build it from source by cloning the monorepo and installing this lib:
+
+.. code-block:: bash
+
+   git clone https://github.com/ihmeuw/vivarium-suite.git
+   cd vivarium-suite
+   pip install libs/dependencies
+
+For broader monorepo development setup, see the monorepo README at
+https://github.com/ihmeuw/vivarium-suite.
