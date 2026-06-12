@@ -1,3 +1,7 @@
+**6.0.2 - 06/12/26**
+
+- Consolidate EnsembleDistribution parameter lookup tables into a single table
+
 **6.0.1 - 06/11/26**
 
 - Update vivarium_testing_utils imports to vivarium.testing_utils

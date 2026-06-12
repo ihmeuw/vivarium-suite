@@ -160,7 +160,13 @@ class EnsembleDistribution(CausalFactorDistribution):
     #################
 
     def setup(self, builder: Builder) -> None:
-        """Build distribution weight and parameter lookup tables.
+        """Build the distribution weight and consolidated parameter lookup tables.
+
+        The parameters of every ensemble member are stored in a single
+        :class:`LookupTable` (rather than one table per member), so a single
+        interpolation serves the whole ensemble. ``self._parameter_columns``
+        records each member's original parameter column names so the
+        consolidated table can be split back apart at lookup time.
 
         Parameters
         ----------
@@ -175,15 +181,15 @@ class EnsembleDistribution(CausalFactorDistribution):
             value_columns=distributions,
         )
 
-        self.parameters = {
-            parameter: self.build_lookup_table(
-                builder,
-                parameter,
-                data_source=data.reset_index(),
-                value_columns=list(data.columns),
-            )
-            for parameter, data in parameters.items()
-        }
+        combined_parameters, self._parameter_columns = combine_distribution_parameters(
+            parameters
+        )
+        self.parameters_table = self.build_lookup_table(
+            builder,
+            "exposure_distribution_parameters",
+            data_source=combined_parameters.reset_index(),
+            value_columns=list(combined_parameters.columns),
+        )
 
         super().setup(builder)
         self.randomness = builder.randomness.get_stream(self.ensemble_propensity)
@@ -247,13 +253,13 @@ class EnsembleDistribution(CausalFactorDistribution):
         builder
             Access point for utilizing framework interfaces during setup.
         """
-        tables = [self.distribution_weights_table, *self.parameters.values()]
         register_risk_affected_attribute_producer(
             builder=builder,
             name=self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=[
-                *tables,
+                self.distribution_weights_table,
+                self.parameters_table,
                 self.causal_factor_propensity,
                 self.ensemble_propensity,
             ],
@@ -300,9 +306,9 @@ class EnsembleDistribution(CausalFactorDistribution):
         if not pop.empty:
             quantiles = clip(quantiles)
             weights = self.distribution_weights_table(quantiles.index)
-            parameters = {
-                name: param(quantiles.index) for name, param in self.parameters.items()
-            }
+            parameters = split_distribution_parameters(
+                self.parameters_table(quantiles.index), self._parameter_columns
+            )
             x = rd.EnsembleDistribution(weights, parameters).ppf(
                 quantiles, pop[self.ensemble_propensity]
             )
@@ -953,3 +959,89 @@ def get_risk_distribution_parameter(data: float | pd.DataFrame) -> float | pd.Se
         data = data.set_index(index).squeeze(axis=1)
 
     return data
+
+
+PARAMETER_SEPARATOR = "."
+"""Joins a distribution name and parameter name into a unique column label."""
+
+
+def combine_distribution_parameters(
+    parameters: dict[str, pd.DataFrame],
+) -> tuple[pd.DataFrame, dict[str, list[str]]]:
+    """Merge per-distribution parameter frames into one wide frame.
+
+    Each ensemble member contributes a DataFrame of parameter values that
+    shares the same demographic index as the others but has overlapping
+    column names (e.g. several members have a ``"scale"`` or an ``"x_min"``
+    column). To store them in a single :class:`LookupTable`, every column is
+    made unique by prefixing it with its distribution name joined by
+    :data:`PARAMETER_SEPARATOR` (``"gamma.scale"``), and the renamed frames
+    are joined on their shared index. The uniqueness guarantee assumes no
+    distribution or parameter name contains :data:`PARAMETER_SEPARATOR`, which
+    holds for the fixed distribution set and GBD parameter names.
+
+    Parameters
+    ----------
+    parameters
+        Mapping from distribution name to that distribution's parameter
+        DataFrame, indexed by the demographic key columns.
+
+    Returns
+    -------
+        A tuple of the combined DataFrame, whose columns are the namespaced
+        parameter labels on the shared demographic index, and a mapping from
+        distribution name to that distribution's original (un-prefixed)
+        parameter column names. The mapping is what
+        :func:`split_distribution_parameters` uses to invert the merge.
+    """
+    columns_by_distribution = {
+        distribution: list(frame.columns) for distribution, frame in parameters.items()
+    }
+    renamed = [
+        frame.rename(
+            columns={
+                col: f"{distribution}{PARAMETER_SEPARATOR}{col}" for col in frame.columns
+            }
+        )
+        for distribution, frame in parameters.items()
+    ]
+    combined = pd.concat(renamed, axis=1)
+    return combined, columns_by_distribution
+
+
+def split_distribution_parameters(
+    combined: pd.DataFrame,
+    columns_by_distribution: dict[str, list[str]],
+) -> dict[str, pd.DataFrame]:
+    """Invert :func:`combine_distribution_parameters`.
+
+    Slice a combined parameter frame back into one DataFrame per
+    distribution with the original parameter column names restored,
+    reproducing the mapping that the ``risk_distributions``
+    ``EnsembleDistribution`` consumes. This runs once per time step on the
+    simulation hot path.
+
+    Parameters
+    ----------
+    combined
+        A frame of namespaced parameter columns, as produced by
+        :func:`combine_distribution_parameters` or read from the
+        consolidated lookup table.
+    columns_by_distribution
+        Mapping from distribution name to that distribution's original
+        parameter column names.
+
+    Returns
+    -------
+        Mapping from distribution name to that distribution's parameter
+        DataFrame, with the original column names restored.
+    """
+    parameters = {}
+    for distribution, original_columns in columns_by_distribution.items():
+        namespaced_columns = [
+            f"{distribution}{PARAMETER_SEPARATOR}{col}" for col in original_columns
+        ]
+        member = combined[namespaced_columns]
+        member.columns = original_columns
+        parameters[distribution] = member
+    return parameters
