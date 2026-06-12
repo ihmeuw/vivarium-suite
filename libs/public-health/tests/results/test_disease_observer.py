@@ -6,10 +6,7 @@ import pandas as pd
 import pytest
 from vivarium.engine import InteractiveContext
 
-from tests.test_utilities import (
-    build_table_with_age,
-    disease_model_with_excess_mortality,
-)
+from tests.test_utilities import build_table_with_age, disease_model_with_excess_mortality
 from vivarium.public_health.disease import DiseaseModel, DiseaseState
 from vivarium.public_health.disease.state import SusceptibleState
 from vivarium.public_health.population import BasePopulation, FertilityDeterministic
