@@ -1,3 +1,7 @@
+**0.19.0 - 06/22/26**
+
+ - Add ``/viv:repo-maintenance`` skill and ``_claim_auditor`` sub-agent (MIC-7150): audit the plugin's skills, agents, commands, README, and the repo ``CLAUDE.md`` for drift against their upstream sources (in-repo files, Confluence/Slack/Jenkins/Jira references, cross-repo facts), report findings with quoted evidence, and apply user-approved fixes
+
 **0.18.1 - 06/22/26**
 
  - Fix stale references in the plugin docs and ``CLAUDE.md`` flagged by the ``repo-maintenance`` audit (MIC-7235)
