@@ -17,7 +17,9 @@ dependencies = []
 
 [project.optional-dependencies]
 # Define commonly-used pins here to be used in other repositories, e.g.
-# vivarium-dependencies[numpy,pandas]>=1.2.0,<2.0.0
+# "vivarium-dependencies[numpy,pandas,scipy]"
+# Aggregate extras (lint, interactive, gbd) self-reference other extras
+# defined below.
 
 # core scientific stack
 numpy = ["numpy"]
@@ -55,7 +57,7 @@ jupyter = [
 ]
 matplotlib = ["matplotlib"]
 vivarium_build_utils = [
-    "vivarium_build_utils>=3.0.1,<4.0.0",
+    "vivarium-build-utils>=3.0.2,<4.0.0",
 ]
 
 # testing
@@ -75,9 +77,9 @@ sphinx = [
 sphinx-click = ["sphinx-click"]
 
 # gbd (IHME artifactory)
-db_queries = ["db_queries>=31.0.4,<32.0.0"]
-db_tools = ["db_tools>=1.0.2,<2.0.0"]
-get_draws = ["get_draws>=5.1.4,<6.0.0"]
+db_queries = ["db-queries>=31.0.4,<32.0.0"]
+db_tools = ["db-tools>=1.0.2,<2.0.0"]
+get_draws = ["get-draws>=5.1.4,<6.0.0"]
 
 # convenience sets
 lint = [
@@ -95,11 +97,22 @@ gbd = [
     "vivarium-dependencies[get_draws]",
 ]
 
+# CI-shape extras (separate from the dep-group extras above). The monorepo's
+# `make install ENV_REQS=ci_github` step from .github/workflows/{ci,release}.yml
+# expects every lib to expose `ci_github` (and Jenkins expects `ci_jenkins`),
+# so we alias them onto this lib's own `test` extra to install pytest for
+# tests/test_package.py. There is no `docs` or `cluster` extra because this
+# lib ships no docs and has no cluster-only deps.
+test = ["vivarium-dependencies[pytest]"]
+ci_github = ["vivarium-dependencies[test]"]
+ci_jenkins = ["vivarium-dependencies[ci_github]"]
+
 [tool.setuptools_scm]
 # Monorepo tagging convention: tags must be prefixed with "vivarium-dependencies-v"
 # (e.g. vivarium-dependencies-v1.1.0). tag_regex strips the prefix so setuptools_scm
 # sees a clean semver; git_describe_command filters to only this lib's tags so
 # siblings' releases don't pollute the version derivation.
+# root = "../.." points setuptools_scm at the monorepo's .git directory
 root = "../.."
 tag_regex = '^vivarium-dependencies-v(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-dependencies-v*"'

@@ -3,8 +3,9 @@
 Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_dependencies``
 repository has been archived.
 
-- Replaced ``setup.py`` with a ``pyproject.toml``
-- Scrubbed standalone scaffolding
+- Replaced ``setup.py`` with a PEP 621 ``pyproject.toml``
+- Renamed ``LICENSE.txt`` to ``LICENSE`` to match the monorepo convention
+- Scrubbed now-unnecessary scaffolding files
 
 **1.0.8 - 06/09/26**
 
