@@ -108,11 +108,12 @@ Slash command (Claude Code only): ``/viv:framework-development <ticket or featur
   against the workflow's own definition: fans out the ``_trace_extractor``
   sub-agent over the run's session transcripts and grades coverage,
   ordering/gates, parallelism, handoff completeness, tool appropriateness,
-  and result propagation, every WARN/FAIL backed by transcript evidence.
+  and result propagation, with findings citing transcript evidence.
   Claude Code-only (it reads Claude Code session transcripts, which have
   no Copilot equivalent) and read-only throughout.
 
 Loaded automatically when the context is relevant to the skill's description.
+
 Layout
 ======
 
@@ -208,9 +209,11 @@ The orchestrator agent files use only Copilot tool vocabulary
 tokens are intentionally absent, because the canonical Claude path is
 the slash command and there is no scenario where the orchestrator
 agent would run usefully under Claude. The non-user-facing sub-agent
-files (everything ``_``-prefixed) do declare both vocabularies (they
+files (everything ``_``-prefixed) declare both vocabularies when they
 are invoked from both the Claude slash commands and from Copilot's
-orchestrators). Do not consolidate
+orchestrators; the Claude-only ones (``_duplicate_finder``,
+``_trace_extractor``), whose only callers are Claude-only skills,
+declare Claude vocabulary alone. Do not consolidate
 these vocabularies — each platform recognizes its own tokens and
 silently drops the other's, and the cross-platform compatibility
 relies on both being present where applicable.

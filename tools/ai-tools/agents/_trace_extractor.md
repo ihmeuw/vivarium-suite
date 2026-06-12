@@ -2,13 +2,11 @@
 name: _trace_extractor
 description: "Use when: extracting a compact orchestration trace (sub-agent dispatches, skill invocations, gates, notable tool calls) from one Claude Code session transcript JSONL, keeping raw transcript bulk out of the orchestrator's context."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
+  # Claude vocabulary only — the workflow-assessment skill (its only
+  # caller) is Claude Code-only, since Copilot has no session transcripts.
   - Read
   - Grep
   - Glob
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
 user-invocable: false
 ---
 
@@ -26,11 +24,14 @@ The orchestrator provides:
 - a **role hint** — what this transcript is (e.g. "main orchestrator of a
   `/viv:code-reviewer` run", "the `_review_design` sub-agent"), usually from the
   sibling `.meta.json`;
+- for a main transcript, the session's **`subagents/` directory**, so each
+  dispatch's outcome can be cross-checked against the `agent-*.meta.json`
+  files actually present;
 - optionally a **focus** — specific things to look for (e.g. "did the brief
   include a worktree path", "summarize what it returned").
 
-Work only on the file(s) you were handed. Do not wander into other sessions'
-transcripts.
+Work only on the file(s) and directory you were handed. Do not wander into
+other sessions' transcripts.
 
 ## Transcript anatomy
 
@@ -60,6 +61,8 @@ Markers worth knowing:
   `<session-dir>/subagents/agent-<id>.jsonl`, each with an
   `agent-<id>.meta.json` of the form `{agentType, description, toolUseId}` —
   `toolUseId` matches the dispatching `tool_use` id in the main transcript.
+  (The `workflow-assessment` skill documents the same directory layout for
+  transcript discovery — keep the two in sync.)
 
 Field names drift across Claude Code versions. If the records don't match this
 shape, say so in the output and report the shape you actually found.
@@ -75,7 +78,10 @@ shape, say so in the output and report the shape you actually found.
    transcript end to end.
 3. Records can be enormous single lines (inlined file contents, base64).
    Truncated reads are fine — you need structure and the first ~200 characters
-   of a `prompt` or `command`, not full payloads.
+   of a `prompt` or `command`, not full payloads. **Exception:** when a focus
+   question is about a brief's *content* (does this dispatch's prompt contain
+   X, does it omit Y), read that dispatch's full `prompt` payload — absence
+   can't be shown from a truncated read.
 4. No shell is available (and `jq` may not exist on the host anyway) — work
    entirely through Grep, Read, and Glob.
 
@@ -101,6 +107,8 @@ an omission.
   noise — count them, don't list them.
 - **Errors & anomalies** — `is_error` results, permission denials, retries of
   the same call, dispatches with no result, malformed records.
+- **Focus answers** — only when a focus was given: each focus question,
+  answered explicitly with its evidence reference.
 
 ## Constraints
 

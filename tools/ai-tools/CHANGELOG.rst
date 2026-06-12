@@ -1,6 +1,6 @@
 **0.19.0 - 06/22/26**
 
- - Add ``workflow-assessment`` skill: post-hoc audit of an agentic workflow run against the workflow's own definition, grading coverage, ordering/gates, parallelism, handoff completeness, tool appropriateness, and result propagation, with every WARN/FAIL citing transcript evidence (MIC-6988)
+ - Add ``workflow-assessment`` skill: post-hoc audit of an agentic workflow run against the workflow's own definition, grading coverage, ordering/gates, parallelism, handoff completeness, tool appropriateness, and result propagation, with findings citing transcript evidence
  - Add ``_trace_extractor`` sub-agent (``Read``/``Grep``/``Glob`` only, no Bash) that turns one session-transcript JSONL into a compact orchestration trace, keeping raw transcript bulk out of the orchestrator's context
 
 **0.18.0 - 06/22/26**
