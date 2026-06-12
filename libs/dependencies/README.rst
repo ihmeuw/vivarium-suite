@@ -6,8 +6,7 @@ Vivarium Dependencies
     :target: https://badge.fury.io/py/vivarium-dependencies
 
 Vivarium Dependencies is a code-less convenience metapackage that defines
-the dependency pins commonly shared across the Simulation Science vivarium
-ecosystem.
+the dependency pins commonly shared across the Vivarium ecosystem.
 
 Usage
 =====
