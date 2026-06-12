@@ -6,14 +6,18 @@ import pytest
 from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.lookup import LookupTable
+from vivarium.risk_distributions import EnsembleDistribution as RDEnsembleDistribution
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.causal_factor.calibration_constant import (
     get_calibration_constant_pipeline_name,
 )
 from vivarium.public_health.causal_factor.distributions import (
+    PARAMETER_SEPARATOR,
     EnsembleDistribution,
     PolytomousDistribution,
+    clip,
 )
 from vivarium.public_health.disease import SIS
 from vivarium.public_health.population import BasePopulation
@@ -347,12 +351,154 @@ def test_ensemble_risk(base_config, base_plugins):
     assert isinstance(distribution, EnsembleDistribution)
 
     expected_distributions = set(distribution_weights.keys()) - {"glnorm"}
-    assert expected_distributions == set(distribution.parameters.keys())
+    assert expected_distributions == set(distribution._parameter_columns.keys())
 
     simulation.step()
 
     # todo: use fuzzy checker to confirm that we are getting the expected results
     print("We didn't runtime error - success!")
+
+
+def _ensemble_risk_data(risk: Risk) -> tuple[dict[str, Any], dict[str, float]]:
+    """Build the data dict and distribution weights for an ensemble risk."""
+    distribution_weights = {
+        "betasr": 0.055,
+        "exp": 0.06,
+        "gamma": 0.065,
+        "glnorm": 0,
+        "gumbel": 0.07,
+        "invgamma": 0.075,
+        "invweibull": 0.8,
+        "llogis": 0.085,
+        "lnorm": 0.09,
+        "mgamma": 0.095,
+        "mgumbel": 0.1,
+        "norm": 0.105,
+        "weibull": 0.12,
+    }
+
+    data = {
+        f"{risk.name}.exposure": pd.DataFrame(
+            {
+                "year_start": 1990,
+                "year_end": 1991,
+                "parameter": "continuous",
+                "value": 5.0,
+            },
+            index=[0],
+        ),
+        f"{risk.name}.exposure_standard_deviation": pd.DataFrame(
+            {
+                "year_start": 1990,
+                "year_end": 1991,
+                "value": 0.5,
+            },
+            index=[0],
+        ),
+        f"{risk.name}.exposure_distribution_weights": pd.DataFrame(
+            {
+                "year_start": 1990,
+                "year_end": 1991,
+                "parameter": list(distribution_weights.keys()),
+                "value": list(distribution_weights.values()),
+            },
+        ),
+        f"{risk.name}.population_attributable_fraction": pd.DataFrame(
+            {
+                "affected_entity": "some_disease",
+                "affected_measure": "incidence_rate",
+                "year_start": 1990,
+                "year_end": 1991,
+                "value": 0.5,
+            },
+            index=[0],
+        ),
+    }
+    return data, distribution_weights
+
+
+def test_ensemble_risk_uses_single_parameter_lookup_table(base_config, base_plugins) -> None:
+    """EnsembleDistribution builds one consolidated parameters_table, not a table per member."""
+    risk = Risk("risk_factor.test_risk")
+    data, distribution_weights = _ensemble_risk_data(risk)
+
+    base_config.update(
+        {
+            "risk_factor.test_risk": {
+                "data_sources": {"exposure": 0.25},
+                "distribution_type": "ensemble",
+                "ensemble_members": 2,
+            },
+        }
+    )
+
+    _setup_risk_simulation(base_config, base_plugins, risk, data, has_risk_effect=False)
+
+    distribution = risk.exposure_distribution
+    assert isinstance(distribution, EnsembleDistribution)
+
+    # A single consolidated parameter table, not one table per member.
+    assert isinstance(distribution.parameters_table, LookupTable)
+    assert not hasattr(distribution, "parameters")
+
+    # The column map covers every supported member (glnorm is excluded).
+    expected_distributions = set(distribution_weights.keys()) - {"glnorm"}
+    assert expected_distributions == set(distribution._parameter_columns.keys())
+
+
+def test_ensemble_risk_exposure_matches_independent_parameter_reconstruction(
+    base_config, base_plugins
+) -> None:
+    """exposure_ppf matches exposures built from member parameters reconstructed independently from the consolidated table."""
+    risk = Risk("risk_factor.test_risk")
+    data, _ = _ensemble_risk_data(risk)
+
+    base_config.update(
+        {
+            "population": {"population_size": 1000},
+            "risk_factor.test_risk": {
+                "data_sources": {"exposure": 0.25},
+                "distribution_type": "ensemble",
+                "ensemble_members": 2,
+            },
+        }
+    )
+
+    simulation = _setup_risk_simulation(
+        base_config, base_plugins, risk, data, has_risk_effect=False
+    )
+    simulation.step()
+
+    distribution = risk.exposure_distribution
+    index = simulation.get_population(["test_risk.exposure"]).index
+
+    actual = distribution.exposure_ppf(index)
+
+    # Reconstruct the reference WITHOUT calling split_distribution_parameters:
+    # read the consolidated parameter table directly and rebuild each member's
+    # frame by selecting its namespaced columns and renaming them back.
+    pop = distribution.population_view.get(
+        index,
+        [distribution.causal_factor_propensity, distribution.ensemble_propensity],
+    )
+    quantiles = clip(pop[distribution.causal_factor_propensity])
+
+    weights = distribution.distribution_weights_table(quantiles.index)
+    combined = distribution.parameters_table(quantiles.index)
+    parameters = {}
+    for member, original_columns in distribution._parameter_columns.items():
+        prefix = f"{member}{PARAMETER_SEPARATOR}"
+        namespaced = [f"{prefix}{column}" for column in original_columns]
+        member_frame = combined[namespaced].copy()
+        member_frame.columns = list(original_columns)
+        parameters[member] = member_frame
+
+    expected = RDEnsembleDistribution(weights, parameters).ppf(
+        quantiles, pop[distribution.ensemble_propensity]
+    )
+    expected[expected.isnull()] = 0
+
+    pd.testing.assert_series_equal(actual, expected, check_names=False)
 
 
 class _CalibrationConstantModifier(Component):
