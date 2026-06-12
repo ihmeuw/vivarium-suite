@@ -104,7 +104,7 @@ gbd = [
 # tests/test_package.py. There is no `docs` or `cluster` extra because this
 # lib ships no docs and has no cluster-only deps.
 test = ["vivarium-dependencies[pytest]"]
-ci_github = ["vivarium-dependencies[test]"]
+ci_github = ["vivarium-dependencies[test,lint]"]
 ci_jenkins = ["vivarium-dependencies[ci_github]"]
 
 [tool.setuptools_scm]
