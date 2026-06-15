@@ -160,7 +160,11 @@ class EnsembleDistribution(CausalFactorDistribution):
     #################
 
     def setup(self, builder: Builder) -> None:
-        """Build distribution weight and parameter lookup tables.
+        """Build lookup tables, wire the PPF pipeline, and register the propensity.
+
+        Build the distribution weights table and the single consolidated
+        parameter table, wire up the exposure PPF pipeline (via ``super().setup``),
+        then register the ensemble propensity initializer.
 
         Parameters
         ----------
@@ -174,17 +178,13 @@ class EnsembleDistribution(CausalFactorDistribution):
             data_source=weights,
             value_columns=distributions,
         )
-
-        self.parameters = {
-            parameter: self.build_lookup_table(
-                builder,
-                parameter,
-                data_source=data.reset_index(),
-                value_columns=list(data.columns),
-            )
-            for parameter, data in parameters.items()
-        }
-
+        combined, self.parameter_columns = self._consolidate_parameter_tables(parameters)
+        self.parameters_table = self.build_lookup_table(
+            builder,
+            "exposure_parameters",
+            data_source=combined.reset_index(),
+            value_columns=list(combined.columns),
+        )
         super().setup(builder)
         self.randomness = builder.randomness.get_stream(self.ensemble_propensity)
         builder.population.register_initializer(
@@ -239,15 +239,88 @@ class EnsembleDistribution(CausalFactorDistribution):
         )
         return distributions, weights.reset_index(), parameters
 
+    def _namespaced_column(self, distribution: str, column: str) -> str:
+        """Return the consolidated-table column name for a distribution's parameter."""
+        # The round-trip is ambiguous if a distribution or column name contains '.'.
+        return f"{distribution}.{column}"
+
+    def _consolidate_parameter_tables(
+        self, parameters: dict[str, pd.DataFrame]
+    ) -> tuple[pd.DataFrame, dict[str, list[str]]]:
+        """Combine per-distribution parameter frames into one wide frame.
+
+        Namespace each distribution's parameter columns so that names shared
+        across distributions (e.g. ``x_min``/``x_max``) stay distinct, then
+        concatenate them column-wise, aligned on the shared demographic index,
+        into a single frame suitable for one consolidated lookup table.
+
+        Parameters
+        ----------
+        parameters
+            Mapping of distribution name to its parameter DataFrame, all sharing
+            the same demographic index.
+
+        Returns
+        -------
+            A tuple of the combined parameter DataFrame (namespaced value
+            columns) and a mapping of distribution name to its original,
+            un-namespaced column names.
+        """
+        parameter_columns = {
+            distribution: list(data.columns) for distribution, data in parameters.items()
+        }
+        namespaced = [
+            data.rename(
+                columns={
+                    col: self._namespaced_column(distribution, col) for col in data.columns
+                }
+            )
+            for distribution, data in parameters.items()
+        ]
+        combined = pd.concat(namespaced, axis=1)
+        return combined, parameter_columns
+
+    def _split_parameters(self, parameters: pd.DataFrame) -> dict[str, pd.DataFrame]:
+        """Split a consolidated parameter lookup result by distribution.
+
+        Invert the consolidation performed by
+        :meth:`_consolidate_parameter_tables` for a looked-up frame, returning
+        the per-distribution parameter frames with their original column names so
+        they can be passed to
+        :class:`vivarium.risk_distributions.EnsembleDistribution`.
+
+        Parameters
+        ----------
+        parameters
+            A frame returned by the consolidated parameter lookup table, indexed
+            by simulant and carrying the namespaced parameter columns.
+
+        Returns
+        -------
+            Mapping of distribution name to its parameter DataFrame with original
+            (un-namespaced) columns.
+        """
+        return {
+            distribution: parameters[
+                [self._namespaced_column(distribution, col) for col in columns]
+            ].rename(
+                columns={self._namespaced_column(distribution, col): col for col in columns}
+            )
+            for distribution, columns in self.parameter_columns.items()
+        }
+
     def register_exposure_ppf_pipeline(self, builder: Builder) -> None:
         """Register the ensemble exposure PPF pipeline.
+
+        Require the distribution weights table and the single consolidated
+        parameter table as resources.
 
         Parameters
         ----------
         builder
             Access point for utilizing framework interfaces during setup.
         """
-        tables = [self.distribution_weights_table, *self.parameters.values()]
+        tables = [self.distribution_weights_table, self.parameters_table]
         register_risk_affected_attribute_producer(
             builder=builder,
             name=self.exposure_ppf_pipeline,
@@ -283,6 +356,10 @@ class EnsembleDistribution(CausalFactorDistribution):
     def exposure_ppf(self, index: pd.Index) -> pd.Series:
         """Calculate exposure values from propensities using the ensemble.
 
+        Perform a single lookup against the consolidated parameter table, split
+        the result back into per-distribution parameters, and evaluate the
+        ensemble percent-point function.
+
         Parameters
         ----------
         index
@@ -296,13 +373,10 @@ class EnsembleDistribution(CausalFactorDistribution):
             index, [self.causal_factor_propensity, self.ensemble_propensity]
         )
         quantiles = pop[self.causal_factor_propensity]
-
         if not pop.empty:
             quantiles = clip(quantiles)
             weights = self.distribution_weights_table(quantiles.index)
-            parameters = {
-                name: param(quantiles.index) for name, param in self.parameters.items()
-            }
+            parameters = self._split_parameters(self.parameters_table(quantiles.index))
             x = rd.EnsembleDistribution(weights, parameters).ppf(
                 quantiles, pop[self.ensemble_propensity]
             )
