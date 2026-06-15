@@ -146,4 +146,5 @@ residual issues into the Phase 7 summary.
 5. On approval, use the `commit-splitter` skill to organize the work into clean,
    reviewable commits, then use `team-conventions` to push and ``gh pr create``
    with the repo's PR template; report the URL and offer the ``#vivarium_dev``
-   flag.
+   flag.  Post a summary of the leftover findings from step 4 as a comment in the
+   PR.
