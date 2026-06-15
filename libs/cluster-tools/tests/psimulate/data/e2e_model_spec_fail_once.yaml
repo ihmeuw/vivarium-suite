@@ -6,13 +6,13 @@
 # Jobmon resume) the sentinel files already exist, so the component is a no-op
 # and every task succeeds.
 components:
-    vivarium.examples.disease_model:
-        population:
-            - BasePopulation()
-        observer:
-            - DeathsObserver()
-    vivarium.cluster_tools.testing.fail_once_component:
-        - FailOnceComponent()
+  vivarium.engine.examples.disease_model:
+    population:
+      - BasePopulation()
+    observer:
+      - DeathsObserver()
+  vivarium.cluster_tools.testing.fail_once_component:
+    - FailOnceComponent()
 configuration:
   time:
     start:
