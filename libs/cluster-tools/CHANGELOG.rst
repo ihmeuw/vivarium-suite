@@ -1,3 +1,7 @@
+**4.2.2 - 06/15/26**
+
+- Update vivarium examples path in test configurations
+
 **4.2.1 - 06/11/26**
 
 - Update vivarium_public_health import to vivarium.public_health in README
