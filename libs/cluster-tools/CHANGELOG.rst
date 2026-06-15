@@ -1,6 +1,6 @@
 **4.2.2 - 06/15/26**
 
-- Update vivarium examples path in test configurations
+- Update vivarium examples path in e2e test model specs
 
 **4.2.1 - 06/11/26**
 
