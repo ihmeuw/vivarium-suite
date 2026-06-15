@@ -1,216 +1,216 @@
-**x.x.x - tbd**
+**3.3.0 - 06/15/26**
 
-   - Add monorepo support: top-level ``monorepo()`` step that provisions per-package
-     Jenkins Multibranch Pipelines, ``withWorkingDirectory`` routing of build stages
-     into ``libs/<pkg>/``, and ``get_package_subdir()`` for resolving the package
-     subdir from JOB_NAME
-   - Add ``TAG_PREFIX`` support across ``make tag-version``, ``make validate-tag``,
-     and ``validate_tag_version.sh`` so monorepo libs can use prefixed tags
-     (e.g. ``vivarium-core-v1.2.3``)
-   - Add ``env_reqs`` parameter to ``reusable_pipeline.groovy`` for selecting the
-     pyproject.toml extras installed during CI
-   - Make the artifactory extra-index URL configurable via the ``IHME_PYPI`` Make
-     variable; setting it empty disables the extra-index entirely (for GitHub
-     Actions runners outside the IHME network)
-   - Guard ``make deploy-package-artifactory`` against an empty ``IHME_PYPI``
-   - Search recursively for ``py.typed`` markers so monorepo packages are detected
-   - ``make install``: install in editable_mode=compat to not break py.typed marker discovery
-   - Add GitHUb App authenticaion support for deployable packages
+- Add monorepo support: top-level ``monorepo()`` step that provisions per-package
+  Jenkins Multibranch Pipelines, ``withWorkingDirectory`` routing of build stages
+  into ``libs/<pkg>/``, and ``get_package_subdir()`` for resolving the package
+  subdir from JOB_NAME
+- Add ``TAG_PREFIX`` support across ``make tag-version``, ``make validate-tag``,
+  and ``validate_tag_version.sh`` so monorepo libs can use prefixed tags
+  (e.g. ``vivarium-core-v1.2.3``)
+- Add ``env_reqs`` parameter to ``reusable_pipeline.groovy`` for selecting the
+  pyproject.toml extras installed during CI
+- Make the artifactory extra-index URL configurable via the ``IHME_PYPI`` Make
+  variable; setting it empty disables the extra-index entirely (for GitHub
+  Actions runners outside the IHME network)
+- Guard ``make deploy-package-artifactory`` against an empty ``IHME_PYPI``
+- Search recursively for ``py.typed`` markers so monorepo packages are detected
+- ``make install``: install in editable_mode=compat to not break py.typed marker discovery
+- Add GitHUb App authenticaion support for deployable packages
 
 **3.2.2 - 05/07/26**
 
-   - Bugfix: Make "run_weekly" parameter available to all stages.
+- Bugfix: Make "run_weekly" parameter available to all stages.
 
 **3.2.1 - 05/07/26**
 
-   - Fix bug in manual override for "weekly" cluster tests.
+- Fix bug in manual override for "weekly" cluster tests.
 
 **3.2.0 - 05/06/26**
 
-   - Add manual override for "weekly" cluster tests.
-   
+- Add manual override for "weekly" cluster tests.
+
 **3.1.2 - 05/05/26**
 
-   - Feature: Add setup-slack make target to support sending Slack notifications from Slurm
+- Feature: Add setup-slack make target to support sending Slack notifications from Slurm
 
 **3.1.1 - 05/04/26**
 
-   - Use NFS to build conda env on jobs that require slurm
+- Use NFS to build conda env on jobs that require slurm
 
 **3.1.0 - 04/22/26**
 
-   - Refactor shared environment pipeline: archive current env with conda-pack before
-     rebuild, rebuild in-place, diff packages, and notify Slack with package diffs.
-     Add archive retention cleanup (default 7 days).
-     
+- Refactor shared environment pipeline: archive current env with conda-pack before
+  rebuild, rebuild in-place, diff packages, and notify Slack with package diffs.
+  Add archive retention cleanup (default 7 days).
+    
 **3.0.4 - 04/17/26**
 
-   - Bugfix: Only clean up /svc-simsci/envs on the node that actually has it
-   - Feature: Catch errors so that we run through all stages rather than aborting on first failure
+- Bugfix: Only clean up /svc-simsci/envs on the node that actually has it
+- Feature: Catch errors so that we run through all stages rather than aborting on first failure
 
 **3.0.3 - 04/16/26**
 
-   - Use --no-cache when running pip install dryrun for getting vbu version
+- Use --no-cache when running pip install dryrun for getting vbu version
 
 **3.0.2 - 04/15/26**
 
-   - Change the vbu-version bootstrapping to use Jenkins coordinator node
+- Change the vbu-version bootstrapping to use Jenkins coordinator node
 
 **3.0.1 - 04/14/26**
 
-   - Move environment building back to /svc-simsci scratch spaces on jenkins nodes.
+- Move environment building back to /svc-simsci scratch spaces on jenkins nodes.
 
 **3.0.0 - 03/30/26**
 
-   - Remove installDependencies stage and upstream_repos config option
+- Remove installDependencies stage and upstream_repos config option
 
 **2.3.8 - 03/16/26**
 
-   - Create a make target for version validation
+- Create a make target for version validation
 
 **2.3.7 - 03/12/26**
 
-   - Validate github repo version prior to deploying
+- Validate github repo version prior to deploying
 
 **2.3.6 - 03/10/26**
 
-    - Bugfix: Fix list parsing and version comparison for python version inference
+- Bugfix: Fix list parsing and version comparison for python version inference
 
 **2.3.5 - 03/09/26**
 
-   - Feature: Infer python version for builds and deployment from downstream repos
+- Feature: Infer python version for builds and deployment from downstream repos
 
 **2.3.4 - 03/02/26**
 
-  - Bugfix: Fix cleanup of environments from Jenkins builds
+- Bugfix: Fix cleanup of environments from Jenkins builds
 
 **2.3.3 - 02/27/26**
 
-  - Drop support for python 3.13, support 3.12
+- Drop support for python 3.13, support 3.12
 
 **2.3.2 - 02/25/26**
 
-  - Slack CI channel for failing builds for all scheduled branches
+- Slack CI channel for failing builds for all scheduled branches
 
 **2.3.1 - 02/23/26**
 
-  - Increase cleanup job timeout
+- Increase cleanup job timeout
 
 **2.3.0 - 02/18/26**
 
-  - Feature: Support python 3.13
-  - Command: `make build-env` now defaults to python 3.13
+- Feature: Support python 3.13
+- Command: `make build-env` now defaults to python 3.13
 
 **2.2.4 - 02/10/26**
 
-  - Bugfix: fix timeout env variable in jenkinsfile
-  - Bugfix: fix the cleanup depth for the shared directory
-  - Bugfix: fix doc-only / changelog-only skipping behavior
+- Bugfix: fix timeout env variable in jenkinsfile
+- Bugfix: fix the cleanup depth for the shared directory
+- Bugfix: fix doc-only / changelog-only skipping behavior
 
 **2.2.3 - 02/09/26**
 
-  - Increase the cleanup Jenkins job timeout to 120 minutes
-  - Message the slack channel when the cleanup job is aborted
+- Increase the cleanup Jenkins job timeout to 120 minutes
+- Message the slack channel when the cleanup job is aborted
 
 **2.2.2 - 01/27/26**
 
-  - Stop skipping any builds (temporary)
+- Stop skipping any builds (temporary)
 
 **2.2.1 - 01/27/26**
 
-  - Stop skipping builds if CHANGELOG-only commit (temporary)
+- Stop skipping builds if CHANGELOG-only commit (temporary)
 
 **2.2.0 - 01/26/26**
 
-  - Feature: Add shared model environments nightly build
+- Feature: Add shared model environments nightly build
 
 **2.1.2 - 01/15/26**
 
-  - Bugfix: use PST timezone for CHANGELOG date validation
+- Bugfix: use PST timezone for CHANGELOG date validation
 
 **2.1.1 - 01/06/26**
 
-  - Fail deployment if CHANGELOG date does not match current date
-  - Add CHANGELOG date validation for Jenkins pipeline
+- Fail deployment if CHANGELOG date does not match current date
+- Add CHANGELOG date validation for Jenkins pipeline
 
 **2.1.0 - 12/16/2025**
 
-  - Feature: Add model lineage analysis utility
+- Feature: Add model lineage analysis utility
 
 **2.0.13 - 11/21/2025**
 
-  - Bugfix: stop skipping scheduled builds if the last commit was CHANGELOG-only
+- Bugfix: stop skipping scheduled builds if the last commit was CHANGELOG-only
 
 **2.0.12 - 10/22/2025**
 
-  - Skip Jenkins builds for CHANGELOG-only commits
-  - Skip doc checks if there is no docs/ directory
+- Skip Jenkins builds for CHANGELOG-only commits
+- Skip doc checks if there is no docs/ directory
 
 **2.0.11 - 10/7/2025**
 
-  - Stop cacheing secondary uv pip install
+- Stop cacheing secondary uv pip install
 
 **2.0.10 - 10/2/2025**
 
-  - Bugfix: Remove Make sources
+- Bugfix: Remove Make sources
 
 **2.0.9 - 10/1/2025**
 
-  - Bugfix: Change name of doc build directory
+- Bugfix: Change name of doc build directory
 
 **2.0.8 - 9/24/2025**
 
-  - Revert disabling dependent branch installs (v2.0.7)
-  - Stop explicit folder deletion in cleanup
+- Revert disabling dependent branch installs (v2.0.7)
+- Stop explicit folder deletion in cleanup
 
 **2.0.7 - 9/23/2025**
 
-  - Disable dependent branch installs
+- Disable dependent branch installs
 
 **2.0.6 - 8/20/2025**
 
-  - Validate arguments passed to reusable_pipeline.groovy
+- Validate arguments passed to reusable_pipeline.groovy
 
 **2.0.5 - 8/8/2025**
 
-  - Create pipeline to clean up Jenkins build directories
+- Create pipeline to clean up Jenkins build directories
 
 **2.0.4 - 8/6/2025**
 
-  - Revert v2.0.3
+- Revert v2.0.3
 
 **2.0.3 - 8/5/2025**
 
-  - Use Jenkins node /tmp/ dir (reversion from v2.0.2) until permissions get resolved
+- Use Jenkins node /tmp/ dir (reversion from v2.0.2) until permissions get resolved
 
 **2.0.2 - 8/4/2025**
 
-  - Create all Jenkins build envs in shared team folder
+- Create all Jenkins build envs in shared team folder
 
 **2.0.1 - 7/25/2025**
 
-  - Bugfix: fix broken doc stages in Jenkins pipeline
+- Bugfix: fix broken doc stages in Jenkins pipeline
 
 **2.0.0 - 7/24/2025**
 
-  - Clean up and better document Make files
+- Clean up and better document Make files
 
 **1.1.2 - 7/16/2025**
 
-  - Bugfix: typo in extra-index-url
+- Bugfix: typo in extra-index-url
 
 **1.1.1 - 7/16/2025**
 
-  - Bugfix: fix broken pip install --dry-run call in get_vbu_version.py
+- Bugfix: fix broken pip install --dry-run call in get_vbu_version.py
 
 **1.1.0 - 7/15/2025**
 
-  - Allow for pinning in other repos
+- Allow for pinning in other repos
 
 **1.0.0 - 7/8/2025**
 
-  - Initial major release
+- Initial major release
 
 **0.1.0 - 7/8/2025**
 
-  - Initial rc release
+- Initial rc release
