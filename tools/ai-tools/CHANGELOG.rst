@@ -1,6 +1,6 @@
 **0.18.0 - 06/17/26**
 
- - Add ``framework-development`` slash command (and ``framework_developer`` Copilot orchestrator) for an end-to-end, black-box-TDD design→implement→verify→PR loop on a well-scoped framework feature, with ``_test_writer`` / ``_feature_implementer`` (write-capable, no Bash) and ``_validator`` sub-agents; its review phase consumes the shared ``_review-core`` skill and leftover findings go to ``ticket-triage``
+ - Add ``framework-development`` slash command for an end-to-end, black-box-TDD design→implement→verify→PR loop on a well-scoped framework feature.
 
 **0.17.0 - 06/16/26**
 
