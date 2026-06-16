@@ -87,6 +87,8 @@ class Observation(ABC):
     """Method or function that determines whether to perform an observation on this Event."""
     stratifications: tuple[Stratification, ...] | None = None
     """Optional tuple of the Stratifications this observation should use."""
+    requires_all_attributes: bool = False
+    """Whether this observation needs every population attribute resolved at gather time."""
 
     def observe(
         self,
@@ -568,3 +570,16 @@ class ConcatenatingObservation(UnstratifiedObservation):
         if existing_results.empty:
             return new_observations
         return pd.concat([existing_results, new_observations], axis=0).reset_index(drop=True)
+
+
+class MicrodataObservation(ConcatenatingObservation):
+    """Concatenating observation that records every population attribute.
+
+    Unlike :class:`ConcatenatingObservation`, which records only the columns named in
+    ``requires_attributes``, this observation records the full prepared population (every
+    attribute resolved by the results system at gather time).
+    """
+
+    def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
+        """Return the full prepared population."""
+        raise NotImplementedError

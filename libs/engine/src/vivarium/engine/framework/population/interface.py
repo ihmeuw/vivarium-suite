@@ -122,3 +122,7 @@ class PopulationInterface(Interface):
     def get_population_index(self) -> Callable[[], pd.Index[int]]:
         """Gets a callable that returns the population index."""
         return self._manager.get_population_index
+
+    def get_all_attribute_names(self) -> list[str]:
+        """Return the names of all attributes in the population state table."""
+        raise NotImplementedError

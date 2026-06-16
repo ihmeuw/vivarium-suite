@@ -77,3 +77,15 @@ class Observer(Component, ABC):
             .get("output_data", {})
             .get("results_directory", None)
         )
+
+
+class MicrodataObserver(Observer):
+    """Observer that records every population attribute for every simulant.
+
+    A black-box "give me everything" observer: at each observed timestep it records the full
+    population state, concatenated across timesteps, so results scientists can compute derived
+    quantities downstream.
+    """
+
+    def register_observations(self, builder: Builder) -> None:
+        raise NotImplementedError
