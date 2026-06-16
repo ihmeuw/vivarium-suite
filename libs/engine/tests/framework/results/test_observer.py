@@ -4,10 +4,11 @@ import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree.main import ConfigTree
 
+from tests.framework.results.helpers import HARRY_POTTER_CONFIG, Hogwarts
 from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.components.manager import ComponentConfigError
 from vivarium.engine.framework.engine import Builder
-from vivarium.engine.framework.results.observer import Observer
+from vivarium.engine.framework.results.observer import MicrodataObserver, Observer
 
 
 class TestObserver(Observer):
@@ -96,3 +97,34 @@ def test_duplicated_observer_error(base_config: ConfigTree) -> None:
             base_config,
             components=[observer1, observer2],
         )
+
+
+@pytest.mark.xfail(reason="not implemented: MicrodataObserver registration")
+def test_microdata_observer_can_be_registered() -> None:
+    """The observer sets up in any sim and registers a single named observation."""
+    sim = InteractiveContext(
+        configuration=HARRY_POTTER_CONFIG,
+        components=[Hogwarts(), MicrodataObserver()],
+    )
+    assert "microdata_observer" in sim._results._results_context.observations
+
+
+@pytest.mark.xfail(reason="not implemented: records all attributes across timesteps")
+def test_microdata_observer_records_all_attributes() -> None:
+    """Recorded microdata has a column for every attribute and one row per simulant per step."""
+    sim = InteractiveContext(
+        configuration=HARRY_POTTER_CONFIG,
+        components=[Hogwarts(), MicrodataObserver()],
+    )
+    expected_attributes = set(sim.get_attribute_names())
+    n_simulants = len(sim.get_population())
+
+    sim.step()
+    one_step = sim.get_results()["microdata_observer"]
+    sim.step()
+    two_steps = sim.get_results()["microdata_observer"]
+
+    assert expected_attributes <= set(one_step.columns)
+    assert "event_time" in one_step.columns
+    assert len(one_step) == n_simulants
+    assert len(two_steps) == 2 * n_simulants
