@@ -1,3 +1,11 @@
+**6.1.0 - 06/16/26**
+
+- Consolidate EnsembleDistribution per-distribution parameter lookup tables into a single LookupTable for fewer pipeline resources
+
+Breaking changes:
+
+- ``EnsembleDistribution.parameters`` (dict of ``LookupTable``) is removed in favor of ``parameters_table`` and ``parameter_columns``.
+
 **6.0.1 - 06/11/26**
 
 - Update vivarium_testing_utils imports to vivarium.testing_utils
