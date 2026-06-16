@@ -28,8 +28,7 @@ For each candidate group, the orchestrator provides:
 
 1. For each group, run **2–4 JQL text searches** against project `MIC`,
    varying the angle: symbol/file-path terms, component-name terms, and a
-   plain-English phrasing of the problem. Keep result limits small
-   (`limit` ≤ 10).
+   plain-English phrasing of the problem.
 2. Search **open and closed tickets alike** — a Done duplicate is still worth
    surfacing (the issue may already be fixed, or may have regressed). Do not
    add status filters.
