@@ -8,7 +8,7 @@ import pytest
 from pytest_mock import MockerFixture
 from scipy import stats
 from vivarium.config_tree import ConfigTree
-from vivarium_testing_utils import FuzzyChecker
+from vivarium.testing_utils import FuzzyChecker
 
 from tests.helpers import ColumnCreator
 from vivarium.engine import InteractiveContext

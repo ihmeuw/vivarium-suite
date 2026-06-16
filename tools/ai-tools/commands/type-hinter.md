@@ -150,6 +150,23 @@ If any error remains, leave `py.typed` absent — the package isn't fully
 typed and this run is a partial conversion. The marker turns on CI mypy
 for the package, so it must be honest.
 
+Adding `py.typed` is a two-part change: setuptools doesn't ship
+non-Python files in the wheel, so the marker also needs a
+`[tool.setuptools.package-data]` entry in `${PKG_ROOT}/pyproject.toml`.
+Copy the precedent from `libs/artifact/pyproject.toml`, comment included:
+
+```toml
+[tool.setuptools.package-data]
+# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
+# users install it from PyPI and so mypy also finds the marker via the
+# editable install during in-repo type checks.
+"vivarium.<pkg>" = ["py.typed"]
+```
+
+Never add one without the other — a marker without the entry silently
+leaves installed copies of the package untyped, and the entry without
+the marker is dead config.
+
 ## Step 9 — Report
 
 Leave all changes in the working tree — don't stage or commit. Print:
@@ -161,7 +178,8 @@ Leave all changes in the working tree — don't stage or commit. Print:
 - Items the user accepted (declined logic changes, accepted ignores,
   applied overrides).
 - Whether step 2 bootstrapped `[tool.mypy]`, and whether step 8 added
-  `py.typed` (if not, note the package is still a partial conversion).
+  `py.typed` and its `[tool.setuptools.package-data]` entry (if not,
+  note the package is still a partial conversion).
 
 Then point the user at `/viv:commit-splitter` to dole the diff into
 reviewable commits.

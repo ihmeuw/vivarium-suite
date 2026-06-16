@@ -1,6 +1,14 @@
-**0.15.1 - 06/11/26**
+**0.16.1 - 06/16/26**
 
  - Update ``team-conventions`` to file pull requests as drafts and only mark them ready for review when flagging in ``#vivarium_dev``
+ 
+**0.16.0 - 06/16/26**
+
+ - Extract the multi-lens review fan-out from ``code-reviewer`` into a shared internal ``_review-core`` skill
+
+**0.15.1 - 06/11/26**
+
+ - ``/viv:type-hinter``: when adding ``py.typed``, also add the matching ``[tool.setuptools.package-data]`` entry to the package's ``pyproject.toml`` so the marker ships in the wheel (PEP 561)
 
 **0.15.0 - 06/11/26**
 

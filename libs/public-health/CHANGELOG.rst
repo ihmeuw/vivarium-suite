@@ -1,3 +1,7 @@
+**6.0.1 - 06/11/26**
+
+- Update vivarium_testing_utils imports to vivarium.testing_utils
+
 **6.0.0 - 06/10/26**
 
 Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_public_health``

@@ -1,3 +1,11 @@
+**5.1.5 - 06/12/26**
+
+- Remove now-unnecessary type: ignore for matplotlib's FuncAnimation call
+
+**5.1.4 - 06/11/26**
+
+- Update vivarium_testing_utils imports to vivarium.testing_utils
+
 **5.1.3 - 06/09/26**
 
 - Unpin mypy and fix associated failures, including those for new networkx type stubs

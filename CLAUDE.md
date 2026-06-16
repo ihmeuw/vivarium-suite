@@ -64,6 +64,13 @@ Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst
 
 `workflow_dispatch` and `release: published` paths exist for manual/recovery releases of a specific lib.
 
+The `tools/ai-tools` Claude Code plugin is *not* a PyPI package, so it has its own
+`.github/workflows/release-ai-tools.yml`. It fires when `tools/ai-tools/CHANGELOG.rst` is
+touched on `main`, parses the version from the same `**X.Y.Z - MM/DD/YY**` first line, and
+creates+pushes a `vivarium-ai-tools-v<X.Y.Z>` tag plus a GitHub Release - no build, test, or
+PyPI publish. It is kept separate from `release.yml` so the plugin release never touches that
+workflow's PyPI trusted-publishing credential path (its `id-token: write` permission).
+
 ## The `vivarium-compat` shim
 
 `libs/compat/` exists only for the monorepo migration. It installs `vivarium_compat.pth` to site-packages, which executes at interpreter startup and inserts a `_CompatFinder` at position 0 of `sys.meta_path`. The finder redirects old import names (e.g. `import vivarium_profiling`) to new ones (`vivarium.profiling`) and emits a `DeprecationWarning`. The active redirect table is `_REDIRECTS` in `src/vivarium/_compat/_compat.py` - uncomment entries as packages migrate, and bump the compat version. Do not enable an entry before the target package is released; the loader raises `ModuleNotFoundError` if the new location does not exist. The entire `libs/compat/` directory is removed once the deprecation period ends.

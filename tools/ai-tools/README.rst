@@ -154,6 +154,15 @@ orchestration prompt. The orchestrator agent files are *not* invoked
 by the slash command — the fan-out targets the specialist sub-agents
 directly.
 
+The multi-lens review fan-out is defined once, in the internal ``_review-core``
+skill (``skills/_review-core/SKILL.md``, hidden from the ``/`` menu via
+``user-invocable: false``), and invoked **inline** by ``/viv:code-reviewer``
+after it gathers PR context. A skill invoked from a command runs inline in the
+same main session — not as a sub-agent — so ``_review-core`` can spawn the
+``_review_*`` fan-out itself, keeping it one level deep. That is what lets the
+review be reused by other main-session commands without duplicating the
+fan-out.
+
 **VS Code Copilot.** Sub-agent delegation is the orchestrator's job
 and is configured via two front-matter fields on the orchestrator
 agent: ``tools:`` must contain the ``agent`` token, and an
