@@ -1,22 +1,37 @@
 **3.3.0 - 06/15/26**
 
 - Add monorepo support: top-level ``monorepo()`` step that provisions per-package
-  Jenkins Multibranch Pipelines, ``withWorkingDirectory`` routing of build stages
-  into ``libs/<pkg>/``, and ``get_package_subdir()`` for resolving the package
-  subdir from JOB_NAME
+  Jenkins Multibranch Pipelines, build stages routed into the per-package
+  ``libs/<pkg>/`` subdirectory in monorepo builds (resolved from ``JOB_NAME`` via
+  the new ``get_package_subdir()`` helper)
 - Add ``TAG_PREFIX`` support across ``make tag-version``, ``make validate-tag``,
   and ``validate_tag_version.sh`` so monorepo libs can use prefixed tags
   (e.g. ``vivarium-core-v1.2.3``)
 - Add ``env_reqs`` parameter to ``reusable_pipeline.groovy`` for selecting the
   pyproject.toml extras installed during CI
+- Add ``github_credentials_id`` parameter to ``reusable_pipeline.groovy`` so
+  deployable callers can override the git credential used at deploy time
+  (defaults to the credential from the branch source)
+- Add a third ``subdir`` argument to the ``get_python_versions(workspace, git_url, subdir)``
+  shared-library function so monorepo per-package builds resolve their own
+  ``python_versions.json`` (default empty preserves the previous behavior for
+  standalone callers)
 - Make the artifactory extra-index URL configurable via the ``IHME_PYPI`` Make
   variable; setting it empty disables the extra-index entirely (for GitHub
   Actions runners outside the IHME network)
 - Guard ``make deploy-package-artifactory`` against an empty ``IHME_PYPI``
 - Search recursively for ``py.typed`` markers so monorepo packages are detected
-- ``make install``: install in editable_mode=compat to not break py.typed marker discovery
-- Add GitHUb App authenticaion support for deployable packages
+
+- ``make install`` now uses ``editable_mode=compat`` so mypy can resolve
+  namespace-package siblings in monorepo dev setups (the PEP 660 default's
+  ``sys.meta_path`` finder is opaque to mypy's static path walk). Scoped via
+  ``--config-settings-package`` so transitive sdist builds are unaffected.
+- Add GitHub App authentication support for deployable packages
 - Bugfix: Correctly handle capturing cron branch name to send Slack notification for schedule builds
+
+Breaking changes:
+
+- `load_shared_files` renamed to `loadSharedFiles` (called from reusable_pipeline.groovy)
 
 **3.2.2 - 05/07/26**
 

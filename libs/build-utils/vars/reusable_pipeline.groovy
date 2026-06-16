@@ -13,6 +13,9 @@ def call(Map config = [:]){
   run_mypy: Whether to run mypy on the package
   env_reqs: The pyproject.toml extras to install with `make install` (e.g. "ci_jenkins").
             Empty/omitted leaves base.mk's default ("dev"), which is correct for standalone repos.
+  github_credentials_id: Jenkins credential ID to use during the deploy stage when pushing
+            the release tag (only consulted when `deployable: true`). Empty/omitted falls
+            back to the credential configured on the Multibranch Pipeline's branch source.
   */
 
   // Handle config arguments
@@ -166,7 +169,8 @@ def call(Map config = [:]){
           script {
             // Use the name of the branch in the build name
             currentBuild.displayName = "#${BUILD_NUMBER} ${GIT_BRANCH}"
-            python_versions = get_python_versions(WORKSPACE, GIT_URL, get_package_subdir())
+            env.PACKAGE_SUBDIR = get_package_subdir()
+            python_versions = get_python_versions(WORKSPACE, GIT_URL, env.PACKAGE_SUBDIR)
             // Derive the deploy/docs version as the last entry in the list
             PYTHON_DEPLOY_VERSION = python_versions[-1]
             echo "Python deploy version (inferred): ${PYTHON_DEPLOY_VERSION}"

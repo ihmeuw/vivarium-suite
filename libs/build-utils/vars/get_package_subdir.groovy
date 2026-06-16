@@ -24,5 +24,9 @@
  */
 def call() {
     def parts = env.JOB_NAME.split('/')
-    return (parts.length >= 5 && parts[2] == 'libs') ? "${parts[2]}/${parts[3]}" : ''
+    def i = parts.findIndexOf { it == 'libs' }
+    // Need both "libs" and the package segment that follows it; the branch
+    // segment after that is optional in some build contexts so we don't require it.
+    if (i < 0 || i + 1 >= parts.length) return ''
+    return "${parts[i]}/${parts[i + 1]}"
 }

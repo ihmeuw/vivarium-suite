@@ -47,7 +47,7 @@ branch only::
           'libs/core/Jenkinsfile',
           'libs/public-health/Jenkinsfile',
       ],
-      // Jenkins credential ID for the GitHub App. Required, no default - vbu
+      // Jenkins credential ID for the GitHub App. Required, no default; vbu
       // stays org-agnostic so the literal UUID lives next to the org context.
       githubCredentialsId: 'fad62062-b1f4-447b-997f-005d6b1ea41e',
       folderPrefix: 'Public',  // optional, defaults to "Public"
@@ -73,6 +73,12 @@ standalone repo would, with one new argument::
 install`` pulls in. Omit it (or leave empty) on standalone repos to keep
 base.mk's default of ``dev``.
 
+Deployable callers (``deployable: true``) can also pass
+``github_credentials_id: '<jenkins-credential-id>'`` to override the git
+credential used at deploy time for pushing the release tag. When omitted, the
+deploy stage falls back to the credential configured on the Multibranch
+Pipeline's branch source, which is the right default for most repos.
+
 Tag prefix
 ----------
 
@@ -92,6 +98,6 @@ Fetching from internal Artifactory
 
 ``IHME_PYPI`` defaults to the internal Artifactory URL and is woven into
 ``EXTRA_INDEX_FLAGS`` for ``make install``. Override it to empty
-(``make install IHME_PYPI=``) in environments that can't reach IHME's network -
-e.g. GitHub Actions runners. ``make deploy-package-artifactory`` requires a
+(``make install IHME_PYPI=``) in environments that can't reach IHME's network
+(e.g. GitHub Actions runners). ``make deploy-package-artifactory`` requires a
 non-empty ``IHME_PYPI`` and is Jenkins/internal-only.

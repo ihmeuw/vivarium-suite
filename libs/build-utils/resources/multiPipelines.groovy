@@ -48,6 +48,18 @@ def generateMultibranchPipelines(List<Path> jenkinsfilePaths, Path rootFolder, S
     String repositoryOwner = matcher.group('owner')
     String repositoryName = matcher.group('repository').replaceFirst(/\.git$/, '')
 
+    // Magic strategy IDs come from the github-branch-source plugin's @Symbol-
+    // annotated enums; they're not hyperlinked anywhere in plugin docs but the
+    // source-of-truth values live in the plugin's BranchDiscoveryTrait and
+    // OriginPullRequestDiscoveryTrait classes:
+    //   https://github.com/jenkinsci/github-branch-source-plugin/blob/master/src/main/java/org/jenkinsci/plugins/github_branch_source/BranchDiscoveryTrait.java
+    //     (BranchDiscoveryTrait.DescriptorImpl: 1=EXCLUDE_PRS, 2=ONLY_PRS, 3=ALL)
+    //   https://github.com/jenkinsci/github-branch-source-plugin/blob/master/src/main/java/org/jenkinsci/plugins/github_branch_source/OriginPullRequestDiscoveryTrait.java
+    //     (OriginPullRequestDiscoveryTrait.DescriptorImpl: 1=MERGE, 2=HEAD, 3=BOTH)
+    // A plugin upgrade could in principle renumber these silently. If a job
+    // suddenly discovers the wrong set of refs, revisit these constants
+    // against the plugin version installed on Jenkins.
+
     // Discover branches strategies
     final int EXCLUDE_PULL_REQUESTS_STRATEGY_ID = 1
 

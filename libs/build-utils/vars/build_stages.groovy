@@ -66,12 +66,9 @@ def runDebugInfo(Map skipEval = [:]) {
     }
 }
 
-/**
- * Runs a closure in the package subdirectory for monorepo builds, or "." for single-repo builds.
- * Derives the subdirectory from JOB_NAME via get_package_subdir().
- */
+// Runs a closure in the package subdirectory for monorepo builds, or "." for single-repo builds.
 def withWorkingDirectory(Closure body) {
-    def subdir = get_package_subdir()
+    def subdir = env.PACKAGE_SUBDIR ?: get_package_subdir()
     echo "Working directory: ${subdir ?: 'repo root'}"
     dir(subdir ?: '.') {
         body()
@@ -108,9 +105,15 @@ def installPackage(String env_reqs = "") {
     // Callers in reusable_pipeline.groovy: "" (leaves base.mk's "dev" default for
     // standalone repos), "ci_jenkins" (monorepo libs), or "docs" (doc-only skip path).
     env_reqs = env_reqs ? "ENV_REQS=${env_reqs}" : ""
+    // Respect the IHME_PYPI env override (matching base.mk) so a caller that
+    // disables artifactory access via env.IHME_PYPI='' isn't silently re-pointed
+    // at the production index by the second pip install below. Defaults to the
+    // canonical artifactory URL when unset, preserving prior behavior.
+    String ihmePypi = env.IHME_PYPI ?: 'https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/'
+    String extraIndex = ihmePypi ? "--extra-index-url ${ihmePypi}simple/ --index-strategy unsafe-best-match" : ""
     stage("Install Package - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
-            sh "${ACTIVATE} && make install ${env_reqs} UV_FLAGS='--no-cache' && uv pip install . --extra-index-url https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/simple/ --index-strategy unsafe-best-match --no-cache"
+            sh "${ACTIVATE} && make install ${env_reqs} UV_FLAGS='--no-cache' && uv pip install . ${extraIndex} --no-cache"
         }
     }
 }
@@ -183,8 +186,8 @@ def testDocs() {
 def deployPackage(Map options = [:]) {
     // Resolve the credential used to checkout the repo. This is typically the
     // "Github App Enterprise" credential configured in the Multibranch Pipeline
-    // branch source.  Same credentials are needed to push tags
-    def gitCredentialsId = options.gitCredentialsId ?: scm.userRemoteConfigs[0].credentialsId
+    // branch source. Same credentials are needed to push tags.
+    def gitCredentialsId = options.gitCredentialsId ?: scm?.userRemoteConfigs?.getAt(0)?.credentialsId
     if (!gitCredentialsId) {
         error("deployPackage: No git credential available for pushing tags. " +
               "Either configure a credential on the Multibranch Pipeline branch source, " +
