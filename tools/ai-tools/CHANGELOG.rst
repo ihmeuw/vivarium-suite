@@ -1,3 +1,7 @@
+**0.17.0 - 06/16/26**
+
+ - Add ``ticket-triage`` skill and associated plumbing
+
 **0.16.1 - 06/16/26**
 
  - Update ``team-conventions`` to file pull requests as drafts and only mark them ready for review when flagging in ``#vivarium_dev``

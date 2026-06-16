@@ -22,15 +22,17 @@ It includes:
   - Testing coverage and quality
   - Documentation
 
-  The orchestrator also runs its own functional-correctness pass. 
+  The orchestrator also runs its own functional-correctness pass.
 
-Slash command (Claude Code only): ``/viv:code-review <PR or description>``.
+Slash command (Claude Code only): ``/viv:code-reviewer <PR or description>``.
+After the review, findings the user won't address in the current PR can be
+handed to the ``ticket-triage`` skill (see Skills below), to compile and file non-duplicate JIRA tickets.
 
 **Regression Debugger**
 
 - ``model_regression_debugger`` — orchestrator that traces data pipeline changes across repos to find the cause of simulation regressions
 
-Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>``.
+Slash command (Claude Code only): ``/viv:model-regression-debugger <symptom and context>``.
 
 **Git Rescue**
 
@@ -80,6 +82,11 @@ Slash command (Claude Code only): ``/viv:debug-regression <symptom and context>`
   browser-based Mermaid diagramming companion
 - ``commit-splitter`` — dole out a bulk uncommitted diff into reviewable
   commits, and PR-sized branches when scope warrants.
+  the current PR into Jira ticket recommendations.
+  the current PR into Jira ticket recommendations: classify
+  (address-now / ticket / drop, no silent drops), group by theme, check
+  the backlog for duplicates via ``_duplicate_finder``, then draft and
+  file per team conventions with every write gated on explicit approval.
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
@@ -123,7 +130,7 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
    /plugin install viv@vivarium-ai-tools
 
 Once installed, the canonical Claude Code entry points are the slash
-commands ``/viv:code-review`` and ``/viv:debug-regression``. These run
+commands ``/viv:code-reviewer`` and ``/viv:model-regression-debugger``. These run
 the parallel sub-agent fan-out at main-session level and produce a
 multi-lens review or investigation.
 
@@ -192,6 +199,9 @@ Code:
 - The 5 ``_review_*`` sub-agents have **no Bash access at all**. They
   are fed PR context by the slash command and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
+- ``_duplicate_finder`` has **no shell or file access at all** — its only
+  tools are the read-only Jira MCP ``search`` and ``get_issue`` calls it
+  uses to check candidate tickets against the backlog.
 - ``_diff_analyzer``, ``_hypothesis_tester``, and ``_split_proposer``
   declare ``Bash`` to run ``git`` and ``gh`` commands. In practice, every
   operation they perform is a read-only git command (``git diff``,
