@@ -26,9 +26,7 @@ It includes:
 
 Slash command (Claude Code only): ``/viv:code-reviewer <PR or description>``.
 After the review, findings the user won't address in the current PR can be
-handed to the ``ticket-triage`` skill (see Skills below), which recommends
-and files approval-gated Jira tickets, using the ``_duplicate_finder``
-sub-agent to check the backlog for duplicates.
+handed to the ``ticket-triage`` skill (see Skills below), to compile and file non-duplicate JIRA tickets.
 
 **Regression Debugger**
 
