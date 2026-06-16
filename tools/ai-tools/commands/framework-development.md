@@ -85,40 +85,58 @@ never the other's output.
 Neither changes a public signature; if a stub looks wrong it reports back and
 you adjust the contract (re-stub, re-seed the worktrees).
 
-## Phase 4 — Integrate and validate
+## Phase 4 — Converge: validate, then review (the critic loop)
 
-1. **Commit each build worktree first.** The writer agents have no Bash, so their
-   output is uncommitted in their worktrees — commit each (you have Bash) before
-   integrating, or ``git checkout <branch> -- …`` pulls the bare stub.
-2. Assemble the two disjoint lineages into the feature branch (``git checkout
-   <branch>-impl -- <src paths>`` and ``<branch>-tests -- <test paths>``, or
-   merge both). Reconcile rather than force-merge if a signature changed.
-3. Spawn `_validator` with the package path, env, and targets (``make test-*``,
-   ``make lint``, ``make mypy`` if the package ships ``py.typed``). It returns a
-   compact PASS/FAIL report. On FAIL, go to Phase 6.
+Integration, validation, and review run as **one bounded loop** with two gates in
+order — **validate** (objective: tests/lint/types) then **review** (advisory:
+quality). You advance to Phase 5 only when validation is green **and** review is
+clean, or when the iteration cap is hit (residuals carried forward, never
+silently dropped). Review is **mandatory on every path** — a run never reaches the
+PR gate unreviewed. A first-round validation failure is the *normal* TDD case
+(the implementer fills bodies blind to the assertions), so it must not route
+around review.
 
-A working env from Phase 0 (the package importable, ``make`` targets runnable) is
-a precondition here — if it can't be built, validation can't run, so resolve that
-before reaching this phase rather than reporting a false PASS. With an **editable
-install**, re-run ``make install`` from the integration checkout first so the env
-imports the integrated code and not whichever worktree it was last installed from.
+**Each round, in order:**
 
-When auto-fixing lint (``black``/``isort``), scope it to the changed files — a
-package-wide reformat sweeps unrelated files into the diff.
+1. **Integrate.** Commit each build worktree first — the writer agents have no
+   Bash, so their output sits uncommitted in their worktrees; commit each (you
+   have Bash) before integrating, or ``git checkout <branch> -- …`` pulls the bare
+   stub. Then assemble the two disjoint lineages into the feature branch
+   (``git checkout <branch>-impl -- <src paths>`` and ``<branch>-tests --
+   <test paths>``, or merge both); reconcile rather than force-merge if a
+   signature changed. With an **editable install**, re-run ``make install`` from
+   the integration checkout first, so the env imports the integrated code and not
+   whichever worktree it was last installed from.
 
-## Phase 5 — Review (shared review core)
+2. **Gate 1 — validate.** Spawn `_validator` with the package path, env, and
+   targets (typically ``make test-*``, ``make lint``, and ``make mypy`` if typed);
+   it returns a compact PASS/FAIL report. A working env from Phase 0 (the package
+   importable, ``make`` targets runnable) is a precondition — if it can't be
+   built, validation can't run, so resolve that rather than reporting a false
+   PASS. **On FAIL, skip review this round** (don't review red code): triage and
+   re-dispatch the fixes (below), then start the next round. When auto-fixing lint
+   (``black``/``isort``), scope it to the changed files — a package-wide reformat
+   sweeps unrelated files into the diff.
 
-Invoke the `_review-core` skill (`skills/_review-core/SKILL.md`), handing it the
-integrated diff, the changed-file list, and a one-line description of the
-feature. It fans out the five `_review_*` specialists and runs the
-functional-correctness pass in this main-session context — the same definition
-`/viv:code-reviewer` uses, so there is no duplication here — and returns the
-synthesized findings. Carry those findings into the Phase 6 critic loop.
+3. **Gate 2 — review (only on green).** Once validation passes, run review. The
+   **first** time you reach green, invoke the `_review-core` skill
+   (`skills/_review-core/SKILL.md`) with the integrated diff, the changed-file
+   list, and a one-line feature description — a full five-lens fan-out plus the
+   functional-correctness pass in this main-session context, the same definition
+   `/viv:code-reviewer` uses. It returns findings **bucketed by lens** (Design,
+   Maintainability, DRY, Tests, Documentation) alongside your own Functionality
+   pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
+   each already-fixed finding **back to the lens that raised it** for a
+   resolved/not-resolved verdict (cheaper, and it mirrors how build failures
+   route). When no must-fix findings remain, run one final full `_review-core`
+   pass as the convergence check — it catches any *new* qualitative issue a fix
+   introduced, which per-finding routing can't. A clean final pass means
+   **converged** → go to Phase 5. Otherwise triage and re-dispatch (below), then
+   start the next round.
 
-## Phase 6 — Generator/critic loop
-
-Triage each failure and **re-dispatch to the owning agent in its existing
-worktree** (the lineages stay separate, so the black box holds across rounds):
+**Triage and re-dispatch** each validation failure / review finding to the agent
+that owns it, in its existing worktree (the lineages stay separate, so the black
+box holds across rounds):
 
 - **Implementation bug** → `_feature_implementer` in ``<impl_path>``, failure
   described in behavioral terms (input → expected output), never as test source.
@@ -129,16 +147,20 @@ worktree** (the lineages stay separate, so the black box holds across rounds):
 - **Spec gap** (legit behavior with no stub) → add the body-less stub to the
   contract, propagate to both worktrees, re-dispatch.
 
-Re-integrate and re-validate each round. **Bound at ≤3 iterations**, then carry
-residual issues into the Phase 7 summary.
+Re-validate after **every** fix — including review fixes — so a quality fix can't
+silently break a test. **Bound at ≤3 corrective iterations** (the initial build
+and the first validate/review are not counted); on exhaustion, carry the residual
+validation failures and review findings into the Phase 5 summary — flagged, never
+silently dropped.
 
-## Phase 7 — Finalize and PR (gated)
+## Phase 5 — Finalize and PR (gated)
 
 1. Tear down the build worktrees and sub-branches (``git worktree remove``;
    tolerate a read-only ``.git`` in a sandbox).
-2. Summarize what was built, the test results, and any residual issues.
+2. Summarize what was built, the test results, and any residual validation
+   failures or review findings carried out of the Phase 4 loop.
 3. **Triage leftover findings.** For review findings you deliberately did not
-   address in this build (residual or out-of-scope after the Phase 6 loop),
+   address in this build (residual or out-of-scope after the Phase 4 loop),
    invoke the `ticket-triage` skill to classify them, dedup against the backlog,
    and file approval-gated Jira tickets. Skip if nothing is left unaddressed.
 4. **Ask the user to approve the PR.** Without approval, stop and leave the
@@ -146,5 +168,5 @@ residual issues into the Phase 7 summary.
 5. On approval, use the `commit-splitter` skill to organize the work into clean,
    reviewable commits, then use `team-conventions` to push and ``gh pr create``
    with the repo's PR template; report the URL and offer the ``#vivarium_dev``
-   flag.  Post a summary of the leftover findings from step 4 as a comment in the
+   flag. Post a summary of the leftover findings from step 3 as a comment in the
    PR.

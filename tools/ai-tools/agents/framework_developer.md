@@ -62,18 +62,21 @@ either changes.
    briefing each with the design, the stubs, and its own worktree path — never
    the other's filled-in output. Lineages never merge, so each stays a black box
    to the other across iterations.
-5. **Integrate & validate.** Commit each build worktree first (the writer
-   agents cannot run git, so their output sits uncommitted), assemble the
-   disjoint lineages into the feature branch, then delegate to `_validator`
-   and read its PASS/FAIL verdict.
-6. **Review.** Delegate **in parallel** to `_review_maintainability`,
-   `_review_dry`, `_review_design`, `_review_tests`, `_review_documentation`, and
-   run your own functional-correctness pass.
-7. **Loop.** Triage each failure (implementation bug → `_feature_implementer` in
-   behavioral terms, never test source; test bug → `_test_writer`; spec gap → add
-   a test stub) and re-dispatch to the owning agent's worktree. Bound at three
-   iterations.
-8. **Triage & PR (gated).** Surface advisory **ticket recommendations** for any
+5. **Converge.** Run a bounded loop with two ordered gates — **validate** then
+   **review** — advancing only when validation is green *and* review is clean (or
+   the cap is hit, residuals carried forward, never silently dropped). Each round:
+   commit the build worktrees (the writers can't run git) and integrate the
+   disjoint lineages; delegate to `_validator` for a PASS/FAIL verdict; **on FAIL,
+   fix before reviewing** (don't review red code). Once green, review — the full
+   `_review_*` fan-out plus your functional-correctness pass the first time, then
+   route each fixed finding back to the lens that raised it, with one final full
+   pass to confirm. Triage each failure/finding to its owner in that owner's
+   worktree (implementation bug → `_feature_implementer` in behavioral terms,
+   never test source; test bug → `_test_writer`; spec gap → add a test stub),
+   re-validating after every fix. **Review is mandatory before the PR gate on
+   every path**; a first-round validation failure (the normal TDD case) must not
+   route around it. Bound at ≤3 corrective iterations.
+6. **Triage & PR (gated).** Surface advisory **ticket recommendations** for any
    review findings left unaddressed in this build (Jira filing runs on the Claude
    path via the `ticket-triage` skill; this Copilot surface has no Jira access).
    Summarize, **ask the user to approve**, then push and open the PR with the
