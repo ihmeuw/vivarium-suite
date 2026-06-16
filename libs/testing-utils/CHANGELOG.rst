@@ -1,3 +1,8 @@
+**0.6.1 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **0.6.0 - 06/11/26**
 
 Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_testing_utils``

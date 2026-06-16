@@ -1,3 +1,8 @@
+**5.1.6 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **5.1.5 - 06/12/26**
 
 - Remove now-unnecessary type: ignore for matplotlib's FuncAnimation call

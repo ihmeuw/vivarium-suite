@@ -113,8 +113,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install vivarium_build_utils
-        # FIXME: Update to main once epic/monorepo is merged
-        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
+        run: uv pip install --system vivarium-build-utils
 
       - name: Install ${{ matrix.library }}
         # UV_FLAGS=--system installs into the runner's system Python (no venv).
