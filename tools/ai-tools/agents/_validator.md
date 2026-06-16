@@ -25,8 +25,7 @@ verdict and the salient failures, not thousands of lines of pytest log.
 
 ## Approach
 
-1. ``cd`` into the package (make targets read ``python_versions.json`` /
-   ``pyproject.toml`` from the cwd), activate the env, run each target. Prefer
+1. ``cd`` into the package, activate the env, run each target. Prefer
    ``make test-*`` over raw ``pytest``; rerun a single failing test
    (``pytest path::test -xvs``) only to extract a clean traceback.
 2. Read source/test files only as needed to locate a failure — you are read-only
