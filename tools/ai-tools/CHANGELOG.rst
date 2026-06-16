@@ -1,4 +1,4 @@
-**0.16.0 - 06/17/26**
+**0.16.0 - 06/16/26**
 
  - Extract the multi-lens review fan-out from ``code-reviewer`` into a shared internal ``_review-core`` skill
 
