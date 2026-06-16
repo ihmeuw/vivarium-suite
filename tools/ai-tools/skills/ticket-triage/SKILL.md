@@ -51,8 +51,7 @@ recommendations, and file the ones the user approves.
    in the draft so the user can place the ticket in that epic's backlog after
    creation (`create_issue` has no epic field; board placement stays manual
    per the hub policy). For a *comment* disposition, draft the comment, show
-   it, and on approval post it with
-   `mcp__plugin_mcp-jira_mcp-jira__add_comment`.
+   it, and on approval post it.
 8. **Report.** List the filed ticket keys/URLs, the comments posted, the
    skips, and the drops.
 
