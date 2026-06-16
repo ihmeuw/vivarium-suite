@@ -23,11 +23,9 @@ pipeline {
 
     stages {
         stage('Multi-Multibranch Pipeline') {
-            // Only provision Jenkins items from main builds. Skip on PR builds (where
-            // env.CHANGE_ID is set) to avoid race conditions between pr-head/pr-merge
-            // sub-jobs both trying to create or update the same items.
+            // Only provision Jenkins items from main builds.
             when {
-                not { changeRequest() }
+                branch 'main'
             }
             steps {
                 script {
