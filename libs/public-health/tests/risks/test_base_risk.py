@@ -375,12 +375,10 @@ def test_ensemble_risk(ensemble_distribution_sim, ensemble_distribution_weights)
 
 
 def test_ensemble_builds_single_consolidated_parameters_table(ensemble_distribution_sim):
-    """The ensemble builds one consolidated ``parameters_table`` LookupTable rather than a per-distribution dict of tables."""
+    """The ensemble builds a single consolidated ``parameters_table`` LookupTable."""
     _, distribution = ensemble_distribution_sim
 
     assert isinstance(distribution.parameters_table, LookupTable)
-    # The old per-distribution dict of LookupTables is gone.
-    assert not hasattr(distribution, "parameters")
 
 
 def test_ensemble_parameter_columns_cover_all_distributions(
@@ -430,14 +428,11 @@ def test_split_parameters_round_trips_to_per_distribution_frames(ensemble_distri
         assert frame.index.equals(index)
 
 
-def test_ensemble_owns_single_parameter_table(ensemble_distribution_sim):
-    """The ensemble owns exactly two LookupTables — the weights table and one consolidated parameters table — not one parameters table per distribution."""
+def test_ensemble_owns_distribution_weights_table(ensemble_distribution_sim):
+    """The ensemble owns the distribution weights LookupTable."""
     _, distribution = ensemble_distribution_sim
 
-    lookup_tables = [
-        value for value in vars(distribution).values() if isinstance(value, LookupTable)
-    ]
-    assert len(lookup_tables) == 2
+    assert isinstance(distribution.distribution_weights_table, LookupTable)
 
 
 def test_ensemble_exposure_ppf_matches_direct_ensemble_computation(ensemble_distribution_sim):

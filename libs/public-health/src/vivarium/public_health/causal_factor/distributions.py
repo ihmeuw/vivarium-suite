@@ -162,10 +162,6 @@ class EnsembleDistribution(CausalFactorDistribution):
     def setup(self, builder: Builder) -> None:
         """Build lookup tables, wire the PPF pipeline, and register the propensity.
 
-        Build the distribution weights table and the single consolidated
-        parameter table, wire up the exposure PPF pipeline (via ``super().setup``),
-        then register the ensemble propensity initializer.
-
         Parameters
         ----------
         builder
@@ -239,7 +235,8 @@ class EnsembleDistribution(CausalFactorDistribution):
         )
         return distributions, weights.reset_index(), parameters
 
-    def _namespaced_column(self, distribution: str, column: str) -> str:
+    @staticmethod
+    def _namespaced_column(distribution: str, column: str) -> str:
         """Return the consolidated-table column name for a distribution's parameter."""
         # The round-trip is ambiguous if a distribution or column name contains '.'.
         return f"{distribution}.{column}"
@@ -247,25 +244,7 @@ class EnsembleDistribution(CausalFactorDistribution):
     def _consolidate_parameter_tables(
         self, parameters: dict[str, pd.DataFrame]
     ) -> tuple[pd.DataFrame, dict[str, list[str]]]:
-        """Combine per-distribution parameter frames into one wide frame.
-
-        Namespace each distribution's parameter columns so that names shared
-        across distributions (e.g. ``x_min``/``x_max``) stay distinct, then
-        concatenate them column-wise, aligned on the shared demographic index,
-        into a single frame suitable for one consolidated lookup table.
-
-        Parameters
-        ----------
-        parameters
-            Mapping of distribution name to its parameter DataFrame, all sharing
-            the same demographic index.
-
-        Returns
-        -------
-            A tuple of the combined parameter DataFrame (namespaced value
-            columns) and a mapping of distribution name to its original,
-            un-namespaced column names.
-        """
+        """Concatenate the per-distribution parameter frames into one namespaced frame, returned with a map of each distribution's original columns."""
         parameter_columns = {
             distribution: list(data.columns) for distribution, data in parameters.items()
         }
@@ -281,25 +260,7 @@ class EnsembleDistribution(CausalFactorDistribution):
         return combined, parameter_columns
 
     def _split_parameters(self, parameters: pd.DataFrame) -> dict[str, pd.DataFrame]:
-        """Split a consolidated parameter lookup result by distribution.
-
-        Invert the consolidation performed by
-        :meth:`_consolidate_parameter_tables` for a looked-up frame, returning
-        the per-distribution parameter frames with their original column names so
-        they can be passed to
-        :class:`vivarium.risk_distributions.EnsembleDistribution`.
-
-        Parameters
-        ----------
-        parameters
-            A frame returned by the consolidated parameter lookup table, indexed
-            by simulant and carrying the namespaced parameter columns.
-
-        Returns
-        -------
-            Mapping of distribution name to its parameter DataFrame with original
-            (un-namespaced) columns.
-        """
+        """Split a consolidated lookup result back into per-distribution frames with their original columns."""
         return {
             distribution: parameters[
                 [self._namespaced_column(distribution, col) for col in columns]
@@ -311,9 +272,6 @@ class EnsembleDistribution(CausalFactorDistribution):
 
     def register_exposure_ppf_pipeline(self, builder: Builder) -> None:
         """Register the ensemble exposure PPF pipeline.
-
-        Require the distribution weights table and the single consolidated
-        parameter table as resources.
 
         Parameters
         ----------
