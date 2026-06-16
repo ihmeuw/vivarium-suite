@@ -87,6 +87,7 @@ class ResultsContext:
             builder.configuration.stratification.excluded_categories.to_dict()
         )
         self.get_tracked_query = builder.population.get_tracked_query()
+        self.get_all_attribute_names = builder.population.get_all_attribute_names
 
     # noinspection PyAttributeOutsideInit
     def set_default_stratifications(self, default_grouping_columns: list[str]) -> None:
