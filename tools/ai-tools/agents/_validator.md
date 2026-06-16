@@ -21,8 +21,7 @@ verdict and the salient failures, not thousands of lines of pytest log.
 ## Input
 
 - **Package path** (``libs/<pkg>``), **env** to activate, and **targets** to run
-  — typically ``make test-*``, ``make lint``, and ``make mypy`` when the package
-  ships a ``py.typed`` marker.
+  — typically ``make test-*``, ``make lint``, and ``make mypy`` if typed.
 
 ## Approach
 
