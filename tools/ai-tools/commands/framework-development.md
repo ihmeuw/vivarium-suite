@@ -127,8 +127,7 @@ around review.
    Maintainability, DRY, Tests, Documentation) alongside your own Functionality
    pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
    each already-fixed finding **back to the lens that raised it** for a
-   resolved/not-resolved verdict (cheaper, and it mirrors how build failures
-   route). When no must-fix findings remain, run one final full `_review-core`
+   resolved/not-resolved verdict. When no must-fix findings remain, run one final full `_review-core`
    pass as the convergence check — it catches any *new* qualitative issue a fix
    introduced, which per-finding routing can't. A clean final pass means
    **converged** → go to Phase 5. Otherwise triage and re-dispatch (below), then
