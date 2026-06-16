@@ -49,6 +49,11 @@ context which harness you are running in:
 
 If unsure, default to proceeding (Copilot path).
 
+> **Maintainers:** the Claude Code mirror of this review definition lives in
+> the `_review-core` skill (`skills/_review-core/SKILL.md`), invoked inline by
+> `/viv:code-reviewer`. Keep the Approach, Output Format, and Constraints below
+> in sync with that file when either changes.
+
 ## Approach
 
 1. **Gather context.** Use the active pull request context and read all changed files. Understand what the PR is doing holistically before delegating.
