@@ -1,6 +1,6 @@
 **0.16.0 - 06/11/26**
 
- - Extract the multi-lens review fan-out from ``code-reviewer`` into a shared internal ``_review-core`` skill (hidden from the ``/`` menu via ``user-invocable: false``), invoked inline so the review is defined once and reusable by other main-session commands without duplicating the fan-out
+ - Extract the multi-lens review fan-out from ``code-reviewer`` into a shared internal ``_review-core`` skill
 
 **0.15.1 - 06/11/26**
 
