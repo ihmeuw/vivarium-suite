@@ -9,13 +9,6 @@ Turn the leftover findings of a code review — the ones that are real but out o
 scope for the current PR — into vetted, deduplicated Jira ticket
 recommendations, and file the ones the user approves.
 
-## Input
-
-This skill works from **findings already in the current session** — a review
-that just ran (`/viv:code-reviewer`, or the review phase of a development
-workflow). If there is no review in context, say so and point the user at
-`/viv:code-reviewer` first; do not reconstruct findings from a PR's comment
-threads or ask the user to paste them.
 
 ## Process
 
