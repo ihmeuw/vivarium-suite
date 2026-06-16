@@ -319,7 +319,7 @@ def call(Map config = [:]){
           if (params.SLACK_TO) {
             channelName = params.SLACK_TO
             slackID = "channel"
-          } else if (env.BRANCH == "main" || scheduled_branches.contains(env.BRANCH)) {
+          } else if (env.BRANCH == "main" || scheduled_branches.contains(env.BRANCH_NAME)) {
             channelName = "simsci-ci-status"
             slackID = "channel"
           } else {

@@ -16,6 +16,7 @@
 - Search recursively for ``py.typed`` markers so monorepo packages are detected
 - ``make install``: install in editable_mode=compat to not break py.typed marker discovery
 - Add GitHUb App authenticaion support for deployable packages
+- Bugfix: Correctly handle capturing cron branch name to send Slack notification for schedule builds
 
 **3.2.2 - 05/07/26**
 
