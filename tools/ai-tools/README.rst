@@ -84,7 +84,7 @@ Slash command (Claude Code only): ``/viv:model-regression-debugger <symptom and 
   browser-based Mermaid diagramming companion
 - ``commit-splitter`` — dole out a bulk uncommitted diff into reviewable
   commits, and PR-sized branches when scope warrants.
-- ``ticket-triage`` — turn code-review findings that are out of scope for
+  the current PR into Jira ticket recommendations.
   the current PR into Jira ticket recommendations: classify
   (address-now / ticket / drop, no silent drops), group by theme, check
   the backlog for duplicates via ``_duplicate_finder``, then draft and
