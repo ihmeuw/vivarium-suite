@@ -1,17 +1,18 @@
-**0.18.0 - 06/11/26**
+**0.18.0 - 06/17/26**
 
  - Add ``framework-development`` slash command (and ``framework_developer`` Copilot orchestrator) for an end-to-end, black-box-TDD design→implement→verify→PR loop on a well-scoped framework feature, with ``_test_writer`` / ``_feature_implementer`` (write-capable, no Bash) and ``_validator`` sub-agents; its review phase consumes the shared ``_review-core`` skill and leftover findings go to ``ticket-triage``
 
-**0.17.0 - 06/11/26**
+**0.17.0 - 06/16/26**
 
- - Add ``ticket-triage`` skill: triages code-review findings the user won't address in the current PR into Jira ticket recommendations — three-way classification with no silent drops, theme-based grouping, backlog dedup, and drafting/filing per team conventions with every write gated on explicit approval
- - Add ``_duplicate_finder`` sub-agent that checks candidate tickets against the MIC backlog via read-only Jira MCP searches and returns a compact match digest, keeping raw JQL traffic out of the orchestrator's context
- - Offer ticket triage at the end of the ``code-reviewer`` slash command, and add an advisory "Ticket recommendations" output section to the Copilot ``code_reviewer`` orchestrator
- - Fix stale slash-command names in the README and the Copilot orchestrators' redirect messages: the live commands are ``/viv:code-reviewer`` and ``/viv:model-regression-debugger`` (named after their command files), not ``/viv:code-review`` / ``/viv:debug-regression``
+ - Add ``ticket-triage`` skill and associated plumbing
 
-**0.16.0 - 06/11/26**
+**0.16.1 - 06/16/26**
 
- - Extract the multi-lens review fan-out from ``code-reviewer`` into a shared internal ``_review-core`` skill (hidden from the ``/`` menu via ``user-invocable: false``), invoked inline so the review is defined once and reusable by other main-session commands without duplicating the fan-out
+ - Update ``team-conventions`` to file pull requests as drafts and only mark them ready for review when flagging in ``#vivarium_dev``
+ 
+**0.16.0 - 06/16/26**
+
+ - Extract the multi-lens review fan-out from ``code-reviewer`` into a shared internal ``_review-core`` skill
 
 **0.15.1 - 06/11/26**
 

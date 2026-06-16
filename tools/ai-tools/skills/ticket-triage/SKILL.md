@@ -9,13 +9,6 @@ Turn the leftover findings of a code review — the ones that are real but out o
 scope for the current PR — into vetted, deduplicated Jira ticket
 recommendations, and file the ones the user approves.
 
-## Input
-
-This skill works from **findings already in the current session** — a review
-that just ran (`/viv:code-reviewer`, or the review phase of a development
-workflow). If there is no review in context, say so and point the user at
-`/viv:code-reviewer` first; do not reconstruct findings from a PR's comment
-threads or ask the user to paste them.
 
 ## Process
 
@@ -58,8 +51,7 @@ threads or ask the user to paste them.
    in the draft so the user can place the ticket in that epic's backlog after
    creation (`create_issue` has no epic field; board placement stays manual
    per the hub policy). For a *comment* disposition, draft the comment, show
-   it, and on approval post it with
-   `mcp__plugin_mcp-jira_mcp-jira__add_comment`.
+   it, and on approval post it.
 8. **Report.** List the filed ticket keys/URLs, the comments posted, the
    skips, and the drops.
 

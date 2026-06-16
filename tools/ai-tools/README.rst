@@ -26,9 +26,7 @@ It includes:
 
 Slash command (Claude Code only): ``/viv:code-reviewer <PR or description>``.
 After the review, findings the user won't address in the current PR can be
-handed to the ``ticket-triage`` skill (see Skills below), which recommends
-and files approval-gated Jira tickets, using the ``_duplicate_finder``
-sub-agent to check the backlog for duplicates.
+handed to the ``ticket-triage`` skill (see Skills below), to compile and file non-duplicate JIRA tickets.
 
 **Regression Debugger**
 
@@ -105,10 +103,7 @@ Slash command (Claude Code only): ``/viv:framework-development <ticket or featur
 - ``commit-splitter`` — dole out a bulk uncommitted diff into reviewable
   commits, and PR-sized branches when scope warrants.
 - ``ticket-triage`` — turn code-review findings that are out of scope for
-  the current PR into Jira ticket recommendations: classify
-  (address-now / ticket / drop, no silent drops), group by theme, check
-  the backlog for duplicates via ``_duplicate_finder``, then draft and
-  file per team conventions with every write gated on explicit approval.
+  the current PR into Jira ticket recommendations.
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
