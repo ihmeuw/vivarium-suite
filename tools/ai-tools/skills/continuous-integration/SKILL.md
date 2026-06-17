@@ -12,8 +12,6 @@ Vivarium-suite runs two parallel CI systems for each `libs/<pkg>` change. This s
 - **GitHub Actions** (`.github/workflows/ci.yml`) runs on push/PR for *affected* packages only. The `detect-changes` job diffs against the base ref and builds a `{library, python-version}` matrix from each changed lib's `python_versions.json`. Root-level changes (`pyproject.toml`, `Makefile`, workflows) trigger a full rebuild. GH runners install `vivarium_build_utils` from git, then run `make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=`. `IHME_PYPI=` disables the artifactory extra-index because GH runners cannot reach IHME's firewalled artifactory; packages with artifactory-only dependencies are only fully exercised in Jenkins.
 - **Jenkins** (`jenkins.simsci.ihme.washington.edu`) is provisioned by the top-level `Jenkinsfile`, which calls `monorepo(...)` from `vivarium_build_utils` to auto-create one Multibranch Pipeline per `libs/*/Jenkinsfile`. Adding a new package under `libs/` is picked up on the next main build. Each lib's Jenkinsfile delegates to `reusable_pipeline(...)` from the same shared library.
 
-`vivarium_build_utils` is currently pinned to the `epic/monorepo` branch in both Jenkinsfiles and the GH workflow installs — search for `FIXME: Update to main` before touching anything that pulls in vbu.
-
 ## Vivarium-suite Jenkins job layout
 
 The `monorepo(...)` call described above produces this folder/job hierarchy on Jenkins:

@@ -1,3 +1,8 @@
+**6.0.2 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **6.0.1 - 06/11/26**
 
 - Update vivarium_testing_utils imports to vivarium.testing_utils

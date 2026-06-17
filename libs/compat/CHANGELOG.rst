@@ -1,3 +1,8 @@
+**0.6.2 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **0.6.1 - 05/22/26**
 
 - Remove the layered_config_tree and vivarium redirects (temporarily)
