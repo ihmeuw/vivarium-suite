@@ -1,6 +1,6 @@
 **0.17.1 - 06/17/26**
 
- - Document running two GitHub MCP identities in the ``plugin-setup`` skill — ``ihmeuw`` via the default ``github`` server and ``ihme-internal`` via a second ``github-internal`` server (``gh``-OAuth auth, distinct ``?id=internal`` URL)
+ - Document running two GitHub MCP identities in the ``plugin-setup`` skill
 
 **0.17.0 - 06/16/26**
 
