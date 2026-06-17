@@ -20,19 +20,6 @@ from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
 )
 
 
-@pytest.fixture
-def caplog(caplog: LogCaptureFixture) -> Generator[LogCaptureFixture, None, None]:
-    handler_id = logger.add(
-        caplog.handler,
-        format="{message}",
-        level=0,
-        filter=lambda record: record["level"].no >= caplog.handler.level,
-        enqueue=False,  # Set to 'True' if your test is spawning child processes.
-    )
-    yield caplog
-    logger.remove(handler_id)
-
-
 @pytest.mark.parametrize(
     "make_dir, has_metadata_file, has_backup, multiple_backups, backup_freq",
     [
@@ -47,7 +34,6 @@ def caplog(caplog: LogCaptureFixture) -> Generator[LogCaptureFixture, None, None
 )
 def test_get_backup(
     tmp_path: Path,
-    caplog: LogCaptureFixture,
     make_dir: bool,
     has_metadata_file: bool,
     has_backup: bool,
