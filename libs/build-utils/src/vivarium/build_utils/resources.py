@@ -1,11 +1,11 @@
-"""Utilities for finding vivarium_build_utils resources."""
+"""Utilities for finding vivarium.build_utils resources."""
 
 import os
 from pathlib import Path
 
 
 def get_resources_path() -> str:
-    """Get the path to the vivarium_build_utils resources directory.
+    """Get the path to the vivarium.build_utils resources directory.
 
     Returns
     -------
@@ -21,7 +21,7 @@ def get_resources_path() -> str:
     # (for editable installs and Jenkins builds).
     prioritized_candidates = (
         this_file.parent / "resources",
-        this_file.parents[2] / "resources",
+        this_file.parents[3] / "resources",
     )
     resources_path = next((path for path in prioritized_candidates if path.exists()), None)
 
@@ -33,6 +33,6 @@ def get_resources_path() -> str:
     return str(resources_path)
 
 
-def get_makefiles_path():
+def get_makefiles_path() -> str:
     """Get the path to the makefiles directory."""
     return os.path.join(get_resources_path(), "makefiles")

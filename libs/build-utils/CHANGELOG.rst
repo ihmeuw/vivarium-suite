@@ -1,3 +1,12 @@
+**4.0.0 - 06/17/26**
+
+First release from the vivarium-suite monorepo; the standalone
+``ihmeuw/vivarium_build_utils`` GitHub repository has been archived.
+
+Breaking changes:
+
+- Import changed from ``vivarium_build_utils`` to ``vivarium.build_utils``.
+
 **3.3.2 - 06/17/26**
 
 - Bugfix: Resolve vivarium-built-utils version even if the package doesn't declare it as a dependency

@@ -8,8 +8,8 @@ bootstrap script in the /bootstrap/vars/ directory.
 This script:
 1. Reads python_versions.json to get the maximum supported Python version
 2. Runs pip with --dry-run to resolve dependencies
-3. Extracts the vivarium_build_utils version from the output
-4. Returns the version with 'v' prefix for git tagging convention
+3. Extracts the vivarium-build-utils version from the output
+4. Returns the monorepo per-lib tag form (``vivarium-build-utils-v<X.Y.Z>``)
 
 """
 
@@ -100,11 +100,11 @@ def _run_pip_dry_run(python_version: str) -> str:
 
 
 def _extract_vbu_version(dry_run_output: str) -> str:
-    """Extract vivarium_build_utils version from pip dry-run output."""
+    """Extract vivarium-build-utils version from pip dry-run output."""
     # uv logs installed packages like:
     #   + vivarium-build-utils==1.2.3
     # OR
-    #   + vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@<HASH>
+    #   + vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium-suite.git@<HASH>
     for line in dry_run_output.split("\n"):
         if "+ vivarium-build-utils" in line:
             # Check for pinned version first
@@ -113,12 +113,11 @@ def _extract_vbu_version(dry_run_output: str) -> str:
             )
             if version_match:
                 version = version_match.group(1)
-                # Add 'v' prefix for git tagging convention
-                return f"v{version}"
+                return f"vivarium-build-utils-v{version}"
 
             # Check for git reference
             git_match = re.search(
-                r"vivarium-build-utils @ git\+https://github\.com/ihmeuw/vivarium_build_utils\.git@([a-f0-9]+)",
+                r"vivarium-build-utils @ git\+https://github\.com/ihmeuw/vivarium-suite\.git@([a-f0-9]+)",
                 line,
             )
             if git_match:

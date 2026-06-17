@@ -4,16 +4,20 @@ Vivarium Build Utils
 
 Vivarium Build Utils contains shared build utilities for Simulation Science projects.
 
-You can install ``vivarium_build_utils`` from PyPI with pip::
+You can install ``vivarium-build-utils`` from PyPI with pip:
 
-  $ pip install vivarium_build_utils
+.. code-block:: bash
 
-or build it from source with::
+   pip install vivarium-build-utils
 
-  $ git clone https://github.com/ihmeuw/vivarium_build_utils.git
-  $ cd vivarium_build_utils
-  $ conda create -n ENVIRONMENT_NAME
-  $ pip install -e .
+or build it from source by cloning the monorepo and installing this package:
+
+.. code-block:: bash
+
+   git clone https://github.com/ihmeuw/vivarium-suite.git
+   cd vivarium-suite/libs/build-utils
+   conda create -n ENVIRONMENT_NAME
+   pip install -e .
 
 Overview
 ========
@@ -29,7 +33,7 @@ installed, run `make help` in the terminal.
 Monorepo support
 ================
 
-``vivarium_build_utils`` supports both standalone repos and monorepos where many
+``vivarium-build-utils`` supports both standalone repos and monorepos where many
 packages live under ``libs/<pkg>/``. Standalone repos keep working with no changes;
 the sections below describe what's needed for a monorepo.
 

@@ -1,27 +1,89 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "vivarium-build-utils"
+description = "Shared build utilities and Jenkins pipeline library for Simulation Science projects."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+# No runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+cluster = []
+docs = []
+interactive = []
+test = ["vivarium-dependencies[pytest]"]
+lint = ["vivarium-dependencies[lint]"]
+dev = ["vivarium-build-utils[docs,interactive,test,lint]"]
+ci_github = ["vivarium-build-utils[test,docs,lint]"]
+ci_jenkins = ["vivarium-build-utils[ci_github,cluster]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Ship ``vivarium.build_utils`` (and any sub-packages). ``vivarium`` itself is
+# excluded so the wheel doesn't ship ``vivarium/__init__.py`` - the namespace
+# owner (vivarium-engine) provides the canonical one.
+include = ["vivarium.build_utils", "vivarium.build_utils.*"]
+
+[tool.setuptools.package-data]
+# setup.py's CustomBuildPy copies resources/ into the package at build time so
+# the wheel ships vivarium/build_utils/resources/. resources/ lives at the lib
+# root (not under src/) so Jenkins can also load it as a libraryResource.
+"vivarium.build_utils" = ["resources/**/*"]
+# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
+# users install it from PyPI and so mypy also finds the marker via the
+# editable install during in-repo type checks.
+"vivarium.public_health" = ["py.typed"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with "vivarium-build-utils-v"
+# (e.g. vivarium-build-utils-v3.4.0). tag_regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so
+# siblings' releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-build-utils-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-build-utils-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
+[tool.pytest.ini_options]
+# Pin the pytest rootdir contract: tests import from each other using absolute
+# `from tests.X` paths, which only resolve when pytest's rootdir is this lib.
+# Declaring testpaths here makes monorepo-root invocations (pytest libs/public-health/)
+# work the same as in-lib invocations.
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["vivarium.build_utils"]
+
+[tool.coverage.report]
+show_missing = true
+
 [tool.black]
-line_length = 94
+line-length = 94
 exclude = '''.*examples.*'''
 
 [tool.isort]
-line_length = 94
 profile = "black"
-multi_line_output = 3 # Vertical Hanging Indent, see https://pypi.org/project/isort/
+line_length = 94
+multi_line_output = 3
 skip_glob = ["*/examples/*", "**/examples/*"]
 
 [tool.mypy]
-# This is the global mypy configuration.
-strict = true  # See all the enabled flags `mypy --help | grep -A 10 'Strict mode'`
+# WARNING: settings here that aren't mypy_path / explicit_package_bases must be
+# kept in sync manually with the monorepo-root [tool.mypy]. The local `make mypy`
+# passes --config-file pyproject.toml (this file), so mypy doesn't read the root
+# config. If you change the root, change this too.
+strict = true
 disallow_any_unimported = false
 implicit_reexport = true
 exclude = [
-    'build',
-    # Files below here should have their errors fixed and then be removed from this list
-    # You will need to remove the mypy: ignore-errors comment from the file heading as well
-    'setup.py',
+    "build",
+    "setup.py",
 ]
 
 disable_error_code = []
