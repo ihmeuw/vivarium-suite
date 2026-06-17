@@ -152,8 +152,7 @@ jobs:
 
       - name: Install vivarium_build_utils
         # Install early so `make validate-tag` is available
-        # FIXME: Update to main once epic/monorepo is merged
-        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
+        run: uv pip install --system vivarium-build-utils
 
       - name: Create and push tag
         env:
