@@ -88,4 +88,4 @@ class MicrodataObserver(Observer):
     """
 
     def register_observations(self, builder: Builder) -> None:
-        raise NotImplementedError
+        builder.results.register_microdata_observation(name=self.name)

@@ -19,6 +19,7 @@ from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
+    MicrodataObservation,
     StratifiedObservation,
     UnstratifiedObservation,
 )
@@ -434,6 +435,53 @@ class ResultsInterface(Interface):
         """
         self._manager.register_observation(
             observation_type=ConcatenatingObservation,
+            name=name,
+            population_filter=PopulationFilter(pop_filter, include_untracked),
+            when=when,
+            requires_attributes=requires_attributes,
+            results_formatter=results_formatter,
+            to_observe=to_observe,
+        )
+
+    def register_microdata_observation(
+        self,
+        name: str,
+        pop_filter: str = "",
+        include_untracked: bool = False,
+        when: str = lifecycle_states.COLLECT_METRICS,
+        requires_attributes: list[str] = [],
+        results_formatter: ResultsFormatter = _default_unstratified_observation_formatter,
+        to_observe: Callable[[Event], bool] = lambda event: True,
+    ) -> None:
+        """Registers a microdata observation that records every population attribute.
+
+        A microdata observation is a concatenating observation that records the full
+        population state - every attribute, resolved at gather time - rather than a fixed
+        set of columns.
+
+        Parameters
+        ----------
+        name
+            Name of the observation. It will also be the name of the output results file
+            for this particular observation.
+        pop_filter
+            A Pandas query filter string to filter the population down to the simulants who should
+            be considered for the observation.
+        include_untracked
+            Whether to include simulants who are untracked from this observation.
+        when
+            Name of the lifecycle phase the observation should happen. Valid values are:
+            "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
+        requires_attributes
+            Additional population attributes required for this observation. The full set of
+            attributes is resolved automatically at gather time.
+        results_formatter
+            Function that formats the raw observation results.
+        to_observe
+            Function that determines whether to perform an observation on this Event.
+        """
+        self._manager.register_observation(
+            observation_type=MicrodataObservation,
             name=name,
             population_filter=PopulationFilter(pop_filter, include_untracked),
             when=when,
