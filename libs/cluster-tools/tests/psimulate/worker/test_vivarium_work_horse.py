@@ -1,4 +1,3 @@
-from collections.abc import Generator
 from pathlib import Path
 from time import time
 from typing import cast
@@ -6,9 +5,6 @@ from typing import cast
 import dill
 import pandas as pd
 import pytest
-from _pytest.logging import LogCaptureFixture
-from loguru import logger
-from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
