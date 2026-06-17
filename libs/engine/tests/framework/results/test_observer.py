@@ -177,8 +177,8 @@ def test_microdata_observer_observes_only_configured_timesteps() -> None:
     assert not sim.get_results()["microdata_observer"].empty
 
 
-def test_microdata_observer_row_limit_caps_rows_per_timestep() -> None:
-    """`row_limit` caps the rows recorded per observed timestep (row_limit // n_observed_timesteps)."""
+def test_microdata_observer_row_limit_randomly_samples_per_timestep() -> None:
+    """`row_limit` caps to row_limit // n_observed_timesteps rows, randomly resampled each step."""
     config = {
         **HARRY_POTTER_CONFIG,
         "microdata_observer": {
@@ -199,4 +199,7 @@ def test_microdata_observer_row_limit_caps_rows_per_timestep() -> None:
     sim.step()  # 2027-04-22 -> observed
     result = sim.get_results()["microdata_observer"]
 
-    assert list(result.groupby("event_time").size()) == [10, 10]
+    cohorts = result.groupby("event_time")["student_id"].apply(set)
+    assert all(len(cohort) == 10 for cohort in cohorts)
+    # A fresh random sample each step - not the same first-N simulants.
+    assert cohorts.iloc[0] != cohorts.iloc[1]

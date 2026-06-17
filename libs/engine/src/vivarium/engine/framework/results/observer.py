@@ -29,10 +29,6 @@ if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
     from vivarium.engine.framework.event import Event
 
-MICRODATA_PROPENSITY_STREAM = "microdata_observation_propensity"
-"""Randomness stream key for the static per-simulant observation propensity. A single shared
-key so all microdata observers draw the same propensity per simulant."""
-
 
 class Observer(Component, ABC):
     """An abstract base class intended to be subclassed by observer components.
@@ -116,21 +112,17 @@ class MicrodataObserver(Observer):
                 f"The '{self.name}' observer requires a non-empty 'columns' list."
             )
         timesteps = list(config.timesteps)
-        row_limit = config.row_limit
-        n_observed_timesteps = 1
-        propensity_source = None
-        if row_limit is not None:
-            n_observed_timesteps = self._count_observed_timesteps(builder, timesteps)
-            propensity_source = builder.randomness.get_stream(
-                MICRODATA_PROPENSITY_STREAM
-            ).get_draw
+        max_rows = None
+        sampler = None
+        if config.row_limit is not None:
+            max_rows = config.row_limit // self._count_observed_timesteps(builder, timesteps)
+            sampler = builder.randomness.get_stream(self.name).get_draw
         builder.results.register_microdata_observation(
             name=self.name,
             columns=columns,
             pop_filter=self._build_pop_filter(list(config.filter)),
-            row_limit=row_limit,
-            n_observed_timesteps=n_observed_timesteps,
-            propensity_source=propensity_source,
+            max_rows=max_rows,
+            sampler=sampler,
             to_observe=self._build_to_observe(timesteps),
         )
 

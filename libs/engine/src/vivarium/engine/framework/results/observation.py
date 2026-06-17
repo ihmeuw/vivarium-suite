@@ -574,13 +574,17 @@ class MicrodataObservation(ConcatenatingObservation):
     """Concatenating observation that records a configured set of columns.
 
     Records the columns named in ``requires_attributes`` (plus the ``event_time`` prepended by
-    :class:`ConcatenatingObservation`) for each simulant, concatenated across timesteps, optionally
-    capped to a fixed cohort via ``row_limit``.
+    :class:`ConcatenatingObservation`) for each simulant, concatenated across timesteps, capped to
+    at most ``max_rows`` rows per observed timestep. When capping, the rows are a fresh **random**
+    sample drawn each observed timestep (via ``sampler``), not the first ``max_rows`` simulants.
 
     Attributes
     ----------
-    row_limit
-        Per-timestep cap on the number of simulants recorded. If None, no cap is applied.
+    max_rows
+        Maximum number of rows to record per observed timestep. If None, no cap is applied.
+    sampler
+        Callable returning a per-simulant random draw in ``[0, 1)`` for an index, used to pick the
+        capped sample. Required when ``max_rows`` is set.
     """
 
     def __init__(
@@ -590,9 +594,8 @@ class MicrodataObservation(ConcatenatingObservation):
         when: str,
         requires_attributes: list[str],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
-        row_limit: int | None = None,
-        n_observed_timesteps: int = 1,
-        propensity_source: Callable[[pd.Index[int]], pd.Series[float]] | None = None,
+        max_rows: int | None = None,
+        sampler: Callable[[pd.Index[int]], pd.Series[float]] | None = None,
         to_observe: Callable[[Event], bool] = lambda event: True,
     ):
         super().__init__(
@@ -603,29 +606,16 @@ class MicrodataObservation(ConcatenatingObservation):
             results_formatter=results_formatter,
             to_observe=to_observe,
         )
-        self.row_limit = row_limit
-        self.n_observed_timesteps = n_observed_timesteps
-        self.propensity_source = propensity_source
-        self._cohort: pd.Index[int] | None = None
+        self.max_rows = max_rows
+        self.sampler = sampler
 
     def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
-        """Return the configured columns for the (optionally capped) cohort."""
-        pop = self._apply_row_cap(pop)
+        """Return the configured columns, capped to a random sample of at most ``max_rows`` rows."""
+        if (
+            self.max_rows is not None
+            and self.sampler is not None
+            and len(pop) > self.max_rows
+        ):
+            sampled = self.sampler(pop.index).nsmallest(self.max_rows).index
+            pop = pop[pop.index.isin(sampled)]
         return super().get_results_of_interest(pop)
-
-    def _apply_row_cap(self, pop: pd.DataFrame) -> pd.DataFrame:
-        """Restrict to a fixed cohort of the lowest-propensity simulants.
-
-        The cohort is chosen once, from the first observed population, as the
-        ``row_limit // n_observed_timesteps`` simulants with the smallest propensity. It is never
-        re-selected, so as cohort members leave the population their rows simply drop out and the
-        freed slots are not backfilled.
-        """
-        if self.row_limit is None:
-            return pop
-        if self._cohort is None:
-            assert self.propensity_source is not None
-            cohort_size = self.row_limit // self.n_observed_timesteps
-            propensity = self.propensity_source(pop.index)
-            self._cohort = propensity.nsmallest(cohort_size).index
-        return pop[pop.index.isin(self._cohort)]

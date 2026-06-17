@@ -20,7 +20,6 @@ from vivarium.engine.framework.results.interface import PopulationFilter
 from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
-    MicrodataObservation,
     Observation,
     StratifiedObservation,
     UnstratifiedObservation,
@@ -361,32 +360,3 @@ class TestCreateExpandedDfOrderedCategoricals:
         assert isinstance(dtype, pd.CategoricalDtype)
         assert dtype.ordered is True
         assert list(dtype.categories) == ["all"]
-
-
-def test_microdata_observation_does_not_backfill_departed_cohort_members() -> None:
-    """A cohort member that leaves the population is not replaced by a new simulant."""
-    # Simulant 3 has the lowest propensity, so a resample/backfill regression would visibly
-    # pull it into the cohort once it appears.
-    propensity = pd.Series([0.1, 0.2, 0.3, 0.05], index=[0, 1, 2, 3])
-    observation = MicrodataObservation(
-        name="microdata_observer",
-        population_filter=PopulationFilter(),
-        when="whenevs",
-        requires_attributes=["x"],
-        results_formatter=lambda _, results: results,
-        row_limit=2,
-        n_observed_timesteps=1,  # cohort size = 2 // 1
-        propensity_source=lambda index: propensity.loc[index],
-    )
-
-    # First observation fixes the cohort to the two lowest-propensity simulants.
-    first = observation.get_results_of_interest(
-        pd.DataFrame({"event_time": 0, "x": 0}, index=[0, 1, 2])
-    )
-    assert set(first.index) == {0, 1}
-
-    # Cohort member 0 has left and a new simulant 3 has appeared.
-    second = observation.get_results_of_interest(
-        pd.DataFrame({"event_time": 0, "x": 0}, index=[1, 2, 3])
-    )
-    assert set(second.index) == {1}  # only the surviving member; simulant 3 is not pulled in
