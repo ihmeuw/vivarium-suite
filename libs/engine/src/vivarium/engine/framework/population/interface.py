@@ -125,4 +125,4 @@ class PopulationInterface(Interface):
 
     def get_all_attribute_names(self) -> list[str]:
         """Return the names of all attributes in the population state table."""
-        raise NotImplementedError
+        return self._manager.get_all_attribute_names()

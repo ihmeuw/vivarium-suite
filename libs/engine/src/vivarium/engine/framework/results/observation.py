@@ -33,6 +33,7 @@ from pandas.core.groupby.generic import DataFrameGroupBy
 from vivarium.engine.exceptions import VivariumError
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.results.stratification import (
+    STRATIFICATION_COLUMN_SUFFIX,
     Stratification,
     get_original_col_name,
 )
@@ -576,10 +577,54 @@ class MicrodataObservation(ConcatenatingObservation):
     """Concatenating observation that records every population attribute.
 
     Unlike :class:`ConcatenatingObservation`, which records only the columns named in
-    ``requires_attributes``, this observation records the full prepared population (every
-    attribute resolved by the results system at gather time).
+    ``requires_attributes``, this observation sets ``requires_all_attributes`` so the results
+    system resolves every attribute at gather time, and records the full prepared population.
+
+    Attributes
+    ----------
+    name
+        Name of the observation. It will also be the name of the output results file
+        for this particular observation.
+    population_filter
+        A named tuple of population filtering details. The first item is a Pandas
+        query string to filter the population down to the simulants who should be
+        considered for the observation. The second item is a boolean indicating whether
+        to include untracked simulants from the observation.
+    when
+        Name of the lifecycle phase the observation should happen.
+    requires_attributes
+        The population attributes required for this observation.
+    results_formatter
+        Method or function that formats the raw observation results.
+    to_observe
+        Method or function that determines whether to perform an observation on this Event.
+
     """
 
+    def __init__(
+        self,
+        name: str,
+        population_filter: PopulationFilter,
+        when: str,
+        requires_attributes: list[str],
+        results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
+        to_observe: Callable[[Event], bool] = lambda event: True,
+    ):
+        super().__init__(
+            name=name,
+            population_filter=population_filter,
+            when=when,
+            requires_attributes=requires_attributes,
+            results_formatter=results_formatter,
+            to_observe=to_observe,
+        )
+        self.requires_all_attributes = True
+
     def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
-        """Return the full prepared population."""
-        raise NotImplementedError
+        """Return the full prepared population, excluding internal mapped stratification columns."""
+        mapped_columns = [
+            column
+            for column in pop.columns
+            if column.endswith(f"_{STRATIFICATION_COLUMN_SUFFIX}")
+        ]
+        return pop.drop(columns=mapped_columns)
