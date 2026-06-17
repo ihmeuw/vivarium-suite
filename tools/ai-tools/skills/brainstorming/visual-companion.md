@@ -109,9 +109,10 @@ When calling this via the Bash tool, set `run_in_background: true`. Then read `$
 
 **Codex:**
 ```bash
-# Codex reaps background processes. The script auto-detects CODEX_CI and
-# switches to foreground mode. Run it normally — no extra flags needed.
-scripts/start-server.sh --project-dir /path/to/project
+# Codex reaps background processes, so a backgrounded server gets killed.
+# Pass --foreground and launch with Codex's background mechanism so the
+# process survives across turns (the script does not auto-detect Codex).
+scripts/start-server.sh --project-dir /path/to/project --foreground
 ```
 
 **Gemini CLI:**

@@ -7,9 +7,10 @@ tools:
   # Claude tools are intentionally omitted: on Claude Code, the canonical
   # entry is the `/viv:code-reviewer` slash command (see
   # `commands/code-reviewer.md`), which fans out at main-session level.
-  # Claude sub-agents cannot spawn further sub-agents, so making this agent
-  # work on Claude would require duplicating the slash command's prompt
-  # with no upside. The body below redirects Claude users to the slash
+  # Making this agent work on Claude would just duplicate that slash command's
+  # prompt with no upside. (Sub-agents can nest as of Claude Code v2.1.172, but
+  # the fan-out is deliberately kept one level deep.)
+  # The body below redirects Claude users to the slash
   # command if this agent is invoked directly via `@code_reviewer`.
   - read
   - search
@@ -40,8 +41,7 @@ context which harness you are running in:
 
   > This entry point is for VS Code Copilot. On Claude Code, please use
   > `/viv:code-reviewer <PR or description>` instead — that path fans out
-  > to specialist sub-agents in parallel via the main session, which a
-  > Claude sub-agent cannot do.
+  > to specialist sub-agents in parallel via the main session.
 
 - **If you are running in VS Code Copilot** (system context identifies
   you as GitHub Copilot or Visual Studio Code) — proceed with the
