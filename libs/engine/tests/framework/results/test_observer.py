@@ -4,7 +4,12 @@ import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree.main import ConfigTree
 
-from tests.framework.results.helpers import HARRY_POTTER_CONFIG, Hogwarts
+from tests.framework.results.helpers import (
+    HARRY_POTTER_CONFIG,
+    Hogwarts,
+    HogwartsResultsStratifier,
+    HousePointsObserver,
+)
 from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.components.manager import ComponentConfigError
 from vivarium.engine.framework.engine import Builder
@@ -117,7 +122,7 @@ def test_microdata_observer_records_all_attributes() -> None:
         components=[Hogwarts(), MicrodataObserver()],
     )
     expected_attributes = set(sim.get_attribute_names())
-    n_simulants = len(sim.get_population())
+    n_simulants = len(sim.get_population_index())
 
     sim.step()
     one_step = sim.get_results()["microdata_observer"]
@@ -128,3 +133,22 @@ def test_microdata_observer_records_all_attributes() -> None:
     assert "event_time" in one_step.columns
     assert len(one_step) == n_simulants
     assert len(two_steps) == 2 * n_simulants
+
+
+def test_microdata_observer_excludes_mapped_stratification_columns() -> None:
+    """Internal mapped-stratification columns added for a co-firing stratified observer are not recorded."""
+    sim = InteractiveContext(
+        configuration=HARRY_POTTER_CONFIG,
+        components=[
+            Hogwarts(),
+            HogwartsResultsStratifier(),
+            HousePointsObserver(),
+            MicrodataObserver(),
+        ],
+    )
+
+    sim.step()
+    result = sim.get_results()["microdata_observer"]
+
+    assert not any(column.endswith("_mapped_values") for column in result.columns)
+    assert "student_house" in result.columns
