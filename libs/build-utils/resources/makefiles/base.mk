@@ -1,0 +1,302 @@
+SHELL := /bin/bash
+UTILS_DIR := $(dir $(abspath $(dir $(abspath $(dir $(lastword $(MAKEFILE_LIST)))))))
+.DEFAULT_GOAL := list # If someone runs "make", run "make list"
+
+# Source files to format, lint, and type check.
+LOCATIONS=src tests
+
+# Unless overridden, build conda environment using the package name.
+SAFE_NAME = $(shell python -c "from pkg_resources import safe_name; print(safe_name(\"$(PACKAGE_NAME)\"))")
+
+# DIST_NAME is the PyPI distribution name read from pyproject.toml's `[project].name`
+# (e.g. "vivarium-cluster-tools" for libs/cluster-tools/). Parsed with sed/grep
+# rather than tomllib so this works on Python <3.11 too.
+DIST_NAME ?= $(shell sed -n '/^\[project\]/,/^\[/p' pyproject.toml 2>/dev/null | grep -E '^name *=' | head -1 | sed -E 's/^name *= *"([^"]+)".*$$/\1/')
+# If we're inside libs/<pkg>/ (i.e. the monorepo), the package's [project] block
+# exists, and DIST_NAME came up empty, fail the build.
+ifeq ($(DIST_NAME),)
+ifneq ($(findstring /libs/$(PACKAGE_NAME),$(CURDIR)),)
+ifneq ($(shell grep -E '^\[project\]' pyproject.toml 2>/dev/null),)
+$(error DIST_NAME parse failed: pyproject.toml has a [project] block but no `name = "..."` line in the canonical double-quoted form. Check for single quotes, multi-line values, or `dynamic = ["name"]` and adjust either the pyproject or this base.mk regex.)
+endif
+endif
+endif
+# Fall back to PACKAGE_NAME for legacy repos that don't declare `[project]` in pyproject.toml.
+DIST_NAME := $(if $(DIST_NAME),$(DIST_NAME),$(PACKAGE_NAME))
+
+PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+
+# Use this URL to pull IHME Python packages and deploy this package to PyPi.
+# Override with `make ... IHME_PYPI=` (empty) when running in environments that
+# can't reach the artifactory (e.g. GitHub Actions runners outside the IHME network).
+IHME_PYPI ?= https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/
+
+# Conditionally include extra-index flags so an empty IHME_PYPI yields a clean
+# command rather than `--extra-index-url simple/` which would be a broken URL.
+EXTRA_INDEX_FLAGS = $(if $(IHME_PYPI),--extra-index-url ${IHME_PYPI}simple/ --index-strategy unsafe-best-match,)
+
+# If CONDA_ENV_PATH is set (from a Jenkins build), use the -p flag when making Conda env in
+# order to make env at specific path. Otherwise, make a named env at the default path using
+# the -n flag.
+# Use the last Python version from python_versions.json if it exists,
+# otherwise fall back to 3.12.
+_PY_VERSIONS_FILE := $(wildcard python_versions.json)
+PYTHON_VERSION ?= $(if $(_PY_VERSIONS_FILE),$(shell python -c \
+        "import json; print(json.load(open('python_versions.json'))[-1])"),3.12)
+CONDA_ENV_NAME ?= ${PACKAGE_NAME}_py${PYTHON_VERSION}
+CONDA_ENV_CREATION_FLAG = $(if $(CONDA_ENV_PATH),-p ${CONDA_ENV_PATH},-n ${CONDA_ENV_NAME})
+
+.PHONY: help
+help: # Curated help message 
+	(echo; \
+	echo "For Make's standard help, run 'make --help'."; \
+	echo; \
+	echo "=================="; \
+	echo "Diagnostic targets"; \
+	echo "=================="; \
+	echo; \
+	echo "list       Print available Make targets"; \
+	echo "debug      Print debug information"; \
+	echo; \
+	echo "=============="; \
+	echo "Helper targets"; \
+	echo "=============="; \
+	echo; \
+	echo "build-env                     Create a new environment with installed packages"; \
+	echo "check                         Run development checks"; \
+	echo "                              (isort, black, mypy, tests, docs)"; \
+	echo "format                        Format code (isort and black)"; \
+	echo "manual-deploy-artifactory     Deploy package; only use if Jenkins deploy fails"; \
+	echo "model <command> [args]        Run model lineage tool (e.g., make model tree,"; \
+	echo "                              make model info v24.0)"; \
+	echo; \
+	echo "====================="; \
+	echo "Jenkins build targets"; \
+	echo "====================="; \
+	echo; \
+	echo "Run the following targets (in order) to mimic a Jenkins build:"; \
+	echo "  1. create-env                       Create a new conda environment"; \
+	echo "  2. install                          Install package and dependencies"; \
+	echo "  3. lint                             Check for formatting errors"; \
+	echo "  4. mypy                             (optional) Check for type hinting errors"; \
+	echo "  5. test-<test-type>                 Run specific tests unit, integration,"; \
+	echo "                                      e2e, all); include RUNSLOW=true if desired"; \
+	echo "  6. build-docs                       Build documentation"; \
+	echo "  7. test-docs                        Test documentation examples"; \
+	echo "  8. Deploy the package (Artifactory only)"; \
+	echo "     a. tag-version                   Tag current version and push to git"; \
+	echo "     b. build-package                 Build pip wheel package"; \
+	echo "     c. deploy-package-artifactory    Deploy the package to Artifactory"; \
+	echo "  9. deploy-docs                      Deploy documentation to shared server"; \
+	echo " 10. clean                            Clean build artifacts and temporary files"; \
+	echo) | less
+
+######################
+# Diagnostic targets #
+######################
+
+# List of Make targets is generated dynamically. Note that to have a target show up in this
+# list, it must have an in-line comment starting with a '#' on the target definition,
+# e.g. some-target:  # this is the description for some-target
+.PHONY: list
+list: # Print available Make targets
+	@echo
+	@echo "Make targets:"
+	@for file in Makefile $(UTILS_DIR)resources/makefiles/*.mk; do \
+		grep -i "^[a-zA-Z][a-zA-Z0-9_ \.\-]*: .*[#].*" $$file | sort | sed 's/:.*#/ : /g'; \
+	done | column -t -s:
+	@echo
+
+.PHONY: debug
+debug: # Print debug information
+	@echo
+	@echo "'make' invoked with these environment variables:"
+	@echo "CONDA_ENV_NAME:                   ${CONDA_ENV_NAME}"
+	@echo "PYTHON_VERSION:                   ${PYTHON_VERSION}"
+	@echo "IHME_PYPI:                        ${IHME_PYPI}"
+	@echo "LOCATIONS:                        ${LOCATIONS}"
+	@echo "PACKAGE_NAME:                     ${PACKAGE_NAME}"
+	@echo "PACKAGE_VERSION:                  ${PACKAGE_VERSION}"
+	@echo "PYPI_ARTIFACTORY_CREDENTIALS_USR: ${PYPI_ARTIFACTORY_CREDENTIALS_USR} "
+	@echo
+	@echo "vivarium_build_utils version:     $(shell python -c "import importlib.metadata; print(importlib.metadata.version('vivarium_build_utils'))" 2>/dev/null || echo "unknown")"
+	@echo
+
+#########################
+# Jenkins build targets #
+#########################
+
+.PHONY: create-env
+create-env: # Create a new conda environment
+# env name: {PACKAGE_NAME}_py{PYTHON_VERSION}.
+	conda create ${CONDA_ENV_CREATION_FLAG} python=${PYTHON_VERSION} --yes
+	@echo
+	@echo "Environment created ($(CONDA_ENV_NAME))"
+	@echo
+
+.PHONY: install
+install: ENV_REQS?=dev
+install: UV_FLAGS?=
+install: # Install package and dependencies
+	pip install uv
+	uv pip install --upgrade pip setuptools ${UV_FLAGS}
+	# NOTE: editable_mode=compat: produces a classic .pth-based editable install
+	#   (sys.path entry pointing at src/) instead of the PEP 660 default
+	#   (sys.meta_path finder). The PEP 660 mode breaks mypy's discovery of
+	#   sibling-namespace packages in monorepo dev setups - mypy's static
+	#   path-walk doesn't invoke meta_path finders, so it sees an empty
+	#   site-packages/<namespace>/ directory and reports the lib as untyped
+	#   even when py.typed is shipped in source. Classic mode produces real
+	#   sys.path entries that mypy traverses normally.
+	#   Scoped to the local package via --config-settings-package (not the
+	#   global --config-settings). The setting is a setuptools-only concept;
+	#   passing it globally leaks it to transitive sdist builds whose backends
+	#   don't recognize it (numpy 1.x's meson-python errors on it with
+	#   "Unknown option editable_mode").
+	uv pip install -e .[${ENV_REQS}] --config-settings-package ${DIST_NAME}:editable_mode=compat ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
+	@$(MAKE) setup-slack
+
+# Path to shared Slack bot token on the team filesystem.
+SLACK_BOT_CONFIG := /mnt/team/simulation_science/priv/engineering/config/slack_bot_config.sh
+
+.PHONY: setup-slack
+setup-slack:
+	@if [ -f $(SLACK_BOT_CONFIG) ]; then \
+		activate_dir="$${CONDA_PREFIX}/etc/conda/activate.d"; \
+		deactivate_dir="$${CONDA_PREFIX}/etc/conda/deactivate.d"; \
+		mkdir -p "$$activate_dir" "$$deactivate_dir"; \
+		cp $(SLACK_BOT_CONFIG) "$$activate_dir/psimulate_slack.sh"; \
+		echo 'unset PSIMULATE_SLACK_BOT_TOKEN' > "$$deactivate_dir/psimulate_slack.sh"; \
+		echo "Slack bot token configured for this environment."; \
+	else \
+		echo "NOTE: Slack bot config not found at $(SLACK_BOT_CONFIG)."; \
+	fi
+
+.PHONY: lint
+lint: # Check for formatting errors
+# NOTE: This is not actually running isort and black but rather just checking the --diffs.
+	@echo
+	@echo "Running isort and black"
+	isort $(LOCATIONS) --check --verbose --only-modified --diff
+	black $(LOCATIONS) --check --diff
+
+.PHONY: mypy
+mypy: # Check for type hinting errors
+	mypy --config-file pyproject.toml .
+
+# test: test targets are defined in test.mk
+
+.PHONY: build-docs
+build-docs: # Build documentation
+	@if [ -d docs/ ]; then \
+		rm -rf docs/build/; \
+		$(MAKE) -C docs/ html SPHINXOPTS="-T -W --keep-going"; \
+	else \
+		echo "No 'docs/' folder found - skipping."; \
+	fi
+
+.PHONY: test-docs
+test-docs: # Test documentation examples
+	@if [ -d docs/ ]; then \
+		$(MAKE) doctest -C docs/; \
+	else \
+		echo "No 'docs/' folder found - skipping."; \
+	fi
+
+.PHONY: validate-tag
+validate-tag: # Validate that current git tag matches CHANGELOG and is valid semver
+    # This is intended to be used only by github deploy workflows
+	@bash $(UTILS_DIR)resources/scripts/validate_tag_version.sh
+
+.PHONY: tag-version
+tag-version: # Tag current version and push to git
+    # TAG_PREFIX is empty for standalone repos and "vivarium-<lib>-" for monorepo libs.
+    # Must stay consistent with validate-tag, which filters by the same prefix.
+	git tag -a "${TAG_PREFIX}v${PACKAGE_VERSION}" -m "Tag automatically generated from Jenkins."
+	git push --tags
+
+.PHONY: build-package
+build-package: # Build pip wheel package
+	pip install build
+	python -m build
+
+.PHONY: deploy-package-artifactory
+deploy-package-artifactory: # Deploy the package to Artifactory
+	@[ "${IHME_PYPI}" ] && echo "" > /dev/null || ( echo "IHME_PYPI is empty; cannot upload. This target is Jenkins/internal-only."; exit 1 )
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set, export using simsci artifactory credentials"; exit 1 )
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set, export using simsci artifactory credentials"; exit 1 )
+	pip install twine
+	twine upload --repository-url ${IHME_PYPI} -u ${PYPI_ARTIFACTORY_CREDENTIALS_USR} -p ${PYPI_ARTIFACTORY_CREDENTIALS_PSW} dist/*
+
+.PHONY: deploy-docs
+deploy-docs: # Deploy documentation to shared server
+	@[ "${DOCS_ROOT_PATH}" ] && echo "" > /dev/null || ( echo "DOCS_ROOT_PATH is not set"; exit 1 )
+	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
+	cp -R ./docs/build/html/* ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
+	chmod -R 0775 ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
+	cd ${DOCS_ROOT_PATH}/${PACKAGE_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
+
+.PHONY: clean
+clean: # Clean build artifacts and temporary files
+	@rm -rf format build-docs build-package integration .pytest_cache
+	@rm -rf dist output
+	$(shell find . -type f -name '*py[co]' -delete -o -type d -name __pycache__ -delete)
+
+##################
+# Helper targets #
+##################
+
+.PHONY: check
+check: # Run development checks
+	make lint
+# 	Run mypy if any py.typed marker exists under src/
+# 	Use 'find' command rather than a hardcoded src/$(PACKAGE_NAME)/py.typed path so
+#	this works for both flat layouts (src/<pkg>/py.typed) and namespace layouts under
+#	monorepo (src/vivarium/<pkg>/py.typed).
+	@if find src -name py.typed 2>/dev/null | grep -q .; then \
+		echo; \
+		echo "Running mypy"; \
+		make mypy; \
+	fi
+# 	Run all fast tests
+	@echo
+	@echo "Running fast tests"
+	make test-all
+# 	Build docs
+	@echo
+	@echo "Building documentation"
+	make build-docs
+# 	Test docs
+	@echo
+	@echo "Running doctests"
+	make test-docs
+	@echo
+	@echo "*** All checks passed successfully! ***"
+
+.PHONY: format
+format: # Format code (isort and black)
+	isort $(LOCATIONS)
+	black $(LOCATIONS)
+
+.PHONY: manual-deploy-artifactory
+manual-deploy-artifactory: # Deploy package; only use if Jenkins deploy fails
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set, export using simsci artifactory credentials"; exit 1 )
+	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set, export using simsci artifactory credentials"; exit 1 )
+	make build-package
+	make tag-version
+	make deploy-package-artifactory
+	
+# Model lineage tool - analyze git tag relationships
+# Usage: make model <command> [args]
+# Commands: list, base, contains, ancestors, check, matrix, tree, info, help
+MODEL_LINEAGE_SCRIPT := $(UTILS_DIR)resources/scripts/model_lineage.sh
+
+# If 'model' is the first goal, capture remaining args and prevent Make from processing them
+ifeq (model,$(firstword $(MAKECMDGOALS)))
+  MODEL_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(MODEL_ARGS):;@:)
+endif
+
+.PHONY: model
+model: # Run model lineage tool (e.g., make model tree, make model info v24.0)
+	@bash $(MODEL_LINEAGE_SCRIPT) $(MODEL_ARGS)

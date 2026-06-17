@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line_length = 94
+exclude = '''.*examples.*'''
+
+[tool.isort]
+line_length = 94
+profile = "black"
+multi_line_output = 3 # Vertical Hanging Indent, see https://pypi.org/project/isort/
+skip_glob = ["*/examples/*", "**/examples/*"]
+
+[tool.mypy]
+# This is the global mypy configuration.
+strict = true  # See all the enabled flags `mypy --help | grep -A 10 'Strict mode'`
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = [
+    'build',
+    # Files below here should have their errors fixed and then be removed from this list
+    # You will need to remove the mypy: ignore-errors comment from the file heading as well
+    'setup.py',
+]
+
+disable_error_code = []
+
+# handle mypy errors when 3rd party packages are not typed.
+[[tool.mypy.overrides]]
+module = [
+    # "scipy.*",
+]
+ignore_missing_imports = true
