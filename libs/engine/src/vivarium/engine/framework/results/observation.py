@@ -575,16 +575,16 @@ class MicrodataObservation(ConcatenatingObservation):
 
     Records the columns named in ``requires_attributes`` (plus the ``event_time`` prepended by
     :class:`ConcatenatingObservation`) for each simulant, concatenated across timesteps, capped to
-    at most ``max_rows`` rows per observed timestep. When capping, the rows are a fresh **random**
-    sample drawn each observed timestep (via ``sampler``), not the first ``max_rows`` simulants.
+    at most ``max_rows_per_timestep`` rows per observed timestep. When capping, the rows are a fresh **random**
+    sample drawn each observed timestep (via ``sampler``), not the first ``max_rows_per_timestep`` simulants.
 
     Attributes
     ----------
-    max_rows
+    max_rows_per_timestep
         Maximum number of rows to record per observed timestep. If None, no cap is applied.
     sampler
         Callable returning a per-simulant random draw in ``[0, 1)`` for an index, used to pick the
-        capped sample. Required when ``max_rows`` is set.
+        capped sample. Required when ``max_rows_per_timestep`` is set.
     """
 
     def __init__(
@@ -594,7 +594,7 @@ class MicrodataObservation(ConcatenatingObservation):
         when: str,
         requires_attributes: list[str],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
-        max_rows: int | None = None,
+        max_rows_per_timestep: int | None = None,
         sampler: Callable[[pd.Index[int]], pd.Series[float]] | None = None,
         to_observe: Callable[[Event], bool] = lambda event: True,
     ):
@@ -606,16 +606,16 @@ class MicrodataObservation(ConcatenatingObservation):
             results_formatter=results_formatter,
             to_observe=to_observe,
         )
-        self.max_rows = max_rows
+        self.max_rows_per_timestep = max_rows_per_timestep
         self.sampler = sampler
 
     def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
-        """Return the configured columns, capped to a random sample of at most ``max_rows`` rows."""
+        """Return the configured columns, capped to a random sample of at most ``max_rows_per_timestep`` rows."""
         if (
-            self.max_rows is not None
+            self.max_rows_per_timestep is not None
             and self.sampler is not None
-            and len(pop) > self.max_rows
+            and len(pop) > self.max_rows_per_timestep
         ):
-            sampled = self.sampler(pop.index).nsmallest(self.max_rows).index
+            sampled = self.sampler(pop.index).nsmallest(self.max_rows_per_timestep).index
             pop = pop[pop.index.isin(sampled)]
         return super().get_results_of_interest(pop)

@@ -450,7 +450,7 @@ class ResultsInterface(Interface):
         pop_filter: str = "",
         include_untracked: bool = False,
         when: str = lifecycle_states.COLLECT_METRICS,
-        max_rows: int | None = None,
+        max_rows_per_timestep: int | None = None,
         sampler: Callable[[pd.Index[int]], pd.Series[float]] | None = None,
         results_formatter: ResultsFormatter = _default_unstratified_observation_formatter,
         to_observe: Callable[[Event], bool] = lambda event: True,
@@ -475,11 +475,11 @@ class ResultsInterface(Interface):
         when
             Name of the lifecycle phase the observation should happen. Valid values are:
             "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
-        max_rows
+        max_rows_per_timestep
             Maximum number of rows to record per observed timestep. If None, no cap is applied.
         sampler
             Callable returning a per-simulant random draw in `[0, 1)` for an index, used to select
-            the capped random sample each timestep. Required when `max_rows` is set.
+            the capped random sample each timestep. Required when `max_rows_per_timestep` is set.
         results_formatter
             Function that formats the raw observation results.
         to_observe
@@ -491,7 +491,7 @@ class ResultsInterface(Interface):
             population_filter=PopulationFilter(pop_filter, include_untracked),
             when=when,
             requires_attributes=columns,
-            max_rows=max_rows,
+            max_rows_per_timestep=max_rows_per_timestep,
             sampler=sampler,
             results_formatter=results_formatter,
             to_observe=to_observe,

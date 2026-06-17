@@ -112,16 +112,18 @@ class MicrodataObserver(Observer):
                 f"The '{self.name}' observer requires a non-empty 'columns' list."
             )
         timesteps = list(config.timesteps)
-        max_rows = None
+        max_rows_per_timestep = None
         sampler = None
         if config.row_limit is not None:
-            max_rows = config.row_limit // self._count_observed_timesteps(builder, timesteps)
+            max_rows_per_timestep = config.row_limit // self._count_observed_timesteps(
+                builder, timesteps
+            )
             sampler = builder.randomness.get_stream(self.name).get_draw
         builder.results.register_microdata_observation(
             name=self.name,
             columns=columns,
             pop_filter=self._build_pop_filter(list(config.filter)),
-            max_rows=max_rows,
+            max_rows_per_timestep=max_rows_per_timestep,
             sampler=sampler,
             to_observe=self._build_to_observe(timesteps),
         )
