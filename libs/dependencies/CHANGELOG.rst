@@ -1,3 +1,7 @@
+**1.2.0 - 06/17/26**
+
+- Remove unused vivarium-build-utils pin definition
+
 **1.1.0 - 06/12/26**
 
 Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_dependencies``
