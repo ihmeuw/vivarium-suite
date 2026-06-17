@@ -152,9 +152,12 @@ def test_microdata_observer_filter_subsets_simulants() -> None:
     sim = InteractiveContext(
         configuration=config, components=[Hogwarts(), MicrodataObserver()]
     )
+    n_simulants = len(sim.get_population_index())
     sim.step()
     result = sim.get_results()["microdata_observer"]
 
+    assert not result.empty
+    assert len(result) < n_simulants  # the filter actually removed some simulants
     assert (result["student_house"] == "gryffindor").all()
     assert (result["power_level"] >= 60).all()
 
@@ -203,3 +206,36 @@ def test_microdata_observer_row_limit_randomly_samples_per_timestep() -> None:
     assert all(len(cohort) == 10 for cohort in cohorts)
     # A fresh random sample each step - not the same first-N simulants.
     assert cohorts.iloc[0] != cohorts.iloc[1]
+
+
+def test_microdata_observer_row_limit_below_timestep_count_errors() -> None:
+    """A row_limit smaller than the number of observed timesteps raises at setup."""
+    config = {
+        **HARRY_POTTER_CONFIG,
+        "microdata_observer": {
+            "columns": ["student_id"],
+            "timesteps": ["2026-04-22", "2027-04-22"],  # 2 observed timesteps
+            "row_limit": 1,  # 1 // 2 would floor to 0 rows per timestep
+        },
+    }
+    with pytest.raises(ResultsConfigurationError, match="row_limit"):
+        InteractiveContext(configuration=config, components=[Hogwarts(), MicrodataObserver()])
+
+
+def test_microdata_observer_row_limit_without_timesteps_uses_step_estimate() -> None:
+    """With no `timesteps`, the per-step cap divides `row_limit` by the estimated step count."""
+    # HARRY_POTTER_CONFIG runs 2024-04-22 to 2029-04-22 with 365-day steps, so the observer
+    # estimates ceil(1826 / 365) = 6 observed steps -> 60 // 6 = 10 rows per step.
+    config = {
+        **HARRY_POTTER_CONFIG,
+        "microdata_observer": {"columns": ["student_id"], "row_limit": 60},
+    }
+    sim = InteractiveContext(
+        configuration=config, components=[Hogwarts(), MicrodataObserver()]
+    )
+
+    sim.step()
+    sim.step()
+    result = sim.get_results()["microdata_observer"]
+
+    assert (result.groupby("event_time").size() == 10).all()

@@ -87,10 +87,26 @@ class Observer(Component, ABC):
 class MicrodataObserver(Observer):
     """Observer that records a configured set of columns for each simulant.
 
-    At each observed timestep it records the columns named in the model spec
-    for every simulant, concatenated across timesteps, so results scientists can compute derived
-    quantities downstream. The columns to record are configured under the ``columns`` key of this
-    observer's configuration block.
+    At each observed timestep it records the configured columns for every (optionally filtered)
+    simulant, concatenated across timesteps, so results scientists can compute derived quantities
+    downstream.
+
+    Configuration
+    -------------
+    Configured under this observer's name (e.g. ``microdata_observer``) in the model spec:
+
+    columns
+        The population columns/attributes to record. Required; an empty list is an error.
+    filter
+        A list of Pandas query strings, AND-combined, restricting which simulants are recorded.
+        Empty (the default) records all simulants.
+    timesteps
+        A list of dates; only timesteps whose event time matches one of them are recorded. Empty
+        (the default) records every timestep.
+    row_limit
+        The *total* maximum number of rows across all observed timesteps. The per-timestep cap is
+        ``row_limit // <number of observed timesteps>`` (floored), and each observed timestep records
+        a fresh random sample of up to that many simulants. None (the default) applies no cap.
     """
 
     @property
@@ -115,9 +131,14 @@ class MicrodataObserver(Observer):
         max_rows_per_timestep = None
         sampler = None
         if config.row_limit is not None:
-            max_rows_per_timestep = config.row_limit // self._count_observed_timesteps(
-                builder, timesteps
-            )
+            n_observed_timesteps = self._count_observed_timesteps(builder, timesteps)
+            if config.row_limit < n_observed_timesteps:
+                raise ResultsConfigurationError(
+                    f"The '{self.name}' observer's row_limit ({config.row_limit}) is smaller than "
+                    f"the number of observed timesteps ({n_observed_timesteps}), which would record "
+                    "zero rows per timestep. Increase row_limit or reduce 'timesteps'."
+                )
+            max_rows_per_timestep = config.row_limit // n_observed_timesteps
             sampler = builder.randomness.get_stream(self.name).get_draw
         builder.results.register_microdata_observation(
             name=self.name,
