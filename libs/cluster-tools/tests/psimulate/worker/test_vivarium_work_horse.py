@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from pathlib import Path
 from time import time
 from typing import cast
@@ -5,6 +6,8 @@ from typing import cast
 import dill
 import pandas as pd
 import pytest
+from _pytest.logging import LogCaptureFixture
+from loguru import logger
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
@@ -17,23 +20,39 @@ from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
 )
 
 
+@pytest.fixture
+def caplog(caplog: LogCaptureFixture) -> Generator[LogCaptureFixture, None, None]:
+    handler_id = logger.add(
+        caplog.handler,
+        format="{message}",
+        level=0,
+        filter=lambda record: record["level"].no >= caplog.handler.level,
+        enqueue=False,  # Set to 'True' if your test is spawning child processes.
+    )
+    yield caplog
+    logger.remove(handler_id)
+
+
 @pytest.mark.parametrize(
-    "make_dir, has_metadata_file, has_backup, multiple_backups",
+    "make_dir, has_metadata_file, has_backup, multiple_backups, backup_freq",
     [
-        (False, False, False, False),
-        (True, False, False, False),
-        (True, True, False, False),
-        (True, True, True, False),
-        (True, True, True, True),
+        (False, False, False, False, 300),
+        (True, False, False, False, 300),
+        (True, True, False, False, 300),
+        (True, True, True, False, 300),
+        (True, True, True, True, 300),
+        # Skip backups
+        (True, True, True, False, None),
     ],
 )
 def test_get_backup(
-    mocker: MockerFixture,
     tmp_path: Path,
+    caplog: LogCaptureFixture,
     make_dir: bool,
     has_metadata_file: bool,
     has_backup: bool,
     multiple_backups: bool,
+    backup_freq: int | None,
 ) -> None:
     task_id = "test_task_id"
     input_draw = 1
@@ -46,7 +65,7 @@ def test_get_backup(
         input_draw=input_draw,
         random_seed=random_seed,
         backup_configuration={
-            "backup_freq": 300,
+            "backup_freq": backup_freq,
             "backup_dir": tmp_path / "backups",
             "backup_metadata_path": tmp_path / "backups" / "backup_metadata.csv",
         },
@@ -97,10 +116,14 @@ def test_get_backup(
         backup = cast(list[int], get_backup(job_parameters))
         assert backup == correct_pickle
         assert not (tmp_path / "backups" / "stale_job.pkl").exists()
-        assert not (tmp_path / "backups" / f"{job_id}.pkl").exists()
-        assert (tmp_path / "backups" / f"{job_parameters.task_id}.pkl").exists()
         assert (tmp_path / "backups" / "different_job.pkl").exists()
-
+        if backup_freq is not None:
+            assert not (tmp_path / "backups" / f"{job_id}.pkl").exists()
+            assert (tmp_path / "backups" / f"{job_parameters.task_id}.pkl").exists()
+        else:
+            # No rename occurs, so the original pickle stays and no log is emitted.
+            assert (tmp_path / "backups" / f"{job_id}.pkl").exists()
+            assert not (tmp_path / "backups" / f"{job_parameters.task_id}.pkl").exists()
     else:
         backup = cast(list[int], get_backup(job_parameters))
         assert not backup
