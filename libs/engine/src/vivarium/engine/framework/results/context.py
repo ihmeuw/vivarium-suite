@@ -87,7 +87,6 @@ class ResultsContext:
             builder.configuration.stratification.excluded_categories.to_dict()
         )
         self.get_tracked_query = builder.population.get_tracked_query()
-        self.get_all_attribute_names = builder.population.get_all_attribute_names
 
     # noinspection PyAttributeOutsideInit
     def set_default_stratifications(self, default_grouping_columns: list[str]) -> None:
@@ -417,8 +416,6 @@ class ResultsContext:
         """
         required_attributes = set()
         for observation in observations:
-            if observation.requires_all_attributes:
-                required_attributes.update(self.get_all_attribute_names())
             required_attributes.update(set(observation.requires_attributes))
             required_attributes.update(
                 pop_utils.extract_columns_from_query(self.get_tracked_query())
