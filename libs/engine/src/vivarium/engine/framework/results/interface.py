@@ -450,6 +450,7 @@ class ResultsInterface(Interface):
         pop_filter: str = "",
         include_untracked: bool = False,
         when: str = lifecycle_states.COLLECT_METRICS,
+        row_limit: int | None = None,
         results_formatter: ResultsFormatter = _default_unstratified_observation_formatter,
         to_observe: Callable[[Event], bool] = lambda event: True,
     ) -> None:
@@ -473,6 +474,9 @@ class ResultsInterface(Interface):
         when
             Name of the lifecycle phase the observation should happen. Valid values are:
             "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
+        row_limit
+            Upper bound on the total number of rows recorded. Divided by the number of observed
+            timesteps to cap the cohort recorded per timestep. If None, no cap is applied.
         results_formatter
             Function that formats the raw observation results.
         to_observe
@@ -484,6 +488,7 @@ class ResultsInterface(Interface):
             population_filter=PopulationFilter(pop_filter, include_untracked),
             when=when,
             requires_attributes=columns,
+            row_limit=row_limit,
             results_formatter=results_formatter,
             to_observe=to_observe,
         )

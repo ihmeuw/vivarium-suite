@@ -138,3 +138,72 @@ def test_microdata_observer_requires_columns() -> None:
     config = {**HARRY_POTTER_CONFIG, "microdata_observer": {"columns": []}}
     with pytest.raises(ResultsConfigurationError, match="columns"):
         InteractiveContext(configuration=config, components=[Hogwarts(), MicrodataObserver()])
+
+
+@pytest.mark.xfail(reason="not implemented: row/simulant filter")
+def test_microdata_observer_filter_subsets_simulants() -> None:
+    """`filter` entries restrict recording to matching simulants, AND-combined."""
+    config = {
+        **HARRY_POTTER_CONFIG,
+        "microdata_observer": {
+            "columns": ["student_house", "power_level"],
+            "filter": ['student_house == "gryffindor"', "power_level >= 60"],
+        },
+    }
+    sim = InteractiveContext(
+        configuration=config, components=[Hogwarts(), MicrodataObserver()]
+    )
+    sim.step()
+    result = sim.get_results()["microdata_observer"]
+
+    assert (result["student_house"] == "gryffindor").all()
+    assert (result["power_level"] >= 60).all()
+
+
+@pytest.mark.xfail(reason="not implemented: timestep filter")
+def test_microdata_observer_observes_only_configured_timesteps() -> None:
+    """Only timesteps listed in `timesteps` are recorded."""
+    # HARRY_POTTER_CONFIG starts 2024-04-22 with 365-day steps, so the collect_metrics
+    # event_time is 2025-04-22 on the first step and 2026-04-22 on the second.
+    config = {
+        **HARRY_POTTER_CONFIG,
+        "microdata_observer": {"columns": ["student_house"], "timesteps": ["2026-04-22"]},
+    }
+    sim = InteractiveContext(
+        configuration=config, components=[Hogwarts(), MicrodataObserver()]
+    )
+
+    sim.step()  # 2025-04-22 -> not in timesteps
+    assert sim.get_results()["microdata_observer"].empty
+    sim.step()  # 2026-04-22 -> in timesteps
+    assert not sim.get_results()["microdata_observer"].empty
+
+
+@pytest.mark.xfail(reason="not implemented: row cap (propensity cohort, no resampling)")
+def test_microdata_observer_row_limit_caps_a_stable_cohort() -> None:
+    """`row_limit` caps the per-timestep cohort, which stays fixed across observed timesteps."""
+    config = {
+        **HARRY_POTTER_CONFIG,
+        "microdata_observer": {
+            "columns": ["student_id"],
+            "timesteps": [
+                "2026-04-22",
+                "2027-04-22",
+            ],  # two observed steps -> cap = 20 // 2 = 10
+            "row_limit": 20,
+        },
+    }
+    sim = InteractiveContext(
+        configuration=config, components=[Hogwarts(), MicrodataObserver()]
+    )
+
+    sim.step()  # 2025-04-22 -> not observed
+    sim.step()  # 2026-04-22 -> observed
+    sim.step()  # 2027-04-22 -> observed
+    result = sim.get_results()["microdata_observer"]
+
+    cohorts = result.groupby("event_time")["student_id"].apply(set)
+    assert len(cohorts) == 2
+    assert all(len(cohort) == 10 for cohort in cohorts)
+    # Same simulants both steps - the cohort is not resampled.
+    assert cohorts.iloc[0] == cohorts.iloc[1]

@@ -574,7 +574,40 @@ class MicrodataObservation(ConcatenatingObservation):
     """Concatenating observation that records a configured set of columns.
 
     Records the columns named in ``requires_attributes`` (plus the ``event_time`` prepended by
-    :class:`ConcatenatingObservation`) for each simulant, concatenated across timesteps. This is
-    the home for the microdata observer's row-cap, sort, and single-random-sample behavior added
-    in later tasks; for now it inherits the concatenating behavior unchanged.
+    :class:`ConcatenatingObservation`) for each simulant, concatenated across timesteps, optionally
+    capped to a fixed cohort via ``row_limit``.
+
+    Attributes
+    ----------
+    row_limit
+        Per-timestep cap on the number of simulants recorded. If None, no cap is applied.
     """
+
+    def __init__(
+        self,
+        name: str,
+        population_filter: PopulationFilter,
+        when: str,
+        requires_attributes: list[str],
+        results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
+        row_limit: int | None = None,
+        to_observe: Callable[[Event], bool] = lambda event: True,
+    ):
+        super().__init__(
+            name=name,
+            population_filter=population_filter,
+            when=when,
+            requires_attributes=requires_attributes,
+            results_formatter=results_formatter,
+            to_observe=to_observe,
+        )
+        self.row_limit = row_limit
+
+    def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
+        """Return the configured columns for the (optionally capped) cohort."""
+        pop = self._apply_row_cap(pop)
+        return super().get_results_of_interest(pop)
+
+    def _apply_row_cap(self, pop: pd.DataFrame) -> pd.DataFrame:
+        """[stub] Apply the propensity-based, no-backfill row cap. Implement in Phase 2."""
+        return pop

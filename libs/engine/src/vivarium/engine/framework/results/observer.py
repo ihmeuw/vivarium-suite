@@ -15,6 +15,7 @@ by concrete observers. Each concrete observer is required to implement a
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from vivarium.config_tree.main import ConfigTree
@@ -24,6 +25,7 @@ from vivarium.engine.framework.results.exceptions import ResultsConfigurationErr
 
 if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
+    from vivarium.engine.framework.event import Event
 
 
 class Observer(Component, ABC):
@@ -92,13 +94,33 @@ class MicrodataObserver(Observer):
     @property
     def configuration_defaults(self) -> dict[str, Any]:
         config = super().configuration_defaults
-        config[self.name] = {"columns": []}
+        config[self.name] = {
+            "columns": [],
+            "filter": [],
+            "timesteps": [],
+            "row_limit": None,
+        }
         return config
 
     def register_observations(self, builder: Builder) -> None:
-        columns = list(builder.configuration[self.name].columns)
+        config = builder.configuration[self.name]
+        columns = list(config.columns)
         if not columns:
             raise ResultsConfigurationError(
                 f"The '{self.name}' observer requires a non-empty 'columns' list."
             )
-        builder.results.register_microdata_observation(name=self.name, columns=columns)
+        builder.results.register_microdata_observation(
+            name=self.name,
+            columns=columns,
+            pop_filter=self._build_pop_filter(list(config.filter)),
+            row_limit=config.row_limit,
+            to_observe=self._build_to_observe(list(config.timesteps)),
+        )
+
+    def _build_pop_filter(self, filters: list[str]) -> str:
+        """[stub] Combine row filters into a single pop_filter query. Implement in Phase 2."""
+        return ""
+
+    def _build_to_observe(self, timesteps: list[str]) -> Callable[[Event], bool]:
+        """[stub] Build the timestep-filter predicate. Implement in Phase 2."""
+        return lambda event: True
