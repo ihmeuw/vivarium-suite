@@ -591,6 +591,8 @@ class MicrodataObservation(ConcatenatingObservation):
         requires_attributes: list[str],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
         row_limit: int | None = None,
+        n_observed_timesteps: int = 1,
+        propensity_source: Callable[[pd.Index[int]], pd.Series[float]] | None = None,
         to_observe: Callable[[Event], bool] = lambda event: True,
     ):
         super().__init__(
@@ -602,6 +604,9 @@ class MicrodataObservation(ConcatenatingObservation):
             to_observe=to_observe,
         )
         self.row_limit = row_limit
+        self.n_observed_timesteps = n_observed_timesteps
+        self.propensity_source = propensity_source
+        self._cohort: pd.Index[int] | None = None
 
     def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
         """Return the configured columns for the (optionally capped) cohort."""
@@ -609,5 +614,18 @@ class MicrodataObservation(ConcatenatingObservation):
         return super().get_results_of_interest(pop)
 
     def _apply_row_cap(self, pop: pd.DataFrame) -> pd.DataFrame:
-        """[stub] Apply the propensity-based, no-backfill row cap. Implement in Phase 2."""
-        return pop
+        """Restrict to a fixed cohort of the lowest-propensity simulants.
+
+        The cohort is chosen once, from the first observed population, as the
+        ``row_limit // n_observed_timesteps`` simulants with the smallest propensity. It is never
+        re-selected, so as cohort members leave the population their rows simply drop out and the
+        freed slots are not backfilled.
+        """
+        if self.row_limit is None:
+            return pop
+        if self._cohort is None:
+            assert self.propensity_source is not None
+            cohort_size = self.row_limit // self.n_observed_timesteps
+            propensity = self.propensity_source(pop.index)
+            self._cohort = propensity.nsmallest(cohort_size).index
+        return pop[pop.index.isin(self._cohort)]

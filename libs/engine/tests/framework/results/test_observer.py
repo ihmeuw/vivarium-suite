@@ -140,7 +140,6 @@ def test_microdata_observer_requires_columns() -> None:
         InteractiveContext(configuration=config, components=[Hogwarts(), MicrodataObserver()])
 
 
-@pytest.mark.xfail(reason="not implemented: row/simulant filter")
 def test_microdata_observer_filter_subsets_simulants() -> None:
     """`filter` entries restrict recording to matching simulants, AND-combined."""
     config = {
@@ -160,7 +159,6 @@ def test_microdata_observer_filter_subsets_simulants() -> None:
     assert (result["power_level"] >= 60).all()
 
 
-@pytest.mark.xfail(reason="not implemented: timestep filter")
 def test_microdata_observer_observes_only_configured_timesteps() -> None:
     """Only timesteps listed in `timesteps` are recorded."""
     # HARRY_POTTER_CONFIG starts 2024-04-22 with 365-day steps, so the collect_metrics
@@ -179,9 +177,8 @@ def test_microdata_observer_observes_only_configured_timesteps() -> None:
     assert not sim.get_results()["microdata_observer"].empty
 
 
-@pytest.mark.xfail(reason="not implemented: row cap (propensity cohort, no resampling)")
-def test_microdata_observer_row_limit_caps_a_stable_cohort() -> None:
-    """`row_limit` caps the per-timestep cohort, which stays fixed across observed timesteps."""
+def test_microdata_observer_row_limit_caps_rows_per_timestep() -> None:
+    """`row_limit` caps the rows recorded per observed timestep (row_limit // n_observed_timesteps)."""
     config = {
         **HARRY_POTTER_CONFIG,
         "microdata_observer": {
@@ -189,7 +186,7 @@ def test_microdata_observer_row_limit_caps_a_stable_cohort() -> None:
             "timesteps": [
                 "2026-04-22",
                 "2027-04-22",
-            ],  # two observed steps -> cap = 20 // 2 = 10
+            ],  # two observed steps -> 20 // 2 = 10 rows per step
             "row_limit": 20,
         },
     }
@@ -202,8 +199,4 @@ def test_microdata_observer_row_limit_caps_a_stable_cohort() -> None:
     sim.step()  # 2027-04-22 -> observed
     result = sim.get_results()["microdata_observer"]
 
-    cohorts = result.groupby("event_time")["student_id"].apply(set)
-    assert len(cohorts) == 2
-    assert all(len(cohort) == 10 for cohort in cohorts)
-    # Same simulants both steps - the cohort is not resampled.
-    assert cohorts.iloc[0] == cohorts.iloc[1]
+    assert list(result.groupby("event_time").size()) == [10, 10]

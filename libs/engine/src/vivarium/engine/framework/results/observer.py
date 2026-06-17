@@ -14,10 +14,12 @@ by concrete observers. Each concrete observer is required to implement a
 """
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+import pandas as pd
 from vivarium.config_tree.main import ConfigTree
 
 from vivarium.engine import Component
@@ -26,6 +28,10 @@ from vivarium.engine.framework.results.exceptions import ResultsConfigurationErr
 if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
     from vivarium.engine.framework.event import Event
+
+MICRODATA_PROPENSITY_STREAM = "microdata_observation_propensity"
+"""Randomness stream key for the static per-simulant observation propensity. A single shared
+key so all microdata observers draw the same propensity per simulant."""
 
 
 class Observer(Component, ABC):
@@ -85,7 +91,7 @@ class Observer(Component, ABC):
 class MicrodataObserver(Observer):
     """Observer that records a configured set of columns for each simulant.
 
-    A black-box observer: at each observed timestep it records the columns named in the model spec
+    At each observed timestep it records the columns named in the model spec
     for every simulant, concatenated across timesteps, so results scientists can compute derived
     quantities downstream. The columns to record are configured under the ``columns`` key of this
     observer's configuration block.
@@ -109,18 +115,47 @@ class MicrodataObserver(Observer):
             raise ResultsConfigurationError(
                 f"The '{self.name}' observer requires a non-empty 'columns' list."
             )
+        timesteps = list(config.timesteps)
+        row_limit = config.row_limit
+        n_observed_timesteps = 1
+        propensity_source = None
+        if row_limit is not None:
+            n_observed_timesteps = self._count_observed_timesteps(builder, timesteps)
+            propensity_source = builder.randomness.get_stream(
+                MICRODATA_PROPENSITY_STREAM
+            ).get_draw
         builder.results.register_microdata_observation(
             name=self.name,
             columns=columns,
             pop_filter=self._build_pop_filter(list(config.filter)),
-            row_limit=config.row_limit,
-            to_observe=self._build_to_observe(list(config.timesteps)),
+            row_limit=row_limit,
+            n_observed_timesteps=n_observed_timesteps,
+            propensity_source=propensity_source,
+            to_observe=self._build_to_observe(timesteps),
         )
 
     def _build_pop_filter(self, filters: list[str]) -> str:
-        """[stub] Combine row filters into a single pop_filter query. Implement in Phase 2."""
-        return ""
+        """Combine row filters into a single AND-joined pop_filter query."""
+        return " and ".join(f"({condition})" for condition in filters)
 
     def _build_to_observe(self, timesteps: list[str]) -> Callable[[Event], bool]:
-        """[stub] Build the timestep-filter predicate. Implement in Phase 2."""
-        return lambda event: True
+        """Build a predicate that observes only on the configured timesteps."""
+        if not timesteps:
+            return lambda event: True
+        target_times = {pd.Timestamp(timestep).normalize() for timestep in timesteps}
+        return lambda event: pd.Timestamp(event.time).normalize() in target_times
+
+    def _count_observed_timesteps(self, builder: Builder, timesteps: list[str]) -> int:
+        """Count the timesteps this observer records on.
+
+        When ``timesteps`` is configured this is exact; otherwise the observer records every
+        step and the count is estimated from the simulation's time configuration (the
+        ``row_limit`` is an upper bound, so an estimate is acceptable here).
+        """
+        if timesteps:
+            return len(timesteps)
+        time = builder.configuration.time
+        start = pd.Timestamp(**time.start.to_dict())
+        end = pd.Timestamp(**time.end.to_dict())
+        step_size = pd.Timedelta(builder.time.step_size()())
+        return max(1, math.ceil((end - start) / step_size))

@@ -451,6 +451,8 @@ class ResultsInterface(Interface):
         include_untracked: bool = False,
         when: str = lifecycle_states.COLLECT_METRICS,
         row_limit: int | None = None,
+        n_observed_timesteps: int = 1,
+        propensity_source: Callable[[pd.Index[int]], pd.Series[float]] | None = None,
         results_formatter: ResultsFormatter = _default_unstratified_observation_formatter,
         to_observe: Callable[[Event], bool] = lambda event: True,
     ) -> None:
@@ -475,8 +477,14 @@ class ResultsInterface(Interface):
             Name of the lifecycle phase the observation should happen. Valid values are:
             "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
         row_limit
-            Upper bound on the total number of rows recorded. Divided by the number of observed
-            timesteps to cap the cohort recorded per timestep. If None, no cap is applied.
+            Upper bound on the total number of rows recorded. Divided by `n_observed_timesteps`
+            to cap the cohort recorded per timestep. If None, no cap is applied.
+        n_observed_timesteps
+            The number of timesteps this observation will record on, used to size the per-timestep
+            cohort from `row_limit`.
+        propensity_source
+            Callable returning a static per-simulant propensity (in `[0, 1)`) for an index, used
+            to select the capped cohort. Required when `row_limit` is set.
         results_formatter
             Function that formats the raw observation results.
         to_observe
@@ -489,6 +497,8 @@ class ResultsInterface(Interface):
             when=when,
             requires_attributes=columns,
             row_limit=row_limit,
+            n_observed_timesteps=n_observed_timesteps,
+            propensity_source=propensity_source,
             results_formatter=results_formatter,
             to_observe=to_observe,
         )
