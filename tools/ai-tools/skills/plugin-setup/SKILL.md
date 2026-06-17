@@ -148,9 +148,11 @@ file that `~/.zshrc` refreshes from `gh auth token`:
 "headersHelper": "printf '{\"Authorization\":\"Bearer %s\"}' \"$(cat $HOME/.claude/secrets/<token-file>)\""
 ```
 
-**Account 1 — `ihmeuw` (`github`).** The plugin ships pre-wired. Add the helper
-above pointing at `~/.claude/secrets/github-token`, using a token SSO-authorized
-for `ihmeuw`. It lives in the plugin **cache**, so reapply after a reinstall.
+**Account 1 — `ihmeuw` (`github`).** The plugin ships pre-wired. Generate the
+token with `gh auth login` (the default `gh` profile) and SSO-authorize it for
+`ihmeuw`; `~/.zshrc` caches `gh auth token` to `~/.claude/secrets/github-token`.
+Add the helper above pointing at that file — it lives in the plugin **cache**,
+so reapply after a reinstall.
 
 **Account 2 — `ihme-internal` (`github-internal`).** Authenticate with the `gh`
 **web OAuth flow, not a fine-grained PAT** (those come back with zero-repo
