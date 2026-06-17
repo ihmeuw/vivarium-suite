@@ -417,6 +417,8 @@ class ResultsContext:
         """
         required_attributes = set()
         for observation in observations:
+            if observation.requires_all_attributes:
+                required_attributes.update(self.get_all_attribute_names())
             required_attributes.update(set(observation.requires_attributes))
             required_attributes.update(
                 pop_utils.extract_columns_from_query(self.get_tracked_query())
