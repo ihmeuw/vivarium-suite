@@ -34,3 +34,11 @@ title/body is the `<subject>`). It fans out to the five `_review_*` specialists,
 runs the functional-correctness pass, synthesizes the findings, and returns the
 structured review. Present that review to the user as-is — `_review-core` owns
 the output format and the review constraints.
+
+## Step 3 — Offer ticket triage
+
+After presenting the review, if it surfaced findings the user is not going
+to address in the current PR, offer to run the `ticket-triage` skill on
+them. That skill classifies the leftovers, checks the backlog for
+duplicates, and files approval-gated Jira tickets — don't duplicate any of
+that here; just make the offer and invoke the skill if accepted.
