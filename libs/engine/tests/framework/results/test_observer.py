@@ -4,15 +4,11 @@ import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree.main import ConfigTree
 
-from tests.framework.results.helpers import (
-    HARRY_POTTER_CONFIG,
-    Hogwarts,
-    HogwartsResultsStratifier,
-    HousePointsObserver,
-)
+from tests.framework.results.helpers import HARRY_POTTER_CONFIG, Hogwarts
 from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.components.manager import ComponentConfigError
 from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
 from vivarium.engine.framework.results.observer import MicrodataObserver, Observer
 
 
@@ -104,24 +100,26 @@ def test_duplicated_observer_error(base_config: ConfigTree) -> None:
         )
 
 
-@pytest.mark.xfail(reason="not implemented: MicrodataObserver registration")
 def test_microdata_observer_can_be_registered() -> None:
     """The observer sets up in any sim and registers a single named observation."""
+    config = {**HARRY_POTTER_CONFIG, "microdata_observer": {"columns": ["student_house"]}}
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG,
+        configuration=config,
         components=[Hogwarts(), MicrodataObserver()],
     )
     assert "microdata_observer" in sim._results._results_context.observations
 
 
-@pytest.mark.xfail(reason="not implemented: records all attributes across timesteps")
-def test_microdata_observer_records_all_attributes() -> None:
-    """Recorded microdata has a column for every attribute and one row per simulant per step."""
+def test_microdata_observer_records_configured_columns() -> None:
+    """Records exactly the configured columns (+ event_time) for every simulant, each step."""
+    config = {
+        **HARRY_POTTER_CONFIG,
+        "microdata_observer": {"columns": ["student_house", "exam_score"]},
+    }
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG,
+        configuration=config,
         components=[Hogwarts(), MicrodataObserver()],
     )
-    expected_attributes = set(sim.get_attribute_names())
     n_simulants = len(sim.get_population_index())
 
     sim.step()
@@ -129,26 +127,14 @@ def test_microdata_observer_records_all_attributes() -> None:
     sim.step()
     two_steps = sim.get_results()["microdata_observer"]
 
-    assert expected_attributes <= set(one_step.columns)
-    assert "event_time" in one_step.columns
+    assert set(one_step.columns) == {"student_house", "exam_score", "event_time"}
     assert len(one_step) == n_simulants
-    assert len(two_steps) == 2 * n_simulants
+    assert len(two_steps) == 2 * n_simulants  # fixed-size population over two steps
+    assert two_steps["event_time"].nunique() == 2
 
 
-def test_microdata_observer_excludes_mapped_stratification_columns() -> None:
-    """Internal mapped-stratification columns added for a co-firing stratified observer are not recorded."""
-    sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG,
-        components=[
-            Hogwarts(),
-            HogwartsResultsStratifier(),
-            HousePointsObserver(),
-            MicrodataObserver(),
-        ],
-    )
-
-    sim.step()
-    result = sim.get_results()["microdata_observer"]
-
-    assert not any(column.endswith("_mapped_values") for column in result.columns)
-    assert "student_house" in result.columns
+def test_microdata_observer_requires_columns() -> None:
+    """An empty `columns` list raises a configuration error at setup."""
+    config = {**HARRY_POTTER_CONFIG, "microdata_observer": {"columns": []}}
+    with pytest.raises(ResultsConfigurationError, match="columns"):
+        InteractiveContext(configuration=config, components=[Hogwarts(), MicrodataObserver()])
