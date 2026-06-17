@@ -23,6 +23,23 @@ MINICONDA_DIR = "/svc-simsci/vbu_bootstrap_envs/miniconda3"
 IHME_PYPI = "https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/"
 
 
+def _get_package_subdir() -> str:
+    """Return ``libs/<pkg>`` for monorepo per-package builds, else empty string.
+
+    Derived from Jenkins' ``JOB_NAME`` ("<prefix>/<repo>/libs/<pkg>/<branch>").
+    Standalone repos have no ``libs`` segment, so subdir stays empty and the
+    script operates on the workspace root (the pre-monorepo behavior).
+    """
+    parts = os.environ.get("JOB_NAME", "").split("/")
+    try:
+        i = parts.index("libs")
+    except ValueError:
+        return ""
+    if i + 1 >= len(parts):
+        return ""
+    return f"{parts[i]}/{parts[i + 1]}"
+
+
 def _get_max_python_version() -> str:
     """Read python_versions.json and return the maximum supported Python version."""
     # Ensure we're in a directory with python_versions.json
@@ -115,6 +132,9 @@ def _extract_vbu_version(dry_run_output: str) -> str:
 def main() -> str:
     """Main function to orchestrate version resolution."""
 
+    subdir = _get_package_subdir()
+    if subdir:
+        os.chdir(subdir)
     python_version = _get_max_python_version()
     dry_run_output = _run_pip_dry_run(python_version)
     vbu_version = _extract_vbu_version(dry_run_output)

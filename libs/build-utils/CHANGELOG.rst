@@ -1,3 +1,7 @@
+**3.3.1 - 06/17/26**
+
+- Bugfix: Handle monorepo directory layout in get_vbu_version.py
+
 **3.3.0 - 06/17/26**
 
 - Add monorepo support: top-level ``monorepo()`` step that provisions per-package
