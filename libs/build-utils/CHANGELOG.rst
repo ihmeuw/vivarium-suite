@@ -1,3 +1,7 @@
+**3.3.2 - 06/17/26**
+
+- Bugfix: Resolve vivarium-built-utils version even if the package doesn't declare it as a dependency
+
 **3.3.1 - 06/17/26**
 
 - Bugfix: Handle monorepo directory layout in get_vbu_version.py

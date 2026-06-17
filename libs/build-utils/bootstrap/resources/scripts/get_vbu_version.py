@@ -79,10 +79,14 @@ def _run_pip_dry_run(python_version: str) -> str:
     # NOTE: if updating supported python versions, be sure to create a new
     # conda environment with the appropriate python version and uv installed
     # at MINICONDA_DIR/envs/py{env_version}
+    #
+    # NOTE: We pass `vivarium-build-utils` alongside `.` so the dry-run always resolves
+    # vbu, even when the lib's pyproject doesn't declare it. For libs that do declare
+    # vbu, the bare requirement adds no constraint and the existing pin drives resolution.
     cmd = f"""
     source {MINICONDA_DIR}/etc/profile.d/conda.sh
     conda activate py{env_version}
-    uv pip install --dry-run . --extra-index-url {IHME_PYPI}simple/ --index-strategy unsafe-best-match --no-cache
+    uv pip install --dry-run . vivarium-build-utils --extra-index-url {IHME_PYPI}simple/ --index-strategy unsafe-best-match --no-cache
     """
 
     try:
