@@ -3,9 +3,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+import vivarium.risk_distributions as rd
 from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.lookup import LookupTable
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.causal_factor.calibration_constant import (
@@ -14,6 +16,7 @@ from vivarium.public_health.causal_factor.calibration_constant import (
 from vivarium.public_health.causal_factor.distributions import (
     EnsembleDistribution,
     PolytomousDistribution,
+    clip,
 )
 from vivarium.public_health.disease import SIS
 from vivarium.public_health.population import BasePopulation
@@ -267,10 +270,10 @@ def test_dichotomous_risk(base_config, base_plugins, scalar_exposure):
     _check_exposure_and_rr(simulation, risk.causal_factor, category_exposures, category_rrs)
 
 
-def test_ensemble_risk(base_config, base_plugins):
-    risk = Risk("risk_factor.test_risk")
-
-    distribution_weights = {
+@pytest.fixture
+def ensemble_distribution_weights() -> dict[str, float]:
+    """Distribution weights for the ensemble test risk (glnorm forced to zero)."""
+    return {
         "betasr": 0.055,
         "exp": 0.06,
         "gamma": 0.065,
@@ -285,6 +288,19 @@ def test_ensemble_risk(base_config, base_plugins):
         "norm": 0.105,
         "weibull": 0.12,
     }
+
+
+@pytest.fixture
+def ensemble_distribution_sim(
+    base_config, base_plugins, ensemble_distribution_weights
+) -> tuple[InteractiveContext, EnsembleDistribution]:
+    """Set up a simulation with an ensemble-distributed risk.
+
+    Return the set-up simulation alongside its configured
+    ``EnsembleDistribution`` component.
+    """
+    risk = Risk("risk_factor.test_risk")
+    distribution_weights = ensemble_distribution_weights
 
     data = {
         f"{risk.name}.exposure": pd.DataFrame(
@@ -331,7 +347,7 @@ def test_ensemble_risk(base_config, base_plugins):
                 "distribution_type": "ensemble",
                 "ensemble_members": 2,
             },
-            f"risk_effect.test_risk_on_some_disease.incidence_rate": {
+            "risk_effect.test_risk_on_some_disease.incidence_rate": {
                 "distribution_args": {"relative_risk": 1.5}
             },
         }
@@ -340,19 +356,157 @@ def test_ensemble_risk(base_config, base_plugins):
     simulation = _setup_risk_simulation(
         base_config, base_plugins, risk, data, has_risk_effect=False
     )
-
-    # Get the distribution component
     distribution = risk.exposure_distribution
-
     assert isinstance(distribution, EnsembleDistribution)
+    return simulation, distribution
 
-    expected_distributions = set(distribution_weights.keys()) - {"glnorm"}
-    assert expected_distributions == set(distribution.parameters.keys())
+
+def test_ensemble_risk(ensemble_distribution_sim, ensemble_distribution_weights):
+    """End-to-end: an ensemble-distributed risk sets up and steps without error."""
+    simulation, distribution = ensemble_distribution_sim
+
+    expected_distributions = set(ensemble_distribution_weights.keys()) - {"glnorm"}
+    assert expected_distributions == set(distribution.parameter_columns.keys())
 
     simulation.step()
 
     # todo: use fuzzy checker to confirm that we are getting the expected results
     print("We didn't runtime error - success!")
+
+
+def test_ensemble_builds_single_consolidated_parameters_table(ensemble_distribution_sim):
+    """The ensemble builds a single consolidated ``parameters_table`` LookupTable."""
+    _, distribution = ensemble_distribution_sim
+
+    assert isinstance(distribution.parameters_table, LookupTable)
+
+
+def test_ensemble_parameter_columns_cover_all_distributions(
+    ensemble_distribution_sim, ensemble_distribution_weights
+):
+    """``parameter_columns`` maps every non-glnorm ensemble distribution to its parameter column names."""
+    _, distribution = ensemble_distribution_sim
+
+    expected_distributions = set(ensemble_distribution_weights) - {"glnorm"}
+    assert set(distribution.parameter_columns) == expected_distributions
+
+    for columns in distribution.parameter_columns.values():
+        assert isinstance(columns, list)
+        assert len(columns) > 0
+
+
+def test_consolidated_parameters_table_columns_namespaced_without_collision(
+    ensemble_distribution_sim,
+):
+    """The consolidated ``parameters_table`` value columns namespace each distribution's parameters so names shared across distributions (e.g. ``x_min``/``x_max``) stay distinct and unique."""
+    _, distribution = ensemble_distribution_sim
+
+    value_columns = list(distribution.parameters_table.value_columns)
+
+    # Namespacing must keep every distribution's parameter column distinct, so the
+    # consolidated table holds exactly one column per (distribution, original-column)
+    # pair with no collisions/collapses -- even though parameters such as x_min/x_max
+    # are shared across every distribution.
+    expected_count = sum(len(cols) for cols in distribution.parameter_columns.values())
+    assert len(value_columns) == expected_count
+    assert len(set(value_columns)) == len(value_columns)
+
+
+def test_split_parameters_round_trips_to_per_distribution_frames(ensemble_distribution_sim):
+    """``_split_parameters`` inverts the consolidation: for a looked-up frame it returns per-distribution frames keyed by distribution name with original (un-namespaced) columns."""
+    simulation, distribution = ensemble_distribution_sim
+    index = simulation.get_population(distribution.causal_factor_propensity).index
+
+    looked_up = distribution.parameters_table(index)
+    split = distribution._split_parameters(looked_up)
+
+    assert set(split) == set(distribution.parameter_columns)
+    for dist, frame in split.items():
+        # Each split frame carries the distribution's original (un-namespaced) columns
+        # and is aligned to the same simulant index.
+        assert list(frame.columns) == distribution.parameter_columns[dist]
+        assert frame.index.equals(index)
+
+
+def test_ensemble_owns_distribution_weights_table(ensemble_distribution_sim):
+    """The ensemble owns the distribution weights LookupTable."""
+    _, distribution = ensemble_distribution_sim
+
+    assert isinstance(distribution.distribution_weights_table, LookupTable)
+
+
+def test_ensemble_exposure_ppf_matches_direct_ensemble_computation(ensemble_distribution_sim):
+    """``exposure_ppf`` equals ``rd.EnsembleDistribution`` evaluated on the looked-up weights and the split consolidated parameters for the same propensities."""
+    simulation, distribution = ensemble_distribution_sim
+    index = simulation.get_population(distribution.causal_factor_propensity).index
+
+    # Reproduce the documented composition of exposure_ppf to build an independent
+    # oracle: clip the risk propensity, look up the ensemble weights, split the
+    # consolidated parameter table, then evaluate the risk-distributions ensemble at
+    # the clipped quantiles and the ensemble propensity, with null exposures -> 0.
+    pop = distribution.population_view.get(
+        index,
+        [distribution.causal_factor_propensity, distribution.ensemble_propensity],
+    )
+    quantiles = clip(pop[distribution.causal_factor_propensity].copy())
+    ensemble_propensity = pop[distribution.ensemble_propensity]
+
+    weights = distribution.distribution_weights_table(quantiles.index)
+    params = distribution._split_parameters(distribution.parameters_table(quantiles.index))
+    expected = rd.EnsembleDistribution(weights, params).ppf(quantiles, ensemble_propensity)
+    expected[expected.isnull()] = 0
+
+    actual = distribution.exposure_ppf(index)
+
+    np.testing.assert_allclose(
+        np.asarray(actual, dtype=float), np.asarray(expected, dtype=float)
+    )
+
+
+def test_ensemble_exposure_ppf_returns_empty_for_empty_index(ensemble_distribution_sim):
+    """``exposure_ppf`` returns an empty series when given an empty index."""
+    _, distribution = ensemble_distribution_sim
+
+    result = distribution.exposure_ppf(pd.Index([], dtype=int))
+
+    assert isinstance(result, pd.Series)
+    assert result.empty
+
+
+def test_consolidate_split_round_trips_parameter_values():
+    """Consolidating then splitting preserves each distribution's parameter columns and values, even across distributions that share parameter names (e.g. ``x_min``/``x_max``)."""
+    idx = pd.RangeIndex(3)
+    synthetic = {
+        "norm": pd.DataFrame(
+            {
+                "loc": [1.0, 2.0, 3.0],
+                "scale": [4.0, 5.0, 6.0],
+                "x_min": [-1.0, -1.0, -1.0],
+                "x_max": [9.0, 9.0, 9.0],
+            },
+            index=idx,
+        ),
+        "gamma": pd.DataFrame(
+            {
+                "a": [7.0, 8.0, 9.0],
+                "scale": [1.0, 1.0, 1.0],
+                "x_min": [0.0, 0.0, 0.0],
+                "x_max": [5.0, 5.0, 5.0],
+            },
+            index=idx,
+        ),
+    }
+
+    # The two helpers only depend on self.parameter_columns, which we set from the
+    # consolidation result -- no simulation setup is required.
+    distribution = EnsembleDistribution(EntityString("risk_factor.test_risk"))
+    combined, cols = distribution._consolidate_parameter_tables(synthetic)
+    distribution.parameter_columns = cols
+    split = distribution._split_parameters(combined)
+
+    assert set(split) == set(synthetic)
+    for dist in synthetic:
+        pd.testing.assert_frame_equal(split[dist], synthetic[dist])
 
 
 class _CalibrationConstantModifier(Component):
