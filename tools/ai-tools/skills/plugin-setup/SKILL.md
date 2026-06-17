@@ -126,24 +126,57 @@ All of these end up at the same state: `JENKINS_MCP_AUTH` set in the environment
 
 ## GitHub MCP server
 
-The `github` plugin (a dependency of this plugin) connects Claude Code to
-GitHub via the official hosted MCP server at
+The `github` plugin connects Claude Code to GitHub via the hosted MCP server at
 `https://api.githubcopilot.com/mcp/`, so PRs, reviews, issues, diffs, and
-Actions runs are queryable as tools.
+Actions runs are queryable as tools. You can run **two identities at once** —
+pick the server by the repo's org:
 
-**The auth wrinkle.** The plugin authenticates with a single
-`Authorization: Bearer` header sourced from a `${GITHUB_PERSONAL_ACCESS_TOKEN}`
-env var. That env var resolves *empty* in an agent-team teammate reconnect
-(the teammate doesn't inherit it), and the empty bearer makes the server
-return HTTP 400 — a `/mcp` failure that only shows up once you use agent
-teams. Fix it by replacing the env-var header in the github server's
-`.mcp.json` (which lives in the plugin **cache**, so a plugin reinstall
-overwrites it — reapply afterward) with a `headersHelper`, which Claude Code
-re-runs fresh on every connection. Point that helper at a 0600 token file
-under `~/.claude/secrets/` that an interactive shell refreshes from
-`gh auth token` — the same secret-file pattern as the Jenkins credential
-above, reusing a token already SSO-authorized for `ihmeuw`. Verify with
-`claude mcp list`, not `claude mcp get` (which would leak the token).
+| Org | Server | Tools |
+|-----|--------|-------|
+| `ihmeuw` (+ public repos) | `github` (plugin default) | `mcp__plugin_github_github__*` |
+| `ihme-internal` (private) | `github-internal` (you add it) | `mcp__github_internal__*` |
+
+The accounts don't overlap (each 404s on the other's org). Verify with
+`claude mcp list` or `/mcp`, never `claude mcp get` (it leaks the token).
+
+**Credential pattern (both servers).** Authenticate each with a `headersHelper`,
+not a plain `${VAR}` header — the env var resolves *empty* in agent-team
+teammate reconnects (empty bearer → HTTP 400). The helper reads a 0600 token
+file that `~/.zshrc` refreshes from `gh auth token`:
+
+```json
+"headersHelper": "printf '{\"Authorization\":\"Bearer %s\"}' \"$(cat $HOME/.claude/secrets/<token-file>)\""
+```
+
+**Account 1 — `ihmeuw` (`github`).** The plugin ships pre-wired. Add the helper
+above pointing at `~/.claude/secrets/github-token`, using a token SSO-authorized
+for `ihmeuw`. It lives in the plugin **cache**, so reapply after a reinstall.
+
+**Account 2 — `ihme-internal` (`github-internal`).** Authenticate with the `gh`
+**web OAuth flow, not a fine-grained PAT** (those come back with zero-repo
+access). Use an isolated `gh` profile so it doesn't clobber Account 1:
+
+```bash
+export GH_CONFIG_DIR="$HOME/.config/gh-ihme"
+gh auth login --hostname github.com --web    # authorize SAML SSO for ihme-internal
+```
+
+Refresh `~/.claude/secrets/github-internal-token` from that profile's
+`gh auth token` in `~/.zshrc`, export `GITHUB_INTERNAL_TOKEN` from it in
+`~/.zshenv`, then register the server and add the matching `headersHelper`
+(pointing at `github-internal-token`) to its `~/.claude.json` entry:
+
+```bash
+claude mcp add --transport http --scope user github-internal \
+  'https://api.githubcopilot.com/mcp/?id=internal' \
+  -H 'Authorization: Bearer ${GITHUB_INTERNAL_TOKEN}'
+```
+
+The `?id=internal` is **required** — Claude Code dedups servers by URL and
+silently drops one if two share it. If `github-internal` won't connect, the
+account likely lacks the Copilot license the hosted endpoint needs; swap it for
+the local `github-mcp-server` binary. Relaunch Claude Code from a fresh shell
+after changes so `~/.zshenv` is re-sourced.
 
 ### Sandboxed `git push`
 
