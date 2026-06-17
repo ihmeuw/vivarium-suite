@@ -1,7 +1,11 @@
+**0.23.0 - 06/26/26**
+
+ - Add ``model-development`` skill (``/viv:model-development``) for an end-to-end model iteration loop: a staged artifact→component→observer build with blind, parallel InteractiveContext verification, simulation-based checks, review, and a gated PR. Adds the ``_model_implementer`` and ``_vv_writer`` sub-agents.
+
 **0.22.0 - 06/25/26**
 
  - Add ``change-propagation`` skill to copy boilerplate across libs
- 
+
 **0.21.0 - 06/25/26**
 
  - Add ``workflow-assessment`` skill to investigate workflow correctness post-hoc
@@ -9,7 +13,7 @@
 **0.20.1 - 06/23/26**
 
  - Document running two GitHub MCP identities in the ``plugin-setup`` skill
- 
+
 **0.20.0 - 06/23/26**
 
  - Add ``/viv:repo-maintenance`` skill and ``_claim_auditor`` sub-agent

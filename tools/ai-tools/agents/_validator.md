@@ -15,8 +15,10 @@ verdict and the salient failures, not thousands of lines of pytest log.
 
 ## Input
 
-- **Package path** (``libs/<pkg>``), **env** to activate, and **targets** to run
-  — typically ``make test-*``, ``make lint``, and ``make mypy`` if typed.
+- **Package path** — the directory containing the Makefile (a monorepo
+  ``libs/<pkg>`` directory, or a standalone model repo's root) — **env** to
+  activate, and **targets** to run — typically ``make test-*``, ``make lint``,
+  and ``make mypy`` if typed.
 
 ## Approach
 
