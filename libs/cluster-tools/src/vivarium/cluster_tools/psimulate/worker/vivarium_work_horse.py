@@ -107,8 +107,10 @@ def get_backup(
                     os.remove(stale_file)
             with open(last_pickle, "rb") as backup_file:
                 sim = cast(ParallelSimulationContext, dill.load(backup_file))
-            logger.info(f"Renaming backup file {last_pickle} to {job_parameters.task_id}.pkl")
             if job_parameters.backup_configuration["backup_freq"] is not None:
+                logger.info(
+                    f"Renaming backup file {last_pickle} to {job_parameters.task_id}.pkl"
+                )
                 # Sleep to prevent FS latency when loading the pickle
                 sleep(5)
                 os.rename(

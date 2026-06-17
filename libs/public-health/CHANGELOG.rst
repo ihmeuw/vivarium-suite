@@ -1,3 +1,16 @@
+**6.1.0 - 06/17/26**
+
+- Consolidate EnsembleDistribution per-distribution parameter lookup tables into a single LookupTable for fewer pipeline resources
+
+Breaking changes:
+
+- ``EnsembleDistribution.parameters`` (dict of ``LookupTable``) is removed in favor of ``parameters_table`` and ``parameter_columns``.
+
+**6.0.2 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **6.0.1 - 06/11/26**
 
 - Update vivarium_testing_utils imports to vivarium.testing_utils

@@ -1,3 +1,8 @@
+**5.0.6 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **5.0.5 - 05/20/26**
 
 - Tighten tag pattern

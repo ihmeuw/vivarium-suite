@@ -1,3 +1,12 @@
+**4.2.4 - 06/17/26**
+
+- Only log the renaming of backup files when a rename actually occurs
+
+**4.2.3 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **4.2.2 - 06/15/26**
 
 - Update vivarium examples path in e2e test model specs

@@ -1,3 +1,8 @@
+**0.4.15 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **0.4.14 - 06/04/26**
 
 - Delegate terminal logging to ``vivarium.engine.framework.logging``
