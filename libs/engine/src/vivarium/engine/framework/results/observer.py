@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING, Any
 from vivarium.config_tree.main import ConfigTree
 
 from vivarium.engine import Component
-from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
 
 if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
@@ -78,27 +77,3 @@ class Observer(Component, ABC):
             .get("output_data", {})
             .get("results_directory", None)
         )
-
-
-class MicrodataObserver(Observer):
-    """Observer that records a configured set of columns for each simulant.
-
-    A black-box observer: at each observed timestep it records the columns named in the model spec
-    for every simulant, concatenated across timesteps, so results scientists can compute derived
-    quantities downstream. The columns to record are configured under the ``columns`` key of this
-    observer's configuration block.
-    """
-
-    @property
-    def configuration_defaults(self) -> dict[str, Any]:
-        config = super().configuration_defaults
-        config[self.name] = {"columns": []}
-        return config
-
-    def register_observations(self, builder: Builder) -> None:
-        columns = list(builder.configuration[self.name].columns)
-        if not columns:
-            raise ResultsConfigurationError(
-                f"The '{self.name}' observer requires a non-empty 'columns' list."
-            )
-        builder.results.register_microdata_observation(name=self.name, columns=columns)

@@ -1,7 +1,3 @@
-**5.2.0 - TBD/TBD/26**
-
-- Add Microdata Observer to results system
-
 **5.1.6 - 06/17/26**
 
 - Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``

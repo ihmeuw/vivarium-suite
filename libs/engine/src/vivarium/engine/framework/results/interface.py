@@ -19,7 +19,6 @@ from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
-    MicrodataObservation,
     StratifiedObservation,
     UnstratifiedObservation,
 )
@@ -439,51 +438,6 @@ class ResultsInterface(Interface):
             population_filter=PopulationFilter(pop_filter, include_untracked),
             when=when,
             requires_attributes=requires_attributes,
-            results_formatter=results_formatter,
-            to_observe=to_observe,
-        )
-
-    def register_microdata_observation(
-        self,
-        name: str,
-        columns: list[str],
-        pop_filter: str = "",
-        include_untracked: bool = False,
-        when: str = lifecycle_states.COLLECT_METRICS,
-        results_formatter: ResultsFormatter = _default_unstratified_observation_formatter,
-        to_observe: Callable[[Event], bool] = lambda event: True,
-    ) -> None:
-        """Registers a microdata observation that records the given columns.
-
-        A microdata observation is a concatenating observation that records the named `columns`
-        (plus `event_time`) for each simulant, concatenated across timesteps.
-
-        Parameters
-        ----------
-        name
-            Name of the observation. It will also be the name of the output results file
-            for this particular observation.
-        columns
-            The population attributes (columns) to record for each simulant.
-        pop_filter
-            A Pandas query filter string to filter the population down to the simulants who should
-            be considered for the observation.
-        include_untracked
-            Whether to include simulants who are untracked from this observation.
-        when
-            Name of the lifecycle phase the observation should happen. Valid values are:
-            "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
-        results_formatter
-            Function that formats the raw observation results.
-        to_observe
-            Function that determines whether to perform an observation on this Event.
-        """
-        self._manager.register_observation(
-            observation_type=MicrodataObservation,
-            name=name,
-            population_filter=PopulationFilter(pop_filter, include_untracked),
-            when=when,
-            requires_attributes=columns,
             results_formatter=results_formatter,
             to_observe=to_observe,
         )
