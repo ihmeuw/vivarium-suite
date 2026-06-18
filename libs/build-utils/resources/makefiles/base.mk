@@ -21,6 +21,7 @@ $(error DIST_NAME parse failed: pyproject.toml has a [project] block but no `nam
 endif
 endif
 endif
+# FIXME [MIC-7237]: eventually remove the fallback to PACKAGE_NAME once all repos have [project] blocks with valid names
 # Fall back to PACKAGE_NAME for legacy repos that don't declare `[project]` in pyproject.toml.
 DIST_NAME ?= $(if $(DIST_NAME_FROM_PROJECT),$(DIST_NAME_FROM_PROJECT),$(PACKAGE_NAME))
 
