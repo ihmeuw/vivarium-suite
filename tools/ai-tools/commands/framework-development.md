@@ -67,8 +67,7 @@ git worktree add -b <branch>-tests .claude/worktrees/<branch>-tests <stub-commit
 
 (Under the Bash sandbox these live in the writable workspace, and the main
 repo's ``.git`` is already writable for linked worktrees — so ``git worktree
-add``/``commit`` work. If your worktrees dir sits outside the session root, add
-it to ``sandbox.filesystem.allowWrite``.)
+add``/``commit`` work.)
 
 **Dispatch both agents in one message** (parallel). Give each the design
 summary, the source stubs + body-less test stubs and their paths, the
