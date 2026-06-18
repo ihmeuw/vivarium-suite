@@ -13,5 +13,3 @@ try:
     __version__ = version("vivarium-build-utils")
 except PackageNotFoundError:
     __version__ = "0.0.0+not-installed"
-
-from vivarium.build_utils.resources import get_makefiles_path, get_resources_path

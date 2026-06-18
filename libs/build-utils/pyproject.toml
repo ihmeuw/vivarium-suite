@@ -25,9 +25,10 @@ ci_jenkins = ["vivarium-build-utils[ci_github,cluster]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# Ship ``vivarium.build_utils`` (and any sub-packages). ``vivarium`` itself is
-# excluded so the wheel doesn't ship ``vivarium/__init__.py`` - the namespace
-# owner (vivarium-engine) provides the canonical one.
+# Only include vivarium.build_utils and its subpackages. Excluding vivarium
+# itself means the wheel does not ship vivarium/__init__.py. The "namespace
+# owner" (vivarium-engine) ships the canonical vivarium/__init__.py. If we
+# shipped our own here, pip would overwrite the canonical one.
 include = ["vivarium.build_utils", "vivarium.build_utils.*"]
 
 [tool.setuptools.package-data]
@@ -35,10 +36,6 @@ include = ["vivarium.build_utils", "vivarium.build_utils.*"]
 # the wheel ships vivarium/build_utils/resources/. resources/ lives at the lib
 # root (not under src/) so Jenkins can also load it as a libraryResource.
 "vivarium.build_utils" = ["resources/**/*"]
-# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
-# users install it from PyPI and so mypy also finds the marker via the
-# editable install during in-repo type checks.
-"vivarium.public_health" = ["py.typed"]
 
 [tool.setuptools_scm]
 # Monorepo tagging convention: tags must be prefixed with "vivarium-build-utils-v"
@@ -51,10 +48,6 @@ git_describe_command = 'git describe --dirty --tags --long --match "vivarium-bui
 fallback_version = "0.0.0+no-git-tag"
 
 [tool.pytest.ini_options]
-# Pin the pytest rootdir contract: tests import from each other using absolute
-# `from tests.X` paths, which only resolve when pytest's rootdir is this lib.
-# Declaring testpaths here makes monorepo-root invocations (pytest libs/public-health/)
-# work the same as in-lib invocations.
 testpaths = ["tests"]
 
 [tool.coverage.run]
@@ -65,13 +58,11 @@ show_missing = true
 
 [tool.black]
 line-length = 94
-exclude = '''.*examples.*'''
 
 [tool.isort]
 profile = "black"
 line_length = 94
 multi_line_output = 3
-skip_glob = ["*/examples/*", "**/examples/*"]
 
 [tool.mypy]
 # WARNING: settings here that aren't mypy_path / explicit_package_bases must be
@@ -85,6 +76,8 @@ exclude = [
     "build",
     "setup.py",
 ]
+mypy_path = "src"
+explicit_package_bases = true
 
 disable_error_code = []
 

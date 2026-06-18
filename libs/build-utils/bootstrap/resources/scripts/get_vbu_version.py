@@ -100,11 +100,22 @@ def _run_pip_dry_run(python_version: str) -> str:
 
 
 def _extract_vbu_version(dry_run_output: str) -> str:
-    """Extract vivarium-build-utils version from pip dry-run output."""
-    # uv logs installed packages like:
-    #   + vivarium-build-utils==1.2.3
-    # OR
-    #   + vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium-suite.git@<HASH>
+    """Extract vivarium-build-utils version from pip dry-run output.
+
+    Returns
+    -------
+        Either the monorepo-prefixed tag (``vivarium-build-utils-v<X.Y.Z>``)
+        when the lib pins a PyPI version, or the bare commit SHA when the lib pins
+        a direct git reference. Jenkins's ``library("vivarium_build_utils@<ref>")``
+        accepts either form.
+
+    Notes
+    -----
+    The pip dry-run output includes lines like:
+        + vivarium-build-utils==1.2.3
+        OR
+        + vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium-suite.git@<HASH>
+    """
     for line in dry_run_output.split("\n"):
         if "+ vivarium-build-utils" in line:
             # Check for pinned version first
