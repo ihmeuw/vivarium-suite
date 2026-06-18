@@ -73,14 +73,28 @@ class MicrodataObserver(PublicHealthObserver):
                 f"The '{self.name}' observer configuration requires a non-empty 'columns'"
             )
         timesteps = list(config.timesteps)
+        observed_dates = [pd.Timestamp(timestep).normalize() for timestep in timesteps]
+        if len(set(observed_dates)) != len(observed_dates):
+            raise ResultsConfigurationError(
+                f"The '{self.name}' observer's 'timesteps' contains duplicate dates: {timesteps}."
+            )
         results_gatherer = None
         if config.row_limit is not None:
-            n_observed_timesteps = self._count_observed_timesteps(builder, timesteps)
+            n_observed_timesteps = self._count_observed_timesteps(builder, observed_dates)
             if config.row_limit < n_observed_timesteps:
+                if observed_dates:
+                    detail = (
+                        f"the number of configured timesteps ({n_observed_timesteps}); "
+                        "list fewer 'timesteps' or increase row_limit."
+                    )
+                else:
+                    detail = (
+                        f"the number of timesteps the simulation runs ({n_observed_timesteps}); "
+                        "increase row_limit, or set 'timesteps' to fewer specific dates."
+                    )
                 raise ResultsConfigurationError(
-                    f"The '{self.name}' observer's row_limit ({config.row_limit}) is smaller than "
-                    f"the number of observed timesteps ({n_observed_timesteps}), which would record "
-                    "zero rows per timestep. Increase row_limit or reduce 'timesteps'."
+                    f"The '{self.name}' observer's row_limit ({config.row_limit}) would record "
+                    f"zero rows per timestep: it is smaller than {detail}"
                 )
             self.max_rows_per_timestep = config.row_limit // n_observed_timesteps
             results_gatherer = self._sample_rows
@@ -88,35 +102,36 @@ class MicrodataObserver(PublicHealthObserver):
             name=self.name,
             requires_attributes=columns,
             pop_filter=" and ".join(f"({condition})" for condition in list(config.filter)),
-            to_observe=self._build_to_observe(timesteps),
+            to_observe=self._build_to_observe(observed_dates),
             results_gatherer=results_gatherer,
         )
 
-    def _build_to_observe(self, timesteps: list[str]) -> Callable[[Event], bool]:
+    def _build_to_observe(
+        self, observed_dates: list[pd.Timestamp]
+    ) -> Callable[[Event], bool]:
         """Build a predicate that observes only on the configured timesteps."""
-        if not timesteps:
+        if not observed_dates:
             return lambda event: True
-        target_times = {pd.Timestamp(timestep).normalize() for timestep in timesteps}
+        target_times = set(observed_dates)
         return lambda event: pd.Timestamp(event.time).normalize() in target_times
 
     def _sample_rows(self, pop: pd.DataFrame) -> pd.DataFrame:
         """Record a fresh random sample of at most ``max_rows_per_timestep`` simulants."""
         if len(pop) <= self.max_rows_per_timestep:
             return pop
-        # Give each simulant a random draw (clock-keyed, so reproducible yet re-drawn each
-        # timestep) and keep the max_rows_per_timestep simulants with the largest draws.
         draws = self.randomness.get_draw(pop.index)
         return pop.loc[draws.nlargest(self.max_rows_per_timestep).index]
 
-    def _count_observed_timesteps(self, builder: Builder, timesteps: list[str]) -> int:
+    def _count_observed_timesteps(
+        self, builder: Builder, observed_dates: list[pd.Timestamp]
+    ) -> int:
         """Count the timesteps this observer records on.
 
         When ``timesteps`` is configured this is exact; otherwise the observer records every
-        step and the count is estimated from the simulation's time configuration (the
-        ``row_limit`` is an upper bound, so an estimate is acceptable here).
+        step and the count is taken from the simulation's time configuration.
         """
-        if timesteps:
-            return len(timesteps)
+        if observed_dates:
+            return len(observed_dates)
         time = builder.configuration.time
         start = pd.Timestamp(**time.start.to_dict())
         end = pd.Timestamp(**time.end.to_dict())

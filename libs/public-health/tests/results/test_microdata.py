@@ -199,3 +199,29 @@ def test_microdata_observer_row_limit_below_timestep_count_errors(
             configuration=config,
             plugin_configuration=base_plugins,
         )
+
+
+def test_microdata_observer_row_limit_below_step_estimate_errors(
+    base_config, base_plugins
+) -> None:
+    """Without `timesteps`, a row_limit below the simulation's step count raises at setup."""
+    config = _configure(base_config, {"columns": ["age"], "row_limit": 1})
+    with pytest.raises(ResultsConfigurationError, match="row_limit"):
+        InteractiveContext(
+            components=[BasePopulation(), MicrodataObserver()],
+            configuration=config,
+            plugin_configuration=base_plugins,
+        )
+
+
+def test_microdata_observer_rejects_duplicate_timesteps(base_config, base_plugins) -> None:
+    """Duplicate dates in `timesteps` raise a configuration error at setup."""
+    config = _configure(
+        base_config, {"columns": ["age"], "timesteps": [FIRST_EVENT_TIME, FIRST_EVENT_TIME]}
+    )
+    with pytest.raises(ResultsConfigurationError, match="duplicate"):
+        InteractiveContext(
+            components=[BasePopulation(), MicrodataObserver()],
+            configuration=config,
+            plugin_configuration=base_plugins,
+        )
