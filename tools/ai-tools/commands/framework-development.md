@@ -9,8 +9,7 @@ Run an end-to-end framework development loop for: $ARGUMENTS
 You (the main session) own the design and the stubs, then drive a **black-box
 TDD** build: `_test_writer` and `_feature_implementer` produce the tests and the
 implementation in isolation, and you fan out `_validator` and run the shared
-`_review-core` skill for review (it fans out the five `_review_*` specialists).
-The fan-out runs here because Claude sub-agents cannot spawn sub-agents. Work the
+`_review-core` skill for review (it fans out the five `_review_*` specialists). Work the
 phases in order; keep the user in the loop at the design and PR gates.
 
 ## Phase 0 — Setup
