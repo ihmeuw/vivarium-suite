@@ -13,9 +13,7 @@ the functional-correctness pass, and the synthesis. It is invoked **inline** by
 the same way by other main-session commands (e.g. a development workflow's review
 phase). Because it runs inline in the caller's main-session context, its fan-out
 to the five `_review_*` sub-agents stays one level deep — so run this unit
-inline and **never** as a forked sub-agent (`context: fork`). (Claude Code
-v2.1.172+ lets a sub-agent spawn nested sub-agents, so a forked run would no
-longer fail outright, but it would nest the fan-out needlessly.)
+inline and **not** as a forked sub-agent.
 
 **Not this unit's job** — the caller owns these: gathering the review target
 (PR/diff context), and any follow-up action on the findings (e.g. filing
