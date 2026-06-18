@@ -11,10 +11,10 @@ SAFE_NAME = $(shell python -c "from pkg_resources import safe_name; print(safe_n
 # DIST_NAME is the PyPI distribution name read from pyproject.toml's `[project].name`
 # (e.g. "vivarium-cluster-tools" for libs/cluster-tools/). Parsed with sed/grep
 # rather than tomllib so this works on Python <3.11 too.
-DIST_NAME ?= $(shell sed -n '/^\[project\]/,/^\[/p' pyproject.toml 2>/dev/null | grep -E '^name *=' | head -1 | sed -E 's/^name *= *"([^"]+)".*$$/\1/')
+DIST_NAME_FROM_PROJECT := $(shell sed -n '/^\[project\]/,/^\[/p' pyproject.toml 2>/dev/null | grep -E '^name *=' | head -1 | sed -E 's/^name *= *"([^"]+)".*$$/\1/')
 # If we're inside libs/<pkg>/ (i.e. the monorepo), the package's [project] block
-# exists, and DIST_NAME came up empty, fail the build.
-ifeq ($(DIST_NAME),)
+# exists, and DIST_NAME_FROM_PROJECT came up empty, fail the build.
+ifeq ($(DIST_NAME_FROM_PROJECT),)
 ifneq ($(findstring /libs/$(PACKAGE_NAME),$(CURDIR)),)
 ifneq ($(shell grep -E '^\[project\]' pyproject.toml 2>/dev/null),)
 $(error DIST_NAME parse failed: pyproject.toml has a [project] block but no `name = "..."` line in the canonical double-quoted form. Check for single quotes, multi-line values, or `dynamic = ["name"]` and adjust either the pyproject or this base.mk regex.)
@@ -22,7 +22,10 @@ endif
 endif
 endif
 # Fall back to PACKAGE_NAME for legacy repos that don't declare `[project]` in pyproject.toml.
-DIST_NAME := $(if $(DIST_NAME),$(DIST_NAME),$(PACKAGE_NAME))
+DIST_NAME ?= $(if $(DIST_NAME_FROM_PROJECT),$(DIST_NAME_FROM_PROJECT),$(PACKAGE_NAME))
+
+# Build the editable_mode=compat config-settings flag only when DIST_NAME was parsed from [project].
+EDITABLE_COMPAT_FLAG := $(if $(DIST_NAME_FROM_PROJECT),--config-settings-package $(DIST_NAME_FROM_PROJECT):editable_mode=compat,)
 
 PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
 
@@ -153,7 +156,7 @@ install: # Install package and dependencies
 	#   passing it globally leaks it to transitive sdist builds whose backends
 	#   don't recognize it (numpy 1.x's meson-python errors on it with
 	#   "Unknown option editable_mode").
-	uv pip install -e .[${ENV_REQS}] --config-settings-package ${DIST_NAME}:editable_mode=compat ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
+	uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
 	@$(MAKE) setup-slack
 
 # Path to shared Slack bot token on the team filesystem.
