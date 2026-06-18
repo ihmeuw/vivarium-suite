@@ -5,7 +5,7 @@ Microdata Observer
 
 An observer that records a configured set of population columns for each simulant at each observed
 timestep, concatenated across timesteps. Unlike the stratified public health observers, it records
-raw per-simulant rows so results scientists can compute derived quantities downstream.
+raw per-simulant rows so that derived quantities can be derived downstream.
 
 """
 from __future__ import annotations
@@ -43,10 +43,10 @@ class MicrodataObserver(PublicHealthObserver):
         return config
 
     def register_observations(self, builder: Builder) -> None:
-        columns = list(builder.configuration[self.name].columns)
+        columns = list(self.configuration.columns)
         if not columns:
             raise ResultsConfigurationError(
-                f"The '{self.name}' observer requires a non-empty 'columns' list."
+                f"The '{self.name}' observer configuration requires a non-empty 'columns'"
             )
         builder.results.register_concatenating_observation(
             name=self.name, requires_attributes=columns
