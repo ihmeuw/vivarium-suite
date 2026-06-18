@@ -568,13 +568,3 @@ class ConcatenatingObservation(UnstratifiedObservation):
         if existing_results.empty:
             return new_observations
         return pd.concat([existing_results, new_observations], axis=0).reset_index(drop=True)
-
-
-class MicrodataObservation(ConcatenatingObservation):
-    """Concatenating observation that records a configured set of columns.
-
-    Records the columns named in ``requires_attributes`` (plus the ``event_time`` prepended by
-    :class:`ConcatenatingObservation`) for each simulant, concatenated across timesteps. This is
-    the home for the microdata observer's row-cap, sort, and single-random-sample behavior added
-    in later tasks; for now it inherits the concatenating behavior unchanged.
-    """
