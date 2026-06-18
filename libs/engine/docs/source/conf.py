@@ -4,6 +4,7 @@
 
 import importlib.metadata
 
+
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.engine"
