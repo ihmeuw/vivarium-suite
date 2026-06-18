@@ -98,8 +98,8 @@ around review.
 **Each round, in order:**
 
 1. **Integrate.** Commit each build worktree first — the writer agents have no
-   Bash, so their output sits uncommitted in their worktrees; commit each (you
-   have Bash) before integrating, or ``git checkout <branch> -- …`` pulls the bare
+   Bash, so their output sits uncommitted in their worktrees; commit each before
+   integrating, or ``git checkout <branch> -- …`` pulls the bare
    stub. Then assemble the two disjoint lineages into the feature branch
    (``git checkout <branch>-impl -- <src paths>`` and ``<branch>-tests --
    <test paths>``, or merge both); reconcile rather than force-merge if a
@@ -120,10 +120,11 @@ around review.
 3. **Gate 2 — review (only on green).** Once validation passes, run review. The
    **first** time you reach green, invoke the `_review-core` skill
    (`skills/_review-core/SKILL.md`) with the integrated diff, the changed-file
-   list, and a one-line feature description — a full five-lens fan-out plus the
-   functional-correctness pass in this main-session context, the same definition
-   `/viv:code-reviewer` uses. It returns findings **bucketed by lens** (Design,
-   Maintainability, DRY, Tests, Documentation) alongside your own Functionality
+   list, and a one-line feature description — a full fan-out across the five
+   review **lenses** (one `_review_*` specialist per dimension: Design,
+   Maintainability, DRY, Tests, Documentation) plus the functional-correctness
+   pass in this main-session context, the same definition `/viv:code-reviewer`
+   uses. It returns findings bucketed by lens, alongside your own Functionality
    pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
    each already-fixed finding **back to the lens that raised it** for a
    resolved/not-resolved verdict. When no must-fix findings remain, run one final full `_review-core`
@@ -148,8 +149,8 @@ box holds across rounds):
 Re-validate after **every** fix — including review fixes — so a quality fix can't
 silently break a test. **Bound at ≤3 corrective iterations** (the initial build
 and the first validate/review are not counted); on exhaustion, carry the residual
-validation failures and review findings into the Phase 5 summary — flagged, never
-silently dropped.
+validation failures and review findings into the Phase 5 summary, so they are
+surfaced for the user rather than quietly dropped.
 
 ## Phase 5 — Finalize and PR (gated)
 
@@ -164,7 +165,8 @@ silently dropped.
 4. **Ask the user to approve the PR.** Without approval, stop and leave the
    branch in place.
 5. On approval, use the `commit-splitter` skill to organize the work into clean,
-   reviewable commits, then use `team-conventions` to push and ``gh pr create``
-   with the repo's PR template; report the URL and offer the ``#vivarium_dev``
-   flag. Post a summary of the leftover findings from step 3 as a comment in the
-   PR.
+   reviewable commits, then follow `team-conventions` to push the branch and open
+   the PR with the repo's PR template — via the **GitHub MCP**
+   (`create_pull_request`), since ``gh`` can't run under the Bash sandbox. Report
+   the URL and offer the ``#vivarium_dev`` flag. Post a summary of the leftover
+   findings from step 3 as a comment in the PR.

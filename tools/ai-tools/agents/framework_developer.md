@@ -64,12 +64,12 @@ either changes.
    to the other across iterations.
 5. **Converge.** Run a bounded loop with two ordered gates — **validate** then
    **review** — advancing only when validation is green *and* review is clean (or
-   the cap is hit, residuals carried forward, never silently dropped). Each round:
+   the cap is hit, residuals carried forward and surfaced, not dropped). Each round:
    commit the build worktrees (the writers can't run git) and integrate the
    disjoint lineages; delegate to `_validator` for a PASS/FAIL verdict; **on FAIL,
    fix before reviewing** (don't review red code). Once green, review — the full
    `_review_*` fan-out plus your functional-correctness pass the first time, then
-   route each fixed finding back to the lens that raised it, with one final full
+   route each fixed finding back to the review lens (specialist) that raised it, with one final full
    pass to confirm. Triage each failure/finding to its owner in that owner's
    worktree (implementation bug → `_feature_implementer` in behavioral terms,
    never test source; test bug → `_test_writer`; spec gap → add a test stub),
