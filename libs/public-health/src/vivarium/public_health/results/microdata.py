@@ -43,7 +43,7 @@ class MicrodataObserver(PublicHealthObserver):
         return config
 
     def register_observations(self, builder: Builder) -> None:
-        columns = list(self.configuration.columns)
+        columns = list(builder.configuration[self.name].columns)
         if not columns:
             raise ResultsConfigurationError(
                 f"The '{self.name}' observer configuration requires a non-empty 'columns'"
