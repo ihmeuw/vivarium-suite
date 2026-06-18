@@ -29,7 +29,7 @@ phases in order; keep the user in the loop at the design and PR gates.
   **scope-tightening pass** before confirming: treat each acceptance criterion as
   intent to validate rather than literal law (flag any "every X" broader than the
   need), check whether a broadly-applied change should instead be a meaningful
-  subset, and defer single-caller abstractions. A groomed AC is still intent, not
+  subset, and defer single-caller abstractions. A groomed acceptance criterion is still intent, not
   law; surface any gap to the user rather than building the literal wording.
 
 Exit with a short written design summary the user has agreed to.
@@ -166,7 +166,6 @@ surfaced for the user rather than quietly dropped.
    branch in place.
 5. On approval, use the `commit-splitter` skill to organize the work into clean,
    reviewable commits, then follow `team-conventions` to push the branch and open
-   the PR with the repo's PR template — via the **GitHub MCP**
-   (`create_pull_request`), since ``gh`` can't run under the Bash sandbox. Report
+   the PR with the repo's PR template. Report
    the URL and offer the ``#vivarium_dev`` flag. Post a summary of the leftover
    findings from step 3 as a comment in the PR.
