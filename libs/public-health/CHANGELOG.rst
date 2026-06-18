@@ -1,6 +1,8 @@
 **6.3.0 - TBD/TBD/26**
 
 - Add Microdata Observer to the results system
+- Support ``filter``, ``timesteps``, and ``row_limit`` configuration for the Microdata Observer
+- Require ``vivarium-engine>=5.2.0`` for the concatenating-observation ``results_gatherer`` hook
 
 **6.2.0 - 06/29/26**
 
