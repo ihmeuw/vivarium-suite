@@ -62,9 +62,10 @@ either changes.
    briefing each with the design, the stubs, and its own worktree path — never
    the other's filled-in output. Lineages never merge, so each stays a black box
    to the other across iterations.
-5. **Converge.** Run a bounded loop with two ordered gates — **validate** then
-   **review** — advancing only when validation is green *and* review is clean (or
-   the cap is hit, residuals carried forward and surfaced, not dropped). Each round:
+5. **Converge.** Run two ordered gates — **validate** then **review** — each with
+   its **own independent budget** (so validation can't starve review), advancing
+   only when validation is green *and* review is clean (or a budget is exhausted,
+   residuals carried forward and surfaced, not dropped). Each round:
    commit the build worktrees (the writers can't run git) and integrate the
    disjoint lineages; delegate to `_validator` for a PASS/FAIL verdict; **on FAIL,
    fix before reviewing** (don't review red code). Once green, review — the full
@@ -75,7 +76,8 @@ either changes.
    never test source; test bug → `_test_writer`; spec gap → add a test stub),
    re-validating after every fix. **Review is mandatory before the PR gate on
    every path**; a first-round validation failure (the normal TDD case) must not
-   route around it. Bound at ≤3 corrective iterations.
+   route around it. Budgets: ≤3 validation rounds to reach green, then ≤3 review
+   rounds to reach clean.
 6. **Triage & PR (gated).** Surface advisory **ticket recommendations** for any
    review findings left unaddressed in this build (Jira filing runs on the Claude
    path via the `ticket-triage` skill; this Copilot surface has no Jira access).

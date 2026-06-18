@@ -12,6 +12,36 @@ implementation in isolation, and you fan out `_validator` and run the shared
 `_review-core` skill for review (it fans out the five `_review_*` specialists). Work the
 phases in order; keep the user in the loop at the design and PR gates.
 
+## Control flow
+
+The phases below are the canonical detail; this is the skeleton:
+
+```
+setup                                # Phase 0: package, env, feature branch
+design  = brainstorm with user       # Phase 1: incl. scope-tightening; user-gated
+stubs   = author contract            # Phase 2: source + body-less test stubs; commit baseline
+build impl_wt, test_wt               # Phase 3: _feature_implementer || _test_writer, isolated
+
+# Phase 4 — converge: two gates, each with its own independent budget
+
+Gate 1 — validate: up to 3 rounds, until green
+    repeat:
+        integrate impl_wt + test_wt
+        validate  ->  PASS: green, exit gate
+                  ->  FAIL: triage & re-dispatch each failure (impl bug / test bug / spec gap)
+    still red after the budget  ->  carry residual failures to Phase 5, skip review (don't review red code)
+
+Gate 2 — review: up to 3 rounds, until clean (separate budget from Gate 1)
+    findings = review_core once       # full five-lens fan-out + correctness; always runs once on green
+    repeat while must-fix findings remain:
+        triage & re-dispatch each finding
+        re-integrate, then re-validate    # a review fix can't silently break a test
+        re-check each fix with the lens that raised it
+    leftover findings  ->  carry to Phase 5
+
+finalize & PR                        # Phase 5: user-gated; residuals -> ticket-triage
+```
+
 ## Phase 0 — Setup
 
 1. Resolve the target ``libs/<pkg>`` package from $ARGUMENTS and ``cd`` there.
@@ -85,10 +115,11 @@ you adjust the contract (re-stub, re-seed the worktrees).
 
 ## Phase 4 — Converge: validate, then review (the critic loop)
 
-Integration, validation, and review run as **one bounded loop** with two gates in
-order — **validate** (objective: tests/lint/types) then **review** (advisory:
-quality). You advance to Phase 5 only when validation is green **and** review is
-clean, or when the iteration cap is hit (residuals carried forward, never
+Integration, validation, and review run as two ordered gates — **validate**
+(objective: tests/lint/types) then **review** (advisory: quality) — **each with
+its own independent budget**, so exhausting the validation budget never eats into
+the review budget. You advance to Phase 5 only when validation is green **and**
+review is clean, or when a budget is exhausted (residuals carried forward, never
 silently dropped). Review is **mandatory on every path** — a run never reaches the
 PR gate unreviewed. A first-round validation failure is the *normal* TDD case
 (the implementer fills bodies blind to the assertions), so it must not route
@@ -146,10 +177,15 @@ box holds across rounds):
   contract, propagate to both worktrees, re-dispatch.
 
 Re-validate after **every** fix — including review fixes — so a quality fix can't
-silently break a test. **Bound at ≤3 corrective iterations** (the initial build
-and the first validate/review are not counted); on exhaustion, carry the residual
-validation failures and review findings into the Phase 5 summary, so they are
-surfaced for the user rather than quietly dropped.
+silently break a test. **Two independent budgets**, neither counting the initial
+build or the first validate/review: **≤3 validation rounds** to reach green, then
+**≤3 review rounds** to reach clean. A review fix that breaks validation is
+re-greened *within* its review round, so it counts against the review budget, not
+the validation one. If the validation budget is exhausted before green, skip
+review (don't review red code) and carry the residual failures forward; if the
+review budget is exhausted, carry the residual findings forward. Either way the
+residuals go into the Phase 5 summary, surfaced for the user rather than quietly
+dropped.
 
 ## Phase 5 — Finalize and PR (gated)
 
