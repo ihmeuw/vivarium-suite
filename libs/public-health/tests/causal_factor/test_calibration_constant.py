@@ -287,3 +287,46 @@ class TestProducer:
 
         actual = sim.get_population(pipeline_name).squeeze()
         assert np.allclose(actual, 0.0, atol=1e-10)
+
+    def test_calibration_survives_skipped_post_processors(self, base_config, base_plugins):
+        """Regression (MIC-7006): calibration is applied as a value *modifier*,
+        not a post-processor, so a consumer that reads the rate with the
+        post-processors skipped still receives the ``(1 - calibration)`` factor.
+
+        ``DiseaseState.adjust_mortality_rate`` and ``RiskAttributableDisease``
+        read their excess-mortality rate with ``skip_post_processor=True``
+        (``mode="no-post-processors"``) to feed ``mortality_rate`` the un-rescaled
+        annual rate. When the calibration lived in the (skippable) post-processor
+        chain it was silently dropped on that path, leaving excess mortality
+        inflated by the relative risk with no ``(1 - PAF)`` offset. As a modifier
+        it survives the skip; only the rate rescaler is skipped.
+        """
+        base_value = 0.7
+        calibration_value = 0.25
+        time_step = pd.Timedelta(days=base_config.time.step_size)
+        pipeline_name = "test_pipeline"
+        source = _AttributeSource(pipeline_name, base_value, is_rate=True)
+        modifier = _CalibrationConstantModifier(pipeline_name, calibration_value)
+
+        sim = InteractiveContext(
+            components=[BasePopulation(), source, modifier],
+            configuration=base_config,
+            plugin_configuration=base_plugins,
+        )
+        sim.step()
+        idx = sim.get_population_index()
+        pipeline = sim._values.get_attribute(pipeline_name)
+
+        calibrated = base_value * (1 - calibration_value)
+
+        # Default read: calibration AND the rate rescaler both apply (unchanged behavior).
+        normal = pipeline(idx)
+        assert np.allclose(normal, from_yearly(calibrated, time_step), atol=1e-9)
+
+        # Mortality-consumer path: post-processors skipped. The rescaler is skipped,
+        # but the calibration -- now a modifier -- still applies.
+        skipped = pipeline(idx, mode="no-post-processors")
+        assert np.allclose(skipped, calibrated, atol=1e-9)
+
+        # Regression guard: the skipped read must NOT return the un-calibrated base.
+        assert not np.allclose(skipped, base_value, atol=1e-3)
