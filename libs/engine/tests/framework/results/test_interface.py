@@ -520,6 +520,7 @@ def test_register_concatenating_observation_threads_custom_gatherer(
     obs = grouped_observations[lifecycle_states.COLLECT_METRICS][filter_info][
         stratifications
     ][0]
+    assert isinstance(obs, ConcatenatingObservation)
     assert obs._results_gatherer is gatherer
 
 

@@ -522,9 +522,10 @@ class ConcatenatingObservation(UnstratifiedObservation):
         Method or function that determines whether to perform an observation on this Event.
     results_gatherer
         Optional callable applied to the filtered population each time results are gathered,
-        before the requested columns are selected. Use it to subset or transform the rows to
-        record (e.g. to record only a sample of simulants). It receives the population and must
-        return a DataFrame indexed like the input. If None, all rows are recorded.
+        before the requested columns are selected. Use it to subset the rows to record (e.g. to
+        record only a sample of simulants). It receives the population (restricted to the requested
+        attributes) and must return a DataFrame retaining those columns. If None, all rows are
+        recorded.
 
     """
 
