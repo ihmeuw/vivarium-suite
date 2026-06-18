@@ -107,34 +107,6 @@ scripts/start-server.sh --project-dir /path/to/project
 ```
 When calling this via the Bash tool, set `run_in_background: true`. Then read `$STATE_DIR/server-info` on the next turn to get the URL and port.
 
-**Codex:**
-```bash
-# Codex reaps background processes, so a backgrounded server gets killed.
-# Pass --foreground and launch with Codex's background mechanism so the
-# process survives across turns (the script does not auto-detect Codex).
-scripts/start-server.sh --project-dir /path/to/project --foreground
-```
-
-**Gemini CLI:**
-```bash
-# Use --foreground and set is_background: true on your shell tool call
-# so the process survives across turns
-scripts/start-server.sh --project-dir /path/to/project --foreground
-```
-
-**Other environments:** The server must keep running in the background across conversation turns. If your environment reaps detached processes, use `--foreground` and launch the command with your platform's background execution mechanism.
-
-If the URL is unreachable from your browser (common in remote/containerized setups), bind a non-loopback host:
-
-```bash
-scripts/start-server.sh \
-  --project-dir /path/to/project \
-  --host 0.0.0.0 \
-  --url-host localhost
-```
-
-Use `--url-host` to control what hostname is printed in the returned URL JSON.
-
 ## The Loop
 
 1. **Check server is alive**, then **write HTML** to a new file in `screen_dir`:
