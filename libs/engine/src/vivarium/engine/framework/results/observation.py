@@ -520,6 +520,11 @@ class ConcatenatingObservation(UnstratifiedObservation):
         Method or function that formats the raw observation results.
     to_observe
         Method or function that determines whether to perform an observation on this Event.
+    results_gatherer
+        Optional callable applied to the filtered population each time results are gathered,
+        before the requested columns are selected. Use it to subset or transform the rows to
+        record (e.g. to record only a sample of simulants). It receives the population and must
+        return a DataFrame indexed like the input. If None, all rows are recorded.
 
     """
 
@@ -531,8 +536,10 @@ class ConcatenatingObservation(UnstratifiedObservation):
         requires_attributes: list[str],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
         to_observe: Callable[[Event], bool] = lambda event: True,
+        results_gatherer: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     ):
         requires_attributes = ["event_time"] + requires_attributes
+        self._results_gatherer = results_gatherer
         super().__init__(
             name=name,
             population_filter=population_filter,
@@ -545,7 +552,9 @@ class ConcatenatingObservation(UnstratifiedObservation):
         )
 
     def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
-        """Return the population with only the `included_columns`."""
+        """Return the requested columns, after applying any custom row gatherer."""
+        if self._results_gatherer is not None:
+            pop = self._results_gatherer(pop)
         return pop[self.requires_attributes]
 
     @staticmethod

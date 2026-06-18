@@ -490,6 +490,37 @@ def test_register_concatenating_observation(mocker: MockerFixture) -> None:
     assert obs.results_gatherer is not None
     assert obs.results_updater is not None
     assert obs.results_formatter is not None
+    assert obs._results_gatherer is None
+
+
+def test_register_concatenating_observation_threads_custom_gatherer(
+    mocker: MockerFixture,
+) -> None:
+    """A `results_gatherer` passed to the interface reaches the registered observation."""
+    mgr = ResultsManager()
+    interface = ResultsInterface(mgr)
+    builder = mocker.MagicMock()
+    builder.configuration.stratification.default = []
+    mocker.patch.object(builder, "value.get_attribute")
+    mgr.setup(builder)
+
+    gatherer = lambda pop: pop
+    interface.register_concatenating_observation(
+        name="some-name",
+        requires_attributes=["some-column"],
+        results_formatter=lambda _, __: pd.DataFrame(),
+        results_gatherer=gatherer,
+    )
+
+    grouped_observations = interface._manager._results_context.grouped_observations
+    filter_info = list(grouped_observations[lifecycle_states.COLLECT_METRICS].keys())[0]
+    stratifications = list(
+        grouped_observations[lifecycle_states.COLLECT_METRICS][filter_info]
+    )[0]
+    obs = grouped_observations[lifecycle_states.COLLECT_METRICS][filter_info][
+        stratifications
+    ][0]
+    assert obs._results_gatherer is gatherer
 
 
 def test_default_stratified_formatter_converts_object_to_categorical() -> None:

@@ -402,6 +402,7 @@ class ResultsInterface(Interface):
         requires_attributes: list[str] = [],
         results_formatter: ResultsFormatter = _default_unstratified_observation_formatter,
         to_observe: Callable[[Event], bool] = lambda event: True,
+        results_gatherer: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     ) -> None:
         """Registers a concatenating observation to the results system.
 
@@ -431,6 +432,11 @@ class ResultsInterface(Interface):
             Function that formats the raw observation results.
         to_observe
             Function that determines whether to perform an observation on this Event.
+        results_gatherer
+            Optional callable applied to the filtered population each time results are gathered,
+            before the requested columns are selected. Use it to subset or transform the rows to
+            record (e.g. to record only a sample of simulants). It receives the population and must
+            return a DataFrame indexed like the input. If None, all rows are recorded.
         """
         self._manager.register_observation(
             observation_type=ConcatenatingObservation,
@@ -440,6 +446,7 @@ class ResultsInterface(Interface):
             requires_attributes=requires_attributes,
             results_formatter=results_formatter,
             to_observe=to_observe,
+            results_gatherer=results_gatherer,
         )
 
     @staticmethod
