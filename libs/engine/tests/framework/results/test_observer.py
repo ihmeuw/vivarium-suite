@@ -4,12 +4,10 @@ import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree.main import ConfigTree
 
-from tests.framework.results.helpers import HARRY_POTTER_CONFIG, Hogwarts
 from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.components.manager import ComponentConfigError
 from vivarium.engine.framework.engine import Builder
-from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
-from vivarium.engine.framework.results.observer import MicrodataObserver, Observer
+from vivarium.engine.framework.results.observer import Observer
 
 
 class TestObserver(Observer):
@@ -98,43 +96,3 @@ def test_duplicated_observer_error(base_config: ConfigTree) -> None:
             base_config,
             components=[observer1, observer2],
         )
-
-
-def test_microdata_observer_can_be_registered() -> None:
-    """The observer sets up in any sim and registers a single named observation."""
-    config = {**HARRY_POTTER_CONFIG, "microdata_observer": {"columns": ["student_house"]}}
-    sim = InteractiveContext(
-        configuration=config,
-        components=[Hogwarts(), MicrodataObserver()],
-    )
-    assert "microdata_observer" in sim._results._results_context.observations
-
-
-def test_microdata_observer_records_configured_columns() -> None:
-    """Records exactly the configured columns (+ event_time) for every simulant, each step."""
-    config = {
-        **HARRY_POTTER_CONFIG,
-        "microdata_observer": {"columns": ["student_house", "exam_score"]},
-    }
-    sim = InteractiveContext(
-        configuration=config,
-        components=[Hogwarts(), MicrodataObserver()],
-    )
-    n_simulants = len(sim.get_population_index())
-
-    sim.step()
-    one_step = sim.get_results()["microdata_observer"]
-    sim.step()
-    two_steps = sim.get_results()["microdata_observer"]
-
-    assert set(one_step.columns) == {"student_house", "exam_score", "event_time"}
-    assert len(one_step) == n_simulants
-    assert len(two_steps) == 2 * n_simulants  # fixed-size population over two steps
-    assert two_steps["event_time"].nunique() == 2
-
-
-def test_microdata_observer_requires_columns() -> None:
-    """An empty `columns` list raises a configuration error at setup."""
-    config = {**HARRY_POTTER_CONFIG, "microdata_observer": {"columns": []}}
-    with pytest.raises(ResultsConfigurationError, match="columns"):
-        InteractiveContext(configuration=config, components=[Hogwarts(), MicrodataObserver()])
