@@ -7,9 +7,6 @@ tools:
   # Claude tools are intentionally omitted: on Claude Code, the canonical
   # entry is the `/viv:code-reviewer` slash command (see
   # `commands/code-reviewer.md`), which fans out at main-session level.
-  # Making this agent work on Claude would just duplicate that slash command's
-  # prompt with no upside. (Sub-agents can nest as of Claude Code v2.1.172, but
-  # the fan-out is deliberately kept one level deep.)
   # The body below redirects Claude users to the slash
   # command if this agent is invoked directly via `@code_reviewer`.
   - read

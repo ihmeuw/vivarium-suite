@@ -9,9 +9,7 @@ Run a parallel multi-lens code review of: $ARGUMENTS
 This command gathers the review target, then hands it to the internal
 `_review-core` skill (`skills/_review-core/SKILL.md`) for the fan-out. That
 fan-out runs in this main-session context — `_review-core` invoked inline from
-here spawns the specialists directly, kept one level deep by design (sub-agents
-*can* nest as of Claude Code v2.1.172, but the slash command, not the
-`code_reviewer` orchestrator agent, is the canonical Claude entry point). `_review-core` is the
+here spawns the specialists directly, kept one level deep by design. `_review-core` is the
 single definition of the review, so it can be reused inline by other
 main-session commands without duplicating the fan-out.
 
