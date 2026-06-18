@@ -30,7 +30,7 @@ documentation for details on the underlying results system).
    from vivarium.public_health.population import BasePopulation
    from vivarium.public_health.results import (
        DiseaseObserver, MortalityObserver, DisabilityObserver,
-       CategoricalRiskObserver, ResultsStratifier,
+       CategoricalRiskObserver, MicrodataObserver, ResultsStratifier,
    )
    from vivarium.public_health.risks import Risk
    from vivarium.public_health._example_data import (
@@ -53,7 +53,7 @@ Common Setup
    from vivarium.public_health.population import BasePopulation
    from vivarium.public_health.results import (
        DiseaseObserver, MortalityObserver, DisabilityObserver,
-       CategoricalRiskObserver, ResultsStratifier,
+       CategoricalRiskObserver, MicrodataObserver, ResultsStratifier,
    )
    from vivarium.public_health.risks import Risk
    from vivarium.public_health._example_data import (
@@ -282,6 +282,66 @@ one observation:
    exposed_pt = pt.loc[pt["sub_entity"] == "exposed", "value"].iloc[0]
    unexposed_pt = pt.loc[pt["sub_entity"] == "unexposed", "value"].iloc[0]
    assert exposed_pt > unexposed_pt
+
+
+MicrodataObserver
+-----------------
+
+A :class:`~vivarium.public_health.results.MicrodataObserver` records the raw
+values of a configured set of population columns for every simulant at each
+time step. Unlike the other observers it does not stratify or aggregate - it
+emits one row per simulant per step. Each row carries an ``event_time`` column
+identifying the step it was recorded on, and the results from every step are
+concatenated into a single table.
+
+This makes it a general-purpose tool for capturing per-simulant microdata from
+any simulation: you tell it which columns to record and it writes them out
+verbatim, leaving any downstream aggregation to you.
+
+List the columns to record under the observer's name. ``columns`` is required;
+an empty list raises a configuration error.
+
+.. testcode::
+
+   config = make_base_config()
+   config.update(
+       {
+           "population": {"population_size": 1000},
+           "microdata_observer": {"columns": ["age", "sex"]},
+       },
+       layer="model_override",
+   )
+
+   sim = InteractiveContext(
+       components=[
+           BasePopulation(),
+           MicrodataObserver(),
+       ],
+       configuration=config,
+       plugin_configuration=base_plugins,
+   )
+   sim.step()
+   sim.step()
+
+   microdata = sim.get_results()["microdata_observer"]
+   print(sorted(microdata.columns.tolist()))
+
+.. testoutput::
+
+   ['age', 'event_time', 'sex']
+
+The table holds one row per simulant per step, so two steps of a 1000-simulant
+population produce 2000 rows spanning two distinct ``event_time`` values:
+
+.. testcode::
+
+   print(len(microdata))
+   print(microdata["event_time"].nunique())
+
+.. testoutput::
+
+   2000
+   2
 
 
 Stratification
