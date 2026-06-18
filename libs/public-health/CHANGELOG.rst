@@ -1,3 +1,7 @@
+**6.3.0 - TBD/TBD/26**
+
+- Add Microdata Observer to the results system
+
 **6.2.0 - 06/29/26**
 
 - Apply the calibration constant (PAF) via a value attribute modifier instead of a pipeline post-processor
