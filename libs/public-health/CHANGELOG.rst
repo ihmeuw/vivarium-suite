@@ -1,3 +1,11 @@
+**6.1.1 - 06/18/26**
+
+- Add ``distribution`` data source to ``RiskAttributableDisease`` for artifactless usage
+- Add scalar data-source arguments to the pre-built disease model factories
+  (``SI``/``SIR``/``SIS``/``SIS_fixed_duration``/``SIR_fixed_duration``/``NeonatalSWC_*``)
+  so they can run without an artifact
+- Rewrite the disease tutorial to supply all data as scalars (no DataFrames or artifact required)
+
 **6.1.0 - 06/17/26**
 
 - Consolidate EnsembleDistribution per-distribution parameter lookup tables into a single LookupTable for fewer pipeline resources
