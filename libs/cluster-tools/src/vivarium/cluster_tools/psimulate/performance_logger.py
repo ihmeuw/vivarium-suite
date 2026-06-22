@@ -11,7 +11,13 @@ from vivarium.cluster_tools.psimulate.paths import (
 )
 from vivarium.cluster_tools.utilities import NUM_ROWS_PER_CENTRAL_LOG_FILE
 
-# The pinned column set and order for every central performance log file.
+# Central log files are named ``log_summary_<NNNN>.csv``.
+LOG_FILE_PREFIX = "log_summary_"
+
+# The pinned column set and order for every central performance log file. Pinned because
+# the append in append_child_job_data is positional and headerless, so any drift in a
+# run's column set or order would silently corrupt the file. Extend this list
+# deliberately (and let a new file roll) when the recorded data genuinely changes.
 CENTRAL_LOG_SCHEMA = [
     "host",
     "job_number",
@@ -79,9 +85,10 @@ def transform_perf_df_for_appending(
 
     Returns
     -------
-        The transformed DataFrame which can be directly appended to our central logs. The data now
-        has a simple RangeIndex, the index values as columns, a new artifact name column, and a new
-        scenario parameters column.
+        The transformed DataFrame with a simple RangeIndex, the index values as columns, a
+        new artifact name column, and a new scenario parameters column. It still carries its
+        raw, producer-defined columns; append_child_job_data reindexes it to
+        CENTRAL_LOG_SCHEMA before writing.
     """
     central_perf_df = perf_df.reset_index()
     # add artifact name to central_perf_df
@@ -141,16 +148,28 @@ def _create_empty_log_file(file_path: str) -> None:
 
 
 def _next_log_file_path(current_file_path: str) -> str:
-    """Return the path of the log file that follows the given one in sequence."""
-    next_index = int(Path(current_file_path).stem.replace("log_summary_", "")) + 1
+    """Return the path of the log file that follows the given one in sequence.
+
+    Assumes the argument is the highest-numbered log file, so the returned path does not
+    yet exist; callers pass the most recent file, never an arbitrary one.
+    """
+    next_index = int(Path(current_file_path).stem.removeprefix(LOG_FILE_PREFIX)) + 1
     return str(
-        CENTRAL_PERFORMANCE_LOGS_DIRECTORY / f"log_summary_{str(next_index).zfill(4)}.csv"
+        CENTRAL_PERFORMANCE_LOGS_DIRECTORY
+        / f"{LOG_FILE_PREFIX}{str(next_index).zfill(4)}.csv"
     )
 
 
 def _header_matches_schema(file_path: str) -> bool:
-    """Return whether an existing log file's header is exactly the central log schema."""
-    return pd.read_csv(file_path, nrows=0).columns.tolist() == CENTRAL_LOG_SCHEMA
+    """Return whether an existing log file's header is exactly the central log schema.
+
+    An empty or unreadable file counts as a non-match so the caller rolls past it.
+    """
+    try:
+        header = pd.read_csv(file_path, nrows=0).columns.tolist()
+    except (pd.errors.EmptyDataError, FileNotFoundError):
+        return False
+    return header == CENTRAL_LOG_SCHEMA
 
 
 def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
@@ -166,10 +185,17 @@ def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
        The first file in our central logs containing child job data.
     """
     log_files = glob.glob(
-        CENTRAL_PERFORMANCE_LOGS_DIRECTORY.as_posix() + "/log_summary_*.csv"
+        CENTRAL_PERFORMANCE_LOGS_DIRECTORY.as_posix() + f"/{LOG_FILE_PREFIX}*.csv"
     )
 
-    most_recent_file_path = sorted(log_files)[-1]
+    if log_files:
+        most_recent_file_path = sorted(log_files)[-1]
+    else:
+        # No central logs exist yet: bootstrap the first file with the canonical header.
+        most_recent_file_path = str(
+            CENTRAL_PERFORMANCE_LOGS_DIRECTORY / f"{LOG_FILE_PREFIX}0000.csv"
+        )
+        _create_empty_log_file(most_recent_file_path)
 
     # The append below is positional, so it is only safe when the target file's header
     # is already the canonical schema. If the most recent file predates the schema, roll
@@ -184,6 +210,9 @@ def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
 
     first_file_with_data = most_recent_file_path
 
+    # The most recent file now matches the schema exactly (validated above or freshly
+    # created), so reindexing incoming data to CENTRAL_LOG_SCHEMA order makes the
+    # positional append land correctly.
     child_job_performance_data = _align_to_schema(child_job_performance_data)
 
     while len(child_job_performance_data) != 0:

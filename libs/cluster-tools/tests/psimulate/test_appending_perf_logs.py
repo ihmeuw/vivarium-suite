@@ -21,6 +21,23 @@ from vivarium.cluster_tools.psimulate.performance_logger import (
 )
 from vivarium.cluster_tools.vipin.perf_counters import CounterSnapshot
 
+# The columns that uniquely identify a child job; they form the perf-report index.
+INDEX_COLS = ["host", "job_number", "task_number", "draw", "seed"]
+
+
+def _patch_central_logs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, num_rows: int
+) -> None:
+    """Point the central log directory at tmp_path and cap each file at num_rows rows."""
+    monkeypatch.setattr(
+        "vivarium.cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE",
+        num_rows,
+    )
+    monkeypatch.setattr(
+        "vivarium.cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
+        tmp_path,
+    )
+
 
 def _load_perf_df(filename: str) -> pd.DataFrame:
     """Load a perf-report fixture indexed like a real run's performance report."""
@@ -33,9 +50,8 @@ def _load_perf_df(filename: str) -> pd.DataFrame:
         "job_hash",
         [f"task_id_{i}" for i in range(len(df))],
     )
-    index_cols = ["host", "job_number", "task_number", "draw", "seed"]
     scenario_cols = [col for col in df.columns if col.startswith("scenario")]
-    return df.set_index(index_cols + scenario_cols)
+    return df.set_index(INDEX_COLS + scenario_cols)
 
 
 @pytest.fixture
@@ -103,9 +119,7 @@ def test_expected_columns(
     output_paths = get_output_paths_from_output_directory(result_directory)
     central_perf_df = transform_perf_df_for_appending(perf_df, output_paths)
     expected_columns = (
-        ["host", "job_number", "task_number", "draw", "seed"]
-        + perf_df.columns.tolist()
-        + ["artifact_name", "scenario_parameters"]
+        INDEX_COLS + perf_df.columns.tolist() + ["artifact_name", "scenario_parameters"]
     )
     assert list(central_perf_df.columns) == expected_columns
 
@@ -155,13 +169,7 @@ def test_valid_log_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
-        tmp_path,
-    )
-    monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE", 4
-    )
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=4)
     # add some data to central logs directory to allow appending
     output_paths = get_output_paths_from_output_directory(result_directory)
     pd.DataFrame(columns=CENTRAL_LOG_SCHEMA).to_csv(
@@ -213,14 +221,7 @@ def test_appending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     max_num_rows = 4
-    monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE",
-        max_num_rows,
-    )
-    monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
-        tmp_path,
-    )
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=max_num_rows)
 
     # set up tests
     # create data we want to append
@@ -290,14 +291,7 @@ def test_appending_aligns_to_schema(
     caplog: LogCaptureFixture,
 ) -> None:
     """Data whose columns drift from the schema is realigned to it, not appended as-is."""
-    monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE",
-        100,
-    )
-    monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
-        tmp_path,
-    )
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=100)  # large enough to never roll
 
     output_paths = get_output_paths_from_output_directory(result_directory)
     central_perf_df = transform_perf_df_for_appending(artifact_perf_df, output_paths)
@@ -335,14 +329,7 @@ def test_appending_rolls_past_legacy_header(
     caplog: LogCaptureFixture,
 ) -> None:
     """A most-recent file whose header predates the schema is left untouched; data rolls onward."""
-    monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.NUM_ROWS_PER_CENTRAL_LOG_FILE",
-        100,
-    )
-    monkeypatch.setattr(
-        "vivarium.cluster_tools.psimulate.performance_logger.CENTRAL_PERFORMANCE_LOGS_DIRECTORY",
-        tmp_path,
-    )
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=100)  # large enough to never roll
 
     output_paths = get_output_paths_from_output_directory(result_directory)
     central_perf_df = transform_perf_df_for_appending(artifact_perf_df, output_paths).reindex(
@@ -372,6 +359,92 @@ def test_appending_rolls_past_legacy_header(
     assert new_result.columns.tolist() == CENTRAL_LOG_SCHEMA
     assert_frame_equal(new_result, central_perf_df.reset_index(drop=True), check_dtype=False)
     assert "does not match the current schema" in caplog.text
+
+
+def test_appending_rolls_past_header_missing_a_column(
+    artifact_perf_df: pd.DataFrame,
+    result_directory: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: LogCaptureFixture,
+) -> None:
+    """A most-recent file missing a schema column (a set difference) also triggers a roll."""
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=100)  # large enough to never roll
+
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    central_perf_df = transform_perf_df_for_appending(artifact_perf_df, output_paths).reindex(
+        columns=CENTRAL_LOG_SCHEMA
+    )
+
+    # A legacy file that predates the job_hash column entirely.
+    legacy_columns = [column for column in CENTRAL_LOG_SCHEMA if column != "job_hash"]
+    legacy_file = tmp_path / "log_summary_0000.csv"
+    central_perf_df.drop(columns=["job_hash"]).to_csv(legacy_file, index=False)
+
+    first_file_with_data = append_child_job_data(central_perf_df.copy())
+
+    assert pd.read_csv(legacy_file).columns.tolist() == legacy_columns
+    new_file = tmp_path / "log_summary_0001.csv"
+    assert first_file_with_data == str(new_file)
+    assert pd.read_csv(new_file).columns.tolist() == CENTRAL_LOG_SCHEMA
+    assert "does not match the current schema" in caplog.text
+
+
+def test_appending_does_not_roll_when_header_matches(
+    artifact_perf_df: pd.DataFrame,
+    result_directory: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: LogCaptureFixture,
+) -> None:
+    """A schema-matching most-recent file is appended to in place, never rolled past."""
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=100)  # large enough to never roll
+
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    central_perf_df = transform_perf_df_for_appending(artifact_perf_df, output_paths).reindex(
+        columns=CENTRAL_LOG_SCHEMA
+    )
+    log_file = tmp_path / "log_summary_0000.csv"
+    pd.DataFrame(columns=CENTRAL_LOG_SCHEMA).to_csv(log_file, index=False)
+
+    first_file_with_data = append_child_job_data(central_perf_df.copy())
+
+    assert first_file_with_data == str(log_file)
+    assert not (tmp_path / "log_summary_0001.csv").exists()
+    assert "does not match" not in caplog.text
+    assert len(pd.read_csv(log_file)) == len(central_perf_df)
+
+
+def test_appending_drifted_data_rolls_across_files(
+    artifact_perf_df: pd.DataFrame,
+    result_directory: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Drifted data spanning multiple files: every rolled file holds the schema in order."""
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=5)  # forces rolls across 3 files
+
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    central_perf_df = transform_perf_df_for_appending(artifact_perf_df, output_paths)
+    # Drift (missing a pinned column, plus an unexpected one) must be realigned in every
+    # rolled file, not just the first.
+    incoming = central_perf_df.drop(columns=["job_hash"])
+    incoming["unexpected_counter"] = 1.0
+    pd.DataFrame(columns=CENTRAL_LOG_SCHEMA).to_csv(
+        tmp_path / "log_summary_0000.csv", index=False
+    )
+
+    append_child_job_data(incoming)
+
+    log_files = sorted(tmp_path.glob("log_summary_*.csv"))
+    assert len(log_files) == 3  # 12 rows capped at 5 per file
+    appended = 0
+    for log_file in log_files:
+        file_data = pd.read_csv(log_file)
+        assert file_data.columns.tolist() == CENTRAL_LOG_SCHEMA
+        assert "unexpected_counter" not in file_data.columns
+        appended += len(file_data)
+    assert appended == len(incoming)
 
 
 def test_central_log_schema_matches_produced_columns(result_directory: Path) -> None:
@@ -419,9 +492,8 @@ def test_central_log_schema_matches_produced_columns(result_directory: Path) -> 
     }
 
     perf_df = pd.json_normalize(worker_message, sep="_")
-    index_cols = ["host", "job_number", "task_number", "draw", "seed"]
     scenario_cols = [col for col in perf_df.columns if col.startswith("scenario")]
-    perf_df = perf_df.set_index(index_cols + scenario_cols)
+    perf_df = perf_df.set_index(INDEX_COLS + scenario_cols)
 
     output_paths = get_output_paths_from_output_directory(result_directory)
     produced = set(transform_perf_df_for_appending(perf_df, output_paths).columns)
@@ -438,9 +510,9 @@ def test_central_log_schema_matches_produced_columns(result_directory: Path) -> 
         "if this change is intended."
     )
 
-    # Counters can only be validated for additions and renames: a counter missing here
-    # may simply be unavailable on this platform, but any counter the code does produce
-    # must be in the schema (a renamed counter shows up as an unexpected one).
+    # Counters can only be validated for additions: any counter the code produces must be
+    # in the schema. A missing counter is tolerated (a platform may omit a family such as
+    # cpu_freq), so a rename or removal that orphans a schema counter is not caught here.
     schema_counters = {c for c in CENTRAL_LOG_SCHEMA if c.startswith("counters_")}
     produced_counters = {c for c in produced if c.startswith("counters_")}
     unexpected_counters = produced_counters - schema_counters
