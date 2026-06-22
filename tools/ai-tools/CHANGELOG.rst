@@ -1,4 +1,4 @@
-**0.18.0 - 06/17/26**
+**0.18.0 - 06/22/26**
 
  - Add ``framework-development`` slash command for an end-to-end, black-box-TDD design→implement→verify→PR loop on a well-scoped framework feature.
 
