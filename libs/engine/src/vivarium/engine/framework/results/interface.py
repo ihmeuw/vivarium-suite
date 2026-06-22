@@ -427,17 +427,13 @@ class ResultsInterface(Interface):
             Name of the lifecycle phase the observation should happen. Valid values are:
             "time_step__prepare", "time_step", "time_step__cleanup", or "collect_metrics".
         requires_attributes
-            The population attributes (columns) to record for this observation.
+            The population attributes to record for this observation.
         results_formatter
             Function that formats the raw observation results.
         to_observe
             Function that determines whether to perform an observation on this Event.
         results_gatherer
-            Optional callable applied to the filtered population each time results are gathered,
-            before the requested columns are selected. Use it to subset the rows to record (e.g. to
-            record only a sample of simulants). It receives the population (restricted to the
-            requested attributes) and must return a DataFrame retaining those columns. If None, all
-            rows are recorded.
+            Callable that subsets the rows to record. If None, all rows are recorded.
         """
         self._manager.register_observation(
             observation_type=ConcatenatingObservation,
