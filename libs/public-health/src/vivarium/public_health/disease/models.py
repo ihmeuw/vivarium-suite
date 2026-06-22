@@ -28,6 +28,13 @@ from vivarium.public_health.disease.state import (
 )
 
 
+def _birth_prevalence_source(cause: str, birth_prevalence: DataInput | None) -> DataInput:
+    """Return the supplied birth prevalence source, or the default artifact key."""
+    if birth_prevalence is not None:
+        return birth_prevalence
+    return f"cause.{cause}.birth_prevalence"
+
+
 def SI(
     cause: str,
     incidence_rate: DataInput | None = None,
@@ -315,11 +322,7 @@ def NeonatalSWC_without_incidence(
     healthy = SusceptibleState(cause)
     with_condition = DiseaseState(
         cause,
-        birth_prevalence=(
-            birth_prevalence
-            if birth_prevalence is not None
-            else f"cause.{cause}.birth_prevalence"
-        ),
+        birth_prevalence=_birth_prevalence_source(cause, birth_prevalence),
         prevalence=prevalence,
         disability_weight=disability_weight,
         excess_mortality_rate=excess_mortality_rate,
@@ -368,11 +371,7 @@ def NeonatalSWC_with_incidence(
     healthy = SusceptibleState(cause)
     with_condition = DiseaseState(
         cause,
-        birth_prevalence=(
-            birth_prevalence
-            if birth_prevalence is not None
-            else f"cause.{cause}.birth_prevalence"
-        ),
+        birth_prevalence=_birth_prevalence_source(cause, birth_prevalence),
         prevalence=prevalence,
         disability_weight=disability_weight,
         excess_mortality_rate=excess_mortality_rate,
