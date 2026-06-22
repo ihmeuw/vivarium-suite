@@ -21,10 +21,6 @@ cannot spawn sub-agents) — so this unit must **never** run as a forked sub-age
 tickets). Work only from the review target handed to you in `$ARGUMENTS`; do not
 fetch a PR or run git/gh here.
 
-(Copilot mirror: the same review definition lives in `agents/code_reviewer.md`,
-which fans out via Copilot's `agents:` field. Keep the Approach, Output Format,
-and Constraints in the two files in sync when either changes.)
-
 ## Step 1 — Fan out to specialist sub-agents in parallel
 
 In a single message, invoke ALL FIVE of the following sub-agents in
