@@ -85,11 +85,6 @@ carries the `subagents/` directory path so dispatch outcomes can be
 cross-checked. The extractor owns transcript mechanics; hand it paths and
 questions, not parsing instructions.
 
-For very large runs (more than ~12 sub-agent transcripts — beyond that the
-returned digests crowd the assessment context), extract the main transcript
-plus the sub-agents the spec has expectations about, and name the ones you
-skipped in the report — never cap silently.
-
 ## Assessment dimensions
 
 Judge the assembled traces against the contract, dimension by dimension:
@@ -138,22 +133,3 @@ unavailable. The verdict derives mechanically from the grades: any FAIL →
 the deviation; (b) run hygiene — one-off issues with this execution. Skip an empty list.>
 ```
 
-## Key disciplines
-
-- **The definition is the contract.** Judge the run against what its
-  definition mandates, not against taste; if the run deviated *because the
-  definition is ambiguous or wrong*, say so and put the fix under
-  workflow-definition recommendations.
-- **Evidence over inference.** No FAIL without a transcript citation. If the
-  transcript can't show it (truncated record, missing file), grade WARN and
-  say why.
-- **Degrade loudly.** No definition, missing transcripts, skipped extractors,
-  or a still-running session — all stated in the report, never papered over.
-- **Stay read-only.** Assessment changes nothing: no edits to definitions,
-  transcripts, or the assessed run's outputs. Recommendations are advisory;
-  leftover definition fixes can flow into `ticket-triage` if the user wants
-  tickets.
-- **Compact context.** Raw transcript bulk stays in the extractors; if a
-  digest comes back oversized, judgmental, or missing line references,
-  tighten the brief and re-dispatch — **once** — then work with what came
-  back and note the degradation in the report.
