@@ -76,6 +76,11 @@ def _default_unstratified_observation_formatter(
     return results
 
 
+def _default_unstratified_results_gatherer(results: pd.DataFrame) -> pd.DataFrame:
+    """Return all rows of the population unchanged."""
+    return results
+
+
 class PopulationFilter(NamedTuple):
     """Container class for population query string and include_untracked flag."""
 
@@ -402,7 +407,9 @@ class ResultsInterface(Interface):
         requires_attributes: list[str] = [],
         results_formatter: ResultsFormatter = _default_unstratified_observation_formatter,
         to_observe: Callable[[Event], bool] = lambda event: True,
-        results_gatherer: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+        results_gatherer: Callable[
+            [pd.DataFrame], pd.DataFrame
+        ] = _default_unstratified_results_gatherer,
     ) -> None:
         """Registers a concatenating observation to the results system.
 
@@ -433,7 +440,7 @@ class ResultsInterface(Interface):
         to_observe
             Function that determines whether to perform an observation on this Event.
         results_gatherer
-            Callable that subsets the rows to record. If None, all rows are recorded.
+            Function that gathers the latest observation results.
         """
         self._manager.register_observation(
             observation_type=ConcatenatingObservation,

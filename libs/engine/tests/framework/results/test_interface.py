@@ -490,7 +490,10 @@ def test_register_concatenating_observation(mocker: MockerFixture) -> None:
     assert obs.results_gatherer is not None
     assert obs.results_updater is not None
     assert obs.results_formatter is not None
-    assert obs._results_gatherer is None
+    pop = pd.DataFrame(
+        {"event_time": [1, 1], "some-column": ["a", "b"], "some-other-column": [1, 2]}
+    )
+    assert obs.results_gatherer(pop, None)["some-column"].tolist() == ["a", "b"]
 
 
 def test_register_concatenating_observation_threads_custom_gatherer(
@@ -504,7 +507,7 @@ def test_register_concatenating_observation_threads_custom_gatherer(
     mocker.patch.object(builder, "value.get_attribute")
     mgr.setup(builder)
 
-    gatherer = lambda pop: pop
+    gatherer = lambda pop: pop.iloc[:1]
     interface.register_concatenating_observation(
         name="some-name",
         requires_attributes=["some-column"],
@@ -521,7 +524,8 @@ def test_register_concatenating_observation_threads_custom_gatherer(
         stratifications
     ][0]
     assert isinstance(obs, ConcatenatingObservation)
-    assert obs._results_gatherer is gatherer
+    pop = pd.DataFrame({"event_time": [1, 1], "some-column": ["a", "b"]})
+    assert obs.results_gatherer(pop, None)["some-column"].tolist() == ["a"]
 
 
 def test_default_stratified_formatter_converts_object_to_categorical() -> None:

@@ -27,7 +27,10 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
-from vivarium.engine.framework.results.interface import PopulationFilter
+from vivarium.engine.framework.results.interface import (
+    PopulationFilter,
+    _default_unstratified_results_gatherer,
+)
 from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
@@ -381,6 +384,7 @@ def test_concatenating_observation_gather_results(
         when=lifecycle_state,
         requires_attributes=included_cols,
         results_formatter=lambda _, __: pd.DataFrame(),
+        results_gatherer=_default_unstratified_results_gatherer,
         stratifications=None,
     )
 

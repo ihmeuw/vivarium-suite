@@ -521,11 +521,7 @@ class ConcatenatingObservation(UnstratifiedObservation):
     to_observe
         Method or function that determines whether to perform an observation on this Event.
     results_gatherer
-        Optional callable applied to the filtered population each time results are gathered,
-        before the requested columns are selected. Use it to subset the rows to record (e.g. to
-        record only a sample of simulants). It receives the population (restricted to the requested
-        attributes) and must return a DataFrame retaining those columns. If None, all rows are
-        recorded.
+        Function that gathers the latest observation results.
 
     """
 
@@ -536,27 +532,25 @@ class ConcatenatingObservation(UnstratifiedObservation):
         when: str,
         requires_attributes: list[str],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
+        results_gatherer: Callable[[pd.DataFrame], pd.DataFrame],
         to_observe: Callable[[Event], bool] = lambda event: True,
-        results_gatherer: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     ):
         requires_attributes = ["event_time"] + requires_attributes
-        self._results_gatherer = results_gatherer
+
+        def gather_results_of_interest(pop: pd.DataFrame) -> pd.DataFrame:
+            """Apply the row gatherer, then select the requested columns."""
+            return results_gatherer(pop)[requires_attributes]
+
         super().__init__(
             name=name,
             population_filter=population_filter,
             when=when,
             requires_attributes=requires_attributes,
-            results_gatherer=self.get_results_of_interest,
+            results_gatherer=gather_results_of_interest,
             results_updater=self.concatenate_results,
             results_formatter=results_formatter,
             to_observe=to_observe,
         )
-
-    def get_results_of_interest(self, pop: pd.DataFrame) -> pd.DataFrame:
-        """Return the requested columns, after applying any custom row gatherer."""
-        if self._results_gatherer is not None:
-            pop = self._results_gatherer(pop)
-        return pop[self.requires_attributes]
 
     @staticmethod
     def concatenate_results(

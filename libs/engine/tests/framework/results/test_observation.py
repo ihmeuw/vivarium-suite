@@ -16,7 +16,10 @@ from tests.framework.results.helpers import (
 )
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
-from vivarium.engine.framework.results.interface import PopulationFilter
+from vivarium.engine.framework.results.interface import (
+    PopulationFilter,
+    _default_unstratified_results_gatherer,
+)
 from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
@@ -49,6 +52,7 @@ def concatenating_observation() -> ConcatenatingObservation:
         when="whenevs",
         requires_attributes=["some-col", "some-other-col"],
         results_formatter=lambda _, __: pd.DataFrame(),
+        results_gatherer=_default_unstratified_results_gatherer,
     )
 
 
@@ -301,13 +305,14 @@ def test_concatenating_observation_records_all_rows_by_default() -> None:
         when="whenevs",
         requires_attributes=["col"],
         results_formatter=lambda _, __: pd.DataFrame(),
+        results_gatherer=_default_unstratified_results_gatherer,
     )
     pop = pd.DataFrame(
         {"event_time": [1, 1, 1], "col": ["a", "b", "c"], "extra": [0, 0, 0]},
         index=[10, 11, 12],
     )
 
-    result = observation.get_results_of_interest(pop)
+    result = observation.results_gatherer(pop, None)
 
     assert list(result.columns) == ["event_time", "col"]
     assert result["col"].tolist() == ["a", "b", "c"]
@@ -328,7 +333,7 @@ def test_concatenating_observation_applies_custom_results_gatherer() -> None:
         index=[10, 11, 12],
     )
 
-    result = observation.get_results_of_interest(pop)
+    result = observation.results_gatherer(pop, None)
 
     assert list(result.columns) == ["event_time", "col"]
     assert result["col"].tolist() == ["a", "c"]
