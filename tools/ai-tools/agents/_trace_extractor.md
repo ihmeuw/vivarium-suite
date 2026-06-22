@@ -31,43 +31,27 @@ Work only on the file(s) and directory you were handed.
 
 ## Transcript anatomy
 
-This format is **internal and undocumented**: only the file *location* is
-documented ([sessions docs](https://code.claude.com/docs/en/sessions)) — the
-record schema and the `subagents/` layout are not, and they drift across
-Claude Code versions. (The supported reader is the Agent SDK, which a
-Read/Grep/Glob sub-agent can't call.) So treat the shape below as a **hint to
-confirm against the actual file**, not a spec: skim a few records first, and if
-they don't match, report the shape you found rather than forcing the data into
-this mold.
+The format is **internal and undocumented** (only the file *location* is —
+[sessions docs](https://code.claude.com/docs/en/sessions)) and drifts across
+versions, so treat this as a hint and confirm against the file. Records are one
+JSON object per line in the standard Anthropic messages shape (`type:
+assistant|user`, a `content` list of `tool_use`/`tool_result` blocks, `is_error`
+on failed results) — read that off the data directly. What's worth stating
+because it *isn't* obvious from a record:
 
-One JSON object per line. The `type` field separates records; only a few
-matter:
-
-- `assistant` — the model's turns. `.message.content` is a list of blocks;
-  `tool_use` blocks carry `name`, `input`, and `id`. **Multiple `tool_use`
-  blocks in one assistant record are one parallel batch** — that is the
-  parallelism evidence the orchestrator needs.
-- `user` — human turns *and* tool results. Tool results are content blocks of
-  type `tool_result` with a `tool_use_id` linking back to the call, and an
-  `is_error` flag on failures. Slash-command invocations show up here as
-  `<command-name>`/`<command-args>` tags.
-- Everything else (`file-history-snapshot`, `mode`, `attachment`, …) is
-  bookkeeping — skip it.
-
-Markers worth knowing:
-
-- **Sub-agent dispatch**: `tool_use` named `Agent` (older transcripts: `Task`),
-  input keys `description`, `prompt`, `subagent_type`.
-- **Skill invocation**: `tool_use` named `Skill`, input keys `skill`, `args`.
-- **User gates**: `tool_use` named `AskUserQuestion` or `ExitPlanMode`; also an
-  assistant text block that ends the turn on a question with the next `user`
-  record answering it.
-- **Sub-agent transcripts** live next to the main one:
-  `<session-dir>/subagents/agent-<id>.jsonl`, each with an
-  `agent-<id>.meta.json` of the form `{agentType, description, toolUseId}` —
-  `toolUseId` matches the dispatching `tool_use` id in the main transcript.
-  (The `workflow-assessment` skill documents the same directory layout for
-  transcript discovery — keep the two in sync.)
+- **Parallelism is positional** — several `tool_use` blocks in *one* `assistant`
+  record were dispatched as a single parallel batch; across separate records
+  they're sequential. This is the only evidence of parallel dispatch.
+- **Sub-agent dispatch** is a `tool_use` named `Agent` (older transcripts:
+  `Task`), with `subagent_type` / `description` / `prompt`.
+- **Sub-agent transcripts are a sibling tree** —
+  `<session-dir>/subagents/agent-<id>.jsonl` plus an `agent-<id>.meta.json`
+  (`{agentType, description, toolUseId}`); `toolUseId` is what links a dispatch
+  to its sub-agent transcript. (Same layout the `workflow-assessment` skill
+  uses for discovery — keep in sync.)
+- **Gates aren't always tool calls** — an `AskUserQuestion`/`ExitPlanMode`
+  `tool_use`, *or* a plain assistant turn ending on a question that the next
+  `user` record answers.
 
 ## Approach
 
