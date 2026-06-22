@@ -307,7 +307,7 @@ def test_appending_aligns_to_schema(
 
     result = pd.read_csv(log_file)
     # The file stays parseable and pinned to the schema; no drift lands on disk.
-    assert list(result.columns) == CENTRAL_LOG_SCHEMA
+    assert list(result.columns) == list(CENTRAL_LOG_SCHEMA)
     assert len(result) == len(incoming)
     # The unexpected column is dropped; the missing pinned column is filled with NaN.
     assert "unexpected_counter" not in result.columns
@@ -356,7 +356,7 @@ def test_appending_rolls_past_legacy_header(
     new_file = tmp_path / "log_summary_0001.csv"
     assert first_file_with_data == str(new_file)
     new_result = pd.read_csv(new_file)
-    assert new_result.columns.tolist() == CENTRAL_LOG_SCHEMA
+    assert new_result.columns.tolist() == list(CENTRAL_LOG_SCHEMA)
     assert_frame_equal(new_result, central_perf_df.reset_index(drop=True), check_dtype=False)
     assert "does not match the current schema" in caplog.text
 
@@ -386,7 +386,7 @@ def test_appending_rolls_past_header_missing_a_column(
     assert pd.read_csv(legacy_file).columns.tolist() == legacy_columns
     new_file = tmp_path / "log_summary_0001.csv"
     assert first_file_with_data == str(new_file)
-    assert pd.read_csv(new_file).columns.tolist() == CENTRAL_LOG_SCHEMA
+    assert pd.read_csv(new_file).columns.tolist() == list(CENTRAL_LOG_SCHEMA)
     assert "does not match the current schema" in caplog.text
 
 
@@ -441,7 +441,7 @@ def test_appending_drifted_data_rolls_across_files(
     appended = 0
     for log_file in log_files:
         file_data = pd.read_csv(log_file)
-        assert file_data.columns.tolist() == CENTRAL_LOG_SCHEMA
+        assert file_data.columns.tolist() == list(CENTRAL_LOG_SCHEMA)
         assert "unexpected_counter" not in file_data.columns
         appended += len(file_data)
     assert appended == len(incoming)
@@ -538,7 +538,7 @@ def test_latest_central_log_file_matches_schema() -> None:
 
     latest_file = log_files[-1]
     header = pd.read_csv(latest_file, nrows=0).columns.tolist()
-    assert header == CENTRAL_LOG_SCHEMA, (
+    assert header == list(CENTRAL_LOG_SCHEMA), (
         f"Latest central log file {latest_file} does not match CENTRAL_LOG_SCHEMA. "
         f"Its header is {header}. A non-canonical file was written out of band; "
         "investigate the producer before further appends drift it."

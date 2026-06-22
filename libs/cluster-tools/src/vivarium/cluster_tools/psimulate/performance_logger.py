@@ -16,9 +16,10 @@ LOG_FILE_PREFIX = "log_summary_"
 
 # The pinned column set and order for every central performance log file. Pinned because
 # the append in append_child_job_data is positional and headerless, so any drift in a
-# run's column set or order would silently corrupt the file. Extend this list
-# deliberately (and let a new file roll) when the recorded data genuinely changes.
-CENTRAL_LOG_SCHEMA = [
+# run's column set or order would silently corrupt the file. It is a tuple because the
+# schema is immutable; extend it deliberately (and let a new file roll) when the recorded
+# data genuinely changes.
+CENTRAL_LOG_SCHEMA = (
     "host",
     "job_number",
     "task_number",
@@ -63,7 +64,7 @@ CENTRAL_LOG_SCHEMA = [
     "counters_time",
     "scenario_parameters",
     "artifact_name",
-]
+)
 
 
 def transform_perf_df_for_appending(
@@ -169,7 +170,7 @@ def _header_matches_schema(file_path: str) -> bool:
         header = pd.read_csv(file_path, nrows=0).columns.tolist()
     except (pd.errors.EmptyDataError, FileNotFoundError):
         return False
-    return header == CENTRAL_LOG_SCHEMA
+    return header == list(CENTRAL_LOG_SCHEMA)
 
 
 def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
