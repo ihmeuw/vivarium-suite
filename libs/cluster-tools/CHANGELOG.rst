@@ -1,3 +1,7 @@
+**4.2.5 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
 **4.2.4 - 06/17/26**
 
 - Only log the renaming of backup files when a rename actually occurs
