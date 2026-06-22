@@ -29,16 +29,11 @@ The orchestrator provides:
 
 Work only on the file(s) and directory you were handed.
 
-## Transcript anatomy
+## Transcript Structure Notes
 
-The format is **internal and undocumented** (only the file *location* is —
-[sessions docs](https://code.claude.com/docs/en/sessions)) and drifts across
-versions, so treat this as a hint and confirm against the file. Records are one
-JSON object per line in the standard Anthropic messages shape (`type:
-assistant|user`, a `content` list of `tool_use`/`tool_result` blocks, `is_error`
-on failed results) — read that off the data directly. What's worth stating
-because it *isn't* obvious from a record:
-
+- Records are one JSON object per line in the standard Anthropic messages shape
+ (`type: assistant|user`, a `content` list of `tool_use`/`tool_result` blocks, `is_error`
+on failed results) 
 - **Parallelism is positional** — several `tool_use` blocks in *one* `assistant`
   record were dispatched as a single parallel batch; across separate records
   they're sequential. This is the only evidence of parallel dispatch.
