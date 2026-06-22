@@ -2,8 +2,6 @@
 name: _trace_extractor
 description: "Use when: extracting a compact orchestration trace (sub-agent dispatches, skill invocations, gates, notable tool calls) from one Claude Code session transcript JSONL, keeping raw transcript bulk out of the orchestrator's context."
 tools:
-  # Claude vocabulary only — the workflow-assessment skill (its only
-  # caller) is Claude Code-only, since Copilot has no session transcripts.
   - Read
   - Grep
   - Glob
