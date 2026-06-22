@@ -1,10 +1,6 @@
 **0.18.0 - 06/22/26**
 
- - Drop GitHub Copilot support (MIC-7238): remove the ``code_reviewer`` and
-   ``model_regression_debugger`` Copilot orchestrator agents, strip the dual
-   Claude/Copilot tool vocabulary from the specialist sub-agents, and remove the
-   VS Code Copilot install and delegation docs. ``_review-core`` is now the
-   single definition of the multi-lens review.
+ - Drop GitHub Copilot support
 
 **0.17.0 - 06/16/26**
 
