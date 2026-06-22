@@ -1,4 +1,4 @@
-**4.0.0 - 06/17/26**
+**4.0.0 - 06/22/26**
 
 First release from the vivarium-suite monorepo; the standalone
 ``ihmeuw/vivarium_build_utils`` GitHub repository has been archived.
