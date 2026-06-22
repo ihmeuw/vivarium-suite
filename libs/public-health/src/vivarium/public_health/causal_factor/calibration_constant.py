@@ -162,7 +162,7 @@ class _RiskAffectedPipeline(Component):
         """
         # The table holds the multiplicative calibration factor ``1 - calibration_constant``
         # (== ``1 - PAF``), populated in ``on_post_setup``; its no-effect placeholder is
-        # therefore 1, not 0, so a read before population cannot zero out the target rate.
+        # therefore 1.
         self._calibration_factor_table = self.build_lookup_table(
             builder, "calibration_factor", data_source=1
         )
@@ -187,14 +187,6 @@ class _RiskAffectedPipeline(Component):
             preferred_post_processor=[*self._additional_post_processors],
         )
 
-        # Apply the calibration factor (1 - PAF) as a value modifier rather than a
-        # post-processor. Consumers that read this pipeline with skip_post_processor=True
-        # (DiseaseState.adjust_mortality_rate and RiskAttributableDisease feeding
-        # mortality_rate) skip the entire post-processor chain, which silently dropped
-        # the calibration factor and left the excess-mortality rate inflated by the relative
-        # risk with no (1 - PAF) offset. As a modifier it survives the skip. Application
-        # is commutative with the relative-risk modifiers, so ordering does not matter.
-        # See MIC-7006.
         builder.value.register_attribute_modifier(
             self._target_pipeline_name, modifier=self._calibration_factor_table
         )
@@ -250,19 +242,8 @@ class _RiskAffectedPipeline(Component):
     def _calibration_constant_post_processor(
         value: list[NumberLike], manager: ValuesManager
     ) -> LookupTableData:
-        """Reduce the registered calibration constants to the joint calibration
-        constant (joint PAF) via ``raw_union(c_i)``.
-
-        The conversion to the multiplicative calibration factor
-        (``1 - raw_union(c_i) == prod(1 - c_i)``) happens in ``on_post_setup``,
-        so this pipeline evaluates to the raw (joint) PAF.
-        """
+        """Compute the joint calibration constant via raw union."""
         joint_calibration_constant = raw_union_post_processor(value, manager)
-        # Guard: a NaN joint value is silently catastrophic -- it becomes a NaN
-        # multiplicative factor on the target rate, zeroing it with no error. It almost
-        # always means two contributing effects supplied PAF data with incompatible
-        # indexes (mismatched index levels, or non-overlapping labels such as different
-        # age bins) that pandas could not align inside ``raw_union``. Fail loudly instead.
         if isinstance(joint_calibration_constant, pd.Series):
             has_nan = bool(joint_calibration_constant.isna().any())
         else:

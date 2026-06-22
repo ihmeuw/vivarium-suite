@@ -289,9 +289,8 @@ class TestProducer:
         assert np.allclose(actual, 0.0, atol=1e-10)
 
     def test_calibration_survives_skipped_post_processors(self, base_config, base_plugins):
-        """Regression (MIC-7006): calibration is applied as a value *modifier*,
-        not a post-processor, so a consumer that reads the rate with the
-        post-processors skipped still receives the ``(1 - calibration)`` factor.
+        """Calibration is applied as a value modifier, so a consumer that reads the rate
+        with the post-processors skipped still receives the ``(1 - calibration)`` factor.
 
         ``DiseaseState.adjust_mortality_rate`` and ``RiskAttributableDisease``
         read their excess-mortality rate with ``skip_post_processor=True``
