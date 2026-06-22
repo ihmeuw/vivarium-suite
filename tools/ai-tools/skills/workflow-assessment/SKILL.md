@@ -16,44 +16,41 @@ reads Claude Code session transcripts, which have no Copilot equivalent. It is
 read-only throughout — it never re-runs the workflow, edits its outputs, or
 modifies the workflow definition.
 
-## Input
+## Resolving the run
 
-Two things identify the job; take them from the user or resolve them yourself:
+The session to assess is rarely named by id — the user describes it: roughly
+*when* it ran and *what they were doing* ("the repo-maintenance run on
+vivarium-suite last Thursday", "yesterday's code review of the config-tree
+PR"). Resolve that description to one session by cross-referencing cheap
+metadata — **never by reading transcripts to search through them**:
 
-1. **The run.** "This run" / "that run" in the session that just executed the
-   workflow means the **current session** (note in the report that the
-   transcript is still being written, and includes this assessment
-   conversation). Otherwise: the most recent transcript in the project
-   directory, or an explicit session id or transcript path. When resolving
-   "most recent" from a fresh session, skip the current session's own
-   transcript — it is always the newest, and it records this assessment
-   request, not the run to assess.
-2. **The workflow.** Usually obvious from the user or the transcript (the
-   `<command-name>` tag or `Skill` invocation that started it). When the
-   session is just ad-hoc agent usage with no definition to judge against,
-   grade only the spec-free dimensions — gates (2), tool appropriateness
-   against each agent's own declared role (5), and result propagation (6) —
-   mark coverage, ordering, parallelism, and handoff completeness `N/A`, and
-   label the report accordingly.
-
-## Locating the run
-
-Transcripts live under `~/.claude/projects/<project-slug>/`, where the slug is
-derived from the session's working directory (path separators *and other
-punctuation* become `-`, e.g. `-home-user-repos-vivarium-suite`). Per session
-`<id>`:
-
-- `<id>.jsonl` — the main transcript;
-- `<id>/subagents/agent-*.jsonl` — one transcript per spawned sub-agent, each
-  with an `agent-*.meta.json` naming its agent type and dispatch description.
-  (Anatomy beyond discovery is the extractor's domain — see
-  `agents/_trace_extractor.md`, and keep the layout in sync.)
-
-"Most recent" is mtime order. Mind two traps: a run executed from a git
-worktree has a *different* cwd and therefore a different project slug (list
-`~/.claude/projects/` when the slug you derived comes up empty), and a
-session with no `subagents/` folder spawned no sub-agents at all — which is
-itself an assessment finding for a workflow that mandates a fan-out.
+1. **Get a description** if the user hasn't given one — roughly when, and
+   which workflow / repo / task. Two shortcuts skip straight to the fan-out:
+   the user means the **current session** (note in the report that its
+   transcript is still being written and includes this assessment), or they
+   hand you an explicit session id or transcript path.
+2. **Find the candidate project dirs.** Sessions live under
+   `~/.claude/projects/<project-slug>/`, where the slug is the run's working
+   directory with punctuation flattened to `-` (honor `$CLAUDE_CONFIG_DIR`,
+   which relocates the `~/.claude` base). One repo worked from several
+   worktrees has several sibling slugs, so Glob `*<repo>*` to catch the main
+   checkout and every worktree at once — "on vivarium-suite" must not miss a
+   worktree run.
+3. **Fingerprint each session without opening its transcript.** Per `<id>`:
+   - `<id>.jsonl`'s **mtime** is when it ran (Glob orders results by mtime);
+   - the **`<id>/subagents/agent-*.meta.json`** sidecars are tiny — read them
+     inline; their `agentType`s and dispatch descriptions identify the
+     workflow (`_claim_auditor` ⟹ repo-maintenance; the five `_review_*` ⟹
+     code-reviewer; `_feature_implementer` + `_test_writer` ⟹
+     framework-development; …). No `subagents/` folder ⟹ no sub-agents ran.
+   - only if the fingerprint is still ambiguous, Grep the file's opening
+     `<command-name>` tag for the exact slash command — a bounded peek at the
+     head, not a transcript read.
+4. **Confirm before fanning out.** Rank candidates by time + fingerprint match
+   and name your pick back in terms the user can verify — its time and shape,
+   not its opaque id ("the 06-18 run that fanned out 33 `_claim_auditor`s") —
+   or show a short table if several are close. The id means nothing to the
+   user; let them recognize the run by its description.
 
 ## Loading the spec
 
@@ -72,6 +69,12 @@ actually mandates, not what you'd have designed:
   implementer never sees filled-in test bodies");
 - which tools each participant is supposed to use (who writes, who only
   reads, what stays out of the main session).
+
+When the run is ad-hoc usage with no workflow definition to judge against,
+grade only the spec-free dimensions — gates (2), tool appropriateness against
+each agent's own declared role (5), and result propagation (6) — mark
+coverage, ordering, parallelism, and handoff completeness `N/A`, and say so in
+the report.
 
 ## Extraction fan-out
 

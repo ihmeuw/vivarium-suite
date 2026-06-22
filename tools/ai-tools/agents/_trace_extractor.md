@@ -31,6 +31,15 @@ Work only on the file(s) and directory you were handed.
 
 ## Transcript anatomy
 
+This format is **internal and undocumented**: only the file *location* is
+documented ([sessions docs](https://code.claude.com/docs/en/sessions)) — the
+record schema and the `subagents/` layout are not, and they drift across
+Claude Code versions. (The supported reader is the Agent SDK, which a
+Read/Grep/Glob sub-agent can't call.) So treat the shape below as a **hint to
+confirm against the actual file**, not a spec: skim a few records first, and if
+they don't match, report the shape you found rather than forcing the data into
+this mold.
+
 One JSON object per line. The `type` field separates records; only a few
 matter:
 
@@ -59,9 +68,6 @@ Markers worth knowing:
   `toolUseId` matches the dispatching `tool_use` id in the main transcript.
   (The `workflow-assessment` skill documents the same directory layout for
   transcript discovery — keep the two in sync.)
-
-Field names drift across Claude Code versions. If the records don't match this
-shape, say so in the output and report the shape you actually found.
 
 ## Approach
 
