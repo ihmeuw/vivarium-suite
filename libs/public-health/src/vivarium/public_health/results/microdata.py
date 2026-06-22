@@ -28,7 +28,7 @@ class MicrodataObserver(PublicHealthObserver):
     """Observer that records a configured set of columns for each simulant.
 
     At each observed timestep it records the configured columns (plus ``event_time``) for every
-    (optionally filtered) simulant, concatenated across timesteps, so results scientists can compute
+    (optionally filtered) simulant, concatenated across timesteps, so users can compute
     derived quantities downstream. It composes the framework's generic concatenating observation, so
     it records raw rows rather than the stratified measures of the other public health observers (it
     does not use ``PublicHealthObserver``'s measure/entity formatting).
@@ -70,7 +70,7 @@ class MicrodataObserver(PublicHealthObserver):
         columns = list(config.columns)
         if not columns:
             raise ResultsConfigurationError(
-                f"The '{self.name}' observer configuration requires a non-empty 'columns'"
+                f"The '{self.name}' observer requires a non-empty 'columns' list in its config."
             )
         timesteps = list(config.timesteps)
         observed_dates = [pd.Timestamp(timestep).normalize() for timestep in timesteps]
@@ -125,11 +125,7 @@ class MicrodataObserver(PublicHealthObserver):
     def _count_observed_timesteps(
         self, builder: Builder, observed_dates: list[pd.Timestamp]
     ) -> int:
-        """Count the timesteps this observer records on.
-
-        When ``timesteps`` is configured this is exact; otherwise the observer records every
-        step and the count is taken from the simulation's time configuration.
-        """
+        """Count the timesteps this observer records on."""
         if observed_dates:
             return len(observed_dates)
         time = builder.configuration.time
