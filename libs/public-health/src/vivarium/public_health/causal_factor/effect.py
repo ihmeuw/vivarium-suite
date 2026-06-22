@@ -208,9 +208,7 @@ class CausalFactorEffect(Component, ABC):
 
     def get_distribution_type(self, builder: Builder) -> str:
         """Get the distribution type for the causal factor from the configuration."""
-        causal_factor_exposure_component = self._get_causal_factor_exposure_component(
-            builder
-        )
+        causal_factor_exposure_component = self._get_causal_factor_exposure_component(builder)
         return (
             causal_factor_exposure_component.distribution_type
             or causal_factor_exposure_component.get_distribution_type(builder)
