@@ -280,7 +280,10 @@ def test_microdata_observer_single_random_sample_records_fixed_cohort(
         base_config,
         {
             "columns": ["simulant_id"],
-            "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],  # 2 observed -> 200 // 2 = 100
+            "timesteps": [
+                FIRST_EVENT_TIME,
+                SECOND_EVENT_TIME,
+            ],  # 2 observed -> 200 // 2 = 100
             "row_limit": 200,
             "single_random_sample": True,
         },

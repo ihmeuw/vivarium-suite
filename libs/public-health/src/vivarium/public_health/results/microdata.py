@@ -142,18 +142,25 @@ class MicrodataObserver(Observer):
         target_times = set(observed_dates)
         return lambda event: pd.Timestamp(event.time).normalize() in target_times
 
+    def _sample_index(
+        self, index: pd.Index[int], additional_key: str | None = None
+    ) -> pd.Index[int]:
+        """Randomly draw up to ``max_rows_per_timestep`` simulants from ``index``."""
+        draws = self.randomness.get_draw(index, additional_key=additional_key)
+        return draws.nlargest(self.max_rows_per_timestep).index
+
     def _sample_rows(self, pop: pd.DataFrame) -> pd.DataFrame:
         """Record a fresh random sample of at most ``max_rows_per_timestep`` simulants."""
         if len(pop) <= self.max_rows_per_timestep:
             return pop
-        draws = self.randomness.get_draw(pop.index)
-        return pop.loc[draws.nlargest(self.max_rows_per_timestep).index]
+        return pop.loc[self._sample_index(pop.index)]
 
     def _sample_cohort(self, pop_data: SimulantData) -> None:
         """Sample the fixed closed cohort once, from the initial population."""
         if self.cohort is None:
-            draws = self.randomness.get_draw(pop_data.index, additional_key="cohort_selection")
-            self.cohort = draws.nlargest(self.max_rows_per_timestep).index
+            self.cohort = self._sample_index(
+                pop_data.index, additional_key="cohort_selection"
+            )
 
     def _cohort_rows(self, pop: pd.DataFrame) -> pd.DataFrame:
         """Record the once-sampled closed cohort still present in the (filtered) population."""
