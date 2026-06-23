@@ -68,7 +68,10 @@ For each claim, one of:
 - `upstream-unreachable` — a needed MCP server is not connected,
   errors, or the page/job/channel cannot be fetched. Never downgrade
   this to `stale`. Name the service so the orchestrator can tell the
-  user what to reconnect.
+  user what to reconnect. A claim you simply can't check read-only —
+  e.g. a write tool's signature, since it isn't in your toolset — is
+  `unverifiable`, not `upstream-unreachable` (the service is fine; you
+  just have no read-only probe).
 
 ## Output format
 

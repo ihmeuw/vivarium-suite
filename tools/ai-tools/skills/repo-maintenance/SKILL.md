@@ -30,8 +30,10 @@ The audited surface is `tools/ai-tools/**` plus the repo root
    per spawn is just the unit path and repo root.
 3. **Synthesize.** Findings that share a root cause across units (the
    same stale URL cited in two skills) collapse into one finding with
-   every location listed. Order the report `stale`, then
-   `unverifiable`, then `upstream-unreachable`.
+   every location listed. Recompute the summary tallies from the
+   per-claim `status:` fields, not the auditors' `counts:` lines (which
+   can drift). Order the report `stale`, then `unverifiable`, then
+   `upstream-unreachable`.
 4. **Report and select.** Present the report (format below) and let the
    user pick which `stale` findings to fix — all, a subset, or none.
    The report and the selection question must be visible together at
@@ -65,7 +67,9 @@ never silently dropped.
   write-capable tool.
 - **Evidence or it didn't happen.** A `stale` finding arriving without
   quoted upstream evidence is dropped from the stale list and its unit
-  listed as *not audited*, so it can be re-run.
+  listed as *not audited*, so it can be re-run. Synthesize from what the
+  auditors returned — don't re-run their upstream checks in the
+  orchestrator; thin evidence means re-run the auditor, not verify inline.
 - **Don't chain.** After fixes are applied, stop. Branch setup,
   commits, and PRs are the user's call (`/viv:team-conventions` covers
   the mechanics).
