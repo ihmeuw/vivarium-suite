@@ -2,15 +2,10 @@
 name: _validator
 description: "Use when: running a package's test/lint/type suite and reporting a compact PASS/FAIL verdict, keeping verbose suite output out of the orchestrator's context."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
   - Bash
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
-  - execute
 user-invocable: false
 ---
 

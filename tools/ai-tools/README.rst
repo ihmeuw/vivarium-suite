@@ -14,7 +14,7 @@ It includes:
 
 **Code Reviewer**
 
-- ``code_reviewer`` — orchestrator that delegates to a number of specialist sub-agents focused on:
+- ``/viv:code-reviewer <PR or description>`` — parallel multi-lens review that fans out to specialist sub-agents focused on:
   
   - Maintainability
   - DRY
@@ -22,21 +22,18 @@ It includes:
   - Testing coverage and quality
   - Documentation
 
-  The orchestrator also runs its own functional-correctness pass.
+  plus its own functional-correctness pass.
 
-Slash command (Claude Code only): ``/viv:code-reviewer <PR or description>``.
 After the review, findings the user won't address in the current PR can be
 handed to the ``ticket-triage`` skill (see Skills below), to compile and file non-duplicate JIRA tickets.
 
 **Regression Debugger**
 
-- ``model_regression_debugger`` — orchestrator that traces data pipeline changes across repos to find the cause of simulation regressions
-
-Slash command (Claude Code only): ``/viv:model-regression-debugger <symptom and context>``.
+- ``/viv:model-regression-debugger <symptom and context>`` — traces data pipeline changes across repos to find the cause of simulation regressions.
 
 **Git Rescue**
 
-- Slash command (Claude Code only): ``/viv:git-rescue [optional description]``.
+- ``/viv:git-rescue [optional description]``.
   Diagnoses and untangles messy git situations — stuck interactive
   rebases, stacked-branch conflicts after a squash-merge of the parent,
   divergent history, accidental merge commits, dropped commits. Always
@@ -47,7 +44,7 @@ Slash command (Claude Code only): ``/viv:model-regression-debugger <symptom and 
 
 **Type Hinter**
 
-- Slash command (Claude Code only): ``/viv:type-hinter <target>`` (a
+- ``/viv:type-hinter <target>`` (a
   package, sub-folder, or ``.py`` files under one ``libs/<pkg>/``). Runs
   as the **lead of an agent team**: resolves the inter-file dependency
   graph, spawns one teammate per file, verifies with ``make mypy``, and
@@ -58,10 +55,10 @@ Slash command (Claude Code only): ``/viv:model-regression-debugger <symptom and 
 
 **Framework Development**
 
-- ``framework_developer`` — orchestrator for an end-to-end
+- ``/viv:framework-development <ticket or feature description>`` — an end-to-end
   design → implement → verify → PR loop on a single well-scoped framework
   feature. The main session owns the design and the interface stubs, then runs
-  a **black-box TDD** build. The orchestrator owns the contract: it writes
+  a **black-box TDD** build. It owns the contract: it writes
   **source stubs** (the API) plus **body-less test stubs** that enumerate the
   acceptance criteria, commits them, and creates two git worktrees from that
   baseline. It then fans out ``_feature_implementer`` and ``_test_writer`` in
@@ -73,8 +70,6 @@ Slash command (Claude Code only): ``/viv:model-regression-debugger <symptom and 
   test/lint/type suite and runs the shared ``_review-core`` skill for review,
   iterating while preserving the black box. It always creates the feature branch
   up front and gates PR creation on explicit user approval.
-
-Slash command (Claude Code only): ``/viv:framework-development <ticket or feature description>``.
 
 **Skills**
 
@@ -104,6 +99,10 @@ Slash command (Claude Code only): ``/viv:framework-development <ticket or featur
   commits, and PR-sized branches when scope warrants.
 - ``ticket-triage`` — turn code-review findings that are out of scope for
   the current PR into Jira ticket recommendations.
+- ``repo-maintenance`` — audit the plugin's AI plaintext (skills, agents,
+  commands, README, root ``CLAUDE.md``) for drift against upstream
+  sources via per-unit ``_claim_auditor`` sub-agents; fixes are gated on
+  user approval.
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
@@ -116,10 +115,8 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives unde
   plugin entry uses ``"source": "./tools/ai-tools"`` to point at the plugin
   directory. Claude Code requires the marketplace catalog at the repo root for
   ``/plugin marketplace add ihmeuw/vivarium-suite`` to find it.
-- ``tools/ai-tools/.claude-plugin/plugin.json``: plugin manifest (also auto-detected
-  by VS Code Copilot).
-- ``tools/ai-tools/agents/``: orchestrator agents (Copilot entry points) and
-  specialist sub-agents.
+- ``tools/ai-tools/.claude-plugin/plugin.json``: plugin manifest.
+- ``tools/ai-tools/agents/``: specialist sub-agents spawned by the slash commands.
 - ``tools/ai-tools/commands/``: Claude Code slash commands.
 - ``tools/ai-tools/skills/``: Claude Code skills (model-loaded reference material for setup and usage flows)
 - ``tools/ai-tools/CHANGELOG.rst``: history of plugin changes.
@@ -146,38 +143,21 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
    /plugin marketplace add /path/to/vivarium-suite
    /plugin install viv@vivarium-ai-tools
 
-Once installed, the canonical Claude Code entry points are the slash
-commands ``/viv:code-reviewer``, ``/viv:model-regression-debugger``, and
+Once installed, the entry points are the slash commands
+``/viv:code-reviewer``, ``/viv:model-regression-debugger``, and
 ``/viv:framework-development``. These run the sub-agent fan-out at
 main-session level and produce a multi-lens review, a regression
 investigation, or an end-to-end feature build.
 
-The ``code_reviewer``, ``model_regression_debugger``, and
-``framework_developer`` agent files exist for VS Code Copilot, which has
-no slash-command surface. On Claude Code, if a user invokes them directly
-via ``@code_reviewer``, ``@model_regression_debugger``, or
-``@framework_developer``, the agent's first step is to detect the harness
-and output a one-line redirect telling the user to use the slash command
-instead. Do not rely on the ``@`` invocation path on Claude.
-
 Delegation mechanism
 ====================
 
-Sub-agent delegation works differently on each platform, and the plugin
-uses two separate mechanisms that target the two harnesses
-independently.
-
-**Claude Code.** The parallel fan-out runs at main-session level: the
-slash command — not a forked orchestrator agent — spawns the specialist
-sub-agents. 
-That is what the
+The parallel fan-out runs at main-session level. That is what the
 ``commands/*.md`` slash commands do: their ``allowed-tools: Agent(...)``
 field grants the main session permission to spawn the listed
 ``_review_*`` (or ``_diff_analyzer`` / ``_hypothesis_tester``)
 sub-agents in parallel, and the slash command body is itself the
-orchestration prompt. The orchestrator agent files are *not* invoked
-by the slash command — the fan-out targets the specialist sub-agents
-directly.
+orchestration prompt.
 
 The multi-lens review fan-out is defined once, in the internal ``_review-core``
 skill (``skills/_review-core/SKILL.md``, hidden from the ``/`` menu via
@@ -188,26 +168,6 @@ same main session — not as a sub-agent — so ``_review-core`` can spawn the
 review be reused by other main-session commands without duplicating the
 fan-out.
 
-**VS Code Copilot.** Sub-agent delegation is the orchestrator's job
-and is configured via two front-matter fields on the orchestrator
-agent: ``tools:`` must contain the ``agent`` token, and an
-``agents: [...]`` list enumerates allowed sub-agents. Both are
-declared on ``code_reviewer``, ``model_regression_debugger``, and
-``framework_developer``. Copilot has no slash-command surface; the agent
-picker is the only entry point.
-
-The orchestrator agent files use only Copilot tool vocabulary
-(``read, search, execute, github/*, agent``) — Claude-style PascalCase
-tokens are intentionally absent, because the canonical Claude path is
-the slash command and there is no scenario where the orchestrator
-agent would run usefully under Claude. The non-user-facing sub-agent
-files (everything ``_``-prefixed) do declare both vocabularies (they
-are invoked from both the Claude slash commands and from Copilot's
-orchestrators). Do not consolidate
-these vocabularies — each platform recognizes its own tokens and
-silently drops the other's, and the cross-platform compatibility
-relies on both being present where applicable.
-
 Security model and recommended deny rules
 =========================================
 
@@ -217,6 +177,9 @@ Code:
 - The 5 ``_review_*`` sub-agents have **no Bash access at all**. They
   are fed PR context by the slash command and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
+- ``_claim_auditor`` likewise has **no Bash access** — it verifies
+  plaintext claims with ``Read``/``Grep``/``Glob``, read-only MCP calls
+  (hub, Jira, Slack, Jenkins, GitHub), and ``WebFetch`` only.
 - ``_duplicate_finder`` has **no shell or file access at all** — its only
   tools are the read-only Jira MCP ``search`` and ``get_issue`` calls it
   uses to check candidate tickets against the backlog.
@@ -232,8 +195,8 @@ Code:
   author test files and fill in source stub bodies during the black-box TDD
   build. They are deliberately **not** granted ``Bash`` — they never run the
   suite, ``git``, or shell commands, which confines their effect to file edits.
-  Each runs inside its own git worktree (the orchestrator does the ``git
-  worktree`` management on the Claude path), so neither tree contains the
+  Each runs inside its own git worktree (the ``/viv:framework-development``
+  command does the ``git worktree`` management), so neither tree contains the
   other's output; the "stay in your worktree" instruction in each brief
   discourages reaching across via an absolute path, since the worktree is not a
   hard read sandbox. Both are spawned only by the ``/viv:framework-development``
@@ -244,14 +207,13 @@ Code:
   files — but running a test suite executes arbitrary project code, so this is a
   broader grant than the read-only git agents above. It is spawned only by the
   ``/viv:framework-development`` slash command.
-- The ``code_reviewer``, ``model_regression_debugger``, and
-  ``framework_developer`` orchestrator agents are Copilot-only and have no
-  Claude tools — on Claude Code they redirect to the slash command and exit. On
-  the Claude path the slash command body (running in the main session) gathers
-  PR/repo context through the GitHub MCP server (a plugin dependency; see the
-  ``plugin-setup`` skill), falling back to read-only git/``gh`` commands when the
-  MCP is unavailable; ``/viv:framework-development`` additionally writes source
-  and test files and runs make targets as it builds the feature.
+- The ``/viv:code-reviewer``, ``/viv:model-regression-debugger``, and
+  ``/viv:framework-development`` slash command bodies (running in the main
+  session) gather PR/repo context through the GitHub MCP server (a plugin
+  dependency; see the ``plugin-setup`` skill), falling back to read-only
+  git/``gh`` commands when the MCP is unavailable; ``/viv:framework-development``
+  additionally writes source and test files and runs make targets as it builds
+  the feature.
 
 For destructive or out-of-scope commands, Claude Code's default
 permission system prompts you before execution, so a prompt-injected
@@ -315,21 +277,3 @@ outside the sandbox. Even ``git push`` runs sandboxed once ``github.com``
 is allowlisted and git's credential helper points at a sandbox-readable
 token file (see ``plugin-setup``), so no un-sandboxing is needed for
 normal git/GitHub work.
-
-Installing in VS Code GitHub Copilot
-====================================
-
-Add this path to ``chat.pluginLocations`` in settings:
-
-.. code-block:: json
-
-   {
-     "chat.pluginLocations": {
-       "/your/path/to/vivarium-suite/tools/ai-tools": true
-     }
-   }
-
-Then reload VS Code and verify the plugin appears in the Agent Plugins
-UI. The agents will appear in the Copilot agent picker. Slash commands
-are intentionally Claude-only — Copilot's agent picker is the
-equivalent surface there.

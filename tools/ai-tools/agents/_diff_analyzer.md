@@ -2,16 +2,10 @@
 name: _diff_analyzer
 description: "Use when: analyzing diffs between branches across one or more repos, summarizing code changes relevant to a regression, identifying which component changes could affect simulation outcomes."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
   - Bash
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
-  - execute
-  - github/*
 user-invocable: false
 ---
 
