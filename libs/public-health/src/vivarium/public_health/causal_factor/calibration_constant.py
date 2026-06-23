@@ -4,17 +4,11 @@ Calibration Constant
 ====================
 
 This module contains functions and classes for managing calibration constants in
-pipelines that are intended to be modifiable by RiskEffect components.
-
-Terminology
------------
-* **calibration constant** -- the raw population attributable fraction (PAF). This is
-  what RiskEffect components contribute as modifiers on the
-  ``{target}.calibration_constant`` pipeline, and what that pipeline evaluates to
-  (the joint PAF across all contributing effects).
-* **calibration factor** -- ``1 - calibration_constant`` (i.e. ``1 - PAF``), the
-  multiplicative, non-attributable fraction applied to the target rate. This is what
-  is stored in the lookup table and registered as a modifier on the target pipeline.
+pipelines that are intended to be modifiable by RiskEffect components. A calibration
+constant is the raw population attributable fraction (PAF): RiskEffect components
+contribute their PAFs as modifiers on the ``{target}.calibration_constant`` pipeline,
+which evaluates to the joint PAF across all contributing effects. The target rate is
+then multiplied by ``1 - calibration_constant``.
 
 """
 from collections.abc import Callable, Sequence
@@ -160,11 +154,9 @@ class _RiskAffectedPipeline(Component):
         builder
             Access point for utilizing framework interfaces during setup.
         """
-        # The table holds the multiplicative calibration factor ``1 - calibration_constant``
-        # (== ``1 - PAF``), populated in ``on_post_setup``; its no-effect placeholder is
-        # therefore 1.
-        self._calibration_factor_table = self.build_lookup_table(
-            builder, "calibration_factor", data_source=1
+        # Holds the joint PAF, populated in ``on_post_setup``; its no-effect placeholder is 0.
+        self._calibration_constant_table = self.build_lookup_table(
+            builder, "calibration_constant", data_source=0
         )
         self._calibration_constant_pipeline = builder.value.register_value_producer(
             get_calibration_constant_pipeline_name(self._target_pipeline_name),
@@ -182,35 +174,26 @@ class _RiskAffectedPipeline(Component):
         register_pipeline(
             self._target_pipeline_name,
             source=self._target_pipeline_source,
-            required_resources=[self._calibration_factor_table, *self._required_resources],
+            required_resources=[self._calibration_constant_table, *self._required_resources],
             preferred_combiner=multiplication_combiner,
             preferred_post_processor=[*self._additional_post_processors],
         )
 
+        # ``multiplication_combiner`` only evaluates this modifier on non-zero target
+        # values, so ``1 - calibration_constant`` is never multiplied into zeros.
         builder.value.register_attribute_modifier(
-            self._target_pipeline_name, modifier=self._calibration_factor_table
+            self._target_pipeline_name,
+            modifier=self._apply_calibration_constant,
+            required_resources=[self._calibration_constant_table],
         )
 
     def on_post_setup(self, event: Event) -> None:
-        """Precompute the joint calibration constant (PAF), convert it to the
-        calibration factor ``1 - PAF``, and store that in the lookup table."""
-        calibration_constant = self._calibration_constant_pipeline()
-        self._calibration_factor_table.set_data(
-            self._to_calibration_factor(calibration_constant)
-        )
+        """Precompute the joint calibration constant (PAF) and store it in the lookup table."""
+        self._calibration_constant_table.set_data(self._calibration_constant_pipeline())
 
-    @staticmethod
-    def _to_calibration_factor(calibration_constant: LookupTableData) -> LookupTableData:
-        """Convert a (joint) calibration constant / PAF to the multiplicative
-        calibration factor ``1 - calibration_constant`` applied to the target rate."""
-        if isinstance(calibration_constant, pd.DataFrame):
-            calibration_factor = calibration_constant.copy()
-            calibration_factor[DEFAULT_VALUE_COLUMN] = (
-                1 - calibration_factor[DEFAULT_VALUE_COLUMN]
-            )
-        else:
-            calibration_factor = 1 - calibration_constant
-        return calibration_factor
+    def _apply_calibration_constant(self, index: pd.Index) -> pd.Series:
+        """Return the ``1 - calibration_constant`` multiplier for the given simulants."""
+        return 1 - self._calibration_constant_table(index)
 
     @property
     def name(self) -> str:
