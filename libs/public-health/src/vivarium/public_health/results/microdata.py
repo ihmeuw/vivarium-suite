@@ -164,8 +164,12 @@ class MicrodataObserver(Observer):
 
     def _cohort_rows(self, pop: pd.DataFrame) -> pd.DataFrame:
         """Record the once-sampled closed cohort still present in the (filtered) population."""
-        cohort = self.cohort if self.cohort is not None else pop.index[:0]
-        return pop.loc[pop.index.intersection(cohort)]
+        if self.cohort is None:
+            raise RuntimeError(
+                f"The '{self.name}' observer's closed cohort was never sampled; its "
+                "population initializer did not run before results were gathered."
+            )
+        return pop.loc[pop.index.intersection(self.cohort)]
 
     def _count_observed_timesteps(
         self, builder: Builder, observed_dates: list[pd.Timestamp]
