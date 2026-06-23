@@ -99,6 +99,10 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   commits, and PR-sized branches when scope warrants.
 - ``ticket-triage`` — turn code-review findings that are out of scope for
   the current PR into Jira ticket recommendations.
+- ``repo-maintenance`` — audit the plugin's AI plaintext (skills, agents,
+  commands, README, root ``CLAUDE.md``) for drift against upstream
+  sources via per-unit ``_claim_auditor`` sub-agents; fixes are gated on
+  user approval.
 
 Loaded automatically when the context is relevant to the skill's description.
 Layout
@@ -173,6 +177,9 @@ Code:
 - The 5 ``_review_*`` sub-agents have **no Bash access at all**. They
   are fed PR context by the slash command and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
+- ``_claim_auditor`` likewise has **no Bash access** — it verifies
+  plaintext claims with ``Read``/``Grep``/``Glob``, read-only MCP calls
+  (hub, Jira, Slack, Jenkins, GitHub), and ``WebFetch`` only.
 - ``_duplicate_finder`` has **no shell or file access at all** — its only
   tools are the read-only Jira MCP ``search`` and ``get_issue`` calls it
   uses to check candidate tickets against the backlog.
