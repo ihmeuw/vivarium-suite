@@ -2,16 +2,11 @@
 name: _test_writer
 description: "Use when: fleshing out body-less test stubs into real tests in black-box TDD, working from the public signatures and the design — never from an implementation."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
   - Edit
   - Write
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
-  - write
 user-invocable: false
 ---
 

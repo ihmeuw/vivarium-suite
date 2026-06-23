@@ -2,16 +2,10 @@
 name: _hypothesis_tester
 description: "Test a single hypothesis about the cause of a simulation regression by comparing old and new code."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
   - Bash
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
-  - execute
-  - github/*
 user-invocable: false
 ---
 

@@ -2,16 +2,11 @@
 name: _feature_implementer
 description: "Use when: implementing a stubbed interface in black-box TDD, working from the signatures, the design spec, and body-less test stubs as read-only criteria — never from the filled-in test assertions."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
   - Edit
   - Write
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
-  - write
 user-invocable: false
 ---
 
