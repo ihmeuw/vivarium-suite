@@ -2,9 +2,7 @@
 name: _duplicate_finder
 description: "Use when: checking candidate tickets against the Jira backlog for duplicates, returning a compact match list and keeping raw JQL search traffic out of the orchestrator's context."
 tools:
-  # Claude vocabulary only — this agent searches Jira through the MCP
-  # server, which Copilot installs of the plugin don't have. The
-  # ticket-triage skill (its only caller) is likewise Claude-only.
+  # Read-only Jira MCP access only — checks candidate tickets against the backlog.
   - mcp__plugin_mcp-jira_mcp-jira__search
   - mcp__plugin_mcp-jira_mcp-jira__get_issue
 user-invocable: false
