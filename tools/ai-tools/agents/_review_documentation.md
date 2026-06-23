@@ -2,13 +2,9 @@
 name: _review_documentation
 description: "Use when: reviewing code for documentation quality, including docstrings, comments, README/changelog updates, and public API documentation accuracy."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
 user-invocable: false
 ---
 

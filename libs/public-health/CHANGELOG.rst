@@ -1,10 +1,13 @@
-**6.1.1 - 06/18/26**
+**6.1.2 - 06/23/26**
 
 - Add ``distribution`` data source to ``RiskAttributableDisease`` for artifactless usage
 - Add scalar data-source arguments to the pre-built disease model factories
   (``SI``/``SIR``/``SIS``/``SIS_fixed_duration``/``SIR_fixed_duration``/``NeonatalSWC_*``)
   so they can run without an artifact
-- Rewrite the disease tutorial to supply all data as scalars (no DataFrames or artifact required)
+
+**6.1.1 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
 
 **6.1.0 - 06/17/26**
 

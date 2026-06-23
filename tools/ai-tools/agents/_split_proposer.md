@@ -2,16 +2,10 @@
 name: _split_proposer
 description: "Use when: proposing how to split an uncommitted working-tree diff into a sequence of reviewable commits, and into PR-sized branches when the total scope warrants it. Returns a structured plan without executing any git changes."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
   - Bash
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
-  - execute
-  - github/*
 user-invocable: false
 ---
 

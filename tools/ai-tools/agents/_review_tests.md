@@ -2,13 +2,9 @@
 name: _review_tests
 description: "Use when: reviewing code for test coverage, test quality, edge cases, and whether tests validate the intended behavior without being brittle."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
 user-invocable: false
 ---
 
