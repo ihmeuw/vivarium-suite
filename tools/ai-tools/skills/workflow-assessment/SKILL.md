@@ -1,6 +1,6 @@
 ---
 name: workflow-assessment
-description: Assess a finished (or in-progress) run of an agentic workflow — did the multi-agent handoffs and tool invocations happen the way the workflow's definition says they should? Reads the Claude Code session transcripts, fans out the `_trace_extractor` sub-agent, and judges the trace against the workflow definition across coverage, ordering/gates, parallelism, handoff completeness, tool appropriateness, and result propagation. Trigger on "assess that run", "check the handoffs", "did the workflow orchestrate correctly", "audit the last code-review run", "workflow assessment".
+description: Assess a finished run of an agentic workflow — did the multi-agent handoffs and tool invocations happen the way the workflow's definition says they should? Reads the Claude Code session transcripts and judges the trace against the workflow definition across coverage, ordering/gates, parallelism, handoff completeness, tool appropriateness, and result propagation. Trigger whenever the user wants to debug or verify the procedural correctness of a Claude session, especially ones with engineered orchestration or multi-agentic workflows.
 allowed-tools: Read, Grep, Glob, Agent(_trace_extractor)
 ---
 
@@ -10,11 +10,6 @@ Verify that a run of an agentic workflow orchestrated the way its definition
 prescribes — the right sub-agents, dispatched the right way, with complete
 handoffs, gates respected, and results actually used — and report graded
 findings with transcript evidence.
-
-This is a **post-hoc transcript audit**, and therefore Claude Code-only: it
-reads Claude Code session transcripts, which have no Copilot equivalent. It is
-read-only throughout — it never re-runs the workflow, edits its outputs, or
-modifies the workflow definition.
 
 ## Resolving the run
 

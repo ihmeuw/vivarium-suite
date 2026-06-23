@@ -73,9 +73,6 @@ on failed results)
 
 ## Output
 
-Return only this digest, with every claim carrying a `path:line` reference.
-State explicitly when a section is empty — an empty section is a finding, not
-an omission.
 
 - **Identity** — transcript path, main vs. sub-agent, agent type, dispatch
   description, approximate record count.
@@ -90,8 +87,7 @@ an omission.
   assistant action.
 - **Notable tool calls** — writes (`Write`/`Edit`/`NotebookEdit`, target
   paths), `Bash` (the command, one line), MCP write-shaped calls
-  (`create`/`update`/`add`/`transition`…), and web access. Read-only calls are
-  noise — count them, don't list them.
+  (`create`/`update`/`add`/`transition`…), and web access.
 - **Errors & anomalies** — `is_error` results, permission denials, retries of
   the same call, dispatches with no result, malformed records.
 - **Focus answers** — only when a focus was given: each focus question,
