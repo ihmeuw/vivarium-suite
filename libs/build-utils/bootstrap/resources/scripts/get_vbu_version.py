@@ -89,6 +89,21 @@ def _run_pip_dry_run(python_version: str) -> str:
     uv pip install --dry-run . vivarium-build-utils --extra-index-url {IHME_PYPI}simple/ --index-strategy unsafe-best-match --no-cache
     """
 
+    output = _run_uv(cmd)
+
+    if "vivarium-build-utils @ file://" in output:
+        # When the lib IS vivarium-build-utils, we need to run the dry-run again w/o `.`.
+        vbu_cmd = f"""
+        source {MINICONDA_DIR}/etc/profile.d/conda.sh
+        conda activate py{env_version}
+        uv pip install --dry-run vivarium-build-utils --extra-index-url {IHME_PYPI}simple/ --index-strategy unsafe-best-match --no-cache
+        """
+        output = _run_uv(vbu_cmd)
+
+    return output
+
+
+def _run_uv(cmd: str) -> str:
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
         # NOTE: uv evidently sends output to stderr
