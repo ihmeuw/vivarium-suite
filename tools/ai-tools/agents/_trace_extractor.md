@@ -34,14 +34,11 @@ Work only on the file(s) and directory you were handed.
 - Records are one JSON object per line in the standard Anthropic messages shape
  (`type: assistant|user`, a `content` list of `tool_use`/`tool_result` blocks, `is_error`
 on failed results) 
-- **Parallelism is positional** — one parallel batch is one assistant turn,
-  which surfaces two ways: several `tool_use` blocks in *one* `assistant`
-  record, **or** a run of consecutive `assistant` records that share a single
-  `message.id` with no `tool_result` between them (Claude Code serializes one
-  turn's parallel calls across separate lines). A different `message.id`, or a
-  `tool_result` in between, means sequential. Key on the shared `message.id`,
-  not the per-record block count — it's the only reliable evidence of parallel
-  dispatch.
+- **Parallelism is positional** — one batch is one assistant turn, the only
+  signal of parallel dispatch. It shows up as several `tool_use` blocks in
+  *one* `assistant` record, **or** consecutive records sharing one `message.id`
+  with no `tool_result` between (Claude Code splits a turn's parallel calls
+  across lines). Key on the shared `message.id`, not the block count.
 - **Sub-agent dispatch** is a `tool_use` named `Agent` (older transcripts:
   `Task`), with `subagent_type` / `description` / `prompt`.
 - **Sub-agent transcripts are a sibling tree** —
@@ -79,8 +76,7 @@ on failed results)
 - **Dispatches** (main transcripts only) — one line per `Agent`/`Task` call:
   `batch# — subagent_type — description — first line of the prompt —
   outcome (result returned / is_error / no matching subagent transcript)`.
-  Calls sharing one assistant turn — same `message.id`, whether in one record
-  or split across consecutive records — share a batch number.
+  Calls sharing one assistant turn (same `message.id`) share a batch number.
 - **Skills invoked** — `skill (args, one line) — line N`.
 - **Gates** — each `AskUserQuestion`/`ExitPlanMode`/turn-ending question, what
   was asked (≤1 line), and whether a user answer follows before the next
