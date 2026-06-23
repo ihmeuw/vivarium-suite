@@ -14,11 +14,6 @@ from vivarium.cluster_tools.utilities import NUM_ROWS_PER_CENTRAL_LOG_FILE
 # Central log files are named ``log_summary_<NNNN>.csv``.
 LOG_FILE_PREFIX = "log_summary_"
 
-# The pinned column set and order for every central performance log file. Pinned because
-# the append in append_child_job_data is positional and headerless, so any drift in a
-# run's column set or order would silently corrupt the file. It is a tuple because the
-# schema is immutable; extend it deliberately (and let a new file roll) when the recorded
-# data genuinely changes.
 CENTRAL_LOG_SCHEMA = (
     "host",
     "job_number",
@@ -137,8 +132,7 @@ def _align_to_schema(performance_data: pd.DataFrame) -> pd.DataFrame:
         logger.warning(
             "Performance data columns do not match the central log schema; "
             f"dropping unexpected columns {unexpected} and filling missing columns "
-            f"{missing} with NaN. If this reflects an intended schema change, update "
-            "CENTRAL_LOG_SCHEMA in performance_logger.py."
+            f"{missing} with NaN."
         )
     return performance_data.reindex(columns=CENTRAL_LOG_SCHEMA)
 
@@ -152,7 +146,7 @@ def _next_log_file_path(current_file_path: str) -> str:
     """Return the path of the log file that follows the given one in sequence.
 
     Assumes the argument is the highest-numbered log file, so the returned path does not
-    yet exist; callers pass the most recent file, never an arbitrary one.
+    yet exist.
     """
     next_index = int(Path(current_file_path).stem.removeprefix(LOG_FILE_PREFIX)) + 1
     return str(
