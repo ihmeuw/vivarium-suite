@@ -34,7 +34,7 @@ make test-all RUNSLOW=true RUNWEEKLY=true
 
 ## Markers
 
-`vivarium_testing_utils` auto-loads as a pytest plugin and registers markers with default-skip rules. Look at `vivarium_testing_utils/pytest_plugin.py` to understand their behavior. If a test is mysteriously skipping, you may also run pytest with `-v` (or `-rs`) and read the skip reason.
+`vivarium_testing_utils` auto-loads as a pytest plugin and registers markers with default-skip rules. Look at `vivarium/testing_utils/pytest_plugin.py` (in `libs/testing-utils/`) to understand their behavior. If a test is mysteriously skipping, you may also run pytest with `-v` (or `-rs`) and read the skip reason.
 
 ## Coverage
 

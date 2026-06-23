@@ -1,3 +1,7 @@
+**6.1.1 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
 **6.1.0 - 06/17/26**
 
 - Consolidate EnsembleDistribution per-distribution parameter lookup tables into a single LookupTable for fewer pipeline resources

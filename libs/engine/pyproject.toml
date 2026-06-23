@@ -35,7 +35,7 @@ dependencies = [
     "vivarium-artifact>=1.0.2",
     "vivarium-config-tree",
     "vivarium-dependencies[numpy_lt_2,pandas,pyyaml,scipy,click,tables,loguru,pyarrow,networkx]",
-    "vivarium-build-utils>=3.3.0,<4.0.0",
+    "vivarium-build-utils>=4.0.0,<5.0.0",
     "dill",
 ]
 
