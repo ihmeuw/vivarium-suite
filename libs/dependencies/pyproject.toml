@@ -110,8 +110,18 @@ ci_jenkins = ["vivarium-dependencies[ci_github]"]
 # sees a clean semver; git_describe_command filters to only this lib's tags so
 # siblings' releases don't pollute the version derivation.
 # root = "../.." points setuptools_scm at the monorepo's .git directory
+#
+# The prefix is made OPTIONAL in tag_regex (`(?:...)?` non-capturing group) so the
+# regex also matches the bare semver (e.g. "1.2.1") that setuptools_scm extracts
+# from PKG-INFO when re-deriving the version during the wheel-from-sdist build in
+# /tmp. This code-less metapackage falls all the way through to that fallback
+# (siblings with a real ``src/`` bail out of setuptools_scm's resolver chain
+# earlier and never hit it). Without this, the bare-semver re-parse fails its
+# internal ``assert version is not None`` and the wheel build crashes. The
+# git_describe_command filter still scopes git lookups to this lib's tags, so
+# the optional-prefix relaxation only affects the PKG-INFO fallback path.
 root = "../.."
-tag_regex = '^vivarium-dependencies-v(?P<version>[^\+]+)$'
+tag_regex = '^(?:vivarium-dependencies-v)?(?P<version>[^\+]+)$'
 git_describe_command = 'git describe --dirty --tags --long --match "vivarium-dependencies-v*"'
 fallback_version = "0.0.0+no-git-tag"
 

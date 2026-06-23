@@ -12,9 +12,8 @@ the functional-correctness pass, and the synthesis. It is invoked **inline** by
 `/viv:code-reviewer` (after it gathers PR context), and is designed to be reused
 the same way by other main-session commands (e.g. a development workflow's review
 phase). Because it runs inline in the caller's main-session context, its fan-out
-to the five `_review_*` sub-agents stays one level deep (a Claude sub-agent
-cannot spawn sub-agents) — so this unit must **never** run as a forked sub-agent
-(`context: fork`), or the fan-out would be nested and fail.
+to the five `_review_*` sub-agents stays one level deep — so run this unit
+inline and **not** as a forked sub-agent.
 
 **Not this unit's job** — the caller owns these: gathering the review target
 (PR/diff context), and any follow-up action on the findings (e.g. filing

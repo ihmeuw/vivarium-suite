@@ -6,9 +6,8 @@ allowed-tools: Read, Grep, Glob, Bash, Agent(_diff_analyzer, _hypothesis_tester)
 
 Investigate a simulation regression described by: $ARGUMENTS
 
-The fan-out runs in this main-session context (Claude sub-agents cannot
-spawn further sub-agents, so the `model_regression_debugger` orchestrator
-agent cannot do this on its own — that's why this slash command exists).
+The fan-out runs in this main-session context, driven by this slash command
+rather than the `model_regression_debugger` orchestrator agent. 
 
 ## Phase 1 — Scope the Problem
 
