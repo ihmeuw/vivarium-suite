@@ -11,7 +11,7 @@ The vivarium-ecosystem console scripts that a standard model-repo conda env (the
 
 | CLI | Ships in | Entry point | What it does |
 |---|---|---|---|
-| `simulate` | `vivarium` | `vivarium.interface.cli:simulate` | Run one simulation locally from a model spec YAML |
+| `simulate` | `vivarium-engine` | `vivarium.engine.interface.cli:simulate` | Run one simulation locally from a model spec YAML |
 | `psimulate` | `vivarium_cluster_tools` | `vivarium_cluster_tools.psimulate.cli:psimulate` | Run many simulations in parallel on the IHME cluster |
 | `vipin` | `vivarium_cluster_tools` | `vivarium_cluster_tools.vipin.cli:vipin` | Extract per-worker perf info from a finished `psimulate` results dir |
 | `make_artifacts` | the *current* model repo | `<pkg>.tools.cli:make_artifacts` | Build the HDF5 data artifact for *this* model — signature differs per repo |

@@ -167,10 +167,10 @@ Sub-agent delegation works differently on each platform, and the plugin
 uses two separate mechanisms that target the two harnesses
 independently.
 
-**Claude Code.** Sub-agents cannot spawn further sub-agents (per the
-upstream `Claude Code sub-agents docs
-<https://code.claude.com/docs/en/sub-agents.md>`_), so the parallel
-fan-out has to run at main-session level. That is what the
+**Claude Code.** The parallel fan-out runs at main-session level: the
+slash command — not a forked orchestrator agent — spawns the specialist
+sub-agents. 
+That is what the
 ``commands/*.md`` slash commands do: their ``allowed-tools: Agent(...)``
 field grants the main session permission to spawn the listed
 ``_review_*`` (or ``_diff_analyzer`` / ``_hypothesis_tester``)

@@ -7,9 +7,7 @@ tools:
   # Claude tools are intentionally omitted: on Claude Code, the canonical
   # entry is the `/viv:model-regression-debugger` slash command (see
   # `commands/model-regression-debugger.md`), which fans out at main-session level.
-  # Claude sub-agents cannot spawn further sub-agents, so making this agent
-  # work on Claude would require duplicating the slash command's prompt
-  # with no upside. The body below redirects Claude users to the slash
+  # The body below redirects Claude users to the slash
   # command if this agent is invoked directly via
   # `@model_regression_debugger`.
   - read
@@ -39,7 +37,7 @@ context which harness you are running in:
   > This entry point is for VS Code Copilot. On Claude Code, please use
   > `/viv:model-regression-debugger <symptom and context>` instead — that path
   > fans out diff analyzers and hypothesis testers in parallel via the
-  > main session, which a Claude sub-agent cannot do.
+  > main session.
 
 - **If you are running in VS Code Copilot** (system context identifies
   you as GitHub Copilot or Visual Studio Code) — proceed with the
