@@ -42,7 +42,9 @@ class MicrodataObserver(Observer):
         The population columns/attributes to record. Required; an empty list is an error.
     filter
         A list of Pandas query strings, AND-combined, restricting which simulants are recorded.
-        Empty (the default) records all simulants.
+        Empty (the default) records all simulants. NOTE: These filters could be applied in such 
+        a way with a combination of ``single_random_sample`` such that a simulant is not tracked 
+        for their entire existence in the tracked population.
     timesteps
         A list of dates; only timesteps whose event time matches one of them are recorded. Empty
         (the default) records every timestep.
