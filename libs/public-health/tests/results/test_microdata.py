@@ -214,14 +214,17 @@ def test_microdata_observer_row_limit_below_step_estimate_errors(
         )
 
 
-def test_microdata_observer_rejects_duplicate_timesteps(base_config, base_plugins) -> None:
-    """Duplicate dates in `timesteps` raise a configuration error at setup."""
+def test_microdata_observer_warns_and_deduplicates_timesteps(
+    base_config, base_plugins, caplog
+) -> None:
+    """Duplicate dates in `timesteps` are deduplicated with a warning, not an error."""
     config = _configure(
         base_config, {"columns": ["age"], "timesteps": [FIRST_EVENT_TIME, FIRST_EVENT_TIME]}
     )
-    with pytest.raises(ResultsConfigurationError, match="duplicate"):
-        InteractiveContext(
-            components=[BasePopulation(), MicrodataObserver()],
-            configuration=config,
-            plugin_configuration=base_plugins,
-        )
+    InteractiveContext(
+        components=[BasePopulation(), MicrodataObserver()],
+        configuration=config,
+        plugin_configuration=base_plugins,
+    )
+    assert "duplicate" in caplog.text
+    assert any(record.levelname == "WARNING" for record in caplog.records)

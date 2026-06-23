@@ -15,23 +15,23 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
+from loguru import logger
+from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
-
-from vivarium.public_health.results.observer import PublicHealthObserver
 
 if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
     from vivarium.engine.framework.event import Event
 
 
-class MicrodataObserver(PublicHealthObserver):
+class MicrodataObserver(Observer):
     """Observer that records a configured set of columns for each simulant.
 
     At each observed timestep it records the configured columns (plus ``event_time``) for every
     (optionally filtered) simulant, concatenated across timesteps, so users can compute
-    derived quantities downstream. It composes the framework's generic concatenating observation, so
-    it records raw rows rather than the stratified measures of the other public health observers (it
-    does not use ``PublicHealthObserver``'s measure/entity formatting).
+    derived quantities downstream. It subclasses the framework's ``Observer`` directly and composes
+    its generic concatenating observation, so it records raw per-simulant rows rather than the
+    stratified measures the other public health observers produce.
 
     Configuration
     -------------
@@ -72,12 +72,21 @@ class MicrodataObserver(PublicHealthObserver):
             raise ResultsConfigurationError(
                 f"The '{self.name}' observer requires a non-empty 'columns' list in its config."
             )
-        timesteps = list(config.timesteps)
-        observed_dates = [pd.Timestamp(timestep).normalize() for timestep in timesteps]
-        if len(set(observed_dates)) != len(observed_dates):
-            raise ResultsConfigurationError(
-                f"The '{self.name}' observer's 'timesteps' contains duplicate dates: {timesteps}."
+        observed_dates = [pd.Timestamp(timestep).normalize() for timestep in config.timesteps]
+        unique_dates = list(dict.fromkeys(observed_dates))
+        if len(unique_dates) != len(observed_dates):
+            duplicates = sorted(
+                {
+                    date.strftime("%Y-%m-%d")
+                    for date in observed_dates
+                    if observed_dates.count(date) > 1
+                }
             )
+            logger.warning(
+                f"The '{self.name}' observer's 'timesteps' contains duplicate dates "
+                f"{duplicates}; each is recorded only once."
+            )
+        observed_dates = unique_dates
         results_gatherer = None
         if config.row_limit is not None:
             n_observed_timesteps = self._count_observed_timesteps(builder, observed_dates)

@@ -429,7 +429,9 @@ For large populations you may want only a sample. ``row_limit`` sets the
 *total* number of rows across all observed steps; each observed step then
 records a fresh random sample of ``row_limit // <number of observed steps>``
 simulants. Here two observed steps and a limit of 200 record 100 simulants
-each:
+each. If fewer than 100 simulants are eligible to be observed on the first 
+time-step, we won't observe more on the second to reach our limit of 200 per 
+simulation - each time-step is capped at 100.
 
 .. testcode::
 
