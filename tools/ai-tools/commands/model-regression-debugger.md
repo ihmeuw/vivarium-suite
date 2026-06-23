@@ -6,8 +6,8 @@ allowed-tools: Read, Grep, Glob, Bash, Agent(_diff_analyzer, _hypothesis_tester)
 
 Investigate a simulation regression described by: $ARGUMENTS
 
-The fan-out runs in this main-session context, driven by this slash command
-rather than the `model_regression_debugger` orchestrator agent. 
+The fan-out runs in this main-session context, with the slash command body
+itself acting as the orchestration prompt.
 
 ## Phase 1 — Scope the Problem
 
