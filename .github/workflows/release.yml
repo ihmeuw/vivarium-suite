@@ -152,7 +152,14 @@ jobs:
 
       - name: Install vivarium_build_utils
         # Install early so `make validate-tag` is available
-        run: uv pip install --system vivarium-build-utils
+        # For build-utils, install from local checkout since the latest PyPI
+        # release is by definition stale relative to this PR
+        run: |
+          if [ "${{ matrix.library }}" = "build-utils" ]; then
+            uv pip install --system -e libs/build-utils
+          else
+            uv pip install --system vivarium-build-utils
+          fi
 
       - name: Create and push tag
         env:
