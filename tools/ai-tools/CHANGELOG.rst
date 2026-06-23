@@ -1,6 +1,18 @@
-**0.19.0 - 06/22/26**
+**0.21.0 - 06/23/26**
 
  - Add ``workflow-assessment`` skill to investigate workflow correctness post-hoc
+
+**0.20.0 - 06/23/26**
+
+ - Add ``/viv:repo-maintenance`` skill and ``_claim_auditor`` sub-agent
+
+**0.19.0 - 06/22/26**
+
+ - Drop GitHub Copilot support
+
+**0.18.1 - 06/22/26**
+
+ - Fix stale references in the plugin docs and ``CLAUDE.md`` flagged by the ``repo-maintenance`` audit (MIC-7235)
 
 **0.18.0 - 06/22/26**
 

@@ -2,16 +2,11 @@
 name: _type_hint_file
 description: "Use when type-hinting a single Python file to conform to its package's mypy config. Spawned by the /viv:type-hinter slash command as one autonomous teammate per target file; teammates coordinate cross-file type contracts directly with each other."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Edit
   - Grep
   - Glob
   - Bash
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
-  - execute
 user-invocable: false
 ---
 
