@@ -1,6 +1,9 @@
-**0.17.1 - 06/17/26**
+**0.18.1 - 06/22/26**
 
  - Fix stale references in the plugin docs and ``CLAUDE.md`` flagged by the ``repo-maintenance`` audit (MIC-7235)
+**0.18.0 - 06/22/26**
+
+ - Add ``framework-development`` slash command for an end-to-end, black-box-TDD design→implement→verify→PR loop on a well-scoped framework feature.
 
 **0.17.0 - 06/16/26**
 

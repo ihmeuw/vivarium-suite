@@ -113,7 +113,14 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install vivarium_build_utils
-        run: uv pip install --system vivarium-build-utils
+      # For build-utils, install from local checkout since the latest PyPI
+      # release is by definition stale relative to this PR
+        run: |
+          if [ "${{ matrix.library }}" = "build-utils" ]; then
+            uv pip install --system -e libs/build-utils
+          else
+            uv pip install --system vivarium-build-utils
+          fi
 
       - name: Install ${{ matrix.library }}
         # UV_FLAGS=--system installs into the runner's system Python (no venv).
