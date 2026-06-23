@@ -1,3 +1,7 @@
+**1.2.1 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
 **1.2.0 - 06/17/26**
 
 - Remove unused vivarium-build-utils pin definition

@@ -19,7 +19,7 @@ dependencies = [
     # version bump.
     "vivarium-compat>=0.3.1",
     "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
-    "vivarium-build-utils>=3.3.0,<4.0.0",
+    "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-gbd-mapping>=6.0.0",
     "vivarium-engine>=5.1.0",
     "vivarium-public-health>=6.0.0",

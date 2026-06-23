@@ -1,0 +1,39 @@
+{
+  "license": "BSD-3-Clause",
+  "title": "ihmeuw/vivarium_build_utils: Archival release",
+  "upload_type": "software",
+  "creators": [
+    {
+      "orcid": "0000-0001-6033-4713",
+      "affiliation": "Institute for Health Metrics and Evaluation",
+      "name": "Abraham Flaxman"
+    },
+    {
+      "orcid": "0000-0001-8649-7561",
+      "affiliation": "Institute for Health Metrics and Evaluation",
+      "name": "Rajan Mudambi"
+    },
+    {
+      "orcid": "0000-0002-5775-2719",
+      "affiliation": "Institute for Health Metrics and Evaluation",
+      "name": "James Albright"
+    },
+    {
+      "orcid": "0009-0004-6649-7010",
+      "affiliation": "Institute for Health Metrics and Evaluation",
+      "name": "Steve Bachmeier"
+    },
+    {
+      "orcid": "0000-0002-7556-2740",
+      "affiliation": "Institute for Health Metrics and Evaluation",
+      "name": "Hussain Jafari"
+    },
+    {
+      "orcid": "0009-0008-1094-6293",
+      "affiliation": "Institute for Health Metrics and Evaluation",
+      "name": "Patrick Nast"
+    }
+  ],
+  "access_right": "open",
+  "description": "Vivarium Build Utils contains shared build utilities for Simulation Science projects."
+}

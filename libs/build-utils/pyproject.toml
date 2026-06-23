@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-build-utils"
+description = "Shared build utilities and Jenkins pipeline library for Simulation Science projects."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+# No runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+cluster = []
+docs = []
+interactive = []
+test = ["vivarium-dependencies[pytest]"]
+lint = ["vivarium-dependencies[lint]"]
+dev = ["vivarium-build-utils[docs,interactive,test,lint]"]
+ci_github = ["vivarium-build-utils[test,docs,lint]"]
+ci_jenkins = ["vivarium-build-utils[ci_github,cluster]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.build_utils and its subpackages. Excluding vivarium
+# itself means the wheel does not ship vivarium/__init__.py. The "namespace
+# owner" (vivarium-engine) ships the canonical vivarium/__init__.py. If we
+# shipped our own here, pip would overwrite the canonical one.
+include = ["vivarium.build_utils", "vivarium.build_utils.*"]
+
+[tool.setuptools.package-data]
+# setup.py's CustomBuildPy copies resources/ into the package at build time so
+# the wheel ships vivarium/build_utils/resources/. resources/ lives at the lib
+# root (not under src/) so Jenkins can also load it as a libraryResource.
+"vivarium.build_utils" = ["resources/**/*"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with "vivarium-build-utils-v"
+# (e.g. vivarium-build-utils-v3.4.0). tag_regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so
+# siblings' releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-build-utils-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-build-utils-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["vivarium.build_utils"]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3
+
+[tool.mypy]
+# WARNING: settings here that aren't mypy_path / explicit_package_bases must be
+# kept in sync manually with the monorepo-root [tool.mypy]. The local `make mypy`
+# passes --config-file pyproject.toml (this file), so mypy doesn't read the root
+# config. If you change the root, change this too.
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = [
+    "build",
+    "setup.py",
+]
+mypy_path = "src"
+explicit_package_bases = true
+
+disable_error_code = []
+
+# handle mypy errors when 3rd party packages are not typed.
+[[tool.mypy.overrides]]
+module = [
+    # "scipy.*",
+]
+ignore_missing_imports = true
