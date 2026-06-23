@@ -105,12 +105,10 @@ Slash command (Claude Code only): ``/viv:framework-development <ticket or featur
 - ``ticket-triage`` — turn code-review findings that are out of scope for
   the current PR into Jira ticket recommendations.
 - ``workflow-assessment`` — post-hoc audit of an agentic workflow run
-  against the workflow's own definition: fans out the ``_trace_extractor``
-  sub-agent over the run's session transcripts and grades coverage,
-  ordering/gates, parallelism, handoff completeness, tool appropriateness,
-  and result propagation, with findings citing transcript evidence.
-  Claude Code-only (it reads Claude Code session transcripts, which have
-  no Copilot equivalent) and read-only throughout.
+  against its own definition: fans out the ``_trace_extractor`` sub-agent
+  over the run's session transcripts and grades coverage, ordering/gates,
+  parallelism, handoffs, tool use, and result propagation, with
+  transcript-cited findings. Claude Code-only, read-only throughout.
 
 Loaded automatically when the context is relevant to the skill's description.
 
@@ -230,12 +228,11 @@ Code:
 - ``_duplicate_finder`` has **no shell or file access at all** — its only
   tools are the read-only Jira MCP ``search`` and ``get_issue`` calls it
   uses to check candidate tickets against the backlog.
-- ``_trace_extractor`` has **no Bash access** — ``Read``, ``Grep``, and
-  ``Glob`` only. It is the one agent that deliberately reads *outside* the
-  working tree: Claude Code session transcripts under
-  ``~/.claude/projects/``, which can contain anything from past
-  conversations. It returns compact orchestration digests, not transcript
-  content, and is spawned only by the ``workflow-assessment`` skill.
+- ``_trace_extractor`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
+  only. It is the one agent that deliberately reads *outside* the working
+  tree: Claude Code session transcripts under ``~/.claude/projects/`` (which
+  can contain anything). It returns compact digests, not transcript content,
+  and is spawned only by the ``workflow-assessment`` skill.
 - ``_diff_analyzer``, ``_hypothesis_tester``, and ``_split_proposer``
   declare ``Bash`` to run ``git`` and ``gh`` commands. In practice, every
   operation they perform is a read-only git command (``git diff``,
