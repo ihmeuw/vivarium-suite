@@ -1,3 +1,7 @@
+**4.0.1 - 06/23/26**
+
+- Bugfix: Fix ``__run_pip_dry_run()`` to handle vbu self-bootstrap case
+
 **4.0.0 - 06/22/26**
 
 First release from the vivarium-suite monorepo; the standalone
