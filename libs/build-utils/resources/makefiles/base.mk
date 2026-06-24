@@ -141,6 +141,7 @@ create-env: # Create a new conda environment
 .PHONY: install
 install: ENV_REQS?=dev
 install: UV_FLAGS?=
+install: IN_TREE_SIBLINGS?=
 install: # Install package and dependencies
 	pip install uv
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
@@ -157,7 +158,24 @@ install: # Install package and dependencies
 	#   passing it globally leaks it to transitive sdist builds whose backends
 	#   don't recognize it (numpy 1.x's meson-python errors on it with
 	#   "Unknown option editable_mode").
-	uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
+	# IN_TREE_SIBLINGS (space-separated lib dir names whose source changed in a
+	#   PR) opts into cross-package resolution: vivarium.build_utils.dependencies
+	#   selects the modified siblings that are reachable from this package and
+	#   version-compatible, and installs them editably (at their pending
+	#   versions) alongside this package in a single uv invocation - so a PR can
+	#   consume an as-yet-unreleased sibling. Empty (the default) leaves the
+	#   normal single-package install untouched.
+	# The else branch hands the install to the CLI, which reconstructs the
+	# equivalents of EDITABLE_COMPAT_FLAG (via --config-settings-package per
+	# editable package) and EXTRA_INDEX_FLAGS (from --ihme-pypi) itself - so a
+	# change to either flag here must be mirrored in build_install_plan.
+	@if [ -z "$(strip $(IN_TREE_SIBLINGS))" ]; then \
+		set -x; uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}; \
+	else \
+		set -x; python -m vivarium.build_utils.dependencies editable-install $(notdir $(CURDIR)) \
+			--changed "$(IN_TREE_SIBLINGS)" --env-reqs "$(ENV_REQS)" \
+			--ihme-pypi "$(IHME_PYPI)" --uv-flags "$(UV_FLAGS)"; \
+	fi
 	@$(MAKE) setup-slack
 
 # Path to shared Slack bot token on the team filesystem.
