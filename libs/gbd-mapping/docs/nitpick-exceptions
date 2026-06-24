@@ -1,0 +1,6 @@
+# Python 3.13 refactored pathlib internals: type hints that resolve to
+# pathlib.Path at the source level get resolved to pathlib._local.Path at
+# runtime, and Sphinx autodoc inspects the runtime type. Python's intersphinx
+# inventory only exposes pathlib.Path (the public name), not the internal
+# alias, so nitpicky mode flags every Path-typed argument. Suppress.
+py:class pathlib._local.Path

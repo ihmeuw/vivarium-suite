@@ -15,12 +15,12 @@ py:class loguru._logger.Logger
 
 # vivarium
 # Type aliases don't play nicely with sphinx when you import them
-# elsewhere.  Works fine for static type checker though.  I think this
-# is cause sphinx does runtime checks.
+# elsewhere. Works fine for static type checker though. I think this
+# is because sphinx does runtime checks.
 py:class Time
-py:class vivarium.framework.time.Time
+py:class vivarium.engine.framework.time.Time
 py:class Timedelta
-py:class vivarium.framework.time.Timedelta
+py:class vivarium.engine.framework.time.Timedelta
 
-# TODO: Need to revisit this. Nitpicking here to avoid failing builds on 3.8 and 3.9 in state_machine and testing_utils
+# loguru Logger leaks into runtime type-check contexts
 py:class Logger

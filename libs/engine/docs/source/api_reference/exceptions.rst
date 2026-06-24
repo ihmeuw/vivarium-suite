@@ -1,0 +1,1 @@
+.. automodule:: vivarium.engine.exceptions

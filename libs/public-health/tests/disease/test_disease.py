@@ -1,0 +1,628 @@
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+import pytest
+from vivarium.config_tree import ConfigTree, ConfigurationError
+from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.state_machine import Transition
+from vivarium.engine.framework.utilities import from_yearly
+from vivarium.engine.testing_utilities import metadata
+
+from tests.test_utilities import build_table_with_age
+from vivarium.public_health.disease import (
+    BaseDiseaseState,
+    DiseaseModel,
+    DiseaseState,
+    RateTransition,
+)
+from vivarium.public_health.disease.state import SusceptibleState
+from vivarium.public_health.disease.transition import TransitionString
+from vivarium.public_health.population import BasePopulation
+
+
+@pytest.fixture
+def disease():
+    return "test"
+
+
+def get_test_prevalence(simulation, key):
+    """
+    Helper function to calculate the prevalence for the given state(key)
+    """
+    try:
+        test = simulation.get_population("test").squeeze()
+        simulants_status_counts = test.value_counts().to_dict()
+        result = float(simulants_status_counts[key] / test.size)
+    except KeyError:
+        result = 0
+    return result
+
+
+def test_dwell_time(base_config, base_plugins, disease):
+    time_step = 10
+
+    base_config.update(
+        {"time": {"step_size": time_step}, "population": {"population_size": 10}},
+        **metadata(__file__),
+    )
+    healthy_state = BaseDiseaseState("healthy")
+    event_state = DiseaseState(
+        "event",
+        prevalence=0.0,
+        dwell_time=pd.Timedelta(days=28),
+        disability_weight=0.0,
+    )
+    done_state = BaseDiseaseState("sick")
+
+    healthy_state.add_dwell_time_transition(event_state)
+    event_state.add_dwell_time_transition(done_state)
+
+    model = DiseaseModel(
+        disease, residual_state=healthy_state, states=[healthy_state, event_state, done_state]
+    )
+
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+
+    # Move everyone into the event state
+    simulation.step()
+    event_time = simulation._clock.time
+    assert np.all(simulation.get_population(disease) == "event")
+
+    simulation.step()
+    simulation.step()
+    # Not enough time has passed for people to move out of the event state, so they should all still be there
+    assert np.all(simulation.get_population(disease) == "event")
+
+    simulation.step()
+    # Now enough time has passed so people should transition away
+    pop = simulation.get_population([disease, "event_event_time", "event_event_count"])
+    assert np.all(pop[disease] == "sick")
+    assert np.all(pop["event_event_time"] == pd.to_datetime(event_time))
+    assert np.all(pop["event_event_count"] == 1)
+
+
+def test_dwell_time_with_mortality(base_config, base_plugins, disease):
+    year_start = base_config.time.start.year
+    year_end = base_config.time.end.year
+
+    time_step = 10
+    pop_size = 100
+    base_config.update(
+        {"time": {"step_size": time_step}, "population": {"population_size": pop_size}},
+        **metadata(__file__),
+    )
+    healthy_state = BaseDiseaseState("healthy")
+
+    mortality_kwargs = {
+        "dwell_time": pd.Timedelta(days=14),
+        "excess_mortality_rate": build_table_with_age(
+            0.7, parameter_columns={"year": (year_start - 1, year_end)}
+        ),
+        "disability_weight": 0.0,
+    }
+
+    mortality_state = DiseaseState("event", **mortality_kwargs)
+    done_state = BaseDiseaseState("sick")
+
+    healthy_state.add_dwell_time_transition(mortality_state)
+    mortality_state.add_dwell_time_transition(done_state)
+
+    model = DiseaseModel(
+        disease,
+        residual_state=healthy_state,
+        states=[healthy_state, mortality_state, done_state],
+    )
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+
+    # Move everyone into the event state
+    simulation.step()
+    assert np.all(simulation.get_population(disease) == "event")
+
+    simulation.step()
+    # Not enough time has passed for people to move out of the event state, so they should all still be there
+    assert np.all(simulation.get_population(disease) == "event")
+
+    simulation.step()
+
+    # Make sure some people have died and remained in event state
+    assert simulation.get_population("is_alive").squeeze().sum() < pop_size
+
+    assert (~simulation.get_population("is_alive").squeeze()).sum() == (
+        simulation.get_population(disease).squeeze() == "event"
+    ).sum()
+
+    # enough time has passed so living people should transition away to sick
+    assert (
+        simulation.get_population("is_alive").squeeze().sum()
+        == (simulation.get_population(disease).squeeze() == "sick").sum()
+    )
+
+
+@pytest.mark.parametrize("test_prevalence_level", [0.0, 0.35, 1.0])
+def test_prevalence_single_state_with_migration(
+    fuzzy_checker, base_config, base_plugins, disease, test_prevalence_level
+):
+    """
+    Test the prevalence for the single state over newly migrated population.
+    Start with the initial population, check the prevalence for initial assignment.
+    Then add new simulants and check whether the initial status is
+    properly assigned to new simulants based on the prevalence data and pre-existing simulants status
+
+    """
+    healthy = BaseDiseaseState("healthy")
+    sick = DiseaseState(
+        "sick",
+        prevalence=test_prevalence_level,
+        disability_weight=0.0,
+        dwell_time=pd.Timedelta(days=1),
+    )
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, sick])
+    base_config.update({"population": {"population_size": 50000}}, **metadata(__file__))
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+
+    disease_status = simulation.get_population(disease).squeeze()
+    fuzzy_checker.fuzzy_assert_proportion(
+        (disease_status == "sick").sum(), disease_status.size, test_prevalence_level
+    )
+
+    for _ in range(3):
+        simulation.step()
+        simulation.simulant_creator(
+            50000,
+            population_configuration={"age_start": 0, "age_end": 5, "sim_state": "time_step"},
+        )
+        disease_status = simulation.get_population(disease).squeeze()
+        fuzzy_checker.fuzzy_assert_proportion(
+            (disease_status == "sick").sum(), disease_status.size, test_prevalence_level
+        )
+
+
+@pytest.mark.parametrize(
+    "test_prevalence_level",
+    [[0.15, 0.05, 0.35], [0, 0.15, 0.5], [0.2, 0.3, 0.5], [0, 0, 1], [0, 0, 0]],
+)
+def test_prevalence_multiple_sequelae(
+    base_config, base_plugins, disease, test_prevalence_level
+):
+    healthy = BaseDiseaseState("healthy")
+    sequela = {
+        i: DiseaseState(
+            "sequela" + str(i),
+            prevalence=p,
+            disability_weight=0.0,
+            dwell_time=pd.Timedelta(days=1),
+        )
+        for i, p in enumerate(test_prevalence_level)
+    }
+    model = DiseaseModel(
+        disease, residual_state=healthy, states=[healthy, sequela[0], sequela[1], sequela[2]]
+    )
+
+    base_config.update({"population": {"population_size": 100000}}, **metadata(__file__))
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+    error_message = (
+        "initial sequela status of simulants should be matched to the prevalence data."
+    )
+    assert np.allclose(
+        [
+            get_test_prevalence(simulation, "sequela0"),
+            get_test_prevalence(simulation, "sequela1"),
+            get_test_prevalence(simulation, "sequela2"),
+        ],
+        test_prevalence_level,
+        0.02,
+    ), error_message
+
+
+def test_mortality_rate(base_config, base_plugins, disease):
+    year_start = base_config.time.start.year
+    year_end = base_config.time.end.year
+
+    time_step = pd.Timedelta(days=base_config.time.step_size)
+
+    healthy = BaseDiseaseState("healthy")
+    mortality_state = DiseaseState(
+        "sick",
+        dwell_time=pd.Timedelta(days=0),
+        disability_weight=0.0,
+        prevalence=build_table_with_age(
+            0.000001, parameter_columns={"year": (year_start - 1, year_end)}
+        ),
+        excess_mortality_rate=build_table_with_age(
+            0.7, parameter_columns={"year": (year_start - 1, year_end)}
+        ),
+    )
+
+    healthy.add_dwell_time_transition(mortality_state)
+
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, mortality_state])
+
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+
+    simulation.step()
+    # Folks instantly transition to sick so now our mortality rate should be much higher
+    assert np.allclose(
+        from_yearly(0.7, time_step),
+        simulation.get_population("mortality_rate")["sick"],
+    )
+
+
+def test_incidence(base_config, base_plugins, disease):
+    time_step = pd.Timedelta(days=base_config.time.step_size)
+
+    healthy = SusceptibleState("healthy")
+    sick = DiseaseState("sick")
+
+    key = f"sequela.acute_myocardial_infarction_first_2_days.incidence_rate"
+    transition = RateTransition(
+        input_state=healthy,
+        output_state=sick,
+        transition_rate=key,
+        rate_type="incidence_rate",
+    )
+    healthy.transition_set.append(transition)
+
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, sick])
+
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    simulation._data.write(key, 0.7)
+    simulation.setup()
+    simulation.step()
+    assert np.allclose(
+        from_yearly(0.7, time_step),
+        simulation.get_population("sick.incidence_rate").squeeze(),
+        atol=0.00001,
+    )
+
+
+def test_risk_deletion(base_config, base_plugins, disease):
+    time_step = base_config.time.step_size
+    time_step = pd.Timedelta(days=time_step)
+    year_start = base_config.time.start.year
+    year_end = base_config.time.end.year
+    base_rate = 0.7
+    calibration_value = 0.1
+
+    healthy = SusceptibleState("healthy")
+    sick = DiseaseState("sick")
+    key = "sequela.acute_myocardial_infarction_first_2_days.incidence_rate"
+    transition = RateTransition(
+        input_state=healthy,
+        output_state=sick,
+        transition_rate=key,
+        rate_type="incidence_rate",
+    )
+    healthy.transition_set.append(transition)
+
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, sick])
+
+    class CalibrationConstantModifier(Component):
+        def setup(self, builder):
+            data = build_table_with_age(
+                calibration_value, parameter_columns={"year": (year_start, year_end)}
+            )
+            builder.value.register_value_modifier(
+                "sick.incidence_rate.calibration_constant",
+                modifier=lambda: data,
+            )
+
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model, CalibrationConstantModifier()],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    simulation._data.write(key, base_rate)
+    simulation.setup()
+    simulation.step()
+    expected_rate = base_rate * (1 - calibration_value)
+    assert np.allclose(
+        from_yearly(expected_rate, time_step),
+        simulation.get_population("sick.incidence_rate").squeeze(),
+        atol=0.00001,
+    )
+
+
+def test__assign_event_time_for_prevalent_cases():
+    pop_data = pd.DataFrame(index=range(100))
+    random_func = lambda index: pd.Series(0.4, index=index)
+    current_time = pd.Timestamp(2017, 1, 10, 12)
+
+    # 10* 0.4 = 4 ; 4 days before the current time
+    expected = pd.Series(pd.Timestamp(2017, 1, 6, 12), index=pop_data.index)
+    dwell_time = pd.Series(10, index=expected.index)
+    actual = DiseaseState._assign_event_time_for_prevalent_cases(
+        pop_data, current_time, random_func, dwell_time
+    )
+    assert (expected == actual).all()
+
+
+def test_prevalence_birth_prevalence_initial_assignment(base_config, base_plugins, disease):
+    healthy = SusceptibleState("healthy")
+    with_condition = DiseaseState(
+        "with_condition", prevalence=1, birth_prevalence=0.5, disability_weight=0
+    )
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, with_condition])
+
+    pop_size = 2000
+    base_config.update(
+        {
+            "population": {
+                "population_size": pop_size,
+                "initialization_age_min": 0,
+                "initialization_age_max": 5,
+            }
+        },
+        **metadata(__file__),
+    )
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+
+    # prevalence should be used for assigning initial status at sim start
+    assert np.isclose(get_test_prevalence(simulation, "with_condition"), 1)
+
+    # birth prevalence should be used for assigning initial status to newly-borns on time steps
+    simulation.step()
+    simulation.simulant_creator(
+        pop_size,
+        population_configuration={"age_start": 0, "age_end": 0, "sim_state": "time_step"},
+    )
+    assert np.isclose(get_test_prevalence(simulation, "with_condition"), 0.75, 0.01)
+
+    # and prevalence should be used for ages not start = end = 0
+    simulation.step()
+    simulation.simulant_creator(
+        pop_size,
+        population_configuration={"age_start": 0, "age_end": 5, "sim_state": "time_step"},
+    )
+    assert np.isclose(get_test_prevalence(simulation, "with_condition"), 0.83, 0.01)
+
+
+def test_no_birth_prevalence_initial_assignment(
+    fuzzy_checker, base_config, base_plugins, disease
+):
+    healthy = SusceptibleState("healthy")
+    with_condition = DiseaseState("with_condition", prevalence=1, disability_weight=0)
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, with_condition])
+
+    base_config.update(
+        {
+            "population": {
+                "population_size": 1000,
+                "initialization_age_min": 0,
+                "initialization_age_max": 5,
+            }
+        },
+        **metadata(__file__),
+    )
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+
+    # prevalence should be used for assigning initial status at sim start
+    disease_status = simulation.get_population(disease).squeeze()
+    fuzzy_checker.fuzzy_assert_proportion(
+        (disease_status == "with_condition").sum(), disease_status.size, 1
+    )
+
+    # with no birth prevalence provided, it should default to 0 for ages start = end = 0
+    simulation.step()
+    simulation.simulant_creator(
+        1000,
+        population_configuration={"age_start": 0, "age_end": 0, "sim_state": "time_step"},
+    )
+
+    disease_status = simulation.get_population(disease).squeeze()
+    fuzzy_checker.fuzzy_assert_proportion(
+        (disease_status == "with_condition").sum(), disease_status.size, 0.5
+    )
+
+    # and default to prevalence for ages not start = end = 0
+    simulation.step()
+    simulation.simulant_creator(
+        1000,
+        population_configuration={"age_start": 0, "age_end": 5, "sim_state": "time_step"},
+    )
+
+    disease_status = simulation.get_population(disease).squeeze()
+    fuzzy_checker.fuzzy_assert_proportion(
+        (disease_status == "with_condition").sum(), disease_status.size, 2.0 / 3.0
+    )
+
+
+def test_birth_prevalence_initial_assignment(
+    fuzzy_checker, base_config, base_plugins, disease
+):
+    healthy = SusceptibleState("healthy")
+    with_condition = DiseaseState(
+        "with_condition", prevalence=1, birth_prevalence=0.5, disability_weight=0
+    )
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, with_condition])
+
+    pop_size = 2000
+    base_config.update(
+        {
+            "population": {
+                "population_size": pop_size,
+                "initialization_age_min": 0,
+                "initialization_age_max": 0,
+            }
+        },
+        **metadata(__file__),
+    )
+    simulation = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+
+    # birth prevalence should be used for assigning initial status at sim start
+    disease_status = simulation.get_population(disease).squeeze()
+    fuzzy_checker.fuzzy_assert_proportion(
+        (disease_status == "with_condition").sum(), disease_status.size, 0.5
+    )
+
+
+def test_state_transition_names(disease):
+    with_condition = DiseaseState("diarrheal_diseases")
+    healthy = SusceptibleState("diarrheal_diseases")
+    healthy.add_rate_transition(with_condition)
+    with_condition.add_rate_transition(healthy)
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, with_condition])
+    assert set(model.state_names) == {
+        "diarrheal_diseases",
+        "susceptible_to_diarrheal_diseases",
+    }
+    assert set(model.transition_names) == {
+        TransitionString("diarrheal_diseases_TO_susceptible_to_diarrheal_diseases"),
+        TransitionString("susceptible_to_diarrheal_diseases_TO_diarrheal_diseases"),
+    }
+
+
+def test_artifact_transition_keys(mocker, disease):
+    """Test that we use expected artifact keys to load transition data."""
+    builder = mocker.Mock()
+    builder.data.load = mocker.Mock()
+    cause = "diarrheal_diseases"
+    with_condition = DiseaseState(cause)
+    healthy = SusceptibleState(cause)
+
+    # check incidence rate
+    incident_transition = healthy.add_rate_transition(with_condition)
+    assert incident_transition.transition_rate == f"cause.{cause}.incidence_rate"
+
+    # check remission rate
+    remissive_transition = with_condition.add_rate_transition(healthy)
+    assert remissive_transition.transition_rate == f"cause.{cause}.remission_rate"
+
+
+@pytest.mark.parametrize("rate_conversion_type", ["linear", "exponential"])
+def test_transition_rate_to_probability_configuration(
+    base_config: ConfigTree,
+    base_plugins: ConfigTree,
+    disease: str,
+    rate_conversion_type: str,
+):
+    """
+    Test that the transition rate to probability configuration is set correctly.
+    """
+    healthy = BaseDiseaseState("healthy")
+    sick = DiseaseState("sick")
+    key = "sequela.acute_myocardial_infarction_first_2_days.incidence_rate"
+    transition = RateTransition(
+        input_state=healthy,
+        output_state=sick,
+        transition_rate=key,
+        rate_type="incidence_rate",
+    )
+    healthy.transition_set.append(transition)
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, sick])
+
+    base_config.update(
+        {
+            f"{transition.name}": {
+                "rate_conversion_type": rate_conversion_type,
+            }
+        }
+    )
+
+    # Sets the configuration
+    sim = InteractiveContext(
+        components=[BasePopulation(), model],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+        setup=True,
+    )
+
+    assert transition.rate_conversion_type == rate_conversion_type
+    with patch(
+        "vivarium.public_health.disease.transition.rate_to_probability", return_value=1.0
+    ) as mock_rate_to_probability:
+        idx = pd.Index(list(range(10)))
+        transition._probability(idx)
+
+        mock_rate_to_probability.assert_called_once()
+        args, kwargs = mock_rate_to_probability.call_args
+        assert len(args) == 1
+        assert len(kwargs) == 1
+        assert args[0].index.equals(idx)
+        assert kwargs["rate_conversion_type"] == rate_conversion_type
+
+
+def test_disease_model_rate_conversion_config_error(
+    base_config: ConfigTree,
+    base_plugins: ConfigTree,
+    disease: str,
+):
+    """
+    Test that the transition rate to probability configuration is set correctly.
+    """
+    healthy = BaseDiseaseState("healthy")
+    sick = DiseaseState("sick")
+    key = "sequela.acute_myocardial_infarction_first_2_days.incidence_rate"
+    transition = RateTransition(
+        input_state=healthy,
+        output_state=sick,
+        transition_rate=key,
+        rate_type="incidence_rate",
+    )
+    another_transition = RateTransition(
+        input_state=sick,
+        output_state=healthy,
+        transition_rate=key,
+        rate_type="incidence_rate",
+    )
+    healthy.transition_set.append(transition)
+    sick.transition_set.append(another_transition)
+    model = DiseaseModel(disease, residual_state=healthy, states=[healthy, sick])
+
+    base_config.update(
+        {
+            f"{transition.name}": {
+                "rate_conversion_type": "linear",
+            },
+            f"{another_transition.name}": {
+                "rate_conversion_type": "exponential",
+            },
+        }
+    )
+
+    # Sets the configuration
+    with pytest.raises(ConfigurationError):
+        InteractiveContext(
+            components=[BasePopulation(), model],
+            configuration=base_config,
+            plugin_configuration=base_plugins,
+            setup=True,
+        )

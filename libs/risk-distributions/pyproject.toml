@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-risk-distributions"
+description = "Components for building distributions. Compatible for use with ``vivarium``."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+dependencies = [
+    "vivarium-dependencies[pandas,numpy,scipy]",
+    "vivarium-build-utils>=4.0.0,<5.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "vivarium-dependencies[pytest]",
+    "vivarium-testing-utils",
+]
+docs = ["vivarium-dependencies[sphinx]"]
+interactive = ["vivarium-dependencies[interactive]"]
+lint = ["vivarium-dependencies[lint]"]
+cluster = []
+dev = ["vivarium-risk-distributions[test,docs,interactive,lint]"]
+ci_github = ["vivarium-risk-distributions[test,docs,lint]"]
+ci_jenkins = ["vivarium-risk-distributions[ci_github,cluster]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.risk_distributions and its subpackages. Excluding
+# vivarium itself means the wheel does not ship vivarium/__init__.py. The
+# "namespace owner" (standalone vivarium today, vivarium-core post-monorepo-
+# migration) ships the canonical vivarium/__init__.py with backward-compat
+# re-exports. If we shipped our own here, pip would overwrite the canonical
+# one and break imports like `from vivarium import Component`.
+include = ["vivarium.risk_distributions", "vivarium.risk_distributions.*"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with "vivarium-risk-distributions-v"
+# (e.g. vivarium-risk-distributions-v3.0.0). tag_regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so siblings'
+# releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-risk-distributions-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-risk-distributions-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
+[tool.mypy]
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = ["build"]
+mypy_path = "src:tests"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# scipy ships no py.typed marker or stubs; treat as Any-typed.
+module = ["scipy", "scipy.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# docutils (used only in docs/source/conf.py) ships no py.typed marker or
+# stubs; treat as Any-typed.
+module = ["docutils", "docutils.*"]
+ignore_missing_imports = true
+
+[tool.setuptools.package-data]
+"vivarium.risk_distributions" = ["py.typed"]
+
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3

@@ -1,0 +1,127 @@
+.. _cli_tutorial:
+
+=============================
+Running from the Command Line
+=============================
+
+To run from the command line, we'll use the
+:mod:`simulate <vivarium.engine.interface.cli>` command. This command is actually a
+group containing two sub-commands: ``run`` and ``test``. We will
+focus on ``run`` here.
+
+The basic use of ``simulate run`` requires no more than a
+:term:`model specification <Model Specification>` yaml file. With this, you can
+do the following to run the model defined by that specification:
+
+.. code-block:: console
+
+    simulate run /path/to/your/model/specification.yaml
+
+By default, ``simulate run`` will output whatever results your model produces
+to the ``~/vivarium_results`` directory.
+
+.. note::
+
+   ``~`` is used as a shortcut to represent the user's home directory on
+   a file system. If you're on Windows, this probably looks something like
+   ``C:\Users\YOUR_NAME`` while on linux it would be ``/home/YOUR_NAME``.
+
+If you navigate to that directory, you should see a subdirectory with the name
+of your model specification.  Inside the model specification directory, there
+will be another subdirectory named for the start time of the run. In here, you
+a results directory which contains all of the simulation results files.
+
+For example, say we've run a simulation for a model specification called
+``potatoes.yaml`` (maybe we're really into gardening).  Our directory tree
+will look like::
+
+    ~/vivarium_results/
+        potatoes/
+            2019_04_20_15_44_20/
+                results/
+                    mashed.parquet
+                    eye_counts.parquet
+
+If we decide we don't like our results, or want to rerun the simulation with
+a different set of :term:`configuration parameters <Configuration>`, we'll add
+new time stamped sub-directories to our ``potatoes`` model results directory::
+
+    ~/vivarium_results/
+        potatoes/
+            2019_04_20_15_44_20/
+                results/
+                    mashed.parquet
+                    eye_counts.parquet
+            2019_04_20_16_34_12/
+                results/
+                    mashed.parquet
+                    eye_counts.parquet
+
+``simulate run`` also provides various flags which you can use to configure
+options for the run. These are:
+
+.. list-table:: **Available** ``simulate run`` **options**
+    :header-rows: 1
+    :widths: 30, 40
+
+    *   - Option
+        - Description
+    *   - | **-\-artifact_path or -i**
+        - | The path to a directory containing the artifact data file that the 
+          | model requires. This is only required if the model specification
+          | file does not contain the artifact path or you want to override it.
+    *   - | **-\-results_directory** or **-o**
+        - | The top-level directory in which to write results.
+          | Within this directory, a subdirectory named to match the
+          | model specification file will be created. Within this, a further
+          | subdirectory named for the time at which the run was started will
+          | be created.
+    *   - | **-v**
+        - | Increase logging verbosity. By default only warnings and errors are
+          | logged; pass **-v** to also log informational messages (such as each
+          | time step) and **-vv** to additionally log debug messages.
+    *   - | **-\-pdb**
+        - | If an error occurs, drop into the python debugger.
+    *   - | **-\-help**
+        - | Print a help message and exit.
+
+.. note::
+    You can see a description of any of the available commands by using the 
+    **-\-help** flag, e.g. ``simulate --help`` or ``simulate run --help``.
+
+
+Let's illustrate how to use them. Say we run the following:
+
+.. code-block:: console
+
+    simulate run /path/to/your/model/specification.yaml -i /path/to/artifact.hdf -o /path/to/output/directory --pdb -vv
+
+Let's walk through how each of these flags will change the behavior from our
+initial plain ``simulate run``. First, we have provided an artifact path via the 
+**-i** flag which will run the simulation using that artifact (regardless of what 
+is specified in the model specification). Second, we have specified an output
+directory via the **-o** flag. In our first example, outputs went to
+``~/vivarium_results``. Now they will go to our specified directory. Next, we have 
+provided the **-\-pdb** flag so that if something goes wrong in our run, we will drop 
+into the python debugger where we can investigate. Finally, we have increased the
+logging verbosity to the debug level via the **-vv** flag (a single **-v** would
+log at the info level instead). Whereas before, we saw nothing printed to
+the console while our simulation was running, we will now see something like
+the following:
+
+.. code-block:: console
+
+    2025-01-15 09:23:41.512 | 0:00:00.842113 | vivarium.engine.framework.values:register_value_modifier:218 - Registering PopulationManager.metrics as modifier to metrics
+    2025-01-15 09:23:41.514 | 0:00:00.844006 | vivarium.engine.framework.values:register_value_producer:171 - Registering value pipeline mortality_rate
+    2025-01-15 09:23:41.515 | 0:00:00.845298 | vivarium.engine.framework.values:register_value_producer:171 - Registering value pipeline metrics
+    2025-01-15 09:23:41.517 | 0:00:00.847441 | vivarium.engine.framework.values:setup:96 - Unsourced pipelines: []
+    2025-01-15 09:23:41.602 | 0:00:00.932110 | vivarium.engine.framework.engine:step:312 - 2005-07-01 00:00:00
+    2025-01-15 09:23:41.640 | 0:00:00.970558 | vivarium.engine.framework.engine:step:312 - 2005-07-04 00:00:00
+    2025-01-15 09:23:41.679 | 0:00:01.009732 | vivarium.engine.framework.engine:step:312 - 2005-07-07 00:00:00
+    2025-01-15 09:23:41.718 | 0:00:01.048264 | vivarium.engine.framework.engine:step:312 - 2005-07-10 00:00:00
+    2025-01-15 09:23:41.757 | 0:00:01.087900 | vivarium.engine.framework.engine:step:312 - 2005-07-13 00:00:00
+    2025-01-15 09:23:41.880 | 0:00:01.210456 | vivarium.engine.framework.engine:report:340 - Some configuration keys not used during run: {'input_data.cache_data', 'output_data.results_directory', 'input_data.intermediary_data_cache_path'}
+
+The specifics of these messages will depend on your model specification, but
+you should see a series of timestamps that correspond to the time steps the
+simulation takes as it runs your model.

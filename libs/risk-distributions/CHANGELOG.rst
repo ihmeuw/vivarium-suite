@@ -1,0 +1,210 @@
+**3.1.3 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
+**3.1.2 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
+**3.1.1 - 06/11/26**
+
+- Include py.typed marker as package data
+
+**3.1.0 - 06/08/26**
+
+- Add complete type annotations across the package and ship a ``py.typed`` marker (PEP 561), enabling downstream type checking
+- Configure strict ``mypy`` in ``pyproject.toml`` (scipy and docutils treated as untyped)
+
+**3.0.3 - 05/20/26**
+
+- Tighten tag pattern
+- Tighten setuptools include pattern (avoid matching hypothetical sibling packages)
+- Use style.css for docs
+- Calculate current year more robustly in docs/conf.py
+
+**3.0.2 - 05/19/26**
+
+- Update LICENSE file
+- Remove .gitignore file
+- Add package-level tests (test_package.py)
+
+**3.0.1 - 05/19/26**
+
+- Add regression test for EnsembleDistribution with missing parameters
+
+**3.0.0 - 05/18/26**
+
+Initial release from the vivarium-suite monorepo; the standalone ``risk_distributions``
+repository has been archived.
+
+Breaking changes:
+- PyPI distribution renamed from ``risk_distributions`` to ``vivarium-risk-distributions``.
+- Import path changed from ``risk_distributions`` to ``vivarium.risk_distributions``.
+
+**2.3.4 - 05/07/26**
+
+- Bugfix: Persist mirror_point in parameters so MirroredDistribution can be instantiated without mean/sd
+
+**2.3.3 - 04/15/26**
+
+- Add computability bound argument to Distribution class
+- Make x_min and x_max less strict due to computability bound changes
+
+**2.3.2 - 04/15/26**
+
+- Update vivarium_build_utils pin
+
+**2.3.1 - 03/16/26**
+
+- Validate version prior to deploying
+- Bugfix: Update intersphinx mapping for python and pandas
+
+**2.3.0 - 02/19/26**
+
+- Add support for Python versions 3.12 and 3.13
+
+**2.2.3 - 01/22/26**
+
+- Add pandas classes to nitpick-exceptions
+
+**2.2.2 - 12/31/25**
+
+- Create new EnsembleDistribution method to get expected parameters
+
+**2.2.1 - 11/20/25**
+
+- Improve 'make build-env': better handle args and make the env name optional
+
+**2.2.0 - 10/02/25**
+
+- Allow user to pass incomplete parameter sets to EnsembleDistribution (filled with zeros)
+- Backfill some unit tests
+
+**2.1.6 - 08/01/25**
+
+- Use vivarium_dependencies for common setup constraints
+
+**2.1.5 - 07/25/25**
+
+- Feature: Support new environment creation via 'make build-env'
+
+**2.1.4 - 07/16/25**
+
+- Support pinning of vivarium_build_utils; pin vivarium_build_utils>=1.1.0,<2.0.0
+
+**2.1.3 - 01/30/24**
+
+- Get python versions from python_versions.json
+
+**2.1.2 - 12/3/24**
+
+- Fix mutable state bugs in pd Series and Dataframes
+
+**2.1.1 - 11/26/24**
+
+- Fix bug in MirroredGamma and MirroredGumbel CDFs.
+- Update Deploy to Python 3.11
+
+**2.1.0 - 11/07/24**
+
+- Drop support for Python 3.9
+- Modernize type hinting
+
+**2.0.17 - 09/17/24**
+
+- Pin Sphinx below 8.0
+
+**2.0.16 - 01/29/24**
+
+- Fix broken readthedocs build
+
+**2.0.15 - 01/09/24**
+
+- Update PyPI to 2FA with trusted publisher
+
+**2.0.14 - 10/19/23**
+
+- Implement setuptools-scm
+- Drop support for Python 3.7-3.8; add support for 3.11
+
+**2.0.13 - 09/26/23**
+
+- Increment version number
+
+**2.0.12 - 09/26/23**
+
+- Address Pandas 2.1 FutureWarnings
+
+**2.0.11 - 12/27/22**
+
+- Update PR template
+- Modify codeowners
+- Update CI and setup to build python 3.7-3.10
+
+**2.0.10 - 07/01/22**
+
+- Add CODEOWNERS
+- Fix autodoc warnings
+
+**2.0.9 - 05/05/22**
+
+- Update black dependency in CI
+
+**2.0.8 - 02/15/22**
+
+- Autoformat code with black and isort.
+- Add black and isort checks to CI.
+
+**2.0.7 - 02/12/22**
+
+- Modernize CI.
+- Add PR template.
+- Update to BSD 3-clause license.
+- Squash warnings in doc building
+- Fix remote doc builds.
+
+**2.0.6 - 08/31/21**
+
+- Add credentials to repository 
+
+**2.0.5 - 08/31/21**
+
+- Set python deployment version to 3.8 
+
+**2.0.4 - 08/31/21**
+
+- Implement quantile (ppf) function for EnsembleDistribution using 2 pr
+- CI changes
+- Update authors and maintainers
+
+**2.0.3 - 09/08/20**
+
+- Correction to the Beta distribution wrapper.
+- supress RuntimeWarning around dist calculation
+- Update authors and maintainers
+
+**2.0.2 - 11/18/19**
+
+- Fix set logic in data frame formatting.
+
+**2.0.1 - 03/12/19**
+
+- Add API documentation.
+- Add cdf to all distributions.
+- Bugfix to handle case where computable is empty for ppf, pdf, and cdf.
+
+**2.0.0 - 02/13/19**
+
+- Full rewrite of risk distributions.
+- Separation of input data handling from parameter calculation.
+- Improved interactive usability.
+
+**1.0.1 - 11/07/18**
+
+- Clean up separated distributions.
+- Allow for only mean and standard deviation or pre-calculated parameters.
+
+**1.0.0 - 10/29/18**
+
+- Initial Release

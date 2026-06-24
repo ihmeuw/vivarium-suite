@@ -1,0 +1,145 @@
+# Example Extraction Configuration
+#
+# This file demonstrates the YAML syntax for configuring extraction patterns
+# that define which profiling metrics to extract from benchmark results.
+#
+# Usage:
+#   run_benchmark -m models/*.yaml -r 10 -b 20 --extraction-config extraction_config.yaml
+#   summarize results/profile_*/benchmark_results.csv --extraction-config extraction_config.yaml
+#
+# Each pattern defines:
+# - What function to match in cProfile output (filename + function_name)
+# - Which metrics to extract (cumtime, percall, ncalls) - all optional with defaults
+# - How to name the resulting columns (templates) - optional with defaults
+#
+# Common use cases:
+#
+# 1. Bottlenecks: Extract all 3 metrics (cumtime, percall, ncalls)
+#    Use for performance hotspots you want to track in detail
+#
+# 2. Simulation phases: Extract only cumtime with "rt_{name}_s" column naming
+#    Use for high-level simulation phases
+#
+# 3. Custom patterns: Mix and match metrics and templates as needed
+
+patterns:
+  # ===========================================================================
+  # BOTTLENECK PATTERNS
+  # ===========================================================================
+  # These extract cumtime, percall, and ncalls for detailed bottleneck analysis
+  
+  - name: gather_results
+    filename: results/manager.py
+    function_name: gather_results
+    extract_cumtime: true
+    extract_percall: true
+    extract_ncalls: true
+    # Generates columns: gather_results_cumtime, gather_results_percall, gather_results_ncalls
+
+  - name: pipeline_call
+    filename: values/pipeline.py
+    function_name: __call__
+    extract_cumtime: true
+    extract_percall: true
+    extract_ncalls: true
+    # Generates columns: pipeline_call_cumtime, pipeline_call_percall, pipeline_call_ncalls
+
+  - name: population_get
+    filename: population/population_view.py
+    function_name: get
+    extract_cumtime: true
+    extract_percall: true
+    extract_ncalls: true
+    # Generates columns: population_get_cumtime, population_get_percall, population_get_ncalls
+
+  # ===========================================================================
+  # SIMULATION PHASE PATTERNS
+  # ===========================================================================
+  # These extract only cumtime for high-level simulation phases
+  # Uses custom template for runtime column naming: rt_{name}_s
+  
+  - name: setup
+    filename: /vivarium/framework/engine.py
+    function_name: setup
+    extract_cumtime: true
+    cumtime_template: "rt_{name}_s"
+    # extract_percall and extract_ncalls default to false
+    # Generates column: rt_setup_s
+
+  - name: initialize_simulants
+    filename: /vivarium/framework/engine.py
+    function_name: initialize_simulants
+    extract_cumtime: true
+    cumtime_template: "rt_{name}_s"
+    # Generates column: rt_initialize_simulants_s
+
+  - name: run
+    filename: /vivarium/framework/engine.py
+    function_name: run
+    extract_cumtime: true
+    cumtime_template: "rt_{name}_s"
+    # Generates column: rt_run_s
+
+  - name: finalize
+    filename: /vivarium/framework/engine.py
+    function_name: finalize
+    extract_cumtime: true
+    cumtime_template: "rt_{name}_s"
+    # Generates column: rt_finalize_s
+
+  - name: report
+    filename: /vivarium/framework/engine.py
+    function_name: report
+    extract_cumtime: true
+    cumtime_template: "rt_{name}_s"
+    # Generates column: rt_report_s
+
+  # ===========================================================================
+  # CUSTOM PATTERN EXAMPLES
+  # ===========================================================================
+  
+  # Example: Custom function with selective metric extraction and custom templates
+  # - name: my_bottleneck
+  #   filename: my/module.py
+  #   function_name: my_function
+  #   extract_cumtime: true
+  #   extract_percall: true
+  #   extract_ncalls: false
+  #   cumtime_template: "{name}_total_time"
+  #   percall_template: "{name}_avg_time"
+  #   # Generates columns: my_bottleneck_total_time, my_bottleneck_avg_time
+  
+  # Example: Minimal pattern (only cumtime with default template)
+  # - name: simple_func
+  #   filename: simple/module.py
+  #   function_name: simple_function
+  #   # extract_cumtime defaults to true
+  #   # extract_percall and extract_ncalls default to false
+  #   # cumtime_template defaults to "{name}_cumtime"
+  #   # Generates column: simple_func_cumtime
+
+# ===========================================================================
+# FIELD REFERENCE
+# ===========================================================================
+#
+# Required fields:
+#   name: Logical name used in column name templates (e.g., "setup", "gather_results")
+#   filename: Path pattern to match the source file (can be partial path)
+#   function_name: Name of the function to match in cProfile output
+#
+# Optional fields (with defaults):
+#   extract_cumtime: Extract cumulative time (default: true)
+#   extract_percall: Extract time per call (default: false)
+#   extract_ncalls: Extract number of calls (default: false)
+#   cumtime_template: Column name template for cumtime (default: "{name}_cumtime")
+#   percall_template: Column name template for percall (default: "{name}_percall")
+#   ncalls_template: Column name template for ncalls (default: "{name}_ncalls")
+#
+# Template variables:
+#   {name}: Replaced with the pattern's name field
+#
+# File path matching:
+#   - Patterns match any path ending with the specified filename
+#   - Use forward slashes even on Windows
+#   - Special regex characters (., *, etc.) are automatically escaped
+#   - Example: "results/manager.py" matches "/full/path/to/results/manager.py"

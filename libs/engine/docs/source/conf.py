@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Sphinx configuration for vivarium-engine docs."""
+
+import importlib.metadata
+
+
+# -- Project information -----------------------------------------------------
+
+project = "vivarium.engine"
+author = "The vivarium developers"
+copyright = "2023, Institute for Health Metrics and Evaluation"
+
+version = importlib.metadata.version("vivarium-engine")
+release = version
+
+
+# -- General configuration ------------------------------------------------
+
+needs_sphinx = "4.0"
+
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx_autodoc_typehints",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.doctest",
+    "sphinx.ext.todo",
+    "sphinx.ext.coverage",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+    "sphinx_click.ext",
+    "matplotlib.sphinxext.plot_directive",
+    "sphinxcontrib.video",
+]
+
+source_suffix = ".rst"
+master_doc = "index"
+language = "en"
+exclude_patterns: list[str] = []
+pygments_style = "sphinx"
+todo_include_todos = True
+
+
+# -- Options for HTML output ----------------------------------------------
+
+html_theme = "sphinx_rtd_theme"
+html_static_path = ["_static"]
+html_css_files = ["style.css"]
+html_sidebars = {
+    "**": [
+        "globaltoc.html",
+        "searchbox.html",
+    ]
+}
+
+htmlhelp_basename = f"{project}doc"
+
+
+# -- Options for LaTeX / man / texinfo output -----------------------------
+
+latex_elements: dict[str, str] = {}
+latex_documents = [
+    (master_doc, f"{project}.tex", f"{project} Documentation", author, "manual")
+]
+man_pages = [(master_doc, project, f"{project} Documentation", [author], 1)]
+texinfo_documents = [
+    (
+        master_doc,
+        project,
+        f"{project} Documentation",
+        author,
+        project,
+        "vivarium is a microsimulation framework built on top of the standard scientific python stack.",
+        "Miscellaneous",
+    ),
+]
+
+
+# -- Intersphinx ---------------------------------------------------------
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
+    "tables": ("https://www.pytables.org/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "networkx": ("https://networkx.org/documentation/stable/", None),
+    # Sibling monorepo libs whose docs engine references.
+    "vivarium_artifact": ("https://vivarium-artifact.readthedocs.io/en/latest/", None),
+    "vivarium_config_tree": ("https://vivarium-config-tree.readthedocs.io/en/latest/", None),
+}
+
+
+# -- Autodoc configuration ------------------------------------------------
+
+autodoc_default_options = {
+    "members": True,
+    "member-order": "bysource",
+    "undoc-members": True,
+    "private-members": False,
+}
+autodoc_typehints = "description"
+
+
+# -- nitpicky mode --------------------------------------------------------
+
+nitpicky = True
+
+nitpick_ignore: list[tuple[str, str]] = []
+with open("../nitpick-exceptions") as f:
+    for line in f:
+        if line.strip() == "" or line.startswith("#"):
+            continue
+        dtype, target = line.split(None, 1)
+        target = target.strip()
+        nitpick_ignore.append((dtype, target))

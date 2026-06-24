@@ -1,0 +1,899 @@
+**6.1.1 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
+**6.1.0 - 06/17/26**
+
+- Consolidate EnsembleDistribution per-distribution parameter lookup tables into a single LookupTable for fewer pipeline resources
+
+Breaking changes:
+
+- ``EnsembleDistribution.parameters`` (dict of ``LookupTable``) is removed in favor of ``parameters_table`` and ``parameter_columns``.
+
+**6.0.2 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
+**6.0.1 - 06/11/26**
+
+- Update vivarium_testing_utils imports to vivarium.testing_utils
+
+**6.0.0 - 06/10/26**
+
+Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_public_health``
+repository has been archived.
+
+Breaking changes:
+
+- Import path changed from ``vivarium_public_health`` to ``vivarium.public_health``.
+
+**5.1.13 - 06/09/26**
+
+- Add data_sources configuration to population components for artifactless usage
+
+**5.1.12 - 06/03/26**
+
+- Add observers tutorial
+
+**5.1.11 - 06/01/26**
+
+- Raise error if filtered relative risk data is empty
+
+**5.1.10 - 06/01/26**
+
+- Add treatment tutorial
+
+**5.1.9 - 05/22/26**
+
+- Add new intersphinx mappings for vivarium-engine and vivarium-config-tree
+
+**5.1.8 - 05/13/26**
+
+- Add risk factor tutorial
+
+**5.1.7 - 04/30/26**
+
+- Add disease tutorial
+
+**5.1.6 - 04/29/26**
+
+- Add population tutorial and example data module
+
+**5.1.5 - 04/28/26**
+
+- Enable adding additional post-processors to risk-affected pipelines
+
+**5.1.4 - 04/23/26**
+
+- Add treatment API docs
+
+**5.1.3 - 04/22/26**
+
+- Add risk concept docs
+
+**5.1.2 - 04/21/26**
+
+- Add results system concept docs
+
+**5.1.1 - 04/21/26**
+
+- Add plugins and results system API docs
+
+**5.1.0 - 04/16/26**
+
+- Enable precomputation of calibration constants to be stored in a lookup table rather than calculated on the fly
+  - Create helper function to register pipelines that can be modified by RiskEffect components
+  - Create helper function to get calibration constant pipeline names
+  - Update RiskEffect to appropriately modify the new calibration constant pipeline
+  - Update DiseaseState to precompute calibration constant for excess mortality rate
+  - Update LBWSGRiskEffect to use the new calibration constant pipeline
+  - Update RateTransition to use the new calibration constant pipeline for transition rate
+  - Update RiskAttributableDisease to use the new calibration constant pipeline for excess mortality rate
+  - Update DichotomousDistribution to use the new calibration constant pipeline for exposure parameters
+- Update RiskEffect and LBWSGRiskEffect to leverage the multiplication_combiner when applying the relative risk
+  - Removes `adjust_target`` method from RiskEffect and LBWSGRiskEffect
+  - The relative risk pipeline is now registered as a modifier directly
+- Relative risk pipeline name is updated to prevent name collision
+
+**5.0.2 - 04/16/26**
+
+- Tighten vivarium_build_utils pin
+- Fix bug in distribution parameter column names
+
+**5.0.1 - 04/15/26**
+
+- Update vivarium_build_utils pin
+
+**5.0.0 - 04/02/26**
+=======================
+
+This release updates the repository to work with `vivarium` v4.0.0 which contains
+several breaking changes.
+
+Vivarium v4.0.0 breaking changes
+--------------------------------
+
+Population management system refactor
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Interactive context: 'get_population()' will now error if if no attributes are 
+  requested or if requesting an attribute that doesn't exist.
+- Population views: Remove subviews, update 'get()' method, and add 'get_frame()' method.
+
+  - You must now explicitly request which attributes you want to retrieve.
+  - Write access (via the 'initialize()' or 'update()' methods) is now restricted 
+    to private columns created by the component the view is attached to.
+
+- Population views: Remove support for population view default queries.
+- Population interface: Replace the 'tracked' column and corresponding auto-filter
+  logic with a new 'register_tracked_query()' method and 'include_untracked' argument
+  when getting attributes or private columns from a population view.
+- Population interface: Require explicit initializer method registration instead 
+  of inferring from methods named 'on_initialize_simulants()'. Supports multiple
+  initializer methods per component.
+
+  - Remove columns_created, columns_required, and initialization_requirements properties throughout.
+  - Changed the names of all initializer methods (no longer 'on_initialize_simulants').
+
+- Population manager: 'get_population()' now requires an explicit attribute request ("all" is allowed).
+- Stop returning AttributePipelines (previously Pipelines) when registering them.
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- Split managers and their corresponding interfaces into separate modules.
+- Replace 'requires_columns' and 'requires_values' arguments with 'requires_attributes' throughout.
+- Replace 'dependencies' arguments with 'required_resources' throughout.
+- Change default behavior of state machine 'allow_self_transition' to True.
+
+Other breaking changes
+----------------------
+
+In addition to updating the repository to work with the changes outlined above:
+
+- Replace BasePopulation's 'tracked' column with an 'is_aged_out' column.
+
+  - AgeOutSimulants registers a modifier to the corresponding 'is_aged_out' attribute pipeline.
+  - AgeOutSimulants also registers 'is_aged_out == True' as a tracked query.
+
+- Change 'alive' string column to an 'is_alive' boolean column.
+- Move 'is_alive' column handling from BasePopulation to Mortality and make Mortality a sub-component
+  of BasePopulation.
+- Update to work with modern LookupTable creation.
+- Remove support for 'intial_state' argument to DiseaseModel.
+- Remove MSLT package.
+- Remove deprecated 'get_data_functions' arguments.
+- Set disease state 'allow_self_transition' default to True.
+
+Other changes
+-------------
+
+- Make exposure distribution 'ppf()' method an attribute pipeline.
+- Update to allow LookupTables as simulation Resources.
+- Remove need to explicitly pass component when registering Resources.
+- Enable agnostic ordering (in model specification) of MortalityObserver and DiseaseModel components.
+- Create new Disability class to register all-cause disability weight pipeline.
+- Update ContinuousDistribution and EnsembleDistribution to scale exposure according to a calibration constant
+- Support python 3.12
+
+**4.3.24 - 03/25/26**
+
+ - Remove upstream_repos from Jenkinsfile
+
+**4.3.23 - 03/16/26**
+
+  - Validate version prior to deploying
+  - Bugfix: Update intersphinx mapping for python and pandas
+
+**4.3.22 - 02/24/26**
+
+  - Bugfix: Remove duplicated pytest options
+
+**4.3.21 - 02/02/26**
+
+  - Use importlib_resources instead of pkg_resources to remove deprecation warning
+
+**4.3.20 - 01/29/26**
+
+  - Update groupby calls in NonLogLinearRiskEffect to remove FutureWarning
+
+**4.3.19 - 01/06/26**
+
+  - Fail deployment if CHANGELOG does not match current date
+
+**4.3.18 - 01/06/26**
+
+  - Bugfix: Fix population scaling in FertilityCrudeBirthRate
+
+**4.3.17 - 12/18/25**
+
+  - Bugfix: Fix failing doc builds
+
+**4.3.16 - 12/15/25**
+
+  - Add documentation for configuration defaults and build_all_lookup_table overrides
+  
+**4.3.15 - 12/12/25**
+
+  - Update PublicHealthObserver to use empty string as default value for required columns
+
+**4.3.14 - 11/20/25**
+
+  - Improve 'make build-env': better handle args and make the env name optional
+  
+**4.3.13 - 11/20/25**
+
+  - Remove unused initial states pipeline dependency
+
+**4.3.12 - 10/06/25**
+
+  - Register event_year as a stratification in the ResultsStratifier
+
+**4.3.11 - 09/24/25**
+
+  - Refactor: Simplify LBWSG parsing logic
+
+**4.3.10 - 09/23/25**
+
+  - Bugfix: Fix bug in PublicHealthObserver to retain stratification columns in results
+
+**4.3.9 - 09/16/25**
+
+  - Bugfix: require alive column in register_transition_count_observation()
+
+**4.3.8 - 09/10/25**
+
+  - Pin vivarium<4.0.0
+
+**4.3.7 - 09/10/25**
+
+  - Bugfix: raise an error if simulation start year is earlier than population data.
+
+**4.3.6 - 08/28/25**
+
+  - Feature: ScaledPopulation can handle multiple year data inputs.
+
+**4.3.5 - 08/01/25**
+
+  - Use vivarium_dependencies for common setup constraints
+
+**4.3.4 - 07/31/25**
+
+  - Modify futurewarning fix from v4.2.6 to not require pandas>=2.2.0
+
+**4.3.3 - 07/30/25**
+
+  - Revert changes from v4.3.0-4.3.2
+
+**4.3.2 - 07/30/25** (withdrawn)
+
+  - Support RiskEffect backwards compatibility with v4.2.x
+
+**4.3.1 - 07/30/25** (withdrawn)
+
+  - Bugfix: reference correct entity name in LBWSG get_current_exposure method
+  - Support backwards compatibility with v4.2.x
+
+**4.3.0 - 07/29/25** (withdrawn)
+
+  - This release was withdrawn from PyPI.
+  - Refactor to create two new abstract classes, Exposure and ExposureEffect
+  - Add Intervention and InterventionEffect classes
+  - Refactor to pass Exposure component to RiskExposureDistribution classes
+  - Update exposure category names for DichotomousDistribution
+
+**4.2.6 - 07/25/25**
+
+  - Feature: Support new environment creation via 'make build-env'
+
+**4.2.5 - 07/18/25**
+
+  - Hush FutureWarnings: add include_groups=False to apply call in StratifiedObservation
+
+**4.2.4 - 07/16/25**
+
+  - Support pinning of vivarium_build_utils; pin vivarium_build_utils>=1.1.0,<2.0.0
+
+**4.2.3 - 07/11/25**
+
+  - Bugfix: Update FertilityCrudeBirthRate to properly check deprecated age_end configuration key
+
+**4.2.2 - 07/03/25**
+
+  - Update deprecated layered config tree method from get_from_layer() to get()
+
+**4.2.1 - 06/30/25**
+
+  - Bugfix: Fix bug in test for LBWSG exposure data based on simulant age
+
+**4.2.0 - 06/11/25**
+
+  - Feature: Update LBWSG to use exposure data based on simulant age
+
+**4.1.1 - 05/23/25**
+
+  - Feature: Update Observer to use super class get_configuration method
+
+**4.1.0 - 05/20/25**
+
+  - Feature: Update RateTransition to have configuration key for rate conversion type
+
+**4.0.2 - 05/01/25**
+
+  - Bugfix: Fix configuration key for untracking age in FertilityCrudeBirthRate
+
+**4.0.1 - 03/21/25**
+
+ - Feature: Update required resources for all components
+
+**4.0.0 - 03/17/25**
+
+ - Feature: Use birth exposure artifact key for LBWSG components
+
+**3.2.2 - 2/21/25**
+
+ - Bugfix: Use relative risk data to get age intervals for LBWSGRiskEffect
+
+**3.2.1 - 1/30/25**
+
+ - Get python versions from python_versions.json
+
+**3.2.0 - 1/15/25**
+
+ - Bugfix: Fix bug in LBWSGRiskEffect where relative risk pipeline was not properly created
+
+**3.1.5 - 01/14/25**
+
+ - Bugfix: Vivarium InteractiveContext no longer returns int
+
+**3.1.4 - 11/22/24**
+
+ - Feature: Enable initializing a population of all newborns
+ - Feature: Enable setting data sources directly on DiseaseModel components
+ - Refactor: Update DiseaseModel to leverage the on_initialize_simulants method of Machine
+
+**3.1.3 - 12/03/24**
+
+ - Feature: Create relative risk pipeline
+
+**3.1.2 - 11/13/24**
+
+ - Modernize type hinting
+ - Refactor: Update DiseaseModel to rely on Machine's time-step and time-step-cleanup methods
+
+**3.1.1 - 11/12/24**
+
+ - Feature: Rename DiseaseModel initial_state to residual_state
+ - Refactor: Use callables rather than strings to define lookup table builders
+
+**3.1.0 - 11/07/24**
+
+ - Drop support for python 3.9
+
+**3.0.11 - 11/07/24**
+
+ - Add ScaledPopulation component to population package
+
+**3.0.10 - 10/29/24**
+
+ - Import subpackage classes to top-level namespace
+
+**3.0.9 - 09/12/24**
+
+ - Fix broken import in scale_up module
+
+**3.0.8 - 09/12/24**
+
+ - Fix broken tests in RiskAttributableDisease due to changes in how to set population_view
+
+**3.0.7 - 09/10/24**
+
+ - Properly create the population_view in RateTransition
+
+**3.0.6 - 09/04/24**
+
+ - Fix bug that was occurring when RiskEffect's rr_source was a float or DataFrame
+ - Better handle exposure column creation in Risk component
+ - Rename LBWSRisk 'exposure_column_name()' staticmethod to not collide with Risk attr
+
+**3.0.5 - 08/29/24**
+
+ - Add missing results module-level docstrings
+ - Strengthen the SimpleCause docstring
+ - Rename the SimpleCause class method
+
+**3.0.4 - 08/28/24**
+
+ - Strengthen results docstrings and clean up others throughout
+ - Add mention of NonLogLinearRiskEffect class to risk exposure tutorial
+
+**3.0.3 - 08/20/24**
+
+ - Use external script to find matching dependency branches
+ - Fix bug when excluding all but one causes of disability from results
+ - Update FertilityAgeSpecificRates for new data format of age specific fertility rates
+
+**3.0.2 - 08/19/24**
+
+ - Parameterize the script to find matching dependency branches
+
+**3.0.1 - 08/19/24**
+
+ - Fix bug in build script when the upstream vivarium branch should be main
+
+**3.0.0 - 08/13/24**
+
+Breaking changes:
+  - Update components to use new Vivarium lookup table configuration
+  - Update Observers to use new Vivarium results interface classes and methods
+  - Change the "all_causes" disability weight pipeline from "disability_weight" to "all_causes.disability_weight"
+
+Major changes:
+  - Refactor risk components to standardize/simplify risk exposure distributions
+  - Enable the setting of CSMR using a causes configuration parser
+  - Implement a PublicHealthObserver to help enforce the existence of "measure", "entity_type", "sub_entity", and "entity" columns in the results
+  - Refactor Risk component to create exposure column in state table
+  - Add support for non-loglinear relative risks
+
+Other changes:
+  - Use external layered-config-tree package instead of Vivarium ConfigTree class
+  - Install matching upstream branches in github builds
+  - Stop writing seed and draw columns to the results
+  - Automatically run Jenkins builds on push or pull request
+  - Various other minor updates
+
+**2.3.3 - 06/17/24**
+
+ - Hotfix pin numpy below 2.0
+
+**2.3.2 - 3/13/24**
+
+ - Update to Mortality Observer to make subclassing easier.
+
+**2.3.1 - 3/11/24**
+
+ - Update Mortality Observer to include tracked in population filter
+ - Fix bug in get_initialization_parameters to only remove existing keys if necessary
+
+**2.3.0 - 3/7/24**
+
+ - Update population configuration keys to be more descriptive
+
+**2.2.3 - 3/6/24**
+
+ - Update Mortality Observer to allow running with cause specific or total deaths and ylls.
+
+**2.2.2 - 2/28/24**
+
+ - Fix bug in rescale_binned_proportions to update midpoitn for new age bins
+
+**2.2.1 - 2/26/24**
+
+ - Update LinearScaleUp configuration defaults
+
+**2.2.0 - 02/14/24**
+
+ - Implement CausesConfigurationParser to parse causes configuration into DiseaseModel components
+ - Bugfix assign sex-location-age demographic proportions by year when only one year in dataset
+
+**2.1.4 - 01/10/24**
+
+ - Exclude undesirable arguments from the return of `BaseDiseaseState` `name` and `__repr__` methods
+
+**2.1.3 - 01/09/24**
+
+ - Update PyPI to 2FA with trusted publisher
+
+**2.1.2 - 12/21/23**
+
+ - Fix tests failing due to Vivarium 2.3.0 release
+
+**2.1.1 - 10/13/23**
+
+ - Perform actions in DiseaseState setup using class methods rather than hardcoding to allow for cleaner subclassing
+
+**2.1.0 - 10/05/23**
+
+ - Remove explicit support for Python 3.8
+ - Minor bugfix to ensure default remission rate calls the right artifact key
+
+**2.0.1 - 09/27/23**
+
+ - Address a CopyWithSettingWarning in results stratifier
+
+**2.0.0 - 09/22/23**
+
+ - Refactor all components to inherit from `vivarium.Component`
+ - Refactor components inheriting from another vivarium class to be compatible with vivarium 2.0.0
+
+**1.0.5 - 09/19/23**
+
+ - Update unit test for dtypes
+
+**1.0.4 - 09/15/23**
+
+ - Address Pandas 2.1 FutureWarnings
+
+**1.0.3 - 08/10/23**
+
+ - Pass `BaseDiseaseState` constructor kwargs to its super-class's constructor
+
+**1.0.2 - 08/10/23**
+
+ - Minor bugfix to ensure dead simulants do not get observed transitions
+
+**1.0.1 - 08/07/23**
+
+ - Minor bugfix to improve handling of excess mortality rate data
+
+**1.0.0 - 08/02/23**
+
+ - Performance and architectural improvements to results manager, including observers
+ - Updates versioning to use setuptools_scm
+ - Other bugfixes
+
+**0.11.0 - 06/01/23**
+
+ - Support Python 3.8-3.11
+ - Update vivarium pin
+ - Handle FutureWarning
+ - Refactor to create a 'get_transition_names' function
+
+**0.10.24 - 05/11/23**
+
+ - Standardize builder, cause argument order in state get data functions
+ - Mends a bug where configured key_columns for randomness were not used in register_simulants
+
+**0.10.23 - 05/03/23**
+
+ - Throw error when artifact doesn't contain relative risk data for desired target
+ - Rename `for_initialization` argument to match updated argument name in vivarium
+
+**0.10.22 - 12/27/22**
+
+ - Update CI and setup for building python 3.7-3.10
+
+**0.10.21 - 11/16/22**
+
+ - Fix bug in timing of disease transition observations
+ - Add logging when adding risks with a relative risk less than 1 from artifact
+
+**0.10.20 - 07/25/22**
+
+ - Update Vivarium pin
+
+**0.10.19 - 06/29/22**
+
+ - Create new LBWSG components
+ - Fix a bug when stratifying newly born simulants
+ - Fix pandas deprecation warnings
+ - Fix a bug when stratifying an empty population
+ - Allow configuration of sex subsetting of the population
+ - Add support for empty populations
+ - Fix a bug in counting deaths and ylls
+ - Refactor DiseaseState to be compatible with latest release of vivarium
+ - Add CODEOWNERS
+
+**0.10.18 - 04/22/22**
+
+ - Improve ScaleUp component configuration
+ - Enable Mortality component to handle affected unmodeled causes
+ - Refactor RiskEffect calculation for clarity and extensibility
+ - Implement ResultsStratifier to stratify outputs
+ - Refactor all observers to be compatible with the ResultsStratifier component
+
+**0.10.17 - 02/15/22**
+
+ - Autoformat code with black and isort.
+ - Add black and isort checks to CI.
+
+**0.10.16 - 02/13/22**
+
+ - Update CI
+
+**0.10.15 - 01/25/22**
+ - Implement LinearScaleUp component
+ - Refactor Risk, RiskEffect, and Mortality components for inheritance
+ - Added pull request template
+ - Fix bug in excess mortality pipeline name
+ - Fix bug in risk propensity pipeline
+
+**0.10.14 - 10/29/21**
+ - Update license to BSD 3-clause
+ - Add .zenodo.json metadata replacing AUTHORS.rst
+
+**0.10.13 - 08/31/21**
+ - implement categorical risk observer
+ - fix pandas warning in application of risk effect
+ - fix column name bug
+ - improve performance of reshaping
+ - require 2.0.6 and later of risk_distributions
+
+**0.10.12 - 08/10/21**
+ - Fix bugs in DiseaseState
+ - Improve functionality of ensemble distributions
+ - Improve CI
+
+**0.10.11 - 05/18/21**
+ - Fix bug in computing ages from an age distribution
+
+**0.10.10 - 05/10/21**
+ - Improve standard DiseaseObserver
+ - Add 'transition rate' to the RateTransition object
+ - Add state and transition names to DiseaseModel and RiskAttributableDisease
+ - Get location from artifact rather than config file
+ - Fix bug that resulted in non-unique initializations of populations
+
+**0.10.9 - 01/25/21**
+ - Improve performance of polytomous risk ppf calculations
+
+**0.10.8 - 1/5/21**
+ - Fix deploy script
+
+**0.10.7 - 1/5/21**
+ - Github actions replaces Travis for CI
+ - Unpin pandas and numpy
+
+**0.10.6 - 11/5/20**
+ - Fix bug when risk effects are defined by a distribution
+
+**0.10.5 - 10/2/20**
+ - Remove code from shigella vaccine
+ - Remove sample history observer
+ - Update randomness implementation to be consistent with latest version of
+   vivarium
+ - Make prevalence sampling configurable
+ - Refactor to avoid warnings
+ - Clarify cut age bin math
+ - Pin to pandas 0.24.x
+ - Fix Travis validation issues
+
+**0.10.4 - 01/14/20**
+
+ - Fix regression bug in RiskAttributableDisease
+ - Introduce low birth weight and short gestation risk and risk effect
+
+**0.10.3 - 12/13/19**
+
+ - Fix regression bug in SIR_fixed_duration.
+
+**0.10.2 - 11/29/19**
+
+ - Fix disease observer bug that prevented it from loading its configuration.
+
+**0.10.1 - 11/27/19**
+
+ - Update MSLT components to new vivarium APIs.
+
+**0.10.0 - 11/18/19**
+
+ - Update vivarium event system usage to no longer require explicit use of
+   events.
+ - Move Artifact to vivarium.
+ - Clean up utility functions location and usage.
+ - Consistent preference of pathlib over os.path
+ - Small API updates for configuration.
+ - Restructure components to allow all subcomponents to be created during
+   initialization.
+ - Remove healthcare access component.
+ - Restructure mortality calculation in a style more consistent with
+   risk-disease pairs.
+ - Update to new API for simulation creation.
+ - Remove usages of 'omit_missing_columns' in favor of population subviews.
+ - Be consistent about rate naming conventions.
+ - Rename Disability component to DisabilityObserver.
+ - Rename 'age_group_start' and 'age_group_end' to 'age_start' and 'age_end'
+   in data and lookup table usage.
+ - Have components specify all necessary dependencies for the resources
+   (pipelines, state table columns, and randomness streams) that they manage.
+ - Update risk effect to make it easier to extend.
+ - Allow lookup table specification without naming bin columns in data.
+ - Update joint_value_postprocessor to union_postprocessor
+ - Clean up some of the MSLT calculations
+ - Dichotomous distribution bugfix
+
+**0.9.19 - 09/30/19**
+
+ - Add python and vivarium to the intersphinx mapping.
+ - Bring in docs for non-standard risks.
+ - Bugfix in parameterized risk component.
+ - Update MSLT code to appropriate names/data artifact usage.
+
+**0.9.18 - 07/29/19**
+
+ - Pin pandas version to be compatible with tables.
+ - Fix in RiskAttributableDisease disability calculation.
+
+**0.9.17 - 07/17/19**
+
+ - Add names to mslt components.
+ - Clip non-ensemble distribution percentiles.
+
+**0.9.16 - 07/16/19**
+
+ - Update observers to not report ages younger than those modeled.
+
+**0.9.15 - 07/03/19**
+
+ - Fix docstring formatting.
+
+**0.9.14 - 07/03/19**
+
+ - Update api documentation format.
+ - Bring in MSLT components.
+
+**0.9.13 - 06/18/19**
+
+ - Move ``VivariumError`` to the correct place.
+ - Add names to all public health components.
+ - Add several missing ``__repr__``s.
+ - Modify the artifact to accept data that is wide on draws.
+ - Update components to new component manager api.
+ - Bugfix in SimulationDistribution
+
+**0.9.12 - 04/23/19**
+
+ - Update docstring for categorical risk observer.
+ - Fix pipeline names in risk attributable disease.
+
+**0.9.11 - 04/22/19**
+
+ - Add documentation for the data artifact.
+ - Bugfix in parameterized risk for covariates.
+ - Make disease observers work with paf of one risks.
+ - Make mortality and disability observers work with risk attributable diseases.
+ - Add simulation info to simulant creator.
+
+**0.9.10 - 03/29/19**
+
+ - Bugfix in disease observer.
+
+**0.9.9 - 03/28/19**
+
+ - Bugfix in data free risk components when using a covariate for coverage.
+ - Bugfix for simulations that start in a future year with extrapolate.
+
+**0.9.8 - 03/19/19**
+
+ - Bugfix in mortality observer.
+
+**0.9.7 - 03/17/19**
+
+ - Bugfixes in disease and treatment observers.
+ - Remove unnecessary output metrics.
+
+**0.9.6 - 03/13/19**
+
+ - Generic observers for mortality, disability, person time, and treatment counts.
+ - Bugfix for large propensities when using risk distributions.
+ - Bugfix for rr distribution parameter name.
+
+**0.9.5 - 03/01/19**
+
+ - Bugfix in validating rebinning risks for continuous risks.
+
+**0.9.4 - 03/01/19**
+
+ - Added neonatal models and support for birth prevalence in DiseaseModel.
+ - Added a risk attributable disease model.
+ - Added support for rebinning polytomous risks into dichotomous risks.
+
+**0.9.3 - 02/26/19**
+
+ - Bugfix in checking relative risk source type from configuration.
+
+**0.9.2 - 02/22/19**
+
+ - Pin numpy and tables dependencies.
+ - Remove forecast flags
+ - Update crude birth rate fertility component
+ - Allow parameterization of RiskEffect components with normal and lognormal distributions.
+ - New observers for disease and treatment.
+
+**0.9.1 - 02/14/19**
+
+ - Update dependencies
+
+**0.9.0 - 02/12/19**
+
+ - Dataset manager logging.
+ - Added an SIR with duration model.
+ - Built observer for death counts and person years by age and year.
+ - Updated population and crude birth rate models for GBD 2017.
+ - Built an observer to point sample categorical risk exposure.
+ - Updated risk distribution and effect to work with the updated risk_distributions package.
+ - Updated healthcare access component.
+ - Added component for therapeutic inertia.
+ - Exposed individual cause disability weights as pipelines.
+ - Various bugfixes and api updates.
+
+**0.8.13 - 01/04/19**
+
+ - Added support for multi-location data artifacts.
+ - Added CI branch synchronization
+
+**0.8.12 - 12/27/18**
+
+ - Bugfix in categorical paf calculation
+
+**0.8.11 - 12/20/18**
+
+ - Bugfix for mock_artifact testing data to include newly added columns.
+ - Bugfix to handle single-value sequela disability weight data.
+
+**0.8.10 - 12/20/18**
+
+ - Added a replace function to the artifact class.
+ - Fixed a bug in age-specific fertility rate component.
+ - Added data free risk and risk effect components
+ - Removed the autogeneration of risk effects.
+ - Updated the risk and risk effect API.
+ - Added a configuration flag and component updates for limited forecasting data usage.
+ - Put in cause-level disability weights.
+ - Updated the population API.
+ - Added in standard epi disease models.
+ - Added support for morbidity only diseases.
+ - Expanded risk effects to target excess mortality.
+ - A host of model fixes and updates for the MSLT subpackage.
+
+**0.8.9 - 11/15/18**
+
+ - Update documentation dependencies.
+
+**0.8.8 - 11/15/18**
+
+ - Fix bug in population age generation.
+ - Assign initial event time for prevalent cases of disease with a dwell time.
+ - Set up artifact filter terms.
+ - Remove mean year and age columns.
+
+**0.8.7 - 11/07/18**
+
+ - Switch to calculating pafs on the fly for non-continuous risks.
+ - Adding components for mslt.
+ - Pulled out distributions into separate package.
+
+**0.8.6 - 11/05/18**
+
+ - Extend interactive api to package up data artifact manager in standard sims.
+ - Exposed disease prevalence propensity as a pipeline
+ - Added logic to rebin polytomous risks to dichotomous risks.
+ - Cleaned up confusing naming in metrics pipelines.
+ - Allow open cohorts to extrapolate birth rate data into the future.
+
+**0.8.5 - 10/23/18**
+
+ - Update mass treatment campaign configuration for easier distributed runs.
+ - Fix leaking global state in mock artifact.
+ - Correctly implement order 0 interpolation.
+
+**0.8.4 - 10/09/18**
+
+ - Fix bug that caused dead people to still experience disease transitions.
+ - Switch risk components to use pipelines for exposure/propensity
+ - Cleaned up return types from distribution.ppf
+ - Added indirect effects
+
+**0.8.3 - 09/27/18**
+
+ - Remove caching from artifact writes as it causes bugs.
+
+**0.8.2 - 09/05/18**
+
+ - Fix bug where the artifact manager assumed the data to be dataframe
+ - Fix bug where the hdf applied filters even where it is not valid.
+
+**0.8.1 - 08/22/18**
+
+ - Fix various deployment things
+ - Add badges
+ - Remove unused metrics components
+ - Use __about__ in docs
+ - Extracted `Artifact` as an abstraction over hdf files.
+ - Cleaned up Artifact manager plugin
+ - Updated mock artifact
+
+**0.8.0 - 07/24/18**
+
+ - Initial Release

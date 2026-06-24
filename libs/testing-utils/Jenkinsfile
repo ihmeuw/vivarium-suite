@@ -1,7 +1,7 @@
 /* This Jenkinsfile simply loads the `reusable_pipeline` pipeline from the
-vivariu_build_utils repository (https://github.com/ihmeuw/vivarium_build_utils).
+vivarium_build_utils repository (https://github.com/ihmeuw/vivarium_build_utils).
 
-vivarium_build_utils is loaded as a Jenkins shared library 
+vivarium_build_utils is loaded as a Jenkins shared library
 (https://www.jenkins.io/doc/book/pipeline/shared-libraries/).
 Jenkins shared library convention dictates that importable modules must be stored
 in the 'vars' folder.
@@ -17,8 +17,8 @@ Jenkins shared libraries can be configured in the Jenkins UI:
         * Project Repository: Url to the shared lib
         * Credentials: SSH key to access the repo
 
-Note that updating the shared repo will take affect on the next pipeline invocation.
-*/ 
+Note that updating the shared repo will take effect on the next pipeline invocation.
+*/
 
 // Load the get_vbu_version function from vivarium_build_utils/bootstrap/
 // (the directory to load from is defined in the Jenkins shared library configuration)
@@ -29,10 +29,11 @@ library("vivarium_build_utils@${get_vbu_version()}")
 
 reusable_pipeline(
     scheduled_branches: [
-      // Add additional branches for cron jobs below.
-      // Note: Newly added branches will require a manual trigger of the first build 
-      // for subsequent scheduled builds to run.
-      "main", "epic/auto-validation"
+        // Add additional branches for cron jobs below.
+        // Note: Newly added branches will require a manual trigger of the first build
+        // for subsequent scheduled builds to run.
+        "main",
     ],
-    skip_doc_build: true
+    skip_doc_build: true,
+    env_reqs: "ci_jenkins",
 )

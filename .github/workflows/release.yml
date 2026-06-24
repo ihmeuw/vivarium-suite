@@ -1,0 +1,226 @@
+# Expected CHANGELOG.rst first-line format: "**X.Y.Z - MM/DD/YY**"
+# Both the detect job (version parsing) and the release job (date validation) depend on this.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ['libs/*/CHANGELOG.rst']
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package directory under libs/ (e.g. core, config-tree)'
+        required: true
+        type: string
+      version:
+        description: 'Version to release (e.g. 4.1.0)'
+        required: true
+        type: string
+  release:
+    types: [published]
+
+jobs:
+  detect:
+    name: Detect Packages to Release
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has-releases: ${{ steps.detect.outputs.has-releases }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect packages to release
+        id: detect
+        env:
+          PACKAGE: ${{ github.event.inputs.package }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Tag was created by the GitHub UI release. Parse it to find the lib and version.
+            # Tag format: "vivarium-<lib>-v<X.Y.Z>" where <lib> matches the libs/<lib>/ dir.
+            TAG_NAME="${{ github.event.release.tag_name }}"
+            if [[ ! "$TAG_NAME" =~ ^vivarium-(.+)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              echo "Tag '${TAG_NAME}' does not match 'vivarium-<lib>-v<X.Y.Z>'"
+              exit 1
+            fi
+            LIBRARY="${BASH_REMATCH[1]}"
+            VERSION="${BASH_REMATCH[2]}"
+
+            if [ ! -d "libs/${LIBRARY}" ]; then
+              echo "Could not find lib directory 'libs/${LIBRARY}'"
+              exit 1
+            fi
+
+            echo "matrix={\"include\":[{\"library\":\"${LIBRARY}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
+            echo "has-releases=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual release.yml dispatch. Validate inputs and use them directly.
+            if [ ! -d "libs/${PACKAGE}" ]; then
+              echo "Package directory 'libs/${PACKAGE}' does not exist"
+              exit 1
+            fi
+
+            TAG="vivarium-${PACKAGE}-v${VERSION}"
+            if git tag -l "$TAG" | grep -q .; then
+              echo "Tag $TAG already exists"
+              exit 1
+            fi
+
+            echo "matrix={\"include\":[{\"library\":\"${PACKAGE}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
+            echo "has-releases=true" >> $GITHUB_OUTPUT
+          else
+            # Push to main. Detect all changed CHANGELOG.rst files and parse versions.
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.event.after }}"
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              BEFORE=$(git rev-list --max-parents=0 HEAD)
+            fi
+
+            CHANGED_CHANGELOGS=$(git diff --name-only "$BEFORE" "$AFTER" | grep '^libs/.*/CHANGELOG\.rst$' || true)
+
+            MATRIX_INCLUDE="["
+            FIRST=true
+            while IFS= read -r changelog; do
+              [ -z "$changelog" ] && continue
+              LIB=$(echo "$changelog" | sed 's|libs/||; s|/CHANGELOG.rst||')
+              VERSION=$(head -1 "libs/${LIB}/CHANGELOG.rst" | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+              if [ -z "$VERSION" ]; then
+                echo "Could not parse version from libs/${LIB}/CHANGELOG.rst"
+                exit 1
+              fi
+
+              TAG="vivarium-${LIB}-v${VERSION}"
+              if git tag -l "$TAG" | grep -q .; then
+                echo "Tag $TAG already exists, skipping"
+                continue
+              fi
+
+              [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
+              MATRIX_INCLUDE+="{\"library\":\"${LIB}\",\"version\":\"${VERSION}\"}"
+            done <<< "$CHANGED_CHANGELOGS"
+            MATRIX_INCLUDE+="]"
+
+            if [ "$MATRIX_INCLUDE" = "[]" ]; then
+              echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+              echo "has-releases=false" >> $GITHUB_OUTPUT
+            else
+              echo "matrix={\"include\":${MATRIX_INCLUDE}}" >> $GITHUB_OUTPUT
+              echo "has-releases=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  release:
+    name: Release ${{ matrix.library }} v${{ matrix.version }}
+    needs: detect
+    if: needs.detect.outputs.has-releases == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Validate CHANGELOG date
+        run: |
+          # Date is checked against Pacific time to match IHME's release conventions
+          # CHANGELOG format is "X.Y.Z - MM/DD/YY" (2-digit year)
+          # (?!\d) prevents partial match if a CHANGELOG still uses a 4-digit year
+          CHANGELOG_DATE=$(head -1 "libs/${{ matrix.library }}/CHANGELOG.rst" | grep -oP '\d{2}/\d{2}/\d{2}(?!\d)')
+          TODAY=$(TZ='America/Los_Angeles' date +%m/%d/%y)
+          if [ "$CHANGELOG_DATE" != "$TODAY" ]; then
+            echo "CHANGELOG date ($CHANGELOG_DATE) does not match today ($TODAY)"
+            exit 1
+          fi
+
+      - name: Install vivarium_build_utils
+        # Install early so `make validate-tag` is available
+        # For build-utils, install from local checkout since the latest PyPI
+        # release is by definition stale relative to this PR
+        run: |
+          if [ "${{ matrix.library }}" = "build-utils" ]; then
+            uv pip install --system -e libs/build-utils
+          else
+            uv pip install --system vivarium-build-utils
+          fi
+
+      - name: Create and push tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if ! git tag -l "$TAG" | grep -q .; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Validate tag
+        # `make validate-tag` reads RELEASE_TAG as the tag, falling back to
+        # GITHUB_REF_NAME. We can't override GITHUB_REF_NAME via a step env
+        # block (GitHub Actions reserves the GITHUB_* namespace), so we set
+        # RELEASE_TAG explicitly. TAG_PREFIX tells the script to strip the
+        # lib-prefix before semver parsing and to scope the previous-tag
+        # lookup to this lib's tags.
+        env:
+          RELEASE_TAG: vivarium-${{ matrix.library }}-v${{ matrix.version }}
+          TAG_PREFIX: vivarium-${{ matrix.library }}-
+        run: cd libs/${{ matrix.library }} && make validate-tag
+
+      - name: Install ${{ matrix.library }}
+        # IHME_PYPI= disables the artifactory extra-index since the runner can't
+        # reach it (firewalled). Libs that need artifactory-only packages
+        # are tested/released via Jenkins.
+        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=
+
+      - name: Run tests
+        run: cd libs/${{ matrix.library }} && make test-all
+
+      - name: Build
+        run: cd libs/${{ matrix.library }} && make build-package
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: libs/${{ matrix.library }}/dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
+          gh release view "$TAG" 2>/dev/null || gh release create "$TAG" \
+            --title "vivarium-${{ matrix.library }} v${{ matrix.version }}" \
+            --generate-notes
+
+      - name: Send failure notification
+        if: failure()
+        uses: dawidd6/action-send-mail@v2
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.NOTIFY_EMAIL }}
+          password: ${{ secrets.NOTIFY_PASSWORD }}
+          subject: ${{ github.job }} job of ${{ github.repository }} has ${{ job.status }}
+          body: ${{ github.job }} job in workflow ${{ github.workflow }} of ${{ github.repository }} has ${{ job.status }}
+          to: uw_ihme_simulationscience@uw.edu
+          from: Vivarium Notifications
