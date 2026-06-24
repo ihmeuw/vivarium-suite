@@ -1,26 +1,26 @@
 """In-tree dependency graph for the vivarium-suite monorepo.
 
 This module is the single source of truth for the dependency relationships
-*between* the packages under ``libs/``. It powers two cross-package CI flows
+between the packages under ``libs/``. It powers two cross-package CI flows
 that let a single PR (or merge) span interdependent packages without an interim
 release:
 
 1. **Editable-sibling install** (consumed by ``make install`` via the
    ``editable-install`` CLI subcommand). When a PR modifies several packages -
-   for example bumping ``vivarium-engine`` and consuming the new version from
+   for example, bumping ``vivarium-engine`` and consuming the new version from
    ``vivarium-public-health`` - the dependent's declared dependency would
    normally resolve the upstream from PyPI, where the new version does not yet
-   exist. :func:`editable_siblings` selects exactly the siblings that are
+   exist. :func:`get_ordered_editable_siblings` selects exactly the siblings that are
    modified in the PR, reachable from the package under test, and version
    compatible, and :func:`build_install_plan` installs them editably (at their
    pending versions) alongside the target in a single ``uv`` invocation.
 
 2. **Ordered release matrix** (consumed by the release workflow via the
    ``release-matrix`` CLI subcommand). When a merge to ``main`` bumps several
-   packages, :func:`release_matrix` emits a GitHub Actions matrix ordered
+   packages, :func:`get_release_matrix` emits a GitHub Actions matrix ordered
    dependencies-first, where each entry carries the in-batch upstreams it must
-   wait for on PyPI before installing - so independent packages release in
-   parallel while dependents serialize only along real dependency edges.
+   wait for on PyPI before installing; independent packages release in parallel
+   while dependents serialize along real dependency edges.
 
 Run as ``python -m vivarium.build_utils.dependencies <subcommand>``.
 """
@@ -28,6 +28,7 @@ Run as ``python -m vivarium.build_utils.dependencies <subcommand>``.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import os
 import re
@@ -56,14 +57,7 @@ DEFAULT_EXTRAS: tuple[str, ...] = ("ci_github",)
 
 
 class DependencyConflictError(Exception):
-    """A selected in-tree sibling's pending version violates a declared pin.
-
-    Raised by :func:`editable_siblings` when a sibling that would be installed
-    editably has a pending version that does not satisfy some reachable
-    package's version constraint on it - typically a forgotten pin bump in the
-    dependent. The message names the sibling, its pending version, and the
-    conflicting package and specifier.
-    """
+    """A selected in-tree sibling's pending version violates a declared pin."""
 
 
 class DependencyCycleError(Exception):
@@ -87,11 +81,15 @@ class Lib:
         Pending release version, parsed from the first line of
         ``CHANGELOG.rst`` (format ``**X.Y.Z - MM/DD/YY**``).
     sibling_deps
-        Mapping of in-tree ``dist_name`` to the combined version specifier this
-        package declares against it, over runtime dependencies plus the extras
-        :func:`load_libs` was asked to resolve. Only dependencies that resolve
-        to another ``libs/`` package appear here; external dependencies
-        (``numpy``, ``dill``, ...) are omitted.
+        This package's dependencies on *other monorepo packages*: a mapping from
+        each depended-on sibling's ``dist_name`` to the version constraint this
+        package places on it. For example, ``vivarium-public-health`` yields
+        ``{"vivarium-engine": SpecifierSet(">=5.1.1"), "vivarium-config-tree":
+        SpecifierSet(">=5.0.0"), ...}``. External dependencies (``numpy``,
+        ``dill``, ...) are excluded - only ``libs/`` packages appear. Collected
+        over the runtime dependencies plus whichever extras :func:`load_libs`
+        resolved; if a sibling is constrained in more than one of those places,
+        the constraints are intersected into a single :class:`SpecifierSet`.
     """
 
     name: str
@@ -108,13 +106,11 @@ class InstallPlan:
     Attributes
     ----------
     argv
-        The argument vector to execute (e.g. ``["uv", "pip", "install", "-e",
-        ...]``).
+        The argument vector to execute (e.g. ``["uv", "pip", "install", "-e", ...]``).
     env
         Environment overrides to apply on top of the current environment when
-        executing ``argv`` - notably the per-sibling
-        ``SETUPTOOLS_SCM_PRETEND_VERSION_FOR_<DIST>`` entries that make each
-        editable sibling present its pending release version.
+        executing ``argv`` (notably the per-sibling ``SETUPTOOLS_SCM_PRETEND_VERSION_FOR_<DIST>``
+        entries that make each editable sibling present its pending release version).
     """
 
     argv: Sequence[str]
@@ -131,8 +127,8 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
     expanding self-referential extras (e.g. ``ci_github = ["vivarium-foo[test,
     docs]"]`` pulls in the requirements of ``foo``'s ``test`` and ``docs``
     extras). Only requirements whose distribution name matches another package
-    under ``libs_dir`` are retained in each :class:`Lib`'s ``sibling_deps``;
-    when a package declares more than one specifier against the same sibling
+    under ``libs_dir`` are retained in each :class:`Lib`'s ``sibling_deps``.
+    When a package declares more than one specifier against the same sibling
     (across runtime and extras) the specifiers are combined.
 
     Parameters
@@ -162,23 +158,27 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
         p for p in libs_dir.iterdir() if p.is_dir() and (p / "pyproject.toml").exists()
     )
 
+    # Read every package from disk and collect the pyproject, dist name, and pending version for each
     pyprojects: dict[str, dict[str, object]] = {}
     dist_names: dict[str, str] = {}
     versions: dict[str, str] = {}
     for pkg_dir in pkg_dirs:
         name = pkg_dir.name
-        pyproject = _load_pyproject(pkg_dir / "pyproject.toml")
+        with (pkg_dir / "pyproject.toml").open("rb") as handle:
+            pyproject = tomllib.load(handle)
         pyprojects[name] = pyproject
-        dist_names[name] = _read_dist_name(pyproject, pkg_dir)
-        versions[name] = _read_pending_version(pkg_dir / "CHANGELOG.rst")
+        dist_names[name] = _get_dist_name(pyproject, pkg_dir)
+        versions[name] = _get_pending_version(pkg_dir / "CHANGELOG.rst")
 
     in_tree = {canonicalize_name(dist): dist for dist in dist_names.values()}
 
+    # Resolve each package's in-tree dependencies and build the Lib objects
     libs: dict[str, Lib] = {}
     for pkg_dir in pkg_dirs:
         name = pkg_dir.name
         dist = dist_names[name]
         sibling_specs = _resolve_sibling_deps(pyprojects[name], dist, extras, in_tree)
+        # Collaps multiple specifiers on the same sibling into a single SpecifierSet
         sibling_deps = {
             target_dist: reduce(lambda a, b: a & b, specs, SpecifierSet())
             for target_dist, specs in sibling_specs.items()
@@ -193,13 +193,7 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
     return libs
 
 
-def _load_pyproject(path: Path) -> dict[str, object]:
-    """Parse a ``pyproject.toml`` file."""
-    with path.open("rb") as handle:
-        return tomllib.load(handle)
-
-
-def _read_dist_name(pyproject: Mapping[str, object], pkg_dir: Path) -> str:
+def _get_dist_name(pyproject: Mapping[str, object], pkg_dir: Path) -> str:
     """Return ``[project].name`` from a parsed pyproject."""
     project = pyproject.get("project")
     name = project.get("name") if isinstance(project, Mapping) else None
@@ -208,7 +202,7 @@ def _read_dist_name(pyproject: Mapping[str, object], pkg_dir: Path) -> str:
     return name
 
 
-def _read_pending_version(changelog: Path) -> str:
+def _get_pending_version(changelog: Path) -> str:
     """Parse the pending version from the first line of a CHANGELOG.rst."""
     if not changelog.exists():
         raise FileNotFoundError(f"changelog not found: {changelog}")
@@ -220,14 +214,14 @@ def _read_pending_version(changelog: Path) -> str:
     return match.group(0)
 
 
-def _dist_to_name(libs: Mapping[str, Lib]) -> dict[str, str]:
+def _get_dist_to_name_mapping(libs: Mapping[str, Lib]) -> dict[str, str]:
     """Map each in-tree ``dist_name`` to its package ``name``."""
     return {lib.dist_name: name for name, lib in libs.items()}
 
 
-def _in_scope_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str]) -> set[str]:
+def _get_in_scope_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str]) -> set[str]:
     """Return ``name``'s direct in-tree upstream names that are in ``scope``."""
-    dist_to_name = _dist_to_name(libs)
+    dist_to_name = _get_dist_to_name_mapping(libs)
     upstreams: set[str] = set()
     for dep_dist in libs[name].sibling_deps:
         dep_name = dist_to_name.get(dep_dist)
@@ -260,7 +254,7 @@ def _resolve_sibling_deps(
     seen_extras: set[str] = set()
     queue: list[str] = list(runtime_reqs)
     for extra in extras:
-        queue.extend(_extra_requirements(optional_map, extra))
+        queue.extend(_get_extra_requirements(optional_map, extra))
         seen_extras.add(extra)
 
     while queue:
@@ -270,7 +264,7 @@ def _resolve_sibling_deps(
             for extra in req.extras:
                 if extra not in seen_extras:
                     seen_extras.add(extra)
-                    queue.extend(_extra_requirements(optional_map, extra))
+                    queue.extend(_get_extra_requirements(optional_map, extra))
             continue
         if req_canon in in_tree:
             siblings.setdefault(in_tree[req_canon], []).append(req.specifier)
@@ -278,13 +272,13 @@ def _resolve_sibling_deps(
     return siblings
 
 
-def _extra_requirements(optional_map: Mapping[str, object], extra: str) -> list[str]:
+def _get_extra_requirements(optional_map: Mapping[str, object], extra: str) -> list[str]:
     """Return the raw requirement strings declared for ``extra``."""
     value = optional_map.get(extra, [])
     return [r for r in value if isinstance(r, str)] if isinstance(value, list) else []
 
 
-def reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
+def get_reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
     """Return all in-tree package names transitively reachable from ``target``.
 
     Walks ``target``'s ``sibling_deps`` and those of every package it reaches,
@@ -295,7 +289,7 @@ def reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
     target
         Package ``name`` to compute reachability from.
     libs
-        The full set of parsed packages, as returned by :func:`load_libs`.
+        The full set of parsed packages.
 
     Returns
     -------
@@ -308,7 +302,7 @@ def reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
     """
     if target not in libs:
         raise KeyError(target)
-    dist_to_name = _dist_to_name(libs)
+    dist_to_name = _get_dist_to_name_mapping(libs)
 
     reached: set[str] = set()
     stack = [target]
@@ -323,7 +317,7 @@ def reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
     return reached
 
 
-def editable_siblings(
+def get_ordered_editable_siblings(
     target: str, libs: Mapping[str, Lib], changed: Sequence[str]
 ) -> list[Lib]:
     """Select the siblings to install editably for a build of ``target``.
@@ -340,7 +334,7 @@ def editable_siblings(
     target
         Package ``name`` being built/tested.
     libs
-        The full set of parsed packages, as returned by :func:`load_libs`.
+        The full set of parsed packages.
     changed
         Package ``name``s whose own source changed in the PR - the only
         packages eligible for in-tree resolution.
@@ -362,16 +356,17 @@ def editable_siblings(
         if name not in libs:
             raise KeyError(name)
 
-    reachable = reachable_siblings(target, libs)
-    selected = [name for name in changed if name in reachable]
+    reachable_siblings = get_reachable_siblings(target, libs)
+    editable_sibling_names = [name for name in changed if name in reachable_siblings]
 
-    constrainers = reachable | {target}
-    for sibling in selected:
+    constrainers = reachable_siblings | {target}
+    for sibling in editable_sibling_names:
         sibling_dist = libs[sibling].dist_name
-        sibling_version = libs[sibling].version
+        sibling_version = libs[sibling].version  # pending release version
         for package in constrainers:
             specifier = libs[package].sibling_deps.get(sibling_dist)
             if specifier is None:
+                # No declared constraint on this sibling from this package, so nothing to check
                 continue
             if not specifier.contains(sibling_version, prereleases=True):
                 raise DependencyConflictError(
@@ -380,11 +375,11 @@ def editable_siblings(
                     f"'{specifier}' declared by {libs[package].dist_name}"
                 )
 
-    ordered = release_order(selected, libs)
+    ordered = get_release_order(editable_sibling_names, libs)
     return [libs[name] for name in ordered]
 
 
-def release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
+def get_release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
     """Topologically sort ``names`` dependencies-first.
 
     Orders only the packages in ``names`` relative to one another, using the
@@ -396,7 +391,7 @@ def release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
     names
         Package ``name``s to order.
     libs
-        The full set of parsed packages, as returned by :func:`load_libs`.
+        The full set of parsed packages.
 
     Returns
     -------
@@ -408,18 +403,21 @@ def release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
     DependencyCycleError
         If the packages in ``names`` form a dependency cycle.
     """
-    name_set = list(dict.fromkeys(names))
-    in_scope = set(name_set)
+    # De-duplicate (defensive) and preserve input order
+    # NOTE: the ordering of ``sorted_names`` below does not matter for topological correctness;
+    # it only affects tie-breaks as well as the github actions release matrix order.
+    sorted_names = list(dict.fromkeys(names))
 
     deps: dict[str, set[str]] = {
-        name: _in_scope_upstreams(name, libs, in_scope) for name in name_set
+        name: _get_in_scope_upstreams(name, libs, scope=set(sorted_names))
+        for name in sorted_names
     }
 
     ordered: list[str] = []
     placed: set[str] = set()
-    while len(ordered) < len(name_set):
+    while len(ordered) < len(sorted_names):
         progressed = False
-        for name in name_set:
+        for name in sorted_names:
             if name in placed:
                 continue
             if deps[name] <= placed:
@@ -427,19 +425,21 @@ def release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
                 placed.add(name)
                 progressed = True
         if not progressed:
-            remaining = [n for n in name_set if n not in placed]
+            remaining = [n for n in sorted_names if n not in placed]
             raise DependencyCycleError(
                 f"dependency cycle among packages: {sorted(remaining)}"
             )
     return ordered
 
 
-def release_matrix(pairs: Mapping[str, str], libs: Mapping[str, Lib]) -> dict[str, object]:
+def get_release_matrix(
+    release_versions: Mapping[str, str], libs: Mapping[str, Lib]
+) -> dict[str, object]:
     """Build the dependency-ordered GitHub Actions release matrix.
 
     Given the packages to release and their versions, returns a matrix object
     suitable for ``strategy.matrix`` in the release workflow. The ``include``
-    entries are ordered dependencies-first (see :func:`release_order`), and
+    entries are ordered dependencies-first (see :func:`get_release_order`), and
     each entry carries the in-batch upstreams it must wait for on PyPI before
     it can install - i.e. the packages it depends on that are *also* part of
     this release batch. Upstreams that are not in the batch are already
@@ -447,42 +447,45 @@ def release_matrix(pairs: Mapping[str, str], libs: Mapping[str, Lib]) -> dict[st
 
     Parameters
     ----------
-    pairs
+    release_versions
         Mapping of package ``name`` to the version being released.
     libs
-        The full set of parsed packages, as returned by :func:`load_libs`.
+        The full set of parsed packages.
 
     Returns
     -------
+        A dictionary suitable for ``strategy.matrix`` in the release workflow:
         ``{"include": [{"library": name, "version": version, "wait_for":
         [{"dist": dist_name, "version": version}, ...]}, ...]}``. ``include``
-        is empty when ``pairs`` is empty.
+        is empty when ``release_versions`` is empty.
 
     Raises
     ------
     DependencyCycleError
         If the release batch forms a dependency cycle.
     KeyError
-        If a key of ``pairs`` is not a key in ``libs``.
+        If a key of ``release_versions`` is not a key in ``libs``.
     """
-    for name in pairs:
+    for name in release_versions:
         if name not in libs:
             raise KeyError(name)
 
-    batch = set(pairs)
-    ordered = release_order(list(pairs), libs)
+    batch = set(release_versions)
+    ordered = get_release_order(list(release_versions), libs)
 
     include: list[dict[str, object]] = []
     for name in ordered:
-        upstreams = release_order(sorted(reachable_siblings(name, libs) & batch), libs)
+        upstreams = get_release_order(
+            sorted(get_reachable_siblings(name, libs) & batch), libs
+        )
         wait_for = [
-            {"dist": libs[upstream].dist_name, "version": pairs[upstream]}
+            {"dist": libs[upstream].dist_name, "version": release_versions[upstream]}
             for upstream in upstreams
         ]
         include.append(
             {
                 "library": name,
-                "version": pairs[name],
+                "version": release_versions[name],
                 "wait_for": wait_for,
             }
         )
@@ -515,11 +518,9 @@ def build_install_plan(
     Parameters
     ----------
     target_lib
-        The package being built; installed editably (by absolute path) with
-        its ``[env_reqs]`` extra.
+        The package being built.
     siblings
-        Siblings to install editably, dependency-ordered (as returned by
-        :func:`editable_siblings`).
+        Siblings to install editably, dependency-ordered.
     env_reqs
         The extra to install on the target (e.g. ``"ci_github"``); when empty,
         the target is installed with no extra.
@@ -574,8 +575,7 @@ def run_install(plan: InstallPlan, libs_dir: Path) -> None:
     """Execute an :class:`InstallPlan`.
 
     Runs ``plan.argv`` with ``plan.env`` overlaid on the current environment,
-    from ``libs_dir`` as the working directory so the editable source paths
-    resolve.
+    from ``libs_dir`` as the working directory so the editable source paths resolve.
 
     Parameters
     ----------
@@ -597,24 +597,23 @@ def run_install(plan: InstallPlan, libs_dir: Path) -> None:
     )
 
 
-def _discover_libs_dir(explicit: str | None) -> Path:
+def _discover_libs_dir(libs_path: str | None) -> Path:
     """Locate the monorepo ``libs/`` directory.
 
-    Uses ``explicit`` if given. Otherwise walks up from the cwd looking for a
+    Uses ``libs_path`` if given. Otherwise walks up from the cwd looking for a
     ``libs/`` directory containing a ``build-utils`` package; failing that,
     treats the cwd as the libs dir if it directly contains ``build-utils``, or
     returns ``<cwd>/libs``.
     """
-    if explicit:
-        return Path(explicit).resolve()
-
+    if libs_path:
+        return Path(libs_path).resolve()
     cwd = Path.cwd().resolve()
     for candidate in (cwd, *cwd.parents):
         libs = candidate / "libs"
+        # Be sure that this is the monorepo's libs dir, not some other directory
+        # named "libs" that happens to be in the cwd's ancestry
         if (libs / "build-utils").is_dir():
             return libs
-    if (cwd / "build-utils").is_dir():
-        return cwd
     return cwd / "libs"
 
 
@@ -628,10 +627,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         Select editable siblings for ``target`` and run the combined editable
         install. Used by ``make install`` when ``IN_TREE_SIBLINGS`` is set.
 
-    ``release-matrix [--pairs <file>] [--libs-dir <path>]``
-        Read ``"<name> <version>"`` lines (from ``--pairs`` or stdin) and print
+    ``release-matrix --versions <file> [--libs-dir <path>]``
+        Read ``"<name> <version>"`` lines from the ``--versions`` file and print
         the dependency-ordered release matrix JSON to stdout. Used by the
         release workflow's detect job.
+
+    ``verify-editable <target> --changed "<names>" [--libs-dir <path>]``
+        Recompute the editable siblings selected for ``target`` (the same
+        selection ``editable-install`` uses) and assert each one is installed
+        editably, not silently resolved from PyPI. Exits non-zero if any is
+        not. Used by the CI workflow after ``make install``.
 
     Parameters
     ----------
@@ -640,13 +645,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Returns
     -------
-        Process exit code: 0 on success, non-zero on any handled error - a
-        dependency conflict, a dependency cycle, a missing version, or an
-        unknown package name.
+        Process exit code: 0 on success, non-zero on any handled error, i.e. a dependency
+        conflict, a dependency cycle, a missing version, or an unknown package name.
     """
     parser = argparse.ArgumentParser(prog="vivarium-build-utils-deps")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # Editable install subcommand
     install_parser = subparsers.add_parser("editable-install")
     install_parser.add_argument("target")
     install_parser.add_argument("--changed", default="")
@@ -655,14 +660,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     install_parser.add_argument("--uv-flags", default="")
     install_parser.add_argument("--libs-dir", default=None)
 
+    # Release matrix subcommand
     matrix_parser = subparsers.add_parser("release-matrix")
-    matrix_parser.add_argument("--pairs", default=None)
+    matrix_parser.add_argument("--versions", required=True)
     matrix_parser.add_argument("--libs-dir", default=None)
+
+    # Verify-editable subcommand
+    verify_parser = subparsers.add_parser("verify-editable")
+    verify_parser.add_argument("target")
+    verify_parser.add_argument("--changed", default="")
+    verify_parser.add_argument("--libs-dir", default=None)
 
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     if args.command == "editable-install":
         return _run_editable_install(args)
+    if args.command == "verify-editable":
+        return _run_verify_editable(args)
     return _run_release_matrix(args)
 
 
@@ -672,7 +686,7 @@ def _run_editable_install(args: argparse.Namespace) -> int:
     libs = load_libs(libs_dir)
     changed = args.changed.split()
     try:
-        siblings = editable_siblings(args.target, libs, changed)
+        siblings = get_ordered_editable_siblings(args.target, libs, changed)
     except (DependencyConflictError, DependencyCycleError) as error:
         print(str(error), file=sys.stderr)
         return 1
@@ -691,14 +705,47 @@ def _run_editable_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def _is_editable_install(dist_name: str) -> bool:
+    """Return whether the installed distribution ``dist_name`` is an editable install.
+
+    Reads the PEP 610 ``direct_url.json`` metadata pip/uv records for an
+    installed distribution; ``dir_info.editable`` is true only for an editable
+    (``-e``) install from a local directory.
+    """
+    direct_url = importlib.metadata.distribution(dist_name).read_text("direct_url.json")
+    if not direct_url:
+        return False
+    return bool(json.loads(direct_url).get("dir_info", {}).get("editable"))
+
+
+def _run_verify_editable(args: argparse.Namespace) -> int:
+    """Handle the ``verify-editable`` subcommand."""
+    libs_dir = _discover_libs_dir(args.libs_dir)
+    libs = load_libs(libs_dir)
+    changed = args.changed.split()
+    expected = get_ordered_editable_siblings(args.target, libs, changed)
+    if not expected:
+        print(f"{args.target}: no changed in-tree siblings to verify")
+        return 0
+
+    failed = False
+    for sibling in expected:
+        editable = _is_editable_install(sibling.dist_name)
+        if not editable:
+            print(
+                f"::error::{sibling.dist_name} is not editable - it resolved "
+                "from PyPI, not in-tree source",
+                file=sys.stderr,
+            )
+            failed = True
+    return 1 if failed else 0
+
+
 def _run_release_matrix(args: argparse.Namespace) -> int:
     """Handle the ``release-matrix`` subcommand."""
-    if args.pairs:
-        raw = Path(args.pairs).read_text()
-    else:
-        raw = sys.stdin.read()
+    raw = Path(args.versions).read_text()
 
-    pairs: dict[str, str] = {}
+    release_versions: dict[str, str] = {}
     for line in raw.splitlines():
         if not line.strip():
             continue
@@ -706,12 +753,11 @@ def _run_release_matrix(args: argparse.Namespace) -> int:
         if len(parts) < 2:
             print(f"missing version for line: {line!r}", file=sys.stderr)
             return 1
-        pairs[parts[0]] = parts[1]
-
+        release_versions[parts[0]] = parts[1]
     libs_dir = _discover_libs_dir(args.libs_dir)
     libs = load_libs(libs_dir)
     try:
-        matrix = release_matrix(pairs, libs)
+        matrix = get_release_matrix(release_versions, libs)
     except DependencyCycleError as error:
         print(str(error), file=sys.stderr)
         return 1

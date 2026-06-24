@@ -26,6 +26,19 @@ endif
 DIST_NAME ?= $(if $(DIST_NAME_FROM_PROJECT),$(DIST_NAME_FROM_PROJECT),$(PACKAGE_NAME))
 
 # Build the editable_mode=compat config-settings flag only when DIST_NAME was parsed from [project].
+# NOTE: editable_mode=compat: produces a classic .pth-based editable install
+#   (sys.path entry pointing at src/) instead of the PEP 660 default
+#   (sys.meta_path finder). The PEP 660 mode breaks mypy's discovery of
+#   sibling-namespace packages in monorepo dev setups - mypy's static
+#   path-walk doesn't invoke meta_path finders, so it sees an empty
+#   site-packages/<namespace>/ directory and reports the lib as untyped
+#   even when py.typed is shipped in source. Classic mode produces real
+#   sys.path entries that mypy traverses normally.
+#   Scoped to the local package via --config-settings-package (not the
+#   global --config-settings). The setting is a setuptools-only concept;
+#   passing it globally leaks it to transitive sdist builds whose backends
+#   don't recognize it (numpy 1.x's meson-python errors on it with
+#   "Unknown option editable_mode").
 EDITABLE_COMPAT_FLAG := $(if $(DIST_NAME_FROM_PROJECT),--config-settings-package $(DIST_NAME_FROM_PROJECT):editable_mode=compat,)
 
 PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
@@ -141,34 +154,11 @@ create-env: # Create a new conda environment
 .PHONY: install
 install: ENV_REQS?=dev
 install: UV_FLAGS?=
+# space-separated list of in-tree sibling lib dirs whose source changed in a PR
 install: IN_TREE_SIBLINGS?=
 install: # Install package and dependencies
 	pip install uv
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
-	# NOTE: editable_mode=compat: produces a classic .pth-based editable install
-	#   (sys.path entry pointing at src/) instead of the PEP 660 default
-	#   (sys.meta_path finder). The PEP 660 mode breaks mypy's discovery of
-	#   sibling-namespace packages in monorepo dev setups - mypy's static
-	#   path-walk doesn't invoke meta_path finders, so it sees an empty
-	#   site-packages/<namespace>/ directory and reports the lib as untyped
-	#   even when py.typed is shipped in source. Classic mode produces real
-	#   sys.path entries that mypy traverses normally.
-	#   Scoped to the local package via --config-settings-package (not the
-	#   global --config-settings). The setting is a setuptools-only concept;
-	#   passing it globally leaks it to transitive sdist builds whose backends
-	#   don't recognize it (numpy 1.x's meson-python errors on it with
-	#   "Unknown option editable_mode").
-	# IN_TREE_SIBLINGS (space-separated lib dir names whose source changed in a
-	#   PR) opts into cross-package resolution: vivarium.build_utils.dependencies
-	#   selects the modified siblings that are reachable from this package and
-	#   version-compatible, and installs them editably (at their pending
-	#   versions) alongside this package in a single uv invocation - so a PR can
-	#   consume an as-yet-unreleased sibling. Empty (the default) leaves the
-	#   normal single-package install untouched.
-	# The else branch hands the install to the CLI, which reconstructs the
-	# equivalents of EDITABLE_COMPAT_FLAG (via --config-settings-package per
-	# editable package) and EXTRA_INDEX_FLAGS (from --ihme-pypi) itself - so a
-	# change to either flag here must be mirrored in build_install_plan.
 	@if [ -z "$(strip $(IN_TREE_SIBLINGS))" ]; then \
 		set -x; uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}; \
 	else \

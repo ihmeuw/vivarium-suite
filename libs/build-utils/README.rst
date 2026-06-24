@@ -114,7 +114,7 @@ bumping one and consuming the new version from a sibling - even though the
 sibling's dependency on it still resolves against PyPI, where the new version
 isn't released yet. ``make install IN_TREE_SIBLINGS="<lib> <lib> ..."`` opts a
 build into in-tree resolution: of the named libs (those whose source changed in
-the PR), the subset that is reachable from the package being built and whose
+the PR), the subset that is reachable from the package being built, and whose
 pending ``CHANGELOG.rst`` version satisfies the dependents' pins is installed
 editably from local source - at the pending version - alongside the package, in
 a single ``uv`` invocation. Unchanged dependencies still resolve from PyPI. A

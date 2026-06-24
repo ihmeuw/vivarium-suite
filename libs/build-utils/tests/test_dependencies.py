@@ -23,11 +23,11 @@ from vivarium.build_utils.dependencies import (
     InstallPlan,
     Lib,
     build_install_plan,
-    editable_siblings,
+    get_ordered_editable_siblings,
+    get_reachable_siblings,
+    get_release_matrix,
+    get_release_order,
     load_libs,
-    reachable_siblings,
-    release_matrix,
-    release_order,
 )
 
 # A factory: given a mapping of package-name -> spec, write a throwaway monorepo
@@ -178,6 +178,17 @@ def test_load_libs_combines_specifiers_for_a_repeated_dep(
     assert not combined.contains("1.9.0")
 
 
+def test_load_libs_unpinned_dep_yields_match_all_specifier(
+    make_monorepo: MonorepoFactory,
+) -> None:
+    """A sibling declared with no version pin yields an empty (match-all) SpecifierSet."""
+    libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+    spec = load_libs(libs_dir)["a"].sibling_deps["vivarium-b"]
+    assert spec == SpecifierSet()
+    assert spec.contains("0.0.1")
+    assert spec.contains("99.0.0")
+
+
 def test_load_libs_raises_on_unparseable_version(
     make_monorepo: MonorepoFactory,
 ) -> None:
@@ -218,9 +229,9 @@ def test_load_libs_canonicalizes_dep_name_to_sibling(
 
 
 # --------------------------------------------------------------------------- #
-# reachable_siblings                                                           #
+# get_reachable_siblings                                                           #
 # --------------------------------------------------------------------------- #
-def test_reachable_siblings_includes_transitive_deps(
+def test_get_reachable_siblings_includes_transitive_deps(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """Reachability follows in-tree edges transitively (a -> b -> c reaches both b and c)."""
@@ -232,10 +243,10 @@ def test_reachable_siblings_includes_transitive_deps(
         }
     )
     libs = load_libs(libs_dir)
-    assert reachable_siblings("a", libs) == {"b", "c"}
+    assert get_reachable_siblings("a", libs) == {"b", "c"}
 
 
-def test_reachable_siblings_excludes_unrelated_libs(
+def test_get_reachable_siblings_excludes_unrelated_libs(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A package the target does not depend on (directly or transitively) is not reachable."""
@@ -247,10 +258,10 @@ def test_reachable_siblings_excludes_unrelated_libs(
         }
     )
     libs = load_libs(libs_dir)
-    assert reachable_siblings("a", libs) == {"b"}
+    assert get_reachable_siblings("a", libs) == {"b"}
 
 
-def test_reachable_siblings_includes_extra_only_deps(
+def test_get_reachable_siblings_includes_extra_only_deps(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A dep activated only via the resolved extra (e.g. testing-utils via [test]) is reachable."""
@@ -261,10 +272,10 @@ def test_reachable_siblings_includes_extra_only_deps(
         }
     )
     libs = load_libs(libs_dir, extras=("ci_github",))
-    assert reachable_siblings("a", libs) == {"testing-utils"}
+    assert get_reachable_siblings("a", libs) == {"testing-utils"}
 
 
-def test_reachable_siblings_excludes_target_itself(
+def test_get_reachable_siblings_excludes_target_itself(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """The target is not in its own reachable set."""
@@ -275,13 +286,13 @@ def test_reachable_siblings_excludes_target_itself(
         }
     )
     libs = load_libs(libs_dir)
-    assert "a" not in reachable_siblings("a", libs)
+    assert "a" not in get_reachable_siblings("a", libs)
 
 
 # --------------------------------------------------------------------------- #
-# editable_siblings                                                            #
+# get_ordered_editable_siblings                                                            #
 # --------------------------------------------------------------------------- #
-def test_editable_siblings_selects_changed_reachable_compatible(
+def test_get_ordered_editable_siblings_selects_changed_reachable_compatible(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A changed, reachable, version-compatible sibling is selected."""
@@ -292,11 +303,11 @@ def test_editable_siblings_selects_changed_reachable_compatible(
         }
     )
     libs = load_libs(libs_dir)
-    selected = editable_siblings("a", libs, changed=["b"])
+    selected = get_ordered_editable_siblings("a", libs, changed=["b"])
     assert [lib.name for lib in selected] == ["b"]
 
 
-def test_editable_siblings_excludes_unchanged_reachable_dep(
+def test_get_ordered_editable_siblings_excludes_unchanged_reachable_dep(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A reachable dep that did not change in the PR is not selected (resolves from PyPI)."""
@@ -307,10 +318,10 @@ def test_editable_siblings_excludes_unchanged_reachable_dep(
         }
     )
     libs = load_libs(libs_dir)
-    assert editable_siblings("a", libs, changed=[]) == []
+    assert get_ordered_editable_siblings("a", libs, changed=[]) == []
 
 
-def test_editable_siblings_excludes_changed_unreachable_lib(
+def test_get_ordered_editable_siblings_excludes_changed_unreachable_lib(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A changed package the target does not depend on is not selected."""
@@ -322,11 +333,11 @@ def test_editable_siblings_excludes_changed_unreachable_lib(
         }
     )
     libs = load_libs(libs_dir)
-    selected = editable_siblings("a", libs, changed=["unrelated"])
+    selected = get_ordered_editable_siblings("a", libs, changed=["unrelated"])
     assert selected == []
 
 
-def test_editable_siblings_ordered_dependencies_first(
+def test_get_ordered_editable_siblings_ordered_dependencies_first(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """Selected siblings are ordered so each follows the selected siblings it depends on."""
@@ -338,13 +349,13 @@ def test_editable_siblings_ordered_dependencies_first(
         }
     )
     libs = load_libs(libs_dir)
-    selected = editable_siblings("a", libs, changed=["b", "c"])
+    selected = get_ordered_editable_siblings("a", libs, changed=["b", "c"])
     names = [lib.name for lib in selected]
     assert set(names) == {"b", "c"}
     assert names.index("c") < names.index("b")
 
 
-def test_editable_siblings_empty_when_no_changed_siblings(
+def test_get_ordered_editable_siblings_empty_when_no_changed_siblings(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """No changed packages (or none reachable) yields an empty selection."""
@@ -355,10 +366,10 @@ def test_editable_siblings_empty_when_no_changed_siblings(
         }
     )
     libs = load_libs(libs_dir)
-    assert editable_siblings("a", libs, changed=[]) == []
+    assert get_ordered_editable_siblings("a", libs, changed=[]) == []
 
 
-def test_editable_siblings_hard_fails_on_pin_conflict(
+def test_get_ordered_editable_siblings_hard_fails_on_pin_conflict(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A selected sibling whose pending version violates a reachable pin raises DependencyConflictError."""
@@ -370,10 +381,10 @@ def test_editable_siblings_hard_fails_on_pin_conflict(
     )
     libs = load_libs(libs_dir)
     with pytest.raises(DependencyConflictError):
-        editable_siblings("a", libs, changed=["b"])
+        get_ordered_editable_siblings("a", libs, changed=["b"])
 
 
-def test_editable_siblings_conflict_message_names_sibling_version_and_pin(
+def test_get_ordered_editable_siblings_conflict_message_names_sibling_version_and_pin(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """The DependencyConflictError message identifies the sibling, its pending version, and the conflicting pin."""
@@ -385,14 +396,14 @@ def test_editable_siblings_conflict_message_names_sibling_version_and_pin(
     )
     libs = load_libs(libs_dir)
     with pytest.raises(DependencyConflictError) as exc_info:
-        editable_siblings("a", libs, changed=["b"])
+        get_ordered_editable_siblings("a", libs, changed=["b"])
     message = str(exc_info.value)
     assert "vivarium-b" in message
     assert "2.0.0" in message
     assert "<2.0.0" in message
 
 
-def test_editable_siblings_detects_transitive_conflict(
+def test_get_ordered_editable_siblings_detects_transitive_conflict(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A pin on a changed transitive sibling (from a non-target intermediate) raises DependencyConflictError."""
@@ -405,33 +416,33 @@ def test_editable_siblings_detects_transitive_conflict(
     )
     libs = load_libs(libs_dir)
     with pytest.raises(DependencyConflictError):
-        editable_siblings("a", libs, changed=["b", "c"])
+        get_ordered_editable_siblings("a", libs, changed=["b", "c"])
 
 
-def test_editable_siblings_raises_keyerror_for_unknown_target(
+def test_get_ordered_editable_siblings_raises_keyerror_for_unknown_target(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """An unknown target name raises KeyError."""
     libs_dir = make_monorepo({"a": {}})
     libs = load_libs(libs_dir)
     with pytest.raises(KeyError):
-        editable_siblings("nonexistent", libs, changed=[])
+        get_ordered_editable_siblings("nonexistent", libs, changed=[])
 
 
-def test_editable_siblings_raises_keyerror_for_unknown_changed(
+def test_get_ordered_editable_siblings_raises_keyerror_for_unknown_changed(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """An unknown package in `changed` raises KeyError."""
     libs_dir = make_monorepo({"a": {}})
     libs = load_libs(libs_dir)
     with pytest.raises(KeyError):
-        editable_siblings("a", libs, changed=["ghost"])
+        get_ordered_editable_siblings("a", libs, changed=["ghost"])
 
 
 # --------------------------------------------------------------------------- #
-# release_order                                                                #
+# get_release_order                                                                #
 # --------------------------------------------------------------------------- #
-def test_release_order_dependencies_first(make_monorepo: MonorepoFactory) -> None:
+def test_get_release_order_dependencies_first(make_monorepo: MonorepoFactory) -> None:
     """A dependency is ordered before its dependent."""
     libs_dir = make_monorepo(
         {
@@ -440,20 +451,20 @@ def test_release_order_dependencies_first(make_monorepo: MonorepoFactory) -> Non
         }
     )
     libs = load_libs(libs_dir)
-    ordered = release_order(["a", "b"], libs)
+    ordered = get_release_order(["a", "b"], libs)
     assert ordered.index("b") < ordered.index("a")
 
 
-def test_release_order_preserves_input_order_for_independent_packages(
+def test_get_release_order_preserves_input_order_for_independent_packages(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """Packages with no dependency relationship keep their input order."""
     libs_dir = make_monorepo({"a": {}, "b": {}, "c": {}})
     libs = load_libs(libs_dir)
-    assert release_order(["c", "a", "b"], libs) == ["c", "a", "b"]
+    assert get_release_order(["c", "a", "b"], libs) == ["c", "a", "b"]
 
 
-def test_release_order_ignores_packages_outside_the_batch(
+def test_get_release_order_ignores_packages_outside_the_batch(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """Only the named packages are ordered; out-of-batch deps do not appear in the result."""
@@ -465,12 +476,12 @@ def test_release_order_ignores_packages_outside_the_batch(
         }
     )
     libs = load_libs(libs_dir)
-    ordered = release_order(["a", "b"], libs)
+    ordered = get_release_order(["a", "b"], libs)
     assert "c" not in ordered
     assert ordered.index("b") < ordered.index("a")
 
 
-def test_release_order_raises_on_cycle(make_monorepo: MonorepoFactory) -> None:
+def test_get_release_order_raises_on_cycle(make_monorepo: MonorepoFactory) -> None:
     """A dependency cycle among the named packages raises DependencyCycleError."""
     libs_dir = make_monorepo(
         {
@@ -480,13 +491,13 @@ def test_release_order_raises_on_cycle(make_monorepo: MonorepoFactory) -> None:
     )
     libs = load_libs(libs_dir)
     with pytest.raises(DependencyCycleError):
-        release_order(["a", "b"], libs)
+        get_release_order(["a", "b"], libs)
 
 
 # --------------------------------------------------------------------------- #
-# release_matrix                                                               #
+# get_release_matrix                                                               #
 # --------------------------------------------------------------------------- #
-def test_release_matrix_include_ordered_dependencies_first(
+def test_get_release_matrix_include_ordered_dependencies_first(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """include entries are ordered dependencies-first."""
@@ -497,12 +508,12 @@ def test_release_matrix_include_ordered_dependencies_first(
         }
     )
     libs = load_libs(libs_dir)
-    matrix = release_matrix({"a": "1.0.0", "b": "2.0.0"}, libs)
+    matrix = get_release_matrix({"a": "1.0.0", "b": "2.0.0"}, libs)
     libraries = [entry["library"] for entry in matrix["include"]]
     assert libraries.index("b") < libraries.index("a")
 
 
-def test_release_matrix_wait_for_lists_in_batch_upstreams(
+def test_get_release_matrix_wait_for_lists_in_batch_upstreams(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A dependent's wait_for lists each upstream that is also in the release batch, as dist==version."""
@@ -513,23 +524,23 @@ def test_release_matrix_wait_for_lists_in_batch_upstreams(
         }
     )
     libs = load_libs(libs_dir)
-    matrix = release_matrix({"a": "1.0.0", "b": "2.0.0"}, libs)
+    matrix = get_release_matrix({"a": "1.0.0", "b": "2.0.0"}, libs)
     entry = next(e for e in matrix["include"] if e["library"] == "a")
     assert entry["wait_for"] == [{"dist": "vivarium-b", "version": "2.0.0"}]
 
 
-def test_release_matrix_wait_for_empty_for_independent_package(
+def test_get_release_matrix_wait_for_empty_for_independent_package(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A package with no in-batch upstream has an empty wait_for."""
     libs_dir = make_monorepo({"a": {"version": "1.0.0"}, "b": {"version": "2.0.0"}})
     libs = load_libs(libs_dir)
-    matrix = release_matrix({"a": "1.0.0", "b": "2.0.0"}, libs)
+    matrix = get_release_matrix({"a": "1.0.0", "b": "2.0.0"}, libs)
     for entry in matrix["include"]:
         assert entry["wait_for"] == []
 
 
-def test_release_matrix_omits_out_of_batch_upstream_from_wait_for(
+def test_get_release_matrix_omits_out_of_batch_upstream_from_wait_for(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """An upstream not in the release batch (already released) is not in wait_for."""
@@ -540,21 +551,21 @@ def test_release_matrix_omits_out_of_batch_upstream_from_wait_for(
         }
     )
     libs = load_libs(libs_dir)
-    matrix = release_matrix({"a": "1.0.0"}, libs)
+    matrix = get_release_matrix({"a": "1.0.0"}, libs)
     entry = next(e for e in matrix["include"] if e["library"] == "a")
     assert entry["wait_for"] == []
 
 
-def test_release_matrix_empty_pairs_yields_empty_include(
+def test_get_release_matrix_empty_pairs_yields_empty_include(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """An empty pairs mapping yields {"include": []}."""
     libs_dir = make_monorepo({"a": {}})
     libs = load_libs(libs_dir)
-    assert release_matrix({}, libs) == {"include": []}
+    assert get_release_matrix({}, libs) == {"include": []}
 
 
-def test_release_matrix_wait_for_is_transitive_closure(
+def test_get_release_matrix_wait_for_is_transitive_closure(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """For chain a -> b -> c all in batch, wait_for is the transitive in-batch closure."""
@@ -566,7 +577,7 @@ def test_release_matrix_wait_for_is_transitive_closure(
         }
     )
     libs = load_libs(libs_dir)
-    matrix = release_matrix({"a": "1.0.0", "b": "2.0.0", "c": "3.0.0"}, libs)
+    matrix = get_release_matrix({"a": "1.0.0", "b": "2.0.0", "c": "3.0.0"}, libs)
     entries = {e["library"]: e for e in matrix["include"]}
 
     order = [e["library"] for e in matrix["include"]]
@@ -582,14 +593,14 @@ def test_release_matrix_wait_for_is_transitive_closure(
     assert {"dist": "vivarium-b", "version": "2.0.0"} in entries["a"]["wait_for"]
 
 
-def test_release_matrix_raises_keyerror_for_unknown_package(
+def test_get_release_matrix_raises_keyerror_for_unknown_package(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A pairs key that is not a known package raises KeyError."""
     libs_dir = make_monorepo({"a": {}})
     libs = load_libs(libs_dir)
     with pytest.raises(KeyError):
-        release_matrix({"ghost": "1.0.0"}, libs)
+        get_release_matrix({"ghost": "1.0.0"}, libs)
 
 
 # --------------------------------------------------------------------------- #
@@ -752,7 +763,7 @@ def test_run_install_invokes_subprocess_with_cwd_check_and_overlaid_env(
 # --------------------------------------------------------------------------- #
 # CLI                                                                          #
 # --------------------------------------------------------------------------- #
-def test_cli_release_matrix_emits_ordered_json(
+def test_cli_get_release_matrix_emits_ordered_json(
     make_monorepo: MonorepoFactory,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
@@ -769,7 +780,7 @@ def test_cli_release_matrix_emits_ordered_json(
     exit_code = main_with(
         [
             "release-matrix",
-            "--pairs",
+            "--versions",
             str(pairs_file),
             "--libs-dir",
             str(libs_dir),
@@ -781,7 +792,7 @@ def test_cli_release_matrix_emits_ordered_json(
     assert libraries.index("b") < libraries.index("a")
 
 
-def test_cli_release_matrix_empty_when_no_pairs(
+def test_cli_get_release_matrix_empty_when_no_pairs(
     make_monorepo: MonorepoFactory,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
@@ -791,22 +802,22 @@ def test_cli_release_matrix_empty_when_no_pairs(
     pairs_file = tmp_path / "pairs.txt"
     pairs_file.write_text("")
     exit_code = main_with(
-        ["release-matrix", "--pairs", str(pairs_file), "--libs-dir", str(libs_dir)]
+        ["release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
     )
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out) == {"include": []}
 
 
-def test_cli_release_matrix_errors_on_missing_version(
+def test_cli_get_release_matrix_errors_on_missing_version(
     make_monorepo: MonorepoFactory,
     tmp_path: Path,
 ) -> None:
     """`release-matrix` exits non-zero when a pairs line has no version."""
     libs_dir = make_monorepo({"a": {}})
     pairs_file = tmp_path / "pairs.txt"
-    pairs_file.write_text("a\n")
+    pairs_file.write_text("a\n")  # no version provided!
     exit_code = main_with(
-        ["release-matrix", "--pairs", str(pairs_file), "--libs-dir", str(libs_dir)]
+        ["release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
     )
     assert exit_code != 0
 
@@ -891,7 +902,7 @@ def test_cli_editable_install_hard_fails_on_conflict(
     assert called is False
 
 
-def test_cli_release_matrix_clean_exit_on_cycle(
+def test_cli_get_release_matrix_clean_exit_on_cycle(
     make_monorepo: MonorepoFactory,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
@@ -906,7 +917,7 @@ def test_cli_release_matrix_clean_exit_on_cycle(
     pairs_file = tmp_path / "pairs.txt"
     pairs_file.write_text("a 1.0.0\nb 2.0.0\n")
     exit_code = main_with(
-        ["release-matrix", "--pairs", str(pairs_file), "--libs-dir", str(libs_dir)]
+        ["release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
     )
     assert exit_code != 0
     captured = capsys.readouterr()
@@ -970,7 +981,7 @@ def test_end_to_end_changed_upstream_bump_installs_editable_before_dependent(
         }
     )
     libs = load_libs(libs_dir)
-    siblings = editable_siblings("a", libs, changed=["b"])
+    siblings = get_ordered_editable_siblings("a", libs, changed=["b"])
     plan = build_install_plan(
         libs["a"], siblings, env_reqs="ci_github", ihme_pypi="", uv_flags=""
     )
@@ -1025,6 +1036,61 @@ def test_discover_libs_dir_falls_back_to_cwd_libs(
     assert dependencies._discover_libs_dir(None) == tmp_path / "libs"
 
 
-def test_discover_libs_dir_honors_explicit(tmp_path: Path) -> None:
-    """An explicit path is used verbatim (resolved), without walking."""
+def test_discover_libs_dir_honors_path_provided(tmp_path: Path) -> None:
+    """A provided path is used verbatim (resolved), without walking."""
     assert dependencies._discover_libs_dir(str(tmp_path)) == tmp_path.resolve()
+
+
+def test_cli_editable_install_clean_exit_on_unknown_package(
+    make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`editable-install` for a target not under libs/ exits non-zero with a clear message."""
+    libs_dir = make_monorepo({"build-utils": {}, "a": {}})
+    rc = main_with(["editable-install", "ghost", "--libs-dir", str(libs_dir)])
+    assert rc == 1
+    assert "unknown package" in capsys.readouterr().err
+
+
+def test_cli_release_matrix_clean_exit_on_unknown_package(
+    make_monorepo: MonorepoFactory, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`release-matrix` with a pairs entry not under libs/ exits non-zero with a clear message."""
+    libs_dir = make_monorepo({"build-utils": {}, "a": {}})
+    pairs = tmp_path / "release_pairs.txt"
+    pairs.write_text("ghost 1.0.0\n")  # non-monorepo package!
+    rc = main_with(["release-matrix", "--versions", str(pairs), "--libs-dir", str(libs_dir)])
+    assert rc == 1
+    assert "unknown package" in capsys.readouterr().err
+
+
+def test_cli_verify_editable_passes_when_siblings_editable(
+    make_monorepo: MonorepoFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`verify-editable` exits 0 when each selected sibling is an editable install."""
+    libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+    monkeypatch.setattr(dependencies, "_is_editable_install", lambda dist: True)
+    rc = main_with(["verify-editable", "a", "--changed", "b", "--libs-dir", str(libs_dir)])
+    assert rc == 0
+
+
+def test_cli_verify_editable_fails_when_sibling_from_pypi(
+    make_monorepo: MonorepoFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`verify-editable` exits non-zero when a selected sibling is not an editable install."""
+    libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+    monkeypatch.setattr(dependencies, "_is_editable_install", lambda dist: False)
+    rc = main_with(["verify-editable", "a", "--changed", "b", "--libs-dir", str(libs_dir)])
+    assert rc == 1
+    assert "not editable" in capsys.readouterr().err
+
+
+def test_cli_verify_editable_noop_when_no_siblings(
+    make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`verify-editable` exits 0 and checks nothing when the target has no changed siblings."""
+    libs_dir = make_monorepo({"a": {}, "b": {}})
+    rc = main_with(["verify-editable", "a", "--changed", "", "--libs-dir", str(libs_dir)])
+    assert rc == 0
+    assert "no changed in-tree siblings" in capsys.readouterr().out

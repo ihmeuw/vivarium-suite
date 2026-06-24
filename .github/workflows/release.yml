@@ -33,15 +33,13 @@ jobs:
           fetch-depth: 0
 
       - name: Collect packages to release
-        # Writes "<lib> <version>" lines to release_pairs.txt - the input the
-        # "Order releases" step feeds to the dependency graph. Truncate first so
-        # a reused/retried workspace can't accumulate stale pairs.
+        # Writes "<lib> <version>" lines to package_versions.txt
         env:
           PACKAGE: ${{ github.event.inputs.package }}
           VERSION: ${{ github.event.inputs.version }}
         run: |
-          rm -f release_pairs.txt
-          touch release_pairs.txt
+          rm -f package_versions.txt
+          touch package_versions.txt
           if [ "${{ github.event_name }}" = "release" ]; then
             # Tag was created by the GitHub UI release. Parse it to find the lib and version.
             # Tag format: "vivarium-<lib>-v<X.Y.Z>" where <lib> matches the libs/<lib>/ dir.
@@ -58,7 +56,7 @@ jobs:
               exit 1
             fi
 
-            echo "${LIBRARY} ${VERSION}" >> release_pairs.txt
+            echo "${LIBRARY} ${VERSION}" >> package_versions.txt
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # Manual release.yml dispatch. Validate inputs and use them directly.
             if [ ! -d "libs/${PACKAGE}" ]; then
@@ -72,7 +70,7 @@ jobs:
               exit 1
             fi
 
-            echo "${PACKAGE} ${VERSION}" >> release_pairs.txt
+            echo "${PACKAGE} ${VERSION}" >> package_versions.txt
           else
             # Push to main. Detect all changed CHANGELOG.rst files and parse versions.
             BEFORE="${{ github.event.before }}"
@@ -99,15 +97,14 @@ jobs:
                 continue
               fi
 
-              echo "${LIB} ${VERSION}" >> release_pairs.txt
+              echo "${LIB} ${VERSION}" >> package_versions.txt
             done <<< "$CHANGED_CHANGELOGS"
           fi
-          echo "Collected release pairs:"; cat release_pairs.txt
+          echo "Collected package versions:"; cat package_versions.txt
 
       - name: Install vivarium_build_utils
         # Editable from the in-tree checkout so the release ordering is computed
-        # by THIS push's dependency graph/resolver (vbu may itself be in the
-        # batch), and so `make validate-tag` is available in the release jobs.
+        # by THIS push's dependency graph/resolver (vbu may itself be in the batch)
         run: |
           python -m pip install uv
           uv pip install --system -e libs/build-utils
@@ -118,7 +115,7 @@ jobs:
         # dependencies-first; each entry carries the in-batch upstreams it must
         # wait for on PyPI. Fails loudly on a cycle or a missing version.
         run: |
-          matrix=$(python -m vivarium.build_utils.dependencies release-matrix --pairs release_pairs.txt)
+          matrix=$(python -m vivarium.build_utils.dependencies release-matrix --versions package_versions.txt)
           echo "Ordered release matrix: ${matrix}"
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
           if [ "$(echo "$matrix" | jq '.include | length')" -eq 0 ]; then
@@ -136,13 +133,10 @@ jobs:
       contents: write
       id-token: write
     strategy:
-      # Jobs run concurrently; the matrix is ordered dependencies-first (good
-      # scheduling), and each job waits for its in-batch upstreams on PyPI before
-      # installing (see "Wait for upstream releases"). So independent packages
-      # release in parallel while a dependent serializes only behind its real
-      # upstreams. fail-fast=false so one package's failure does not cancel
-      # unrelated releases; a dependent whose upstream failed fails via the wait
-      # timeout rather than publishing against a missing version.
+      # Jobs run concurrently; the matrix is ordered dependencies-first and each
+      # job waits for its in-batch upstreams on PyPI before installing. Independent
+      # packages release in parallel
+      # fail-fast=false so one package's failure does not cancel unrelated releases
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
     steps:
@@ -203,13 +197,6 @@ jobs:
         run: cd libs/${{ matrix.library }} && make validate-tag
 
       - name: Wait for upstream releases
-        # Before installing, block until every in-batch upstream this package
-        # depends on is installable from PyPI. The detect job ordered the matrix
-        # dependencies-first and computed wait_for per entry; this gate is what
-        # lets a dependent release safely alongside an upstream published in the
-        # same push. Each upstream gets up to ~5 min (PyPI propagation can lag a
-        # publish by a minute or more); --no-cache so a cached "not found" from an
-        # early probe doesn't stick. Empty wait_for (independent package) is a no-op.
         run: |
           python - <<'PY'
           import json, subprocess, sys, time
@@ -222,8 +209,8 @@ jobs:
               print("No in-batch upstreams to wait for.")
               sys.exit(0)
 
-          for up in wait_for:
-              spec = f"{up['dist']}=={up['version']}"
+          for upstream in wait_for:
+              spec = f"{upstream['dist']}=={upstream['version']}"
               print(f"Waiting for {spec} on PyPI...")
               deadline = time.time() + TIMEOUT_SECONDS
               while True:
@@ -242,8 +229,8 @@ jobs:
           PY
 
       - name: Install ${{ matrix.library }}
-        # IHME_PYPI= disables the artifactory extra-index since the runner can't
-        # reach it (firewalled). Libs that need artifactory-only packages
+        # IHME_PYPI= (a blank) disables the GitHub Enterprise extra-index since the
+        # runner can't reach it (firewalled); libs that need packages hosted there
         # are tested/released via Jenkins. Upstreams are guaranteed installable
         # by the wait gate above, so this resolves them from PyPI normally.
         run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=
