@@ -7,6 +7,10 @@
 - Add runtime dependencies ``packaging`` and ``tomli`` (the latter only on
   Python < 3.11)
 
+**4.0.2 - 06/24/26**
+
+- Add ``--runslow`` and ``--runweekly`` support to pytest calls so that Jenkins builds pass
+
 **4.0.1 - 06/23/26**
 
 - Bugfix: Fix ``__run_pip_dry_run()`` to handle vbu self-bootstrap case
