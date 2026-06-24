@@ -1,3 +1,7 @@
+**0.20.1 - 06/23/26**
+
+ - Document running two GitHub MCP identities in the ``plugin-setup`` skill
+ 
 **0.20.0 - 06/23/26**
 
  - Add ``/viv:repo-maintenance`` skill and ``_claim_auditor`` sub-agent
