@@ -48,6 +48,7 @@ py:class PandasObject
 py:class DataFrameGroupBy
 py:class ResultsFormatter
 py:class ResultsUpdater
+py:class PopulationFilterArgument
 py:class _NestedDict
 py:exc ResultsConfigurationError
 py:exc vivarium.engine.framework.results.exceptions.ResultsConfigurationError

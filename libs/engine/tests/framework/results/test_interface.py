@@ -495,7 +495,7 @@ def test_register_concatenating_observation(mocker: MockerFixture) -> None:
 def test_population_filter_from_argument() -> None:
     """from_argument parses a string, a callable, or a (query, callable) tuple."""
 
-    def row_filter(index: pd.Index) -> pd.Index:
+    def row_filter(index: pd.Index[int]) -> pd.Index[int]:
         return index[:1]
 
     assert PopulationFilter.from_argument("a == 1", include_untracked=True) == (

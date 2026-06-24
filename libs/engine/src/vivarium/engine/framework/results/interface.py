@@ -43,7 +43,7 @@ new observation results."""
 PopulationRowFilter = Callable[[pd.Index], pd.Index]  # type: ignore [type-arg]
 """A Callable that takes a population index and returns the subset of indices to keep."""
 PopulationFilterArgument = Union[str, PopulationRowFilter, tuple[str, PopulationRowFilter]]
-"""A population filter: a Pandas query string, a row-filter callable, or a
+"""A population filter given as a Pandas query string, a row-filter callable, or a
 ``(query, callable)`` tuple that applies the query first and the callable to the result."""
 
 

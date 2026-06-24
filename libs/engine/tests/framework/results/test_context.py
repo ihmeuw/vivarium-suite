@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import math
 import re
@@ -867,7 +869,7 @@ def test__filter_population_with_row_filter_callable(mocker: MockerFixture) -> N
     ctx = ResultsContext()
     mocker.patch.object(ctx, "get_tracked_query", return_value="", create=True)
 
-    def keep_even(index: pd.Index) -> pd.Index:
+    def keep_even(index: pd.Index[int]) -> pd.Index[int]:
         return index[index % 2 == 0]
 
     filtered_pop = ctx._filter_population(
@@ -883,7 +885,7 @@ def test__filter_population_with_query_and_row_filter(mocker: MockerFixture) -> 
     ctx = ResultsContext()
     mocker.patch.object(ctx, "get_tracked_query", return_value="", create=True)
 
-    def keep_first(index: pd.Index) -> pd.Index:
+    def keep_first(index: pd.Index[int]) -> pd.Index[int]:
         return index[:1]
 
     filtered_pop = ctx._filter_population(
