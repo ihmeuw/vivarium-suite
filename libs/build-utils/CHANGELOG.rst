@@ -1,6 +1,6 @@
 **4.0.2 - 06/24/26**
 
-- Add ``--runslow`` support to pytest calls so that Jenkins builds pass
+- Add ``--runslow`` and ``--runweekly`` support to pytest calls so that Jenkins builds pass
 
 **4.0.1 - 06/23/26**
 
