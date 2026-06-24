@@ -105,3 +105,25 @@ Fetching from internal Artifactory
 (``make install IHME_PYPI=``) in environments that can't reach IHME's network
 (e.g. GitHub Actions runners). ``make deploy-package-artifactory`` requires a
 non-empty ``IHME_PYPI`` and is Jenkins/internal-only.
+
+Cross-package PRs
+-----------------
+
+A single PR can modify several interdependent monorepo packages - including
+bumping one and consuming the new version from a sibling - even though the
+sibling's dependency on it still resolves against PyPI, where the new version
+isn't released yet. ``make install IN_TREE_SIBLINGS="<lib> <lib> ..."`` opts a
+build into in-tree resolution: of the named libs (those whose source changed in
+the PR), the subset that is reachable from the package being built and whose
+pending ``CHANGELOG.rst`` version satisfies the dependents' pins is installed
+editably from local source - at the pending version - alongside the package, in
+a single ``uv`` invocation. Unchanged dependencies still resolve from PyPI. A
+pending version that violates a declared pin fails the build with a clear
+message (a forgotten pin bump). ``IN_TREE_SIBLINGS`` is a no-op when empty, so
+single-package installs are unaffected.
+
+The GitHub Actions CI and release workflows wire this automatically (CI passes
+the PR's changed libs; release orders the batch dependencies-first and waits for
+each upstream on PyPI before building its dependents). The selection,
+ordering, and install-plan logic lives in ``vivarium.build_utils.dependencies``
+(run ``python -m vivarium.build_utils.dependencies --help``).

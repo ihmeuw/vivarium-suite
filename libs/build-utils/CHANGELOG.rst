@@ -1,3 +1,14 @@
+**4.1.0 - 06/24/26**
+
+- Add ``vivarium.build_utils.dependencies``: the in-tree dependency graph for
+  cross-package PRs and releases (editable-sibling selection and
+  dependency-ordered release matrix), with ``editable-install`` and
+  ``release-matrix`` CLI subcommands
+- Add ``make install IN_TREE_SIBLINGS="<lib> ..."`` to install modified,
+  reachable, version-compatible siblings editably at their pending versions
+- Add runtime dependencies ``packaging`` and ``tomli`` (the latter only on
+  Python < 3.11)
+
 **4.0.1 - 06/23/26**
 
 - Bugfix: Fix ``__run_pip_dry_run()`` to handle vbu self-bootstrap case
