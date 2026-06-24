@@ -38,11 +38,7 @@ The lead's brief gives you:
   `python_versions.json`, its paths, its CHANGELOG/version) versus the
   **generalizable** boilerplate you are meant to carry over.
 - **`target_basis`** *(optional)*: source material specific to **this** target
-  that the lead has already gathered for you — e.g. the target's own
-  pre-migration config, an archived repo's historical file state, the prior
-  `setup.py` the new file should be adapted from. You have **no network or
-  GitHub access**, so anything outside your checkout that the adaptation needs,
-  the lead fetches and hands to you here. When present, use it as the seed for
+  that the lead has already gathered for you. When present, use it as the seed for
   your target's version; fall back to the shared `reference_files` when absent.
 - **`intent`**: one or two sentences on what the propagation is for, so you
   can judge what "adapted correctly" means for an ambiguous case.
@@ -78,10 +74,8 @@ The lead's brief gives you:
      when an env is available; otherwise note it's unverified and relies on CI.
    - **Metadata-only changes** (classifiers, URLs, description, authors, a
      lint-config tweak that can't change imports) → a full `make check` builds
-     an env for zero signal. Instead confirm the file parses (e.g. `tomllib`
-     load of `pyproject.toml`) and run a targeted validity check (e.g.
-     classifier strings against the `trove-classifiers` package), and note that
-     the suite is unaffected and was deliberately skipped.
+     an env for zero signal. Instead confirm the file parses and run a targeted
+      validity check , and note that the suite was deliberately skipped.
    When a check fails, determine whether **your change caused it** or it is a
    **pre-existing** failure (check against the unmodified target if in doubt)
    and report which.
@@ -127,9 +121,6 @@ Send the lead a structured report with these sections (use "none" where empty):
   what the file calls for.
 - **Stay in your target.** Edit only your own checkout; never reach into
   another target's.
-- **You have no network or GitHub access.** Work only from your checkout and
-  the lead's brief (`reference_files`, `target_basis`). If the adaptation needs
-  source material you weren't given, say so in Notes — don't guess.
 - **Don't force a conflict.** When the target has a deliberately different
   version, report it as a conflict for a human call — do not silently
   overwrite it.

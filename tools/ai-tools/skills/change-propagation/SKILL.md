@@ -50,10 +50,7 @@ Spawn one `_propagate_target` worker per target, **in parallel**. Brief each
 worker with: its single `target`, the `substrate`, the `reference_files`
 (path + content), the `source_package` note, the `intent`, and — when the
 adaptation needs material specific to that target — the `target_basis` you
-gathered in step 1. **Workers have no network or GitHub access**, so any
-per-target source that lives outside the monorepo (an archived repo's
-historical `setup.py`, a prior config, external file state) you must fetch and
-hand them; a worker cannot research it itself. Then:
+gathered in step 1.  Then:
 
 - **Monorepo workers** each run in their own **isolated git worktree** — spawn
   them with the Agent tool's `isolation: "worktree"`, so the worker's working
