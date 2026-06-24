@@ -464,13 +464,13 @@ simulation - each time-step is capped at 100.
    [100, 100]
 
 
-Following a fixed closed cohort
+Following a closed cohort
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 By default ``row_limit`` draws a *fresh* sample each observed step, so the
 recorded simulants differ from step to step. Set ``single_random_sample`` to
 sample once from the initial population and then record only those same
-simulants - a fixed *closed cohort* - at every observed step. This requires
+simulants - a *closed cohort* - at every observed step. This requires
 ``row_limit``, which sets the cohort's size (``row_limit // <number of observed
 steps>``).
 

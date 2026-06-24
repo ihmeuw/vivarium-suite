@@ -53,7 +53,7 @@ class MicrodataObserver(Observer):
         ``row_limit // <number of observed timesteps>`` (floored), and each observed timestep records
         a fresh random sample of up to that many simulants. None (the default) applies no cap.
     single_random_sample
-        If True, sample a fixed *closed cohort* (of the per-timestep-cap size) once from the initial
+        If True, sample a *closed cohort* (of the per-timestep-cap size) once from the initial
         population and record only those simulants each observed timestep, instead of resampling.
         Requires ``row_limit``. Members are never added, and are dropped without replacement when
         they leave the filter or simulation, so ``row_limit`` stays an upper bound. False by default.
@@ -100,8 +100,7 @@ class MicrodataObserver(Observer):
         if config.single_random_sample and config.row_limit is None:
             raise ResultsConfigurationError(
                 f"The '{self.name}' observer's 'single_random_sample' requires a 'row_limit' "
-                "to define the closed cohort's size; set 'row_limit' or disable "
-                "'single_random_sample'."
+                "to define the closed cohort's size."
             )
         query = " and ".join(f"({condition})" for condition in list(config.filter))
         pop_filter: str | tuple[str, Callable[[pd.Index[int]], pd.Index[int]]] = query
