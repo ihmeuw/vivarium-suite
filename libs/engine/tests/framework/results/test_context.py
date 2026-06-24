@@ -27,10 +27,7 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
-from vivarium.engine.framework.results.interface import (
-    PopulationFilter,
-    _default_unstratified_results_gatherer,
-)
+from vivarium.engine.framework.results.interface import PopulationFilter
 from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
@@ -384,7 +381,6 @@ def test_concatenating_observation_gather_results(
         when=lifecycle_state,
         requires_attributes=included_cols,
         results_formatter=lambda _, __: pd.DataFrame(),
-        results_gatherer=_default_unstratified_results_gatherer,
         stratifications=None,
     )
 
@@ -863,6 +859,41 @@ def test__filter_population(
         house = tracked_query.split("==")[1].strip("'")
         expected = expected[expected["house"] == house]
     assert filtered_pop.equals(expected)
+
+
+def test__filter_population_with_row_filter_callable(mocker: MockerFixture) -> None:
+    """A callable pop_filter subsets the population by index."""
+    population = BASE_POPULATION.copy()
+    ctx = ResultsContext()
+    mocker.patch.object(ctx, "get_tracked_query", return_value="", create=True)
+
+    def keep_even(index: pd.Index) -> pd.Index:
+        return index[index % 2 == 0]
+
+    filtered_pop = ctx._filter_population(
+        population=population,
+        population_filter=PopulationFilter(include_untracked=True, row_filter=keep_even),
+    )
+    assert filtered_pop.equals(population.loc[keep_even(population.index)])
+
+
+def test__filter_population_with_query_and_row_filter(mocker: MockerFixture) -> None:
+    """A (query, callable) pop_filter applies the query first, then the callable."""
+    population = BASE_POPULATION.copy()
+    ctx = ResultsContext()
+    mocker.patch.object(ctx, "get_tracked_query", return_value="", create=True)
+
+    def keep_first(index: pd.Index) -> pd.Index:
+        return index[:1]
+
+    filtered_pop = ctx._filter_population(
+        population=population,
+        population_filter=PopulationFilter(
+            query='familiar=="cat"', include_untracked=True, row_filter=keep_first
+        ),
+    )
+    expected = population[population["familiar"] == "cat"]
+    assert filtered_pop.equals(expected.loc[keep_first(expected.index)])
 
 
 @pytest.mark.parametrize(

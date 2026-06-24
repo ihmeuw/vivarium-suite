@@ -490,42 +490,23 @@ def test_register_concatenating_observation(mocker: MockerFixture) -> None:
     assert obs.results_gatherer is not None
     assert obs.results_updater is not None
     assert obs.results_formatter is not None
-    pop = pd.DataFrame(
-        {"event_time": [1, 1], "some-column": ["a", "b"], "some-other-column": [1, 2]}
+
+
+def test_population_filter_from_argument() -> None:
+    """from_argument parses a string, a callable, or a (query, callable) tuple."""
+
+    def row_filter(index: pd.Index) -> pd.Index:
+        return index[:1]
+
+    assert PopulationFilter.from_argument("a == 1", include_untracked=True) == (
+        PopulationFilter(query="a == 1", include_untracked=True, row_filter=None)
     )
-    assert obs.results_gatherer(pop, None)["some-column"].tolist() == ["a", "b"]
-
-
-def test_register_concatenating_observation_threads_custom_gatherer(
-    mocker: MockerFixture,
-) -> None:
-    """A `results_gatherer` passed to the interface reaches the registered observation."""
-    mgr = ResultsManager()
-    interface = ResultsInterface(mgr)
-    builder = mocker.MagicMock()
-    builder.configuration.stratification.default = []
-    mocker.patch.object(builder, "value.get_attribute")
-    mgr.setup(builder)
-
-    gatherer = lambda pop: pop.iloc[:1]
-    interface.register_concatenating_observation(
-        name="some-name",
-        requires_attributes=["some-column"],
-        results_formatter=lambda _, __: pd.DataFrame(),
-        results_gatherer=gatherer,
+    assert PopulationFilter.from_argument(row_filter) == (
+        PopulationFilter(query="", row_filter=row_filter)
     )
-
-    grouped_observations = interface._manager._results_context.grouped_observations
-    filter_info = list(grouped_observations[lifecycle_states.COLLECT_METRICS].keys())[0]
-    stratifications = list(
-        grouped_observations[lifecycle_states.COLLECT_METRICS][filter_info]
-    )[0]
-    obs = grouped_observations[lifecycle_states.COLLECT_METRICS][filter_info][
-        stratifications
-    ][0]
-    assert isinstance(obs, ConcatenatingObservation)
-    pop = pd.DataFrame({"event_time": [1, 1], "some-column": ["a", "b"]})
-    assert obs.results_gatherer(pop, None)["some-column"].tolist() == ["a"]
+    assert PopulationFilter.from_argument(("a == 1", row_filter)) == (
+        PopulationFilter(query="a == 1", row_filter=row_filter)
+    )
 
 
 def test_default_stratified_formatter_converts_object_to_categorical() -> None:

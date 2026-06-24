@@ -1,6 +1,6 @@
-**5.2.0 - 06/18/26**
+**5.2.0 - 06/24/26**
 
-- Support a custom ``results_gatherer`` for concatenating observations
+- Support a callable population filter (or ``(query, callable)`` tuple) for all observations
 
 **5.1.7 - 06/22/26**
 

@@ -437,7 +437,10 @@ class ResultsContext:
         if not population_filter.include_untracked:
             # combine the tracking query with the population filter query
             query = pop_utils.combine_queries(query, self.get_tracked_query())
-        return population.query(query) if query else population.copy()
+        filtered = population.query(query) if query else population.copy()
+        if population_filter.row_filter is not None:
+            filtered = filtered.loc[population_filter.row_filter(filtered.index)]
+        return filtered
 
     def _drop_na_stratifications(
         self, population: pd.DataFrame, stratification_names: tuple[str, ...] | None
