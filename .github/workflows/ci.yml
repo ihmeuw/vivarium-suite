@@ -17,6 +17,11 @@ jobs:
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
       has-changes: ${{ steps.detect.outputs.has-changes }}
+      # Libraries whose own source changed in this PR/push (space-separated).
+      # This is the set eligible for in-tree sibling resolution - distinct from
+      # the build matrix below, which also rebuilds everything when a shared
+      # root/workflow file changes.
+      changed-libs: ${{ steps.detect.outputs.changed-libs }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -51,6 +56,19 @@ jobs:
           if [ -z "$ALL_LIBS" ]; then
             echo "Warning: no package directories found under libs/"
           fi
+
+          # Libraries whose own source changed (independent of the rebuild-all
+          # trigger below). This is the set passed as IN_TREE_SIBLINGS so each
+          # build resolves its modified, reachable, version-compatible siblings
+          # from in-tree source; it stays empty when only root/workflow files changed.
+          SOURCE_CHANGED=()
+          for lib in $ALL_LIBS; do
+            if echo "$CHANGED" | grep -q "^libs/${lib}/"; then
+              SOURCE_CHANGED+=("$lib")
+            fi
+          done
+          echo "changed-libs=${SOURCE_CHANGED[*]}" >> $GITHUB_OUTPUT
+          echo "Source-changed libraries: ${SOURCE_CHANGED[*]:-(none)}"
 
           # Root-level changes to shared config or workflows rebuild everything
           if echo "$CHANGED" | grep -qE "^(pyproject\.toml|Makefile)$|^\.github/workflows/"; then
@@ -113,14 +131,13 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install vivarium_build_utils
-      # For build-utils, install from local checkout since the latest PyPI
-      # release is by definition stale relative to this PR
-        run: |
-          if [ "${{ matrix.library }}" = "build-utils" ]; then
-            uv pip install --system -e libs/build-utils
-          else
-            uv pip install --system vivarium-build-utils
-          fi
+        # Always install vbu editably from the in-tree checkout (not from PyPI),
+        # so a PR that modifies vbu itself - its dependency-resolution logic
+        # (vivarium.build_utils.dependencies) or its makefiles (base.mk) - is
+        # exercised by THIS PR's vbu rather than a stale released one. This also
+        # makes the `make install` cross-package delegation below run the
+        # checkout's resolver.
+        run: uv pip install --system -e libs/build-utils
 
       - name: Install ${{ matrix.library }}
         # UV_FLAGS=--system installs into the runner's system Python (no venv).
@@ -128,7 +145,45 @@ jobs:
         # artifactory is firewalled and unreachable from GH-hosted runners.
         # Libs that depend on artifactory-only packages won't fully install in
         # this environment by design - those are tested via Jenkins.
-        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=
+        # IN_TREE_SIBLINGS lists the libs whose source changed in this PR; make
+        # install resolves the subset reachable from this package (and version-
+        # compatible) from in-tree source at their pending versions, so a single
+        # PR can consume an as-yet-unreleased sibling. Unchanged deps still
+        # resolve from PyPI. It is a no-op (normal install) when empty.
+        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github IN_TREE_SIBLINGS="${{ needs.detect-changes.outputs.changed-libs }}" UV_FLAGS=--system IHME_PYPI=
+
+      - name: Verify changed siblings resolved from source
+        # Positive check that each sibling we intended to resolve in-tree (changed
+        # + reachable + version-compatible) is actually an editable install, not a
+        # silent PyPI fallback. This re-runs the SAME editable_siblings() selection
+        # that `make install` ran above, so it must track that function's signature;
+        # if the selection API changes, update both call sites. No-op when this
+        # package has no such siblings.
+        run: |
+          python - "${{ matrix.library }}" ${{ needs.detect-changes.outputs.changed-libs }} <<'PY'
+          import importlib.metadata as md
+          import json
+          import sys
+          from pathlib import Path
+
+          from vivarium.build_utils import dependencies as deps
+
+          target, changed = sys.argv[1], sys.argv[2:]
+          expected = deps.editable_siblings(target, deps.load_libs(Path("libs")), changed)
+          if not expected:
+              print(f"{target}: no changed in-tree siblings to verify")
+              sys.exit(0)
+
+          failed = False
+          for sibling in expected:
+              direct_url = md.distribution(sibling.dist_name).read_text("direct_url.json")
+              editable = bool(direct_url and json.loads(direct_url).get("dir_info", {}).get("editable"))
+              print(f"{sibling.dist_name}: version={md.version(sibling.dist_name)} editable={editable}")
+              if not editable:
+                  print(f"::error::{sibling.dist_name} is not editable - it resolved from PyPI, not in-tree source")
+                  failed = True
+          sys.exit(1 if failed else 0)
+          PY
 
       - name: Lint ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make lint
