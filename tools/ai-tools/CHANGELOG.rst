@@ -1,6 +1,6 @@
 **0.21.0 - 06/23/26**
 
- - Add ``change-propagation`` skill and ``_propagate_target`` worker sub-agent for propagating an adapted copy of a reference file/directory across several targets (monorepo libs and/or external repos) in parallel — one worker per target, monorepo targets verified with ``make check`` in isolated worktrees and external targets adapted read-only through the GitHub MCP — then converging into one draft PR per repo via ``team-conventions``, with every durable write gated on one explicit approval
+ - Add ``change-propagation`` skill to copy boilerplate across libs
 
 **0.20.1 - 06/23/26**
 
