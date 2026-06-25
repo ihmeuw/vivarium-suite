@@ -54,7 +54,7 @@ parsing instructions.
 ## Assessment dimensions
 
 1. **Coverage** — every mandated sub-agent and phase ran, in the mandated
-   multiplicity. No trace evidence = FAIL, not a gap.
+   multiplicity. No trace evidence = FAIL, not something you can ignore or rationalize away.
 2. **Ordering & gates** — phases ran in order; every gated action has a user
    answer *before* it; bounded loops stayed bounded.
 3. **Parallelism** — dispatches the definition parallelizes share one batch;
