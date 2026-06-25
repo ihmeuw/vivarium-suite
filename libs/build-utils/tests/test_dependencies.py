@@ -1,10 +1,4 @@
-"""Tests for the in-tree dependency graph (``vivarium.build_utils.dependencies``).
-
-Body-less stubs: each test names an acceptance criterion; the test writer fills
-the bodies. Tests build synthetic mini-monorepos under a temp directory (via the
-``make_monorepo`` factory) rather than depending on the real ``libs/`` layout, so
-they stay stable as the real packages evolve.
-"""
+"""Tests for the in-tree dependency graph (``vivarium.build_utils.dependencies``)."""
 
 from __future__ import annotations
 

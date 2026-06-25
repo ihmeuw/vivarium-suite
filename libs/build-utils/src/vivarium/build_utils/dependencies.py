@@ -123,7 +123,7 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
     For each ``libs/<pkg>`` directory, reads the distribution name and the
     declared dependencies from ``pyproject.toml`` and the pending version from
     the first line of ``CHANGELOG.rst``. Dependencies are resolved over
-    ``[project].dependencies`` plus the requested ``extras``, recursively
+    ``[project].dependencies`` plus the requested ``extras``, transitively
     expanding self-referential extras (e.g. ``ci_github = ["vivarium-foo[test,
     docs]"]`` pulls in the requirements of ``foo``'s ``test`` and ``docs``
     extras). Only requirements whose distribution name matches another package
@@ -239,8 +239,9 @@ def _resolve_sibling_deps(
     """Resolve in-tree sibling specifiers over runtime deps plus ``extras``.
 
     Self-referential extras (a requirement targeting ``own_dist`` with extras)
-    are recursively expanded; an in-tree edge to another dist records its
-    specifier without expanding that dist's extras.
+    are expanded transitively via a worklist queue; an expanded extra may pull
+    in further self-referential extras whereas an in-tree edge to another dist records
+    its specifier without expanding that dist's extras.
     """
     project = pyproject.get("project")
     project_map: Mapping[str, object] = project if isinstance(project, Mapping) else {}
@@ -311,6 +312,8 @@ def get_reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
         for dep_dist in libs[current].sibling_deps:
             dep_name = dist_to_name.get(dep_dist)
             if dep_name is not None and dep_name not in reached:
+                # A new dependency was found, so add it to the reached set and push
+                # it onto the stack for further exploration
                 reached.add(dep_name)
                 stack.append(dep_name)
     reached.discard(target)
