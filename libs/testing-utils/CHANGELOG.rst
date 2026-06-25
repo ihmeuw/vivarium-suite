@@ -1,3 +1,7 @@
+**0.7.0 - 06/26/26**
+
+- Update pytest-xdist plugin default behavior
+
 **0.6.2 - 06/22/26**
 
 - Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``

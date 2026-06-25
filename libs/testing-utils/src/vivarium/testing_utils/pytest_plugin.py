@@ -7,6 +7,7 @@ via the pytest11 entry point declared in pyproject.toml.
 import os
 import shutil
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from _pytest.config import Config, argparsing
@@ -68,27 +69,88 @@ def pytest_collection_modifyitems(config: Config, items: list[Function]) -> None
                 item.add_marker(skip_weekly)
 
 
-def pytest_xdist_auto_num_workers(config: Config) -> int:
-    """Automatically determine the number of workers for pytest-xdist.
+# Default ceiling on parallel xdist workers for ``-n auto``. The suite is
+# isolation-safe in parallel (339/339) and memory headroom thins past ~4, so 4 is
+# the target; the hook only ever scales *down* from here.
+DEFAULT_MAX_WORKERS = 4
 
-    - On SLURM: Use CPUs allocated to the job (via SLURM environment variables)
-    - Not on SLURM: Return 1 (no parallelization by default)
-    - Users can override by explicitly passing -n flag to pytest
+# Conservative per-worker memory budget (GB). Peak suite RSS measured ~0.75 GB
+# across all workers, so 1 GB/worker leaves headroom. Used only where available
+# memory can be read (Linux /proc/meminfo).
+_GB_PER_WORKER = 1.0
+
+
+def _usable_cpu_count() -> int:
+    """Count CPUs this process may actually run on.
+
+    Prefers the CPU affinity mask, which respects the cgroup limits SLURM sets per
+    job -- a job allocated N CPUs sees N here, never the whole node -- so it can't
+    over-subscribe a shared cluster node. Falls back to the system CPU count where
+    affinity is unavailable (e.g. macOS).
     """
-    cpus = 1
-    if IS_ON_SLURM:
-        # Check SLURM environment variables in order of preference
-        slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK") or os.environ.get(
-            "SLURM_CPUS_ON_NODE"
-        )
-        if slurm_cpus:
-            cpus = int(slurm_cpus)
-        # Fallback: use the number of CPUs actually available to this process
-        # (respects cgroup constraints set by SLURM)
-        else:
-            cpus = len(os.sched_getaffinity(0))
+    if hasattr(os, "sched_getaffinity"):
+        try:
+            return len(os.sched_getaffinity(0))
+        except OSError:
+            pass
+    return os.cpu_count() or 1
 
-    return cpus
+
+def _available_memory_gb() -> float | None:
+    """Available memory in GB, or None when it can't be read.
+
+    Reads ``MemAvailable`` from /proc/meminfo to avoid a psutil dependency;
+    returns None off Linux so callers skip the memory check.
+    """
+    meminfo = Path("/proc/meminfo")
+    if not meminfo.exists():
+        return None
+    try:
+        for line in meminfo.read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return float(line.split()[1]) / (1024 * 1024)
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _auto_num_workers() -> int:
+    """Resolve the xdist worker count: target DEFAULT_MAX_WORKERS, clamped down to
+    the available CPUs and memory, floored at 1."""
+    workers = min(DEFAULT_MAX_WORKERS, _usable_cpu_count())
+    available_gb = _available_memory_gb()
+    if available_gb is not None:
+        workers = min(workers, int(available_gb // _GB_PER_WORKER))
+    return max(1, workers)
+
+
+def pytest_xdist_auto_num_workers(config: Config) -> int:
+    """Choose a safe number of xdist workers for ``-n auto``.
+
+    Targets ``DEFAULT_MAX_WORKERS`` (4) but scales *down* to the CPUs actually
+    available to the process and what free memory supports, never below 1 -- so it
+    degrades gracefully (e.g. 4 -> 2 -> 1) on small or constrained machines and on
+    under-provisioned cluster allocations instead of erroring or over-subscribing.
+    Detection uses the CPU affinity mask, so a SLURM job never sees more than its
+    allocation even on a busy node.
+    """
+    return _auto_num_workers()
+
+
+def pytest_report_header(config: Config) -> list[str]:
+    """When running in parallel, print the resolved worker plan at the top of the
+    run so it's visible -- and greppable in CI -- how many workers were chosen."""
+    numprocesses = config.getoption("numprocesses", default=None)
+    if not numprocesses:
+        return []
+    memory_gb = _available_memory_gb()
+    memory = f"{memory_gb:.1f} GB" if memory_gb is not None else "unknown"
+    return [
+        f"vivarium xdist auto-workers: {_auto_num_workers()} "
+        f"(target {DEFAULT_MAX_WORKERS}, usable CPUs {_usable_cpu_count()}, "
+        f"available memory {memory}); requested -n {numprocesses}. The actual spawned "
+        f"count is in xdist's own 'N workers [M items]' line below."
+    ]
 
 
 def is_slow_test_day(slow_test_day: str = SLOW_TEST_DAY) -> bool:
