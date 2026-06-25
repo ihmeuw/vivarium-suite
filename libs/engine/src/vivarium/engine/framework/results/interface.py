@@ -44,7 +44,7 @@ PopulationRowFilter = Callable[[pd.Index], pd.Index]  # type: ignore [type-arg]
 """A Callable that takes a population index and returns the subset of indices to keep."""
 PopulationFilterArgument = Union[str, PopulationRowFilter, tuple[str, PopulationRowFilter]]
 """A population filter given as a Pandas query string, a row-filter callable, or a
-``(query, callable)`` tuple that applies the query first and the callable to the result."""
+``(query, callable)`` tuple that applies the query first followed by the callable."""
 
 
 def _required_function_placeholder(
@@ -89,7 +89,7 @@ class PopulationFilter(NamedTuple):
     row_filter: PopulationRowFilter | None = None
 
     @classmethod
-    def from_argument(
+    def create_filter(
         cls, pop_filter: PopulationFilterArgument, include_untracked: bool = False
     ) -> PopulationFilter:
         """Build a PopulationFilter from a query string, a row-filter callable, or both."""
@@ -241,7 +241,7 @@ class ResultsInterface(Interface):
         pop_filter
             A filter selecting which simulants to observe. Either a Pandas query string, a
             callable mapping the population index to the subset of indices to keep, or a
-            ``(query, callable)`` tuple that applies the query first and the callable to the result.
+            ``(query, callable)`` tuple that applies the query first followed by the callable.
         include_untracked
             Whether to include simulants who are untracked from this observation.
         when
@@ -275,7 +275,7 @@ class ResultsInterface(Interface):
         self._manager.register_observation(
             observation_type=StratifiedObservation,
             name=name,
-            population_filter=PopulationFilter.from_argument(pop_filter, include_untracked),
+            population_filter=PopulationFilter.create_filter(pop_filter, include_untracked),
             when=when,
             requires_attributes=requires_attributes,
             results_updater=results_updater,
@@ -309,7 +309,7 @@ class ResultsInterface(Interface):
         pop_filter
             A filter selecting which simulants to observe. Either a Pandas query string, a
             callable mapping the population index to the subset of indices to keep, or a
-            ``(query, callable)`` tuple that applies the query first and the callable to the result.
+            ``(query, callable)`` tuple that applies the query first followed by the callable.
         include_untracked
             Whether to include simulants who are untracked from this observation.
         when
@@ -339,7 +339,7 @@ class ResultsInterface(Interface):
         self._manager.register_observation(
             observation_type=UnstratifiedObservation,
             name=name,
-            population_filter=PopulationFilter.from_argument(pop_filter, include_untracked),
+            population_filter=PopulationFilter.create_filter(pop_filter, include_untracked),
             when=when,
             requires_attributes=requires_attributes,
             results_updater=results_updater,
@@ -379,7 +379,7 @@ class ResultsInterface(Interface):
         pop_filter
             A filter selecting which simulants to observe. Either a Pandas query string, a
             callable mapping the population index to the subset of indices to keep, or a
-            ``(query, callable)`` tuple that applies the query first and the callable to the result.
+            ``(query, callable)`` tuple that applies the query first followed by the callable.
         include_untracked
             Whether to include simulants who are untracked from this observation.
         when
@@ -405,7 +405,7 @@ class ResultsInterface(Interface):
         self._manager.register_observation(
             observation_type=AddingObservation,
             name=name,
-            population_filter=PopulationFilter.from_argument(pop_filter, include_untracked),
+            population_filter=PopulationFilter.create_filter(pop_filter, include_untracked),
             when=when,
             requires_attributes=requires_attributes,
             results_formatter=results_formatter,
@@ -443,7 +443,7 @@ class ResultsInterface(Interface):
         pop_filter
             A filter selecting which simulants to observe. Either a Pandas query string, a
             callable mapping the population index to the subset of indices to keep, or a
-            ``(query, callable)`` tuple that applies the query first and the callable to the result.
+            ``(query, callable)`` tuple that applies the query first followed by the callable.
         include_untracked
             Whether to include simulants who are untracked from this observation.
         when
@@ -459,7 +459,7 @@ class ResultsInterface(Interface):
         self._manager.register_observation(
             observation_type=ConcatenatingObservation,
             name=name,
-            population_filter=PopulationFilter.from_argument(pop_filter, include_untracked),
+            population_filter=PopulationFilter.create_filter(pop_filter, include_untracked),
             when=when,
             requires_attributes=requires_attributes,
             results_formatter=results_formatter,
