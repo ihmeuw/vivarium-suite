@@ -163,8 +163,8 @@ install: # Install package and dependencies
 		set -x; uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}; \
 	else \
 		set -x; python -m vivarium.build_utils.dependencies editable-install $(notdir $(CURDIR)) \
-			--changed "$(IN_TREE_SIBLINGS)" --env-reqs "$(ENV_REQS)" \
-			--ihme-pypi "$(IHME_PYPI)" --uv-flags "$(UV_FLAGS)"; \
+			--changed="$(IN_TREE_SIBLINGS)" --env-reqs="$(ENV_REQS)" \
+			--ihme-pypi="$(IHME_PYPI)" --uv-flags="$(UV_FLAGS)"; \
 	fi
 	@$(MAKE) setup-slack
 
