@@ -103,8 +103,7 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   commands, README, root ``CLAUDE.md``) for drift against upstream
   sources via per-unit ``_claim_auditor`` sub-agents; fixes are gated on
   user approval.
-- ``change-propagation`` — propagate an adapted copy of a reference file
-  or directory across several targets (monorepo libs and/or external
+- ``change-propagation`` — propagate boilerplate across several targets (monorepo libs and/or external
   repos) in parallel, one ``_propagate_target`` worker per target, then
   converge them into one draft PR per repo — every durable write gated on
   one explicit approval.
@@ -173,19 +172,6 @@ same main session — not as a sub-agent — so ``_review-core`` can spawn the
 review be reused by other main-session commands without duplicating the
 fan-out.
 
-The same one-level mechanism backs the **directly model-invoked skills**: a
-skill runs inline in the main session however it is entered, so it too can
-spawn one tier of workers without a command wrapper. ``ticket-triage`` spawns
-``_duplicate_finder`` this way, and ``change-propagation`` spawns one
-``_propagate_target`` worker per target. Note when an ``Agent(...)`` grant is
-needed: ``allowed-tools`` both *restricts* a unit to the listed tools and
-pre-approves them, so a unit that declares it (``_review-core`` and the
-``commands/*.md`` wrappers) must list ``Agent(...)`` or it would be fenced out
-of spawning. A skill that omits ``allowed-tools`` (``ticket-triage``,
-``change-propagation``) inherits the main session's tools — including ``Agent``
-— and so needs no explicit grant; that suits a lead like ``change-propagation``
-whose toolset (git, the GitHub MCP across orgs) is too broad to enumerate
-safely.
 
 Security model and recommended deny rules
 =========================================
