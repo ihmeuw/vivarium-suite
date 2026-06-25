@@ -50,7 +50,7 @@ The disease components in this tutorial take their data directly as
 require a data artifact. The only data served from memory is the demographic
 structure that
 :class:`~vivarium.public_health.population.base_population.BasePopulation`
-needs, which the example data plugin (``BASE_PLUGINS``) provides.
+needs, which the in-memory example artifact (``BASE_PLUGINS``) provides.
 
 Every code example in this tutorial uses the imports and helpers shown below.
 To run any example in a standalone script, include all of these at the top:
@@ -62,8 +62,8 @@ To run any example in a standalone script, include all of these at the top:
    from vivarium.public_health.population import BasePopulation
    from vivarium.public_health._example_data import BASE_PLUGINS, make_base_config
 
-   # BASE_PLUGINS configures the data plugin to serve demographic data from
-   # memory, so BasePopulation runs without a real HDF artifact. Pass it as
+   # BASE_PLUGINS serves the demographic data from memory in place of an HDF
+   # artifact, so BasePopulation runs without one. Pass it as
    # plugin_configuration to InteractiveContext.
    base_plugins = BASE_PLUGINS
 
@@ -80,7 +80,7 @@ you supply each measure as a:
 
 - **Scalar** (int or float) - broadcast a constant value to all simulants.
 - **Callable** - call the function at setup time to produce the data.
-- **Data key** (string) - load the measure from the data plugin at that key.
+- **Data key** (string) - load the measure from the artifact at that key.
 
 By default each measure loads from the artifact at the data key shown below.
 Supplying a scalar instead - as every example in this tutorial does - lets the
@@ -88,6 +88,9 @@ model run without an artifact. State- and model-level measures can be supplied
 either as a constructor/factory argument or through the configuration; the
 transition rates are supplied as a constructor/factory argument (their
 generated configuration keys are not meant to be written by hand).
+
+For the full list of data keys and the column layout each one expects, see
+:ref:`disease_data_concept`.
 
 .. list-table::
    :header-rows: 1
@@ -133,7 +136,7 @@ declares five configurable data sources:
 
 .. code-block:: yaml
 
-   # Default configuration (loads from the data plugin):
+   # Default configuration (loads from the artifact):
    {state_id}:
      data_sources:
        prevalence: "cause.{state_id}.prevalence"
@@ -147,7 +150,7 @@ simulation configuration:
 
 .. code-block:: yaml
 
-   # Override with scalars - no data key lookup needed:
+   # Override with scalars:
    configuration:
      my_disease:
        data_sources:
@@ -328,8 +331,8 @@ Pre-Built Models
 For common disease progressions,
 :mod:`vivarium.public_health.disease.models` provides convenience functions
 that create fully wired models in a single call. Each factory accepts the
-model's measures as scalar arguments, so the examples below run without an
-artifact; omit an argument to load that measure from the artifact instead.
+model's measures as scalar arguments; omit an argument to load that measure
+from the artifact instead.
 
 
 SI model (Susceptible |rarr| Infected)
@@ -356,8 +359,8 @@ The simplest model: once infected, a simulant never recovers.
        layer="override",
    )
 
-   # Supply every measure as a scalar - no artifact needed. Prevalence is 0,
-   # so everyone starts susceptible; incidence drives new infections.
+   # Supply every measure as a scalar. Prevalence is 0, so everyone starts
+   # susceptible; incidence drives new infections.
    model = SI(
        "test_cause",
        incidence_rate=0.5,

@@ -15,9 +15,7 @@ artifact.
 """
 
 import pandas as pd
-
-# Imported so DataInput's "Builder" forward reference resolves in the API docs.
-from vivarium.engine.framework.engine import Builder  # noqa: F401
+from vivarium.engine.framework.engine import Builder
 from vivarium.engine.types import DataInput
 
 from vivarium.public_health.disease.model import DiseaseModel

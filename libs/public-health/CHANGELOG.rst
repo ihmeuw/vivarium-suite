@@ -1,8 +1,6 @@
-**6.1.2 - 06/23/26**
+**6.1.2 - 06/24/26**
 
-- Add ``distribution`` data source to ``RiskAttributableDisease`` for artifactless usage
-- Add scalar data-source arguments to the pre-built disease model factories
-  (``SI``/``SIR``/``SIS``/``SIS_fixed_duration``/``SIR_fixed_duration``/``NeonatalSWC_*``)
+- Add scalar data-source arguments to the pre-built disease model factories 
   so they can run without an artifact
 
 **6.1.1 - 06/22/26**
