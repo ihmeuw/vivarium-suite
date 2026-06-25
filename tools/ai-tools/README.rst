@@ -103,6 +103,10 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   commands, README, root ``CLAUDE.md``) for drift against upstream
   sources via per-unit ``_claim_auditor`` sub-agents; fixes are gated on
   user approval.
+- ``change-propagation`` — propagate boilerplate across several targets (monorepo libs and/or external
+  repos) in parallel, one ``_propagate_target`` worker per target, then
+  converge them into one draft PR per repo — every durable write gated on
+  one explicit approval.
 - ``workflow-assessment`` — post-hoc audit of an agentic workflow run
   against its own definition: fans out the ``_trace_extractor`` sub-agent
   over the run's session transcripts and grades coverage, ordering/gates,
@@ -174,6 +178,7 @@ same main session — not as a sub-agent — so ``_review-core`` can spawn the
 review be reused by other main-session commands without duplicating the
 fan-out.
 
+
 Security model and recommended deny rules
 =========================================
 
@@ -218,6 +223,14 @@ Code:
   files — but running a test suite executes arbitrary project code, so this is a
   broader grant than the read-only git agents above. It is spawned only by the
   ``/viv:framework-development`` slash command.
+- ``_propagate_target`` (spawned by the ``change-propagation`` skill) also
+  **writes** and runs the test suite: for a monorepo target it adapts files
+  into a ``libs/<pkg>/`` subtree and runs that package's ``make check`` inside
+  an **isolated git worktree** (its verification sandbox). Its prompt constrains
+  it to write only within its assigned target and to **never** push, branch,
+  commit, or open a PR — every durable write is the lead skill's, after explicit
+  approval. For an external target it uses only read-only GitHub MCP calls and
+  writes nothing.
 - The ``/viv:code-reviewer``, ``/viv:model-regression-debugger``, and
   ``/viv:framework-development`` slash command bodies (running in the main
   session) gather PR/repo context through the GitHub MCP server (a plugin

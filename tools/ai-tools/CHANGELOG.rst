@@ -1,3 +1,7 @@
+**0.22.0 - 06/25/26**
+
+ - Add ``change-propagation`` skill to copy boilerplate across libs
+ 
 **0.21.0 - 06/25/26**
 
  - Add ``workflow-assessment`` skill to investigate workflow correctness post-hoc
