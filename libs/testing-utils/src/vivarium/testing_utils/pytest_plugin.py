@@ -77,13 +77,7 @@ _GB_PER_WORKER = 1.0
 
 
 def _usable_cpu_count() -> int:
-    """Count CPUs this process may actually run on.
-
-    Prefers the CPU affinity mask, which respects the cgroup limits SLURM sets per
-    job -- a job allocated N CPUs sees N here, never the whole node -- so it can't
-    over-subscribe a shared cluster node. Falls back to the system CPU count where
-    affinity is unavailable (e.g. macOS).
-    """
+    """Return the CPUs this process may use: its affinity mask, else the system count."""
     if hasattr(os, "sched_getaffinity"):
         try:
             return len(os.sched_getaffinity(0))
@@ -93,11 +87,7 @@ def _usable_cpu_count() -> int:
 
 
 def _available_memory_gb() -> float | None:
-    """Available memory in GB, or None when it can't be read.
-
-    Reads ``MemAvailable`` from /proc/meminfo to avoid a psutil dependency;
-    returns None off Linux so callers skip the memory check.
-    """
+    """Return available memory in GB from ``/proc/meminfo``, or None when unreadable (non-Linux)."""
     meminfo = Path("/proc/meminfo")
     if not meminfo.exists():
         return None
@@ -111,8 +101,7 @@ def _available_memory_gb() -> float | None:
 
 
 def _auto_num_workers() -> int:
-    """Resolve the xdist worker count: target DEFAULT_MAX_WORKERS, clamped down to
-    the available CPUs and memory, floored at 1."""
+    """Resolve the worker count: target DEFAULT_MAX_WORKERS, clamped to CPUs/memory, floored at 1."""
     workers = min(DEFAULT_MAX_WORKERS, _usable_cpu_count())
     available_gb = _available_memory_gb()
     if available_gb is not None:
@@ -121,21 +110,12 @@ def _auto_num_workers() -> int:
 
 
 def pytest_xdist_auto_num_workers(config: Config) -> int:
-    """Choose a safe number of xdist workers for ``-n auto``.
-
-    Targets ``DEFAULT_MAX_WORKERS`` (4) but scales *down* to the CPUs actually
-    available to the process and what free memory supports, never below 1 -- so it
-    degrades gracefully (e.g. 4 -> 2 -> 1) on small or constrained machines and on
-    under-provisioned cluster allocations instead of erroring or over-subscribing.
-    Detection uses the CPU affinity mask, so a SLURM job never sees more than its
-    allocation even on a busy node.
-    """
+    """Resolve a safe worker count for ``-n auto`` (capped at DEFAULT_MAX_WORKERS, scaled to CPUs/memory)."""
     return _auto_num_workers()
 
 
 def pytest_report_header(config: Config) -> list[str]:
-    """When running in parallel, print the resolved worker plan at the top of the
-    run so it's visible -- and greppable in CI -- how many workers were chosen."""
+    """Print the resolved xdist worker plan at the top of the run, when running in parallel."""
     numprocesses = config.getoption("numprocesses", default=None)
     if not numprocesses:
         return []
