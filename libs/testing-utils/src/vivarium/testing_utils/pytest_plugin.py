@@ -69,14 +69,10 @@ def pytest_collection_modifyitems(config: Config, items: list[Function]) -> None
                 item.add_marker(skip_weekly)
 
 
-# Default ceiling on parallel xdist workers for ``-n auto``. The suite is
-# isolation-safe in parallel (339/339) and memory headroom thins past ~4, so 4 is
-# the target; the hook only ever scales *down* from here.
+# Default ceiling on parallel xdist workers for ``-n auto``.
 DEFAULT_MAX_WORKERS = 4
 
-# Conservative per-worker memory budget (GB). Peak suite RSS measured ~0.75 GB
-# across all workers, so 1 GB/worker leaves headroom. Used only where available
-# memory can be read (Linux /proc/meminfo).
+# Conservative per-worker memory budget (GB).
 _GB_PER_WORKER = 1.0
 
 
