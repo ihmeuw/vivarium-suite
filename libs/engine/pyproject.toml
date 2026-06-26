@@ -35,7 +35,7 @@ dependencies = [
     "vivarium-artifact>=1.0.2",
     "vivarium-config-tree",
     "vivarium-dependencies[numpy_lt_2,pandas,pyyaml,scipy,click,tables,loguru,pyarrow,networkx]",
-    "vivarium-build-utils>=4.0.0,<5.0.0",
+    "vivarium-build-utils @ git+https://github.com/ihmeuw/vivarium-suite@test/engine/pytest-plugins#subdirectory=libs/build-utils",
     "dill",
 ]
 
@@ -43,7 +43,7 @@ dependencies = [
 interactive = ["vivarium-dependencies[interactive]"]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils>=0.6.0",
+    "vivarium-testing-utils @ git+https://github.com/ihmeuw/vivarium-suite@test/engine/pytest-plugins#subdirectory=libs/testing-utils",
 ]
 docs = [
     "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
