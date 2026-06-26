@@ -2,8 +2,10 @@
 
 import os
 from pathlib import Path
+from typing import cast
 
 import pytest
+from _pytest.config import Config
 
 from vivarium.testing_utils import pytest_plugin
 from vivarium.testing_utils.pytest_plugin import DEFAULT_MAX_WORKERS, _auto_num_workers
@@ -182,13 +184,13 @@ def test_available_memory_gb_takes_min(
 def test_report_header_silent_when_not_parallel(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pytest_plugin, "_usable_cpu_count", lambda: 8)
     monkeypatch.setattr(pytest_plugin, "_available_memory_gb", lambda: 32.0)
-    assert pytest_plugin.pytest_report_header(_FakeConfig(None)) == []
+    assert pytest_plugin.pytest_report_header(cast(Config, _FakeConfig(None))) == []
 
 
 def test_report_header_reports_when_parallel(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pytest_plugin, "_usable_cpu_count", lambda: 8)
     monkeypatch.setattr(pytest_plugin, "_available_memory_gb", lambda: 32.0)
-    [header] = pytest_plugin.pytest_report_header(_FakeConfig("auto"))
+    [header] = pytest_plugin.pytest_report_header(cast(Config, _FakeConfig("auto")))
     assert f"auto-workers: {DEFAULT_MAX_WORKERS}" in header
 
 
