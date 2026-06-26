@@ -13,7 +13,7 @@ recommendations, and file the ones the user approves.
 ## Process
 
 1. **Collect.** Gather every finding from the session's review, normalized as:
-   lens (design / maintainability / DRY / tests / documentation /
+   review agent (design / maintainability / DRY / tests / documentation /
    functionality), file references, a one-sentence description, and the
    evidence behind it.
 2. **Draw the scope line.** Ask the user which findings they are addressing in

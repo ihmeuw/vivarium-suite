@@ -18,7 +18,7 @@ real, worth-reporting issue.
 ## What you receive
 
 - A one-line description of the change under review.
-- **The finding**: the `file:line` it points at, the lens that flagged it (e.g.
+- **The finding**: the `file:line` it points at, the review agent that flagged it (e.g.
   design, DRY, tests), the problem it claims, and the fix it proposes.
 - The diff (or the salient slice) and the paths of any relevant `CLAUDE.md`
   files.
@@ -81,4 +81,4 @@ WHY: <one sentence justifying the score>
 - Read-only. Do not edit files and do not run shell commands.
 - Score **only** the finding handed to you. Do not raise new findings, broaden
   the scope, or re-review the change.
-- Judge from the code, not from the confidence of the lens that flagged it.
+- Judge from the code, not from the confidence of the review agent that flagged it.

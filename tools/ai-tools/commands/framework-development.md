@@ -33,11 +33,11 @@ Gate 1 — validate: up to 3 rounds, until green
     still red after the budget  ->  carry residual failures to Phase 5, skip review (don't review red code)
 
 Gate 2 — review: up to 3 rounds, until clean (separate budget from Gate 1)
-    findings = review_core once       # full five-lens fan-out + correctness; always runs once on green
+    findings = review_core once       # full five-agent fan-out + correctness; always runs once on green
     repeat while must-fix findings remain:
         triage & re-dispatch each finding
         re-integrate, then re-validate    # a review fix can't silently break a test
-        re-check each fix with the lens that raised it
+        re-check each fix with the review agent that raised it
     leftover findings  ->  carry to Phase 5
 
 finalize & PR                        # Phase 5: user-gated; residuals -> ticket-triage
@@ -152,14 +152,14 @@ around review.
    **first** time you reach green, invoke the `_review-core` skill
    (`skills/_review-core/SKILL.md`) with the integrated diff, the changed-file
    list, and a one-line feature description — a full fan-out across the five
-   review **lenses** (one Sonnet `_review_*` specialist per dimension: Design,
+   **review agents** (one Sonnet `_review_*` specialist per dimension: Design,
    Maintainability, DRY, Tests, Documentation) plus the functional-correctness
    pass in this main-session context, the same definition `/viv:code-reviewer`
    uses. It then independently confidence-scores every finding (a `_review_scorer`
    per finding) and drops those below 50, so it returns the surviving findings
-   bucketed by lens — each annotated with its score — alongside your own
+   bucketed by review agent — each annotated with its score — alongside your own
    Functionality pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
-   each already-fixed finding **back to the lens that raised it** for a
+   each already-fixed finding **back to the review agent that raised it** for a
    resolved/not-resolved verdict. When no must-fix findings remain, run one final full `_review-core`
    pass as the convergence check — it catches any *new* qualitative issue a fix
    introduced, which per-finding routing can't. A clean final pass means

@@ -1,11 +1,11 @@
 ---
 name: _review-core
-description: "Internal building block invoked by /viv:code-reviewer (and framework-development's review phase): runs the multi-lens review fan-out + functional-correctness pass + per-finding confidence scoring + synthesis on a diff the caller has already gathered. Not a review entry point — to review a PR, use /viv:code-reviewer."
+description: "Internal building block invoked by /viv:code-reviewer (and framework-development's review phase): runs the multi-agent review fan-out + functional-correctness pass + per-finding confidence scoring + synthesis on a diff the caller has already gathered. Not a review entry point — to review a PR, use /viv:code-reviewer."
 allowed-tools: Read, Grep, Glob, Agent(_review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation, _review_scorer)
 user-invocable: false
 ---
 
-Run the shared multi-lens review of: $ARGUMENTS
+Run the shared multi-agent review of: $ARGUMENTS
 
 This is the **review core** — the single definition of the parallel fan-out, the
 functional-correctness pass, the per-finding confidence scoring, and the
@@ -15,7 +15,7 @@ commands (e.g. a development workflow's review phase). Because it runs inline in
 the caller's main-session context, its fan-out to the `_review_*` sub-agents
 stays one level deep — so run this unit inline and **not** as a forked sub-agent.
 
-The five lenses run on **Sonnet** and the per-finding confidence scorers on
+The five review agents run on **Sonnet** and the per-finding confidence scorers on
 **Haiku** (set in each agent's definition, so you don't pass a model); the
 synthesis runs here in the caller's main session.
 
@@ -29,7 +29,7 @@ fetch a PR or run git/gh here.
 In a single message, invoke ALL FIVE of the following sub-agents in
 parallel. Hand each the same brief: the change description, the changed-file
 list, and the diff (or the salient slice). Do this regardless of size or
-content type — a docs-only change still goes through every lens, and
+content type — a docs-only change still goes through every review agent, and
 sub-agents correctly report "no findings" if there are none.
 
 - `_review_maintainability` — readability, documentation, implicit assumptions, coupling
@@ -54,7 +54,7 @@ While the sub-agents run, perform your own functional-correctness review:
 
 ## Step 3 — Score every finding for confidence (independent, in parallel)
 
-When the five lenses return, collect every finding — from all five lenses **and**
+When the five review agents return, collect every finding — from all five review agents **and**
 from your own functional-correctness pass — into one flat list, treating each as
 a discrete item (including nits). Then have each one scored independently:
 
@@ -62,12 +62,12 @@ a discrete item (including nits). Then have each one scored independently:
    `CLAUDE.md` (if any) plus any `CLAUDE.md` in directories the change touched.
 2. In a single message, launch one `_review_scorer` (Haiku) **per finding**, in
    parallel. Hand each scorer: the one-line change description, the **single**
-   finding (its `file:line`, the lens that flagged it, the problem, and the
+   finding (its `file:line`, the review agent that flagged it, the problem, and the
    proposed fix), the diff slice relevant to that finding, and the `CLAUDE.md`
    paths. Each returns a `SCORE` (0-100) and a one-line `WHY`.
 
 Score your own functional-correctness findings the same way — the scorer is the
-independent check on the lens *and* on you, so don't exempt yourself.
+independent check on the review agent *and* on you, so don't exempt yourself.
 
 ## Step 4 — Filter by confidence
 
@@ -77,9 +77,9 @@ needs ≥50 — a verified-real issue — to survive. Count how many you dropped
 
 ## Step 5 — Synthesize
 
-Merge the surviving findings into the structured output below. When two lenses
+Merge the surviving findings into the structured output below. When two review agents
 flagged the same issue (two findings, two scores), collapse them into one entry,
-attribute both lenses, and keep the **highest** of their scores. Annotate each
+attribute both review agents, and keep the **highest** of their scores. Annotate each
 surviving finding with its confidence score.
 
 ## Output Format
