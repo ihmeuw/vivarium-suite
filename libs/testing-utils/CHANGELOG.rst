@@ -1,6 +1,6 @@
 **0.7.0 - 06/26/26**
 
-- Update pytest-xdist plugin default behavior
+- Update ``-n auto`` to pick a resource-aware worker count
 
 **0.6.2 - 06/22/26**
 

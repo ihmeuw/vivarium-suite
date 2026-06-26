@@ -25,6 +25,19 @@ def is_on_slurm() -> bool:
 
 IS_ON_SLURM = is_on_slurm()
 
+# Default ceiling on parallel xdist workers for ``-n auto``: enough to speed up the suite
+# while capping memory use and oversubscription on large shared (e.g. SLURM) nodes.
+DEFAULT_MAX_WORKERS = 4
+
+# Conservative per-worker memory budget (GB).
+_GB_PER_WORKER = 1.0
+
+# Filesystem locations consulted for a cgroup memory limit (e.g. a SLURM ``--mem``
+# allocation or a container limit). Module-level so tests can redirect them.
+_PROC_SELF_CGROUP = Path("/proc/self/cgroup")
+_CGROUP_V2_ROOT = Path("/sys/fs/cgroup")
+_CGROUP_V1_MEMORY_ROOT = Path("/sys/fs/cgroup/memory")
+
 
 def pytest_addoption(parser: argparsing.Parser) -> None:
     parser.addoption("--runslow", action="store_true", default=False, help="run slow tests")
@@ -69,13 +82,6 @@ def pytest_collection_modifyitems(config: Config, items: list[Function]) -> None
                 item.add_marker(skip_weekly)
 
 
-# Default ceiling on parallel xdist workers for ``-n auto``.
-DEFAULT_MAX_WORKERS = 4
-
-# Conservative per-worker memory budget (GB).
-_GB_PER_WORKER = 1.0
-
-
 def _usable_cpu_count() -> int:
     """Return the CPUs this process may use: its affinity mask, else the system count."""
     if hasattr(os, "sched_getaffinity"):
@@ -86,31 +92,94 @@ def _usable_cpu_count() -> int:
     return os.cpu_count() or 1
 
 
-def _available_memory_gb() -> float | None:
-    """Return available memory in GB from ``/proc/meminfo``, or None when unreadable (non-Linux)."""
+def _node_available_memory_gb() -> float | None:
+    """Return the node's available memory in GB from ``/proc/meminfo``, or None when unreadable."""
     meminfo = Path("/proc/meminfo")
     if not meminfo.exists():
         return None
     try:
         for line in meminfo.read_text().splitlines():
             if line.startswith("MemAvailable:"):
-                return float(line.split()[1]) / (1024 * 1024)
+                return float(line.split()[1]) / (1024 * 1024)  # MemAvailable is in kB -> GB
     except (OSError, ValueError, IndexError):
         return None
     return None
 
 
-def _auto_num_workers() -> int:
-    """Resolve the worker count: target DEFAULT_MAX_WORKERS, clamped to CPUs/memory, floored at 1."""
-    workers = min(DEFAULT_MAX_WORKERS, _usable_cpu_count())
-    available_gb = _available_memory_gb()
+def _read_cgroup_memory_limit(limit_file: Path) -> int | None:
+    """Read a cgroup memory-limit file as a byte count, or None if missing or unlimited."""
+    try:
+        raw = limit_file.read_text().strip()
+    except OSError:
+        return None
+    if raw == "max":  # cgroup v2 sentinel for "no limit"
+        return None
+    try:
+        limit = int(raw)
+    except ValueError:
+        return None
+    # cgroup v1 encodes "unlimited" as a near-2**63 page-aligned sentinel.
+    return None if limit >= 2**62 else limit
+
+
+def _cgroup_memory_limit_gb() -> float | None:
+    """Return this process's cgroup memory limit in GB, or None if unlimited/unreadable."""
+    try:
+        entries = _PROC_SELF_CGROUP.read_text().splitlines()
+    except OSError:
+        return None
+
+    limits: list[int] = []
+    for entry in entries:
+        fields = entry.split(":")
+        if len(fields) != 3:
+            continue
+        controllers, rel_path = fields[1], fields[2].lstrip("/")
+        if controllers == "":  # cgroup v2 (unified hierarchy)
+            root, limit_filename = _CGROUP_V2_ROOT, "memory.max"
+        elif "memory" in controllers.split(","):  # cgroup v1 memory controller
+            root, limit_filename = _CGROUP_V1_MEMORY_ROOT, "memory.limit_in_bytes"
+        else:
+            continue
+        cgroup_dir = root / rel_path
+        while True:
+            limit = _read_cgroup_memory_limit(cgroup_dir / limit_filename)
+            if limit is not None:
+                limits.append(limit)
+            if cgroup_dir == root:
+                break
+            cgroup_dir = cgroup_dir.parent
+
+    return min(limits) / 1024**3 if limits else None
+
+
+def _available_memory_gb() -> float | None:
+    """Return the memory usable by this process in GB: the smaller of the node's free
+    memory and any cgroup (e.g. SLURM ``--mem``) limit, or None if neither is readable."""
+    candidates = [
+        gb
+        for gb in (_node_available_memory_gb(), _cgroup_memory_limit_gb())
+        if gb is not None
+    ]
+    return min(candidates) if candidates else None
+
+
+def _resolve_workers(cpus: int, available_gb: float | None) -> int:
+    """Clamp the target worker count to the given CPUs and memory, floored at 1."""
+    workers = min(DEFAULT_MAX_WORKERS, cpus)
     if available_gb is not None:
         workers = min(workers, int(available_gb // _GB_PER_WORKER))
+    # Always run at least one worker, even below a full per-worker memory budget.
     return max(1, workers)
 
 
+def _auto_num_workers() -> int:
+    """Resolve the worker count: target DEFAULT_MAX_WORKERS, clamped to CPUs/memory, floored at 1."""
+    return _resolve_workers(_usable_cpu_count(), _available_memory_gb())
+
+
 def pytest_xdist_auto_num_workers(config: Config) -> int:
-    """Resolve a safe worker count for ``-n auto`` (capped at DEFAULT_MAX_WORKERS, scaled to CPUs/memory)."""
+    """Resolve a safe worker count for ``-n auto`` (capped at DEFAULT_MAX_WORKERS, scaled to CPUs/memory, floored at 1)."""
     return _auto_num_workers()
 
 
@@ -119,11 +188,12 @@ def pytest_report_header(config: Config) -> list[str]:
     numprocesses = config.getoption("numprocesses", default=None)
     if not numprocesses:
         return []
-    memory_gb = _available_memory_gb()
-    memory = f"{memory_gb:.1f} GB" if memory_gb is not None else "unknown"
+    cpus = _usable_cpu_count()
+    available_gb = _available_memory_gb()
+    memory = f"{available_gb:.2f} GB" if available_gb is not None else "unknown"
     return [
-        f"vivarium xdist auto-workers: {_auto_num_workers()} "
-        f"(target {DEFAULT_MAX_WORKERS}, usable CPUs {_usable_cpu_count()}, "
+        f"vivarium xdist auto-workers: {_resolve_workers(cpus, available_gb)} "
+        f"(target {DEFAULT_MAX_WORKERS}, usable CPUs {cpus}, "
         f"available memory {memory}); requested -n {numprocesses}. The actual spawned "
         f"count is in xdist's own 'N workers [M items]' line below."
     ]
