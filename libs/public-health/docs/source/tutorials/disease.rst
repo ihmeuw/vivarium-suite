@@ -47,12 +47,11 @@ Common Setup
 ------------
 
 The disease components in this tutorial take their data directly as
-**scalars** - so none of the examples require a data artifact. State- and
-model-level measures (prevalence, disability weight, excess mortality rate,
-birth prevalence, and cause-specific mortality rate) are set through the
-``data_sources`` configuration (see `Data sources`_); transition rates are
-passed as a constructor or factory argument. The only data served from memory
-is the demographic structure that
+**scalars** - so none of the examples require a data artifact. Every measure -
+prevalence, disability weight, excess mortality rate, birth prevalence,
+cause-specific mortality rate, and the transition rates - is set through the
+``data_sources`` configuration (see `Data sources`_). The only data served from
+memory is the demographic structure that
 :class:`~vivarium.public_health.population.base_population.BasePopulation`
 needs, which the in-memory example artifact (``BASE_PLUGINS``) provides.
 
@@ -77,6 +76,30 @@ To run any example in a standalone script, include all of these at the top:
    # time range, step size, and randomness key columns.
    config = make_base_config()
 
+   # A transition's data_sources key is its auto-generated component name, which
+   # encodes the two states and the default rate key - so it is verbose. These
+   # are the keys for the "test_cause" and "neonatal_cause" models used below.
+   # (See `Data sources`_ for why transition keys look like this.)
+   incidence_key = (
+       "rate_transition.'susceptible_state.susceptible_to_test_cause'."
+       "'disease_state.test_cause'.cause.test_cause.incidence_rate.incidence_rate"
+   )
+   sis_remission_key = (
+       "rate_transition.'disease_state.test_cause'."
+       "'susceptible_state.susceptible_to_test_cause'."
+       "cause.test_cause.remission_rate.remission_rate"
+   )
+   sir_remission_key = (
+       "rate_transition.'disease_state.test_cause'."
+       "'recovered_state.recovered_from_test_cause'."
+       "cause.test_cause.remission_rate.remission_rate"
+   )
+   neonatal_incidence_key = (
+       "rate_transition.'susceptible_state.susceptible_to_neonatal_cause'."
+       "'disease_state.neonatal_cause'."
+       "cause.neonatal_cause.incidence_rate.incidence_rate"
+   )
+
 
 Data sources
 ------------
@@ -90,12 +113,14 @@ you supply each measure as a:
 
 By default each measure loads from the artifact at the data key shown below.
 Supplying a scalar instead - as every example in this tutorial does - lets the
-model run without an artifact. State- and model-level measures can be supplied
-through the configuration or, when constructing a component directly, as a
-constructor argument; the pre-built factories do not take them, so with a
-factory these measures are set through the configuration. The transition rates
-are supplied as a constructor or factory argument (their generated
-configuration keys are not meant to be written by hand).
+model run without an artifact. The pre-built factories take no data arguments,
+so with a factory every measure is set through the configuration. When building
+states and transitions directly you may instead pass them as constructor
+arguments (e.g. ``DiseaseState(prevalence=...)`` or
+``add_rate_transition(transition_rate=...)``). A transition's configuration key
+is its auto-generated component name, which encodes both states and is therefore
+verbose; the factory examples below define these keys once in `Common Setup`_
+and reuse them.
 
 For the full list of data keys and the column layout each one expects, see
 :ref:`disease_data_concept`.
@@ -127,17 +152,19 @@ For the full list of data keys and the column layout each one expects, see
      - :class:`~vivarium.public_health.disease.transition.RateTransition`
        (from susceptible state)
      - ``cause.{cause}.incidence_rate``
-     - ``incidence_rate=`` or ``add_rate_transition(transition_rate=...)``
+     - ``add_rate_transition(transition_rate=...)`` or the transition's
+       (auto-generated) ``data_sources.transition_rate``
    * - remission_rate
      - :class:`~vivarium.public_health.disease.transition.RateTransition`
        (from infected state)
      - ``cause.{cause}.remission_rate``
-     - ``remission_rate=`` or ``add_rate_transition(transition_rate=...)``
+     - ``add_rate_transition(transition_rate=...)`` or the transition's
+       (auto-generated) ``data_sources.transition_rate``
    * - cause_specific_mortality_rate
      - :class:`~vivarium.public_health.disease.model.DiseaseModel`
      - ``cause.{cause}.cause_specific_mortality_rate``
      - ``cause_specific_mortality_rate=`` or
-       ``{cause}.data_sources.cause_specific_mortality_rate``
+       ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
 
 For example, :class:`~vivarium.public_health.disease.state.DiseaseState`
 declares five configurable data sources:
@@ -340,13 +367,12 @@ Pre-Built Models
 
 For common disease progressions,
 :mod:`vivarium.public_health.disease.models` provides convenience functions
-that create fully wired models in a single call. Each factory accepts the
-model's transition rates (incidence and, where applicable, remission) as scalar
-arguments; omit a rate to load it from the artifact instead. The remaining
-measures - prevalence, disability weight, excess mortality rate, birth
-prevalence, and cause-specific mortality rate - are supplied through the
-configuration, keyed by component name (``disease_state.{cause}`` for the
-state-level measures and ``disease_model.{cause}`` for the CSMR).
+that create fully wired models in a single call. The factories take only the
+cause name (and a duration for the fixed-duration models); every measure is
+supplied through the configuration, keyed by component name:
+``disease_state.{cause}`` for the state-level measures, ``disease_model.{cause}``
+for the CSMR, and each transition's auto-generated key for its rate (defined
+once in `Common Setup`_ and reused below).
 
 
 SI model (Susceptible |rarr| Infected)
@@ -354,10 +380,9 @@ SI model (Susceptible |rarr| Infected)
 
 The simplest model: once infected, a simulant never recovers.
 
-**Incidence rate** is passed to the factory; the remaining measures are set
-through the configuration:
+All measures are set through the configuration:
 
-- ``incidence_rate`` - susceptible |rarr| infected (factory argument)
+- ``incidence_rate`` - susceptible |rarr| infected (transition key)
 - ``prevalence`` - initialization into disease state (configuration)
 - ``disability_weight`` - YLD calculation (configuration)
 - ``excess_mortality_rate`` - mortality (configuration)
@@ -386,9 +411,10 @@ through the configuration:
        layer="override",
    )
 
-   # The incidence rate is supplied to the factory; the other measures come
-   # from the configuration above.
-   model = SI("test_cause", incidence_rate=0.5)
+   config.update(
+       {incidence_key: {"data_sources": {"transition_rate": 0.5}}}, layer="override"
+   )
+   model = SI("test_cause")
 
    sim = InteractiveContext(
        components=[BasePopulation(), model],
@@ -421,9 +447,9 @@ SIS model (Susceptible |harr| Infected)
 
 Simulants can recover and become susceptible again.
 
-**Additional factory argument** (beyond SI):
+**Additional rate** (beyond SI):
 
-- ``remission_rate`` - infected |rarr| susceptible
+- ``remission_rate`` - infected |rarr| susceptible (transition key)
 
 .. testcode::
 
@@ -446,8 +472,14 @@ Simulants can recover and become susceptible again.
        layer="override",
    )
 
-   # The remission_rate sends infected simulants back to susceptible.
-   model = SIS("test_cause", incidence_rate=0.5, remission_rate=1.0)
+   config.update(
+       {
+           incidence_key: {"data_sources": {"transition_rate": 0.5}},
+           sis_remission_key: {"data_sources": {"transition_rate": 1.0}},
+       },
+       layer="override",
+   )
+   model = SIS("test_cause")
 
    sim = InteractiveContext(
        components=[BasePopulation(), model],
@@ -476,11 +508,10 @@ SIR model (Susceptible |rarr| Infected |rarr| Recovered)
 Simulants move from susceptible to infected to recovered, with no return
 to susceptibility.
 
-**Transition rates** are passed to the factory; the remaining measures are set
-through the configuration:
+All measures are set through the configuration:
 
-- ``incidence_rate`` - susceptible |rarr| infected (factory argument)
-- ``remission_rate`` - infected |rarr| recovered (factory argument)
+- ``incidence_rate`` - susceptible |rarr| infected (transition key)
+- ``remission_rate`` - infected |rarr| recovered (transition key)
 - ``prevalence`` - initialization into disease state (configuration)
 - ``disability_weight`` - YLD calculation (configuration)
 - ``excess_mortality_rate`` - mortality (configuration)
@@ -507,8 +538,14 @@ through the configuration:
        layer="override",
    )
 
-   # Here the remission_rate moves infected simulants to recovered.
-   model = SIR("test_cause", incidence_rate=0.5, remission_rate=0.5)
+   config.update(
+       {
+           incidence_key: {"data_sources": {"transition_rate": 0.5}},
+           sir_remission_key: {"data_sources": {"transition_rate": 0.5}},
+       },
+       layer="override",
+   )
+   model = SIR("test_cause")
 
    sim = InteractiveContext(
        components=[BasePopulation(), model],
@@ -538,12 +575,12 @@ An SIS model where the infection lasts for a fixed number of days instead
 of using a remission rate. Simulants cannot transition out of the infected
 state until the dwell time has elapsed.
 
-**Factory argument:**
+**Rate** (set through configuration):
 
-- ``incidence_rate`` - susceptible |rarr| infected
+- ``incidence_rate`` - susceptible |rarr| infected (transition key)
 
-No remission rate is needed; the dwell time is passed to the factory and the
-remaining measures are set through the configuration.
+No remission rate is needed - the fixed ``duration`` passed to the factory
+drives the return transition. Every measure is set through the configuration.
 
 .. testcode::
 
@@ -567,9 +604,10 @@ remaining measures are set through the configuration.
        layer="override",
    )
 
-   # Infection lasts exactly 14 days; the dwell time handles the return
-   # transition, so no remission_rate is needed.
-   model = SIS_fixed_duration("test_cause", duration="14", incidence_rate=0.5)
+   config.update(
+       {incidence_key: {"data_sources": {"transition_rate": 0.5}}}, layer="override"
+   )
+   model = SIS_fixed_duration("test_cause", duration="14")
 
    sim = InteractiveContext(
        components=[BasePopulation(), model],
@@ -620,8 +658,10 @@ moves to the recovered state.
        layer="override",
    )
 
-   # Infection lasts exactly 21 days before recovery.
-   model = SIR_fixed_duration("test_cause", duration="21", incidence_rate=0.5)
+   config.update(
+       {incidence_key: {"data_sources": {"transition_rate": 0.5}}}, layer="override"
+   )
+   model = SIR_fixed_duration("test_cause", duration="21")
 
    sim = InteractiveContext(
        components=[BasePopulation(), model],
@@ -721,9 +761,9 @@ NeonatalSWC with incidence
 A model where the condition is assigned at birth *and* new cases can arise
 via an incidence rate.
 
-**Additional factory argument** (beyond the birth-prevalence-only model):
+**Additional rate** (beyond the birth-prevalence-only model):
 
-- ``incidence_rate`` - for ongoing incidence after birth
+- ``incidence_rate`` - for ongoing incidence after birth (transition key)
 
 .. testcode::
 
@@ -753,8 +793,11 @@ via an incidence rate.
        layer="override",
    )
 
-   # Birth prevalence (configuration) plus ongoing incidence (factory argument).
-   model = NeonatalSWC_with_incidence("neonatal_cause", incidence_rate=0.5)
+   config.update(
+       {neonatal_incidence_key: {"data_sources": {"transition_rate": 0.5}}},
+       layer="override",
+   )
+   model = NeonatalSWC_with_incidence("neonatal_cause")
 
    sim = InteractiveContext(
        components=[BasePopulation(), model],
@@ -1208,9 +1251,11 @@ sensitivity analyses or testing:
        layer="override",
    )
 
-   # Only the incidence rate is passed to the factory; everything else comes
-   # from the configuration above.
-   model = SI("test_cause", incidence_rate=0.5)
+   # Everything, including the incidence rate, comes from the configuration.
+   config.update(
+       {incidence_key: {"data_sources": {"transition_rate": 0.5}}}, layer="override"
+   )
+   model = SI("test_cause")
 
    sim = InteractiveContext(
        components=[BasePopulation(), model],
@@ -1261,11 +1306,13 @@ These are useful for tracking disease history:
            "disease_model.test_cause": {
                "data_sources": {"cause_specific_mortality_rate": 0.0},
            },
+           incidence_key: {"data_sources": {"transition_rate": 0.5}},
+           sis_remission_key: {"data_sources": {"transition_rate": 1.0}},
        },
        layer="override",
    )
 
-   model = SIS("test_cause", incidence_rate=0.5, remission_rate=1.0)
+   model = SIS("test_cause")
 
    sim = InteractiveContext(
        components=[BasePopulation(), model],
@@ -1303,7 +1350,7 @@ Configuration Summary
      - Default data key(s) (used if not supplied directly)
    * - ``DiseaseModel``
      - ``cause_specific_mortality_rate=`` (constructor) or
-       ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
+       ``1{cause}.data_sources.cause_specific_mortality_rate``
      - ``cause.{cause}.cause_specific_mortality_rate``
    * - ``DiseaseState``
      - ``prevalence=``, ``birth_prevalence=``, ``dwell_time=``,
@@ -1318,26 +1365,25 @@ Configuration Summary
      - ``proportion=`` via ``add_proportion_transition``
      - None (proportion usually provided directly)
    * - ``SI``
-     - ``incidence_rate`` (factory); prevalence, disability_weight,
-       excess_mortality_rate, and cause_specific_mortality_rate via configuration
+     - no data arguments; all measures via configuration (state/model measures
+       by component name, incidence by the transition's auto-generated key)
      - matching ``cause.test_cause.{measure}`` keys
    * - ``SIS``
-     - the ``SI`` arguments plus ``remission_rate`` (factory)
+     - like ``SI``, plus a remission rate (its own transition key)
      - matching ``cause.test_cause.{measure}`` keys
    * - ``SIR``
-     - the ``SI`` arguments plus ``remission_rate`` (factory)
+     - like ``SI``, plus a remission rate (its own transition key)
      - matching ``cause.test_cause.{measure}`` keys
    * - ``SIS_fixed_duration``
-     - ``duration`` plus the ``SI`` arguments
+     - ``duration`` argument; all measures via configuration (incidence only)
      - matching ``cause.test_cause.{measure}`` keys
    * - ``SIR_fixed_duration``
-     - ``duration`` plus the ``SI`` arguments
+     - ``duration`` argument; all measures via configuration (incidence only)
      - matching ``cause.test_cause.{measure}`` keys
    * - ``NeonatalSWC_without_incidence``
-     - no factory arguments; birth_prevalence, prevalence, disability_weight,
-       excess_mortality_rate, and cause_specific_mortality_rate via configuration
+     - no data arguments; all measures via configuration
      - matching ``cause.{cause}.{measure}`` keys
    * - ``NeonatalSWC_with_incidence``
-     - ``incidence_rate`` (factory); the ``NeonatalSWC_without_incidence``
-       measures via configuration
+     - like ``NeonatalSWC_without_incidence``, plus an incidence rate
+       (transition key)
      - matching ``cause.{cause}.{measure}`` keys

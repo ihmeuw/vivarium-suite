@@ -97,16 +97,11 @@ def test_si_structure():
 
 def test_si_incidence_defaults_to_artifact_key():
     # The susceptible->diseased transition's rate defaults to the incidence artifact key.
+    # Overriding it without an artifact is done through the configuration (see the
+    # disease tutorial), not a factory argument.
     model = models.SI(CAUSE)
     healthy = _state(model, SusceptibleState)
     assert _rate_transition(healthy).transition_rate == f"cause.{CAUSE}.incidence_rate"
-
-
-def test_si_incidence_override():
-    # A supplied incidence rate is used on the susceptible->diseased transition.
-    model = models.SI(CAUSE, incidence_rate=0.2)
-    healthy = _state(model, SusceptibleState)
-    assert _rate_transition(healthy).transition_rate == 0.2
 
 
 #######################
@@ -125,18 +120,12 @@ def test_sir_has_recovered_state():
 
 
 @pytest.mark.parametrize("factory", [models.SIR, models.SIS])
-def test_remission_rate_default_and_override(factory):
-    # Default: remission loads from the artifact remission key.
-    default_model = factory(CAUSE)
-    default_infected = _state(default_model, DiseaseState)
-    assert (
-        _rate_transition(default_infected).transition_rate == f"cause.{CAUSE}.remission_rate"
-    )
-
-    # Override: the supplied remission rate is used verbatim.
-    override_model = factory(CAUSE, remission_rate=0.5)
-    override_infected = _state(override_model, DiseaseState)
-    assert _rate_transition(override_infected).transition_rate == 0.5
+def test_remission_rate_defaults_to_artifact_key(factory):
+    # Remission defaults to the artifact remission key; overriding it without an
+    # artifact is done through the configuration, not a factory argument.
+    model = factory(CAUSE)
+    infected = _state(model, DiseaseState)
+    assert _rate_transition(infected).transition_rate == f"cause.{CAUSE}.remission_rate"
 
 
 ###########################
@@ -175,6 +164,8 @@ def test_neonatal_without_incidence_has_no_incidence_transition():
 
 
 def test_neonatal_with_incidence_adds_incidence_transition():
-    model = models.NeonatalSWC_with_incidence(CAUSE, incidence_rate=0.7)
+    # The with-incidence model adds an incidence transition defaulting to the
+    # incidence artifact key.
+    model = models.NeonatalSWC_with_incidence(CAUSE)
     healthy = _state(model, SusceptibleState)
-    assert _rate_transition(healthy).transition_rate == 0.7
+    assert _rate_transition(healthy).transition_rate == f"cause.{CAUSE}.incidence_rate"
