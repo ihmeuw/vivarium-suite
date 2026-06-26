@@ -1,13 +1,6 @@
 **6.1.2 - 06/26/26**
 
-- Add optional incidence/remission rate arguments to the pre-built disease model
-  factories (``SI``, ``SIR``, ``SIS``, ``SIS_fixed_duration``,
-  ``SIR_fixed_duration``, ``NeonatalSWC_*``). Combined with the existing
-  per-state and per-model ``data_sources`` configuration, this lets a
-  factory-built model run entirely from configuration, with no artifact.
-- Make ``RiskAttributableDisease``'s exposure ``distribution`` a configurable
-  ``data_sources`` entry that accepts a literal (e.g. ``"dichotomous"``) instead
-  of always loading ``{risk}.distribution`` from the artifact.
+- Allow RiskAttributableDisease input data to be defined without an artifact 
 - Rewrite the disease tutorial to build every model artifactless, driving all
   data through configuration.
 
