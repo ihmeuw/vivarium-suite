@@ -1,3 +1,12 @@
+**4.2.6 - 06/23/26**
+
+- Enforce a fixed schema for central performance logs
+- Start a new central log file instead of appending when the most recent file predates the schema
+
+**4.2.5 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
 **4.2.4 - 06/17/26**
 
 - Only log the renaming of backup files when a rename actually occurs

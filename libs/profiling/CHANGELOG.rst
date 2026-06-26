@@ -1,3 +1,7 @@
+**0.4.16 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
 **0.4.15 - 06/17/26**
 
 - Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
