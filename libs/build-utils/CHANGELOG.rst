@@ -1,3 +1,8 @@
+**4.1.0 - 06/26/26**
+
+- Run pytest with ``-n auto`` by default to parallelize tests across available workers
+- Turn coverage off by default
+
 **4.0.2 - 06/24/26**
 
 - Add ``--runslow`` and ``--runweekly`` support to pytest calls so that Jenkins builds pass
