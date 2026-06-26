@@ -22,7 +22,10 @@ It includes:
   - Testing coverage and quality
   - Documentation
 
-  plus its own functional-correctness pass.
+  plus its own functional-correctness pass. The five lenses run on Sonnet;
+  every finding is then independently scored for confidence (0-100) by a
+  per-finding ``_review_scorer`` Haiku sub-agent, and findings below 50 are
+  dropped — so only verified issues reach the report, each shown with its score.
 
 After the review, findings the user won't address in the current PR can be
 handed to the ``ticket-triage`` skill (see Skills below), to compile and file non-duplicate JIRA tickets.
@@ -178,6 +181,14 @@ same main session — not as a sub-agent — so ``_review-core`` can spawn the
 review be reused by other main-session commands without duplicating the
 fan-out.
 
+``_review-core`` runs two one-level fan-outs in sequence, tiered by model. The
+five review lenses run on **Sonnet**; once they return, ``_review-core`` collects
+every finding (the lenses' plus its own functional-correctness pass) and spawns a
+second fan-out of ``_review_scorer`` agents on **Haiku** — one per finding — to
+score each finding's confidence (0-100) independently of the lens that raised it.
+It then drops anything below 50 and synthesizes the survivors. Both fan-outs stay
+one level deep because ``_review-core`` itself runs inline in the main session.
+
 
 Security model and recommended deny rules
 =========================================
@@ -185,8 +196,9 @@ Security model and recommended deny rules
 The agents in this plugin have the following shell access on Claude
 Code:
 
-- The 5 ``_review_*`` sub-agents have **no Bash access at all**. They
-  are fed PR context by the slash command and analyze code with
+- The ``_review_*`` sub-agents — the five review lenses plus the
+  per-finding ``_review_scorer`` — have **no Bash access at all**. They
+  are fed review context by ``_review-core`` and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
 - ``_claim_auditor`` likewise has **no Bash access** — it verifies
   plaintext claims with ``Read``/``Grep``/``Glob``, read-only MCP calls

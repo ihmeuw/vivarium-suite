@@ -1,19 +1,23 @@
 ---
 name: _review-core
-description: "Internal building block invoked by /viv:code-reviewer (and framework-development's review phase): runs the multi-lens review fan-out + functional-correctness pass + synthesis on a diff the caller has already gathered. Not a review entry point — to review a PR, use /viv:code-reviewer."
-allowed-tools: Read, Grep, Glob, Agent(_review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation)
+description: "Internal building block invoked by /viv:code-reviewer (and framework-development's review phase): runs the multi-lens review fan-out + functional-correctness pass + per-finding confidence scoring + synthesis on a diff the caller has already gathered. Not a review entry point — to review a PR, use /viv:code-reviewer."
+allowed-tools: Read, Grep, Glob, Agent(_review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation, _review_scorer)
 user-invocable: false
 ---
 
 Run the shared multi-lens review of: $ARGUMENTS
 
-This is the **review core** — the single definition of the parallel fan-out,
-the functional-correctness pass, and the synthesis. It is invoked **inline** by
-`/viv:code-reviewer` (after it gathers PR context), and is designed to be reused
-the same way by other main-session commands (e.g. a development workflow's review
-phase). Because it runs inline in the caller's main-session context, its fan-out
-to the five `_review_*` sub-agents stays one level deep — so run this unit
-inline and **not** as a forked sub-agent.
+This is the **review core** — the single definition of the parallel fan-out, the
+functional-correctness pass, the per-finding confidence scoring, and the
+synthesis. It is invoked **inline** by `/viv:code-reviewer` (after it gathers PR
+context), and is designed to be reused the same way by other main-session
+commands (e.g. a development workflow's review phase). Because it runs inline in
+the caller's main-session context, its fan-out to the `_review_*` sub-agents
+stays one level deep — so run this unit inline and **not** as a forked sub-agent.
+
+The five lenses run on **Sonnet** and the per-finding confidence scorers on
+**Haiku** (set in each agent's definition, so you don't pass a model); the
+synthesis runs here in the caller's main session.
 
 **Not this unit's job** — the caller owns these: gathering the review target
 (PR/diff context), and any follow-up action on the findings (e.g. filing
@@ -48,12 +52,35 @@ While the sub-agents run, perform your own functional-correctness review:
   implementation diverges from the documented modelling strategy. If you can't
   determine the relevant concept model, say so rather than guessing.
 
-## Step 3 — Synthesize
+## Step 3 — Score every finding for confidence (independent, in parallel)
 
-When all five sub-agents return, merge their findings with your functional-
-correctness review into the structured output below. Deduplicate findings
-flagged by multiple sub-agents and attribute the perspective(s) that
-flagged each issue.
+When the five lenses return, collect every finding — from all five lenses **and**
+from your own functional-correctness pass — into one flat list, treating each as
+a discrete item (including nits). Then have each one scored independently:
+
+1. Gather the relevant `CLAUDE.md` paths once with Glob/Read: the repo-root
+   `CLAUDE.md` (if any) plus any `CLAUDE.md` in directories the change touched.
+2. In a single message, launch one `_review_scorer` (Haiku) **per finding**, in
+   parallel. Hand each scorer: the one-line change description, the **single**
+   finding (its `file:line`, the lens that flagged it, the problem, and the
+   proposed fix), the diff slice relevant to that finding, and the `CLAUDE.md`
+   paths. Each returns a `SCORE` (0-100) and a one-line `WHY`.
+
+Score your own functional-correctness findings the same way — the scorer is the
+independent check on the lens *and* on you, so don't exempt yourself.
+
+## Step 4 — Filter by confidence
+
+Drop every finding the scorer put **below 50**: scores of 0-25 (false positives
+and unverified guesses) are discarded and never appear in the output. A finding
+needs ≥50 — a verified-real issue — to survive. Count how many you dropped.
+
+## Step 5 — Synthesize
+
+Merge the surviving findings into the structured output below. When two lenses
+flagged the same issue (two findings, two scores), collapse them into one entry,
+attribute both lenses, and keep the **highest** of their scores. Annotate each
+surviving finding with its confidence score.
 
 ## Output Format
 
@@ -86,21 +113,25 @@ severity: a correctness bug earns a sentence of rationale; a nit gets none.
 <numbered findings from your own analysis>
 
 ### Minor Nits
-<one line each: `file:line` — the fix. No rationale, no code block.>
+<one line each: `file:line` — the fix *(confidence: NN)*. No rationale, no code block.>
 
 ### Overall
 <one or two sentences, only if there's a cross-cutting theme worth naming. Omit if the findings already speak for themselves.>
+
+<If any findings were dropped, end with one italic line: _Filtered N finding(s) below the confidence threshold (50)._>
 ```
 
 Per-finding budget, scaled to severity:
 - **Substantive findings** (Design through Functionality): `file:line`, then the
-  problem and the fix in **≤2 sentences**. Add a "why it matters" clause only when
-  the impact is non-obvious. Include a code snippet only when the fix isn't clear
-  from a sentence — never to illustrate the problem.
-- **Nits**: one line each, fix only.
+  problem and the fix in **≤2 sentences**, ending with `*(confidence: NN)*`. Add
+  a "why it matters" clause only when the impact is non-obvious. Include a code
+  snippet only when the fix isn't clear from a sentence — never to illustrate the
+  problem.
+- **Nits**: one line each, fix only, ending with `*(confidence: NN)*`.
 
 ## Constraints
 
+- Score every finding independently before reporting it — a finding the `_review_scorer` puts below 50 is dropped, not softened or downgraded to a nit
 - Do not suggest changes outside the scope of the diff
 - Do not edit any files — this review is read-only and advisory
 - Distinguish pre-existing issues encountered in changed code from issues introduced by the change
