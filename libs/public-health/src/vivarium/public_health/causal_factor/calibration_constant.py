@@ -154,7 +154,6 @@ class _RiskAffectedPipeline(Component):
         builder
             Access point for utilizing framework interfaces during setup.
         """
-        # Holds the joint PAF, populated in ``on_post_setup``; its no-effect placeholder is 0.
         self._calibration_constant_table = self.build_lookup_table(
             builder, "calibration_constant", data_source=0
         )
@@ -179,8 +178,6 @@ class _RiskAffectedPipeline(Component):
             preferred_post_processor=[*self._additional_post_processors],
         )
 
-        # ``multiplication_combiner`` only evaluates this modifier on non-zero target
-        # values, so ``1 - calibration_constant`` is never multiplied into zeros.
         builder.value.register_attribute_modifier(
             self._target_pipeline_name,
             modifier=self._apply_calibration_constant,
@@ -228,9 +225,9 @@ class _RiskAffectedPipeline(Component):
         """Compute the joint calibration constant via raw union."""
         joint_calibration_constant = raw_union_post_processor(value, manager)
         if isinstance(joint_calibration_constant, pd.Series):
-            has_nan = bool(joint_calibration_constant.isna().any())
+            has_nan = joint_calibration_constant.isna().any()
         else:
-            has_nan = bool(pd.isna(joint_calibration_constant))
+            has_nan = pd.isna(joint_calibration_constant)
         if has_nan:
             raise ValueError(
                 f"Joint calibration constant (PAF) contains NaN after combining "
