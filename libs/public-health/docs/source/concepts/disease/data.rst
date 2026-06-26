@@ -12,7 +12,7 @@ Disease Data
 The disease components read their input data by **key** from the simulation's
 data source (an artifact by default). This page documents the key name and
 column layout each component expects. Every configurable key can also be
-supplied directly -- as a scalar, ``DataFrame``, or callable -- through the
+supplied directly as a scalar, ``DataFrame``, or callable through the
 ``data_sources`` configuration without rebuilding an artifact (see the
 ``Data sources`` section of the :doc:`disease model tutorial
 </tutorials/disease>`).
