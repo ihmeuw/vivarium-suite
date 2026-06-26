@@ -1,9 +1,11 @@
 """Tests for the disease-model factory functions in ``disease.models``.
 
-These verify that the optional data-source parameters are threaded into the
-right states, transitions, and the model, and that leaving them as ``None``
-preserves the historical behavior of loading each measure from its default
-artifact key.
+These verify that the optional transition-rate parameters are threaded into the
+right transitions, and that leaving every measure unset preserves the historical
+behavior of loading it from its default artifact key. The non-rate measures
+(prevalence, disability weight, excess mortality rate, birth prevalence, and
+cause-specific mortality rate) are supplied through the configuration rather
+than the factory, so the factories only default them to their artifact keys.
 """
 
 import pandas as pd
@@ -11,7 +13,6 @@ import pytest
 
 from vivarium.public_health.disease import models
 from vivarium.public_health.disease.model import DiseaseModel
-from vivarium.public_health.disease.models import _birth_prevalence_source
 from vivarium.public_health.disease.state import (
     DiseaseState,
     RecoveredState,
@@ -72,30 +73,14 @@ def test_factory_builds_disease_model(factory, extra_kwargs):
 
 @pytest.mark.parametrize("factory, extra_kwargs", ALL_FACTORIES, ids=_FACTORY_IDS)
 def test_factory_prevalence_and_csmr_defaults(factory, extra_kwargs):
-    # With nothing supplied, prevalence defaults to its artifact key and CSMR is
-    # left for the model to load from the artifact.
+    # The factory supplies neither prevalence nor CSMR, so prevalence defaults to
+    # its artifact key and CSMR is left for the model to load from the artifact.
+    # Either is overridable through the configuration's data_sources block.
     model = factory(CAUSE, **extra_kwargs)
     infected = _state(model, DiseaseState)
 
     assert infected._prevalence_source == f"cause.{CAUSE}.prevalence"
     assert model._csmr_source is None
-
-
-@pytest.mark.parametrize("factory, extra_kwargs", ALL_FACTORIES, ids=_FACTORY_IDS)
-def test_factory_prevalence_and_csmr_override(factory, extra_kwargs):
-    # A supplied prevalence and CSMR are used instead of the artifact defaults.
-    # (disability_weight and excess_mortality_rate are wrapped in closures on the
-    # state, not stored raw, so they are not asserted here.)
-    model = factory(
-        CAUSE,
-        prevalence=0.1,
-        cause_specific_mortality_rate=0.4,
-        **extra_kwargs,
-    )
-    infected = _state(model, DiseaseState)
-
-    assert infected._prevalence_source == 0.1
-    assert model._csmr_source == 0.4
 
 
 ############
@@ -112,7 +97,6 @@ def test_si_structure():
 
 def test_si_incidence_defaults_to_artifact_key():
     # The susceptible->diseased transition's rate defaults to the incidence artifact key.
-    # (prevalence/CSMR defaults are covered for all factories by the generic tests.)
     model = models.SI(CAUSE)
     healthy = _state(model, SusceptibleState)
     assert _rate_transition(healthy).transition_rate == f"cause.{CAUSE}.incidence_rate"
@@ -183,15 +167,6 @@ def test_neonatal_birth_prevalence_defaults_to_artifact_key(factory):
     assert with_condition._birth_prevalence_source == f"cause.{CAUSE}.birth_prevalence"
 
 
-@pytest.mark.parametrize(
-    "factory", [models.NeonatalSWC_without_incidence, models.NeonatalSWC_with_incidence]
-)
-def test_neonatal_birth_prevalence_override(factory):
-    model = factory(CAUSE, birth_prevalence=0.4)
-    with_condition = _state(model, DiseaseState)
-    assert with_condition._birth_prevalence_source == 0.4
-
-
 def test_neonatal_without_incidence_has_no_incidence_transition():
     model = models.NeonatalSWC_without_incidence(CAUSE)
     healthy = _state(model, SusceptibleState)
@@ -203,19 +178,3 @@ def test_neonatal_with_incidence_adds_incidence_transition():
     model = models.NeonatalSWC_with_incidence(CAUSE, incidence_rate=0.7)
     healthy = _state(model, SusceptibleState)
     assert _rate_transition(healthy).transition_rate == 0.7
-
-
-###########
-# Helpers #
-###########
-
-
-def test_birth_prevalence_source_defaults_to_artifact_key():
-    assert _birth_prevalence_source(CAUSE, None) == f"cause.{CAUSE}.birth_prevalence"
-
-
-def test_birth_prevalence_source_passes_through_supplied_value():
-    assert _birth_prevalence_source(CAUSE, 0.25) == 0.25
-    assert _birth_prevalence_source(CAUSE, "cause.other.birth_prevalence") == (
-        "cause.other.birth_prevalence"
-    )
