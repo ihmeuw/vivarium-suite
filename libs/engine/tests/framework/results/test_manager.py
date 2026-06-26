@@ -43,7 +43,7 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
-from vivarium.engine.framework.results.interface import PopulationFilter
+from vivarium.engine.framework.results.interface import _PopulationFilter
 from vivarium.engine.framework.results.manager import ResultsManager
 from vivarium.engine.framework.results.observation import AddingObservation, Observation
 from vivarium.engine.framework.results.observer import Observer
@@ -222,7 +222,7 @@ def test_add_observation_nop_stratifications(
     mgr.register_observation(
         observation_type=AddingObservation,
         name="name",
-        population_filter=PopulationFilter("is_alive == True"),
+        population_filter=_PopulationFilter("is_alive == True"),
         aggregator_sources=[],
         aggregator=lambda: None,
         requires_attributes=[],
@@ -560,7 +560,7 @@ def test_prepare_population(
     observations: list[Observation] = [
         AddingObservation(
             name=f"test_observation_{i}",
-            population_filter=PopulationFilter(),
+            population_filter=_PopulationFilter(),
             when=lifecycle_states.COLLECT_METRICS,
             requires_attributes=columns + values,
             results_formatter=lambda *_: pd.DataFrame(),
@@ -617,7 +617,7 @@ def test_prepare_population_all_untracked(
     mgr = prepare_population_sim._results
     observation1 = AddingObservation(
         name="familiar",
-        population_filter=PopulationFilter(include_untracked=True),  # allow untracked
+        population_filter=_PopulationFilter(include_untracked=True),  # allow untracked
         when=lifecycle_states.COLLECT_METRICS,
         requires_attributes=["familiar"],
         results_formatter=lambda *_: pd.DataFrame(),
@@ -626,7 +626,7 @@ def test_prepare_population_all_untracked(
     )
     observation2 = AddingObservation(
         name="house_points",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         when=lifecycle_states.COLLECT_METRICS,
         requires_attributes=["house_points"],
         results_formatter=lambda *_: pd.DataFrame(),
@@ -665,7 +665,7 @@ def test_prepare_population_all_untracked(
     observation3 = AddingObservation(
         # identical to observation1 exclude excluding untracked
         name="familiar",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         when=lifecycle_states.COLLECT_METRICS,
         requires_attributes=["familiar"],
         results_formatter=lambda *_: pd.DataFrame(),

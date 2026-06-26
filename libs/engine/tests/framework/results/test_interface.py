@@ -18,8 +18,8 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results import ResultsInterface, ResultsManager
 from vivarium.engine.framework.results.interface import (
-    PopulationFilter,
     _default_stratified_observation_formatter,
+    _PopulationFilter,
 )
 from vivarium.engine.framework.results.observation import (
     ConcatenatingObservation,
@@ -327,7 +327,7 @@ def test_register_multiple_adding_observations(mocker: MockerFixture) -> None:
     grouped_observations = interface._manager._results_context.grouped_observations
     assert len(grouped_observations) == 1
     assert (
-        grouped_observations[lifecycle_states.TIME_STEP_CLEANUP][PopulationFilter()][()][
+        grouped_observations[lifecycle_states.TIME_STEP_CLEANUP][_PopulationFilter()][()][
             0
         ].name
         == "living_person_time"
@@ -343,14 +343,14 @@ def test_register_multiple_adding_observations(mocker: MockerFixture) -> None:
     grouped_observations = interface._manager._results_context.grouped_observations
     assert len(grouped_observations) == 2
     assert (
-        grouped_observations[lifecycle_states.TIME_STEP_CLEANUP][PopulationFilter()][()][
+        grouped_observations[lifecycle_states.TIME_STEP_CLEANUP][_PopulationFilter()][()][
             0
         ].name
         == "living_person_time"
     )
     assert (
         grouped_observations[lifecycle_states.TIME_STEP_PREPARE][
-            PopulationFilter("undead==True")
+            _PopulationFilter("undead==True")
         ][()][0].name
         == "undead_person_time"
     )
@@ -492,21 +492,28 @@ def test_register_concatenating_observation(mocker: MockerFixture) -> None:
     assert obs.results_formatter is not None
 
 
-def test_population_filter_create_filter() -> None:
-    """create_filter parses a string, a callable, or a (query, callable) tuple."""
+def test_population_filter_parsing() -> None:
+    """_PopulationFilter parses a string, a callable, or a (query, callable) tuple."""
 
     def row_filter(index: pd.Index[int]) -> pd.Index[int]:
         return index[:1]
 
-    assert PopulationFilter.create_filter("a == 1", include_untracked=True) == (
-        PopulationFilter(query="a == 1", include_untracked=True, row_filter=None)
+    string_filter = _PopulationFilter("a == 1", include_untracked=True)
+    assert (
+        string_filter.query,
+        string_filter.include_untracked,
+        string_filter.index_filter,
+    ) == (
+        "a == 1",
+        True,
+        None,
     )
-    assert PopulationFilter.create_filter(row_filter) == (
-        PopulationFilter(query="", row_filter=row_filter)
-    )
-    assert PopulationFilter.create_filter(("a == 1", row_filter)) == (
-        PopulationFilter(query="a == 1", row_filter=row_filter)
-    )
+
+    callable_filter = _PopulationFilter(row_filter)
+    assert (callable_filter.query, callable_filter.index_filter) == ("", row_filter)
+
+    tuple_filter = _PopulationFilter(("a == 1", row_filter))
+    assert (tuple_filter.query, tuple_filter.index_filter) == ("a == 1", row_filter)
 
 
 def test_default_stratified_formatter_converts_object_to_categorical() -> None:
