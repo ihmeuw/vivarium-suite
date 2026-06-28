@@ -79,18 +79,18 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   documentation. The main session owns the **iteration plan** — the contract
   that pins the artifact keys, pipeline names, state-table columns, and observer
   outputs a change touches, plus the quantitative expectations from the research
-  doc. From that contract it runs a **staged build** ordered by the model's
-  data-dependency chain (artifact → component → observer, skipping untouched
-  layers) via ``_model_implementer``, dispatched once per layer, while
-  ``_vv_writer`` writes the verification in parallel, **blind to the
-  implementation** — InteractiveContext pytest checks and a ``model_<N>`` V&V
-  notebook built from the plan alone. It verifies by **running the simulation**
-  (delegating the existing suite to ``_validator``, then executing the new
-  checks, a local ``simulate`` run, and the notebook), runs the shared
-  ``_review-core`` review, and gates the artifact build, the test commit, and the
-  PR on explicit user approval. The model-repo sibling of
-  ``/viv:framework-development``, reusing its ``_validator`` sub-agent and the
-  shared ``_review-core`` review.
+  doc. From that contract it runs a **staged build** along the model's
+  data-dependency chain (artifact → component → observer, one stage per touched
+  layer, skipping the rest), while an **internal verification** is authored in
+  parallel and blind to the implementation — InteractiveContext checks and a
+  notebook built from the plan alone. It then **runs the simulation** to verify
+  (the repo's existing suite, the new checks, a local ``simulate`` run, and the
+  notebook) and applies the same multi-lens review as
+  ``/viv:framework-development``. The verification is an internal loop for
+  engineering confidence — not formal V&V — so its **traces** (notebook plots and
+  tables) are posted to the PR, while the artifacts themselves stay out of the
+  repo unless you ask to keep them. Gates the artifact build and the PR on
+  explicit user approval. The model-repo sibling of ``/viv:framework-development``.
 
 **Skills**
 
@@ -242,10 +242,10 @@ Code:
   are likewise write-capable (``Write``/``Edit``, no ``Bash``): they author
   files but never run the simulation, ``git``, or shell commands, and their
   writes are partitioned. ``_model_implementer`` writes **only its assigned model
-  layer's code** (artifact, component, or observer) — never tests or notebooks —
+  layer's code** (artifact, component, or observer) — never the verification checks or notebook —
   dispatched once per layer and working directly on the feature branch (the
   stages are sequential, so no worktree isolation is needed). ``_vv_writer``
-  writes **the tests and the V&V notebook**, blind to the implementation. Both
+  writes **the verification checks and notebook**, blind to the implementation. Both
   are spawned only by the ``/viv:model-development`` skill.
 - ``_validator`` declares ``Bash`` so it can run the package's ``make
   test-*`` / ``make lint`` / ``make mypy`` targets and report a PASS/FAIL

@@ -26,7 +26,7 @@ data-dependency chain (artifact → component → observer, skipping layers the
 change doesn't touch) and, **in parallel**, a verification author that is blind
 to the implementation. You fan out `_validator` and run the shared
 `_review-core` skill for review. Work the phases in order; keep the user in the
-loop at the plan, artifact-build, test-commit, and PR gates.
+loop at the plan, artifact-build, and PR gates.
 
 ## Phase 0 — Setup
 
@@ -106,18 +106,20 @@ names and the quantitative expectations), pointers to the repo's existing test
 patterns (`conftest.py` fixtures, `FuzzyChecker` from `vivarium_testing_utils`,
 the step/event mapping, `model_notebooks/`), and the target paths.
 
-`_vv_writer` produces two things from the plan alone:
+`_vv_writer` produces two things from the plan alone, both **internal to this
+loop** (not committed by default — see Phase 7):
 
-- **InteractiveContext pytest checks** following the repo's existing patterns —
-  spin up the sim, advance to the relevant step, and assert the quantitative
+- **InteractiveContext checks** following the repo's existing patterns — spin
+  up the sim, advance to the relevant step, and assert the quantitative
   expectations against the state table / pipeline values.
-- A **`model_<N>`-style V&V notebook** for interpretive review, mirroring the
-  repo's `model_notebooks/` convention.
+- A **`model_<N>`-style verification notebook** (mirroring the repo's
+  `model_notebooks/` convention) whose plots and tables are the **traces**
+  posted to the PR.
 
 ## Phase 4 — Verify
 
 A runnable env and (for artifact-key changes) a built artifact are preconditions
-— if either is missing, checks that are cannot be executed must be surfaced to
+— if either is missing, checks that cannot be executed must be surfaced to
 the user.
 
 1. Spawn `_validator` with the **model repo root** (the directory containing the
@@ -127,8 +129,9 @@ the user.
    PASS/FAIL report.
 2. Run the new InteractiveContext checks, and a small **local `simulate` run**
    on a reduced spec/population to confirm the iteration completes end-to-end.
-3. Execute the V&V notebook so the user can eyeball the scenario output against
-   the research targets.
+3. Execute the verification notebook to produce its **traces** (plots and
+   tables) — for the user to eyeball against the research targets now, and to
+   post to the PR in Phase 7.
 
 **Missing-artifact degradation.** If the artifact a sim check needs cannot be
 produced in this environment, run everything that doesn't need it (lint, the
@@ -163,17 +166,21 @@ triage.
 
 1. Summarize what was built, the verification results (including any
    "unverified" status), and any residual issues from the Phase 5 loop.
-2. **Gate 3 — approve committing the tests.** The new InteractiveContext tests
-   are committed only after explicit user approval. The V&V notebook lands in
-      the model repo (alongside the existing `model_notebooks/`); promoting it to a
-         research repo is a manual follow-up, not part of this workflow.
-3. **Triage leftover findings.** For review findings deliberately not addressed
+2. **Post the verification traces to the PR.** Attach the key plots, tables,
+   and output from the verification notebook — the record that the iteration
+   was checked against the research expectations.
+3. **Don't commit the verification artifacts by default.** They are an
+   internal loop for engineering confidence, not formal V&V (a separate
+   research task). Ask whether to keep any in the repo (e.g. an
+   InteractiveContext check kept as a regression test); commit only on an
+   explicit yes.
+4. **Triage leftover findings.** For review findings deliberately not addressed
    in this build, invoke the `ticket-triage` skill to classify them, dedup
    against the backlog, and file approval-gated Jira tickets. Skip if nothing is
    left unaddressed.
-4. **Gate 4 — approve the PR.** Without approval, stop and leave the branch in
+5. **Gate 3 — approve the PR.** Without approval, stop and leave the branch in
    place.
-5. On approval, use the `commit-splitter` skill to organize the work into clean,
+6. On approval, use the `commit-splitter` skill to organize the work into clean,
    reviewable commits, then use `team-conventions` to push and `gh pr create`
    with the repo's PR template; report the URL and offer the `#vivarium_dev`
    flag.
