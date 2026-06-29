@@ -3,6 +3,7 @@ import pytest
 from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population import SimulantData
 from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
 
@@ -30,6 +31,31 @@ class _SimulantID(Component):
         self.population_view.initialize(
             pd.DataFrame({"simulant_id": range(len(pop_data.index))}, index=pop_data.index)
         )
+
+
+class _Disqualifier(Component):
+    """Mark all simulants eligible, then disqualify half of them before the second step."""
+
+    def setup(self, builder: Builder) -> None:
+        self._steps = 0
+        builder.population.register_initializer(
+            initializer=self._initialize, columns=["eligible"]
+        )
+
+    def _initialize(self, pop_data: SimulantData) -> None:
+        self.population_view.initialize(
+            pd.Series(True, index=pop_data.index, name="eligible")
+        )
+
+    def on_time_step(self, event: Event) -> None:
+        self._steps += 1
+        if self._steps == 2:  # after the first observed step, before the second
+            self.population_view.update("eligible", self._disqualify_half)
+
+    @staticmethod
+    def _disqualify_half(eligible: pd.Series) -> pd.Series:
+        eligible.loc[eligible.index[::2]] = False
+        return eligible
 
 
 def _configure(
@@ -228,3 +254,85 @@ def test_microdata_observer_warns_and_deduplicates_timesteps(
     )
     assert "duplicate" in caplog.text
     assert any(record.levelname == "WARNING" for record in caplog.records)
+
+
+def test_microdata_observer_single_random_sample_requires_row_limit(
+    base_config, base_plugins
+) -> None:
+    """single_random_sample without a row_limit raises a configuration error at setup."""
+    config = _configure(
+        base_config,
+        {"columns": ["age"], "single_random_sample": True},  # no row_limit
+    )
+    with pytest.raises(ResultsConfigurationError, match="single_random_sample"):
+        InteractiveContext(
+            components=[BasePopulation(), MicrodataObserver()],
+            configuration=config,
+            plugin_configuration=base_plugins,
+        )
+
+
+def test_microdata_observer_single_random_sample_records_fixed_cohort(
+    base_config, base_plugins
+) -> None:
+    """single_random_sample records the same once-sampled cohort at every observed step."""
+    config = _configure(
+        base_config,
+        {
+            "columns": ["simulant_id"],
+            "timesteps": [
+                FIRST_EVENT_TIME,
+                SECOND_EVENT_TIME,
+            ],  # 2 observed -> 200 // 2 = 100
+            "row_limit": 200,
+            "single_random_sample": True,
+        },
+        population_size=1000,
+    )
+    sim = InteractiveContext(
+        components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
+        configuration=config,
+        plugin_configuration=base_plugins,
+    )
+
+    sim.step()  # FIRST_EVENT_TIME -> observed
+    sim.step()  # SECOND_EVENT_TIME -> observed
+    result = sim.get_results()["microdata_observer"]
+
+    recorded = result.groupby("event_time")["simulant_id"].apply(set)
+    assert len(recorded.iloc[0]) == 100  # row_limit // n_observed_timesteps
+    # The same simulants both steps - a fixed closed cohort, not a fresh sample each step.
+    assert recorded.iloc[0] == recorded.iloc[1]
+
+
+def test_microdata_observer_single_random_sample_drops_members_leaving_filter(
+    base_config, base_plugins
+) -> None:
+    """A cohort member that leaves the filter is dropped and never refilled (upper bound)."""
+    config = _configure(
+        base_config,
+        {
+            "columns": ["simulant_id"],
+            "filter": ["eligible == True"],
+            "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
+            "row_limit": 200,  # cohort size 100
+            "single_random_sample": True,
+        },
+        population_size=1000,
+    )
+    sim = InteractiveContext(
+        components=[BasePopulation(), _SimulantID(), _Disqualifier(), MicrodataObserver()],
+        configuration=config,
+        plugin_configuration=base_plugins,
+    )
+
+    sim.step()  # FIRST_EVENT_TIME -> full cohort still eligible
+    sim.step()  # _Disqualifier flips half ineligible, then SECOND_EVENT_TIME observes
+    result = sim.get_results()["microdata_observer"]
+
+    recorded = result.groupby("event_time")["simulant_id"].apply(set)
+    assert len(recorded.iloc[0]) == 100  # full cohort recorded the first step
+    # No new simulants enter the cohort (no refill)...
+    assert recorded.iloc[1].issubset(recorded.iloc[0])
+    # ...and the disqualified members really did drop out.
+    assert len(recorded.iloc[1]) < len(recorded.iloc[0])
