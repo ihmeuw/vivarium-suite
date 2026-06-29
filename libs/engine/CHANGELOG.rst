@@ -1,3 +1,7 @@
+**5.2.0 - 06/29/26**
+
+- Support a callable population filter (or ``(query, callable)`` tuple) for all observations
+
 **5.1.7 - 06/22/26**
 
 - Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
