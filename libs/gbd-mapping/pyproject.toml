@@ -66,12 +66,10 @@ git_describe_command = 'git describe --dirty --tags --long --match "vivarium-gbd
 fallback_version = "0.0.0+no-git-tag"
 
 # No [tool.mypy] section: this package is only partially typed and the
-# gbd_mapping module is largely auto-generated. CI's `make mypy` is skipped
-# when py.typed is absent (see .github/workflows/ci.yml); Jenkinsfile sets
-# `run_mypy: false` to match. When the codebase is fully annotated, add a
+# gbd_mapping module is largely auto-generated. CI skips mypy when no py.typed
+# marker exists under src/. When the codebase is fully annotated, add a
 # py.typed marker plus the standard [tool.mypy] block (see
-# libs/config-tree/pyproject.toml for the template) and flip Jenkins
-# `run_mypy` back to true.
+# libs/config-tree/pyproject.toml for the template) to enable mypy everywhere.
 
 [tool.black]
 line-length = 94

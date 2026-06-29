@@ -122,6 +122,11 @@ class RiskAttributableDisease(ExcessMortalityState):
                     population_attributable_fraction:
                         Source for PAF data. Default is 0, indicating no
                         mediated effects from other risks.
+                    distribution:
+                        Source for the risk's exposure distribution type.
+                        Default is the artifact key ``{risk}.distribution``.
+                        Accepts a literal distribution string (e.g.
+                        ``"dichotomous"``) to bypass the artifact.
                 threshold: str or list
                     Exposure threshold defining disease state. For continuous
                     risks, provide a string like ``">7"`` or ``"<5"``.
@@ -142,6 +147,7 @@ class RiskAttributableDisease(ExcessMortalityState):
                     "cause_specific_mortality_rate": self.load_cause_specific_mortality_rate_data,
                     "excess_mortality_rate": self.load_excess_mortality_rate_data,
                     "population_attributable_fraction": 0,
+                    "distribution": f"{self.risk}.distribution",
                 },
                 "threshold": None,
                 "mortality": True,
@@ -246,7 +252,9 @@ class RiskAttributableDisease(ExcessMortalityState):
             required_resources=[self.excess_mortality_rate_name],
         )
 
-        distribution = builder.data.load(f"{self.risk}.distribution")
+        distribution = self.get_data(
+            builder, builder.configuration[self.name].data_sources.distribution
+        )
         threshold = builder.configuration[self.name].threshold
 
         self.filter_by_exposure = self.get_exposure_filter(distribution, threshold)

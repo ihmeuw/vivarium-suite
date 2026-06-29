@@ -34,6 +34,5 @@ reusable_pipeline(
         // for subsequent scheduled builds to run.
         "main",
     ],
-    run_mypy: false,
     env_reqs: "ci_jenkins",
 )
