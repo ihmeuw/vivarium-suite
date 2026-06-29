@@ -6,22 +6,25 @@ Lookup Tables
 Simulations tend to require a large quantity of data to run.  :mod:`vivarium.engine`
 provides the :class:`LookupTable` abstraction to ensure that accurate data can
 be retrieved when it's needed. It's a callable object that takes in a
-population index and returns data specific to the individuals represented by
+population index and returns data specific to the simulants represented by
 that index. See the :ref:`lookup concept note <lookup_concept>` for more.
 
 """
 
 from __future__ import annotations
 
+import warnings
+from collections.abc import Hashable, Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Generic
 from typing import SupportsFloat as Numeric
-from typing import TypeVar
+from typing import TypeVar, cast
 
 import pandas as pd
 
 from vivarium.engine.component import Component
-from vivarium.engine.framework.lookup.interpolation import Interpolation
+from vivarium.engine.framework.lookup.interpolation import Interpolation, has_named_row_index
 from vivarium.engine.framework.population.population_view import PopulationView
 from vivarium.engine.framework.resource import Resource
 from vivarium.engine.types import LookupTableData
@@ -34,14 +37,91 @@ T = TypeVar("T", pd.Series, pd.DataFrame)  # type: ignore [type-arg]
 
 DEFAULT_VALUE_COLUMN = "value"
 
+FLAT_DATAFRAME_DEPRECATION_MESSAGE = (
+    "Passing a flat DataFrame (one whose row index is the default "
+    "RangeIndex) to LookupTable is deprecated and will be removed in a "
+    "future release. Construct your data as a DataFrame (or Series) with "
+    "the lookup attributes on the row index (MultiIndex or named "
+    "Index) and value columns on the DataFrame columns instead."
+)
+
+MAPPING_INPUT_DEPRECATION_MESSAGE = (
+    "Passing a Mapping (e.g., dict) to LookupTable is deprecated and will "
+    "be removed in a future release. Construct your data as a DataFrame (or "
+    "Series) with the lookup attributes on the row index (MultiIndex or "
+    "named Index) and value columns on the DataFrame columns instead."
+)
+
+VALUE_COLUMNS_INDEXED_ERROR_MESSAGE = (
+    "Passing `value_columns` alongside an indexed DataFrame/Series is not "
+    "allowed. Value columns are inferred from the DataFrame columns (or the "
+    "Series name) of an indexed input. Pass lookup attributes on the row "
+    "index and value columns on the DataFrame columns instead."
+)
+
+
+@dataclass(frozen=True, eq=False)
+class _ColumnSchema(Generic[T]):
+    """Records the shape the lookup table should return."""
+
+    value_columns: pd.Index[Any]
+    """The column labels that will be on the result of calling this lookup table."""
+    return_type: type[T] = pd.DataFrame  # type: ignore [assignment]
+    """The type that this lookup table should return, either :class:`pandas.Series` or :class:`pandas.DataFrame`."""
+
+    def __str__(self) -> str:
+        return (
+            f"<pandas.{self.return_type.__name__}, " f"value_columns={self.value_columns!r}>"
+        )
+
+    @classmethod
+    def from_data(
+        cls,
+        data: LookupTableData,
+        value_columns: list[str] | tuple[str, ...] | str | None = None,
+    ) -> _ColumnSchema[Any]:
+        """Return the column schema from input data and value columns."""
+        if isinstance(data, pd.Series):
+            return cls(
+                value_columns=pd.Index([data.name]),
+                return_type=pd.Series,  # type: ignore [arg-type]
+            )
+        if has_named_row_index(data):
+            return cls(
+                value_columns=data.columns,
+                return_type=pd.DataFrame,  # type: ignore [arg-type]
+            )
+        if value_columns is None:
+            cols: list[Hashable] = [DEFAULT_VALUE_COLUMN]
+            return_type: type = pd.Series
+        elif isinstance(value_columns, str):
+            cols = [value_columns]
+            return_type = pd.Series
+        else:
+            cols = list(value_columns)
+            return_type = pd.DataFrame
+        return cls(
+            value_columns=pd.Index(cols),
+            return_type=return_type,
+        )
+
+    @staticmethod
+    def matches(a: _ColumnSchema[Any], b: _ColumnSchema[Any]) -> bool:
+        """Return True iff two schemas produce identical lookup shapes."""
+        return (
+            a.return_type is b.return_type
+            and a.value_columns.equals(b.value_columns)
+            and list(a.value_columns.names) == list(b.value_columns.names)
+        )
+
 
 class LookupTable(Resource, Generic[T]):
-    """A callable to produces values for a population index.
+    """A callable that produces values for a population index.
 
     In :mod:`vivarium.engine` simulations, the index is synonymous with the simulated
-    population.  The lookup system allows the user to provide different kinds
-    of data and strategies for using that data.  When the simulation is
-    running, then, components can lookup parameter values based solely on
+    population. The lookup system allows the user to provide different kinds
+    of data and strategies for using that data. When the simulation is
+    running, components can look parameter values up based solely on
     the population index.
 
     Notes
@@ -55,98 +135,135 @@ class LookupTable(Resource, Generic[T]):
     """The type of the resource."""
 
     @property
-    def value_columns(self) -> list[str]:
-        """The name(s) of the column(s) in the data that will be returned by this lookup table."""
-        return (
-            list(self._value_columns)
-            if not isinstance(self._value_columns, str)
-            else [self._value_columns]
+    def key_columns(self) -> list[str]:
+        warnings.warn(
+            "The `key_columns` property is deprecated and will be removed in a future release. "
+            "Use `lookup_attributes` to get the full list of lookup attributes.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return self.interpolation.categorical_parameters if self.interpolation else []
+
+    @property
+    def parameter_columns(self) -> list[str]:
+        """The attribute names that are used as continuous parameters in lookup."""
+        warnings.warn(
+            "The `parameter_columns` property is deprecated and will be removed in a future release. "
+            "Use `lookup_attributes` to get the full list of lookup attributes.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if self.interpolation is None:
+            return []
+        return list(self.interpolation.continuous_parameters)
+
+    @property
+    def value_columns(self) -> pd.Index[Any]:
+        """The column names returned when calling this lookup table."""
+        return self._column_schema.value_columns
+
+    @property
+    def return_type(self) -> type[T]:
+        """The type returned when calling this lookup table."""
+        return self._column_schema.return_type
+
+    @property
+    def lookup_attributes(self) -> list[str]:
+        """The attribute pipelines used to lookup/interpolate values for this table."""
+        if self.interpolation is None:
+            return []
+        return list(self.interpolation.categorical_parameters) + list(
+            self.interpolation.continuous_parameters
+        )
+
+    @property
+    def _column_schema(self) -> _ColumnSchema[T]:
+        """Invariant schema defining the structure of the lookup table's return value."""
+        if self.__column_schema is None:
+            raise ValueError("Column schema has not been set.")
+        return self.__column_schema
 
     def __init__(
         self,
         component: Component,
         data: LookupTableData,
         name: str,
-        value_columns: list[str] | tuple[str, ...] | str,
+        value_columns: list[str] | tuple[str, ...] | str | None,
         manager: LookupTableManager,
         population_view: PopulationView,
     ):
         super().__init__(self.get_name(component.name, name), component)
-        self._value_columns: list[str] | tuple[str, ...] | str = value_columns
-        """Names of value columns that will be returned by the lookup table."""
         self._manager: LookupTableManager = manager
         """The manager that created this lookup table."""
         self.population_view: PopulationView = population_view
         """PopulationView to use to get attributes for interpolation or categorization."""
-
-        self.return_type: type[T] = (
-            pd.Series if isinstance(self._value_columns, str) else pd.DataFrame
-        )
-        """The type of data returned by the lookup table (pd.Series or pd.DataFrame)."""
-
         self.data: LookupTableData
         """The data this table will use to produce values."""
-        self.key_columns: list[str] = []
-        """Column names to be used as categorical parameters in Interpolation
-        to select between interpolation functions."""
-        self.parameter_columns: list[str] = []
-        """Column names to be used as continuous parameters in Interpolation."""
         self.interpolation: Interpolation | None = None
         """Interpolation object to use when data is a DataFrame. Will be None if data is
         a scalar or list of scalars."""
 
-        self.set_data(data)
+        if isinstance(data, Mapping):
+            data = pd.DataFrame(data)
+
+        if value_columns is not None and has_named_row_index(data):
+            raise ValueError(VALUE_COLUMNS_INDEXED_ERROR_MESSAGE)
+
+        self.__column_schema: _ColumnSchema[T] = cast(
+            "_ColumnSchema[T]", _ColumnSchema.from_data(data, value_columns)
+        )
+
+        self._set_data(data)
 
     def set_data(self, data: LookupTableData) -> None:
-        """Set the data and associated attributes for the lookup table.
+        """Replace the data this lookup table will return.
 
-        This method is called during initialization and when updating the data of the lookup
-        table.  It is responsible for validating and setting the data. If the data is a
-        DataFrame, it also sets the key_columns and parameter_columns attributes and
-        initializes the Interpolation object.
+        The new data must produce the same return type and value columns as
+        the data passed at construction time.
 
         Parameters
         ----------
         data
-            The data this table will use to produce values. Can be a scalar, list of scalars,
-            or a pandas DataFrame.
-        """
-        self._validate_data_inputs(data)
-        self.data = data
-        if isinstance(data, pd.DataFrame):
-            self.parameter_columns, self.key_columns = self._get_columns(data)
-            parameter_columns_with_edges: list[tuple[str, str, str]] = [
-                (p, f"{p}_start", f"{p}_end") for p in self.parameter_columns
-            ]
-            required_cols = {
-                *self.key_columns,
-                *{col for p in parameter_columns_with_edges for col in p},
-                *self.value_columns,
-            }
-            if extra_columns := list(data.columns.difference(list(required_cols))):
-                raise ValueError(
-                    f"Data contains extra columns not in "
-                    f"key_columns, parameter_columns, or value_columns: {extra_columns}"
-                )
+            The data this table will use to produce values.
 
+        Raises
+        ------
+        ValueError
+            If ``data`` would change the return type or value columns of this
+            lookup table.
+        """
+        if isinstance(data, pd.DataFrame) and not has_named_row_index(data):
+            warnings.warn(
+                FLAT_DATAFRAME_DEPRECATION_MESSAGE,
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if isinstance(data, Mapping):
+            warnings.warn(
+                MAPPING_INPUT_DEPRECATION_MESSAGE,
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            data = pd.DataFrame(data)
+
+        self._set_data(data)
+
+    def _set_data(self, data: LookupTableData) -> None:
+        """Validate and set ``data`` and interpolation strategy."""
+        self._validate_data(data)
+        self.data = data
+        if isinstance(self.data, (pd.Series, pd.DataFrame)):
             self.interpolation = Interpolation(
-                data,
-                self.key_columns,
-                parameter_columns_with_edges,
-                self.value_columns,
+                data=self.data,
+                value_columns=self.value_columns,
                 order=self._manager.interpolation_order,
                 extrapolate=self._manager.extrapolate,
                 validate=self._manager.validate_interpolation,
             )
         else:
-            self.key_columns = []
-            self.parameter_columns = []
             self.interpolation = None
 
-        self._required_resources = [
-            col for col in [*self.key_columns, *self.parameter_columns] if col != "year"
-        ]
+        self._required_resources = [col for col in self.lookup_attributes if col != "year"]
 
     def __call__(self, index: pd.Index[int]) -> T:
         """Get the mapped values for the given index.
@@ -162,38 +279,24 @@ class LookupTable(Resource, Generic[T]):
             columns
 
         """
-        mapped_values = self._call(index).squeeze(axis=1)
-        if not isinstance(mapped_values, self.return_type):
-            raise TypeError(
-                f"LookupTable expected to return {self.return_type}, "
-                f"but got {type(mapped_values)}"
-            )
-        return mapped_values
+        return self._call(index)
 
-    def _call(self, index: pd.Index[int]) -> pd.DataFrame:
+    def _call(self, index: pd.Index[int]) -> T:
         """Private method to allow LookupManager to add constraints."""
+        result: pd.Series[Any] | pd.DataFrame
         if self.interpolation is None:
             # Broadcast scalar or list of scalars to the index.
             if not isinstance(self.data, (list, tuple)):
-                values_series: pd.Series[Any] = pd.Series(
-                    self.data, index=index, name=self.value_columns[0]
-                )
-                return pd.DataFrame(values_series)
+                result = pd.Series(self.data, index=index, name=self.value_columns[0])
             else:
                 values_list: list[pd.Series[Any]] = [
                     pd.Series(v, index=index) for v in self.data
                 ]
-                return pd.DataFrame(dict(zip(self.value_columns, values_list)))
+                result = pd.DataFrame(dict(zip(self.value_columns, values_list)))
         else:
-            # Interpolate continuous parameters and categorize categorical parameters based on
-            # the population attributes.
-            requested_columns = [
-                col
-                for col in list(self.key_columns) + list(self.parameter_columns)
-                if col != "year"
-            ]
+            requested_columns = [col for col in self.lookup_attributes if col != "year"]
             pop = pd.DataFrame(self.population_view.get(index, requested_columns))
-            if "year" in self.parameter_columns:
+            if "year" in self.lookup_attributes:
                 current_time = self._manager.clock()
                 if isinstance(current_time, pd.Timestamp) or isinstance(
                     current_time, datetime
@@ -206,7 +309,20 @@ class LookupTable(Resource, Generic[T]):
                         "You cannot use the column 'year' in a simulation unless "
                         "your simulation uses a DateTimeClock."
                     )
-            return self.interpolation(pop)
+            result = self.interpolation(pop)
+
+            if self._column_schema.return_type is pd.Series:
+                assert len(self.value_columns) == 1
+                squeezed = result.squeeze(axis=1)
+                squeezed.name = self.value_columns[0]
+                result = squeezed
+
+        expected_type = self._column_schema.return_type
+        if not isinstance(result, expected_type):
+            raise TypeError(
+                f"LookupTable expected to return {expected_type}, but got {type(result)}"
+            )
+        return result
 
     def __repr__(self) -> str:
         return "LookupTable()"
@@ -229,64 +345,83 @@ class LookupTable(Resource, Generic[T]):
         """
         return f"{component_name}.{table_name}"
 
-    def _get_columns(self, data: pd.DataFrame) -> tuple[list[str], list[str]]:
-        all_columns = list(data.columns)
-
-        potential_parameter_columns = [
-            str(col).removesuffix("_start")
-            for col in all_columns
-            if str(col).endswith("_start")
-        ]
-        parameter_columns = []
-        bin_edge_columns = []
-        for column in potential_parameter_columns:
-            if f"{column}_end" in all_columns:
-                parameter_columns.append(column)
-                bin_edge_columns += [f"{column}_start", f"{column}_end"]
-
-        key_columns = [
-            col
-            for col in all_columns
-            if col not in self.value_columns and col not in bin_edge_columns
-        ]
-
-        return parameter_columns, key_columns
-
-    def _validate_data_inputs(self, data: LookupTableData) -> None:
-        """Makes sure the data format agrees with the provided column layout."""
-        if (
-            data is None
+    def _validate_data(self, data: LookupTableData) -> None:
+        """Validate ``data`` and check that it matches the table's column schema."""
+        if data is None or (
+            isinstance(data, (pd.Series, list, tuple))
+            and len(data) == 0
             or (isinstance(data, pd.DataFrame) and data.empty)
-            or (isinstance(data, (list, tuple)) and not data)
         ):
             raise ValueError("Must supply some data")
 
-        acceptable_types = (Numeric, datetime, timedelta, str, list, tuple, pd.DataFrame)
+        acceptable_types = (
+            Numeric,
+            datetime,
+            timedelta,
+            str,
+            list,
+            tuple,
+            pd.DataFrame,
+            pd.Series,
+        )
         if not isinstance(data, acceptable_types):
             raise TypeError(
                 f"The only allowable types for data are {acceptable_types}. "
                 f"You passed {type(data)}."
             )
 
-        if isinstance(data, (list, tuple)):
-            if isinstance(self._value_columns, str):
+        if isinstance(data, pd.Series) and isinstance(data.index, pd.RangeIndex):
+            raise ValueError(
+                "A pandas Series passed to LookupTable must have a structured "
+                "index (MultiIndex or named Index) carrying the parameter/key "
+                "columns; got a RangeIndex."
+            )
+
+        if has_named_row_index(data):
+            index_level_names = list(data.index.names)
+            if any(name is None for name in index_level_names):
                 raise ValueError(
-                    "When supplying multiple values, value_columns must be a list or tuple of strings."
+                    "All row index levels must be named when passing an indexed "
+                    f"DataFrame/Series to LookupTable. Got names: {index_level_names}."
                 )
-            if len(self._value_columns) != len(data):
+            if len(set(index_level_names)) != len(index_level_names):
                 raise ValueError(
-                    "The number of value columns must match the number of values."
-                    f"You supplied values: {data} and value_columns: {self._value_columns}"
+                    "Row index level names must be unique when passing an indexed "
+                    f"DataFrame/Series to LookupTable. Got names: {index_level_names}."
+                )
+
+        expected = self._column_schema
+        if has_named_row_index(data):
+            new_schema = _ColumnSchema.from_data(data)
+            if not _ColumnSchema.matches(new_schema, expected):
+                raise ValueError(
+                    "Cannot change LookupTable return type or value columns on set_data after initial setup. "
+                    f"Existing return: {expected}; new: {new_schema}."
+                )
+            return
+
+        expected_columns = list(expected.value_columns)
+        if isinstance(data, (list, tuple)):
+            if expected.return_type is pd.Series or len(expected_columns) != len(data):
+                raise ValueError(
+                    "Cannot change LookupTable return type or value columns on set_data after "
+                    f"initial setup. Expect {len(expected_columns)} value column(s) "
+                    f"({expected_columns!r}) with return type "
+                    f"{expected.return_type.__name__}; got {len(data)} value(s)."
                 )
         elif isinstance(data, pd.DataFrame):
             if missing_columns := [
-                col for col in self.value_columns if col not in data.columns
+                col for col in expected_columns if col not in data.columns
             ]:
                 raise ValueError(
-                    f"Data is missing the following value columns: {missing_columns}"
+                    "Cannot change LookupTable return type or value columns on set_data after "
+                    f"initial setup. Data is missing the following value columns: {missing_columns}."
                 )
         else:
-            if not isinstance(self._value_columns, str):
+            if expected.return_type is not pd.Series:
                 raise ValueError(
-                    "When supplying a single value, value_columns must be a string if provided."
+                    "Cannot change LookupTable return type or value columns on set_data after "
+                    "initial setup. Expects return type "
+                    f"{expected.return_type.__name__} with {len(expected_columns)} "
+                    f"column(s); got a single scalar."
                 )
