@@ -87,7 +87,7 @@ class MicrodataObserver(Observer):
                 f"{duplicates}; each is recorded only once."
             )
         observed_dates = unique_dates
-        results_gatherer = None
+        self.max_rows_per_timestep: int | None = None
         if config.row_limit is not None:
             n_observed_timesteps = self._count_observed_timesteps(builder, observed_dates)
             if config.row_limit < n_observed_timesteps:
@@ -106,13 +106,12 @@ class MicrodataObserver(Observer):
                     f"zero rows per timestep: it is smaller than {detail}"
                 )
             self.max_rows_per_timestep = config.row_limit // n_observed_timesteps
-            results_gatherer = self._sample_rows
+        query = " and ".join(f"({condition})" for condition in list(config.filter))
         builder.results.register_concatenating_observation(
             name=self.name,
             requires_attributes=columns,
-            pop_filter=" and ".join(f"({condition})" for condition in list(config.filter)),
+            pop_filter=(query, self._sample_index),
             to_observe=self._build_to_observe(observed_dates),
-            results_gatherer=results_gatherer,
         )
 
     def _build_to_observe(
@@ -124,12 +123,12 @@ class MicrodataObserver(Observer):
         target_times = set(observed_dates)
         return lambda event: pd.Timestamp(event.time).normalize() in target_times
 
-    def _sample_rows(self, pop: pd.DataFrame) -> pd.DataFrame:
-        """Record a fresh random sample of at most ``max_rows_per_timestep`` simulants."""
-        if len(pop) <= self.max_rows_per_timestep:
-            return pop
-        draws = self.randomness.get_draw(pop.index)
-        return pop.loc[draws.nlargest(self.max_rows_per_timestep).index]
+    def _sample_index(self, index: pd.Index) -> pd.Index:
+        """Keep a fresh random sample of at most ``max_rows_per_timestep`` simulants (all if no limit)."""
+        if self.max_rows_per_timestep is None or len(index) <= self.max_rows_per_timestep:
+            return index
+        draws = self.randomness.get_draw(index)
+        return draws.nlargest(self.max_rows_per_timestep).index
 
     def _count_observed_timesteps(
         self, builder: Builder, observed_dates: list[pd.Timestamp]
