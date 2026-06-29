@@ -379,38 +379,41 @@ class ValuesManager(Manager):
     ) -> None:
         component = self._get_current_component()
         value_source: ValueSource
+        inferred_resource_tuple: tuple[Iterable[str | Resource], str] | None = None
+
         if source_is_private_column:
-            generic_error_msg = (
+            private_col_error_msg = (
                 f"Invalid source for {pipeline.name}. `source` must be list containing a single"
-                " private column name."
+                " private column name. "
             )
             if not isinstance(source, list):
                 raise ValueError(
-                    generic_error_msg + f"Got `source` type {type(source)} instead."
+                    private_col_error_msg + f"Got `source` type {type(source)} instead."
                 )
             if len(source) != 1:
-                raise ValueError(generic_error_msg + f"Got {len(source)} names instead.")
+                raise ValueError(private_col_error_msg + f"Got {len(source)} names instead.")
             value_source = PrivateColumnValueSource(
                 pipeline, source[0], self._get_view(component)  # type: ignore[arg-type]
             )
-            if required_resources:
-                self.logger.warning(
-                    f"Conflicting information for {pipeline.name}. Ignoring 'required_resources' "
-                    "since the `source_is_private_column` flag is set to True and we can infer "
-                    "the required resources directly."
-                )
-            required_resources = [Column(source[0], component)]
+            inferred_resource_tuple = (
+                [Column(source[0], component)],
+                "the `source_is_private_column` flag is set to True",
+            )
         elif isinstance(source, list):
             value_source = AttributesValueSource(pipeline, source, self._get_view(component))  # type: ignore[arg-type]
-            if required_resources:
-                self.logger.warning(
-                    f"Conflicting information for {pipeline.name}. Ignoring 'required_resources' "
-                    "since the `source` is a list of attributes and we can infer the required "
-                    "resources directly."
-                )
-            required_resources = source
+            inferred_resource_tuple = (source, "the `source` is a list of attributes")
         else:
             value_source = ValueSource(pipeline, source)
+            if isinstance(source, Resource):
+                inferred_resource_tuple = (
+                    [source],
+                    f"the `source` is of type {type(source)}",
+                )
+
+        if inferred_resource_tuple is not None:
+            inferred_resources, reason = inferred_resource_tuple
+            self._warn_if_overriding_resources(pipeline.name, required_resources, reason)
+            required_resources = inferred_resources
 
         if not isinstance(preferred_post_processor, Sequence):
             preferred_post_processor_list = [preferred_post_processor]
@@ -441,16 +444,28 @@ class ValuesManager(Manager):
     ) -> None:
         component = self._get_current_component()
         if isinstance(modifier, Resource):
-            if required_resources:
-                self.logger.warning(
-                    f"Conflicting information for {pipeline.name}. Ignoring 'required_resources' "
-                    f"since the `modifier` is of type {type(modifier)} and we can infer "
-                    "the required resources directly."
-                )
+            self._warn_if_overriding_resources(
+                pipeline.name,
+                required_resources,
+                f"the `modifier` is of type {type(modifier)}",
+            )
             required_resources = [modifier]
         value_modifier = pipeline.get_value_modifier(modifier, component, required_resources)
         self.logger.debug(f"Registering {value_modifier.name} as modifier to {pipeline.name}")
         self._add_resource(value_modifier)
+
+    def _warn_if_overriding_resources(
+        self,
+        pipeline_name: str,
+        required_resources: Iterable[str | Resource],
+        reason: str,
+    ) -> None:
+        """Warns when explicit ``required_resources`` are ignored in favor of inferred ones."""
+        if required_resources:
+            self.logger.warning(
+                f"Conflicting information for {pipeline_name}. Ignoring 'required_resources' "
+                f"since {reason} and we can infer the required resources directly."
+            )
 
     def __contains__(self, item: str) -> bool:
         return item in self._all_pipelines
