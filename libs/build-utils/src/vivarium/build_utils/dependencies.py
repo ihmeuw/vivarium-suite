@@ -10,7 +10,7 @@ release:
    for example, bumping ``vivarium-engine`` and consuming the new version from
    ``vivarium-public-health`` - the dependent's declared dependency would
    normally resolve the upstream from PyPI, where the new version does not yet
-   exist. :func:`get_ordered_editable_siblings` selects exactly the siblings that are
+   exist. :func:`get_editable_siblings` selects exactly the siblings that are
    modified in the PR, reachable from the package under test, and version
    compatible, and :func:`build_install_plan` installs them editably (at their
    pending versions) alongside the target in a single ``uv`` invocation.
@@ -320,7 +320,7 @@ def get_reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
     return reached
 
 
-def get_ordered_editable_siblings(
+def get_editable_siblings(
     target: str, libs: Mapping[str, Lib], changed: Sequence[str]
 ) -> list[Lib]:
     """Select the siblings to install editably for a build of ``target``.
@@ -689,7 +689,7 @@ def _run_editable_install(args: argparse.Namespace) -> int:
     libs = load_libs(libs_dir)
     changed = args.changed.split()
     try:
-        siblings = get_ordered_editable_siblings(args.target, libs, changed)
+        siblings = get_editable_siblings(args.target, libs, changed)
     except (DependencyConflictError, DependencyCycleError) as error:
         print(str(error), file=sys.stderr)
         return 1
@@ -726,7 +726,7 @@ def _run_verify_editable(args: argparse.Namespace) -> int:
     libs_dir = _discover_libs_dir(args.libs_dir)
     libs = load_libs(libs_dir)
     changed = args.changed.split()
-    expected = get_ordered_editable_siblings(args.target, libs, changed)
+    expected = get_editable_siblings(args.target, libs, changed)
     if not expected:
         print(f"{args.target}: no changed in-tree siblings to verify")
         return 0

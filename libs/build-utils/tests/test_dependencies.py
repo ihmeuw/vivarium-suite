@@ -17,7 +17,7 @@ from vivarium.build_utils.dependencies import (
     InstallPlan,
     Lib,
     build_install_plan,
-    get_ordered_editable_siblings,
+    get_editable_siblings,
     get_reachable_siblings,
     get_release_matrix,
     get_release_order,
@@ -284,9 +284,9 @@ def test_get_reachable_siblings_excludes_target_itself(
 
 
 # --------------------------------------------------------------------------- #
-# get_ordered_editable_siblings                                                            #
+# get_editable_siblings                                                            #
 # --------------------------------------------------------------------------- #
-def test_get_ordered_editable_siblings_selects_changed_reachable_compatible(
+def test_get_editable_siblings_selects_changed_reachable_compatible(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A changed, reachable, version-compatible sibling is selected."""
@@ -297,11 +297,11 @@ def test_get_ordered_editable_siblings_selects_changed_reachable_compatible(
         }
     )
     libs = load_libs(libs_dir)
-    selected = get_ordered_editable_siblings("a", libs, changed=["b"])
+    selected = get_editable_siblings("a", libs, changed=["b"])
     assert [lib.name for lib in selected] == ["b"]
 
 
-def test_get_ordered_editable_siblings_excludes_unchanged_reachable_dep(
+def test_get_editable_siblings_excludes_unchanged_reachable_dep(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A reachable dep that did not change in the PR is not selected (resolves from PyPI)."""
@@ -312,10 +312,10 @@ def test_get_ordered_editable_siblings_excludes_unchanged_reachable_dep(
         }
     )
     libs = load_libs(libs_dir)
-    assert get_ordered_editable_siblings("a", libs, changed=[]) == []
+    assert get_editable_siblings("a", libs, changed=[]) == []
 
 
-def test_get_ordered_editable_siblings_excludes_changed_unreachable_lib(
+def test_get_editable_siblings_excludes_changed_unreachable_lib(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A changed package the target does not depend on is not selected."""
@@ -327,11 +327,11 @@ def test_get_ordered_editable_siblings_excludes_changed_unreachable_lib(
         }
     )
     libs = load_libs(libs_dir)
-    selected = get_ordered_editable_siblings("a", libs, changed=["unrelated"])
+    selected = get_editable_siblings("a", libs, changed=["unrelated"])
     assert selected == []
 
 
-def test_get_ordered_editable_siblings_ordered_dependencies_first(
+def test_get_editable_siblings_ordered_dependencies_first(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """Selected siblings are ordered so each follows the selected siblings it depends on."""
@@ -343,13 +343,13 @@ def test_get_ordered_editable_siblings_ordered_dependencies_first(
         }
     )
     libs = load_libs(libs_dir)
-    selected = get_ordered_editable_siblings("a", libs, changed=["b", "c"])
+    selected = get_editable_siblings("a", libs, changed=["b", "c"])
     names = [lib.name for lib in selected]
     assert set(names) == {"b", "c"}
     assert names.index("c") < names.index("b")
 
 
-def test_get_ordered_editable_siblings_empty_when_no_changed_siblings(
+def test_get_editable_siblings_empty_when_no_changed_siblings(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """No changed packages (or none reachable) yields an empty selection."""
@@ -360,10 +360,10 @@ def test_get_ordered_editable_siblings_empty_when_no_changed_siblings(
         }
     )
     libs = load_libs(libs_dir)
-    assert get_ordered_editable_siblings("a", libs, changed=[]) == []
+    assert get_editable_siblings("a", libs, changed=[]) == []
 
 
-def test_get_ordered_editable_siblings_hard_fails_on_pin_conflict(
+def test_get_editable_siblings_hard_fails_on_pin_conflict(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A selected sibling whose pending version violates a reachable pin raises DependencyConflictError."""
@@ -375,10 +375,10 @@ def test_get_ordered_editable_siblings_hard_fails_on_pin_conflict(
     )
     libs = load_libs(libs_dir)
     with pytest.raises(DependencyConflictError):
-        get_ordered_editable_siblings("a", libs, changed=["b"])
+        get_editable_siblings("a", libs, changed=["b"])
 
 
-def test_get_ordered_editable_siblings_conflict_message_names_sibling_version_and_pin(
+def test_get_editable_siblings_conflict_message_names_sibling_version_and_pin(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """The DependencyConflictError message identifies the sibling, its pending version, and the conflicting pin."""
@@ -390,14 +390,14 @@ def test_get_ordered_editable_siblings_conflict_message_names_sibling_version_an
     )
     libs = load_libs(libs_dir)
     with pytest.raises(DependencyConflictError) as exc_info:
-        get_ordered_editable_siblings("a", libs, changed=["b"])
+        get_editable_siblings("a", libs, changed=["b"])
     message = str(exc_info.value)
     assert "vivarium-b" in message
     assert "2.0.0" in message
     assert "<2.0.0" in message
 
 
-def test_get_ordered_editable_siblings_detects_transitive_conflict(
+def test_get_editable_siblings_detects_transitive_conflict(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """A pin on a changed transitive sibling (from a non-target intermediate) raises DependencyConflictError."""
@@ -410,27 +410,27 @@ def test_get_ordered_editable_siblings_detects_transitive_conflict(
     )
     libs = load_libs(libs_dir)
     with pytest.raises(DependencyConflictError):
-        get_ordered_editable_siblings("a", libs, changed=["b", "c"])
+        get_editable_siblings("a", libs, changed=["b", "c"])
 
 
-def test_get_ordered_editable_siblings_raises_keyerror_for_unknown_target(
+def test_get_editable_siblings_raises_keyerror_for_unknown_target(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """An unknown target name raises KeyError."""
     libs_dir = make_monorepo({"a": {}})
     libs = load_libs(libs_dir)
     with pytest.raises(KeyError):
-        get_ordered_editable_siblings("nonexistent", libs, changed=[])
+        get_editable_siblings("nonexistent", libs, changed=[])
 
 
-def test_get_ordered_editable_siblings_raises_keyerror_for_unknown_changed(
+def test_get_editable_siblings_raises_keyerror_for_unknown_changed(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """An unknown package in `changed` raises KeyError."""
     libs_dir = make_monorepo({"a": {}})
     libs = load_libs(libs_dir)
     with pytest.raises(KeyError):
-        get_ordered_editable_siblings("a", libs, changed=["ghost"])
+        get_editable_siblings("a", libs, changed=["ghost"])
 
 
 # --------------------------------------------------------------------------- #
@@ -975,7 +975,7 @@ def test_end_to_end_changed_upstream_bump_installs_editable_before_dependent(
         }
     )
     libs = load_libs(libs_dir)
-    siblings = get_ordered_editable_siblings("a", libs, changed=["b"])
+    siblings = get_editable_siblings("a", libs, changed=["b"])
     plan = build_install_plan(
         libs["a"], siblings, env_reqs="ci_github", ihme_pypi="", uv_flags=""
     )
