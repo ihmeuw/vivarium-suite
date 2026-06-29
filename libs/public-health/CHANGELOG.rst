@@ -1,4 +1,4 @@
-**6.3.0 - TBD/TBD/26**
+**6.3.0 - 06/29/26**
 
 - Add Microdata Observer to the results system
 - Support ``filter``, ``timesteps``, and ``row_limit`` configuration for the Microdata Observer
