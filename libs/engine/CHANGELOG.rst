@@ -1,4 +1,4 @@
-**5.2.0 - 06/25/26**
+**5.2.0 - 06/29/26**
 
 - Support a callable population filter (or ``(query, callable)`` tuple) for all observations
 
