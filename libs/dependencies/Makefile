@@ -39,13 +39,16 @@ help:
 	@echo "make build-env"
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env [name=<environment name>] [py=<python version>]"
+	@echo "  make build-env [name=<environment name>] [py=<python version>] [artifactory_access=<true|false>]"
 	@echo
 	@echo "ARGUMENTS:"
 	@echo "  name [optional]"
 	@echo "      Name of the conda environment to create (defaults to <PACKAGE_NAME>)"
 	@echo "  py [optional]"
 	@echo "      Python version (defaults to latest supported)"
+	@echo "  artifactory_access [optional]"
+	@echo "      Whether the build host can reach the IHME artifactory. Either 'true'"
+	@echo "      (default) or 'false'; use 'false' to build off-VPN without artifactory."
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -55,7 +58,7 @@ endif
 
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
-	@allowed="name py"; \
+	@allowed="name py artifactory_access"; \
 	for arg in $(filter-out build-env,$(MAKECMDGOALS)) $(MAKEFLAGS); do \
 		case $$arg in \
 			*=*) \
@@ -79,12 +82,18 @@ build-env: # Create a new environment with installed packages
 		exit 1; \
 	fi
 	@$(eval py ?= $(shell python -c "import json; print(max(json.load(open('python_versions.json')), key=lambda x: tuple(map(int, x.split('.')))))"))
+#	artifactory_access - when false, build without the IHME artifactory index (e.g. off-VPN)
+	@$(eval artifactory_access ?= true)
+	@case "$(artifactory_access)" in \
+		true|false) ;; \
+		*) echo "Error: 'artifactory_access' must be 'true' or 'false', got '$(artifactory_access)'" >&2; exit 1 ;; \
+	esac
 	
 
 	conda create -n $(name) python=$(py) --yes
 # 	Bootstrap vivarium_build_utils into the new environment
 	conda run -n $(name) pip install vivarium_build_utils
-	conda run -n $(name) make install
+	conda run -n $(name) make install $(if $(filter false,$(artifactory_access)),IHME_PYPI=)
 
 	@echo
 	@echo "Finished building environment"
