@@ -1,3 +1,9 @@
+**4.1.0 - 06/29/26**
+
+- Run mypy in CI based on the presence of a ``py.typed`` marker under ``src/``
+- Centralize py.typed marker logic in a new ``mypy-if-typed`` Make target 
+- Deprecate the ``run_mypy`` ``reusable_pipeline`` argument; it is still accepted but ignored
+
 **4.0.2 - 06/24/26**
 
 - Add ``--runslow`` and ``--runweekly`` support to pytest calls so that Jenkins builds pass
