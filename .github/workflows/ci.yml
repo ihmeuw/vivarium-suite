@@ -24,6 +24,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate dependency graph is acyclic
+        # Full-graph pre-merge guard: fails the PR if libs/*/pyproject runtime deps
+        # form a cycle (the release workflow orders the graph too, but only post-merge).
+        run: |
+          pip install packaging
+          PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependencies check-acyclic
+
       - name: Detect changed packages
         id: detect
         run: |

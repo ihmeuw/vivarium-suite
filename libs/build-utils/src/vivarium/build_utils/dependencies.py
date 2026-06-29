@@ -643,6 +643,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         editably, not silently resolved from PyPI. Exits non-zero if any is
         not. Used by the CI workflow after ``make install``.
 
+    ``check-acyclic [--libs-dir <path>]``
+        Validate that the whole in-tree dependency graph is acyclic, exiting
+        non-zero on a cycle. Used by the CI workflow as a pre-merge guard.
+
     Parameters
     ----------
     argv
@@ -676,12 +680,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     verify_parser.add_argument("--changed", default="")
     verify_parser.add_argument("--libs-dir", default=None)
 
+    # Check-acyclic subcommand
+    check_parser = subparsers.add_parser("check-acyclic")
+    check_parser.add_argument("--libs-dir", default=None)
+
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     if args.command == "editable-install":
         return _run_editable_install(args)
     if args.command == "verify-editable":
         return _run_verify_editable(args)
+    if args.command == "check-acyclic":
+        return _run_check_acyclic(args)
     return _run_release_matrix(args)
 
 
@@ -760,7 +770,13 @@ def _run_release_matrix(args: argparse.Namespace) -> int:
             return 1
         release_versions[parts[0]] = parts[1]
     libs_dir = _discover_libs_dir(args.libs_dir)
-    libs = load_libs(libs_dir)
+    # Runtime deps only: release order need only respect *runtime* edges (a
+    # dependent's install can't resolve until its runtime upstreams are on PyPI;
+    # its test deps just need to already be published). The ci_github extra adds
+    # test-dep edges that legitimately cycle (e.g. config-tree's tests use
+    # testing-utils, which depends on config-tree at runtime), and a topological
+    # sort can't be defined over a cyclic graph.
+    libs = load_libs(libs_dir, extras=())
     try:
         matrix = get_release_matrix(release_versions, libs)
     except DependencyCycleError as error:
@@ -770,6 +786,23 @@ def _run_release_matrix(args: argparse.Namespace) -> int:
         print(f"unknown package: {error.args[0]}", file=sys.stderr)
         return 1
     print(json.dumps(matrix))
+    return 0
+
+
+def _run_check_acyclic(args: argparse.Namespace) -> int:
+    """Handle the ``check-acyclic`` subcommand."""
+    libs_dir = _discover_libs_dir(args.libs_dir)
+    # Runtime deps only: the ``ci_github`` extra pulls in test dependencies that
+    # legitimately cycle (e.g. config-tree's tests use testing-utils, which
+    # depends on config-tree at runtime). Only a *runtime* dependency cycle is a
+    # real problem, and that graph is the one release ordering must be acyclic over.
+    libs = load_libs(libs_dir, extras=())
+    try:
+        get_release_order(list(libs), libs)
+    except DependencyCycleError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    print(f"in-tree dependency graph is acyclic ({len(libs)} packages)")
     return 0
 
 

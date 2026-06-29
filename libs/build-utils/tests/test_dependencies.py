@@ -916,6 +916,55 @@ def test_cli_get_release_matrix_clean_exit_on_cycle(
     assert "Traceback" not in (captured.out + captured.err)
 
 
+def test_cli_check_acyclic_passes_on_dag(make_monorepo: MonorepoFactory) -> None:
+    """`check-acyclic` exits 0 when the in-tree graph is a DAG."""
+    libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+    assert main_with(["check-acyclic", "--libs-dir", str(libs_dir)]) == 0
+
+
+def test_cli_check_acyclic_fails_on_cycle(
+    make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`check-acyclic` exits non-zero with a clean message (no traceback) on a cycle."""
+    libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {"deps": ["vivarium-a"]}})
+    exit_code = main_with(["check-acyclic", "--libs-dir", str(libs_dir)])
+    assert exit_code != 0
+    captured = capsys.readouterr()
+    assert "Traceback" not in (captured.out + captured.err)
+
+
+def test_cli_release_matrix_orders_over_runtime_deps_only(
+    make_monorepo: MonorepoFactory,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """Release ordering uses runtime deps, so a test-extra cycle does not break it.
+
+    Mirrors config-tree <-> testing-utils: a depends on b only via a test extra
+    (in ci_github), while b depends on a at runtime. The ci_github graph cycles;
+    the runtime graph (b -> a) is a DAG, so the matrix orders a before b.
+    """
+    libs_dir = make_monorepo(
+        {
+            "a": {"version": "1.0.0", "extras": {"ci_github": ["vivarium-b"]}},
+            "b": {"version": "2.0.0", "deps": ["vivarium-a"]},
+        }
+    )
+    pairs_file = tmp_path / "pairs.txt"
+    pairs_file.write_text("a 1.0.0\nb 2.0.0\n")
+    exit_code = main_with(
+        ["release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
+    )
+    assert exit_code == 0
+    matrix = json.loads(capsys.readouterr().out)
+    include = matrix["include"]
+    assert [entry["library"] for entry in include] == ["a", "b"]
+    a_entry = next(e for e in include if e["library"] == "a")
+    b_entry = next(e for e in include if e["library"] == "b")
+    assert a_entry["wait_for"] == []
+    assert [w["dist"] for w in b_entry["wait_for"]] == ["vivarium-a"]
+
+
 # --------------------------------------------------------------------------- #
 # End-to-end                                                                   #
 # --------------------------------------------------------------------------- #
