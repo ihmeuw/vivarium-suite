@@ -43,6 +43,11 @@ def test_auto_num_workers_scales_and_floors(
     assert _auto_num_workers() == expected
 
 
+def test_auto_num_workers_resolves_on_real_system() -> None:
+    """The full resolution chain runs against the real machine (no mocks) and stays in range."""
+    assert 1 <= _auto_num_workers() <= DEFAULT_MAX_WORKERS
+
+
 def test_usable_cpu_count_uses_affinity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(os, "sched_getaffinity", lambda pid: {0, 1, 2}, raising=False)
     assert pytest_plugin._usable_cpu_count() == 3
@@ -78,14 +83,14 @@ def test_node_available_memory_gb_parses_memavailable(
 ) -> None:
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemTotal:    16000000 kB\nMemAvailable:  8388608 kB\n")
-    monkeypatch.setattr(pytest_plugin, "Path", lambda _: meminfo)
+    monkeypatch.setattr(pytest_plugin, "_PROC_MEMINFO", meminfo)
     assert pytest_plugin._node_available_memory_gb() == pytest.approx(8.0)
 
 
 def test_node_available_memory_gb_none_when_file_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pytest_plugin, "Path", lambda _: tmp_path / "absent")
+    monkeypatch.setattr(pytest_plugin, "_PROC_MEMINFO", tmp_path / "absent")
     assert pytest_plugin._node_available_memory_gb() is None
 
 
@@ -94,7 +99,7 @@ def test_node_available_memory_gb_none_when_no_memavailable_line(
 ) -> None:
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemTotal: 16000000 kB\nMemFree: 1234 kB\n")
-    monkeypatch.setattr(pytest_plugin, "Path", lambda _: meminfo)
+    monkeypatch.setattr(pytest_plugin, "_PROC_MEMINFO", meminfo)
     assert pytest_plugin._node_available_memory_gb() is None
 
 
@@ -103,7 +108,7 @@ def test_node_available_memory_gb_none_when_malformed(
 ) -> None:
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemAvailable: notanumber kB\n")
-    monkeypatch.setattr(pytest_plugin, "Path", lambda _: meminfo)
+    monkeypatch.setattr(pytest_plugin, "_PROC_MEMINFO", meminfo)
     assert pytest_plugin._node_available_memory_gb() is None
 
 
@@ -210,3 +215,20 @@ def test_not_actually_slow(request):
     result = pytester.runpytest("-v")
     result.stdout.fnmatch_lines(["*test_not_actually_slow PASSED*"])
     assert result.ret == 0
+
+
+def test_xdist_auto_num_workers_end_to_end(pytester: pytest.Pytester) -> None:
+    """Under ``-n auto`` xdist loads the plugin, invokes the worker-count hook, and the run
+    succeeds with the resolved plan printed - the behavior previously only verified live."""
+    pytester.makepyfile(
+        """
+        def test_one() -> None:
+            assert True
+
+        def test_two() -> None:
+            assert True
+        """
+    )
+    result = pytester.runpytest_subprocess("-n", "auto")
+    assert result.ret == 0
+    result.stdout.fnmatch_lines(["*vivarium xdist auto-workers:*"])

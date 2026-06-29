@@ -1,4 +1,4 @@
-**0.7.0 - 06/26/26**
+**0.7.0 - 06/29/26**
 
 - Update ``-n auto`` to pick a resource-aware worker count
 

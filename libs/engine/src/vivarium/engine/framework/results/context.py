@@ -26,7 +26,7 @@ from vivarium.engine.types import ScalarMapper, VectorMapper
 
 if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
-    from vivarium.engine.framework.results.interface import PopulationFilter
+    from vivarium.engine.framework.results.interface import _PopulationFilter
 
 
 class ResultsContext:
@@ -52,7 +52,7 @@ class ResultsContext:
         objects to be produced keyed by the observation name.
     grouped_observations
         Dictionary of observation details. It is of the format
-        {lifecycle_state: {PopulationFilter: {stratifications: list[Observation]}}}.
+        {lifecycle_state: {_PopulationFilter: {stratifications: list[Observation]}}}.
         Allowable lifecycle_states are "time_step__prepare", "time_step",
         "time_step__cleanup", and "collect_metrics".
     logger
@@ -67,7 +67,7 @@ class ResultsContext:
         self.grouped_observations: defaultdict[
             str,
             defaultdict[
-                PopulationFilter,
+                _PopulationFilter,
                 defaultdict[tuple[str, ...] | None, list[Observation]],
             ],
         ] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
@@ -223,7 +223,7 @@ class ResultsContext:
         self,
         observation_type: type[Observation],
         name: str,
-        population_filter: PopulationFilter,
+        population_filter: _PopulationFilter,
         when: str,
         requires_attributes: list[str],
         stratifications: tuple[str, ...] | None,
@@ -430,14 +430,17 @@ class ResultsContext:
         return list(required_attributes)
 
     def _filter_population(
-        self, population: pd.DataFrame, population_filter: PopulationFilter
+        self, population: pd.DataFrame, population_filter: _PopulationFilter
     ) -> pd.DataFrame:
         """Filter out simulants not to observe."""
         query = population_filter.query
         if not population_filter.include_untracked:
             # combine the tracking query with the population filter query
             query = pop_utils.combine_queries(query, self.get_tracked_query())
-        return population.query(query) if query else population.copy()
+        filtered = population.query(query) if query else population.copy()
+        if population_filter.index_filter is not None:
+            filtered = filtered.loc[population_filter.index_filter(filtered.index)]
+        return filtered
 
     def _drop_na_stratifications(
         self, population: pd.DataFrame, stratification_names: tuple[str, ...] | None
