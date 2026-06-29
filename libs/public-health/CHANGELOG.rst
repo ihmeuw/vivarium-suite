@@ -1,4 +1,4 @@
-**6.1.2 - 06/26/26**
+**6.1.2 - 06/29/26**
 
 - Allow RiskAttributableDisease input data to be defined without an artifact 
 - Rewrite the disease tutorial to build every model artifactless, driving all
