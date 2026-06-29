@@ -11,6 +11,7 @@ license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
+    "networkx",
     "packaging",
     "tomli; python_version < '3.11'",
 ]
@@ -86,6 +87,7 @@ disable_error_code = []
 # handle mypy errors when 3rd party packages are not typed.
 [[tool.mypy.overrides]]
 module = [
-    # "scipy.*",
+    "networkx",
+    "networkx.*",
 ]
 ignore_missing_imports = true

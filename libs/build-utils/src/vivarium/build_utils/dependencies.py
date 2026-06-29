@@ -1,17 +1,17 @@
-"""In-tree dependency graph for the vivarium-suite monorepo.
+"""Cross-package CI flows for the vivarium-suite monorepo.
 
-This module is the single source of truth for the dependency relationships
-between the packages under ``libs/``. It powers two cross-package CI flows
-that let a single PR (or merge) span interdependent packages without an interim
-release:
+This module wires together the in-tree package model
+(:mod:`vivarium.build_utils._parsing`) and the dependency-graph queries
+(:mod:`vivarium.build_utils._graph`) into the two cross-package flows that let a
+single PR (or merge) span interdependent packages without an interim release:
 
 1. **Editable-sibling install** (consumed by ``make install`` via the
    ``editable-install`` CLI subcommand). When a PR modifies several packages -
    for example, bumping ``vivarium-engine`` and consuming the new version from
    ``vivarium-public-health`` - the dependent's declared dependency would
    normally resolve the upstream from PyPI, where the new version does not yet
-   exist. :func:`get_ordered_editable_siblings` selects exactly the siblings that are
-   modified in the PR, reachable from the package under test, and version
+   exist. :func:`get_ordered_editable_siblings` selects exactly the siblings that
+   are modified in the PR, reachable from the package under test, and version
    compatible, and :func:`build_install_plan` installs them editably (at their
    pending versions) alongside the target in a single ``uv`` invocation.
 
@@ -22,7 +22,10 @@ release:
    wait for on PyPI before installing; independent packages release in parallel
    while dependents serialize along real dependency edges.
 
-Run as ``python -m vivarium.build_utils.dependencies <subcommand>``.
+The in-tree graph itself (parsing, reachability, topological ordering) lives in
+the ``_parsing`` and ``_graph`` modules; the names they own are re-exported here
+so this module remains the single public surface and CLI entry point. Run as
+``python -m vivarium.build_utils.dependencies <subcommand>``.
 """
 
 from __future__ import annotations
@@ -31,72 +34,41 @@ import argparse
 import importlib.metadata
 import json
 import os
-import re
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from functools import reduce
 from pathlib import Path
 
-from packaging.requirements import Requirement
-from packaging.specifiers import SpecifierSet
-from packaging.utils import canonicalize_name
+from vivarium.build_utils._graph import (
+    DependencyCycleError,
+    get_reachable_siblings,
+    get_release_order,
+)
+from vivarium.build_utils._parsing import DEFAULT_EXTRAS, Lib, _discover_libs_dir, load_libs
 
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python < 3.11
-    import tomli as tomllib  # type: ignore[no-redef]
-
-# The pyproject extra whose dependency closure CI activates (``make install
-# ENV_REQS=ci_github`` in both the GitHub Actions test matrix and the release
-# job). The dependency graph is resolved over runtime dependencies plus this
-# extra so the editable-sibling and release-ordering decisions reflect the
-# dependency set the install actually pulls in.
-DEFAULT_EXTRAS: tuple[str, ...] = ("ci_github",)
+# Re-exported so ``vivarium.build_utils.dependencies`` stays the public surface
+# (and the CLI entry point) even though parsing and graph queries now live in
+# sibling modules.
+__all__ = [
+    "DEFAULT_EXTRAS",
+    "DependencyConflictError",
+    "DependencyCycleError",
+    "InstallPlan",
+    "Lib",
+    "build_install_plan",
+    "get_ordered_editable_siblings",
+    "get_reachable_siblings",
+    "get_release_matrix",
+    "get_release_order",
+    "load_libs",
+    "main",
+    "run_install",
+]
 
 
 class DependencyConflictError(Exception):
     """A selected in-tree sibling's pending version violates a declared pin."""
-
-
-class DependencyCycleError(Exception):
-    """The in-tree dependency graph contains a cycle and cannot be ordered."""
-
-
-@dataclass(frozen=True)
-class Lib:
-    """A single independently-released package under ``libs/``.
-
-    Attributes
-    ----------
-    name
-        Directory name under ``libs/`` (e.g. ``"engine"``).
-    dist_name
-        PyPI distribution name from ``pyproject.toml`` ``[project].name``
-        (e.g. ``"vivarium-engine"``).
-    path
-        Absolute path to the ``libs/<name>`` directory.
-    version
-        Pending release version, parsed from the first line of
-        ``CHANGELOG.rst`` (format ``**X.Y.Z - MM/DD/YY**``).
-    sibling_deps
-        This package's dependencies on *other monorepo packages*: a mapping from
-        each depended-on sibling's ``dist_name`` to the version constraint this
-        package places on it. For example, ``vivarium-public-health`` yields
-        ``{"vivarium-engine": SpecifierSet(">=5.1.1"), "vivarium-config-tree":
-        SpecifierSet(">=5.0.0"), ...}``. External dependencies (``numpy``,
-        ``dill``, ...) are excluded - only ``libs/`` packages appear. Collected
-        over the runtime dependencies plus whichever extras :func:`load_libs`
-        resolved; if a sibling is constrained in more than one of those places,
-        the constraints are intersected into a single :class:`SpecifierSet`.
-    """
-
-    name: str
-    dist_name: str
-    path: Path
-    version: str
-    sibling_deps: Mapping[str, SpecifierSet]
 
 
 @dataclass(frozen=True)
@@ -115,209 +87,6 @@ class InstallPlan:
 
     argv: Sequence[str]
     env: Mapping[str, str]
-
-
-def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[str, Lib]:
-    """Parse every package under ``libs_dir`` into a :class:`Lib`.
-
-    For each ``libs/<pkg>`` directory, reads the distribution name and the
-    declared dependencies from ``pyproject.toml`` and the pending version from
-    the first line of ``CHANGELOG.rst``. Dependencies are resolved over
-    ``[project].dependencies`` plus the requested ``extras``, transitively
-    expanding self-referential extras (e.g. ``ci_github = ["vivarium-foo[test,
-    docs]"]`` pulls in the requirements of ``foo``'s ``test`` and ``docs``
-    extras). Only requirements whose distribution name matches another package
-    under ``libs_dir`` are retained in each :class:`Lib`'s ``sibling_deps``.
-    When a package declares more than one specifier against the same sibling
-    (across runtime and extras) the specifiers are combined.
-
-    Parameters
-    ----------
-    libs_dir
-        Path to the monorepo's ``libs/`` directory.
-    extras
-        Optional-dependency extras to fold into each package's resolved
-        dependency set, in addition to its runtime dependencies.
-
-    Returns
-    -------
-        Mapping of package ``name`` (directory name) to its :class:`Lib`.
-
-    Raises
-    ------
-    FileNotFoundError
-        If ``libs_dir`` does not exist.
-    ValueError
-        If a package's ``pyproject.toml`` has no parseable distribution name,
-        or its ``CHANGELOG.rst`` first line has no parseable version.
-    """
-    if not libs_dir.exists():
-        raise FileNotFoundError(f"libs directory does not exist: {libs_dir}")
-
-    pkg_dirs = sorted(
-        p for p in libs_dir.iterdir() if p.is_dir() and (p / "pyproject.toml").exists()
-    )
-
-    # Read every package from disk and collect the pyproject, dist name, and pending version for each
-    pyprojects: dict[str, dict[str, object]] = {}
-    dist_names: dict[str, str] = {}
-    versions: dict[str, str] = {}
-    for pkg_dir in pkg_dirs:
-        name = pkg_dir.name
-        with (pkg_dir / "pyproject.toml").open("rb") as handle:
-            pyproject = tomllib.load(handle)
-        pyprojects[name] = pyproject
-        dist_names[name] = _get_dist_name(pyproject, pkg_dir)
-        versions[name] = _get_pending_version(pkg_dir / "CHANGELOG.rst")
-
-    in_tree = {canonicalize_name(dist): dist for dist in dist_names.values()}
-
-    # Resolve each package's in-tree dependencies and build the Lib objects
-    libs: dict[str, Lib] = {}
-    for pkg_dir in pkg_dirs:
-        name = pkg_dir.name
-        dist = dist_names[name]
-        sibling_specs = _resolve_sibling_deps(pyprojects[name], dist, extras, in_tree)
-        # Collaps multiple specifiers on the same sibling into a single SpecifierSet
-        sibling_deps = {
-            target_dist: reduce(lambda a, b: a & b, specs, SpecifierSet())
-            for target_dist, specs in sibling_specs.items()
-        }
-        libs[name] = Lib(
-            name=name,
-            dist_name=dist,
-            path=pkg_dir.resolve(),
-            version=versions[name],
-            sibling_deps=sibling_deps,
-        )
-    return libs
-
-
-def _get_dist_name(pyproject: Mapping[str, object], pkg_dir: Path) -> str:
-    """Return ``[project].name`` from a parsed pyproject."""
-    project = pyproject.get("project")
-    name = project.get("name") if isinstance(project, Mapping) else None
-    if not isinstance(name, str) or not name:
-        raise ValueError(f"no [project].name in {pkg_dir / 'pyproject.toml'}")
-    return name
-
-
-def _get_pending_version(changelog: Path) -> str:
-    """Parse the pending version from the first line of a CHANGELOG.rst."""
-    if not changelog.exists():
-        raise FileNotFoundError(f"changelog not found: {changelog}")
-    lines = changelog.read_text().splitlines()
-    first_line = lines[0] if lines else ""
-    match = re.search(r"\d+\.\d+\.\d+", first_line)
-    if match is None:
-        raise ValueError(f"no parseable version in first line of {changelog}")
-    return match.group(0)
-
-
-def _get_dist_to_name_mapping(libs: Mapping[str, Lib]) -> dict[str, str]:
-    """Map each in-tree ``dist_name`` to its package ``name``."""
-    return {lib.dist_name: name for name, lib in libs.items()}
-
-
-def _get_in_scope_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str]) -> set[str]:
-    """Return ``name``'s direct in-tree upstream names that are in ``scope``."""
-    dist_to_name = _get_dist_to_name_mapping(libs)
-    upstreams: set[str] = set()
-    for dep_dist in libs[name].sibling_deps:
-        dep_name = dist_to_name.get(dep_dist)
-        if dep_name in scope and dep_name != name:
-            upstreams.add(dep_name)
-    return upstreams
-
-
-def _resolve_sibling_deps(
-    pyproject: Mapping[str, object],
-    own_dist: str,
-    extras: Sequence[str],
-    in_tree: Mapping[str, str],
-) -> dict[str, list[SpecifierSet]]:
-    """Resolve in-tree sibling specifiers over runtime deps plus ``extras``.
-
-    Self-referential extras (a requirement targeting ``own_dist`` with extras)
-    are expanded transitively via a worklist queue; an expanded extra may pull
-    in further self-referential extras whereas an in-tree edge to another dist records
-    its specifier without expanding that dist's extras.
-    """
-    project = pyproject.get("project")
-    project_map: Mapping[str, object] = project if isinstance(project, Mapping) else {}
-    runtime = project_map.get("dependencies", [])
-    runtime_reqs: list[str] = list(runtime) if isinstance(runtime, list) else []
-    optional = project_map.get("optional-dependencies", {})
-    optional_map: Mapping[str, object] = optional if isinstance(optional, Mapping) else {}
-
-    own_canon = canonicalize_name(own_dist)
-    siblings: dict[str, list[SpecifierSet]] = {}
-    seen_extras: set[str] = set()
-    queue: list[str] = list(runtime_reqs)
-    for extra in extras:
-        queue.extend(_get_extra_requirements(optional_map, extra))
-        seen_extras.add(extra)
-
-    while queue:
-        req = Requirement(queue.pop(0))
-        req_canon = canonicalize_name(req.name)
-        if req_canon == own_canon:
-            for extra in req.extras:
-                if extra not in seen_extras:
-                    seen_extras.add(extra)
-                    queue.extend(_get_extra_requirements(optional_map, extra))
-            continue
-        if req_canon in in_tree:
-            siblings.setdefault(in_tree[req_canon], []).append(req.specifier)
-
-    return siblings
-
-
-def _get_extra_requirements(optional_map: Mapping[str, object], extra: str) -> list[str]:
-    """Return the raw requirement strings declared for ``extra``."""
-    value = optional_map.get(extra, [])
-    return [r for r in value if isinstance(r, str)] if isinstance(value, list) else []
-
-
-def get_reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
-    """Return all in-tree package names transitively reachable from ``target``.
-
-    Walks ``target``'s ``sibling_deps`` and those of every package it reaches,
-    following only in-tree edges. The result excludes ``target`` itself.
-
-    Parameters
-    ----------
-    target
-        Package ``name`` to compute reachability from.
-    libs
-        The full set of parsed packages.
-
-    Returns
-    -------
-        Names of the in-tree packages reachable from ``target``.
-
-    Raises
-    ------
-    KeyError
-        If ``target`` is not a key in ``libs``.
-    """
-    if target not in libs:
-        raise KeyError(target)
-    dist_to_name = _get_dist_to_name_mapping(libs)
-
-    reached: set[str] = set()
-    stack = [target]
-    while stack:
-        current = stack.pop()
-        for dep_dist in libs[current].sibling_deps:
-            dep_name = dist_to_name.get(dep_dist)
-            if dep_name is not None and dep_name not in reached:
-                # A new dependency was found, so add it to the reached set and push
-                # it onto the stack for further exploration
-                reached.add(dep_name)
-                stack.append(dep_name)
-    reached.discard(target)
-    return reached
 
 
 def get_ordered_editable_siblings(
@@ -380,59 +149,6 @@ def get_ordered_editable_siblings(
 
     ordered = get_release_order(editable_sibling_names, libs)
     return [libs[name] for name in ordered]
-
-
-def get_release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
-    """Topologically sort ``names`` dependencies-first.
-
-    Orders only the packages in ``names`` relative to one another, using the
-    in-tree edges among them; packages outside ``names`` are ignored. Among
-    packages with no dependency relationship the input order is preserved.
-
-    Parameters
-    ----------
-    names
-        Package ``name``s to order.
-    libs
-        The full set of parsed packages.
-
-    Returns
-    -------
-        ``names`` reordered so each package follows every package in ``names``
-        it depends on.
-
-    Raises
-    ------
-    DependencyCycleError
-        If the packages in ``names`` form a dependency cycle.
-    """
-    # De-duplicate (defensive) and preserve input order
-    # NOTE: the ordering of ``sorted_names`` below does not matter for topological correctness;
-    # it only affects tie-breaks as well as the github actions release matrix order.
-    sorted_names = list(dict.fromkeys(names))
-
-    deps: dict[str, set[str]] = {
-        name: _get_in_scope_upstreams(name, libs, scope=set(sorted_names))
-        for name in sorted_names
-    }
-
-    ordered: list[str] = []
-    placed: set[str] = set()
-    while len(ordered) < len(sorted_names):
-        progressed = False
-        for name in sorted_names:
-            if name in placed:
-                continue
-            if deps[name] <= placed:
-                ordered.append(name)
-                placed.add(name)
-                progressed = True
-        if not progressed:
-            remaining = [n for n in sorted_names if n not in placed]
-            raise DependencyCycleError(
-                f"dependency cycle among packages: {sorted(remaining)}"
-            )
-    return ordered
 
 
 def get_release_matrix(
@@ -598,26 +314,6 @@ def run_install(plan: InstallPlan, libs_dir: Path) -> None:
         env={**os.environ, **plan.env},
         check=True,
     )
-
-
-def _discover_libs_dir(libs_path: str | None) -> Path:
-    """Locate the monorepo ``libs/`` directory.
-
-    Uses ``libs_path`` if given. Otherwise walks up from the cwd looking for a
-    ``libs/`` directory containing a ``build-utils`` package; failing that,
-    treats the cwd as the libs dir if it directly contains ``build-utils``, or
-    returns ``<cwd>/libs``.
-    """
-    if libs_path:
-        return Path(libs_path).resolve()
-    cwd = Path.cwd().resolve()
-    for candidate in (cwd, *cwd.parents):
-        libs = candidate / "libs"
-        # Be sure that this is the monorepo's libs dir, not some other directory
-        # named "libs" that happens to be in the cwd's ancestry
-        if (libs / "build-utils").is_dir():
-            return libs
-    return cwd / "libs"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
