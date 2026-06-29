@@ -118,13 +118,23 @@ def installPackage(String env_reqs = "") {
     }
 }
 
-def checkFormatting(Boolean run_mypy) {
+def checkFormatting() {
     stage("Check Formatting - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
             script {
                 sh "${ACTIVATE} && make lint"
-                if (run_mypy == true) {
+                // Run mypy only when a py.typed marker exists under src/, matching the
+                // detection used by `make check` (base.mk) and GH Actions (ci.yml). Use
+                // 'find' rather than a hardcoded path so it works for both flat layouts
+                // (src/<pkg>/py.typed) and namespace layouts (src/vivarium/<pkg>/py.typed).
+                def hasPyTyped = sh(
+                    script: "find src -name py.typed 2>/dev/null | grep -q .",
+                    returnStatus: true
+                ) == 0
+                if (hasPyTyped) {
                     sh "${ACTIVATE} && make mypy"
+                } else {
+                    echo "No py.typed marker found under src/; skipping mypy."
                 }
             }
         }

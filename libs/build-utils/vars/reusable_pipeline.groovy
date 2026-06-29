@@ -10,7 +10,10 @@ def call(Map config = [:]){
   requires_slurm: Whether the child tasks require the slurm scheduler.
   deployable: Whether the package can be deployed by Jenkins.
   skip_doc_build: Only skips the doc build.
-  run_mypy: Whether to run mypy on the package
+  run_mypy: DEPRECATED and ignored. mypy now runs automatically whenever a
+            py.typed marker exists under the package's src/ (matching `make check`
+            and GH Actions). Still accepted so existing callers don't fail config
+            validation, but it has no effect.
   env_reqs: The pyproject.toml extras to install with `make install` (e.g. "ci_jenkins").
             Empty/omitted leaves base.mk's default ("dev"), which is correct for standalone repos.
   github_credentials_id: Jenkins credential ID to use during the deploy stage when pushing
@@ -37,7 +40,12 @@ def call(Map config = [:]){
   def requires_slurm = config.requires_slurm ?: false
   def is_deployable = (config?.deployable == true)
   def skip_doc_build = (config?.skip_doc_build == true)
-  def run_mypy = (config.run_mypy != null) ? config.run_mypy : true
+  // DEPRECATED: run_mypy no longer controls anything. mypy runs in checkFormatting
+  // whenever a py.typed marker exists under src/. Accepted for backward compatibility.
+  if (config.run_mypy != null) {
+    echo "WARNING: 'run_mypy' is deprecated and ignored. mypy now runs automatically " +
+         "when a py.typed marker exists under src/. Remove 'run_mypy' from this Jenkinsfile."
+  }
   // Empty string leaves base.mk's default ("dev") in effect. installPackage in
   // build_stages.groovy only sets ENV_REQS=... when this is non-empty.
   def env_reqs = config.env_reqs ?: ""
@@ -59,7 +67,6 @@ def call(Map config = [:]){
   echo "  requires_slurm: ${requires_slurm}"
   echo "  is_deployable: ${is_deployable}"
   echo "  skip_doc_build: ${skip_doc_build}"
-  echo "  run_mypy: ${run_mypy}"
   echo "  env_reqs: ${env_reqs}"
 
   if (stagger_scheduled_builds && scheduled_branches.size() > 1) {
@@ -259,7 +266,7 @@ def call(Map config = [:]){
                         buildStages.runDebugInfo(skipEval)
                         buildStages.buildEnvironment()
                         buildStages.installPackage(env_reqs)
-                        buildStages.checkFormatting(run_mypy)
+                        buildStages.checkFormatting()
                         // Transform test type inputs to actual make test target names
                         tests = test_types.collect { "test-${it}" }
                         buildStages.runTests(tests, run_weekly)
