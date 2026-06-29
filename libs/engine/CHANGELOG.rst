@@ -1,6 +1,10 @@
-**5.1.8 - 06/29/26**
+**5.2.1 - 06/29/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
+
+**5.2.0 - 06/29/26**
+
+- Support a callable population filter (or ``(query, callable)`` tuple) for all observations
 
 **5.1.7 - 06/22/26**
 
