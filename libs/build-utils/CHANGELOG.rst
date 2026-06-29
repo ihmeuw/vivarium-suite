@@ -1,3 +1,7 @@
+**4.1.1 - 06/29/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
 **4.1.0 - 06/29/26**
 
 - Run mypy in CI based on the presence of a ``py.typed`` marker under ``src/``

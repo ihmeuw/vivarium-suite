@@ -1,3 +1,7 @@
+**6.1.3 - 06/29/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
 **6.1.2 - 06/29/26**
 
 - Allow RiskAttributableDisease input data to be defined without an artifact 
