@@ -12,8 +12,7 @@ def call(Map config = [:]){
   skip_doc_build: Only skips the doc build.
   run_mypy: DEPRECATED and ignored. mypy now runs automatically whenever a
             py.typed marker exists under the package's src/ (matching `make check`
-            and GH Actions). Still accepted so existing callers don't fail config
-            validation, but it has no effect.
+            and GH Actions).
   env_reqs: The pyproject.toml extras to install with `make install` (e.g. "ci_jenkins").
             Empty/omitted leaves base.mk's default ("dev"), which is correct for standalone repos.
   github_credentials_id: Jenkins credential ID to use during the deploy stage when pushing
@@ -43,8 +42,8 @@ def call(Map config = [:]){
   // DEPRECATED: run_mypy no longer controls anything. mypy runs in checkFormatting
   // whenever a py.typed marker exists under src/. Accepted for backward compatibility.
   if (config.run_mypy != null) {
-    echo "WARNING: 'run_mypy' is deprecated and ignored. mypy now runs automatically " +
-         "when a py.typed marker exists under src/. Remove 'run_mypy' from this Jenkinsfile."
+    echo "WARNING: 'run_mypy' is deprecated and ignored; mypy now runs automatically " +
+         "when a py.typed marker exists under src/."
   }
   // Empty string leaves base.mk's default ("dev") in effect. installPackage in
   // build_stages.groovy only sets ENV_REQS=... when this is non-empty.

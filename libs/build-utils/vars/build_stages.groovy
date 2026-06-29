@@ -123,10 +123,6 @@ def checkFormatting() {
         withWorkingDirectory {
             script {
                 sh "${ACTIVATE} && make lint"
-                // Run mypy only when a py.typed marker exists under src/, matching the
-                // detection used by `make check` (base.mk) and GH Actions (ci.yml). Use
-                // 'find' rather than a hardcoded path so it works for both flat layouts
-                // (src/<pkg>/py.typed) and namespace layouts (src/vivarium/<pkg>/py.typed).
                 def hasPyTyped = sh(
                     script: "find src -name py.typed 2>/dev/null | grep -q .",
                     returnStatus: true
