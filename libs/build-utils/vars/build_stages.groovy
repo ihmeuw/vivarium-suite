@@ -118,14 +118,12 @@ def installPackage(String env_reqs = "") {
     }
 }
 
-def checkFormatting(Boolean run_mypy) {
+def checkFormatting() {
     stage("Check Formatting - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
             script {
                 sh "${ACTIVATE} && make lint"
-                if (run_mypy == true) {
-                    sh "${ACTIVATE} && make mypy"
-                }
+                sh "${ACTIVATE} && make mypy-if-typed"
             }
         }
     }
