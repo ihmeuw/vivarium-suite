@@ -32,8 +32,9 @@ DEFAULT_MAX_WORKERS = 4
 # Conservative per-worker memory budget (GB).
 _GB_PER_WORKER = 1.0
 
-# Filesystem locations consulted for a cgroup memory limit (e.g. a SLURM ``--mem``
-# allocation or a container limit). Module-level so tests can redirect them.
+# Filesystem locations consulted for available memory and cgroup limits (e.g. a SLURM
+# ``--mem`` allocation or a container limit). Module-level so tests can redirect them.
+_PROC_MEMINFO = Path("/proc/meminfo")
 _PROC_SELF_CGROUP = Path("/proc/self/cgroup")
 _CGROUP_V2_ROOT = Path("/sys/fs/cgroup")
 _CGROUP_V1_MEMORY_ROOT = Path("/sys/fs/cgroup/memory")
@@ -94,11 +95,10 @@ def _usable_cpu_count() -> int:
 
 def _node_available_memory_gb() -> float | None:
     """Return the node's available memory in GB from ``/proc/meminfo``, or None when unreadable."""
-    meminfo = Path("/proc/meminfo")
-    if not meminfo.exists():
+    if not _PROC_MEMINFO.exists():
         return None
     try:
-        for line in meminfo.read_text().splitlines():
+        for line in _PROC_MEMINFO.read_text().splitlines():
             if line.startswith("MemAvailable:"):
                 return float(line.split()[1]) / (1024 * 1024)  # MemAvailable is in kB -> GB
     except (OSError, ValueError, IndexError):
@@ -123,7 +123,14 @@ def _read_cgroup_memory_limit(limit_file: Path) -> int | None:
 
 
 def _cgroup_memory_limit_gb() -> float | None:
-    """Return this process's cgroup memory limit in GB, or None if unlimited/unreadable."""
+    """Return this process's cgroup memory limit in GB, or None if unlimited/unreadable.
+
+    Parsing is deliberately forgiving: an unreadable ``/proc/self/cgroup``, an unfamiliar
+    line format, an unknown controller, or a missing/garbage limit file all yield None
+    rather than raising. The cgroup layout this reads is fragile and varies across kernels
+    and containers, so any drift degrades to the node-memory estimate (and ultimately the
+    CPU count) instead of breaking collection.
+    """
     try:
         entries = _PROC_SELF_CGROUP.read_text().splitlines()
     except OSError:
@@ -179,7 +186,17 @@ def _auto_num_workers() -> int:
 
 
 def pytest_xdist_auto_num_workers(config: Config) -> int:
-    """Resolve a safe worker count for ``-n auto`` (capped at DEFAULT_MAX_WORKERS, scaled to CPUs/memory, floored at 1)."""
+    """Resolve a safe worker count for ``-n auto`` (capped at DEFAULT_MAX_WORKERS, scaled to CPUs/memory, floored at 1).
+
+    Notes
+    -----
+    The worker count is consumed by two independent pytest hooks that fire separately during startup and can't
+    share state — pytest_xdist_auto_num_workers (the count xdist actually uses) and pytest_report_header (the line
+    printed at the top of the run) — so the resolution logic is factored into a single pure helper (_resolve_workers,
+    wrapped by _auto_num_workers) that both call, which keeps the printed plan consistent with the count xdist runs
+    with rather than recomputing it two different ways.
+    """
+
     return _auto_num_workers()
 
 

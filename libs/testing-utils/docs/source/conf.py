@@ -15,7 +15,6 @@ import importlib.metadata
 from docutils.nodes import Text
 from sphinx.ext.intersphinx import missing_reference
 
-
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.testing_utils"
