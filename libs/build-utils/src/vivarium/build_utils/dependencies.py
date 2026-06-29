@@ -325,12 +325,16 @@ def get_editable_siblings(
 ) -> list[Lib]:
     """Select the siblings to install editably for a build of ``target``.
 
-    Returns the packages in ``changed`` that are reachable from ``target``,
-    ordered dependencies-first. Packages in ``changed`` that are not reachable
-    from ``target`` are ignored (a change elsewhere in the monorepo does not
-    affect this build). Before returning, validates that each selected
-    sibling's pending version satisfies every reachable package's declared
-    constraint on it.
+    Returns the packages in ``changed`` that are reachable from ``target``.
+    Packages in ``changed`` that are not reachable from ``target`` are ignored
+    (a change elsewhere in the monorepo does not affect this build). Before
+    returning, validates that each selected sibling's pending version satisfies
+    every reachable package's declared constraint on it.
+
+    Notes
+    -----
+    The returned order is not meaningful - both consumers (a single combined install
+    and the verify check) are order-insensitive.
 
     Parameters
     ----------
@@ -344,8 +348,7 @@ def get_editable_siblings(
 
     Returns
     -------
-        The selected siblings as :class:`Lib`s, ordered so a sibling appears
-        after every other selected sibling it depends on.
+        The selected siblings as :class:`Lib`s.
 
     Raises
     ------
@@ -378,8 +381,7 @@ def get_editable_siblings(
                     f"'{specifier}' declared by {libs[package].dist_name}"
                 )
 
-    ordered = get_release_order(editable_sibling_names, libs)
-    return [libs[name] for name in ordered]
+    return [libs[name] for name in editable_sibling_names]
 
 
 def get_release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
@@ -690,7 +692,7 @@ def _run_editable_install(args: argparse.Namespace) -> int:
     changed = args.changed.split()
     try:
         siblings = get_editable_siblings(args.target, libs, changed)
-    except (DependencyConflictError, DependencyCycleError) as error:
+    except DependencyConflictError as error:
         print(str(error), file=sys.stderr)
         return 1
     except KeyError as error:

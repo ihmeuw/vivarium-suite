@@ -331,10 +331,10 @@ def test_get_editable_siblings_excludes_changed_unreachable_lib(
     assert selected == []
 
 
-def test_get_editable_siblings_ordered_dependencies_first(
+def test_get_editable_siblings_selects_transitively_reachable_changed(
     make_monorepo: MonorepoFactory,
 ) -> None:
-    """Selected siblings are ordered so each follows the selected siblings it depends on."""
+    """Selection includes changed siblings reachable transitively (a -> b -> c selects both b and c)."""
     libs_dir = make_monorepo(
         {
             "a": {"deps": ["vivarium-b"]},
@@ -344,9 +344,7 @@ def test_get_editable_siblings_ordered_dependencies_first(
     )
     libs = load_libs(libs_dir)
     selected = get_editable_siblings("a", libs, changed=["b", "c"])
-    names = [lib.name for lib in selected]
-    assert set(names) == {"b", "c"}
-    assert names.index("c") < names.index("b")
+    assert {lib.name for lib in selected} == {"b", "c"}
 
 
 def test_get_editable_siblings_empty_when_no_changed_siblings(
@@ -918,48 +916,6 @@ def test_cli_get_release_matrix_clean_exit_on_cycle(
     assert "Traceback" not in (captured.out + captured.err)
 
 
-def test_cli_editable_install_clean_exit_on_cycle(
-    make_monorepo: MonorepoFactory,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """`editable-install` exits non-zero with a clean message (no traceback, no install) on a cycle."""
-    libs_dir = make_monorepo(
-        {
-            "a": {"deps": ["vivarium-b"]},
-            "b": {"deps": ["vivarium-c"]},
-            "c": {"deps": ["vivarium-b"]},
-        }
-    )
-    called = False
-
-    def fake_run_install(plan: InstallPlan, run_dir: Path) -> None:
-        nonlocal called
-        called = True
-
-    monkeypatch.setattr(dependencies, "run_install", fake_run_install)
-    exit_code = main_with(
-        [
-            "editable-install",
-            "a",
-            "--changed",
-            "b c",
-            "--env-reqs",
-            "ci_github",
-            "--ihme-pypi",
-            "",
-            "--uv-flags",
-            "",
-            "--libs-dir",
-            str(libs_dir),
-        ]
-    )
-    assert exit_code != 0
-    assert called is False
-    captured = capsys.readouterr()
-    assert "Traceback" not in (captured.out + captured.err)
-
-
 # --------------------------------------------------------------------------- #
 # End-to-end                                                                   #
 # --------------------------------------------------------------------------- #
@@ -967,7 +923,7 @@ def test_end_to_end_changed_upstream_bump_installs_editable_before_dependent(
     make_monorepo: MonorepoFactory,
 ) -> None:
     """For target A depending on changed+bumped B: the plan installs B editably at its pending
-    version, ordered before A, in a single uv invocation - the core cross-package PR scenario."""
+    version alongside A in a single uv invocation - the core cross-package PR scenario."""
     libs_dir = make_monorepo(
         {
             "a": {"deps": ["vivarium-b>=2.0.0"], "version": "1.0.0"},
