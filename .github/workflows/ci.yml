@@ -65,29 +65,24 @@ jobs:
           # Human-readable output
           echo "Source-changed libraries: ${SOURCE_CHANGED[*]:-(none)}"
 
-          # Root-level changes to shared config or workflows rebuild everything
+          # Build set: the source-changed libs, or every lib when a shared
+          # root/workflow file changes (those affect all packages).
           if echo "$CHANGED" | grep -qE "^(pyproject\.toml|Makefile)$|^\.github/workflows/"; then
             echo "Root-level changes detected - testing all packages"
-            CHANGED_LIBS=($ALL_LIBS)
+            BUILD_LIBS=($ALL_LIBS)
           else
-            CHANGED_LIBS=()
-            for lib in $ALL_LIBS; do
-              if echo "$CHANGED" | grep -q "^libs/${lib}/"; then
-                echo "Changes detected in ${lib}"
-                CHANGED_LIBS+=("$lib")
-              fi
-            done
+            BUILD_LIBS=("${SOURCE_CHANGED[@]}")
           fi
 
-          if [ ${#CHANGED_LIBS[@]} -eq 0 ]; then
+          if [ ${#BUILD_LIBS[@]} -eq 0 ]; then
             echo "No package changes detected"
             echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
             echo "has-changes=false" >> $GITHUB_OUTPUT
           else
-            echo "Building matrix for: ${CHANGED_LIBS[*]}"
+            echo "Building matrix for: ${BUILD_LIBS[*]}"
             MATRIX_INCLUDE="["
             FIRST=true
-            for lib in "${CHANGED_LIBS[@]}"; do
+            for lib in "${BUILD_LIBS[@]}"; do
               if [ ! -f "libs/${lib}/python_versions.json" ]; then
                 echo "::error::libs/${lib}/python_versions.json not found"
                 exit 1
