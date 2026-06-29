@@ -123,15 +123,7 @@ def checkFormatting() {
         withWorkingDirectory {
             script {
                 sh "${ACTIVATE} && make lint"
-                def hasPyTyped = sh(
-                    script: "find src -name py.typed 2>/dev/null | grep -q .",
-                    returnStatus: true
-                ) == 0
-                if (hasPyTyped) {
-                    sh "${ACTIVATE} && make mypy"
-                } else {
-                    echo "No py.typed marker found under src/; skipping mypy."
-                }
+                sh "${ACTIVATE} && make mypy-if-typed"
             }
         }
     }
