@@ -229,9 +229,12 @@ class _RiskAffectedPipeline(Component):
         else:
             has_nan = pd.isna(joint_calibration_constant)
         if has_nan:
+            # value[0] is the pipeline source seed (0), not a real contributor, so
+            # subtract it to report the actual number of RiskEffect contributions.
+            num_contributors = len(value) - 1
             raise ValueError(
                 f"Joint calibration constant (PAF) contains NaN after combining "
-                f"{len(value)} contributor(s) via raw_union. This typically means two "
+                f"{num_contributors} contributor(s) via raw_union. This typically means two "
                 "RiskEffects targeting the same pipeline supplied PAF data with "
                 "incompatible indexes (mismatched index levels, or non-overlapping "
                 "labels such as different age bins) that could not be aligned. "
