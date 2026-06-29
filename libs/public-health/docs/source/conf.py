@@ -13,7 +13,6 @@
 import importlib.metadata
 import os
 
-
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.public_health"

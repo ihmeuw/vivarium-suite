@@ -125,6 +125,20 @@ def test_mortality_rate_pandas_dataframe(disease_mock):
     assert np.all(expected == disease.adjust_mortality_rate(test_index, rates_df))
 
 
+def test_distribution_configuration_default():
+    disease = RiskAttributableDisease("cause.test_cause", "risk_factor.test_risk")
+    data_sources = disease.configuration_defaults[disease.name]["data_sources"]
+    assert data_sources["distribution"] == "risk_factor.test_risk.distribution"
+
+
+def test_distribution_literal_override_bypasses_artifact(mocker):
+    disease = RiskAttributableDisease("cause.test_cause", "risk_factor.test_risk")
+    builder = mocker.Mock()
+    # A dotless literal is returned as-is and never loaded from the artifact.
+    assert disease.get_data(builder, "dichotomous") == "dichotomous"
+    builder.data.load.assert_not_called()
+
+
 test_data = [("disease_no_recovery", False), ("disease_with_recovery", True)]
 
 

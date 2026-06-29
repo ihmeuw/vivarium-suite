@@ -13,6 +13,7 @@ Disease
    :hidden:
 
    model
+   data
    risk_attributable_disease
 
 The ``vivarium.public_health`` disease package provides
