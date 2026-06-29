@@ -464,6 +464,71 @@ simulation - each time-step is capped at 100.
    [100, 100]
 
 
+Following a closed cohort
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default ``row_limit`` draws a *fresh* sample each observed step, so the
+recorded simulants differ from step to step. Set ``single_random_sample`` to
+sample once from the initial population and then record only those same
+simulants - a *closed cohort* - at every observed step. This requires
+``row_limit``, which sets the cohort's size (``row_limit // <number of observed
+steps>``).
+
+The cohort is never refilled: members are dropped without replacement once they
+leave the filter or the simulation, so the recorded count can only shrink over
+time and ``row_limit`` stays an upper bound. Recording a stable per-simulant id
+shows the same simulants recurring each step:
+
+.. testcode::
+
+   class SimulantID(Component):
+       """Tag each simulant with a stable id so we can see which ones recur."""
+
+       def setup(self, builder):
+           builder.population.register_initializer(
+               initializer=self._initialize, columns=["simulant_id"]
+           )
+
+       def _initialize(self, pop_data):
+           self.population_view.initialize(
+               pd.DataFrame(
+                   {"simulant_id": range(len(pop_data.index))}, index=pop_data.index
+               )
+           )
+
+   config = make_base_config()
+   config.update(
+       {
+           "population": {"population_size": 1000},
+           "microdata_observer": {
+               "columns": ["simulant_id"],
+               "timesteps": ["1990-08-01", "1990-09-01"],
+               "row_limit": 200,
+               "single_random_sample": True,
+           },
+       },
+       layer="model_override",
+   )
+
+   sim = InteractiveContext(
+       components=[BasePopulation(), SimulantID(), MicrodataObserver()],
+       configuration=config,
+       plugin_configuration=base_plugins,
+   )
+   sim.step()
+   sim.step()
+
+   microdata = sim.get_results()["microdata_observer"]
+   cohorts = microdata.groupby("event_time")["simulant_id"].apply(set)
+   print(cohorts.map(len).tolist())
+   print(cohorts.iloc[0] == cohorts.iloc[1])
+
+.. testoutput::
+
+   [100, 100]
+   True
+
+
 Stratification
 --------------
 

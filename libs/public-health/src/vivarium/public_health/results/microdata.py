@@ -22,6 +22,7 @@ from vivarium.engine.framework.results.exceptions import ResultsConfigurationErr
 if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
     from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.population import SimulantData
 
 
 class MicrodataObserver(Observer):
@@ -29,8 +30,8 @@ class MicrodataObserver(Observer):
 
     At each observed timestep it records the configured columns (plus ``event_time``) for every
     (optionally filtered) simulant, concatenated across timesteps, so users can compute
-    derived quantities downstream. It directly composes the framework's generic
-    concatenating observation, so it records raw per-simulant rows rather than the
+    derived quantities downstream. It subclasses the framework's ``Observer`` directly and composes
+    its generic concatenating observation, so it records raw per-simulant rows rather than the
     stratified measures the other public health observers produce.
 
     Configuration
@@ -41,7 +42,9 @@ class MicrodataObserver(Observer):
         The population columns/attributes to record. Required; an empty list is an error.
     filter
         A list of Pandas query strings, AND-combined, restricting which simulants are recorded.
-        Empty (the default) records all simulants.
+        Empty (the default) records all simulants. NOTE: These filters could be applied in such
+        a way with a combination of ``single_random_sample`` such that a simulant is not tracked
+        for their entire existence in the tracked population.
     timesteps
         A list of dates; only timesteps whose event time matches one of them are recorded. Empty
         (the default) records every timestep.
@@ -49,6 +52,11 @@ class MicrodataObserver(Observer):
         The *total* maximum number of rows across all observed timesteps. The per-timestep cap is
         ``row_limit // <number of observed timesteps>`` (floored), and each observed timestep records
         a fresh random sample of up to that many simulants. None (the default) applies no cap.
+    single_random_sample
+        If True, sample a *closed cohort* (of the per-timestep-cap size) once from the initial
+        population and record only those simulants each observed timestep, instead of resampling.
+        Requires ``row_limit``. Members are never added, and are dropped without replacement when
+        they leave the filter or simulation, so ``row_limit`` stays an upper bound. False by default.
     """
 
     @property
@@ -59,11 +67,13 @@ class MicrodataObserver(Observer):
             "filter": [],
             "timesteps": [],
             "row_limit": None,
+            "single_random_sample": False,
         }
         return config
 
     def setup(self, builder: Builder) -> None:
         self.randomness = builder.randomness.get_stream(self.name)
+        self.cohort: pd.Index[int] | None = None
 
     def register_observations(self, builder: Builder) -> None:
         config = builder.configuration[self.name]
@@ -87,7 +97,13 @@ class MicrodataObserver(Observer):
                 f"{duplicates}; each is recorded only once."
             )
         observed_dates = unique_dates
-        self.max_rows_per_timestep: int | None = None
+        if config.single_random_sample and config.row_limit is None:
+            raise ResultsConfigurationError(
+                f"The '{self.name}' observer's 'single_random_sample' requires a 'row_limit' "
+                "to define the closed cohort's size."
+            )
+        query = " and ".join(f"({condition})" for condition in list(config.filter))
+        pop_filter: str | tuple[str, Callable[[pd.Index[int]], pd.Index[int]]] = query
         if config.row_limit is not None:
             n_observed_timesteps = self._count_observed_timesteps(builder, observed_dates)
             if config.row_limit < n_observed_timesteps:
@@ -106,11 +122,17 @@ class MicrodataObserver(Observer):
                     f"zero rows per timestep: it is smaller than {detail}"
                 )
             self.max_rows_per_timestep = config.row_limit // n_observed_timesteps
-        query = " and ".join(f"({condition})" for condition in list(config.filter))
+            row_filter: Callable[[pd.Index[int]], pd.Index[int]]
+            if config.single_random_sample:
+                builder.population.register_initializer(self._sample_cohort, columns=None)
+                row_filter = self._cohort_filter
+            else:
+                row_filter = self._sample_index
+            pop_filter = (query, row_filter)
         builder.results.register_concatenating_observation(
             name=self.name,
             requires_attributes=columns,
-            pop_filter=(query, self._sample_index),
+            pop_filter=pop_filter,
             to_observe=self._build_to_observe(observed_dates),
         )
 
@@ -123,12 +145,28 @@ class MicrodataObserver(Observer):
         target_times = set(observed_dates)
         return lambda event: pd.Timestamp(event.time).normalize() in target_times
 
-    def _sample_index(self, index: pd.Index) -> pd.Index:
-        """Keep a fresh random sample of at most ``max_rows_per_timestep`` simulants (all if no limit)."""
-        if self.max_rows_per_timestep is None or len(index) <= self.max_rows_per_timestep:
-            return index
-        draws = self.randomness.get_draw(index)
+    def _sample_index(
+        self, index: pd.Index[int], additional_key: str | None = None
+    ) -> pd.Index[int]:
+        """Randomly draw up to ``max_rows_per_timestep`` simulants from ``index``."""
+        draws = self.randomness.get_draw(index, additional_key=additional_key)
         return draws.nlargest(self.max_rows_per_timestep).index
+
+    def _sample_cohort(self, pop_data: SimulantData) -> None:
+        """Sample the fixed closed cohort once, from the initial population."""
+        if self.cohort is None:
+            self.cohort = self._sample_index(
+                pop_data.index, additional_key="cohort_selection"
+            )
+
+    def _cohort_filter(self, index: pd.Index[int]) -> pd.Index[int]:
+        """Keep only the once-sampled closed cohort members still in the (filtered) index."""
+        if self.cohort is None:
+            raise RuntimeError(
+                f"The '{self.name}' observer's closed cohort was never sampled; its "
+                "population initializer did not run before results were gathered."
+            )
+        return index.intersection(self.cohort)
 
     def _count_observed_timesteps(
         self, builder: Builder, observed_dates: list[pd.Timestamp]
