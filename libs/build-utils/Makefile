@@ -35,7 +35,7 @@ help:
 	@echo "make build-env"
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env [name=<environment name>] [py=<python version>] [artifactory_access=<true|false>]"
+	@echo "  make build-env [name=<environment name>] [py=<python version>] [artifactory_access=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
 	@echo "  name [optional]"
@@ -43,8 +43,8 @@ help:
 	@echo "  py [optional]"
 	@echo "      Python version (defaults to latest supported)"
 	@echo "  artifactory_access [optional]"
-	@echo "      Whether the build host can reach the IHME artifactory. Either 'true'"
-	@echo "      (default) or 'false'; use 'false' to build off-VPN without artifactory."
+	@echo "      Whether the build host can reach the IHME artifactory. Either 'yes'"
+	@echo "      (default) or 'no'; use 'no' to build off-VPN without artifactory."
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -78,13 +78,12 @@ build-env: # Create a new environment with installed packages
 		exit 1; \
 	fi
 	@$(eval py ?= $(shell python -c "import json; print(max(json.load(open('python_versions.json')), key=lambda x: tuple(map(int, x.split('.')))))"))
-#	artifactory_access - when false, build without the IHME artifactory index (e.g. off-VPN)
-	@$(eval artifactory_access ?= true)
+#	artifactory_access
+	@$(eval artifactory_access ?= yes)
 	@case "$(artifactory_access)" in \
-		true|false) ;; \
-		*) echo "Error: 'artifactory_access' must be 'true' or 'false', got '$(artifactory_access)'" >&2; exit 1 ;; \
+		yes|no) ;; \
+		*) echo "Error: 'artifactory_access' must be 'yes' or 'no', got '$(artifactory_access)'" >&2; exit 1 ;; \
 	esac
-
 
 	conda create -n $(name) python=$(py) --yes
 # 	Bootstrap vivarium.build_utils into the new environment.
@@ -93,7 +92,8 @@ build-env: # Create a new environment with installed packages
 # 	avoids "PyPI version is stale relative to local source" during major
 # 	version bumps.
 	conda run -n $(name) pip install -e .
-	conda run -n $(name) make install $(if $(filter false,$(artifactory_access)),IHME_PYPI=)
+# 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
+	conda run -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 
 	@echo
 	@echo "Finished building environment"
