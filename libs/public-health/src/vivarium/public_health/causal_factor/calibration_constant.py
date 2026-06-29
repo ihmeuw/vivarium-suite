@@ -4,9 +4,11 @@ Calibration Constant
 ====================
 
 This module contains functions and classes for managing calibration constants in
-pipelines that are intended to be modifiable by RiskEffect components. Population
-attributable fractions (PAFs) can often be used interchangeably with calibration
-constants.
+pipelines that are intended to be modifiable by RiskEffect components. A calibration
+constant is the raw population attributable fraction (PAF): RiskEffect components
+contribute their PAFs as modifiers on the ``{target}.calibration_constant`` pipeline,
+which evaluates to the joint PAF across all contributing effects. The target rate is
+then multiplied by ``1 - calibration_constant``.
 
 """
 from collections.abc import Callable, Sequence
@@ -173,16 +175,22 @@ class _RiskAffectedPipeline(Component):
             source=self._target_pipeline_source,
             required_resources=[self._calibration_constant_table, *self._required_resources],
             preferred_combiner=multiplication_combiner,
-            preferred_post_processor=[
-                self._apply_calibration_constant,
-                *self._additional_post_processors,
-            ],
+            preferred_post_processor=[*self._additional_post_processors],
+        )
+
+        builder.value.register_attribute_modifier(
+            self._target_pipeline_name,
+            modifier=self._apply_calibration_constant,
+            required_resources=[self._calibration_constant_table],
         )
 
     def on_post_setup(self, event: Event) -> None:
-        """Precompute the calibration constant and store it in the lookup table."""
-        calibration_constant_data = self._calibration_constant_pipeline()
-        self._calibration_constant_table.set_data(calibration_constant_data)
+        """Precompute the joint calibration constant (PAF) and store it in the lookup table."""
+        self._calibration_constant_table.set_data(self._calibration_constant_pipeline())
+
+    def _apply_calibration_constant(self, index: pd.Index) -> pd.Series:
+        """Return the ``1 - calibration_constant`` multiplier for the given simulants."""
+        return 1 - self._calibration_constant_table(index)
 
     @property
     def name(self) -> str:
@@ -217,18 +225,19 @@ class _RiskAffectedPipeline(Component):
         """Compute the joint calibration constant via raw union."""
         joint_calibration_constant = raw_union_post_processor(value, manager)
         if isinstance(joint_calibration_constant, pd.Series):
+            has_nan = joint_calibration_constant.isna().any()
+        else:
+            has_nan = pd.isna(joint_calibration_constant)
+        if has_nan:
+            raise ValueError(
+                f"Joint calibration constant (PAF) contains NaN after combining "
+                f"{len(value)} contributor(s) via raw_union. This typically means two "
+                "RiskEffects targeting the same pipeline supplied PAF data with "
+                "incompatible indexes (mismatched index levels, or non-overlapping "
+                "labels such as different age bins) that could not be aligned. "
+                "Harmonize the contributors' indexes (or resolve each PAF at the "
+                "simulant index before combining)."
+            )
+        if isinstance(joint_calibration_constant, pd.Series):
             joint_calibration_constant = joint_calibration_constant.reset_index()
         return joint_calibration_constant
-
-    def _apply_calibration_constant(
-        self,
-        index: pd.Index,
-        value: pd.Series,
-        manager: ValuesManager,
-    ) -> pd.Series:
-        """Multiply non-zero values by ``(1 - calibration_constant)``."""
-        non_zero_index = value[value != 0].index
-        if not non_zero_index.empty:
-            calibration_constant = self._calibration_constant_table(non_zero_index)
-            value.loc[non_zero_index] = value.loc[non_zero_index] * (1 - calibration_constant)
-        return value
