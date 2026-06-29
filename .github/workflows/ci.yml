@@ -134,7 +134,12 @@ jobs:
         run: cd libs/${{ matrix.library }} && make lint
 
       - name: Mypy ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make mypy-if-typed
+        run: |
+          if find "libs/${{ matrix.library }}/src" -name "py.typed" | grep -q .; then
+            cd libs/${{ matrix.library }} && make mypy
+          else
+            echo "Untyped package, skipping mypy"
+          fi
 
       - name: Test ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make test-all
