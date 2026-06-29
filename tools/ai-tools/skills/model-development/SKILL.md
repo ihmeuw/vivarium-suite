@@ -28,6 +28,33 @@ to the implementation. You fan out `_validator` and run the shared
 `_review-core` skill for review. Work the phases in order; keep the user in the
 loop at the plan, artifact-build, and PR gates.
 
+## Control flow
+
+The phases below are the canonical detail; this is the skeleton:
+
+```
+setup                                 # Phase 0: model repo, env, feature branch; require a runnable env
+plan  = iteration plan from research  # Phase 1: pin keys/pipelines/columns/outputs + expectations; user-gated
+
+# Phases 2 and 3 run in parallel off the approved plan:
+build  = staged _model_implementer    # Phase 2: artifact -> [user gate: build artifact] -> component -> observer
+verify = _vv_writer                   # Phase 3: blind to the build — InteractiveContext checks + notebook
+
+# Phase 4 — verify by running the simulation:
+run _validator (existing suite) + new checks + local simulate + notebook  ->  traces
+    artifact unavailable  ->  "unverified — sim checks not run"   # never a false PASS
+
+# Phase 5 — critic loop, up to 3 rounds:
+repeat while failures:
+    impl bug   ->  re-dispatch the owning build stage (behavioral terms)
+    check bug  ->  re-dispatch _vv_writer (weaken a check only with user approval)
+    plan gap   ->  amend the contract, notify user, re-dispatch
+
+review = review_core                  # Phase 6: five-lens fan-out + correctness; findings -> Phase 5
+
+finalize & PR                         # Phase 7: post traces; artifacts uncommitted unless asked; user-gated PR
+```
+
 ## Phase 0 — Setup
 
 1. Resolve the target **model repo** from $ARGUMENTS (a `vivarium_*` model repo,

@@ -1,6 +1,6 @@
 ---
 name: _model_implementer
-description: "Use when: implementing one layer of a vivarium model iteration (artifact data-loading, a component/pipeline, or an observer) from an orchestrator-composed stage brief and the iteration plan — never inventing requirements the plan doesn't name."
+description: "Use when: implementing one layer of a vivarium model iteration (artifact data-loading, a component/pipeline, or an observer) from an orchestrator-composed stage brief and the iteration plan."
 tools:
   - Read
   - Grep
@@ -59,5 +59,4 @@ You are spawned only by the `model-development` skill (`/viv:model-development`)
 - How your layer satisfies its slice of the plan and the named quantitative
   expectations.
 - Anything underspecified or wrong in the plan — report, don't paper over it,
-  and don't special-case values to hit an expected number. Do not run the
-  simulation, edit tests, or touch other layers.
+  and don't special-case values to hit an expected number.
