@@ -29,7 +29,7 @@ class MicrodataObserver(Observer):
 
     At each observed timestep it records the configured columns (plus ``event_time``) for every
     (optionally filtered) simulant, concatenated across timesteps, so users can compute
-    derived quantities downstream. It directly composes the framework's generic 
+    derived quantities downstream. It directly composes the framework's generic
     concatenating observation, so it records raw per-simulant rows rather than the
     stratified measures the other public health observers produce.
 
