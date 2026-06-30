@@ -35,16 +35,17 @@ def permissions_params(request: FixtureRequest) -> tuple[MkdirParams, str | None
     return request.param  # type: ignore[no-any-return]
 
 
-def test_mkdir_set_permissions(permissions_params: tuple[MkdirParams, str | None]) -> None:
+def test_mkdir_set_permissions(
+    permissions_params: tuple[MkdirParams, str | None], tmp_path: Path
+) -> None:
     # Get prior umask value
     prior_umask = os.umask(0)
     os.umask(prior_umask)
 
-    cwd = Path(os.getcwd())
     parent_dir_name = "parent_dir"
     child_dir_name = "child_dir"
 
-    parent_path = cwd / parent_dir_name
+    parent_path = tmp_path / parent_dir_name
     path = parent_path / child_dir_name
 
     mkdir_params: MkdirParams = permissions_params[0]
@@ -56,12 +57,14 @@ def test_mkdir_set_permissions(permissions_params: tuple[MkdirParams, str | None
             f"ls -l | grep '{parent_dir_name}' | grep '{permissions}'",
             shell=True,
             stdout=PIPE,
+            cwd=tmp_path,
         )
         assert proc.communicate()[0], "Parent directory has incorrect permissions"
         proc = Popen(
             f"ls -l '{parent_dir_name}' | grep '{child_dir_name}' | grep '{permissions}'",
             shell=True,
             stdout=PIPE,
+            cwd=tmp_path,
         )
         assert proc.communicate()[0], "Child directory has incorrect permissions"
 
