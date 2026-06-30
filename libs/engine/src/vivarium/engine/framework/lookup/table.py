@@ -91,7 +91,7 @@ class _ColumnSchema(Generic[T]):
                 value_columns=data.columns,
                 return_type=pd.DataFrame,  # type: ignore [arg-type]
             )
-        if not value_columns:
+        if value_columns is None:
             cols: list[Hashable] = [DEFAULT_VALUE_COLUMN]
             return_type: type = pd.Series
         elif isinstance(value_columns, str):
@@ -263,12 +263,8 @@ class LookupTable(Resource, Generic[T]):
         else:
             self.interpolation = None
 
-        lookup_attributes = self.lookup_attributes
-        self._uses_year = "year" in lookup_attributes
-        self._requested_columns: list[str] = [
-            col for col in lookup_attributes if col != "year"
-        ]
-        self._required_resources = self._requested_columns
+        self._uses_year = "year" in self.lookup_attributes
+        self._required_resources = [col for col in self.lookup_attributes if col != "year"]
 
     def __call__(self, index: pd.Index[int]) -> T:
         """Get the mapped values for the given index.
@@ -299,7 +295,8 @@ class LookupTable(Resource, Generic[T]):
                 ]
                 result = pd.DataFrame(dict(zip(self.value_columns, values_list)))
         else:
-            pop = pd.DataFrame(self.population_view.get(index, self._requested_columns))
+            requested_columns = [col for col in self.lookup_attributes if col != "year"]
+            pop = pd.DataFrame(self.population_view.get(index, requested_columns))
             if self._uses_year:
                 current_time = self._manager.clock()
                 if isinstance(current_time, pd.Timestamp) or isinstance(

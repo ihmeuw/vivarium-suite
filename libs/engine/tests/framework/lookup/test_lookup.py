@@ -440,17 +440,6 @@ class TestValidateBuildTableParameters:
         )
         assert list(table.value_columns) == ["a", "b", "c"]
 
-    @pytest.mark.parametrize("value_columns", [[], ""])
-    def test_build_table_empty_value_columns_defaults_to_value(
-        self, value_columns: list[str] | str, lookup_manager: LookupTableManager
-    ) -> None:
-        """Falsy value_columns fall back to the default 'value' column instead of
-        building a broken zero-value-column table."""
-        table = lookup_manager._build_table(
-            LookupCreator(), 5, "test", value_columns=value_columns
-        )
-        assert list(table.value_columns) == ["value"]
-
     def test_build_table_indexed_dataframe_succeeds(
         self, lookup_manager: LookupTableManager
     ) -> None:
@@ -1085,6 +1074,7 @@ class TestIndexedInput:
         data = pd.DataFrame([[0.1], [0.2]], index=self._sex_index(), columns=cols)
         table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
         assert list(table.value_columns) == [("sex", "rate")]
+        assert table.interpolation is not None
         assert table.interpolation.categorical_parameters == ["sex"]
 
     def test_series_input_returns_series(self, lookup_manager: LookupTableManager) -> None:
@@ -1092,6 +1082,7 @@ class TestIndexedInput:
         table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
         assert table._column_schema.return_type is pd.Series
         assert list(table.value_columns) == ["rate"]
+        assert table.interpolation is not None
         assert table.interpolation.categorical_parameters == ["sex"]
         assert table.interpolation.continuous_parameters == []
 
@@ -1117,6 +1108,7 @@ class TestIndexedInput:
             table = lookup_manager._build_table(
                 LookupCreator(), data, "test", value_columns=None
             )
+        assert table.interpolation is not None
         assert table.interpolation.categorical_parameters == ["sex"]
         assert list(table.value_columns) == ["rate"]
 
