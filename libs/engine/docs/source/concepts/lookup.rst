@@ -105,8 +105,8 @@ the same column structure as the input.
    row index, not on ``.columns``. When migrating from a flat DataFrame,
    prefer the default ``data.set_index([...])`` (which drops the columns
    from ``.columns``) over ``data.set_index([...], drop=False)`` — the
-   latter leaves the lookup attributes duplicated on ``.columns`` and trips
-   the "value column name collides with index level name" validation.
+   latter leaves the lookup attributes duplicated as *value columns*,
+   which changes the table's inferred return schema and lookup behavior.
 
 .. note::
 
