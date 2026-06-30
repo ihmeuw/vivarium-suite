@@ -20,33 +20,13 @@ from .models import DependencyConflictError, DependencyCycleError
 from .release import get_release_matrix
 
 
-def _discover_libs_dir(libs_path: str | None) -> Path:
-    """Locate the monorepo ``libs/`` directory.
-
-    Uses ``libs_path`` if given. Otherwise walks up from the cwd looking for a
-    ``libs/`` directory containing a ``build-utils`` package; failing that,
-    treats the cwd as the libs dir if it directly contains ``build-utils``, or
-    returns ``<cwd>/libs``.
-    """
-    if libs_path:
-        return Path(libs_path).resolve()
-    cwd = Path.cwd().resolve()
-    for candidate in (cwd, *cwd.parents):
-        libs = candidate / "libs"
-        # Be sure that this is the monorepo's libs dir, not some other directory
-        # named "libs" that happens to be in the cwd's ancestry
-        if (libs / "build-utils").is_dir():
-            return libs
-    return cwd / "libs"
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point.
 
     Subcommands:
 
     ``editable-install <target> --changed "<names>" --env-reqs <extra>
-    --ihme-pypi <url> --uv-flags <flags> [--libs-dir <path>]``
+        --ihme-pypi <url> --uv-flags <flags> [--libs-dir <path>]``
         Select editable siblings for ``target`` and run the combined editable
         install. Used by ``make install`` when ``IN_TREE_SIBLINGS`` is set.
 
@@ -138,19 +118,6 @@ def _run_editable_install(args: argparse.Namespace) -> int:
     return 0
 
 
-def _is_editable_install(dist_name: str) -> bool:
-    """Return whether the installed distribution ``dist_name`` is an editable install.
-
-    Reads the PEP 610 ``direct_url.json`` metadata pip/uv records for an
-    installed distribution; ``dir_info.editable`` is true only for an editable
-    (``-e``) install from a local directory.
-    """
-    direct_url = importlib.metadata.distribution(dist_name).read_text("direct_url.json")
-    if not direct_url:
-        return False
-    return bool(json.loads(direct_url).get("dir_info", {}).get("editable"))
-
-
 def _run_verify_editable(args: argparse.Namespace) -> int:
     """Handle the ``verify-editable`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
@@ -222,3 +189,36 @@ def _run_check_acyclic(args: argparse.Namespace) -> int:
         return 1
     print(f"in-tree dependency graph is acyclic ({len(libs)} packages)")
     return 0
+
+
+def _discover_libs_dir(libs_path: str | None) -> Path:
+    """Locate the monorepo ``libs/`` directory.
+
+    Uses ``libs_path`` if given. Otherwise walks up from the cwd looking for a
+    ``libs/`` directory containing a ``build-utils`` package; failing that,
+    treats the cwd as the libs dir if it directly contains ``build-utils``, or
+    returns ``<cwd>/libs``.
+    """
+    if libs_path:
+        return Path(libs_path).resolve()
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        libs = candidate / "libs"
+        # Be sure that this is the monorepo's libs dir, not some other directory
+        # named "libs" that happens to be in the cwd's ancestry
+        if (libs / "build-utils").is_dir():
+            return libs
+    return cwd / "libs"
+
+
+def _is_editable_install(dist_name: str) -> bool:
+    """Return whether the installed distribution ``dist_name`` is an editable install.
+
+    Reads the PEP 610 ``direct_url.json`` metadata pip/uv records for an
+    installed distribution; ``dir_info.editable`` is true only for an editable
+    (``-e``) install from a local directory.
+    """
+    direct_url = importlib.metadata.distribution(dist_name).read_text("direct_url.json")
+    if not direct_url:
+        return False
+    return bool(json.loads(direct_url).get("dir_info", {}).get("editable"))
