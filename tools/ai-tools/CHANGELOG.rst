@@ -1,3 +1,7 @@
+**0.22.1 - 06/29/26**
+
+ - Fix drifted references found by ``/viv:repo-maintenance``
+
 **0.22.0 - 06/25/26**
 
  - Add ``change-propagation`` skill to copy boilerplate across libs

@@ -89,7 +89,7 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
 - ``vivarium-research`` — connector for the Vivarium Research
   documentation (https://vivarium-research.readthedocs.io). Discovers
   the docs nav tree on demand and searches modelling-strategy content
-  via the Read the Docs v2 API.
+  via the Read the Docs search API.
 - ``design-doc`` — SimSci Engineering convention for drafting a design
   document on the IHME hub
 - ``brainstorming`` — structured design exploration that produces a Jira
