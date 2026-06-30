@@ -101,6 +101,11 @@ def get_release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str
     return ordered
 
 
+def _get_dist_to_name_mapping(libs: Mapping[str, Lib]) -> dict[str, str]:
+    """Map each in-tree ``dist_name`` to its library ``name``."""
+    return {lib.dist_name: name for name, lib in libs.items()}
+
+
 def _get_in_scope_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str]) -> set[str]:
     """Return ``name``'s direct in-tree upstream names that are in ``scope``."""
     dist_to_name = _get_dist_to_name_mapping(libs)
@@ -110,8 +115,3 @@ def _get_in_scope_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str])
         if dep_name in scope and dep_name != name:
             upstreams.add(dep_name)
     return upstreams
-
-
-def _get_dist_to_name_mapping(libs: Mapping[str, Lib]) -> dict[str, str]:
-    """Map each in-tree ``dist_name`` to its library ``name``."""
-    return {lib.dist_name: name for name, lib in libs.items()}

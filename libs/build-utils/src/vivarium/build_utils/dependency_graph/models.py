@@ -26,7 +26,7 @@ class DependencyCycleError(Exception):
 
 @dataclass(frozen=True)
 class Lib:
-    """A single independently-released package under ``libs/``.
+    """A single independently-released library under ``libs/``.
 
     Attributes
     ----------
@@ -41,12 +41,12 @@ class Lib:
         Pending release version, parsed from the first line of
         ``CHANGELOG.rst`` (format ``**X.Y.Z - MM/DD/YY**``).
     upstreams
-        This package's dependencies on *other monorepo packages*: a mapping from
+        This library's dependencies on *other monorepo libraries*: a mapping from
         each depended-on upstream's ``dist_name`` to the version constraint this
-        package places on it. For example, ``vivarium-public-health`` yields
+        library places on it. For example, ``vivarium-public-health`` yields
         ``{"vivarium-engine": SpecifierSet(">=5.1.1"), "vivarium-config-tree":
         SpecifierSet(">=5.0.0"), ...}``. External dependencies (``numpy``,
-        ``dill``, ...) are excluded - only ``libs/`` packages appear. Collected
+        ``dill``, ...) are excluded; only ``libs/`` libraries appear. Collected
         over the runtime dependencies plus whichever extras :func:`load_libs`
         resolved; if a upstream is constrained in more than one of those places,
         the constraints are intersected into a single :class:`SpecifierSet`.
