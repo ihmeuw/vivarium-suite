@@ -162,7 +162,7 @@ install: # Install package and dependencies
 	@if [ -z "$(strip $(IN_TREE_SIBLINGS))" ]; then \
 		set -x; uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}; \
 	else \
-		set -x; python -m vivarium.build_utils.dependency_graph editable-install $(notdir $(CURDIR)) \
+		set -x; python -m vivarium.build_utils.dependency_graph install-editable $(notdir $(CURDIR)) \
 			--changed="$(IN_TREE_SIBLINGS)" --env-reqs="$(ENV_REQS)" \
 			--ihme-pypi="$(IHME_PYPI)" --uv-flags="$(UV_FLAGS)"; \
 	fi

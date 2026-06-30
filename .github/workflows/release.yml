@@ -115,7 +115,7 @@ jobs:
         # dependencies-first; each entry carries the in-batch upstreams it must
         # wait for on PyPI. Fails loudly on a cycle or a missing version.
         run: |
-          matrix=$(python -m vivarium.build_utils.dependency_graph release-matrix --versions package_versions.txt)
+          matrix=$(python -m vivarium.build_utils.dependency_graph build-release-matrix --versions package_versions.txt)
           echo "Ordered release matrix: ${matrix}"
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
           if [ "$(echo "$matrix" | jq '.include | length')" -eq 0 ]; then

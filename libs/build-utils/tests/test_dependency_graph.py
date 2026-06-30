@@ -760,7 +760,7 @@ def test_cli_get_release_matrix_emits_ordered_json(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    """`release-matrix` prints dependency-ordered matrix JSON to stdout."""
+    """`build-release-matrix` prints dependency-ordered matrix JSON to stdout."""
     libs_dir = make_monorepo(
         {
             "a": {"deps": ["vivarium-b"], "version": "1.0.0"},
@@ -771,7 +771,7 @@ def test_cli_get_release_matrix_emits_ordered_json(
     pairs_file.write_text("a 1.0.0\nb 2.0.0\n")
     exit_code = main_with(
         [
-            "release-matrix",
+            "build-release-matrix",
             "--versions",
             str(pairs_file),
             "--libs-dir",
@@ -789,12 +789,12 @@ def test_cli_get_release_matrix_empty_when_no_pairs(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    """`release-matrix` with no pairs prints {"include": []} and exits 0."""
+    """`build-release-matrix` with no pairs prints {"include": []} and exits 0."""
     libs_dir = make_monorepo({"a": {}})
     pairs_file = tmp_path / "pairs.txt"
     pairs_file.write_text("")
     exit_code = main_with(
-        ["release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
+        ["build-release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
     )
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out) == {"include": []}
@@ -804,12 +804,12 @@ def test_cli_get_release_matrix_errors_on_missing_version(
     make_monorepo: MonorepoFactory,
     tmp_path: Path,
 ) -> None:
-    """`release-matrix` exits non-zero when a pairs line has no version."""
+    """`build-release-matrix` exits non-zero when a pairs line has no version."""
     libs_dir = make_monorepo({"a": {}})
     pairs_file = tmp_path / "pairs.txt"
     pairs_file.write_text("a\n")  # no version provided!
     exit_code = main_with(
-        ["release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
+        ["build-release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
     )
     assert exit_code != 0
 
@@ -818,7 +818,7 @@ def test_cli_editable_install_runs_selected_plan(
     make_monorepo: MonorepoFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """`editable-install` builds the plan for the selected siblings and runs it (runner patched)."""
+    """`install-editable` builds the plan for the selected siblings and runs it (runner patched)."""
     libs_dir = make_monorepo(
         {
             "a": {"deps": ["vivarium-b>=2.0.0"]},
@@ -834,7 +834,7 @@ def test_cli_editable_install_runs_selected_plan(
     monkeypatch.setattr(dependency_graph.cli, "run_install", fake_run_install)
     exit_code = main_with(
         [
-            "editable-install",
+            "install-editable",
             "a",
             "--changed",
             "b",
@@ -860,7 +860,7 @@ def test_cli_editable_install_hard_fails_on_conflict(
     make_monorepo: MonorepoFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """`editable-install` exits non-zero (without installing) on a version-pin conflict."""
+    """`install-editable` exits non-zero (without installing) on a version-pin conflict."""
     libs_dir = make_monorepo(
         {
             "a": {"deps": ["vivarium-b<2.0.0"]},
@@ -876,7 +876,7 @@ def test_cli_editable_install_hard_fails_on_conflict(
     monkeypatch.setattr(dependency_graph.cli, "run_install", fake_run_install)
     exit_code = main_with(
         [
-            "editable-install",
+            "install-editable",
             "a",
             "--changed",
             "b",
@@ -899,7 +899,7 @@ def test_cli_get_release_matrix_clean_exit_on_cycle(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    """`release-matrix` on a cyclic batch exits non-zero with a clean message (no traceback)."""
+    """`build-release-matrix` on a cyclic batch exits non-zero with a clean message (no traceback)."""
     libs_dir = make_monorepo(
         {
             "a": {"deps": ["vivarium-b"], "version": "1.0.0"},
@@ -909,7 +909,7 @@ def test_cli_get_release_matrix_clean_exit_on_cycle(
     pairs_file = tmp_path / "pairs.txt"
     pairs_file.write_text("a 1.0.0\nb 2.0.0\n")
     exit_code = main_with(
-        ["release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
+        ["build-release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
     )
     assert exit_code != 0
     captured = capsys.readouterr()
@@ -953,7 +953,7 @@ def test_cli_release_matrix_orders_over_runtime_deps_only(
     pairs_file = tmp_path / "pairs.txt"
     pairs_file.write_text("a 1.0.0\nb 2.0.0\n")
     exit_code = main_with(
-        ["release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
+        ["build-release-matrix", "--versions", str(pairs_file), "--libs-dir", str(libs_dir)]
     )
     assert exit_code == 0
     matrix = json.loads(capsys.readouterr().out)
@@ -1043,9 +1043,9 @@ def test_discover_libs_dir_honors_path_provided(tmp_path: Path) -> None:
 def test_cli_editable_install_clean_exit_on_unknown_package(
     make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`editable-install` for a target not under libs/ exits non-zero with a clear message."""
+    """`install-editable` for a target not under libs/ exits non-zero with a clear message."""
     libs_dir = make_monorepo({"build-utils": {}, "a": {}})
-    rc = main_with(["editable-install", "ghost", "--libs-dir", str(libs_dir)])
+    rc = main_with(["install-editable", "ghost", "--libs-dir", str(libs_dir)])
     assert rc == 1
     assert "unknown package" in capsys.readouterr().err
 
@@ -1053,11 +1053,13 @@ def test_cli_editable_install_clean_exit_on_unknown_package(
 def test_cli_release_matrix_clean_exit_on_unknown_package(
     make_monorepo: MonorepoFactory, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`release-matrix` with a pairs entry not under libs/ exits non-zero with a clear message."""
+    """`build-release-matrix` with a pairs entry not under libs/ exits non-zero with a clear message."""
     libs_dir = make_monorepo({"build-utils": {}, "a": {}})
     pairs = tmp_path / "release_pairs.txt"
     pairs.write_text("ghost 1.0.0\n")  # non-monorepo package!
-    rc = main_with(["release-matrix", "--versions", str(pairs), "--libs-dir", str(libs_dir)])
+    rc = main_with(
+        ["build-release-matrix", "--versions", str(pairs), "--libs-dir", str(libs_dir)]
+    )
     assert rc == 1
     assert "unknown package" in capsys.readouterr().err
 

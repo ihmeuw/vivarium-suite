@@ -1,6 +1,6 @@
 """Command-line interface for ``vivarium.build_utils.dependency_graph``.
 
-Exposes the editable-install, release-matrix, verify-editable, and check-acyclic
+Exposes the install-editable, build-release-matrix, verify-editable, and check-acyclic
 subcommands consumed by ``make install`` and the CI/release workflows.
 """
 
@@ -25,19 +25,19 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Subcommands:
 
-    ``editable-install <target> --changed "<names>" --env-reqs <extra>
+    ``install-editable <target> --changed "<names>" --env-reqs <extra>
         --ihme-pypi <url> --uv-flags <flags> [--libs-dir <path>]``
         Select editable siblings for ``target`` and run the combined editable
         install. Used by ``make install`` when ``IN_TREE_SIBLINGS`` is set.
 
-    ``release-matrix --versions <file> [--libs-dir <path>]``
+    ``build-release-matrix --versions <file> [--libs-dir <path>]``
         Read ``"<name> <version>"`` lines from the ``--versions`` file and print
         the dependency-ordered release matrix JSON to stdout. Used by the
         release workflow's detect job.
 
     ``verify-editable <target> --changed "<names>" [--libs-dir <path>]``
         Recompute the editable siblings selected for ``target`` (the same
-        selection ``editable-install`` uses) and assert each one is installed
+        selection ``install-editable`` uses) and assert each one is installed
         editably, not silently resolved from PyPI. Exits non-zero if any is
         not. Used by the CI workflow after ``make install``.
 
@@ -59,7 +59,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Editable install subcommand
-    install_parser = subparsers.add_parser("editable-install")
+    install_parser = subparsers.add_parser("install-editable")
     install_parser.add_argument("target")
     install_parser.add_argument("--changed", default="")
     install_parser.add_argument("--env-reqs", default="")
@@ -68,7 +68,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     install_parser.add_argument("--libs-dir", default=None)
 
     # Release matrix subcommand
-    matrix_parser = subparsers.add_parser("release-matrix")
+    matrix_parser = subparsers.add_parser("build-release-matrix")
     matrix_parser.add_argument("--versions", required=True)
     matrix_parser.add_argument("--libs-dir", default=None)
 
@@ -84,17 +84,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    if args.command == "editable-install":
-        return _run_editable_install(args)
+    if args.command == "install-editable":
+        return _run_install_editable(args)
     if args.command == "verify-editable":
         return _run_verify_editable(args)
     if args.command == "check-acyclic":
         return _run_check_acyclic(args)
-    return _run_release_matrix(args)
+    return _run_build_release_matrix(args)
 
 
-def _run_editable_install(args: argparse.Namespace) -> int:
-    """Handle the ``editable-install`` subcommand."""
+def _run_install_editable(args: argparse.Namespace) -> int:
+    """Handle the ``install-editable`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
     libs = load_libs(libs_dir)
     changed = args.changed.split()
@@ -141,8 +141,8 @@ def _run_verify_editable(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
-def _run_release_matrix(args: argparse.Namespace) -> int:
-    """Handle the ``release-matrix`` subcommand."""
+def _run_build_release_matrix(args: argparse.Namespace) -> int:
+    """Handle the ``build-release-matrix`` subcommand."""
     raw = Path(args.versions).read_text()
 
     release_versions: dict[str, str] = {}

@@ -6,7 +6,7 @@ let a single PR (or merge) span interdependent packages without an interim
 release:
 
 1. **Editable-sibling install** (consumed by ``make install`` via the
-   ``editable-install`` CLI subcommand). When a PR modifies several packages -
+   ``install-editable`` CLI subcommand). When a PR modifies several packages -
    for example, bumping ``vivarium-engine`` and consuming the new version from
    ``vivarium-public-health`` - the dependent's declared dependency would
    normally resolve the upstream from PyPI, where the new version does not yet
@@ -16,7 +16,7 @@ release:
    pending versions) alongside the target in a single ``uv`` invocation.
 
 2. **Ordered release matrix** (consumed by the release workflow via the
-   ``release-matrix`` CLI subcommand). When a merge to ``main`` bumps several
+   ``build-release-matrix`` CLI subcommand). When a merge to ``main`` bumps several
    packages, :func:`get_release_matrix` emits a GitHub Actions matrix ordered
    dependencies-first, where each entry carries the in-batch upstreams it must
    wait for on PyPI before installing; independent packages release in parallel
