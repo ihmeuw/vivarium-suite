@@ -1,4 +1,4 @@
-**5.3.0 - TBD**
+**5.3.0 - 06/30/26**
 
 - Feature: ``LookupTable`` accepts ``DataFrame``/``Series`` with lookup attributes on the row index.
 - API: ``LookupTable.value_columns`` is now a ``pandas.Index`` (was ``list[str]``).
@@ -6,6 +6,10 @@
 - Raise: ``value_columns`` alongside an indexed ``DataFrame``/``Series`` is now an error.
 - Deprecation: passing a flat ``DataFrame`` to ``build_table``/``set_data`` is deprecated.
 - Deprecation: passing a ``Mapping`` to ``build_table``/``set_data`` is deprecated.
+
+**5.2.1 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
 
 **5.2.0 - 06/29/26**
 
