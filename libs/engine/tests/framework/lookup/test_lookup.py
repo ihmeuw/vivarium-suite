@@ -1085,15 +1085,15 @@ class TestIndexedInput:
         data = pd.DataFrame([[0.1], [0.2]], index=self._sex_index(), columns=cols)
         table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
         assert list(table.value_columns) == [("sex", "rate")]
-        assert table.key_columns == ["sex"]
+        assert table.interpolation.categorical_parameters == ["sex"]
 
     def test_series_input_returns_series(self, lookup_manager: LookupTableManager) -> None:
         data = pd.Series([0.1, 0.2], index=self._sex_index(), name="rate")
         table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
         assert table._column_schema.return_type is pd.Series
         assert list(table.value_columns) == ["rate"]
-        assert table.key_columns == ["sex"]
-        assert table.parameter_columns == []
+        assert table.interpolation.categorical_parameters == ["sex"]
+        assert table.interpolation.continuous_parameters == []
 
     def test_nameless_series_input_returns_nameless_series(
         self, lookup_manager: LookupTableManager
@@ -1117,7 +1117,7 @@ class TestIndexedInput:
             table = lookup_manager._build_table(
                 LookupCreator(), data, "test", value_columns=None
             )
-        assert table.key_columns == ["sex"]
+        assert table.interpolation.categorical_parameters == ["sex"]
         assert list(table.value_columns) == ["rate"]
 
     def test_value_columns_inferred_when_none(
