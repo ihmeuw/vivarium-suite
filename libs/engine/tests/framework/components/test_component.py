@@ -20,6 +20,7 @@ from tests.helpers import (
     SingleLookupCreator,
 )
 from vivarium.engine import InteractiveContext
+from vivarium.engine.component import _coerce_flat_data_to_indexed
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.lookup.table import LookupTable
@@ -239,6 +240,54 @@ def test_component_configuration_gets_set() -> None:
     )
 
 
+def test_coerce_flat_data_to_indexed() -> None:
+    """Flat DataFrames are re-indexed on their key columns (and value_columns
+    cleared), preserving the Series-vs-DataFrame return type; scalars, lists,
+    Series, and already-indexed frames pass through unchanged."""
+    # a single string value column -> indexed Series (Series-returning table)
+    out, value_columns = _coerce_flat_data_to_indexed(
+        pd.DataFrame({"sex": ["M", "F"], "value": [0.1, 0.2]}), "value"
+    )
+    assert value_columns is None
+    assert isinstance(out, pd.Series)
+    assert out.index.names == ["sex"]
+    assert out.name == "value"
+
+    # value_columns=None defaults to the "value" column -> indexed Series
+    out, value_columns = _coerce_flat_data_to_indexed(
+        pd.DataFrame({"sex": ["M", "F"], "value": [0.1, 0.2]}), None
+    )
+    assert value_columns is None
+    assert isinstance(out, pd.Series)
+    assert out.index.names == ["sex"]
+    assert out.name == "value"
+
+    # a list of value columns -> indexed DataFrame (DataFrame-returning table)
+    out, value_columns = _coerce_flat_data_to_indexed(
+        pd.DataFrame({"sex": ["M", "F"], "a": [1, 2], "b": [3, 4]}), ["a", "b"]
+    )
+    assert value_columns is None
+    assert isinstance(out, pd.DataFrame)
+    assert out.index.names == ["sex"]
+    assert list(out.columns) == ["a", "b"]
+
+    # already-indexed DataFrame, scalar, list, and Series are returned unchanged
+    indexed = pd.DataFrame({"value": [0.1]}, index=pd.Index(["M"], name="sex"))
+    out, value_columns = _coerce_flat_data_to_indexed(indexed, None)
+    assert out is indexed and value_columns is None
+    assert _coerce_flat_data_to_indexed(5.0, "value") == (5.0, "value")
+    assert _coerce_flat_data_to_indexed([1, 2], ["a", "b"]) == ([1, 2], ["a", "b"])
+    series = pd.Series([1], index=pd.Index(["M"], name="sex"), name="value")
+    out, value_columns = _coerce_flat_data_to_indexed(series, None)
+    assert out is series and value_columns is None
+
+    # a flat DataFrame missing its value column is left alone (no key columns to
+    # safely infer), so the deprecation/validation path still surfaces it
+    df_no_value = pd.DataFrame({"sex": ["M", "F"], "rate": [0.1, 0.2]})
+    out, value_columns = _coerce_flat_data_to_indexed(df_no_value, "value")
+    assert out is df_no_value and value_columns == "value"
+
+
 def test_component_lookup_table_configuration(hdf_file_path: Path) -> None:
     # Tests that lookup tables are created correctly based on their configuration
 
@@ -282,13 +331,15 @@ def test_component_lookup_table_configuration(hdf_file_path: Path) -> None:
     )
     sim.setup()
 
-    # Check that lookup table backing data is of the correct type
-    assert isinstance(component.favorite_team_table.data, pd.DataFrame)
-    assert isinstance(component.favorite_color_table.data, pd.DataFrame)
-    assert isinstance(component.favorite_number_table.data, pd.DataFrame)
+    # Check that lookup table backing data is of the correct type. The flat
+    # artifact frames have a single ("value") value column, so they are stored
+    # as indexed Series (Series-returning tables), not flat DataFrames.
+    assert isinstance(component.favorite_team_table.data, pd.Series)
+    assert isinstance(component.favorite_color_table.data, pd.Series)
+    assert isinstance(component.favorite_number_table.data, pd.Series)
     assert isinstance(component.favorite_scalar_table.data, float)
     assert isinstance(component.favorite_list_table.data, list)
-    assert isinstance(component.cooling_time_table.data, pd.DataFrame)
+    assert isinstance(component.cooling_time_table.data, pd.Series)
 
     # Check for correct columns in lookup tables
     assert component.favorite_team_table.interpolation is not None
@@ -316,14 +367,17 @@ def test_component_lookup_table_configuration(hdf_file_path: Path) -> None:
     ]
     assert not component.cooling_time_table.interpolation.continuous_parameters
 
-    # Check for correct data in lookup tables
-    assert component.favorite_team_table.data.equals(favorite_team.reset_index())
-    assert component.favorite_color_table.data.equals(favorite_color.reset_index())
-    assert component.favorite_number_table.data.equals(favorite_number.reset_index())
+    # Check for correct data in lookup tables. Flat artifact data is re-indexed
+    # onto its key columns before building, so the backing data is stored in the
+    # (supported) indexed form -- a Series for these single-value-column frames,
+    # matching the original frames' lone value column.
+    assert component.favorite_team_table.data.equals(favorite_team["value"])
+    assert component.favorite_color_table.data.equals(favorite_color["value"])
+    assert component.favorite_number_table.data.equals(favorite_number["value"])
     assert component.favorite_scalar_table.data == 0.4
     assert component.favorite_list_table.data == [9, 4]
     assert component.baking_time_table.data == 0.5
-    assert component.cooling_time_table.data.equals(cooling_time.reset_index())
+    assert component.cooling_time_table.data.equals(cooling_time["value"])
 
 
 @pytest.mark.parametrize(

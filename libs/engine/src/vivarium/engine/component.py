@@ -37,6 +37,51 @@ DEFAULT_EVENT_PRIORITY = 5
 """The default priority at which events will be triggered."""
 
 
+def _coerce_flat_data_to_indexed(
+    data: LookupTableData,
+    value_columns: list[str] | tuple[str, ...] | str | None,
+) -> tuple[LookupTableData, list[str] | tuple[str, ...] | str | None]:
+    """Move a flat DataFrame's key/parameter columns onto the row index.
+
+    Artifact data is loaded as a flat (default ``RangeIndex``) DataFrame,
+    which a ``LookupTable`` treats as a deprecated input form. Setting the
+    non-value columns as the row index produces the supported indexed form,
+    which yields identical lookup behavior, and the value columns are then
+    inferred from the data (so ``value_columns`` is cleared). Scalars,
+    lists, ``Series``, mappings, and frames that already carry a named row
+    index are returned unchanged.
+    """
+    # Imported lazily: vivarium.engine.framework.lookup imports Component, so a
+    # module-level import would be circular.
+    from vivarium.engine.framework.lookup.table import DEFAULT_VALUE_COLUMN
+
+    if not isinstance(data, pd.DataFrame) or any(
+        name is not None for name in data.index.names
+    ):
+        return data, value_columns
+
+    if not value_columns:
+        resolved_value_columns = [DEFAULT_VALUE_COLUMN]
+    elif isinstance(value_columns, str):
+        resolved_value_columns = [value_columns]
+    else:
+        resolved_value_columns = list(value_columns)
+
+    if any(column not in data.columns for column in resolved_value_columns):
+        return data, value_columns
+    key_columns = [column for column in data.columns if column not in resolved_value_columns]
+    if not key_columns:
+        return data, value_columns
+
+    indexed = data.set_index(key_columns)
+    # Preserve the return type: a flat DataFrame with ``value_columns`` given as
+    # None or a single string produced a Series-returning table, so squeeze to a
+    # Series; a list/tuple of value columns produced a DataFrame-returning table.
+    if not value_columns or isinstance(value_columns, str):
+        return indexed[resolved_value_columns[0]], None
+    return indexed, None
+
+
 class Component(ABC):
     """The base class for all components used in a Vivarium simulation.
 
@@ -510,6 +555,7 @@ class Component(ABC):
 
         try:
             data = self.get_data(builder, data_source)
+            data, value_columns = _coerce_flat_data_to_indexed(data, value_columns)
             return builder.lookup.build_table(
                 data=data, name=name, value_columns=value_columns
             )
