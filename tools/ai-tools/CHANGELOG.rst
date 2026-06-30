@@ -1,3 +1,7 @@
+**0.22.2 - 06/30/26**
+
+ - Fix drifted references found by ``/viv:repo-maintenance``
+ 
 **0.22.1 - 06/30/26**
 
  - ``code-reviewer``: run the five review agents on Sonnet, then independently score every finding for confidence (0-100) with a per-finding ``_review_scorer`` Haiku sub-agent and drop findings below 50; survivors show their score
