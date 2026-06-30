@@ -54,14 +54,14 @@ def test_mkdir_set_permissions(
     def test_mkdir_permissions() -> None:
         mkdir(path, **mkdir_params)
         proc = Popen(
-            f"ls -l '{tmp_path}' | grep '{parent_dir_name}' | grep '{permissions}'",
+            f"ls -l | grep '{parent_dir_name}' | grep '{permissions}'",
             shell=True,
             stdout=PIPE,
             cwd=tmp_path,
         )
         assert proc.communicate()[0], "Parent directory has incorrect permissions"
         proc = Popen(
-            f"ls -l '{parent_path}' | grep '{child_dir_name}' | grep '{permissions}'",
+            f"ls -l '{parent_dir_name}' | grep '{child_dir_name}' | grep '{permissions}'",
             shell=True,
             stdout=PIPE,
             cwd=tmp_path,
