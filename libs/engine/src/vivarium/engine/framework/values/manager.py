@@ -460,7 +460,7 @@ class ValuesManager(Manager):
         required_resources: Iterable[str | Resource],
         reason: str,
     ) -> None:
-        """Warns when explicit ``required_resources`` are ignored in favor of inferred ones."""
+        """Warn when explicit ``required_resources`` are ignored in favor of inferred ones."""
         if required_resources:
             self.logger.warning(
                 f"Conflicting information for {pipeline_name}. Ignoring 'required_resources' "

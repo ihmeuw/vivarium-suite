@@ -8,6 +8,7 @@ import pytest
 from vivarium.engine.framework.lookup.interpolation import (
     Interpolation,
     Order0Interp,
+    _validate_data_columns,
     check_data_complete,
     validate_parameters,
 )
@@ -268,7 +269,7 @@ def test_validate_parameters__extra_columns() -> None:
         }
     )
     with pytest.raises(ValueError, match="extra columns"):
-        validate_parameters(
+        _validate_data_columns(
             data,
             ["sex"],
             ["age"],

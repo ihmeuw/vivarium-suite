@@ -440,6 +440,17 @@ class TestValidateBuildTableParameters:
         )
         assert list(table.value_columns) == ["a", "b", "c"]
 
+    @pytest.mark.parametrize("value_columns", [[], ""])
+    def test_build_table_empty_value_columns_defaults_to_value(
+        self, value_columns: list[str] | str, lookup_manager: LookupTableManager
+    ) -> None:
+        """Falsy value_columns fall back to the default 'value' column instead of
+        building a broken zero-value-column table."""
+        table = lookup_manager._build_table(
+            LookupCreator(), 5, "test", value_columns=value_columns
+        )
+        assert list(table.value_columns) == ["value"]
+
     def test_build_table_indexed_dataframe_succeeds(
         self, lookup_manager: LookupTableManager
     ) -> None:
@@ -454,6 +465,23 @@ class TestValidateBuildTableParameters:
         assert table.interpolation is not None
         assert table.interpolation.categorical_parameters == ["a"]
         assert table.interpolation.continuous_parameters == ["b"]
+
+    def test_build_table_indexed_non_string_level_name(
+        self, lookup_manager: LookupTableManager
+    ) -> None:
+        """A non-string row-index level name is classified as a categorical
+        parameter instead of crashing on the ``_start``/``_end`` check."""
+        data = pd.DataFrame(
+            {"rate": [0.1, 0.2]},
+            index=pd.MultiIndex.from_tuples(
+                [(0, "Female"), (1, "Male")], names=[2020, "sex"]
+            ),
+        )
+        table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
+        assert list(table.value_columns) == ["rate"]
+        assert table.interpolation is not None
+        assert table.interpolation.categorical_parameters == [2020, "sex"]
+        assert table.interpolation.continuous_parameters == []
 
     def test_value_columns_with_indexed_input_raises(
         self, lookup_manager: LookupTableManager

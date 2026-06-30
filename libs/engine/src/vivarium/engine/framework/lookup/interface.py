@@ -152,7 +152,7 @@ class LookupTableInterface(Interface):
         list/tuple inputs, value columns are required to name the resulting
         DataFrame columns. For scalar inputs, value columns can be provided to
         name the resulting Series column; if not provided, the resulting Series
-        will be unnamed.
+        is named ``"value"``.
 
         .. deprecated:: 4.2.0
             Passing a Mapping or a flat :class:`pandas.DataFrame` (one whose

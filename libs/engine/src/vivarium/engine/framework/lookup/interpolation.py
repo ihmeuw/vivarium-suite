@@ -31,9 +31,27 @@ def has_named_row_index(
     return False
 
 
+_START_SUFFIX = "_start"
+_END_SUFFIX = "_end"
+
+
+def _start_column(parameter: str) -> str:
+    """The left-edge (inclusive) bin column name for a continuous parameter."""
+    return f"{parameter}{_START_SUFFIX}"
+
+
+def _end_column(parameter: str) -> str:
+    """The right-edge (exclusive) bin column name for a continuous parameter."""
+    return f"{parameter}{_END_SUFFIX}"
+
+
 def _get_bin_edge_columns(continuous_parameters: Sequence[str]) -> list[str]:
     """Get the column names for the left and right edges of bins for each continuous parameter."""
-    return [f"{p}_{edge}" for p in continuous_parameters for edge in ("start", "end")]
+    return [
+        column
+        for parameter in continuous_parameters
+        for column in (_start_column(parameter), _end_column(parameter))
+    ]
 
 
 class Interpolation:
@@ -99,6 +117,15 @@ class Interpolation:
         :attr:`value_columns` carries the original user-facing labels and is
         reapplied to the output of :meth:`__call__`."""
 
+        # Structural column validation runs regardless of the interpolation
+        # ``validate`` flag: extra/missing columns indicate a data-preparation
+        # error rather than an interpolation-quality concern.
+        _validate_data_columns(
+            self.data,
+            self.categorical_parameters,
+            self.continuous_parameters,
+            self._internal_value_columns,
+        )
         if validate:
             validate_parameters(
                 self.data,
@@ -149,9 +176,12 @@ class Interpolation:
         parameter_columns_set = set(parameter_columns)
         continuous_columns: list[str] = []
         for column in parameter_columns:
-            if column.endswith("_start"):
-                base = column.removesuffix("_start")
-                if f"{base}_end" in parameter_columns_set:
+            # Cast to str so non-string lookup attribute names (e.g. an integer
+            # index level name) are treated as categorical rather than crashing
+            # on the str-only ``endswith``/``removesuffix`` calls.
+            if str(column).endswith(_START_SUFFIX):
+                base = str(column).removesuffix(_START_SUFFIX)
+                if _end_column(base) in parameter_columns_set:
                     continuous_columns.append(base)
         return continuous_columns
 
@@ -251,13 +281,24 @@ def validate_parameters(
                 f"the right edge (exclusive). You provided {p}."
             )
 
-    # break out the individual columns from binned column name lists
     if not value_columns:
         raise ValueError(
             f"No non-parameter data. Available columns: {data.columns}, "
             f"Parameter columns: {set(categorical_parameters) | set(continuous_parameters)}"
         )
 
+
+def _validate_data_columns(
+    data: pd.DataFrame,
+    categorical_parameters: Sequence[str],
+    continuous_parameters: Sequence[str],
+    value_columns: Sequence[Hashable],
+) -> None:
+    """Validate the data has no columns beyond its parameter and value columns.
+
+    Runs regardless of the interpolation ``validate`` flag, since stray columns
+    indicate a data-preparation error rather than an interpolation-quality issue.
+    """
     required_cols = {
         *categorical_parameters,
         *_get_bin_edge_columns(continuous_parameters),
@@ -403,7 +444,7 @@ class Order0Interp:
             Whether or not to validate the data.
         """
         continuous_parameters_with_edges = [
-            (p, f"{p}_start", f"{p}_end") for p in continuous_parameters
+            (p, _start_column(p), _end_column(p)) for p in continuous_parameters
         ]
 
         if validate:
