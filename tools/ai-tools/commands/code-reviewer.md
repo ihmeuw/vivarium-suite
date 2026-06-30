@@ -29,7 +29,7 @@ $ARGUMENTS as a free-form description.
 
 Invoke the `_review-core` skill, handing it the changed-file list, the diff
 (or the salient slice), and a one-line description of the change (the PR
-title/body is the `<subject>`). It fans out to the five Sonnet `_review_*`
+title/body is the `<subject>`). It fans out to the five `_review_*`
 specialists, runs the functional-correctness pass, independently scores every
 finding for confidence (dropping anything below 50), synthesizes the survivors —
 each annotated with its confidence score — and returns the structured review.

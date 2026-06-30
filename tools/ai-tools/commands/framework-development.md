@@ -9,7 +9,7 @@ Run an end-to-end framework development loop for: $ARGUMENTS
 You (the main session) own the design and the stubs, then drive a **black-box
 TDD** build: `_test_writer` and `_feature_implementer` produce the tests and the
 implementation in isolation, and you fan out `_validator` and run the shared
-`_review-core` skill for review (it fans out the five Sonnet `_review_*`
+`_review-core` skill for review (it fans out the five `_review_*`
 specialists, then confidence-scores and filters their findings). Work the
 phases in order; keep the user in the loop at the design and PR gates.
 
@@ -152,7 +152,7 @@ around review.
    **first** time you reach green, invoke the `_review-core` skill
    (`skills/_review-core/SKILL.md`) with the integrated diff, the changed-file
    list, and a one-line feature description — a full fan-out across the five
-   **review agents** (one Sonnet `_review_*` specialist per dimension: Design,
+   **review agents** (one `_review_*` specialist per dimension: Design,
    Maintainability, DRY, Tests, Documentation) plus the functional-correctness
    pass in this main-session context, the same definition `/viv:code-reviewer`
    uses. It then independently confidence-scores every finding (a `_review_scorer`

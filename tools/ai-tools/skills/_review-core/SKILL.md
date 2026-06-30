@@ -15,10 +15,6 @@ commands (e.g. a development workflow's review phase). Because it runs inline in
 the caller's main-session context, its fan-out to the `_review_*` sub-agents
 stays one level deep — so run this unit inline and **not** as a forked sub-agent.
 
-The five review agents run on **Sonnet** and the per-finding confidence scorers on
-**Haiku** (set in each agent's definition, so you don't pass a model); the
-synthesis runs here in the caller's main session.
-
 **Not this unit's job** — the caller owns these: gathering the review target
 (PR/diff context), and any follow-up action on the findings (e.g. filing
 tickets). Work only from the review target handed to you in `$ARGUMENTS`; do not
@@ -60,7 +56,7 @@ a discrete item (including nits). Then have each one scored independently:
 
 1. Gather the relevant `CLAUDE.md` paths once with Glob/Read: the repo-root
    `CLAUDE.md` (if any) plus any `CLAUDE.md` in directories the change touched.
-2. In a single message, launch one `_review_scorer` (Haiku) **per finding**, in
+2. In a single message, launch one `_review_scorer` **per finding**, in
    parallel. Hand each scorer: the one-line change description, the **single**
    finding (its `file:line`, the review agent that flagged it, the problem, and the
    proposed fix), the diff slice relevant to that finding, and the `CLAUDE.md`

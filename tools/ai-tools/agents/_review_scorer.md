@@ -62,8 +62,9 @@ real, worth-reporting issue.
   duplicate them.
 - General code-quality wishes (more test coverage, more docs) unless the relevant
   `CLAUDE.md` explicitly requires it.
-- Issues called out in `CLAUDE.md` but explicitly silenced in the code (e.g. a
-  lint-ignore comment).
+- Issues the developer deliberately and reasonably silenced (e.g. a documented
+  `# type: ignore` or lint-ignore for a genuine tooling false positive) — but an
+  ignore that merely masks a fixable issue is still fair to flag.
 - Functionality changes that are clearly intentional or directly part of the
   broader change.
 
