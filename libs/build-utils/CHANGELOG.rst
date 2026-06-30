@@ -1,6 +1,6 @@
 **4.1.0 - 06/25/26**
 
-- Add ``vivarium.build_utils.dependencies``: the in-tree dependency graph for
+- Add ``vivarium.build_utils.dependency_graph``: the in-tree dependency graph for
   cross-package PRs and releases
 - Add ``make install IN_TREE_SIBLINGS="<lib> ..."`` to install modified,
   reachable, version-compatible siblings editably at their pending versions

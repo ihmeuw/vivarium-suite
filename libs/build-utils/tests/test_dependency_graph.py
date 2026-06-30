@@ -1,4 +1,4 @@
-"""Tests for the in-tree dependency graph (``vivarium.build_utils.dependencies``)."""
+"""Tests for the in-tree dependency graph (``vivarium.build_utils.dependency_graph``)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from typing import Any
 import pytest
 from packaging.specifiers import SpecifierSet
 
-from vivarium.build_utils import dependencies
-from vivarium.build_utils.dependencies import (
+from vivarium.build_utils import dependency_graph
+from vivarium.build_utils.dependency_graph import (
     DependencyConflictError,
     DependencyCycleError,
     InstallPlan,
@@ -741,7 +741,7 @@ def test_run_install_invokes_subprocess_with_cwd_check_and_overlaid_env(
         argv=["uv", "pip", "install", "-e", str(libs_dir / "a")],
         env={"SETUPTOOLS_SCM_PRETEND_VERSION_FOR_VIVARIUM_A": "1.0.0"},
     )
-    dependencies.run_install(plan, libs_dir)
+    dependency_graph.run_install(plan, libs_dir)
 
     assert captured["argv"] == list(plan.argv)
     kwargs = captured["kwargs"]
@@ -831,7 +831,7 @@ def test_cli_editable_install_runs_selected_plan(
         captured["plan"] = plan
         captured["libs_dir"] = run_dir
 
-    monkeypatch.setattr(dependencies, "run_install", fake_run_install)
+    monkeypatch.setattr(dependency_graph.cli, "run_install", fake_run_install)
     exit_code = main_with(
         [
             "editable-install",
@@ -873,7 +873,7 @@ def test_cli_editable_install_hard_fails_on_conflict(
         nonlocal called
         called = True
 
-    monkeypatch.setattr(dependencies, "run_install", fake_run_install)
+    monkeypatch.setattr(dependency_graph.cli, "run_install", fake_run_install)
     exit_code = main_with(
         [
             "editable-install",
@@ -1001,7 +1001,7 @@ def test_end_to_end_changed_upstream_bump_installs_editable_before_dependent(
 
 def main_with(argv: Sequence[str]) -> int:
     """Invoke the module's CLI ``main`` with an explicit argv list."""
-    return dependencies.main(list(argv))
+    return dependency_graph.main(list(argv))
 
 
 # --------------------------------------------------------------------------- #
@@ -1015,7 +1015,7 @@ def test_discover_libs_dir_from_package_subdir(
         {"build-utils": {}, "engine": {"deps": ["vivarium-build-utils"]}}
     )
     monkeypatch.chdir(libs_dir / "engine")
-    assert dependencies._discover_libs_dir(None) == libs_dir
+    assert dependency_graph._discover_libs_dir(None) == libs_dir
 
 
 def test_discover_libs_dir_from_repo_root(
@@ -1024,7 +1024,7 @@ def test_discover_libs_dir_from_repo_root(
     """Auto-discovery finds libs/ when run from the repo root (libs/'s parent)."""
     libs_dir = make_monorepo({"build-utils": {}})
     monkeypatch.chdir(libs_dir.parent)
-    assert dependencies._discover_libs_dir(None) == libs_dir
+    assert dependency_graph._discover_libs_dir(None) == libs_dir
 
 
 def test_discover_libs_dir_falls_back_to_cwd_libs(
@@ -1032,12 +1032,12 @@ def test_discover_libs_dir_falls_back_to_cwd_libs(
 ) -> None:
     """With no build-utils package anywhere above, discovery falls back to <cwd>/libs."""
     monkeypatch.chdir(tmp_path)
-    assert dependencies._discover_libs_dir(None) == tmp_path / "libs"
+    assert dependency_graph._discover_libs_dir(None) == tmp_path / "libs"
 
 
 def test_discover_libs_dir_honors_path_provided(tmp_path: Path) -> None:
     """A provided path is used verbatim (resolved), without walking."""
-    assert dependencies._discover_libs_dir(str(tmp_path)) == tmp_path.resolve()
+    assert dependency_graph._discover_libs_dir(str(tmp_path)) == tmp_path.resolve()
 
 
 def test_cli_editable_install_clean_exit_on_unknown_package(
@@ -1067,7 +1067,7 @@ def test_cli_verify_editable_passes_when_siblings_editable(
 ) -> None:
     """`verify-editable` exits 0 when each selected sibling is an editable install."""
     libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-    monkeypatch.setattr(dependencies, "_is_editable_install", lambda dist: True)
+    monkeypatch.setattr(dependency_graph.cli, "_is_editable_install", lambda dist: True)
     rc = main_with(["verify-editable", "a", "--changed", "b", "--libs-dir", str(libs_dir)])
     assert rc == 0
 
@@ -1079,7 +1079,7 @@ def test_cli_verify_editable_fails_when_sibling_from_pypi(
 ) -> None:
     """`verify-editable` exits non-zero when a selected sibling is not an editable install."""
     libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-    monkeypatch.setattr(dependencies, "_is_editable_install", lambda dist: False)
+    monkeypatch.setattr(dependency_graph.cli, "_is_editable_install", lambda dist: False)
     rc = main_with(["verify-editable", "a", "--changed", "b", "--libs-dir", str(libs_dir)])
     assert rc == 1
     assert "not editable" in capsys.readouterr().err

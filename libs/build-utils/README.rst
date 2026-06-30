@@ -125,5 +125,5 @@ single-package installs are unaffected.
 The GitHub Actions CI and release workflows wire this automatically (CI passes
 the PR's changed libs; release orders the batch dependencies-first and waits for
 each upstream on PyPI before building its dependents). The selection,
-ordering, and install-plan logic lives in ``vivarium.build_utils.dependencies``
-(run ``python -m vivarium.build_utils.dependencies --help``).
+ordering, and install-plan logic lives in ``vivarium.build_utils.dependency_graph``
+(run ``python -m vivarium.build_utils.dependency_graph --help``).

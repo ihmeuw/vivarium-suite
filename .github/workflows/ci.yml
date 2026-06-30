@@ -34,7 +34,7 @@ jobs:
         # form a cycle (the release workflow orders the graph too, but only post-merge).
         run: |
           pip install packaging
-          PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependencies check-acyclic
+          PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph check-acyclic
 
       - name: Detect changed packages
         id: detect
@@ -149,7 +149,7 @@ jobs:
         # Positive check that each sibling we intended to resolve in-tree (changed
         # + reachable + version-compatible) is actually an editable install, not a
         # silent PyPI fallback.
-        run: python -m vivarium.build_utils.dependencies verify-editable ${{ matrix.library }} --changed "${{ needs.detect-changes.outputs.changed-libs }}"
+        run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ matrix.library }} --changed "${{ needs.detect-changes.outputs.changed-libs }}"
 
       - name: Lint ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make lint
