@@ -7,38 +7,22 @@ from collections.abc import Mapping, Sequence
 from .models import DependencyCycleError, Lib
 
 
-def _get_dist_to_name_mapping(libs: Mapping[str, Lib]) -> dict[str, str]:
-    """Map each in-tree ``dist_name`` to its package ``name``."""
-    return {lib.dist_name: name for name, lib in libs.items()}
+def get_reachable_upstreams(target: str, libs: Mapping[str, Lib]) -> set[str]:
+    """Return all in-tree library names transitively reachable from ``target``.
 
-
-def _get_in_scope_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str]) -> set[str]:
-    """Return ``name``'s direct in-tree upstream names that are in ``scope``."""
-    dist_to_name = _get_dist_to_name_mapping(libs)
-    upstreams: set[str] = set()
-    for dep_dist in libs[name].sibling_deps:
-        dep_name = dist_to_name.get(dep_dist)
-        if dep_name in scope and dep_name != name:
-            upstreams.add(dep_name)
-    return upstreams
-
-
-def get_reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
-    """Return all in-tree package names transitively reachable from ``target``.
-
-    Walks ``target``'s ``sibling_deps`` and those of every package it reaches,
+    Walks ``target``'s ``upstreams`` and those of every library it reaches,
     following only in-tree edges. The result excludes ``target`` itself.
 
     Parameters
     ----------
     target
-        Package ``name`` to compute reachability from.
+        Library ``name`` to compute reachability from.
     libs
-        The full set of parsed packages.
+        The full set of parsed libraries.
 
     Returns
     -------
-        Names of the in-tree packages reachable from ``target``.
+        Names of the in-tree libraries reachable from ``target``.
 
     Raises
     ------
@@ -53,7 +37,7 @@ def get_reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
     stack = [target]
     while stack:
         current = stack.pop()
-        for dep_dist in libs[current].sibling_deps:
+        for dep_dist in libs[current].upstreams:
             dep_name = dist_to_name.get(dep_dist)
             if dep_name is not None and dep_name not in reached:
                 # A new dependency was found, so add it to the reached set and push
@@ -65,28 +49,28 @@ def get_reachable_siblings(target: str, libs: Mapping[str, Lib]) -> set[str]:
 
 
 def get_release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
-    """Topologically sort ``names`` dependencies-first.
+    """Topologically sort library ``names`` dependencies-first.
 
-    Orders only the packages in ``names`` relative to one another, using the
-    in-tree edges among them; packages outside ``names`` are ignored. Among
-    packages with no dependency relationship the input order is preserved.
+    Orders only the libraries in ``names`` relative to one another, using the
+    in-tree edges among them; libraries outside ``names`` are ignored. Input order
+    is preserved for libraries with no dependency relationships.
 
     Parameters
     ----------
     names
-        Package ``name``s to order.
+        Library ``name``s to order.
     libs
-        The full set of parsed packages.
+        The full set of parsed libraries.
 
     Returns
     -------
-        ``names`` reordered so each package follows every package in ``names``
-        it depends on.
+        Library ``names`` reordered dependencies-first, i.e. each library appears
+        after all of its in-tree upstreams (that are also in ``names``).
 
     Raises
     ------
     DependencyCycleError
-        If the packages in ``names`` form a dependency cycle.
+        If the libraries in ``names`` form a dependency cycle.
     """
     # De-duplicate (defensive) and preserve input order
     # NOTE: the ordering of ``sorted_names`` below does not matter for topological correctness;
@@ -112,6 +96,22 @@ def get_release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str
         if not progressed:
             remaining = [n for n in sorted_names if n not in placed]
             raise DependencyCycleError(
-                f"dependency cycle among packages: {sorted(remaining)}"
+                f"dependency cycle among libraries: {sorted(remaining)}"
             )
     return ordered
+
+
+def _get_in_scope_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str]) -> set[str]:
+    """Return ``name``'s direct in-tree upstream names that are in ``scope``."""
+    dist_to_name = _get_dist_to_name_mapping(libs)
+    upstreams: set[str] = set()
+    for dep_dist in libs[name].upstreams:
+        dep_name = dist_to_name.get(dep_dist)
+        if dep_name in scope and dep_name != name:
+            upstreams.add(dep_name)
+    return upstreams
+
+
+def _get_dist_to_name_mapping(libs: Mapping[str, Lib]) -> dict[str, str]:
+    """Map each in-tree ``dist_name`` to its library ``name``."""
+    return {lib.dist_name: name for name, lib in libs.items()}

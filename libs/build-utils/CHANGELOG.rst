@@ -2,8 +2,8 @@
 
 - Add ``vivarium.build_utils.dependency_graph``: the in-tree dependency graph for
   cross-package PRs and releases
-- Add ``make install IN_TREE_SIBLINGS="<lib> ..."`` to install modified,
-  reachable, version-compatible siblings editably at their pending versions
+- Add ``make install CHANGED_LIBS="<lib> ..."`` to install modified, reachable,
+  version-compatible upstream libraries editably at their pending versions
 - Add runtime dependencies ``packaging`` and ``tomli`` (the latter only on
   Python < 3.11)
 

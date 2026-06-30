@@ -11,13 +11,13 @@ from packaging.specifiers import SpecifierSet
 # The pyproject extra whose dependency closure CI activates (``make install
 # ENV_REQS=ci_github`` in both the GitHub Actions test matrix and the release
 # job). The dependency graph is resolved over runtime dependencies plus this
-# extra so the editable-sibling and release-ordering decisions reflect the
+# extra so the editable-upstream and release-ordering decisions reflect the
 # dependency set the install actually pulls in.
 DEFAULT_EXTRAS: tuple[str, ...] = ("ci_github",)
 
 
 class DependencyConflictError(Exception):
-    """A selected in-tree sibling's pending version violates a declared pin."""
+    """A selected in-tree upstream's pending version violates a declared pin."""
 
 
 class DependencyCycleError(Exception):
@@ -40,15 +40,15 @@ class Lib:
     version
         Pending release version, parsed from the first line of
         ``CHANGELOG.rst`` (format ``**X.Y.Z - MM/DD/YY**``).
-    sibling_deps
+    upstreams
         This package's dependencies on *other monorepo packages*: a mapping from
-        each depended-on sibling's ``dist_name`` to the version constraint this
+        each depended-on upstream's ``dist_name`` to the version constraint this
         package places on it. For example, ``vivarium-public-health`` yields
         ``{"vivarium-engine": SpecifierSet(">=5.1.1"), "vivarium-config-tree":
         SpecifierSet(">=5.0.0"), ...}``. External dependencies (``numpy``,
         ``dill``, ...) are excluded - only ``libs/`` packages appear. Collected
         over the runtime dependencies plus whichever extras :func:`load_libs`
-        resolved; if a sibling is constrained in more than one of those places,
+        resolved; if a upstream is constrained in more than one of those places,
         the constraints are intersected into a single :class:`SpecifierSet`.
     """
 
@@ -56,7 +56,7 @@ class Lib:
     dist_name: str
     path: Path
     version: str
-    sibling_deps: Mapping[str, SpecifierSet]
+    upstreams: Mapping[str, SpecifierSet]
 
 
 @dataclass(frozen=True)
@@ -69,8 +69,8 @@ class InstallPlan:
         The argument vector to execute (e.g. ``["uv", "pip", "install", "-e", ...]``).
     env
         Environment overrides to apply on top of the current environment when
-        executing ``argv`` (notably the per-sibling ``SETUPTOOLS_SCM_PRETEND_VERSION_FOR_<DIST>``
-        entries that make each editable sibling present its pending release version).
+        executing ``argv`` (notably the per-upstream ``SETUPTOOLS_SCM_PRETEND_VERSION_FOR_<DIST>``
+        entries that make each editable upstream present its pending release version).
     """
 
     argv: Sequence[str]

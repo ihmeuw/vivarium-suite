@@ -20,7 +20,7 @@ from .models import DEFAULT_EXTRAS, Lib
 
 
 def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[str, Lib]:
-    """Parse every package under ``libs_dir`` into a :class:`Lib`.
+    """Parse every library under ``libs_dir`` into a :class:`Lib`.
 
     For each ``libs/<pkg>`` directory, reads the distribution name and the
     declared dependencies from ``pyproject.toml`` and the pending version from
@@ -28,9 +28,9 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
     ``[project].dependencies`` plus the requested ``extras``, transitively
     expanding self-referential extras (e.g. ``ci_github = ["vivarium-foo[test,
     docs]"]`` pulls in the requirements of ``foo``'s ``test`` and ``docs``
-    extras). Only requirements whose distribution name matches another package
-    under ``libs_dir`` are retained in each :class:`Lib`'s ``sibling_deps``.
-    When a package declares more than one specifier against the same sibling
+    extras). Only requirements whose distribution name matches another library
+    under ``libs_dir`` are retained in each :class:`Lib`'s ``upstreams``.
+    When a library declares more than one specifier against the same upstream
     (across runtime and extras) the specifiers are combined.
 
     Parameters
@@ -38,59 +38,59 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
     libs_dir
         Path to the monorepo's ``libs/`` directory.
     extras
-        Optional-dependency extras to fold into each package's resolved
+        Optional-dependency extras to fold into each library's resolved
         dependency set, in addition to its runtime dependencies.
 
     Returns
     -------
-        Mapping of package ``name`` (directory name) to its :class:`Lib`.
+        Mapping of library ``name`` (directory name) to its :class:`Lib`.
 
     Raises
     ------
     FileNotFoundError
         If ``libs_dir`` does not exist.
     ValueError
-        If a package's ``pyproject.toml`` has no parseable distribution name,
+        If a library's ``pyproject.toml`` has no parseable distribution name,
         or its ``CHANGELOG.rst`` first line has no parseable version.
     """
     if not libs_dir.exists():
         raise FileNotFoundError(f"libs directory does not exist: {libs_dir}")
 
-    pkg_dirs = sorted(
+    library_dirs = sorted(
         p for p in libs_dir.iterdir() if p.is_dir() and (p / "pyproject.toml").exists()
     )
 
-    # Read every package from disk and collect the pyproject, dist name, and pending version for each
+    # Read every library from disk and collect the pyproject, dist name, and pending version for each
     pyprojects: dict[str, dict[str, object]] = {}
     dist_names: dict[str, str] = {}
     versions: dict[str, str] = {}
-    for pkg_dir in pkg_dirs:
-        name = pkg_dir.name
-        with (pkg_dir / "pyproject.toml").open("rb") as handle:
+    for lib_dir in library_dirs:
+        name = lib_dir.name
+        with (lib_dir / "pyproject.toml").open("rb") as handle:
             pyproject = tomllib.load(handle)
         pyprojects[name] = pyproject
-        dist_names[name] = _get_dist_name(pyproject, pkg_dir)
-        versions[name] = _get_pending_version(pkg_dir / "CHANGELOG.rst")
+        dist_names[name] = _get_dist_name(pyproject, lib_dir)
+        versions[name] = _get_pending_version(lib_dir / "CHANGELOG.rst")
 
-    in_tree = {canonicalize_name(dist): dist for dist in dist_names.values()}
+    monorepo_dists = {canonicalize_name(dist): dist for dist in dist_names.values()}
 
-    # Resolve each package's in-tree dependencies and build the Lib objects
+    # Resolve each library's in-tree dependencies and build the Lib objects
     libs: dict[str, Lib] = {}
-    for pkg_dir in pkg_dirs:
-        name = pkg_dir.name
+    for lib_dir in library_dirs:
+        name = lib_dir.name
         dist = dist_names[name]
-        sibling_specs = _resolve_sibling_deps(pyprojects[name], dist, extras, in_tree)
-        # Collaps multiple specifiers on the same sibling into a single SpecifierSet
-        sibling_deps = {
+        upstream_specs = _resolve_upstreams(pyprojects[name], dist, extras, monorepo_dists)
+        # Collaps multiple specifiers on the same upstream into a single SpecifierSet
+        upstreams = {
             target_dist: reduce(lambda a, b: a & b, specs, SpecifierSet())
-            for target_dist, specs in sibling_specs.items()
+            for target_dist, specs in upstream_specs.items()
         }
         libs[name] = Lib(
             name=name,
             dist_name=dist,
-            path=pkg_dir.resolve(),
+            path=lib_dir.resolve(),
             version=versions[name],
-            sibling_deps=sibling_deps,
+            upstreams=upstreams,
         )
     return libs
 
@@ -116,13 +116,13 @@ def _get_pending_version(changelog: Path) -> str:
     return match.group(0)
 
 
-def _resolve_sibling_deps(
+def _resolve_upstreams(
     pyproject: Mapping[str, object],
     own_dist: str,
     extras: Sequence[str],
-    in_tree: Mapping[str, str],
+    monorepo_dists: Mapping[str, str],
 ) -> dict[str, list[SpecifierSet]]:
-    """Resolve in-tree sibling specifiers over runtime deps plus ``extras``.
+    """Resolve in-tree upstream specifiers over runtime deps plus ``extras``.
 
     Self-referential extras (a requirement targeting ``own_dist`` with extras)
     are expanded transitively via a worklist queue; an expanded extra may pull
@@ -137,7 +137,7 @@ def _resolve_sibling_deps(
     optional_map: Mapping[str, object] = optional if isinstance(optional, Mapping) else {}
 
     own_canon = canonicalize_name(own_dist)
-    siblings: dict[str, list[SpecifierSet]] = {}
+    upstreams: dict[str, list[SpecifierSet]] = {}
     seen_extras: set[str] = set()
     queue: list[str] = list(runtime_reqs)
     for extra in extras:
@@ -153,10 +153,10 @@ def _resolve_sibling_deps(
                     seen_extras.add(extra)
                     queue.extend(_get_extra_requirements(optional_map, extra))
             continue
-        if req_canon in in_tree:
-            siblings.setdefault(in_tree[req_canon], []).append(req.specifier)
+        if req_canon in monorepo_dists:
+            upstreams.setdefault(monorepo_dists[req_canon], []).append(req.specifier)
 
-    return siblings
+    return upstreams
 
 
 def _get_extra_requirements(optional_map: Mapping[str, object], extra: str) -> list[str]:

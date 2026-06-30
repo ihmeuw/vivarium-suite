@@ -154,16 +154,15 @@ create-env: # Create a new conda environment
 .PHONY: install
 install: ENV_REQS?=dev
 install: UV_FLAGS?=
-# space-separated list of in-tree sibling lib dirs whose source changed in a PR
-install: IN_TREE_SIBLINGS?=
+install: CHANGED_LIBS?=
 install: # Install package and dependencies
 	pip install uv
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
-	@if [ -z "$(strip $(IN_TREE_SIBLINGS))" ]; then \
+	@if [ -z "$(strip $(CHANGED_LIBS))" ]; then \
 		set -x; uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}; \
 	else \
 		set -x; python -m vivarium.build_utils.dependency_graph install-editable $(notdir $(CURDIR)) \
-			--changed="$(IN_TREE_SIBLINGS)" --env-reqs="$(ENV_REQS)" \
+			--changed="$(CHANGED_LIBS)" --env-reqs="$(ENV_REQS)" \
 			--ihme-pypi="$(IHME_PYPI)" --uv-flags="$(UV_FLAGS)"; \
 	fi
 	@$(MAKE) setup-slack

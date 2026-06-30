@@ -1,9 +1,8 @@
-"""Editable-sibling selection and ``uv pip install`` plan composition.
+"""Editable-upstream selection and ``uv pip install`` plan composition.
 
-Powers the cross-package CI install: pick the modified, reachable, version-
-compatible siblings of the package under build, and compose a single editable
-``uv pip install`` that resolves them from in-tree source at their pending
-versions.
+Powers the cross-library CI install: pick the modified, reachable, version-
+compatible upstreams of the library under build, and compose a single editable
+``uv pip install`` that resolves them from in-tree source at their pending versions.
 """
 
 from __future__ import annotations
@@ -13,20 +12,20 @@ import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from .graph import get_reachable_siblings
+from .graph import get_reachable_upstreams
 from .models import DependencyConflictError, InstallPlan, Lib
 
 
-def get_editable_siblings(
+def get_editable_upstreams(
     target: str, libs: Mapping[str, Lib], changed: Sequence[str]
 ) -> list[Lib]:
-    """Select the siblings to install editably for a build of ``target``.
+    """Select the upstream libraries to install editably for a build of ``target``.
 
-    Returns the packages in ``changed`` that are reachable from ``target``.
-    Packages in ``changed`` that are not reachable from ``target`` are ignored
+    Returns the libraries in ``changed`` that are reachable from ``target``;
+    libraries in ``changed`` that are not reachable from ``target`` are ignored
     (a change elsewhere in the monorepo does not affect this build). Before
-    returning, validates that each selected sibling's pending version satisfies
-    every reachable package's declared constraint on it.
+    returning, validates that each selected upstream's pending version satisfies
+    every reachable library's declared constraint on it.
 
     Notes
     -----
@@ -36,22 +35,21 @@ def get_editable_siblings(
     Parameters
     ----------
     target
-        Package ``name`` being built/tested.
+        Library ``name`` being built/tested.
     libs
-        The full set of parsed packages.
+        The full set of parsed libraries.
     changed
-        Package ``name``s whose own source changed in the PR - the only
-        packages eligible for in-tree resolution.
+        Library ``name``s whose own source changed in the PR.
 
     Returns
     -------
-        The selected siblings as :class:`Lib`s.
+        The selected upstream libraries as :class:`Lib`s.
 
     Raises
     ------
     DependencyConflictError
-        If a selected sibling's pending version does not satisfy some reachable
-        package's version constraint on it.
+        If a selected upstream library's pending version does not satisfy some reachable
+        library's version constraint on it.
     KeyError
         If ``target`` or any entry of ``changed`` is not a key in ``libs``.
     """
@@ -59,46 +57,46 @@ def get_editable_siblings(
         if name not in libs:
             raise KeyError(name)
 
-    reachable_siblings = get_reachable_siblings(target, libs)
-    editable_sibling_names = [name for name in changed if name in reachable_siblings]
+    reachable_upstreams = get_reachable_upstreams(target, libs)
+    editable_upstream_names = [name for name in changed if name in reachable_upstreams]
 
-    constrainers = reachable_siblings | {target}
-    for sibling in editable_sibling_names:
-        sibling_dist = libs[sibling].dist_name
-        sibling_version = libs[sibling].version  # pending release version
-        for package in constrainers:
-            specifier = libs[package].sibling_deps.get(sibling_dist)
+    constrainers = reachable_upstreams | {target}
+    for upstream in editable_upstream_names:
+        upstream_dist = libs[upstream].dist_name
+        upstream_version = libs[upstream].version  # pending release version
+        for library in constrainers:
+            specifier = libs[library].upstreams.get(upstream_dist)
             if specifier is None:
-                # No declared constraint on this sibling from this package, so nothing to check
+                # No declared constraint on this upstream from this library, so nothing to check
                 continue
-            if not specifier.contains(sibling_version, prereleases=True):
+            if not specifier.contains(upstream_version, prereleases=True):
                 raise DependencyConflictError(
-                    f"in-tree sibling {sibling_dist} pending version "
-                    f"{sibling_version} does not satisfy specifier "
-                    f"'{specifier}' declared by {libs[package].dist_name}"
+                    f"in-tree upstream {upstream_dist} pending version "
+                    f"{upstream_version} does not satisfy specifier "
+                    f"'{specifier}' declared by {libs[library].dist_name}"
                 )
 
-    return [libs[name] for name in editable_sibling_names]
+    return [libs[name] for name in editable_upstream_names]
 
 
 def build_install_plan(
     target_lib: Lib,
-    siblings: Sequence[Lib],
+    editable_upstreams: Sequence[Lib],
     *,
     env_reqs: str,
     ihme_pypi: str,
     uv_flags: str,
 ) -> InstallPlan:
-    """Compose the single ``uv pip install`` invocation for a cross-package build.
+    """Compose the single ``uv pip install`` invocation for a cross-library build.
 
     Builds one command that installs ``target_lib`` editably with its
-    ``env_reqs`` extra and each sibling editably, by absolute path, so ``uv``
+    ``env_reqs`` extra and each upstream editably, by absolute path, so ``uv``
     resolves the named in-tree distributions from local source rather than
-    PyPI. Each editable package gets the ``editable_mode=compat`` config setting
+    PyPI. Each editable library gets the ``editable_mode=compat`` config setting
     (keyed by its ``dist_name``, matching ``make install``'s classic-``.pth``
     editable mode), and the extra-index flags are included only when
     ``ihme_pypi`` is non-empty. The returned plan's ``env`` carries a
-    ``SETUPTOOLS_SCM_PRETEND_VERSION_FOR_<DIST>`` entry for each sibling so its
+    ``SETUPTOOLS_SCM_PRETEND_VERSION_FOR_<DIST>`` entry for each upstream so its
     editable install reports its pending release version (a feature branch has
     no release tag, so ``setuptools_scm`` would otherwise derive a dev version
     that fails a bumped pin). The target needs no pretend version - nothing in
@@ -107,9 +105,9 @@ def build_install_plan(
     Parameters
     ----------
     target_lib
-        The package being built.
-    siblings
-        Siblings to install editably, dependency-ordered.
+        The library being built.
+    editable_upstreams
+        Upstream libraries to install editably.
     env_reqs
         The extra to install on the target (e.g. ``"ci_github"``); when empty,
         the target is installed with no extra.
@@ -131,16 +129,16 @@ def build_install_plan(
     ]
 
     env: dict[str, str] = {}
-    for sibling in siblings:
-        argv.extend(["-e", str(sibling.path)])
+    for upstream in editable_upstreams:
+        argv.extend(["-e", str(upstream.path)])
         config_settings.extend(
             [
                 "--config-settings-package",
-                f"{sibling.dist_name}:editable_mode=compat",
+                f"{upstream.dist_name}:editable_mode=compat",
             ]
         )
-        dist_upper = sibling.dist_name.upper().replace("-", "_")
-        env[f"SETUPTOOLS_SCM_PRETEND_VERSION_FOR_{dist_upper}"] = sibling.version
+        dist_upper = upstream.dist_name.upper().replace("-", "_")
+        env[f"SETUPTOOLS_SCM_PRETEND_VERSION_FOR_{dist_upper}"] = upstream.version
 
     argv.extend(config_settings)
 

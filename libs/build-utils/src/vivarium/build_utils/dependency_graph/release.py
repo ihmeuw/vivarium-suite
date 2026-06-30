@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from .graph import get_reachable_siblings, get_release_order
+from .graph import get_reachable_upstreams, get_release_order
 from .models import Lib
 
 
@@ -13,20 +13,20 @@ def get_release_matrix(
 ) -> dict[str, object]:
     """Build the dependency-ordered GitHub Actions release matrix.
 
-    Given the packages to release and their versions, returns a matrix object
+    Given the libraries to release and their versions, returns a matrix object
     suitable for ``strategy.matrix`` in the release workflow. The ``include``
     entries are ordered dependencies-first (see :func:`get_release_order`), and
-    each entry carries the in-batch upstreams it must wait for on PyPI before
-    it can install - i.e. the packages it depends on that are *also* part of
-    this release batch. Upstreams that are not in the batch are already
+    each entry carries the in-batch upstream libraries it must wait for on PyPI
+    before it can install, i.e. the libraries it depends on that are *also* part
+    of this release batch. Upstream libraries that are not in the batch are already
     released and so are omitted from ``wait_for``.
 
     Parameters
     ----------
     release_versions
-        Mapping of package ``name`` to the version being released.
+        Mapping of library ``name`` to the version being released.
     libs
-        The full set of parsed packages.
+        The full set of parsed libraries.
 
     Returns
     -------
@@ -42,17 +42,17 @@ def get_release_matrix(
     KeyError
         If a key of ``release_versions`` is not a key in ``libs``.
     """
-    for name in release_versions:
-        if name not in libs:
-            raise KeyError(name)
+    for lib_name in release_versions:
+        if lib_name not in libs:
+            raise KeyError(lib_name)
 
     batch = set(release_versions)
-    ordered = get_release_order(list(release_versions), libs)
+    ordered_lib_names = get_release_order(list(release_versions), libs)
 
     include: list[dict[str, object]] = []
-    for name in ordered:
+    for lib_name in ordered_lib_names:
         upstreams = get_release_order(
-            sorted(get_reachable_siblings(name, libs) & batch), libs
+            sorted(get_reachable_upstreams(lib_name, libs) & batch), libs
         )
         wait_for = [
             {"dist": libs[upstream].dist_name, "version": release_versions[upstream]}
@@ -60,8 +60,8 @@ def get_release_matrix(
         ]
         include.append(
             {
-                "library": name,
-                "version": release_versions[name],
+                "library": lib_name,
+                "version": release_versions[lib_name],
                 "wait_for": wait_for,
             }
         )
