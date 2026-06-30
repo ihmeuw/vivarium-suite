@@ -1,3 +1,7 @@
+**5.2.1 - 06/30/26**
+
+- Fix order-dependent randomness in results test fixtures
+
 **5.2.0 - 06/29/26**
 
 - Support a callable population filter (or ``(query, callable)`` tuple) for all observations

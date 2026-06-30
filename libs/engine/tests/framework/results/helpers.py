@@ -47,7 +47,10 @@ HARRY_POTTER_CONFIG = {
     },
 }
 
-RNG = np.random.default_rng(42)
+# Each component seeds its own generator from this so the random population is identical
+# regardless of test execution order. A shared module-level generator made draws depend on
+# how many tests had run before, which surfaced as flaky failures under xdist parallelism.
+_RNG_SEED = 42
 
 
 ##################
@@ -57,6 +60,7 @@ RNG = np.random.default_rng(42)
 
 class Hogwarts(Component):
     def setup(self, builder: Builder) -> None:
+        self.rng = np.random.default_rng(_RNG_SEED)
         builder.value.register_attribute_producer(
             "grade",
             source=lambda index: self.population_view.get(index, "exam_score").map(
@@ -89,9 +93,9 @@ class Hogwarts(Component):
         initialization_data = pd.DataFrame(
             {
                 "student_id": list(range(size)),
-                "student_house": RNG.choice(STUDENT_HOUSES, size=size),
-                "familiar": RNG.choice(FAMILIARS, size=size),
-                "power_level": RNG.choice([lvl for lvl in POWER_LEVELS], size=size),
+                "student_house": self.rng.choice(STUDENT_HOUSES, size=size),
+                "familiar": self.rng.choice(FAMILIARS, size=size),
+                "power_level": self.rng.choice([lvl for lvl in POWER_LEVELS], size=size),
                 "house_points": 0,
                 "quidditch_wins": 0,
                 "exam_score": 0.0,
@@ -251,6 +255,7 @@ class ValedictorianObserver(Observer):
     def __init__(self) -> None:
         super().__init__()
         self.valedictorians: list[int] = []
+        self.rng = np.random.default_rng(_RNG_SEED)
 
     def register_observations(self, builder: Builder) -> None:
         builder.results.register_unstratified_observation(
@@ -262,7 +267,7 @@ class ValedictorianObserver(Observer):
 
     def choose_valedictorian(self, df: pd.DataFrame) -> pd.DataFrame:
         eligible_students = df.loc[~df["student_id"].isin(self.valedictorians), "student_id"]
-        valedictorian: int = RNG.choice(eligible_students)
+        valedictorian: int = self.rng.choice(eligible_students)
         self.valedictorians.append(valedictorian)
         return df[df["student_id"] == valedictorian]
 
