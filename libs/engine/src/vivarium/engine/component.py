@@ -55,11 +55,6 @@ def _coerce_flat_data_to_indexed(
     # module-level import would be circular.
     from vivarium.engine.framework.lookup.table import DEFAULT_VALUE_COLUMN
 
-    if not isinstance(data, pd.DataFrame) or any(
-        name is not None for name in data.index.names
-    ):
-        return data, value_columns
-
     if not value_columns:
         resolved_value_columns = [DEFAULT_VALUE_COLUMN]
     elif isinstance(value_columns, str):
@@ -67,19 +62,28 @@ def _coerce_flat_data_to_indexed(
     else:
         resolved_value_columns = list(value_columns)
 
-    if any(column not in data.columns for column in resolved_value_columns):
-        return data, value_columns
-    key_columns = [column for column in data.columns if column not in resolved_value_columns]
-    if not key_columns:
-        return data, value_columns
-
-    indexed = data.set_index(key_columns)
-    # Preserve the return type: a flat DataFrame with ``value_columns`` given as
-    # None or a single string produced a Series-returning table, so squeeze to a
-    # Series; a list/tuple of value columns produced a DataFrame-returning table.
-    if not value_columns or isinstance(value_columns, str):
-        return indexed[resolved_value_columns[0]], None
-    return indexed, None
+    result: tuple[LookupTableData, list[str] | tuple[str, ...] | str | None] = (
+        data,
+        value_columns,
+    )
+    # Only a flat DataFrame whose declared value columns are present, and which
+    # has at least one key/parameter column to move onto the index, is coerced.
+    if (
+        isinstance(data, pd.DataFrame)
+        and not any(name is not None for name in data.index.names)
+        and all(column in data.columns for column in resolved_value_columns)
+    ):
+        key_columns = [
+            column for column in data.columns if column not in resolved_value_columns
+        ]
+        if key_columns:
+            indexed = data.set_index(key_columns)
+            squeeze_to_series = not value_columns or isinstance(value_columns, str)
+            result = (
+                indexed[resolved_value_columns[0]] if squeeze_to_series else indexed,
+                None,
+            )
+    return result
 
 
 class Component(ABC):

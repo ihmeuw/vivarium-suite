@@ -117,9 +117,6 @@ class Interpolation:
         :attr:`value_columns` carries the original user-facing labels and is
         reapplied to the output of :meth:`__call__`."""
 
-        # Structural column validation runs regardless of the interpolation
-        # ``validate`` flag: extra/missing columns indicate a data-preparation
-        # error rather than an interpolation-quality concern.
         _validate_data_columns(
             self.data,
             self.categorical_parameters,
@@ -176,9 +173,6 @@ class Interpolation:
         parameter_columns_set = set(parameter_columns)
         continuous_columns: list[str] = []
         for column in parameter_columns:
-            # Cast to str so non-string lookup attribute names (e.g. an integer
-            # index level name) are treated as categorical rather than crashing
-            # on the str-only ``endswith``/``removesuffix`` calls.
             if str(column).endswith(_START_SUFFIX):
                 base = str(column).removesuffix(_START_SUFFIX)
                 if _end_column(base) in parameter_columns_set:
@@ -281,6 +275,7 @@ def validate_parameters(
                 f"the right edge (exclusive). You provided {p}."
             )
 
+    # break out the individual columns from binned column name lists
     if not value_columns:
         raise ValueError(
             f"No non-parameter data. Available columns: {data.columns}, "
@@ -294,11 +289,7 @@ def _validate_data_columns(
     continuous_parameters: Sequence[str],
     value_columns: Sequence[Hashable],
 ) -> None:
-    """Validate the data has no columns beyond its parameter and value columns.
-
-    Runs regardless of the interpolation ``validate`` flag, since stray columns
-    indicate a data-preparation error rather than an interpolation-quality issue.
-    """
+    """Validate the data has no columns beyond its parameter and value columns."""
     required_cols = {
         *categorical_parameters,
         *_get_bin_edge_columns(continuous_parameters),
