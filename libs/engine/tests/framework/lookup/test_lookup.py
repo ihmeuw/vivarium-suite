@@ -1061,8 +1061,9 @@ class TestIndexedInput:
         )
         data = pd.DataFrame([[0.1, 0.2], [0.3, 0.4]], index=index, columns=cols)
         table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
-        assert table.parameter_columns == ["age"]
-        assert table.key_columns == []
+        assert table.interpolation is not None
+        assert table.interpolation.continuous_parameters == ["age"]
+        assert table.interpolation.categorical_parameters == []
         # value_columns exposes the user-facing labels (the original tuples),
         # not the opaque internal IDs used for the interpolation pipeline.
         assert list(table.value_columns) == [("rate", "Female"), ("rate", "Male")]
