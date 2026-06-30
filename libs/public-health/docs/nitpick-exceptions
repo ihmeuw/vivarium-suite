@@ -36,6 +36,7 @@ py:class vivarium.public_health.results.DiseaseObserver
 py:class vivarium.public_health.results.MortalityObserver
 py:class vivarium.public_health.results.DisabilityObserver
 py:class vivarium.public_health.results.CategoricalRiskObserver
+py:class vivarium.public_health.results.MicrodataObserver
 py:class vivarium.public_health.results.ResultsStratifier
 
 # vivarium types and classes used in type hints

@@ -1,3 +1,7 @@
+**0.7.0 - 06/29/26**
+
+- Update ``-n auto`` to pick a resource-aware worker count
+
 **0.6.2 - 06/22/26**
 
 - Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
