@@ -82,7 +82,7 @@ def sort_topologically(names: Sequence[str], libs: Mapping[str, Lib]) -> list[st
     for name in sorted_names:
         sorter.add(name)
     for name in sorted_names:
-        sorter.add(name, *_get_in_scope_upstreams(name, libs, scope=scope))
+        sorter.add(name, *_get_direct_upstreams(name, libs, scope=scope))
 
     try:
         # NOTE: static_order() yields zero-predecessor nodes in insertion order,
@@ -101,7 +101,7 @@ def _get_dist_to_name_mapping(libs: Mapping[str, Lib]) -> dict[str, str]:
     return {lib.dist_name: name for name, lib in libs.items()}
 
 
-def _get_in_scope_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str]) -> set[str]:
+def _get_direct_upstreams(name: str, libs: Mapping[str, Lib], scope: set[str]) -> set[str]:
     """Return ``name``'s direct in-tree upstream names that are in ``scope``."""
     dist_to_name = _get_dist_to_name_mapping(libs)
     upstreams: set[str] = set()
