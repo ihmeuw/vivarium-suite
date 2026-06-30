@@ -1,3 +1,7 @@
+**4.2.1 - 06/30/26**
+
+- Remove pytest-xdist from explicit test dependencies
+
 **4.2.0 - 06/29/26**
 
 - Run pytest with ``-n auto`` by default to parallelize tests across available workers
