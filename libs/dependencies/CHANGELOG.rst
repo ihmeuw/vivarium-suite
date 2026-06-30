@@ -1,3 +1,7 @@
+**1.2.2 - 06/30/26**
+
+- Add pytest-xdist to pytest group
+
 **1.2.1 - 06/22/26**
 
 - Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``

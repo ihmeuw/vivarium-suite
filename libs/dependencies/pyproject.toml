@@ -58,7 +58,7 @@ jupyter = [
 matplotlib = ["matplotlib"]
 
 # testing
-pytest = ["pytest", "pytest-cov", "pytest-mock"]
+pytest = ["pytest", "pytest-cov", "pytest-mock", "pytest-xdist"]
 
 # formatting and linting
 black = ["black==22.3.0"]
