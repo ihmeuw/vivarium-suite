@@ -1,11 +1,16 @@
-**4.1.1 - 06/29/26**
+**4.2.1 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
+
+**4.2.0 - 06/29/26**
+
+- Run pytest with ``-n auto`` by default to parallelize tests across available workers
+- Turn coverage off by default
 
 **4.1.0 - 06/29/26**
 
 - Run mypy in CI based on the presence of a ``py.typed`` marker under ``src/``
-- Centralize py.typed marker logic in a new ``mypy-if-typed`` Make target 
+- Centralize py.typed marker logic in a new ``mypy-if-typed`` Make target
 - Deprecate the ``run_mypy`` ``reusable_pipeline`` argument; it is still accepted but ignored
 
 **4.0.2 - 06/24/26**
