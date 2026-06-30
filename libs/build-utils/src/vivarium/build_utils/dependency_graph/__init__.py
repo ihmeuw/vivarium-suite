@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from .cli import _discover_libs_dir, main
 from .editable import build_install_plan, get_editable_upstreams, run_install
-from .graph import get_reachable_upstreams, get_release_order
+from .graph import get_reachable_upstreams, sort_topologically
 from .loading import load_libs
 from .models import (
     DEFAULT_EXTRAS,

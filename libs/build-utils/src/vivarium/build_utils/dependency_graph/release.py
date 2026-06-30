@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from .graph import get_reachable_upstreams, get_release_order
+from .graph import get_reachable_upstreams, sort_topologically
 from .models import Lib
 
 
@@ -15,7 +15,7 @@ def get_release_matrix(
 
     Given the libraries to release and their versions, returns a matrix object
     suitable for ``strategy.matrix`` in the release workflow. The ``include``
-    entries are ordered dependencies-first (see :func:`get_release_order`), and
+    entries are ordered dependencies-first (see :func:`sort_topologically`), and
     each entry carries the in-batch upstream libraries it must wait for on PyPI
     before it can install, i.e. the libraries it depends on that are *also* part
     of this release batch. Upstream libraries that are not in the batch are already
@@ -47,11 +47,11 @@ def get_release_matrix(
             raise KeyError(lib_name)
 
     batch = set(release_versions)
-    ordered_lib_names = get_release_order(list(release_versions), libs)
+    ordered_lib_names = sort_topologically(list(release_versions), libs)
 
     include: list[dict[str, object]] = []
     for lib_name in ordered_lib_names:
-        upstreams = get_release_order(
+        upstreams = sort_topologically(
             sorted(get_reachable_upstreams(lib_name, libs) & batch), libs
         )
         wait_for = [

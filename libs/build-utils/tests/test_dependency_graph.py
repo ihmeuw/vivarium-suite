@@ -20,8 +20,8 @@ from vivarium.build_utils.dependency_graph import (
     get_editable_upstreams,
     get_reachable_upstreams,
     get_release_matrix,
-    get_release_order,
     load_libs,
+    sort_topologically,
 )
 
 # A factory: given a mapping of library-name -> spec, write a throwaway monorepo
@@ -460,8 +460,8 @@ class TestGetEditableUpstreams:
             get_editable_upstreams("a", libs, changed=["ghost"])
 
 
-class TestGetReleaseOrder:
-    """Tests for ``get_release_order``."""
+class TestSortTopologically:
+    """Tests for ``sort_topologically``."""
 
     def test_dependencies_first(self, make_monorepo: MonorepoFactory) -> None:
         """A dependency is ordered before its dependent."""
@@ -472,7 +472,7 @@ class TestGetReleaseOrder:
             }
         )
         libs = load_libs(libs_dir)
-        ordered = get_release_order(["a", "b"], libs)
+        ordered = sort_topologically(["a", "b"], libs)
         assert ordered.index("b") < ordered.index("a")
 
     def test_preserves_input_order_for_independent_libraries(
@@ -482,7 +482,7 @@ class TestGetReleaseOrder:
         """Libraries with no dependency relationship keep their input order."""
         libs_dir = make_monorepo({"a": {}, "b": {}, "c": {}})
         libs = load_libs(libs_dir)
-        assert get_release_order(["c", "a", "b"], libs) == ["c", "a", "b"]
+        assert sort_topologically(["c", "a", "b"], libs) == ["c", "a", "b"]
 
     def test_ignores_libraries_outside_the_batch(
         self,
@@ -497,7 +497,7 @@ class TestGetReleaseOrder:
             }
         )
         libs = load_libs(libs_dir)
-        ordered = get_release_order(["a", "b"], libs)
+        ordered = sort_topologically(["a", "b"], libs)
         assert "c" not in ordered
         assert ordered.index("b") < ordered.index("a")
 
@@ -511,7 +511,7 @@ class TestGetReleaseOrder:
         )
         libs = load_libs(libs_dir)
         with pytest.raises(DependencyCycleError):
-            get_release_order(["a", "b"], libs)
+            sort_topologically(["a", "b"], libs)
 
 
 class TestGetReleaseMatrix:

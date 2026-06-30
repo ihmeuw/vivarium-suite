@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .editable import build_install_plan, get_editable_upstreams, run_install
-from .graph import get_release_order
+from .graph import sort_topologically
 from .loading import load_libs
 from .models import DependencyConflictError, DependencyCycleError
 from .release import get_release_matrix
@@ -149,7 +149,7 @@ def _run_check_acyclic(args: argparse.Namespace) -> int:
     # real problem, and that graph is the one release ordering must be acyclic over.
     libs = load_libs(libs_dir, extras=())
     try:
-        get_release_order(list(libs), libs)
+        sort_topologically(list(libs), libs)
     except DependencyCycleError as error:
         print(str(error), file=sys.stderr)
         return 1

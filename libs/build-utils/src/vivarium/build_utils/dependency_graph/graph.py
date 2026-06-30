@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import graphlib
 from collections.abc import Mapping, Sequence
 
 from .models import DependencyCycleError, Lib
@@ -48,7 +49,7 @@ def get_reachable_upstreams(target: str, libs: Mapping[str, Lib]) -> set[str]:
     return reached
 
 
-def get_release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
+def sort_topologically(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str]:
     """Topologically sort library ``names`` dependencies-first.
 
     Orders only the libraries in ``names`` relative to one another, using the
@@ -72,33 +73,27 @@ def get_release_order(names: Sequence[str], libs: Mapping[str, Lib]) -> list[str
     DependencyCycleError
         If the libraries in ``names`` form a dependency cycle.
     """
-    # De-duplicate (defensive) and preserve input order
-    # NOTE: the ordering of ``sorted_names`` below does not matter for topological correctness;
-    # it only affects tie-breaks as well as the github actions release matrix order.
+    # De-duplicate (defensive) and preserve input order.
     sorted_names = list(dict.fromkeys(names))
+    scope = set(sorted_names)
 
-    deps: dict[str, set[str]] = {
-        name: _get_in_scope_upstreams(name, libs, scope=set(sorted_names))
-        for name in sorted_names
-    }
+    # Add every node up front in input order followed by the edges
+    sorter: graphlib.TopologicalSorter[str] = graphlib.TopologicalSorter()
+    for name in sorted_names:
+        sorter.add(name)
+    for name in sorted_names:
+        sorter.add(name, *_get_in_scope_upstreams(name, libs, scope=scope))
 
-    ordered: list[str] = []
-    placed: set[str] = set()
-    while len(ordered) < len(sorted_names):
-        progressed = False
-        for name in sorted_names:
-            if name in placed:
-                continue
-            if deps[name] <= placed:
-                ordered.append(name)
-                placed.add(name)
-                progressed = True
-        if not progressed:
-            remaining = [n for n in sorted_names if n not in placed]
-            raise DependencyCycleError(
-                f"dependency cycle among libraries: {sorted(remaining)}"
-            )
-    return ordered
+    try:
+        # NOTE: static_order() yields zero-predecessor nodes in insertion order,
+        # so independent libraries keep their input order (the only tie-break that
+        # matters as it sets the GitHub Actions release matrix order).
+        return list(sorter.static_order())
+    except graphlib.CycleError as error:
+        cycle = error.args[1]
+        raise DependencyCycleError(
+            f"dependency cycle among libraries: {sorted(set(cycle))}"
+        ) from error
 
 
 def _get_dist_to_name_mapping(libs: Mapping[str, Lib]) -> dict[str, str]:
