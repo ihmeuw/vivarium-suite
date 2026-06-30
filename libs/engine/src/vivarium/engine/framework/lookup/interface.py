@@ -146,11 +146,11 @@ class LookupTableInterface(Interface):
         using order 0 (step function) interpolation; other row-index level names
         are treated as exact-match categorical columns.
 
-        Value columns are not permitted when the input data is a
-        :class:`pandas.DataFrame` or :class:`pandas.Series`, as the value
-        columns are inferred from the DataFrame columns or the Series name. For
-        list/tuple inputs, value columns are required to name the resulting
-        DataFrame columns. For scalar inputs, value columns can be provided to
+        For indexed :class:`pandas.DataFrame` / :class:`pandas.Series` inputs (lookup attributes
+        on the row index), ``value_columns`` must be ``None`` because value columns are inferred
+        from the DataFrame columns or the Series name. For flat DataFrame inputs (deprecated),
+        ``value_columns`` selects which column(s) are returned. For list/tuple inputs, value
+        columns are required to name the resulting DataFrame columns. For scalar inputs, value columns can be provided to
         name the resulting Series column; if not provided, the resulting Series
         is named ``"value"``.
 
