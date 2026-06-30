@@ -1,3 +1,7 @@
+**0.7.1 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
 **0.7.0 - 06/29/26**
 
 - Update ``-n auto`` to pick a resource-aware worker count

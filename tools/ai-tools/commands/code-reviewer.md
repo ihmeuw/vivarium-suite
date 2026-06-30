@@ -1,10 +1,10 @@
 ---
-description: "Parallel multi-lens code review across maintainability, DRY, design, tests, documentation, and functional correctness."
+description: "Parallel multi-agent code review across maintainability, DRY, design, tests, documentation, and functional correctness."
 argument-hint: "A pull request to review, or a description of the changes to review."
-allowed-tools: Read, Grep, Glob, Bash, Agent(_review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation)
+allowed-tools: Read, Grep, Glob, Bash, Agent(_review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation, _review_scorer)
 ---
 
-Run a parallel multi-lens code review of: $ARGUMENTS
+Run a parallel multi-agent code review of: $ARGUMENTS
 
 This command gathers the review target, then hands it to the internal
 `_review-core` skill (`skills/_review-core/SKILL.md`) for the fan-out. That
@@ -29,10 +29,12 @@ $ARGUMENTS as a free-form description.
 
 Invoke the `_review-core` skill, handing it the changed-file list, the diff
 (or the salient slice), and a one-line description of the change (the PR
-title/body is the `<subject>`). It fans out to the five `_review_*` specialists,
-runs the functional-correctness pass, synthesizes the findings, and returns the
-structured review. Present that review to the user as-is — `_review-core` owns
-the output format and the review constraints.
+title/body is the `<subject>`). It fans out to the five `_review_*`
+specialists, runs the functional-correctness pass, independently scores every
+finding for confidence (dropping anything below 50), synthesizes the survivors —
+each annotated with its confidence score — and returns the structured review.
+Present that review to the user as-is — `_review-core` owns the output format and
+the review constraints.
 
 ## Step 3 — Offer ticket triage
 

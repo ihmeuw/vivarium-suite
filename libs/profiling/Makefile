@@ -38,7 +38,7 @@ help:
 	@echo "make build-env"
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env [type=<environment type>] [name=<environment name>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>]"
+	@echo "  make build-env [type=<environment type>] [name=<environment name>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>] [artifactory_access=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
 	@echo "  type [optional]"
@@ -51,6 +51,9 @@ help:
 	@echo "      Whether to install git-lfs in the environment. Either 'yes' or 'no' (default)"
 	@echo "  py [optional]"
 	@echo "      Python version (defaults to latest supported)"
+	@echo "  artifactory_access [optional]"
+	@echo "      Whether the build host can reach the IHME artifactory. Either 'yes'"
+	@echo "      (default) or 'no'; use 'no' to build off-VPN without artifactory."
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -60,7 +63,7 @@ endif
 
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
-	@allowed="type name lfs py include_timestamp"; \
+	@allowed="type name lfs py include_timestamp artifactory_access"; \
 	for arg in $(filter-out build-env,$(MAKECMDGOALS)) $(MAKEFLAGS); do \
 		case $$arg in \
 			*=*) \
@@ -89,16 +92,20 @@ build-env: # Create a new environment with installed packages
 	@$(call validate_arg,$(lfs),yes no,lfs)
 #	python version
 	@$(eval py ?= $(shell python -c "import json; versions = json.load(open('python_versions.json')); print(max(versions, key=lambda x: tuple(map(int, x.split('.')))))"))
-	
+#	artifactory_access
+	@$(eval artifactory_access ?= yes)
+	@$(call validate_arg,$(artifactory_access),yes no,artifactory_access)
+
 	conda create -n $(name) python=$(py) --yes
 # 	Bootstrap vivarium_build_utils into the new environment
 	conda run -n $(name) pip install vivarium_build_utils
-#	Install packages based on type
+#	Install packages based on type. artifactory_access=no passes an empty IHME_PYPI,
+#	which clears base.mk's EXTRA_INDEX_FLAGS.
 	@if [ "$(type)" = "simulation" ]; then \
-		conda run -n $(name) make install ENV_REQS=dev; \
+		conda run -n $(name) make install ENV_REQS=dev $(if $(filter no,$(artifactory_access)),IHME_PYPI=); \
 		conda install -n $(name) redis -c anaconda -y; \
 	elif [ "$(type)" = "artifact" ]; then \
-		conda run -n $(name) make install ENV_REQS=data; \
+		conda run -n $(name) make install ENV_REQS=data $(if $(filter no,$(artifactory_access)),IHME_PYPI=); \
 	fi
 	@if [ "$(lfs)" = "yes" ]; then \
 		conda run -n $(name) conda install -c conda-forge git-lfs --yes; \
