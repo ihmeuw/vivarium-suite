@@ -1,6 +1,10 @@
-**1.2.2 - 06/30/26**
+**1.2.3 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
+
+**1.2.2 - 06/30/26**
+
+- Add pytest-xdist to pytest group
 
 **1.2.1 - 06/22/26**
 

@@ -1,6 +1,10 @@
-**4.2.1 - 06/30/26**
+**4.2.2 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
+
+**4.2.1 - 06/30/26**
+
+- Remove pytest-xdist from explicit test dependencies
 
 **4.2.0 - 06/29/26**
 
