@@ -1,3 +1,7 @@
+**6.3.1 - 06/30/26**
+
+- Reduce population size in test suites to improve runtime
+
 **6.3.0 - 06/29/26**
 
 - Add Microdata Observer to the results system

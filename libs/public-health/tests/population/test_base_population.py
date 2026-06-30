@@ -357,7 +357,7 @@ def test_scaled_population(
     config.update(
         {
             "population": {
-                "population_size": 1_000_000,
+                "population_size": 25_000,
                 "include_sex": "Both",
             },
             "time": {
