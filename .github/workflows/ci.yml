@@ -142,13 +142,12 @@ jobs:
         # artifactory is firewalled and unreachable from GH-hosted runners.
         # Libs that depend on artifactory-only packages won't fully install in
         # this environment by design - those are tested via Jenkins.
-        # IN_TREE_SIBLINGS lists the libs whose source changed in this PR.
-        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github IN_TREE_SIBLINGS="${{ needs.detect-changes.outputs.changed-libs }}" UV_FLAGS=--system IHME_PYPI=
+        # CHANGED_LIBS lists the libraries whose source changed in this PR.
+        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github CHANGED_LIBS="${{ needs.detect-changes.outputs.changed-libs }}" UV_FLAGS=--system IHME_PYPI=
 
-      - name: Verify changed siblings resolved from source
-        # Positive check that each sibling we intended to resolve in-tree (changed
-        # + reachable + version-compatible) is actually an editable install, not a
-        # silent PyPI fallback.
+      - name: Verify changed libraries resolved from source
+        # Positive check that each library we intended to resolve in-tree (changed
+        # + reachable + version-compatible) is actually an editable install.
         run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ matrix.library }} --changed "${{ needs.detect-changes.outputs.changed-libs }}"
 
       - name: Lint ${{ matrix.library }}
