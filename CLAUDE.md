@@ -38,7 +38,7 @@ make build-package                      # build wheel/sdist into dist/
 make validate-tag                       # used by release CI; checks tag matches CHANGELOG
 ```
 
-`make help` (inside a package, after `build-env`) lists everything else. Most targets come from `vivarium_build_utils`' `base.mk` / `test.mk`, which the local `Makefile` includes dynamically via `python -c "from vivarium_build_utils.resources import get_makefiles_path"`. Outside an env where `vivarium_build_utils` is installed, only `build-env` is available; this is by design.
+`make help` (inside a package, after `build-env`) lists everything else. Most targets come from the `vivarium.build_utils` package's `base.mk` / `test.mk`, which the local `Makefile` includes dynamically via `python -c "from vivarium.build_utils.resources import get_makefiles_path"`. Outside an env where `vivarium.build_utils` is installed, only `build-env` is available; this is by design.
 
 To run a single test, activate the env and use pytest directly: `pytest tests/path/to/test_foo.py::test_name -xvs`.
 
