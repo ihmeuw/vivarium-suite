@@ -1,4 +1,4 @@
-**0.22.1 - 06/30/26**
+**0.22.2 - 06/30/26**
 
  - Fix drifted references found by ``/viv:repo-maintenance``
  
