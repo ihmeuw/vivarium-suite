@@ -52,7 +52,7 @@ repeat while failures:
 
 review = review_core                  # Phase 6: five-lens fan-out + correctness; findings -> Phase 5
 
-finalize & PR                         # Phase 7: post traces; artifacts uncommitted unless asked; user-gated PR
+finalize & PR                         # Phase 7: post traces; artifacts uncommitted unless asked; user-gated PR(s), stacked per layer
 ```
 
 ## Phase 0 — Setup
@@ -99,7 +99,9 @@ Dispatch `_model_implementer` **once per touched layer**, in data-dependency
 order, **skipping any layer the plan leaves alone**. Each stage works directly
 on the feature branch — stages are sequential, so they cannot collide, and you
 **diff-check each stage's output before dispatching the next** (the next stage
-needs the real names the previous one produced, not the planned ones).
+needs the real names the previous one produced, not the planned ones). **Commit
+each stage as its own layer commit** (artifact / component / observer) so the
+per-layer structure carries into the Phase 7 PRs.
 
 Compose a **stage brief** for each dispatch from the plan: the layer-specific
 guidance, the plan slice for that layer, the contract names to honor, exemplar
@@ -207,7 +209,9 @@ triage.
    left unaddressed.
 5. **Gate 3 — approve the PR.** Without approval, stop and leave the branch in
    place.
-6. On approval, use the `commit-splitter` skill to organize the work into clean,
-   reviewable commits, then use `team-conventions` to push and `gh pr create`
-   with the repo's PR template; report the URL and offer the `#vivarium_dev`
-   flag.
+6. On approval, use the `commit-splitter` skill to organize the work for review,
+   then use `team-conventions` to push and `gh pr create` with the repo's PR
+   template; report the URL(s) and offer the `#vivarium_dev` flag. **A multi-layer
+   iteration ships as stacked per-layer PRs in data-dependency order (artifact ->
+   component -> observer), matching team practice; a single-layer change is one
+   PR.**
