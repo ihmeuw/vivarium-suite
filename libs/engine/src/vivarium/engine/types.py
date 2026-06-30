@@ -24,6 +24,7 @@ LookupTableData = (
     ScalarValue
     | str
     | pd.DataFrame
+    | pd.Series  # type: ignore [type-arg]
     | list[ScalarValue]
     | tuple[ScalarValue, ...]
     | DataFrameMapping

@@ -60,6 +60,7 @@ py:class vivarium.engine.framework.utilities.TimeValue
 py:class T
 py:class vivarium.engine.framework.components.manager.T
 py:class vivarium.engine.framework.components.manager.C
+py:class vivarium.engine.framework.lookup.table.T
 
 # vivarium-config-tree: type annotations in engine source use the bare name
 # ``ConfigTree`` (via ``from vivarium.config_tree import ConfigTree``), which
@@ -73,6 +74,7 @@ py:class ConfigTree
 # Special methods that Sphinx can't resolve
 py:meth __init__
 py:meth __repr__
+py:meth __call__
 
 # vivarium internal references that may not be in the docs
 py:class vivarium.engine.framework.population.PopulationView
