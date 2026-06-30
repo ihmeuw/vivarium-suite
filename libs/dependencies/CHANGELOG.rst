@@ -1,4 +1,4 @@
-**1.2.2 - 06/29/26**
+**1.2.2 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
 
