@@ -1,3 +1,7 @@
+**4.2.1 - 06/30/26**
+
+- Use the pip cache only on push/PR (feature-branch) builds; main, nightly (cron), and deploy builds install cache-free so a from-source wheel build failure isn't masked by a cached wheel
+
 **4.2.0 - 06/29/26**
 
 - Run pytest with ``-n auto`` by default to parallelize tests across available workers

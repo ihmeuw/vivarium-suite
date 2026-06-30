@@ -100,7 +100,7 @@ def buildEnvironment() {
     }
 }
 
-def installPackage(String env_reqs = "") {
+def installPackage(String env_reqs = "", boolean useCache = false) {
     // env_reqs selects which pyproject.toml extra `make install` pulls in.
     // Callers in reusable_pipeline.groovy: "" (leaves base.mk's "dev" default for
     // standalone repos), "ci_jenkins" (monorepo libs), or "docs" (doc-only skip path).
@@ -111,9 +111,12 @@ def installPackage(String env_reqs = "") {
     // canonical artifactory URL when unset, preserving prior behavior.
     String ihmePypi = env.IHME_PYPI ?: 'https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/'
     String extraIndex = ihmePypi ? "--extra-index-url ${ihmePypi}simple/ --index-strategy unsafe-best-match" : ""
+    // Use pip cache only on push/PR
+    String noCache = useCache ? "" : "--no-cache"
+    String uvFlags = noCache ? "UV_FLAGS='${noCache}'" : ""
     stage("Install Package - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
-            sh "${ACTIVATE} && make install ${env_reqs} UV_FLAGS='--no-cache' && uv pip install . ${extraIndex} --no-cache"
+            sh "${ACTIVATE} && make install ${env_reqs} ${uvFlags} && uv pip install . ${extraIndex} ${noCache}"
         }
     }
 }

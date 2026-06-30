@@ -249,7 +249,10 @@ def call(Map config = [:]){
                         skipForDocOnly: skipForDocOnly,
                         skipForChangelogOnly: skipForChangelogOnly
                       ]
-                      
+
+                      // Use pip cache only for push/PR
+                      boolean useCache = !env.IS_CRON.toBoolean() && env.BRANCH != "main"
+
                       if (skipForChangelogOnly) {
                         echo "This is a changelog-only change since last build and previous build passed. Skipping entire build."
                         // No build steps needed - just let it fall through to cleanup
@@ -258,13 +261,13 @@ def call(Map config = [:]){
                         echo "This is a doc-only change since last build and previous build passed. Skipping everything except doc build and doc tests."
                         buildStages.runDebugInfo(skipEval)
                         buildStages.buildEnvironment()
-                        buildStages.installPackage("docs")
+                        buildStages.installPackage("docs", useCache)
                         buildStages.buildDocs()
                         buildStages.testDocs()
                       } else {
                         buildStages.runDebugInfo(skipEval)
                         buildStages.buildEnvironment()
-                        buildStages.installPackage(env_reqs)
+                        buildStages.installPackage(env_reqs, useCache)
                         buildStages.checkFormatting()
                         // Transform test type inputs to actual make test target names
                         tests = test_types.collect { "test-${it}" }
