@@ -1,3 +1,7 @@
+**4.2.7 - 06/30/26**
+
+- Isolate the mkdir permissions test in a per-test directory to be compatible with parallel test execution
+
 **4.2.6 - 06/23/26**
 
 - Enforce a fixed schema for central performance logs
