@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from .models import DependencyCycleError, Lib
 
 
-def get_reachable_upstreams(target: str, libs: Mapping[str, Lib]) -> set[str]:
+def get_transitive_upstreams(target: str, libs: Mapping[str, Lib]) -> set[str]:
     """Return all in-tree library names transitively reachable from ``target``.
 
     Walks ``target``'s ``upstreams`` and those of every library it reaches,

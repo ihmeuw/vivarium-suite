@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from .graph import get_reachable_upstreams, sort_topologically
+from .graph import get_transitive_upstreams, sort_topologically
 from .models import Lib
 
 
@@ -52,7 +52,7 @@ def get_release_matrix(
     include: list[dict[str, object]] = []
     for lib_name in ordered_lib_names:
         upstreams = sort_topologically(
-            sorted(get_reachable_upstreams(lib_name, libs) & batch), libs
+            sorted(get_transitive_upstreams(lib_name, libs) & batch), libs
         )
         wait_for = [
             {"dist": libs[upstream].dist_name, "version": release_versions[upstream]}

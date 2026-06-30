@@ -18,8 +18,8 @@ from vivarium.build_utils.dependency_graph import (
     Lib,
     build_install_plan,
     get_editable_upstreams,
-    get_reachable_upstreams,
     get_release_matrix,
+    get_transitive_upstreams,
     load_libs,
     sort_topologically,
 )
@@ -249,8 +249,8 @@ class TestLoadLibs:
         assert libs["a"].upstreams["vivarium-b"] == SpecifierSet(">=2.0.0")
 
 
-class TestGetReachableUpstreams:
-    """Tests for ``get_reachable_upstreams``."""
+class TestGetTransitiveUpstreams:
+    """Tests for ``get_transitive_upstreams``."""
 
     def test_includes_transitive_deps(
         self,
@@ -265,7 +265,7 @@ class TestGetReachableUpstreams:
             }
         )
         libs = load_libs(libs_dir)
-        assert get_reachable_upstreams("a", libs) == {"b", "c"}
+        assert get_transitive_upstreams("a", libs) == {"b", "c"}
 
     def test_excludes_unrelated_libs(
         self,
@@ -280,7 +280,7 @@ class TestGetReachableUpstreams:
             }
         )
         libs = load_libs(libs_dir)
-        assert get_reachable_upstreams("a", libs) == {"b"}
+        assert get_transitive_upstreams("a", libs) == {"b"}
 
     def test_includes_extra_only_deps(
         self,
@@ -294,7 +294,7 @@ class TestGetReachableUpstreams:
             }
         )
         libs = load_libs(libs_dir, extras=("ci_github",))
-        assert get_reachable_upstreams("a", libs) == {"testing-utils"}
+        assert get_transitive_upstreams("a", libs) == {"testing-utils"}
 
     def test_excludes_target_itself(
         self,
@@ -308,7 +308,7 @@ class TestGetReachableUpstreams:
             }
         )
         libs = load_libs(libs_dir)
-        assert "a" not in get_reachable_upstreams("a", libs)
+        assert "a" not in get_transitive_upstreams("a", libs)
 
 
 class TestGetEditableUpstreams:

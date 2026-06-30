@@ -12,7 +12,7 @@ import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from .graph import get_reachable_upstreams
+from .graph import get_transitive_upstreams
 from .models import DependencyConflictError, InstallPlan, Lib
 
 
@@ -57,7 +57,7 @@ def get_editable_upstreams(
         if name not in libs:
             raise KeyError(name)
 
-    reachable_upstreams = get_reachable_upstreams(target, libs)
+    reachable_upstreams = get_transitive_upstreams(target, libs)
     editable_upstream_names = [name for name in changed if name in reachable_upstreams]
 
     constrainers = reachable_upstreams | {target}
