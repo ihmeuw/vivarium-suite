@@ -1046,8 +1046,9 @@ class TestIndexedInput:
     def test_multiindex_rows_basic(self, lookup_manager: LookupTableManager) -> None:
         data = self._make_sex_age_dataframe()
         table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
-        assert table.parameter_columns == ["age"]
-        assert table.key_columns == ["sex"]
+        assert table.interpolation is not None
+        assert table.interpolation.continuous_parameters == ["age"]
+        assert table.interpolation.categorical_parameters == ["sex"]
         assert list(table.value_columns) == ["rate"]
         assert table._column_schema.return_type is pd.DataFrame
 
