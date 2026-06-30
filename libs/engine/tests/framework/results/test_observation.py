@@ -16,7 +16,7 @@ from tests.framework.results.helpers import (
 )
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
-from vivarium.engine.framework.results.interface import PopulationFilter
+from vivarium.engine.framework.results.interface import _PopulationFilter
 from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
@@ -31,7 +31,7 @@ from vivarium.engine.framework.results.stratification import Stratification
 def stratified_observation() -> StratifiedObservation:
     return StratifiedObservation(
         name="stratified_observation_name",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         when="whenevs",
         requires_attributes=[],
         results_updater=lambda _, __: pd.DataFrame(),
@@ -45,7 +45,7 @@ def stratified_observation() -> StratifiedObservation:
 def concatenating_observation() -> ConcatenatingObservation:
     return ConcatenatingObservation(
         name="concatenating_observation_name",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         when="whenevs",
         requires_attributes=["some-col", "some-other-col"],
         results_formatter=lambda _, __: pd.DataFrame(),
@@ -243,7 +243,7 @@ def test_adding_observation_results_updater(new_observations: pd.DataFrame) -> N
     existing_results = pd.DataFrame({"value": [0.0, 0.0]})
     obs = AddingObservation(
         name="adding_observation_name",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         when="whenevs",
         requires_attributes=[],
         results_formatter=lambda _, __: pd.DataFrame(),
@@ -313,7 +313,7 @@ class TestCreateExpandedDfOrderedCategoricals:
     ) -> StratifiedObservation:
         observation = StratifiedObservation(
             name="some-observation",
-            population_filter=PopulationFilter(),
+            population_filter=_PopulationFilter(),
             when="collect_metrics",
             requires_attributes=[],
             results_updater=lambda existing, _: existing,
