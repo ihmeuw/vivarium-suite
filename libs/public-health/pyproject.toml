@@ -28,7 +28,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Life",
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
-    "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
