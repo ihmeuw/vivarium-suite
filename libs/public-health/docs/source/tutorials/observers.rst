@@ -30,7 +30,7 @@ documentation for details on the underlying results system).
    from vivarium.public_health.population import BasePopulation
    from vivarium.public_health.results import (
        DiseaseObserver, MortalityObserver, DisabilityObserver,
-       CategoricalRiskObserver, ResultsStratifier,
+       CategoricalRiskObserver, MicrodataObserver, ResultsStratifier,
    )
    from vivarium.public_health.risks import Risk
    from vivarium.public_health._example_data import (
@@ -53,7 +53,7 @@ Common Setup
    from vivarium.public_health.population import BasePopulation
    from vivarium.public_health.results import (
        DiseaseObserver, MortalityObserver, DisabilityObserver,
-       CategoricalRiskObserver, ResultsStratifier,
+       CategoricalRiskObserver, MicrodataObserver, ResultsStratifier,
    )
    from vivarium.public_health.risks import Risk
    from vivarium.public_health._example_data import (
@@ -282,6 +282,251 @@ one observation:
    exposed_pt = pt.loc[pt["sub_entity"] == "exposed", "value"].iloc[0]
    unexposed_pt = pt.loc[pt["sub_entity"] == "unexposed", "value"].iloc[0]
    assert exposed_pt > unexposed_pt
+
+
+MicrodataObserver
+-----------------
+
+A :class:`~vivarium.public_health.results.MicrodataObserver` records the raw
+values of a configured set of population columns for every simulant at each
+time step. Unlike the other observers it does not stratify or aggregate - it
+emits one row per simulant per step. Each row carries an ``event_time`` column
+identifying the step it was recorded on, and the results from every step are
+concatenated into a single table.
+
+This makes it a general-purpose tool for capturing per-simulant microdata from
+any simulation: you tell it which columns to record and it writes them out
+verbatim, leaving any downstream aggregation to you.
+
+List the columns to record under the observer's name. ``columns`` is required;
+an empty list raises a configuration error.
+
+.. testcode::
+
+   config = make_base_config()
+   config.update(
+       {
+           "population": {"population_size": 1000},
+           "microdata_observer": {"columns": ["age", "sex"]},
+       },
+       layer="model_override",
+   )
+
+   sim = InteractiveContext(
+       components=[
+           BasePopulation(),
+           MicrodataObserver(),
+       ],
+       configuration=config,
+       plugin_configuration=base_plugins,
+   )
+   sim.step()
+   sim.step()
+
+   microdata = sim.get_results()["microdata_observer"]
+   print(sorted(microdata.columns.tolist()))
+
+.. testoutput::
+
+   ['age', 'event_time', 'sex']
+
+The table holds one row per simulant per step, so two steps of a 1000-simulant
+population produce 2000 rows spanning two distinct ``event_time`` values:
+
+.. testcode::
+
+   print(len(microdata))
+   print(microdata["event_time"].nunique())
+
+.. testoutput::
+
+   2000
+   2
+
+
+Recording only matching simulants
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Pass a list of Pandas query strings as ``filter`` to record only the simulants
+that match. The conditions are AND-combined, so the example below keeps only
+females aged 20 or older:
+
+.. testcode::
+
+   config = make_base_config()
+   config.update(
+       {
+           "population": {"population_size": 1000},
+           "microdata_observer": {
+               "columns": ["age", "sex"],
+               "filter": ['sex == "Female"', "age >= 20"],
+           },
+       },
+       layer="model_override",
+   )
+
+   sim = InteractiveContext(
+       components=[BasePopulation(), MicrodataObserver()],
+       configuration=config,
+       plugin_configuration=base_plugins,
+   )
+   sim.step()
+
+   microdata = sim.get_results()["microdata_observer"]
+   print(sorted(microdata["sex"].unique().tolist()))
+   print((microdata["age"] >= 20).all())
+   print(len(microdata) < 1000)
+
+.. testoutput::
+
+   ['Female']
+   True
+   True
+
+
+Recording only certain time steps
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default every time step is recorded. Pass ``timesteps`` - a list of dates -
+to record only the steps whose ``event_time`` matches one of them. This
+simulation starts in 1990 with 30.5-day steps, so the first step's
+``event_time`` is 1990-08-01 and the second is 1990-09-01; recording only the
+latter leaves the first step empty:
+
+.. testcode::
+
+   config = make_base_config()
+   config.update(
+       {
+           "population": {"population_size": 1000},
+           "microdata_observer": {"columns": ["age"], "timesteps": ["1990-09-01"]},
+       },
+       layer="model_override",
+   )
+
+   sim = InteractiveContext(
+       components=[BasePopulation(), MicrodataObserver()],
+       configuration=config,
+       plugin_configuration=base_plugins,
+   )
+
+   sim.step()  # 1990-08-01 - not recorded
+   print(sim.get_results()["microdata_observer"].empty)
+   sim.step()  # 1990-09-01 - recorded
+   recorded = sim.get_results()["microdata_observer"]
+   print(recorded["event_time"].dt.strftime("%Y-%m-%d").unique().tolist())
+
+.. testoutput::
+
+   True
+   ['1990-09-01']
+
+
+Capping the number of recorded rows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For large populations you may want only a sample. ``row_limit`` sets the
+*total* number of rows across all observed steps; each observed step then
+records a fresh random sample of ``row_limit // <number of observed steps>``
+simulants. Here two observed steps and a limit of 200 record 100 simulants
+each. If fewer than 100 simulants are eligible to be observed on the first 
+time-step, we won't observe more on the second to reach our limit of 200 per 
+simulation - each time-step is capped at 100.
+
+.. testcode::
+
+   config = make_base_config()
+   config.update(
+       {
+           "population": {"population_size": 1000},
+           "microdata_observer": {
+               "columns": ["age"],
+               "timesteps": ["1990-08-01", "1990-09-01"],
+               "row_limit": 200,
+           },
+       },
+       layer="model_override",
+   )
+
+   sim = InteractiveContext(
+       components=[BasePopulation(), MicrodataObserver()],
+       configuration=config,
+       plugin_configuration=base_plugins,
+   )
+   sim.step()
+   sim.step()
+
+   microdata = sim.get_results()["microdata_observer"]
+   print(microdata.groupby("event_time").size().tolist())
+
+.. testoutput::
+
+   [100, 100]
+
+
+Following a closed cohort
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default ``row_limit`` draws a *fresh* sample each observed step, so the
+recorded simulants differ from step to step. Set ``single_random_sample`` to
+sample once from the initial population and then record only those same
+simulants - a *closed cohort* - at every observed step. This requires
+``row_limit``, which sets the cohort's size (``row_limit // <number of observed
+steps>``).
+
+The cohort is never refilled: members are dropped without replacement once they
+leave the filter or the simulation, so the recorded count can only shrink over
+time and ``row_limit`` stays an upper bound. Recording a stable per-simulant id
+shows the same simulants recurring each step:
+
+.. testcode::
+
+   class SimulantID(Component):
+       """Tag each simulant with a stable id so we can see which ones recur."""
+
+       def setup(self, builder):
+           builder.population.register_initializer(
+               initializer=self._initialize, columns=["simulant_id"]
+           )
+
+       def _initialize(self, pop_data):
+           self.population_view.initialize(
+               pd.DataFrame(
+                   {"simulant_id": range(len(pop_data.index))}, index=pop_data.index
+               )
+           )
+
+   config = make_base_config()
+   config.update(
+       {
+           "population": {"population_size": 1000},
+           "microdata_observer": {
+               "columns": ["simulant_id"],
+               "timesteps": ["1990-08-01", "1990-09-01"],
+               "row_limit": 200,
+               "single_random_sample": True,
+           },
+       },
+       layer="model_override",
+   )
+
+   sim = InteractiveContext(
+       components=[BasePopulation(), SimulantID(), MicrodataObserver()],
+       configuration=config,
+       plugin_configuration=base_plugins,
+   )
+   sim.step()
+   sim.step()
+
+   microdata = sim.get_results()["microdata_observer"]
+   cohorts = microdata.groupby("event_time")["simulant_id"].apply(set)
+   print(cohorts.map(len).tolist())
+   print(cohorts.iloc[0] == cohorts.iloc[1])
+
+.. testoutput::
+
+   [100, 100]
+   True
 
 
 Stratification

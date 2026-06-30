@@ -14,15 +14,14 @@ the individuals represented by that index. See the
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from vivarium.config_tree import ConfigTree
 
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
-from vivarium.engine.framework.lookup.table import DEFAULT_VALUE_COLUMN, LookupTable
+from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.manager import Manager
 from vivarium.engine.types import LookupTableData
 
@@ -87,24 +86,6 @@ class LookupTableManager(Manager):
                         f" table '{table_name}' during setup."
                     )
 
-    @overload
-    def build_table(
-        self,
-        data: LookupTableData,
-        name: str,
-        value_columns: str | None,
-    ) -> LookupTable[pd.Series[Any]]:
-        ...
-
-    @overload
-    def build_table(
-        self,
-        data: LookupTableData,
-        name: str,
-        value_columns: list[str] | tuple[str, ...],
-    ) -> LookupTable[pd.DataFrame]:
-        ...
-
     def build_table(
         self,
         data: LookupTableData,
@@ -141,16 +122,11 @@ class LookupTableManager(Manager):
         if not name:
             name = f"lookup_table_{len(self.tables)}"
 
-        if isinstance(data, Mapping):
-            data = pd.DataFrame(data)
-
-        value_columns_ = value_columns if value_columns else DEFAULT_VALUE_COLUMN
-
         table = LookupTable(
             name=name,
             component=component,
             data=data,
-            value_columns=value_columns_,
+            value_columns=value_columns,
             manager=self,
             population_view=self._get_view(),
         )

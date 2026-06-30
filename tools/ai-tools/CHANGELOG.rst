@@ -1,3 +1,19 @@
+**0.22.2 - 06/30/26**
+
+ - Fix drifted references found by ``/viv:repo-maintenance``
+ 
+**0.22.1 - 06/30/26**
+
+ - ``code-reviewer``: run the five review agents on Sonnet, then independently score every finding for confidence (0-100) with a per-finding ``_review_scorer`` Haiku sub-agent and drop findings below 50; survivors show their score
+
+**0.22.0 - 06/25/26**
+
+ - Add ``change-propagation`` skill to copy boilerplate across libs
+ 
+**0.21.0 - 06/25/26**
+
+ - Add ``workflow-assessment`` skill to investigate workflow correctness post-hoc
+
 **0.20.1 - 06/23/26**
 
  - Document running two GitHub MCP identities in the ``plugin-setup`` skill
@@ -5,7 +21,7 @@
 **0.20.0 - 06/23/26**
 
  - Add ``/viv:repo-maintenance`` skill and ``_claim_auditor`` sub-agent
- 
+
 **0.19.0 - 06/22/26**
 
  - Drop GitHub Copilot support
