@@ -2,13 +2,10 @@
 name: _review_design
 description: "Use when: reviewing code for design and data structure choices, algorithmic efficiency, whether the right abstractions are used, representation trade-offs, API surface design."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
+model: sonnet
 user-invocable: false
 ---
 

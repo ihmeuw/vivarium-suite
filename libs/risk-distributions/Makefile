@@ -3,14 +3,14 @@ ifdef JENKINS_URL
 # 	Files are already in workspace from shared library
 	MAKE_INCLUDES := .
 else
-# 	For local dev, use the installed vivarium_build_utils package if it exists
-# 	First, check if we can import vivarium_build_utils and assign 'yes' or 'no'.
+# 	For local dev, use the installed vivarium.build_utils package if it exists
+# 	First, check if we can import vivarium.build_utils and assign 'yes' or 'no'.
 # 	We do this by importing the package in python and redirecting stderr to the null device.
 # 	If the import is successful (&&), it will print 'yes', otherwise (||) it will print 'no'.
-	VIVARIUM_BUILD_UTILS_AVAILABLE := $(shell python -c "import vivarium_build_utils" 2>/dev/null && echo "yes" || echo "no")
-# 	If vivarium_build_utils is available, get the makefiles path or else set it to empty
+	VIVARIUM_BUILD_UTILS_AVAILABLE := $(shell python -c "import vivarium.build_utils" 2>/dev/null && echo "yes" || echo "no")
+# 	If vivarium.build_utils is available, get the makefiles path or else set it to empty
 	ifeq ($(VIVARIUM_BUILD_UTILS_AVAILABLE),yes)
-		MAKE_INCLUDES := $(shell python -c "from vivarium_build_utils.resources import get_makefiles_path; print(get_makefiles_path())")
+		MAKE_INCLUDES := $(shell python -c "from vivarium.build_utils.resources import get_makefiles_path; print(get_makefiles_path())")
 	else
 		MAKE_INCLUDES :=
 	endif
@@ -20,28 +20,31 @@ endif
 PACKAGE_NAME = $(notdir $(CURDIR))
 
 ifneq ($(MAKE_INCLUDES),) # not empty
-# Include makefiles from vivarium_build_utils
+# Include makefiles from vivarium.build_utils
 include $(MAKE_INCLUDES)/base.mk
 include $(MAKE_INCLUDES)/test.mk
 else # empty
-# Use this help message (since the vivarium_build_utils version is not available)
+# Use this help message (since the vivarium.build_utils version is not available)
 help:
 	@echo
 	@echo "For Make's standard help, run 'make --help'."
 	@echo
-	@echo "Most of our Makefile targets are provided by the vivarium_build_utils"
+	@echo "Most of our Makefile targets are provided by the vivarium.build_utils"
 	@echo "package. To access them, you need to create a development environment first."
 	@echo
 	@echo "make build-env"
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env [name=<environment name>] [py=<python version>]"
+	@echo "  make build-env [name=<environment name>] [py=<python version>] [artifactory_access=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
 	@echo "  name [optional]"
 	@echo "      Name of the conda environment to create (defaults to <PACKAGE_NAME>)"
 	@echo "  py [optional]"
 	@echo "      Python version (defaults to latest supported)"
+	@echo "  artifactory_access [optional]"
+	@echo "      Whether the build host can reach the IHME artifactory. Either 'yes'"
+	@echo "      (default) or 'no'; use 'no' to build off-VPN without artifactory."
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -51,7 +54,7 @@ endif
 
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
-	@allowed="name py"; \
+	@allowed="name py artifactory_access"; \
 	for arg in $(filter-out build-env,$(MAKECMDGOALS)) $(MAKEFLAGS); do \
 		case $$arg in \
 			*=*) \
@@ -75,12 +78,18 @@ build-env: # Create a new environment with installed packages
 		exit 1; \
 	fi
 	@$(eval py ?= $(shell python -c "import json; print(max(json.load(open('python_versions.json')), key=lambda x: tuple(map(int, x.split('.')))))"))
-	
+#	artifactory_access
+	@$(eval artifactory_access ?= yes)
+	@case "$(artifactory_access)" in \
+		yes|no) ;; \
+		*) echo "Error: 'artifactory_access' must be 'yes' or 'no', got '$(artifactory_access)'" >&2; exit 1 ;; \
+	esac
 
 	conda create -n $(name) python=$(py) --yes
 # 	Bootstrap vivarium_build_utils into the new environment
 	conda run -n $(name) pip install vivarium_build_utils
-	conda run -n $(name) make install
+# 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
+	conda run -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 
 	@echo
 	@echo "Finished building environment"

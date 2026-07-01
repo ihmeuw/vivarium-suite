@@ -1,3 +1,51 @@
+**0.22.2 - 06/30/26**
+
+ - Fix drifted references found by ``/viv:repo-maintenance``
+ 
+**0.22.1 - 06/30/26**
+
+ - ``code-reviewer``: run the five review agents on Sonnet, then independently score every finding for confidence (0-100) with a per-finding ``_review_scorer`` Haiku sub-agent and drop findings below 50; survivors show their score
+
+**0.22.0 - 06/25/26**
+
+ - Add ``change-propagation`` skill to copy boilerplate across libs
+ 
+**0.21.0 - 06/25/26**
+
+ - Add ``workflow-assessment`` skill to investigate workflow correctness post-hoc
+
+**0.20.1 - 06/23/26**
+
+ - Document running two GitHub MCP identities in the ``plugin-setup`` skill
+ 
+**0.20.0 - 06/23/26**
+
+ - Add ``/viv:repo-maintenance`` skill and ``_claim_auditor`` sub-agent
+
+**0.19.0 - 06/22/26**
+
+ - Drop GitHub Copilot support
+
+**0.18.1 - 06/22/26**
+
+ - Fix stale references in the plugin docs and ``CLAUDE.md`` flagged by the ``repo-maintenance`` audit (MIC-7235)
+
+**0.18.0 - 06/22/26**
+
+ - Add ``framework-development`` slash command for an end-to-end, black-box-TDD design→implement→verify→PR loop on a well-scoped framework feature.
+
+**0.17.0 - 06/16/26**
+
+ - Add ``ticket-triage`` skill and associated plumbing
+
+**0.16.1 - 06/16/26**
+
+ - Update ``team-conventions`` to file pull requests as drafts and only mark them ready for review when flagging in ``#vivarium_dev``
+ 
+**0.16.0 - 06/16/26**
+
+ - Extract the multi-lens review fan-out from ``code-reviewer`` into a shared internal ``_review-core`` skill
+
 **0.15.1 - 06/11/26**
 
  - ``/viv:type-hinter``: when adding ``py.typed``, also add the matching ``[tool.setuptools.package-data]`` entry to the package's ``pyproject.toml`` so the marker ships in the wheel (PEP 561)

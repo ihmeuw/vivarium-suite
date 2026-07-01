@@ -2,13 +2,10 @@
 name: _review_maintainability
 description: "Use when: reviewing code for maintainability, readability, documentation quality, implicit assumptions, magic numbers, docstring accuracy, coupling between components."
 tools:
-  # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
   - Grep
   - Glob
-  # Copilot vocabulary (Claude silently drops unknown tokens)
-  - read
-  - search
+model: sonnet
 user-invocable: false
 ---
 

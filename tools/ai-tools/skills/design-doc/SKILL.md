@@ -29,7 +29,7 @@ Work iteratively. For each section the user has content for, propose Confluence 
 
 A few notes based on existing docs:
 - The *User interaction and design* section is the workhorse — add h3 subheadings freely (*Discussion*, *Potential solutions*, *Decision*, *Use cases*, *Class diagram*). *Results Processing* is a good example of the depth this section can take.
-- In the Tasks table, story points use the `X.01` convention (`1.01`, `2.01`, …). For guidance about the pointing convention, consult page id 176590586 (https://hub.ihme.washington.edu/spaces/SSE/pages/176590586/Point+Jira+Tickets) Do not fill in the Ticket ID column — that is for the user to update as they create tickets.
+- In the Tasks table, story points use the `X.01` convention (`1.01`, `2.01`, …). For guidance about the pointing convention, consult page id 176590586 (https://hub.ihme.washington.edu/spaces/SSE/pages/176590586/Point+Jira+Tickets) Do not fill in the Ticket column — that is for the user to update as they create tickets.
 
 Show the user the draft. **Do not call `create_page` until the user explicitly approves the copy.**
 

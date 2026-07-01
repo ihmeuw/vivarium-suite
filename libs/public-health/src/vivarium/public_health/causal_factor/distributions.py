@@ -160,7 +160,7 @@ class EnsembleDistribution(CausalFactorDistribution):
     #################
 
     def setup(self, builder: Builder) -> None:
-        """Build distribution weight and parameter lookup tables.
+        """Build lookup tables, wire the PPF pipeline, and register the propensity.
 
         Parameters
         ----------
@@ -174,17 +174,13 @@ class EnsembleDistribution(CausalFactorDistribution):
             data_source=weights,
             value_columns=distributions,
         )
-
-        self.parameters = {
-            parameter: self.build_lookup_table(
-                builder,
-                parameter,
-                data_source=data.reset_index(),
-                value_columns=list(data.columns),
-            )
-            for parameter, data in parameters.items()
-        }
-
+        combined, self.parameter_columns = self._consolidate_parameter_tables(parameters)
+        self.parameters_table = self.build_lookup_table(
+            builder,
+            "exposure_parameters",
+            data_source=combined.reset_index(),
+            value_columns=list(combined.columns),
+        )
         super().setup(builder)
         self.randomness = builder.randomness.get_stream(self.ensemble_propensity)
         builder.population.register_initializer(
@@ -239,6 +235,41 @@ class EnsembleDistribution(CausalFactorDistribution):
         )
         return distributions, weights.reset_index(), parameters
 
+    @staticmethod
+    def _namespaced_column(distribution: str, column: str) -> str:
+        """Return the consolidated-table column name for a distribution's parameter."""
+        # The round-trip is ambiguous if a distribution or column name contains '.'.
+        return f"{distribution}.{column}"
+
+    def _consolidate_parameter_tables(
+        self, parameters: dict[str, pd.DataFrame]
+    ) -> tuple[pd.DataFrame, dict[str, list[str]]]:
+        """Concatenate the per-distribution parameter frames into one namespaced frame, returned with a map of each distribution's original columns."""
+        parameter_columns = {
+            distribution: list(data.columns) for distribution, data in parameters.items()
+        }
+        namespaced = [
+            data.rename(
+                columns={
+                    col: self._namespaced_column(distribution, col) for col in data.columns
+                }
+            )
+            for distribution, data in parameters.items()
+        ]
+        combined = pd.concat(namespaced, axis=1)
+        return combined, parameter_columns
+
+    def _split_parameters(self, parameters: pd.DataFrame) -> dict[str, pd.DataFrame]:
+        """Split a consolidated lookup result back into per-distribution frames with their original columns."""
+        return {
+            distribution: parameters[
+                [self._namespaced_column(distribution, col) for col in columns]
+            ].rename(
+                columns={self._namespaced_column(distribution, col): col for col in columns}
+            )
+            for distribution, columns in self.parameter_columns.items()
+        }
+
     def register_exposure_ppf_pipeline(self, builder: Builder) -> None:
         """Register the ensemble exposure PPF pipeline.
 
@@ -247,7 +278,7 @@ class EnsembleDistribution(CausalFactorDistribution):
         builder
             Access point for utilizing framework interfaces during setup.
         """
-        tables = [self.distribution_weights_table, *self.parameters.values()]
+        tables = [self.distribution_weights_table, self.parameters_table]
         register_risk_affected_attribute_producer(
             builder=builder,
             name=self.exposure_ppf_pipeline,
@@ -283,6 +314,10 @@ class EnsembleDistribution(CausalFactorDistribution):
     def exposure_ppf(self, index: pd.Index) -> pd.Series:
         """Calculate exposure values from propensities using the ensemble.
 
+        Perform a single lookup against the consolidated parameter table, split
+        the result back into per-distribution parameters, and evaluate the
+        ensemble percent-point function.
+
         Parameters
         ----------
         index
@@ -296,13 +331,10 @@ class EnsembleDistribution(CausalFactorDistribution):
             index, [self.causal_factor_propensity, self.ensemble_propensity]
         )
         quantiles = pop[self.causal_factor_propensity]
-
         if not pop.empty:
             quantiles = clip(quantiles)
             weights = self.distribution_weights_table(quantiles.index)
-            parameters = {
-                name: param(quantiles.index) for name, param in self.parameters.items()
-            }
+            parameters = self._split_parameters(self.parameters_table(quantiles.index))
             x = rd.EnsembleDistribution(weights, parameters).ppf(
                 quantiles, pop[self.ensemble_propensity]
             )
@@ -621,17 +653,30 @@ class DichotomousDistribution(CausalFactorDistribution):
     Support optional rebinning of polytomous exposure data.
     """
 
+    @staticmethod
+    def get_exposed(causal_factor_type: str) -> str:
+        """The name of the exposed category for the given causal factor type."""
+        return "covered" if causal_factor_type == "intervention" else "exposed"
+
+    @staticmethod
+    def get_unexposed(causal_factor_type: str) -> str:
+        """The name of the unexposed category for the given causal factor type."""
+        return "uncovered" if causal_factor_type == "intervention" else "unexposed"
+
     @property
     def exposed(self) -> str:
         """The name of the exposed category."""
-        return "covered" if self.causal_factor.type == "intervention" else "exposed"
+        return self.get_exposed(self.causal_factor.type)
 
     @property
     def unexposed(self) -> str:
         """The name of the unexposed category."""
-        return "uncovered" if self.causal_factor.type == "intervention" else "unexposed"
+        return self.get_unexposed(self.causal_factor.type)
 
-    def rename_deprecated_categories(self, data: pd.DataFrame) -> pd.DataFrame:
+    @staticmethod
+    def rename_deprecated_categories(
+        causal_factor_type: str, data: pd.DataFrame
+    ) -> pd.DataFrame:
         """Rename deprecated cat1/cat2 parameter values to exposed/unexposed.
 
         If the data contains ``'cat1'`` in its ``'parameter'`` column, the
@@ -642,6 +687,8 @@ class DichotomousDistribution(CausalFactorDistribution):
 
         Parameters
         ----------
+        causal_factor_type
+            The type of the causal factor (e.g. ``"intervention"`` or ``"risk_factor"``).
         data
             A DataFrame with a ``'parameter'`` column.
 
@@ -652,17 +699,17 @@ class DichotomousDistribution(CausalFactorDistribution):
         if "cat1" not in data["parameter"].values:
             return data
 
-        if self.causal_factor.type != "intervention":
+        exposed = DichotomousDistribution.get_exposed(causal_factor_type)
+        unexposed = DichotomousDistribution.get_unexposed(causal_factor_type)
+        if causal_factor_type != "intervention":
             warnings.warn(
                 "Using 'cat1' and 'cat2' for dichotomous exposure is deprecated "
                 "and will be removed in a future release. Use "
-                f"'{self.exposed}' and '{self.unexposed}' instead.",
+                f"'{exposed}' and '{unexposed}' instead.",
                 FutureWarning,
                 stacklevel=3,
             )
-        data["parameter"] = data["parameter"].replace(
-            {"cat1": self.exposed, "cat2": self.unexposed}
-        )
+        data["parameter"] = data["parameter"].replace({"cat1": exposed, "cat2": unexposed})
         return data
 
     #####################
@@ -785,7 +832,9 @@ class DichotomousDistribution(CausalFactorDistribution):
         # rebin exposure categories
         self.validate_rebin_source(builder, exposure_data)
         rebin_exposed_categories = set(self.configuration["rebinned_exposed"])
-        exposure_data = self.rename_deprecated_categories(exposure_data)
+        exposure_data = self.rename_deprecated_categories(
+            self.causal_factor.type, exposure_data
+        )
         if rebin_exposed_categories:
             exposure_data = self._rebin_exposure_data(exposure_data, rebin_exposed_categories)
 

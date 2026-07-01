@@ -45,7 +45,7 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
-from vivarium.engine.framework.results.interface import PopulationFilter, ResultsInterface
+from vivarium.engine.framework.results.interface import ResultsInterface, _PopulationFilter
 from vivarium.engine.framework.results.manager import ResultsManager
 from vivarium.engine.framework.results.observation import AddingObservation, Observation
 from vivarium.engine.framework.results.observer import Observer
@@ -224,7 +224,7 @@ def test_add_observation_nop_stratifications(
     mgr.register_observation(
         observation_type=AddingObservation,
         name="name",
-        population_filter=PopulationFilter("is_alive == True"),
+        population_filter=_PopulationFilter("is_alive == True"),
         aggregator_sources=[],
         aggregator=lambda: None,
         requires_attributes=[],
@@ -564,7 +564,7 @@ def test_prepare_population(
     observations: list[Observation] = [
         AddingObservation(
             name=f"test_observation_{i}",
-            population_filter=PopulationFilter(),
+            population_filter=_PopulationFilter(),
             when=lifecycle_states.COLLECT_METRICS,
             requires_attributes=columns + values,
             results_formatter=lambda *_: pd.DataFrame(),
@@ -622,7 +622,7 @@ def test_prepare_population_all_untracked(
     mgr = prepare_population_sim._results
     observation1 = AddingObservation(
         name="familiar",
-        population_filter=PopulationFilter(include_untracked=True),  # allow untracked
+        population_filter=_PopulationFilter(include_untracked=True),  # allow untracked
         when=lifecycle_states.COLLECT_METRICS,
         requires_attributes=["familiar"],
         results_formatter=lambda *_: pd.DataFrame(),
@@ -631,7 +631,7 @@ def test_prepare_population_all_untracked(
     )
     observation2 = AddingObservation(
         name="house_points",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         when=lifecycle_states.COLLECT_METRICS,
         requires_attributes=["house_points"],
         results_formatter=lambda *_: pd.DataFrame(),
@@ -671,7 +671,7 @@ def test_prepare_population_all_untracked(
     observation3 = AddingObservation(
         # identical to observation1 exclude excluding untracked
         name="familiar",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         when=lifecycle_states.COLLECT_METRICS,
         requires_attributes=["familiar"],
         results_formatter=lambda *_: pd.DataFrame(),
@@ -700,7 +700,9 @@ def test_stratified_observation_results() -> None:
         .groupby(["familiar", "student_house"])
         .apply(len)
     )
-    expected = num_familiars.loc["cat"] ** 1.0
+    # The observer emits every house, including any with zero cats as 0.0, so reindex over
+    # all houses rather than letting the groupby drop empty ones.
+    expected = num_familiars.loc["cat"].reindex(list(STUDENT_HOUSES), fill_value=0) ** 1.0
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(
@@ -715,7 +717,7 @@ def test_stratified_observation_results() -> None:
         .groupby(["familiar", "student_house"])
         .apply(len)
     )
-    expected = num_familiars.loc["cat"] ** 2.0
+    expected = num_familiars.loc["cat"].reindex(list(STUDENT_HOUSES), fill_value=0) ** 2.0
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(

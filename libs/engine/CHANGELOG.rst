@@ -1,7 +1,41 @@
-**5.2.0 - TBD/TBD/26**
+**5.4.0 - TBD/TBD/26**
 
 - Add support for observations to specify priority for lifecycle events
 - Added priority attribute to `Event`
+
+**5.3.1 - 06/30/26**
+
+- Fix order-dependent randomness in results test fixtures
+
+**5.3.0 - 06/30/26**
+
+- Feature: ``LookupTable`` accepts ``DataFrame``/``Series`` with lookup attributes on the row index.
+- API: ``LookupTable.value_columns`` is now a ``pandas.Index`` (was ``list[str]``).
+- API: ``Interpolation.__init__`` infers parameter columns from data; takes ``value_columns``.
+- Raise: ``value_columns`` alongside an indexed ``DataFrame``/``Series`` is now an error.
+- Deprecation: passing a flat ``DataFrame`` to ``build_table``/``set_data`` is deprecated.
+- Deprecation: passing a ``Mapping`` to ``build_table``/``set_data`` is deprecated.
+
+**5.2.1 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
+**5.2.0 - 06/29/26**
+
+- Support a callable population filter (or ``(query, callable)`` tuple) for all observations
+
+**5.1.7 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
+**5.1.6 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
+**5.1.5 - 06/12/26**
+
+- Remove now-unnecessary type: ignore for matplotlib's FuncAnimation call
 
 **5.1.4 - 06/11/26**
 

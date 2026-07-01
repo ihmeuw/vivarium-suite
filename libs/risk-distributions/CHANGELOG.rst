@@ -1,3 +1,16 @@
+**3.1.4 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
+**3.1.3 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
+**3.1.2 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **3.1.1 - 06/11/26**
 
 - Include py.typed marker as package data

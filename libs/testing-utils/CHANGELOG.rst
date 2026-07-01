@@ -1,3 +1,20 @@
+**0.7.1 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
+**0.7.0 - 06/29/26**
+
+- Update ``-n auto`` to pick a resource-aware worker count
+
+**0.6.2 - 06/22/26**
+
+- Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``
+
+**0.6.1 - 06/17/26**
+
+- Switch Jenkins ``vivarium_build_utils`` shared library loading from the ``epic/monorepo``
+  branch to the version returned by ``get_vbu_version()``
+
 **0.6.0 - 06/11/26**
 
 Initial release from the vivarium-suite monorepo; the standalone ``ihmeuw/vivarium_testing_utils``

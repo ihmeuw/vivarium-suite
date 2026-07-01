@@ -26,7 +26,7 @@ from vivarium.engine.types import ScalarMapper, VectorMapper
 
 if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
-    from vivarium.engine.framework.results.interface import PopulationFilter
+    from vivarium.engine.framework.results.interface import _PopulationFilter
 
 
 class ResultsManager(Manager):
@@ -266,7 +266,7 @@ class ResultsManager(Manager):
         self,
         observation_type: type[Observation],
         name: str,
-        population_filter: PopulationFilter,
+        population_filter: _PopulationFilter,
         when: str,
         priority: int = DEFAULT_EVENT_PRIORITY,
         requires_attributes: list[str] = [],

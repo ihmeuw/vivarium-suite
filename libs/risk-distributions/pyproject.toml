@@ -12,7 +12,7 @@ authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
     "vivarium-dependencies[pandas,numpy,scipy]",
-    "vivarium-build-utils>=3.0.2,<4.0.0",
+    "vivarium-build-utils>=4.0.0,<5.0.0",
 ]
 
 [project.optional-dependencies]

@@ -12,7 +12,7 @@
 // Load the full vivarium_build_utils library at the expected version
 // Note that vivarium-suite is not a python package and so we do not attempt to
 // determine a non-main specific version of vivarium_build_utils.
-library("vivarium_build_utils@epic/monorepo")
+library("vivarium_build_utils@main")
 
 pipeline {
     agent any
@@ -23,11 +23,9 @@ pipeline {
 
     stages {
         stage('Multi-Multibranch Pipeline') {
-            // Only provision Jenkins items from main builds. Skip on PR builds (where
-            // env.CHANGE_ID is set) to avoid race conditions between pr-head/pr-merge
-            // sub-jobs both trying to create or update the same items.
+            // Only provision Jenkins items from main builds.
             when {
-                not { changeRequest() }
+                branch 'main'
             }
             steps {
                 script {

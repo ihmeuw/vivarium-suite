@@ -113,8 +113,14 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install vivarium_build_utils
-        # FIXME: Update to main once epic/monorepo is merged
-        run: uv pip install --system "vivarium_build_utils @ git+https://github.com/ihmeuw/vivarium_build_utils.git@epic/monorepo"
+      # For build-utils, install from local checkout since the latest PyPI
+      # release is by definition stale relative to this PR
+        run: |
+          if [ "${{ matrix.library }}" = "build-utils" ]; then
+            uv pip install --system -e libs/build-utils
+          else
+            uv pip install --system vivarium-build-utils
+          fi
 
       - name: Install ${{ matrix.library }}
         # UV_FLAGS=--system installs into the runner's system Python (no venv).
@@ -128,12 +134,7 @@ jobs:
         run: cd libs/${{ matrix.library }} && make lint
 
       - name: Mypy ${{ matrix.library }}
-        run: |
-          if find "libs/${{ matrix.library }}/src" -name "py.typed" | grep -q .; then
-            cd libs/${{ matrix.library }} && make mypy
-          else
-            echo "Untyped package, skipping mypy"
-          fi
+        run: cd libs/${{ matrix.library }} && make mypy-if-typed
 
       - name: Test ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make test-all
