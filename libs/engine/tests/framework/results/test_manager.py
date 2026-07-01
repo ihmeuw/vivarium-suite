@@ -694,7 +694,9 @@ def test_stratified_observation_results() -> None:
         .groupby(["familiar", "student_house"])
         .apply(len)
     )
-    expected = num_familiars.loc["cat"] ** 1.0
+    # The observer emits every house, including any with zero cats as 0.0, so reindex over
+    # all houses rather than letting the groupby drop empty ones.
+    expected = num_familiars.loc["cat"].reindex(list(STUDENT_HOUSES), fill_value=0) ** 1.0
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(
@@ -709,7 +711,7 @@ def test_stratified_observation_results() -> None:
         .groupby(["familiar", "student_house"])
         .apply(len)
     )
-    expected = num_familiars.loc["cat"] ** 2.0
+    expected = num_familiars.loc["cat"].reindex(list(STUDENT_HOUSES), fill_value=0) ** 2.0
     expected.name = "value"
     expected = expected.sort_values().reset_index()
     expected["student_house"] = expected["student_house"].astype(

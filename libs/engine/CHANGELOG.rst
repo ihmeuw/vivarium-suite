@@ -1,3 +1,7 @@
+**5.3.1 - 06/30/26**
+
+- Fix order-dependent randomness in results test fixtures
+
 **5.3.0 - 06/30/26**
 
 - Feature: ``LookupTable`` accepts ``DataFrame``/``Series`` with lookup attributes on the row index.
