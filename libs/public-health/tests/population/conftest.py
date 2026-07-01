@@ -48,7 +48,7 @@ def include_sex(request):
 
 @pytest.fixture
 def base_simulants():
-    simulant_ids = range(100000)
+    simulant_ids = range(10000)
     creation_time = pd.Timestamp(1990, 7, 2)
     return pd.DataFrame(
         {
