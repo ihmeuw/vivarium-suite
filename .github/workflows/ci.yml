@@ -148,6 +148,14 @@ jobs:
             echo "Skipping docs build (only runs on 3.11)"
           fi
 
+      - name: Test docs for ${{ matrix.library }}
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.11" ]; then
+            cd libs/${{ matrix.library }} && make test-docs
+          else
+            echo "Skipping doctests (only runs on 3.11)"
+          fi
+
   ci-status:
     name: CI Status
     needs: [detect-changes, build-and-test]
