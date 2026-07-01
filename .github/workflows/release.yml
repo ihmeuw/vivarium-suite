@@ -163,16 +163,11 @@ jobs:
 
       - name: Create and push tag
         env:
-          GH_TOKEN: ${{ github.token }}
+          TAG_PREFIX: vivarium-${{ matrix.library }}-
         run: |
-          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if ! git tag -l "$TAG" | grep -q .; then
-            git tag "$TAG"
-            git push origin "$TAG"
-          fi
+          cd libs/${{ matrix.library }} && make tag-version
 
       - name: Validate tag
         # `make validate-tag` reads RELEASE_TAG as the tag, falling back to
