@@ -190,9 +190,7 @@ jobs:
         # IHME_PYPI= disables the artifactory extra-index since the runner can't
         # reach it (firewalled). Libs that need artifactory-only packages
         # are tested/released via Jenkins.
-        # --no-cache: deploy builds install cache-free so a from-source wheel build
-        # failure (e.g. an old numpy/pandas that no longer builds) surfaces here
-        # rather than being masked by a cached wheel (see MIC-6854).
+        # Only use pip cache on push/PR, not on release
         run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS='--system --no-cache' IHME_PYPI=
 
       - name: Run tests
