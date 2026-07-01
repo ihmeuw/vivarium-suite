@@ -1,3 +1,7 @@
+**4.2.3 - 07/01/26**
+
+- Add check for already-existing tag prior to creating a new one in ``make tag-version``
+
 **4.2.2 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
