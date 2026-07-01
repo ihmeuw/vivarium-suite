@@ -1,6 +1,10 @@
+**4.2.8 - 06/30/26**
+
+- Isolate cluster-tools mkdir test with tmp_path
+
 **4.2.7 - 06/30/26**
 
-- Isolate the mkdir permissions test in a per-test directory to be compatible with parallel test execution
+- Add support for 'make build-env' without access to the IHME Artifactory.
 
 **4.2.6 - 06/23/26**
 
