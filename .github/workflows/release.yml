@@ -156,9 +156,9 @@ jobs:
         # release is by definition stale relative to this PR
         run: |
           if [ "${{ matrix.library }}" = "build-utils" ]; then
-            uv pip install --system -e libs/build-utils
+            uv pip install --system --no-cache -e libs/build-utils
           else
-            uv pip install --system vivarium-build-utils
+            uv pip install --system --no-cache vivarium-build-utils
           fi
 
       - name: Validate tag
@@ -189,7 +189,8 @@ jobs:
         # IHME_PYPI= disables the artifactory extra-index since the runner can't
         # reach it (firewalled). Libs that need artifactory-only packages
         # are tested/released via Jenkins.
-        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=
+        # Only use pip cache on push/PR, not on release
+        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS='--system --no-cache' IHME_PYPI=
 
       - name: Run tests
         run: cd libs/${{ matrix.library }} && make test-all
