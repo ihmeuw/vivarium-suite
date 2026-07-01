@@ -1,3 +1,7 @@
+**4.2.3 - 07/01/26**
+
+- Use the pip cache only on push/PR (feature-branch) builds; main, nightly (cron), and deploy builds install cache-free so a from-source wheel build failure isn't masked by a cached wheel
+
 **4.2.2 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
