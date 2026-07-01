@@ -39,32 +39,35 @@ def _run_tag_version(
     )
 
 
-@pytest.fixture
-def repo_with_remote(tmp_path: Path) -> Path:
-    remote = tmp_path / "remote.git"
-    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git(repo, "init")
-    _git(repo, "config", "user.email", "test@example.com")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "remote", "add", "origin", str(remote))
-    _git(repo, "commit", "--allow-empty", "-m", "init")
-    return repo
+class TestTagVersion:
+    @pytest.fixture
+    def repo_with_remote(self, tmp_path: Path) -> Path:
+        remote = tmp_path / "remote.git"
+        subprocess.run(
+            ["git", "init", "--bare", str(remote)], check=True, capture_output=True
+        )
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git(repo, "init")
+        _git(repo, "config", "user.email", "test@example.com")
+        _git(repo, "config", "user.name", "Test")
+        _git(repo, "remote", "add", "origin", str(remote))
+        _git(repo, "commit", "--allow-empty", "-m", "init")
+        return repo
 
+    def test_creates_and_pushes_single_tag(self, repo_with_remote: Path) -> None:
+        result = _run_tag_version(repo_with_remote, prefix="vivarium-build-utils-")
+        assert result.returncode == 0, result.stderr
+        assert _git(repo_with_remote, "tag", "--list").split() == [
+            "vivarium-build-utils-v1.2.3"
+        ]
+        remote_tags = _git(repo_with_remote, "ls-remote", "--tags", "origin")
+        assert "vivarium-build-utils-v1.2.3" in remote_tags
 
-def test_tag_version_creates_and_pushes_single_tag(repo_with_remote: Path) -> None:
-    result = _run_tag_version(repo_with_remote, prefix="vivarium-build-utils-")
-    assert result.returncode == 0, result.stderr
-    assert _git(repo_with_remote, "tag", "--list").split() == ["vivarium-build-utils-v1.2.3"]
-    remote_tags = _git(repo_with_remote, "ls-remote", "--tags", "origin")
-    assert "vivarium-build-utils-v1.2.3" in remote_tags
-
-
-def test_tag_version_is_idempotent(repo_with_remote: Path) -> None:
-    first = _run_tag_version(repo_with_remote)
-    assert first.returncode == 0, first.stderr
-    second = _run_tag_version(repo_with_remote)
-    assert second.returncode == 0, second.stderr
-    assert "already exists" in second.stdout
-    assert _git(repo_with_remote, "tag", "--list").split() == ["v1.2.3"]
+    def test_is_idempotent(self, repo_with_remote: Path) -> None:
+        first = _run_tag_version(repo_with_remote)
+        assert first.returncode == 0, first.stderr
+        second = _run_tag_version(repo_with_remote)
+        assert second.returncode == 0, second.stderr
+        assert "already exists" in second.stdout
+        assert _git(repo_with_remote, "tag", "--list").split() == ["v1.2.3"]
