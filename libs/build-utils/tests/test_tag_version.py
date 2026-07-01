@@ -55,14 +55,19 @@ class TestTagVersion:
         _git(repo, "commit", "--allow-empty", "-m", "init")
         return repo
 
-    def test_creates_and_pushes_single_tag(self, repo_with_remote: Path) -> None:
+    def test_pushes_only_the_release_tag(self, repo_with_remote: Path) -> None:
+        # A stray local tag that must NOT be pushed. Without it this test can't
+        # tell `git push origin <tag>` apart from the old `git push --tags`,
+        # since with a single tag both push the same thing.
+        _git(repo_with_remote, "tag", "stray-local-v9.9.9")
         result = _run_tag_version(repo_with_remote, prefix="vivarium-build-utils-")
         assert result.returncode == 0, result.stderr
-        assert _git(repo_with_remote, "tag", "--list").split() == [
-            "vivarium-build-utils-v1.2.3"
-        ]
+        assert (
+            "vivarium-build-utils-v1.2.3" in _git(repo_with_remote, "tag", "--list").split()
+        )
         remote_tags = _git(repo_with_remote, "ls-remote", "--tags", "origin")
         assert "vivarium-build-utils-v1.2.3" in remote_tags
+        assert "stray-local-v9.9.9" not in remote_tags
 
     def test_is_idempotent(self, repo_with_remote: Path) -> None:
         first = _run_tag_version(repo_with_remote)
