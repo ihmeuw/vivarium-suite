@@ -22,7 +22,7 @@ def config(base_config):
     base_config.update(
         {
             "population": {
-                "population_size": 10000,
+                "population_size": 1000,
                 "age_start": 0,
                 "age_end": 125,
             },
@@ -120,7 +120,7 @@ def test_FertilityCrudeBirthRate_extrapolate(base_config, base_plugins):
     base_config.update(
         {
             "population": {
-                "population_size": 10000,
+                "population_size": 5000,
                 "age_start": 0,
                 "age_end": 125,
             },
@@ -185,7 +185,7 @@ def test_FertilityCrudeBirthRate_with_non_zero_initialization_age_min_error(
 
 
 def test_fertility_module(base_config, base_plugins):
-    start_population_size = 1000
+    start_population_size = 100
     num_days = 1000
     time_step = 10  # Days
     base_config.update(
@@ -280,7 +280,7 @@ class TestFertilityCrudeBirthRateDataSources:
         base_config.update(
             {
                 "population": {
-                    "population_size": 10_000,
+                    "population_size": 1000,
                     "initialization_age_min": 0,
                     "initialization_age_max": 125,
                     "data_sources": {

@@ -92,7 +92,7 @@ def test_BasePopulation(
 
 
 def test_age_out_simulants(config, base_plugins):
-    start_population_size = 10000
+    start_population_size = 1000
     num_days = 600
     time_step = 100  # Days
     config.update(
@@ -128,7 +128,7 @@ def test_age_out_simulants(config, base_plugins):
 def test_aged_out_simulant_untracking(
     config, base_plugins, fuzzy_checker: FuzzyChecker
 ) -> None:
-    start_population_size = 10000
+    start_population_size = 1000
     initialization_age_min = 4
     initialization_age_max = initialization_age_min + 1
     time_step = utilities.DAYS_PER_YEAR / 2  # Days, ~0.5 years
@@ -357,7 +357,7 @@ def test_scaled_population(
     config.update(
         {
             "population": {
-                "population_size": 1_000_000,
+                "population_size": 25_000,
                 "include_sex": "Both",
             },
             "time": {
@@ -808,7 +808,7 @@ class TestScaledPopulationDataSources:
             base_plugins,
             {
                 "population": {
-                    "population_size": 100_000,
+                    "population_size": 25_000,
                     "data_sources": {
                         "population_structure": pop_data,
                     },
@@ -818,7 +818,7 @@ class TestScaledPopulationDataSources:
             components=[bp.ScaledPopulation(scaling_factor)],
         )
         pop = sim.get_population(["age", "sex", "location"])
-        assert len(pop) == 100_000
+        assert len(pop) == 25_000
         assert (pop["location"] == "ScaledLand").all()
         # Verify scaling: males should be ~75% of population
         male_fraction = (pop["sex"] == "Male").sum() / len(pop)

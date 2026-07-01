@@ -1,3 +1,7 @@
+**6.3.2 - 07/01/26**
+
+- Reduce population size in test suites to improve runtime
+
 **6.3.1 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
