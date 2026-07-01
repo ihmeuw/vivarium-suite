@@ -150,6 +150,7 @@ jobs:
 
       - name: Test docs for ${{ matrix.library }}
         run: |
+          # Run doctests on the same canonical 3.11 build as the docs build above
           if [ "${{ matrix.python-version }}" = "3.11" ]; then
             cd libs/${{ matrix.library }} && make test-docs
           else

@@ -1,6 +1,8 @@
 **4.2.3 - 07/01/26**
 
-- Add check for already-existing tag prior to creating a new one in ``make tag-version``
+- Make ``make tag-version`` idempotent: skip if the tag already exists
+- Push only the newly created tag rather than all local tags (``git push origin <tag>`` instead of ``git push --tags``)
+- Change the tag message from "Tag automatically generated from Jenkins." to "Release <tag>"
 
 **4.2.2 - 06/30/26**
 

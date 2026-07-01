@@ -167,7 +167,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          cd libs/${{ matrix.library }} && make tag-version
+          # Pass matrix.version explicitly so the tag uses the same version the
+          # detect job parsed, rather than re-deriving it from CHANGELOG.rst.
+          cd libs/${{ matrix.library }} && make tag-version PACKAGE_VERSION=${{ matrix.version }}
 
       - name: Validate tag
         # `make validate-tag` reads RELEASE_TAG as the tag, falling back to
