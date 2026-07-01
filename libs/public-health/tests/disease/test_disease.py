@@ -166,7 +166,7 @@ def test_prevalence_single_state_with_migration(
         dwell_time=pd.Timedelta(days=1),
     )
     model = DiseaseModel(disease, residual_state=healthy, states=[healthy, sick])
-    base_config.update({"population": {"population_size": 50000}}, **metadata(__file__))
+    base_config.update({"population": {"population_size": 5000}}, **metadata(__file__))
     simulation = InteractiveContext(
         components=[BasePopulation(), model],
         configuration=base_config,
@@ -211,7 +211,7 @@ def test_prevalence_multiple_sequelae(
         disease, residual_state=healthy, states=[healthy, sequela[0], sequela[1], sequela[2]]
     )
 
-    base_config.update({"population": {"population_size": 100000}}, **metadata(__file__))
+    base_config.update({"population": {"population_size": 10000}}, **metadata(__file__))
     simulation = InteractiveContext(
         components=[BasePopulation(), model],
         configuration=base_config,

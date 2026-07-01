@@ -1,10 +1,20 @@
-**4.3.0 - 07/01/26**
+**4.3.0 - 07/02/26**
 
 - Add ``vivarium.build_utils.dependency_graph`` package for cross-library handling
 - Add ``make install CHANGED_LIBS="<lib> ..."`` to install modified, reachable,
   version-compatible upstream libraries editably at their pending versions
-- Add runtime dependencies ``packaging`` and ``tomli`` (the latter only on
-  Python < 3.11)
+- Add runtime dependencies ``packaging`` and ``tomli`` (the latter only on Python < 3.11)
+
+**4.2.4 - 07/01/26**
+
+- Make ``make tag-version`` idempotent and skip if the tag already exists
+- Push only the newly created tag rather than all local tags
+- Add tests against 'make tag-version'
+
+**4.2.3 - 07/01/26**
+
+- Use the pip cache only on push/PR (feature-branch) builds; main, nightly (cron), and deploy
+  builds install cache-free so a from-source wheel build failure isn't masked by a cached wheel
 
 **4.2.2 - 06/30/26**
 

@@ -166,49 +166,49 @@ jobs:
           fi
 
       - name: Install vivarium_build_utils
-        # Install early so `make validate-tag` is available. Editable from the
-        # in-tree checkout: the latest PyPI vbu is by definition stale relative
-        # to this push, and vbu may itself be in the release batch.
-        run: uv pip install --system -e libs/build-utils
-
-      - name: Create and push tag
-        env:
-          GH_TOKEN: ${{ github.token }}
+        # Editable from the in-tree checkout so the release ordering is computed
+        # by THIS push's dependency graph/resolver (vbu may itself be in the batch)
         run: |
-          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if ! git tag -l "$TAG" | grep -q .; then
-            git tag "$TAG"
-            git push origin "$TAG"
-          fi
+          python -m pip install uv
+          uv pip install --system -e libs/build-utils
 
       - name: Validate tag
+        # Runs before the tag is created so a bad version never reaches origin.
         # `make validate-tag` reads RELEASE_TAG as the tag, falling back to
         # GITHUB_REF_NAME. We can't override GITHUB_REF_NAME via a step env
         # block (GitHub Actions reserves the GITHUB_* namespace), so we set
         # RELEASE_TAG explicitly. TAG_PREFIX tells the script to strip the
         # lib-prefix before semver parsing and to scope the previous-tag
-        # lookup to this lib's tags.
+        # lookup to this lib's tags. Validation is independent of whether the
+        # tag exists yet (it injects RELEASE_VERSION into the bump check).
         env:
           RELEASE_TAG: vivarium-${{ matrix.library }}-v${{ matrix.version }}
           TAG_PREFIX: vivarium-${{ matrix.library }}-
         run: cd libs/${{ matrix.library }} && make validate-tag
 
+      - name: Create and push tag
+        env:
+          TAG_PREFIX: vivarium-${{ matrix.library }}-
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Pass matrix.version explicitly so the tag uses the same version the
+          # detect job parsed, rather than re-deriving it from CHANGELOG.rst.
+          cd libs/${{ matrix.library }} && make tag-version PACKAGE_VERSION=${{ matrix.version }}
+
       - name: Wait for upstream releases
         run: |
           python - <<'PY'
           import json, subprocess, sys, time
-
+  
           TIMEOUT_SECONDS = 300  # per upstream; PyPI propagation can lag a publish by a minute+
           POLL_SECONDS = 15
-
+  
           wait_for = json.loads(r'''${{ toJson(matrix.wait_for) }}''')
           if not wait_for:
               print("No in-batch upstreams to wait for.")
               sys.exit(0)
-
+  
           for upstream in wait_for:
               spec = f"{upstream['dist']}=={upstream['version']}"
               print(f"Waiting for {spec} on PyPI...")
@@ -233,7 +233,8 @@ jobs:
         # runner can't reach it (firewalled); libs that need packages hosted there
         # are tested/released via Jenkins. Upstreams are guaranteed installable
         # by the wait gate above, so this resolves them from PyPI normally.
-        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS=--system IHME_PYPI=
+        # Only use pip cache on push/PR, not on release
+        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS='--system --no-cache' IHME_PYPI=
 
       - name: Run tests
         run: cd libs/${{ matrix.library }} && make test-all
