@@ -1,1 +1,2 @@
-import vivarium_compat._compat; vivarium_compat._compat.install_compat_finder()
+# vivarium-compat is retired (MIC-7100). This .pth file is intentionally
+# empty so no import hook is installed at interpreter startup.

@@ -1,3 +1,21 @@
+**0.7.0 - 07/02/26**
+
+**Final release.** vivarium-compat is retired.
+
+- Gut the import-redirect hook: ``vivarium_compat.pth`` is now a comment-only no-op
+  and ``vivarium_compat/_compat.py`` has been removed. Installing this version of
+  vivarium-compat does *nothing* at Python startup.
+- Rewrite ``vivarium_compat/__init__.py`` and ``README.md`` as deprecation banners
+  pointing users at the new ``vivarium.<subpkg>`` import paths
+- Delete the package's own tests
+
+Migrate any remaining ``import <old_name>`` statements in your code to
+``import vivarium.<new_name>``. See MIC-7100 for the broader context.
+This is the last release from this package. The source directory
+``libs/compat/`` will be removed from the vivarium-suite monorepo
+immediately after this release lands on PyPI. Please remove
+``vivarium-compat`` from your project dependencies.
+
 **0.6.4 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
