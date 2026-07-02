@@ -1,17 +1,13 @@
-**1.0.0 - 07/02/26**
+**0.7.0 - 07/02/26**
 
 **Final release.** vivarium-compat is retired.
 
-- Gut the import-redirect hook: ``vivarium_compat.pth`` is now a
-  comment-only no-op and ``vivarium_compat/_compat.py`` has been
-  removed. Installing this version of vivarium-compat does *nothing*
-  at Python startup - no ``sys.meta_path`` entries are added, no
-  legacy imports get redirected.
-- Rewrite ``vivarium_compat/__init__.py`` and ``README.md`` as
-  deprecation banners pointing users at the new ``vivarium.<subpkg>``
-  import paths.
-- Delete the package's own tests (``libs/compat/tests/``): they
-  validated behavior that no longer exists.
+- Gut the import-redirect hook: ``vivarium_compat.pth`` is now a comment-only no-op
+  and ``vivarium_compat/_compat.py`` has been removed. Installing this version of
+  vivarium-compat does *nothing* at Python startup.
+- Rewrite ``vivarium_compat/__init__.py`` and ``README.md`` as deprecation banners
+  pointing users at the new ``vivarium.<subpkg>`` import paths
+- Delete the package's own tests
 
 Migrate any remaining ``import <old_name>`` statements in your code to
 ``import vivarium.<new_name>``. See MIC-7100 for the broader context.

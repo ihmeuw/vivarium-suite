@@ -1,12 +1,12 @@
-# vivarium-compat (retired)
+# vivarium-compat (RETIRED)
 
-> **This package is retired as of version 1.0.0.** It no longer does
-> anything at runtime; the `.pth` file is a comment-only no-op and the
-> import-redirect hook has been deleted.
+> **This package is retired as of version 0.7.0.** It no longer does anything at
+> runtime; the `.pth` file is a comment-only no-op and the import-redirect hook
+> has been deleted.
 >
-> If you have `vivarium-compat` in your project dependencies, remove
-> it. If your code still relies on the old top-level import paths this
-> package used to redirect, migrate them:
+> If you have `vivarium-compat` in your project dependencies, remove it. If your 
+> code still relies on the old top-level import paths this package used to redirect,
+> migrate them:
 >
 > | Old import | New import |
 > |---|---|
@@ -15,10 +15,8 @@
 > | `import gbd_mapping` | `import vivarium.gbd_mapping` |
 > | `import gbd_mapping_generator` | `import vivarium.gbd_mapping_generator` |
 >
-> See [MIC-7100](https://jira.ihme.washington.edu/browse/MIC-7100) for
-> context. The source directory `libs/compat/` will be removed from the
-> vivarium-suite monorepo shortly after this final release lands on
-> PyPI.
+> The source directory `libs/compat/` will be removed from the vivarium-suite monorepo
+> shortly after this final release lands on PyPI.
 
 ## History
 
