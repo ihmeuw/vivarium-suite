@@ -12,18 +12,6 @@ from vivarium_compat._compat import (
 )
 
 
-@pytest.fixture(autouse=True)
-def restore_import_state():
-    """Snapshot and restore sys.meta_path and sys.modules after each test."""
-    saved_meta_path = sys.meta_path[:]
-    saved_modules = set(sys.modules.keys())
-    yield
-    sys.meta_path[:] = saved_meta_path
-    for key in list(sys.modules.keys()):
-        if key not in saved_modules:
-            del sys.modules[key]
-
-
 @pytest.fixture
 def patched_redirects(monkeypatch):
     """Patch _REDIRECTS with a stdlib target and reinstall the finder."""
