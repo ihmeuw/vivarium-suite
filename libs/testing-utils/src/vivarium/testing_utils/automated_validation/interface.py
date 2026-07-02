@@ -44,7 +44,7 @@ from vivarium.testing_utils.automated_validation.data_transformation.utils impor
 )
 from vivarium.testing_utils.automated_validation.results import VerificationResults
 from vivarium.testing_utils.automated_validation.visualization import plot_utils
-from vivarium.testing_utils.fuzzy_checker import TestResult
+from vivarium.testing_utils.fuzzy_checker import ProportionTestResult
 
 
 class ValidationContext:
@@ -750,7 +750,7 @@ class ValidationContext:
                     continue
 
                 # Collect all TestResults for this comparison
-                all_results: list[TestResult] = [overall]
+                all_results: list[ProportionTestResult] = [overall]
                 if isinstance(stratified, dict):
                     for group in stratified.values():
                         for test_result in group.values():
@@ -760,7 +760,7 @@ class ValidationContext:
                 children_map, failing_desc_map = self._build_lattice(all_results)
 
                 # Run the lattice drill-down starting from overall
-                displayed: list[TestResult] = []
+                displayed: list[ProportionTestResult] = []
                 self._process_lattice_node(overall, children_map, failing_desc_map, displayed)
                 all_filtered.extend(r.to_dict() for r in displayed)
 
@@ -770,8 +770,8 @@ class ValidationContext:
 
     @staticmethod
     def _build_lattice(
-        all_results: list[TestResult],
-    ) -> tuple[dict[int, list[TestResult]], dict[int, set[int]]]:
+        all_results: list[ProportionTestResult],
+    ) -> tuple[dict[int, list[ProportionTestResult]], dict[int, set[int]]]:
         """Build the lattice adjacency list and failing-descendant index.
 
         Returns
@@ -783,7 +783,7 @@ class ValidationContext:
             Maps each node's id to the set of ids of all strict descendants
             that reject the null.
         """
-        children: dict[int, list[TestResult]] = {id(r): [] for r in all_results}
+        children: dict[int, list[ProportionTestResult]] = {id(r): [] for r in all_results}
         failing_descendants: dict[int, set[int]] = {id(r): set() for r in all_results}
 
         for parent in all_results:
@@ -816,10 +816,10 @@ class ValidationContext:
 
     def _process_lattice_node(
         self,
-        node: TestResult,
-        children_map: dict[int, list[TestResult]],
+        node: ProportionTestResult,
+        children_map: dict[int, list[ProportionTestResult]],
         failing_desc_map: dict[int, set[int]],
-        displayed: list[TestResult],
+        displayed: list[ProportionTestResult],
     ) -> None:
         """Process a single node in the lattice drill-down algorithm.
 

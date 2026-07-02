@@ -20,7 +20,7 @@ from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_
 
 
 @dataclass
-class TestResult:
+class ProportionTestResult:
 
     """Class to store metadata for individual tests run by FuzzyChecker."""
 
@@ -88,6 +88,127 @@ class TestResult:
             results_dict["index_info"] = self.index_info
         return results_dict
 
+@dataclass
+class TestResult:
+    """Base class for storing metadata for tests run by FuzzyChecker."""
+
+    name: str
+    """Name of the test being calculated."""
+    name_additional: str
+    """Additional name for test, used for when the same test is calculated multiple times."""
+    target_lower_bound: float
+    """Lower bound of the target range."""
+    target_upper_bound: float
+    """Upper bound of the target range."""
+    bayes_factor: float
+    """Calculated Bayes factor from the test."""
+    reject_null: bool
+    """Whether the null hypothesis was rejected."""
+    index_info: dict[str, Any] | None = None
+    """Index name mapping for name_additional attribute."""
+    confidence: str = "Conclusive"
+    """Whether the test result is conclusive or inconclusive based on sample size and Bayes factor."""
+    lower_bound_bayes_factor: float | None = None
+    """Bayes factor at lower bound, used to check if sample size is too small for lower bound detection."""
+    upper_bound_bayes_factor: float | None = None
+    """Bayes factor at upper bound, used to check if sample size is too small for upper bound detection."""
+
+
+@dataclass
+class ProportionTestResult(TestResult):
+
+    """Class to store metadata for proportion tests run by FuzzyChecker."""
+
+    observed_proportion: float
+    """The observed proportion of a specific event happening."""
+    observed_numerator: int
+    """Observed counts of the event happening."""
+    observed_denominator: int
+    """Total counts of opportunities for the event to happen."""
+    bug_issue_distribution: tuple[float, float]
+    """The bug/issue distribution used in the test."""
+    no_bug_issue_distribution: rv_discrete_frozen
+    """The no-bug/issue distribution used in the test."""
+
+    @property
+    def comparison_to_target(self) -> str:
+        """Describe whether the observed proportion is below, above, or aligned with target."""
+        if not self.reject_null:
+            return "No significant difference"
+
+        if self.observed_proportion < self.target_lower_bound:
+            return "Underestimated"
+
+        if self.observed_proportion > self.target_upper_bound:
+            return "Overestimated"
+
+        return "No significant difference"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary of the main metadata for this TestResult, including index info if present."""
+        results_dict = {
+            "name": self.name,
+            "name_additional": self.name_additional,
+            "observed_proportion": self.observed_proportion,
+            "observed_numerator": self.observed_numerator,
+            "observed_denominator": self.observed_denominator,
+            "target_lower_bound": self.target_lower_bound,
+            "target_upper_bound": self.target_upper_bound,
+            "bayes_factor": self.bayes_factor,
+            "reject_null": self.reject_null,
+            "comparison_to_target": self.comparison_to_target,
+            "confidence": self.confidence,
+        }
+        if self.index_info is not None:
+            results_dict["index_info"] = self.index_info
+        return results_dict
+
+
+@dataclass
+class MeanTestResult(TestResult):
+
+    """Class to store metadata for mean tests run by FuzzyChecker."""
+
+    observed_mean: float
+    """The observed mean of the continuous values."""
+    observed_std: float
+    """The observed standard deviation of the continuous values."""
+    observed_count: int
+    """The count of observations."""
+
+    @property
+    def comparison_to_target(self) -> str:
+        """Describe whether the observed mean is below, above, or aligned with target."""
+        if not self.reject_null:
+            return "No significant difference"
+
+        if self.observed_mean < self.target_lower_bound:
+            return "Underestimated"
+
+        if self.observed_mean > self.target_upper_bound:
+            return "Overestimated"
+
+        return "No significant difference"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary of the main metadata for this TestResult, including index info if present."""
+        results_dict = {
+            "name": self.name,
+            "name_additional": self.name_additional,
+            "observed_mean": self.observed_mean,
+            "observed_std": self.observed_std,
+            "observed_count": self.observed_count,
+            "target_lower_bound": self.target_lower_bound,
+            "target_upper_bound": self.target_upper_bound,
+            "bayes_factor": self.bayes_factor,
+            "reject_null": self.reject_null,
+            "comparison_to_target": self.comparison_to_target,
+            "confidence": self.confidence,
+        }
+        if self.index_info is not None:
+            results_dict["index_info"] = self.index_info
+        return results_dict
+
 
 class FuzzyChecker:
     """
@@ -122,7 +243,8 @@ class FuzzyChecker:
     """
 
     def __init__(self) -> None:
-        self.proportion_test_diagnostics: list[TestResult] = []
+        self.proportion_test_diagnostics: list[ProportionTestResult] = []
+        self.mean_test_diagnostics: list[MeanTestResult] = []
 
     def fuzzy_assert_proportion(
         self,
@@ -236,6 +358,242 @@ class FuzzyChecker:
 
         self.proportion_test_diagnostics.append(test_proportion)
 
+    def fuzzy_assert_mean(
+        self,
+        target_mean: tuple[float, float] | float,
+        observed_values: Collection[float] | None = None,
+        observed_zeroth_moment: int | None = None,
+        observed_first_moment: float | None = None,
+        observed_second_moment: float | None = None,
+        fail_bayes_factor_cutoff: float = 100.0,
+        inconclusive_bayes_factor_cutoff: float = 0.1,
+        bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
+        alpha_prior: float = 2.0,
+        beta_prior: float | None = None,
+        name: str = "",
+        name_additional: str = "",
+    ) -> None:
+        """
+        Assert that an observed set of continuous values came from a target distribution with a given mean.
+
+        This method performs a Bayesian hypothesis test comparing how likely the
+        observed data is under two scenarios -- one where the simulation is working
+        as intended (target mean) and one where something is wrong (bug/issue mean).
+        It raises an AssertionError if the test decisively favors the "bug/issue"
+        scenario and warns if the test is not conclusive.
+
+        For more details, see:
+        https://vivarium-research.readthedocs.io/en/latest/model_design/vivarium_features/automated_v_and_v/index.html#proportions-and-rates
+
+        :param target_mean:
+            What the mean *should* be if there is no bug/issue
+            in the simulation, as the number of observations/simulants goes to infinity.
+            If this parameter is a tuple of two floats, they are interpreted as the 2.5th percentile
+            and the 97.5th percentile of the uncertainty interval about this value.
+            If this parameter is a single float, it is interpreted as an exact value (no uncertainty).
+            Setting this target distribution is a research task; there is much more guidance on
+            doing so at https://vivarium-research.readthedocs.io/en/latest/model_design/vivarium_features/automated_v_and_v/index.html#interpreting-the-hypotheses
+        :param observed_values:
+            The observed continuous values in the simulation.
+            If omitted, all three of observed_zeroth_moment, observed_first_moment, and observed_second_moment
+            must be supplied.
+        :param observed_zeroth_moment:
+            The zeroth moment of the continuous values in the simulation, which is simply the length of the
+            collection of continuous values in the simulation (i.e. the population size if each simulant
+            has one continuous value included in this check).
+        :param observed_first_moment:
+            The first moment of the continuous values in the simulation, which is their sum.
+        :param observed_second_moment:
+            The second moment of the continuous values in the simulation, which is sum of their squares.
+        :param fail_bayes_factor_cutoff:
+            The Bayes factor above which a hypothesis test is considered to favor a bug/issue so strongly
+            that the assertion should fail.
+            This cutoff trades off sensitivity with specificity and should be set in consultation with research;
+            this is described in detail at https://vivarium-research.readthedocs.io/en/latest/model_design/vivarium_features/automated_v_and_v/index.html#sensitivity-and-specificity
+            The default of 100 is conventionally called a "decisive" result in Bayesian hypothesis testing.
+        :param inconclusive_bayes_factor_cutoff:
+            The Bayes factor above which a hypothesis test is considered to be inconclusive, not
+            ruling out a bug/issue.
+            This will cause a warning.
+            The default of 0.1 represents what is conventionally considered "substantial" evidence in
+            favor of no bug/issue.
+        :param bug_issue_distribution_mean_uncertainty_interval:
+            Describes what the mean might be if there is a bug/issue. Uses a very wide interval by default.
+        :param alpha_prior:
+            The alpha parameter of the inverse-gamma prior on the variance of the continuous values.
+            Defaults to 2, which is weakly informative.
+        :param beta_prior:
+            The beta parameter of the inverse-gamma prior on the variance of the continuous values.
+            Defaults to (alpha_prior - 1) * data_scale**2 where data_scale is the target mean (if a point)
+            or the midpoint of the target (if a UI), which is weakly informative.
+        :param name:
+            The name of the assertion, for use in messages and diagnostics.
+            All assertions with the same name will output identical warning messages,
+            which means pytest will aggregate those warnings.
+        :param name_additional:
+            An optional additional name attribute that will be output in diagnostics but not in warnings.
+            Useful for e.g. specifying the timestep when an assertion happened.
+
+        """
+        test_mean = self.test_mean(
+            name=name,
+            name_additional=name_additional,
+            target_mean=target_mean,
+            observed_values=observed_values,
+            observed_zeroth_moment=observed_zeroth_moment,
+            observed_first_moment=observed_first_moment,
+            observed_second_moment=observed_second_moment,
+            bug_issue_distribution_mean_uncertainty_interval=bug_issue_distribution_mean_uncertainty_interval,
+            alpha_prior=alpha_prior,
+            beta_prior=beta_prior,
+            fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+        )
+
+        if test_mean.reject_null:
+            if test_mean.observed_mean < test_mean.target_lower_bound:
+                raise AssertionError(
+                    f"{name} value {test_mean.observed_mean:g} is significantly less than expected, bayes factor = {test_mean.bayes_factor:g}"
+                )
+            else:
+                raise AssertionError(
+                    f"{name} value {test_mean.observed_mean:g} is significantly greater than expected, bayes factor = {test_mean.bayes_factor:g}"
+                )
+
+        if (
+            fail_bayes_factor_cutoff
+            > test_mean.bayes_factor
+            > inconclusive_bayes_factor_cutoff
+        ):
+            logger.warning(f"Bayes factor for '{name}' is not conclusive.")
+
+        self.mean_test_diagnostics.append(test_mean)
+
+    def test_mean(
+        self,
+        target_mean: tuple[float, float] | float,
+        observed_values: Collection[float] | None = None,
+        observed_zeroth_moment: int | None = None,
+        observed_first_moment: float | None = None,
+        observed_second_moment: float | None = None,
+        bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
+        alpha_prior: float = 2.0,
+        beta_prior: float | None = None,
+        fail_bayes_factor_cutoff: float = 100.0,
+        name: str = "",
+        name_additional: str = "",
+    ) -> MeanTestResult:
+        """Perform a Bayesian hypothesis test on the observed mean and return the result.
+
+        :param target_mean:
+            What the mean *should* be if there is no bug/issue.
+            A single float for an exact value, or a tuple of (lower, upper) for an uncertainty interval.
+        :param observed_values:
+            The observed continuous values. If omitted, all three moment parameters must be supplied.
+        :param observed_zeroth_moment:
+            The count of observed values.
+        :param observed_first_moment:
+            The sum of observed values.
+        :param observed_second_moment:
+            The sum of squares of observed values.
+        :param bug_issue_distribution_mean_uncertainty_interval:
+            Describes what the mean might be if there is a bug/issue. Uses a very wide interval by default.
+        :param alpha_prior:
+            The alpha parameter of the inverse-gamma prior on the variance.
+        :param beta_prior:
+            The beta parameter of the inverse-gamma prior on the variance.
+        :param fail_bayes_factor_cutoff:
+            The Bayes factor above which the null hypothesis is rejected.
+        :param name:
+            The name of the test, for use in diagnostics.
+        :param name_additional:
+            An optional additional name attribute for diagnostics.
+
+        """
+        if isinstance(target_mean, tuple):
+            target_lower_bound, target_upper_bound = target_mean
+        else:
+            target_lower_bound = target_upper_bound = target_mean
+
+        assert (
+            target_upper_bound >= target_lower_bound
+        ), f"The lower bound of the V&V target ({target_lower_bound}) cannot be greater than the upper bound ({target_upper_bound})"
+
+        assert (
+            (observed_zeroth_moment is None)
+            == (observed_first_moment is None)
+            == (observed_second_moment is None)
+        )
+        assert (observed_first_moment is None) != (observed_values is None)
+        if observed_values is not None:
+            observed_values = np.array(observed_values)
+            observed_zeroth_moment = len(observed_values)
+            observed_first_moment = np.sum(observed_values)
+            observed_second_moment = np.sum(observed_values ** 2)
+
+        assert (
+            observed_zeroth_moment is not None
+            and observed_first_moment is not None
+            and observed_second_moment is not None
+        )
+
+        data_scale = (target_lower_bound + target_upper_bound) / 2
+        if beta_prior is None:
+            # Suggested by ChatGPT as a reasonable "weakly informative"
+            # prior, using a priori information about the expected scale
+            # of the data
+            # https://chatgpt.com/share/68b768f5-214c-8005-8d4c-1b12c6c4f2d0
+            beta_prior = (alpha_prior - 1) * data_scale**2
+
+        if bug_issue_distribution_mean_uncertainty_interval is None:
+            # With the default alpha and beta priors, this recovers the default lambda
+            # prior ChatGPT suggested above.
+            # https://chatgpt.com/share/68b768f5-214c-8005-8d4c-1b12c6c4f2d0
+            bug_issue_distribution_mean_uncertainty_interval = (
+                -62.0 * data_scale,
+                62.0 * data_scale,
+            )
+
+        bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+            bug_issue_distribution_mean_uncertainty_interval,
+            observed_zeroth_moment,
+            observed_first_moment,
+            observed_second_moment,
+            alpha_prior=alpha_prior,
+            beta_prior=beta_prior,
+        )
+
+        no_bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+            target_mean,
+            observed_zeroth_moment,
+            observed_first_moment,
+            observed_second_moment,
+            alpha_prior=alpha_prior,
+            beta_prior=beta_prior,
+        )
+
+        with np.errstate(under="ignore", over="ignore"):
+            bayes_factor = np.exp(bug_issue_log_likelihood - no_bug_issue_log_likelihood)
+
+        # https://chatgpt.com/s/t_68c0a1ef82748191872184e93b7bc7e0
+        observed_mean = observed_first_moment / observed_zeroth_moment
+        observed_variance = (
+            observed_second_moment / observed_zeroth_moment - observed_mean**2
+        )
+        observed_std = np.sqrt(observed_variance)
+        reject_null = bayes_factor > fail_bayes_factor_cutoff
+
+        return MeanTestResult(
+            name=name,
+            name_additional=name_additional,
+            observed_mean=observed_mean,
+            observed_std=observed_std,
+            observed_count=observed_zeroth_moment,
+            target_lower_bound=target_lower_bound,
+            target_upper_bound=target_upper_bound,
+            bayes_factor=bayes_factor,
+            reject_null=reject_null,
+        )
+    
     def test_proportion(
         self,
         name: str = "",
@@ -246,7 +604,7 @@ class FuzzyChecker:
         bug_issue_beta_distribution_parameters: tuple[float, float] = (0.5, 0.5),
         fail_bayes_factor_cutoff: float = 100.0,
         inconclusive_bayes_factor_cutoff: float = 0.1,
-    ) -> TestResult:
+    ) -> ProportionTestResult:
         """Convert a dictionary representation of a test result to a TestResult object."""
         if isinstance(target_proportion, tuple):
             target_lower_bound, target_upper_bound = target_proportion
@@ -300,7 +658,7 @@ class FuzzyChecker:
             no_bug_issue_distribution=no_bug_issue_distribution,
         )
 
-        return TestResult(
+        return ProportionTestResult(
             name=name,
             name_additional=name_additional,
             observed_proportion=observed_proportion,
@@ -782,6 +1140,176 @@ class FuzzyChecker:
             # We return an arbitrarily large penalty to ensure this is never selected as the minimum.
             return float("inf")
 
+    def _compute_continuous_log_likelihood(
+        self,
+        target_mean: float | tuple[float, float],
+        observed_zeroth_moment: int,
+        observed_first_moment: float,
+        observed_second_moment: float,
+        alpha_prior: float,
+        beta_prior: float,
+    ) -> float:
+        """
+        Calculates how likely your observed data is under a model where the mean is either fixed or uncertain.
+        If target_mean is a tuple, we allow for uncertainty in the mean (using a range). If it's a float, we treat the mean as exact.
+        This function chooses the right formula for each case and returns the log-likelihood (a measure of how well the data fits the model).
+
+        Intuitive explanation:
+        - If you have uncertainty about the mean, we use a model that allows the mean to vary within your interval.
+        - If you know the mean exactly, we use a simpler model.
+        """
+        if isinstance(target_mean, tuple):
+            assert len(target_mean) == 2
+            prior_mu_center, lambda_prior = self._compute_parameters_for_marginal_mu_interval(
+                target_mean[0], target_mean[1], alpha_prior, beta_prior
+            )
+
+            return self._log_likelihood_normal_inverse_gamma(
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                mu0=prior_mu_center,
+                lambda0=lambda_prior,
+                alpha0=alpha_prior,
+                beta0=beta_prior,
+            )
+        else:
+            return self._log_likelihood_normal_inverse_gamma_fixed_mean(
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                mu_star=target_mean,
+                alpha0=alpha_prior,
+                beta0=beta_prior,
+            )
+
+    def _log_likelihood_normal_inverse_gamma(
+        self,
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        mu0: float,
+        lambda0: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
+        """
+        Calculates the log-likelihood for your data under a model where the mean is uncertain (not fixed), but centered at mu0 with a certain strength (lambda0).
+        This is the standard Bayesian update for a normal distribution with unknown mean and variance, using a normal-inverse-gamma prior.
+
+        Free mean model:
+        y_i ~ N(mu, sigma^2)
+        mu | sigma^2 ~ N(mu0, sigma^2/lambda0)
+        sigma^2 ~ Inv-Gamma(alpha0, beta0)
+        Returns log p(y | A).
+
+        See https://chatgpt.com/s/t_68c0a68c053c8191a53e86d1201e7864.
+        """
+        n = zeroth_moment
+        ybar = first_moment / zeroth_moment
+        # https://chatgpt.com/s/t_68c09ef4028c8191a4f32acd26987bff
+        S = second_moment - 2 * ybar * first_moment + zeroth_moment * (ybar**2)
+
+        lambda_n = lambda0 + n
+        alpha_n = alpha0 + n / 2.0
+        beta_n = beta0 + 0.5 * (S + (lambda0 * n / lambda_n) * (ybar - mu0) ** 2)
+
+        return float(
+            -0.5 * n * np.log(2.0 * np.pi)
+            + 0.5 * (np.log(lambda0) - np.log(lambda_n))
+            + (gammaln(alpha_n) - gammaln(alpha0))
+            + alpha0 * np.log(beta0)
+            - alpha_n * np.log(beta_n)
+        )
+
+    def _log_likelihood_normal_inverse_gamma_fixed_mean(
+        self,
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        mu_star: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
+        """
+        Calculates the log-likelihood for your data under a model where the mean is fixed at mu_star.
+        This is the standard Bayesian update for a normal distribution with known mean and unknown variance, using an inverse-gamma prior.
+
+        Point mean model:
+        y_i ~ N(mu_star, sigma^2)
+        sigma^2 ~ Inv-Gamma(alpha0, beta0)
+        Returns log p(y | B).
+        """
+        n = zeroth_moment
+        # https://chatgpt.com/s/t_68c09ef4028c8191a4f32acd26987bff
+        S_star = second_moment - 2 * mu_star * first_moment + zeroth_moment * (mu_star**2)
+
+        alpha_n = alpha0 + n / 2.0
+        beta_n = beta0 + 0.5 * S_star
+
+        return float(
+            -0.5 * n * np.log(2.0 * np.pi)
+            + (gammaln(alpha_n) - gammaln(alpha0))
+            + alpha0 * np.log(beta0)
+            - alpha_n * np.log(beta_n)
+        )
+
+    def _compute_parameters_for_marginal_mu_interval(
+        self,
+        desired_lower: float,
+        desired_upper: float,
+        alpha_prior: float,
+        beta_prior: float,
+    ) -> tuple[float, float]:
+        """
+        Compute conjugate prior parameters (mu0, lambda0) so that the *marginal*
+        prior for mu (after integrating out sigma^2 under an Inv-Gamma(alpha_prior,beta_prior))
+        has a central 95% interval equal to [desired_lower, desired_upper].
+
+        Parameters
+        ----------
+        desired_lower, desired_upper : float
+            Desired central 95% prior interval for mu.
+        alpha_prior : float
+            alpha parameter of the Inv-Gamma prior on sigma^2 (shape).
+            Must be > 0. Typical weak choice: alpha_prior = 2.0.
+        beta_prior : float
+            beta parameter (scale) of the Inv-Gamma prior on sigma^2.
+            Choose based on prior beliefs about sigma (must be > 0).
+
+        Returns
+        -------
+        prior_mu_center : float
+            mu0, the center/location of the conditional Normal prior for mu|sigma2.
+        prior_lambda : float
+            lambda0, the strength parameter for mu|sigma2 ~ N(mu0, sigma2/lambda0).
+        """
+        if desired_upper <= desired_lower:
+            raise ValueError("desired_upper must be greater than desired_lower")
+
+        if alpha_prior <= 0 or beta_prior <= 0:
+            raise ValueError("alpha_prior and beta_prior must be positive")
+
+        # center and half-width of desired interval
+        prior_mu_center = 0.5 * (desired_lower + desired_upper)
+        half_width = 0.5 * (desired_upper - desired_lower)
+
+        # degrees of freedom of the marginal Student-t for mu
+        degrees_freedom = 2.0 * alpha_prior
+
+        # 97.5% quantile of a standard Student-t with nu df
+        from scipy.stats import t
+
+        t975 = t.ppf(0.975, df=degrees_freedom)
+
+        # desired marginal scale for mu: s_mu such that t975 * s_mu == half_width
+        scale_mu_marginal = half_width / t975
+
+        # solve for lambda0 from s_mu^2 = beta / (alpha * lambda0)
+        prior_lambda = beta_prior / (alpha_prior * scale_mu_marginal**2)
+
+        return prior_mu_center, float(prior_lambda)
+    
     def save_diagnostic_output(self, output_directory: Path | str) -> None:
         """
         Note: Users will need to set the output directory by creating a fixture with
@@ -791,5 +1319,8 @@ class FuzzyChecker:
         Can be useful to get more information about warnings, or to prioritize
         areas to be more thorough in manual V&V.
         """
-        output = pd.DataFrame(self.proportion_test_diagnostics)
-        output.to_csv(Path(output_directory) / "proportion_test_diagnostics.csv", index=False)
+        proportion_output = pd.DataFrame(self.proportion_test_diagnostics)
+        proportion_output.to_csv(Path(output_directory) / "proportion_test_diagnostics.csv", index=False)
+
+        mean_output = pd.DataFrame(self.mean_test_diagnostics)
+        mean_output.to_csv(Path(output_directory) / "mean_test_diagnostics.csv", index=False)

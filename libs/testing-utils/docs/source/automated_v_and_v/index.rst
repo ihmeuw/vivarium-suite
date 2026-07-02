@@ -276,6 +276,58 @@ For simplicity, we default to a `Jeffreys prior <https://en.wikipedia.org/wiki/J
 a beta distribution with :math:`\alpha = \beta = 0.5` --
 which results in a beta-binomial distribution on the number of events.
 
+Continuous values
+~~~~~~~~~~~~~~~~~
+
+Continuous values (real numbers) show up in our simulations in a number of places.
+For example, certain risk factors (e.g. hemoglobin) have continuous exposures.
+Additionally, many intermediates in simulation computations are continuous values.
+For example, even though mortality can be seen as a binary event and dealt with as a proportion,
+more statistical power can be gained (at the expense of not testing that the sampling step is
+working appropriately) by checking the underlying *probability* of mortality, which is real-valued.
+Probabilities are bounded by 0 and 1, but we can ignore this for convenience at the cost of sensitivity
+and specificity.
+
+.. note::
+
+  It would be interesting to explore using a transformation function on bounded values, such as logit
+  for probabilities, before performing the fuzzy check as if they were unbounded continuous values.
+  The main difficulty here would be dealing with values exactly at the boundary.
+
+We assume that each simulant's continuous value was independently drawn from a normal distribution.
+(When the draws are not in fact identically distributed, we will ignore our knowledge of this, as in
+the proportions case.)
+When the target is a precise value, we use a normal distribution with the target mean and a weakly informative
+prior on the variance of :math:`\Gamma^{-1}(2, s_{ref}^2)` where :math:`\Gamma^{-1}` refers to `the inverse-gamma distribution <https://en.wikipedia.org/wiki/Inverse-gamma_distribution>`_
+and :math:`s_{ref}` is an a priori estimate of the data scale, which defaults to the target mean.
+This prior is used because there is no proper Jeffreys prior for this unbounded parameter,
+and setting the beta parameter using an approximate data scale is much less informative than other heuristics
+such as setting both parameters to nearly zero. [Gelman_2006]_
+The fact that the inverse-gamma is a conjugate prior to the normal with unknown variance allows for easy
+computation of the posterior likelihood and therefore the Bayes factor.
+
+When a target 95% UI is specified instead of a single target value,
+we use a `normal inverse-gamma distribution <https://en.wikipedia.org/wiki/Beta_distribution>`_ that has approximately that UI
+on the mean (if the variance parameter is marginalized out) and the same :math:`IG(2, s_{ref}^2)` prior on
+the variance.
+The default :math:`s_{ref}` is now set to the midpoint of the target UI.
+
+Finally, we must specify a distribution in the case where there is a bug/error
+in the simulation.
+Again, since there is no Jeffreys prior, we use a weakly informative prior,
+specifically :math:`N\text{-}\Gamma^{-1}(0, 10^{-3}, 2, s_{ref}^2)`
+where :math:`N\text{-}\Gamma^{-1}` refers to `the normal-inverse-gamma distribution <https://en.wikipedia.org/wiki/Normal-inverse-gamma_distribution>`_
+and :math:`s_{ref}` is set to the target mean or the midpoint of the UI.
+In fact, rather than specifying :math:`10^{-3}` for the :math:`\lambda` parameter,
+we specify a default 95% UI, that with all the other defaults, recovers that value,
+which is :math:`(-62 \times s_{ref}, 62 \times s_{ref})`.
+This UI can be customized, which is more interpretable than customizing the :math:`\lambda` directly.
+
+The zeroth, first, and second moments of the continuous value are sufficient statistics to calculate
+the Bayes factor.
+Either these statistics or the entire set of continuous value can be passed into the fuzzy check,
+depending on what is more convenient.
+
 Automated V&V runs
 ------------------
 
@@ -365,3 +417,5 @@ References
 ----------
 
 .. [Bernardo_2002] Bernardo, José M., and Raúl Rueda. “Bayesian Hypothesis Testing: A Reference Approach.” International Statistical Review / Revue Internationale de Statistique, vol. 70, no. 3, 2002, pp. 351–72. JSTOR, https://doi.org/10.2307/1403862. Accessed 6 Nov. 2023.
+
+.. [Gelman_2006] Gelman, Andrew. "Prior distributions for variance parameters in hierarchical models (comment on article by Browne and Draper)." (2006): 515-534. https://sites.stat.columbia.edu/gelman/research/published/taumain.pdf

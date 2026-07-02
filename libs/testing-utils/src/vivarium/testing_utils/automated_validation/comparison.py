@@ -12,7 +12,7 @@ from vivarium.testing_utils.automated_validation.data_transformation.calculation
 )
 from vivarium.testing_utils.automated_validation.data_transformation.measures import Measure
 from vivarium.testing_utils.automated_validation.visualization import dataframe_utils
-from vivarium.testing_utils.fuzzy_checker import FuzzyChecker, TestResult
+from vivarium.testing_utils.fuzzy_checker import FuzzyChecker, ProportionTestResult
 
 StratValue = str | int | float
 
@@ -182,7 +182,7 @@ class FuzzyComparison(Comparison):
             raise ValueError("Test and reference measures must be the same.")
         self.measure: Measure = self.test_bundle.measure
         self.proportion_test_results: dict[
-            str, TestResult | dict[tuple[str, ...], dict[str, TestResult]]
+            str, ProportionTestResult | dict[tuple[str, ...], dict[str, ProportionTestResult]]
         ] = {
             "stratified": {},
         }
