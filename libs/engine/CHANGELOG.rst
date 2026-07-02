@@ -1,3 +1,7 @@
+**5.3.2 - 07/02/26**
+
+- Fix order-dependent ``SimulationContext`` name cache in tests under pytest-xdist
+
 **5.3.1 - 06/30/26**
 
 - Fix order-dependent randomness in results test fixtures
