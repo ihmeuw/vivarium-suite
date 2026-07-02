@@ -1,11 +1,4 @@
-"""Test suite scaffolding for the retired ``vivarium-compat`` package.
-
-The package's original tests were deleted in the v1.0.0 retirement commit
-(see ``libs/compat/CHANGELOG.rst``). Only this conftest remains so that
-``make test-all`` still runs without failing on ``pytest`` exit code 5
-(``NO_TESTS_COLLECTED``). Once ``libs/compat/`` itself is removed from
-the monorepo in the follow-up PR, this file goes with it.
-"""
+"""Test suite scaffolding for the retired ``vivarium-compat`` package."""
 
 from typing import Any
 
