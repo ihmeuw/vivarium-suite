@@ -251,7 +251,7 @@ def test_mirrored_distribution_from_parameters_only(
 def test_mirrored_cdf_within_support_is_not_nan(
     distribution: type[MirroredDistribution],
 ) -> None:
-    """Regression test: a mirrored cdf must not spuriously return NaN inside its support.
+    """Regression test: a mirrored cdf must not spuriously return NaN within its computability window.
 
     The computability window is derived from the underlying (reflected) distribution, so
     it must be mapped back into data space before gating cdf/pdf inputs. Previously the

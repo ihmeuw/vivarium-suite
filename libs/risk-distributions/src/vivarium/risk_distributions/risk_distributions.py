@@ -283,7 +283,7 @@ class MirroredDistribution(BaseDistribution):
     def get_computability_bounds(
         cls, parameters: pd.DataFrame, computability_bound: float
     ) -> pd.DataFrame:
-        """Reflect the underlying distribution's support bounds into data space.
+        """Reflect the underlying distribution's computability bounds into data space.
 
         A data-space value ``x`` is evaluated via its reflection ``mirror_point - x``,
         so the underlying quantile bounds (which live in the reflected space) must be
