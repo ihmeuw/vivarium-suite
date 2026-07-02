@@ -1,3 +1,8 @@
+**3.1.5 - 07/01/26**
+
+- Fix mirrored distributions returning NaN for valid inputs by reflecting the
+  computability bounds into data space
+
 **3.1.4 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
