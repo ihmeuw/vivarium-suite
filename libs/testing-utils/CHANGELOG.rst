@@ -1,6 +1,5 @@
 **0.7.2 - 07/02/26**
 
-- Scope numpy error-handling to ``FuzzyChecker`` computations instead of a process-global ``seterr``
 - Write a per-xdist-worker file in ``FuzzyChecker.save_diagnostic_output``
 - Copy ``MEASURE_KEY_MAPPINGS`` inner dicts in ``MeasureMapper`` to avoid shared-state mutation
 

@@ -613,7 +613,7 @@ class FuzzyChecker:
         # We can be dealing with some _extremely_ unlikely events here, so we have to set numpy to not error
         # if we generate a probability too small to be stored in a floating point number(!), which is known
         # as "underflow"
-        with np.errstate(all="raise", under="ignore"):
+        with np.errstate(under="ignore"):
             bug_marginal_likelihood = float(bug_distribution.pmf(numerator))
             no_bug_marginal_likelihood = float(no_bug_distribution.pmf(numerator))
 
@@ -675,7 +675,7 @@ class FuzzyChecker:
         best_error = float(np.finfo(float).max)
 
         for _ in range(1_000):
-            with np.errstate(all="raise", under="ignore"):
+            with np.errstate(under="ignore"):
                 concentration = np.exp(
                     (np.log(concentration_max) + np.log(concentration_min)) / 2
                 )
@@ -766,7 +766,7 @@ class FuzzyChecker:
     def _quantile_squared_error(
         self, dist: rv_continuous_frozen, value: float, intended_quantile: float
     ) -> float:
-        with np.errstate(all="raise", under="ignore"):
+        with np.errstate(under="ignore"):
             actual_quantile = dist.cdf(value)
 
         if 0 < actual_quantile < 1:
