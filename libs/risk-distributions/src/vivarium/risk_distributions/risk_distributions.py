@@ -279,6 +279,28 @@ class MirroredDistribution(BaseDistribution):
         )
         return mirror_point
 
+    @classmethod
+    def get_computability_bounds(
+        cls, parameters: pd.DataFrame, computability_bound: float
+    ) -> pd.DataFrame:
+        """Reflect the underlying distribution's support bounds into data space.
+
+        A data-space value ``x`` is evaluated via its reflection ``mirror_point - x``,
+        so the underlying quantile bounds (which live in the reflected space) must be
+        mapped back with ``mirror_point - bound`` before the base ``cdf``/``pdf``
+        computability mask can compare them against ``x``. The reflection also swaps the
+        min and max.
+        """
+        transformed = super().get_computability_bounds(parameters, computability_bound)
+        mirror_point = parameters["mirror_point"]
+        return pd.DataFrame(
+            {
+                "computability_min": mirror_point - transformed["computability_max"],
+                "computability_max": mirror_point - transformed["computability_min"],
+            },
+            index=parameters.index,
+        )
+
 
 class Beta(BaseDistribution):
     distribution = stats.beta
