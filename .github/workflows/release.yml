@@ -161,30 +161,29 @@ jobs:
             uv pip install --system --no-cache vivarium-build-utils
           fi
 
-      - name: Create and push tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if ! git tag -l "$TAG" | grep -q .; then
-            git tag "$TAG"
-            git push origin "$TAG"
-          fi
-
       - name: Validate tag
+        # Runs before the tag is created so a bad version never reaches origin.
         # `make validate-tag` reads RELEASE_TAG as the tag, falling back to
         # GITHUB_REF_NAME. We can't override GITHUB_REF_NAME via a step env
         # block (GitHub Actions reserves the GITHUB_* namespace), so we set
         # RELEASE_TAG explicitly. TAG_PREFIX tells the script to strip the
         # lib-prefix before semver parsing and to scope the previous-tag
-        # lookup to this lib's tags.
+        # lookup to this lib's tags. Validation is independent of whether the
+        # tag exists yet (it injects RELEASE_VERSION into the bump check).
         env:
           RELEASE_TAG: vivarium-${{ matrix.library }}-v${{ matrix.version }}
           TAG_PREFIX: vivarium-${{ matrix.library }}-
         run: cd libs/${{ matrix.library }} && make validate-tag
+
+      - name: Create and push tag
+        env:
+          TAG_PREFIX: vivarium-${{ matrix.library }}-
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Pass matrix.version explicitly so the tag uses the same version the
+          # detect job parsed, rather than re-deriving it from CHANGELOG.rst.
+          cd libs/${{ matrix.library }} && make tag-version PACKAGE_VERSION=${{ matrix.version }}
 
       - name: Install ${{ matrix.library }}
         # IHME_PYPI= disables the artifactory extra-index since the runner can't
