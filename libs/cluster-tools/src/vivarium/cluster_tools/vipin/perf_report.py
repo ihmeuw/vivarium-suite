@@ -145,9 +145,7 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
     report_df["measure"] = report_df["measure"].replace("seconds", "s", regex=True)
 
     report_df = report_df.set_index(cols).sort_index()
-    # Emitted at WARNING so the end-of-run performance report stays visible under
-    # the default (WARNING) terminal verbosity. Display options are scoped to the
-    # render so this function doesn't leak global pandas settings to the process.
+    # Scope display options to the render so this doesn't leak global pandas state.
     with pd.option_context(
         "display.max_rows",
         None,
@@ -156,6 +154,7 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
         "display.float_format",
         "{:.2f}".format,
     ):
+        # WARNING keeps the report visible under the default terminal verbosity.
         logger.warning(f"\n{report_df}")
 
 
