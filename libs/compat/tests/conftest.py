@@ -7,6 +7,7 @@ from vivarium_compat._compat import _resolving
 @pytest.fixture(autouse=True)
 def restore_import_state():
     """Snapshot/reset global import state (sys.meta_path, sys.modules, _resolving) around each test."""
+    # Clear at setup too, in case a prior test left a stale entry.
     _resolving.clear()
     saved_meta_path = sys.meta_path[:]
     saved_modules = set(sys.modules.keys())

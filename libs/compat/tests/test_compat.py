@@ -91,6 +91,17 @@ def test_circular_guard_cleans_up_on_success():
     assert "_test_clean_old" not in _resolving
 
 
+@pytest.fixture(scope="module")
+def _polluted_resolving():
+    # Runs before the function-scoped autouse clear
+    _resolving.add("prior_test_residue")
+
+
+def test_resolving_cleared_before_each_test(_polluted_resolving):
+    # Fails if the setup-time _resolving.clear() in conftest.py is removed.
+    assert _resolving == set()
+
+
 def test_error_when_neither_target_nor_old_name_exists(monkeypatch):
     """ModuleNotFoundError surfaces only when both new target and old name are missing."""
     monkeypatch.setattr(
