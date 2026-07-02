@@ -1,3 +1,7 @@
+**4.2.9 - 07/02/26**
+
+- Scope pandas display options in ``print_stat_report`` to avoid mutating global state
+
 **4.2.8 - 06/30/26**
 
 - Isolate cluster-tools mkdir test with tmp_path

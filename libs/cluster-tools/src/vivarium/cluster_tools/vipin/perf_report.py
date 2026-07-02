@@ -103,10 +103,6 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
 
     The stats are grouped by scenario_cols.
     """
-    pd.set_option("display.max_rows", None)
-    pd.set_option("display.max_columns", None)
-    pd.options.display.float_format = "{:.2f}".format
-
     do_compound = len(scenario_cols) > COMPOUND_SCENARIO_COL_COUNT
 
     perf_df = perf_df.reset_index()
@@ -150,8 +146,17 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
 
     report_df = report_df.set_index(cols).sort_index()
     # Emitted at WARNING so the end-of-run performance report stays visible under
-    # the default (WARNING) terminal verbosity.
-    logger.warning(f"\n{report_df}")
+    # the default (WARNING) terminal verbosity. Display options are scoped to the
+    # render so this function doesn't leak global pandas settings to the process.
+    with pd.option_context(
+        "display.max_rows",
+        None,
+        "display.max_columns",
+        None,
+        "display.float_format",
+        "{:.2f}".format,
+    ):
+        logger.warning(f"\n{report_df}")
 
 
 def report_performance(
