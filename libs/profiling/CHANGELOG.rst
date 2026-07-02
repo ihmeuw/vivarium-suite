@@ -1,3 +1,9 @@
+**0.5.0 - 07/02/26**
+
+**Breaking change:** drop the transitional ``vivarium-compat`` runtime dependency.
+Downstream code that still does ``import vivarium_profiling`` will now raise ``ModuleNotFoundError``;
+switch to ``import vivarium.profiling``.
+
 **0.4.17 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
