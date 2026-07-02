@@ -67,6 +67,8 @@ def is_same_object_method(
 
 @pytest.fixture()
 def SimulationContext() -> Generator[type[SimulationContext_], None, None]:
+    # Clearing before yielding guarantees a clean slate regardless of order.
+    SimulationContext_._clear_context_cache()
     yield SimulationContext_
     SimulationContext_._clear_context_cache()
 
