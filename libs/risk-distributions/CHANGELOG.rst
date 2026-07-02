@@ -1,4 +1,4 @@
-**3.1.5 - 07/01/26**
+**3.1.5 - 07/02/26**
 
 - Fix mirrored distributions returning NaN for valid inputs by reflecting the
   computability bounds into data space
