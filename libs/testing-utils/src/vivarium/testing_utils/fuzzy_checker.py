@@ -3,6 +3,7 @@
 #################
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import cache
 from itertools import chain, combinations
@@ -612,7 +613,7 @@ class FuzzyChecker:
         # We can be dealing with some _extremely_ unlikely events here, so we have to set numpy to not error
         # if we generate a probability too small to be stored in a floating point number(!), which is known
         # as "underflow"
-        with np.errstate(under="ignore"):
+        with np.errstate(all="raise", under="ignore"):
             bug_marginal_likelihood = float(bug_distribution.pmf(numerator))
             no_bug_marginal_likelihood = float(no_bug_distribution.pmf(numerator))
 
@@ -674,7 +675,7 @@ class FuzzyChecker:
         best_error = float(np.finfo(float).max)
 
         for _ in range(1_000):
-            with np.errstate(under="ignore"):
+            with np.errstate(all="raise", under="ignore"):
                 concentration = np.exp(
                     (np.log(concentration_max) + np.log(concentration_min)) / 2
                 )
@@ -765,7 +766,7 @@ class FuzzyChecker:
     def _quantile_squared_error(
         self, dist: rv_continuous_frozen, value: float, intended_quantile: float
     ) -> float:
-        with np.errstate(under="ignore"):
+        with np.errstate(all="raise", under="ignore"):
             actual_quantile = dist.cdf(value)
 
         if 0 < actual_quantile < 1:
@@ -792,4 +793,12 @@ class FuzzyChecker:
         areas to be more thorough in manual V&V.
         """
         output = pd.DataFrame(self.proportion_test_diagnostics)
-        output.to_csv(Path(output_directory) / "proportion_test_diagnostics.csv", index=False)
+        # Include the xdist worker id so parallel workers (separate processes)
+        # don't overwrite each other's diagnostics file.
+        worker = os.environ.get("PYTEST_XDIST_WORKER")
+        filename = (
+            f"proportion_test_diagnostics_{worker}.csv"
+            if worker
+            else "proportion_test_diagnostics.csv"
+        )
+        output.to_csv(Path(output_directory) / filename, index=False)
