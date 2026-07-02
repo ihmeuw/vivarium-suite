@@ -14,12 +14,10 @@ from vivarium.public_health.risks.base_risk import Risk
 from vivarium.public_health.utilities import to_years
 
 
-@pytest.fixture
-def categorical_risk():
+def _make_categorical_risk_data() -> dict:
+    """Build the exposure/category/distribution data for the 4-category test_risk."""
     year_start = 1990
     year_end = 2010
-    risk = "test_risk"
-    risk_data = dict()
     exposure_data = build_table_with_age(
         0.25,
         parameter_columns={
@@ -31,57 +29,54 @@ def categorical_risk():
         var_name="parameter",
         value_name="value",
     )
-
-    risk_data["exposure"] = exposure_data
-    risk_data["categories"] = {
-        "cat1": "severe",
-        "cat2": "moderate",
-        "cat3": "mild",
-        "cat4": "unexposed",
+    return {
+        "exposure": exposure_data,
+        "categories": {
+            "cat1": "severe",
+            "cat2": "moderate",
+            "cat3": "mild",
+            "cat4": "unexposed",
+        },
+        "distribution": "ordered_polytomous",
     }
-    risk_data["distribution"] = "ordered_polytomous"
-    return Risk(f"risk_factor.{risk}"), risk_data
 
 
-@pytest.fixture()
-def simulation_after_one_step(base_config, base_plugins, categorical_risk):
-    risk, risk_data = categorical_risk
-    observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
+@pytest.fixture
+def categorical_risk():
+    return Risk("risk_factor.test_risk"), _make_categorical_risk_data()
+
+
+@pytest.fixture(scope="module")
+def categorical_risk_observer_sim(base_config_factory, base_plugins):
+    """One built-stepped-finalized test_risk categorical-observer sim, shared across the
+    registration and correctness tests. Returns ``(simulation, risk_data)``.
+    """
+    risk_data = _make_categorical_risk_data()
     simulation = InteractiveContext(
         components=[
             BasePopulation(),
             ResultsStratifier(),
-            risk,
-            observer,
+            Risk("risk_factor.test_risk"),
+            CategoricalRiskObserver("test_risk"),
         ],
-        configuration=base_config,
+        configuration=base_config_factory(),
         plugin_configuration=base_plugins,
         setup=False,
     )
-    simulation.configuration.update(
-        {
-            "stratification": {
-                "test_risk": {
-                    "include": ["sex"],
-                }
-            }
-        }
-    )
-
+    simulation.configuration.update({"stratification": {"test_risk": {"include": ["sex"]}}})
     for key, value in risk_data.items():
         simulation._data.write(f"risk_factor.test_risk.{key}", value)
-
     simulation.setup()
     simulation.step()
     simulation.finalize()
     simulation.report()
+    return simulation, risk_data
 
-    return simulation
 
-
-def test_observation_registration(simulation_after_one_step):
+def test_observation_registration(categorical_risk_observer_sim):
     """Test that all expected observation stratifications appear in the results."""
-    results = simulation_after_one_step.get_results()
+    simulation, _ = categorical_risk_observer_sim
+    results = simulation.get_results()
     assert set(results) == set(["person_time_test_risk"])
 
     person_time = results["person_time_test_risk"]
@@ -91,16 +86,16 @@ def test_observation_registration(simulation_after_one_step):
     )
 
 
-def test_observation_correctness(base_config, simulation_after_one_step, categorical_risk):
+def test_observation_correctness(categorical_risk_observer_sim):
     """Test that person time appear as expected in the results."""
-    time_step = pd.Timedelta(days=base_config.time.step_size)
+    simulation, risk_data = categorical_risk_observer_sim
+    time_step = pd.Timedelta(days=simulation.configuration.time.step_size)
 
-    _, risk_data = categorical_risk
     exposure_categories = risk_data["categories"].keys()
 
-    pop = simulation_after_one_step.get_population(["sex", "test_risk.exposure"])
+    pop = simulation.get_population(["sex", "test_risk.exposure"])
 
-    results = simulation_after_one_step.get_results()
+    results = simulation.get_results()
     assert set(results) == set(["person_time_test_risk"])
     results = results["person_time_test_risk"]
 

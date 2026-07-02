@@ -20,11 +20,8 @@ def disease() -> str:
     return "t_virus"
 
 
-@pytest.fixture
-def model(base_config, disease: str) -> DiseaseModel:
-    """A dummy SI model where everyone should be `with_condition` by the third timestep."""
-    year_start = base_config.time.start.year
-    year_end = base_config.time.end.year
+def _make_t_virus_model(disease: str, year_start: int, year_end: int) -> DiseaseModel:
+    """Build a fresh SI ``DiseaseModel`` where everyone reaches ``with_condition`` quickly."""
     healthy = SusceptibleState("with_condition", allow_self_transition=False)
     with_condition = DiseaseState(
         "with_condition",
@@ -42,6 +39,14 @@ def model(base_config, disease: str) -> DiseaseModel:
         ),
     )
     return DiseaseModel(disease, residual_state=healthy, states=[healthy, with_condition])
+
+
+@pytest.fixture
+def model(base_config, disease: str) -> DiseaseModel:
+    """A dummy SI model where everyone should be `with_condition` by the third timestep."""
+    return _make_t_virus_model(
+        disease, base_config.time.start.year, base_config.time.end.year
+    )
 
 
 @pytest.fixture
@@ -68,6 +73,33 @@ def human_cortico_deficiency():
         residual_state=hcd_healthy_state,
         states=[hcd_healthy_state, hcd_infected_state],
     )
+
+
+@pytest.fixture(scope="module")
+def disease_observer_sim(base_config_factory, base_plugins):
+    """One built-and-stepped t_virus disease-observer sim, shared across the registration
+    and correctness tests, which assert different things on the same end-state.
+
+    Returns ``(simulation, disease_states_at_start)``; the pre-step disease state is
+    captured because the correctness test needs the susceptible-at-start count.
+    """
+    config = base_config_factory()
+    simulation = InteractiveContext(
+        components=[
+            BasePopulation(),
+            _make_t_virus_model("t_virus", config.time.start.year, config.time.end.year),
+            ResultsStratifier(),
+            DiseaseObserver("t_virus"),
+        ],
+        configuration=config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    simulation.configuration.update({"stratification": {"t_virus": {"include": ["sex"]}}})
+    simulation.setup()
+    disease_states_at_start = simulation.get_population("t_virus")
+    simulation.step()
+    return simulation, disease_states_at_start
 
 
 # Updating the previous state
@@ -123,32 +155,9 @@ def test_previous_state_update(base_config, base_plugins, disease, model):
     assert (pop[observer.disease] == "with_condition").all()
 
 
-def test_observation_registration(base_config, base_plugins, disease, model):
+def test_observation_registration(disease_observer_sim):
     """Test that all expected observation stratifications appear in the results."""
-    observer = DiseaseObserver(disease)
-    simulation = InteractiveContext(
-        components=[
-            BasePopulation(),
-            model,
-            ResultsStratifier(),
-            observer,
-        ],
-        configuration=base_config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    simulation.configuration.update(
-        {
-            "stratification": {
-                "t_virus": {
-                    "include": ["sex"],
-                }
-            }
-        }
-    )
-
-    simulation.setup()
-    simulation.step()
+    simulation, _ = disease_observer_sim
     results = simulation.get_results()
     person_time = results["person_time_t_virus"]
     transition_count = results["transition_count_t_virus"]
@@ -167,33 +176,10 @@ def test_observation_registration(base_config, base_plugins, disease, model):
 
 
 # Person time and all states and transition counts are correct
-def test_observation_correctness(base_config, base_plugins, disease, model):
+def test_observation_correctness(disease_observer_sim):
     """Test that person time and event counts appear as expected in the results."""
-    time_step = pd.Timedelta(days=base_config.time.step_size)
-    observer = DiseaseObserver(disease)
-    simulation = InteractiveContext(
-        components=[
-            BasePopulation(),
-            model,
-            ResultsStratifier(),
-            observer,
-        ],
-        configuration=base_config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    simulation.configuration.update(
-        {
-            "stratification": {
-                "t_virus": {
-                    "include": ["sex"],
-                }
-            }
-        }
-    )
-
-    simulation.setup()
-    disease_states = simulation.get_population(disease)
+    simulation, disease_states = disease_observer_sim
+    time_step = pd.Timedelta(days=simulation.configuration.time.step_size)
 
     # All simulants should transition to "with_condition"
     susceptible_at_start = sum(disease_states == "susceptible_to_with_condition")
@@ -202,7 +188,6 @@ def test_observation_correctness(base_config, base_plugins, disease, model):
         len(disease_states) - susceptible_at_start
     ) * to_years(time_step)
 
-    simulation.step()
     results = simulation.get_results()
     person_time = results["person_time_t_virus"]
     transition_count = results["transition_count_t_virus"]
