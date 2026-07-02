@@ -1,3 +1,7 @@
+**0.6.5 - 07/02/26**
+
+- Isolate global import state per test with a package conftest fixture to prevent xdist ordering flakes
+
 **0.6.4 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
