@@ -1,3 +1,7 @@
+**6.4.0 - 07/06/26**
+
+- Allow the risk components ``CausalFactorEffect``/``RiskEffect`` (``tmred``, ``relative_risk_scalar``, ``demographic_dimensions``), ``NonLogLinearRiskEffect`` (``tmred``), ``LBWSGDistribution`` (``categories``), and ``CategoricalCausalFactorObserver`` (``categories``) to source their data via configuration ``data_sources`` instead of requiring an artifact
+
 **6.3.3 - 07/06/26**
 
 - Add PyPI classifiers

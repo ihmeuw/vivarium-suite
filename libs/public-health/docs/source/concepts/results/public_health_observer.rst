@@ -253,8 +253,10 @@ in each exposure category and multiplies by the step size (converted to
 years) to produce person-time.
 
 The observer registers a stratification for the risk factor whose categories
-are loaded from the artifact at ``risk_factor.{name}.categories``, and the
-exposure values come from the ``{name}.exposure`` pipeline.
+are loaded by default from the artifact at ``risk_factor.{name}.categories``,
+but can be overridden via ``stratification.{name}.data_sources.categories``
+with a DataFrame of ``category`` and ``description`` columns; the exposure
+values come from the ``{name}.exposure`` pipeline.
 
 The observer's configuration key matches the risk factor name (e.g.
 ``configuration.stratification.child_wasting``).
