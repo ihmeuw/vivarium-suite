@@ -119,12 +119,11 @@ actually produced.
    before continuing. The workflow never rebuilds the artifact itself.
 
 2. **Component** — `_model_implementer` writes the states, pipelines, and
-   model-spec wiring that consume the artifact keys.
+   wiring that consume the artifact keys. May update model spec.
 
 3. **Observer** — `_model_implementer` writes the outputs and stratification.
+   May update model spec.
 
-The component and observer stages each also register themselves in the model
-spec (`model_spec.yaml`) — that is part of the layer's work, not a separate stage.
 
 When a stage reports a forced deviation from the plan (a key or pipeline that
 had to be named differently, a missing dependency), **update the contract** and
