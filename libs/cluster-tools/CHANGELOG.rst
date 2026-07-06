@@ -1,4 +1,4 @@
-**4.2.9 - 07/02/26**
+**4.2.9 - 07/06/26**
 
 - Scope pandas display options in ``print_stat_report`` to avoid mutating global state
 
