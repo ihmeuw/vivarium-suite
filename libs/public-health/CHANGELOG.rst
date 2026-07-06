@@ -1,3 +1,7 @@
+**6.1.6 - 07/06/26**
+
+- Add PyPI classifiers
+
 **6.3.2 - 07/01/26**
 
 - Reduce population size in test suites to improve runtime

@@ -1,3 +1,7 @@
+**0.4.18 - 07/06/26**
+
+- Add PyPI classifiers
+
 **0.5.0 - 07/02/26**
 
 **Breaking change:** drop the transitional ``vivarium-compat`` runtime dependency.

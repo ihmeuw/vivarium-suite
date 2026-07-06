@@ -1,3 +1,7 @@
+**4.0.4 - 07/06/26**
+
+- Add PyPI classifiers
+
 **4.2.4 - 07/01/26**
 
 - Make ``make tag-version`` idempotent and skip if the tag already exists
