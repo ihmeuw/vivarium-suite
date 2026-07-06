@@ -79,9 +79,9 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   documentation. The main session owns the **iteration plan** — the contract
   that pins the artifact keys, pipeline names, state-table columns, and observer
   outputs a change touches, plus the quantitative expectations from the research
-  doc. From that contract it runs a **staged build** along the model's
-  data-dependency chain (artifact → component → observer, one stage per touched
-  layer, skipping the rest), while an **internal verification** is authored in
+  doc. From that contract it runs a **sequential build** in
+  data-dependency order (artifact, then component, then observer — skipping
+  layers the change doesn't touch), while an **internal verification** is authored in
   parallel and blind to the implementation — InteractiveContext checks and a
   notebook built from the plan alone. It then **runs the simulation** to verify
   (the repo's existing suite, the new checks, a local ``simulate`` run, and the
@@ -90,7 +90,7 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   engineering confidence — not formal V&V — so its **traces** (notebook plots and
   tables) are posted to the PR, while the artifacts themselves stay out of the
   repo unless you ask to keep them. Gates the artifact build and the PR on
-  explicit user approval. The model-repo sibling of ``/viv:framework-development``.
+  explicit user approval.
 
 **Skills**
 

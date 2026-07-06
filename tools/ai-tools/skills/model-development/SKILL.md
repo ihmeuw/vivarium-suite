@@ -33,29 +33,30 @@ loop at the plan, artifact-build, and PR gates.
 The phases below are the canonical detail; this is the skeleton:
 
 ```
-setup                                 # Phase 0: model repo, env, feature branch; require a runnable env
-plan  = iteration plan from research  # Phase 1: pin keys/pipelines/columns/outputs + expectations; user-gated
+setup                                 # Setup: model repo, env, feature branch; require a runnable env
+plan  = iteration plan from research  # Plan: pin keys/pipelines/columns/outputs + expectations; user-gated
 
-# Phases 2 and 3 run in parallel off the approved plan:
-build  = staged _model_implementer    # Phase 2: artifact -> [user gate: build artifact] -> component -> observer
-verify = _vv_writer                   # Phase 3: blind to the build — InteractiveContext checks + notebook
+# Build and verification-authoring run in parallel off the approved plan:
+build  = _model_implementer per layer    # Build: artifact -> [user gate: build artifact] -> component -> observer
+verify = _vv_writer                   # Verify author: blind to the build — InteractiveContext checks + notebook
 
-# Phase 4 — verify by running the simulation:
+# Verify by running the simulation:
 run _validator (existing suite) + new checks + local simulate + notebook  ->  traces
     artifact unavailable  ->  "unverified — sim checks not run"   # never a false PASS
 
-# Phase 5 — critic loop, up to 3 rounds:
+# Critic loop, up to 3 rounds:
 repeat while failures:
     impl bug   ->  re-dispatch the owning build stage (behavioral terms)
     check bug  ->  re-dispatch _vv_writer (weaken a check only with user approval)
     plan gap   ->  amend the contract, notify user, re-dispatch
+    exhausted, still failing  ->  stop and surface to the user (do not review)
 
-review = review_core                  # Phase 6: five-lens fan-out + correctness; findings -> Phase 5
+review = review_core                  # Review: five-lens fan-out + correctness; findings -> critic loop
 
-finalize & PR                         # Phase 7: post traces; artifacts uncommitted unless asked; user-gated PR(s), stacked per layer
+finalize & PR                         # Finalize: post traces; artifacts uncommitted unless asked; user-gated PR(s), stacked per layer
 ```
 
-## Phase 0 — Setup
+## Setup
 
 1. Resolve the target **model repo** from $ARGUMENTS (a `vivarium_*` model repo,
    e.g. `vivarium_gates_mncnh`) and `cd` there. This workflow runs in the model
@@ -63,12 +64,12 @@ finalize & PR                         # Phase 7: post traces; artifacts uncommit
 2. Activate the right conda env.
 3. Create a **feature branch** for the iteration.
 
-**Exit criterion — a runnable env.** Before leaving Phase 0, confirm the repo
-imports and the simulation entry points are on PATH. Verification in Phase 4
+**Exit criterion — a runnable env.** Before leaving setup, confirm the repo
+imports and the simulation entry points are on PATH. The verify step
 _runs the model_, so a half-built env produces a false PASS later — resolve it
 now rather than discovering it at verify time.
 
-## Phase 1 — Iteration plan (the contract)
+## Iteration plan (the contract)
 
 - Pull the research requirements: if $ARGUMENTS references a MIC ticket or a
   vivarium-research page, fetch it. The research doc is the source of truth for
@@ -90,10 +91,10 @@ now rather than discovering it at verify time.
     coverage levels. This is what verification checks against.
   - **Non-goals** — what is explicitly out of scope for this iteration.
 
-**Gate 1 — approve the plan.** Exit Phase 1 only with a written iteration plan
+**Gate — approve the plan.** Exit the plan phase only with a written iteration plan
 the user has agreed to.
 
-## Phase 2 — Staged build
+## Staged build
 
 Dispatch `_model_implementer` **once per touched layer**, in data-dependency
 order, **skipping any layer the plan leaves alone**. Each stage works directly
@@ -101,7 +102,7 @@ on the feature branch — stages are sequential, so they cannot collide, and you
 **diff-check each stage's output before dispatching the next** (the next stage
 needs the real names the previous one produced, not the planned ones). **Commit
 each stage as its own layer commit** (artifact / component / observer) so the
-per-layer structure carries into the Phase 7 PRs.
+per-layer structure carries into the finalize-phase PRs.
 
 Compose a **stage brief** for each dispatch from the plan: the layer-specific
 guidance, the plan slice for that layer, the contract names to honor, exemplar
@@ -111,7 +112,7 @@ actually produced.
 1. **Artifact** — `_model_implementer` writes the data-loading/artifact-building
    code (new keys, loaders). It does **not** build the artifact.
 
-   **Gate 2 (conditional) — the artifact build.** If this iteration changed
+   **Gate (conditional) — the artifact build.** If this iteration changed
    artifact keys, the new data must exist before the simulation can run, and
    building it generally needs GBD/cluster data access. **Pause and ask the
    user** to build the artifact (or point the model spec at an updated one)
@@ -122,21 +123,24 @@ actually produced.
 
 3. **Observer** — `_model_implementer` writes the outputs and stratification.
 
+The component and observer stages each also register themselves in the model
+spec (`model_spec.yaml`) — that is part of the layer's work, not a separate stage.
+
 When a stage reports a forced deviation from the plan (a key or pipeline that
 had to be named differently, a missing dependency), **update the contract** and
 carry the corrected facts forward.
 
-## Phase 3 — Verification author (parallel with Phase 2)
+## Verification author (parallel with the build)
 
 Because the verification author is **blind to the implementation by design**, it
-does not wait for the build — dispatch `_vv_writer` **as soon as Gate 1
-passes**, concurrently with Phase 2. Hand it the iteration plan (the contract
+does not wait for the build — dispatch `_vv_writer` **as soon as the
+plan is approved**, concurrently with the build. Hand it the iteration plan (the contract
 names and the quantitative expectations), pointers to the repo's existing test
 patterns (`conftest.py` fixtures, `FuzzyChecker` from `vivarium_testing_utils`,
 the step/event mapping, `model_notebooks/`), and the target paths.
 
 `_vv_writer` produces two things from the plan alone, both **internal to this
-loop** (not committed by default — see Phase 7):
+loop** (not committed by default — see the finalize phase):
 
 - **InteractiveContext checks** following the repo's existing patterns — spin
   up the sim, advance to the relevant step, and assert the quantitative
@@ -145,7 +149,7 @@ loop** (not committed by default — see Phase 7):
   `model_notebooks/` convention) whose plots and tables are the **traces**
   posted to the PR.
 
-## Phase 4 — Verify
+## Verify
 
 A runnable env and (for artifact-key changes) a built artifact are preconditions
 — if either is missing, checks that cannot be executed must be surfaced to
@@ -157,10 +161,12 @@ the user.
    repo ships `py.typed`) for the repo's existing suite. It returns a compact
    PASS/FAIL report.
 2. Run the new InteractiveContext checks, and a small **local `simulate` run**
-   on a reduced spec/population to confirm the iteration completes end-to-end.
+   on a reduced spec/population to confirm the iteration completes end-to-end
+   (a reduced-scope run is typically on the order of an hour — set that
+   expectation with the user).
 3. Execute the verification notebook to produce its **traces** (plots and
    tables) — for the user to eyeball against the research targets now, and to
-   post to the PR in Phase 7.
+   post to the PR at the finalize phase.
 
 **Missing-artifact degradation.** If the artifact a sim check needs cannot be
 produced in this environment, run everything that doesn't need it (lint, the
@@ -168,7 +174,7 @@ existing unit suite, review) and stop with an explicit **"unverified — sim
 checks not run"** status. Leave the branch and checks in place to run where the
 artifact exists. Never report PASS for a sim check that did not run.
 
-## Phase 5 — Critic loop (bounded)
+## Critic loop (bounded)
 
 Triage each failure and re-dispatch to the owner, **bounded at ≤3 iterations**:
 
@@ -183,18 +189,19 @@ Triage each failure and re-dispatch to the owner, **bounded at ≤3 iterations**
 - **Plan gap** (legitimate behavior the plan never named) → amend the contract,
   notify the user, and re-dispatch the owning stage.
 
-Re-verify each round. On exhaustion, carry residuals into the Phase 7 summary.
+Re-verify each round. **On exhaustion with unresolved failures, stop and
+surface them to the user — do not proceed to review or finalize.**
 
-## Phase 6 — Review
+## Review
 
 Invoke the `_review-core` skill with the integrated diff, the changed-file list,
-and a one-line description of the iteration. Carry its findings into the Phase 5
+and a one-line description of the iteration. Carry its findings into the critic-loop
 triage.
 
-## Phase 7 — Finalize and PR (gated)
+## Finalize and PR (gated)
 
 1. Summarize what was built, the verification results (including any
-   "unverified" status), and any residual issues from the Phase 5 loop.
+   "unverified" status), and any residual issues from the critic loop.
 2. **Post the verification traces to the PR.** Attach the key plots, tables,
    and output from the verification notebook — the record that the iteration
    was checked against the research expectations.
@@ -207,7 +214,7 @@ triage.
    in this build, invoke the `ticket-triage` skill to classify them, dedup
    against the backlog, and file approval-gated Jira tickets. Skip if nothing is
    left unaddressed.
-5. **Gate 3 — approve the PR.** Without approval, stop and leave the branch in
+5. **Gate — approve the PR.** Without approval, stop and leave the branch in
    place.
 6. On approval, use the `commit-splitter` skill to organize the work for review,
    then use `team-conventions` to push and `gh pr create` with the repo's PR
