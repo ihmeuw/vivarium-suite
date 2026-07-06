@@ -1,3 +1,8 @@
+**0.7.2 - 07/02/26**
+
+- Write a per-xdist-worker file in ``FuzzyChecker.save_diagnostic_output``
+- Copy ``MEASURE_KEY_MAPPINGS`` inner dicts in ``MeasureMapper`` to avoid shared-state mutation
+
 **0.7.1 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.
