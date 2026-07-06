@@ -250,10 +250,8 @@ class State(Component):
 
     def has_initialization_weights(self) -> bool:
         """Determines if state has explicitly defined initialization weights."""
-        return not (
-            not isinstance(self.initialization_weights_table.data, pd.DataFrame)
-            and self.initialization_weights_table.data == 0.0
-        )
+        data = self.initialization_weights_table.data
+        return bool(isinstance(data, (pd.DataFrame, pd.Series)) or data != 0.0)
 
     def set_model(self, model_name: str) -> None:
         """Defines the column name for the model this state belongs to"""

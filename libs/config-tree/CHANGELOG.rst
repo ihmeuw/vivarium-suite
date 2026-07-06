@@ -1,3 +1,7 @@
+**5.0.8 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
 **5.0.7 - 06/22/26**
 
 - Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``

@@ -116,7 +116,7 @@ def test_microdata_observer_filter_subsets_simulants(base_config, base_plugins) 
     config = _configure(
         base_config,
         {"columns": ["age", "sex"], "filter": ['sex == "Female"', "age >= 20"]},
-        population_size=1000,
+        population_size=250,
     )
     sim = InteractiveContext(
         components=[BasePopulation(), MicrodataObserver()],
@@ -164,7 +164,7 @@ def test_microdata_observer_row_limit_randomly_samples_per_timestep(
             ],  # 2 observed -> 200 // 2 = 100
             "row_limit": 200,
         },
-        population_size=1000,
+        population_size=250,
     )
     sim = InteractiveContext(
         components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
@@ -192,7 +192,7 @@ def test_microdata_observer_row_limit_without_timesteps_uses_step_estimate(
             "columns": ["simulant_id"],
             "row_limit": 2 * ESTIMATED_TIMESTEPS,
         },  # -> 2 rows per step
-        population_size=1000,
+        population_size=250,
     )
     sim = InteractiveContext(
         components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
@@ -287,7 +287,7 @@ def test_microdata_observer_single_random_sample_records_fixed_cohort(
             "row_limit": 200,
             "single_random_sample": True,
         },
-        population_size=1000,
+        population_size=250,
     )
     sim = InteractiveContext(
         components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
@@ -318,7 +318,7 @@ def test_microdata_observer_single_random_sample_drops_members_leaving_filter(
             "row_limit": 200,  # cohort size 100
             "single_random_sample": True,
         },
-        population_size=1000,
+        population_size=250,
     )
     sim = InteractiveContext(
         components=[BasePopulation(), _SimulantID(), _Disqualifier(), MicrodataObserver()],

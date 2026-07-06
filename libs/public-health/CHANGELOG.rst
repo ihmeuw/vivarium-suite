@@ -1,3 +1,11 @@
+**6.3.2 - 07/01/26**
+
+- Reduce population size in test suites to improve runtime
+
+**6.3.1 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
 **6.3.0 - 06/29/26**
 
 - Add Microdata Observer to the results system
