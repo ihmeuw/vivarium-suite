@@ -12,76 +12,59 @@ import pytest
 from vivarium.build_utils.readme import load_versions, main, update_readme_text
 
 
-def test_bold_enumerated_preserves_markup() -> None:
-    text = "**Supported Python versions: 3.9, 3.10**\n"
-    updated, count = update_readme_text(text, ["3.10", "3.11", "3.12"])
-    assert updated == "**Supported Python versions: 3.10, 3.11, 3.12**\n"
-    assert count == 1
+@pytest.mark.parametrize(
+    "text, versions, expected, count",
+    [
+        # Bold markup is preserved.
+        (
+            "**Supported Python versions: 3.9, 3.10**\n",
+            ["3.10", "3.11", "3.12"],
+            "**Supported Python versions: 3.10, 3.11, 3.12**\n",
+            1,
+        ),
+        # Non-bold stays non-bold.
+        (
+            "Supported Python versions: 3.9, 3.10\n",
+            ["3.10", "3.11"],
+            "Supported Python versions: 3.10, 3.11\n",
+            1,
+        ),
+        # A single-version list still matches.
+        (
+            "**Supported Python versions: 3.10, 3.11**\n",
+            ["3.13"],
+            "**Supported Python versions: 3.13**\n",
+            1,
+        ),
+        # Versions are ordered numerically, not lexically ("3.9" < "3.10").
+        (
+            "**Supported Python versions: 3.8**\n",
+            ["3.11", "3.9", "3.10"],
+            "**Supported Python versions: 3.9, 3.10, 3.11**\n",
+            1,
+        ),
+        # No marker: text unchanged, no substitutions.
+        (
+            "A README with no supported-Python declarations.\n",
+            ["3.10", "3.11"],
+            "A README with no supported-Python declarations.\n",
+            0,
+        ),
+    ],
+)
+def test_update_readme_text(
+    text: str, versions: list[str], expected: str, count: int
+) -> None:
+    updated, made = update_readme_text(text, versions)
+    assert updated == expected
+    assert made == count
 
 
-def test_non_bold_enumerated_stays_non_bold() -> None:
-    text = "Supported Python versions: 3.9, 3.10\n"
-    updated, _ = update_readme_text(text, ["3.10", "3.11"])
-    assert updated == "Supported Python versions: 3.10, 3.11\n"
-    assert "**" not in updated
-
-
-def test_single_version_enumerated() -> None:
-    text = "**Supported Python versions: 3.10, 3.11**\n"
-    updated, count = update_readme_text(text, ["3.13"])
-    assert updated == "**Supported Python versions: 3.13**\n"
-    assert count == 1
-
-
-def test_floor_form_updates_to_min() -> None:
-    text = "requires Python 3.9+ to run\n"
-    updated, count = update_readme_text(text, ["3.10", "3.11"])
-    assert updated == "requires Python 3.10+ to run\n"
-    assert count == 1
-
-
-def test_install_pin_updates_to_max() -> None:
-    text = "conda create -n ENV python=3.10\n"
-    updated, count = update_readme_text(text, ["3.10", "3.11", "3.12"])
-    assert updated == "conda create -n ENV python=3.12\n"
-    assert count == 1
-
-
-def test_config_tree_double_form() -> None:
-    text = "**Supported Python versions: 3.9, 3.10**\n" "   conda create -n ENV python=3.9\n"
-    updated, count = update_readme_text(text, ["3.10", "3.11", "3.12", "3.13"])
-    assert "**Supported Python versions: 3.10, 3.11, 3.12, 3.13**" in updated
-    assert "python=3.13" in updated
-    assert count == 2
-
-
-def test_idempotent() -> None:
+def test_update_readme_text_is_idempotent() -> None:
     versions = ["3.10", "3.11", "3.12"]
-    text = "**Supported Python versions: 3.9**\n   python=3.9\n"
-    once, _ = update_readme_text(text, versions)
+    once, _ = update_readme_text("**Supported Python versions: 3.9**\n", versions)
     twice, _ = update_readme_text(once, versions)
     assert once == twice
-
-
-def test_numeric_sort_not_lexical() -> None:
-    text = "**Supported Python versions: 3.8**\n"
-    updated, _ = update_readme_text(text, ["3.11", "3.9", "3.10"])
-    # Lexical sorting would order "3.10" < "3.9"; numeric must not.
-    assert updated == "**Supported Python versions: 3.9, 3.10, 3.11**\n"
-
-
-def test_pip_double_equals_untouched() -> None:
-    text = "pip install vivarium-x==3.13\n"
-    updated, count = update_readme_text(text, ["3.10", "3.11"])
-    assert updated == text
-    assert count == 0
-
-
-def test_no_marker_returns_zero_substitutions() -> None:
-    text = "A README with no supported-Python declarations.\n"
-    updated, count = update_readme_text(text, ["3.10", "3.11"])
-    assert updated == text
-    assert count == 0
 
 
 def _write_lib(tmp_path: Path, readme: str, versions: list[str]) -> Path:
@@ -91,66 +74,81 @@ def _write_lib(tmp_path: Path, readme: str, versions: list[str]) -> Path:
     return tmp_path
 
 
+@pytest.mark.parametrize(
+    "readme, versions, argv, exit_code, readme_substrings, stderr_substrings",
+    [
+        # Write mode fixes drift on disk (also covers positional-root resolution).
+        (
+            "**Supported Python versions: 3.10, 3.11, 3.12, 3.13**\n",
+            ["3.11", "3.12", "3.13"],
+            [],
+            0,
+            ["**Supported Python versions: 3.11, 3.12, 3.13**"],
+            [],
+        ),
+        # --check on an in-sync README passes and writes nothing.
+        (
+            "**Supported Python versions: 3.10, 3.11**\n",
+            ["3.10", "3.11"],
+            ["--check"],
+            0,
+            ["3.10, 3.11"],
+            [],
+        ),
+        # --check on drift fails, prints a diff, and leaves the file untouched.
+        (
+            "**Supported Python versions: 3.10, 3.11, 3.12, 3.13**\n",
+            ["3.11", "3.12", "3.13"],
+            ["--check"],
+            1,
+            ["3.10"],  # still on disk; --check writes nothing
+            ["out of sync", "3.10"],  # diff reports the removed version
+        ),
+        # No marker: warn, exit 0.
+        (
+            "No version line here.\n",
+            ["3.10", "3.11"],
+            [],
+            0,
+            [],
+            ["no supported-Python marker"],
+        ),
+        # No marker with --require-line: error, exit 1.
+        (
+            "No version line here.\n",
+            ["3.10", "3.11"],
+            ["--require-line"],
+            1,
+            [],
+            ["ERROR"],
+        ),
+    ],
+)
+def test_main(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    readme: str,
+    versions: list[str],
+    argv: list[str],
+    exit_code: int,
+    readme_substrings: list[str],
+    stderr_substrings: list[str],
+) -> None:
+    root = _write_lib(tmp_path, readme, versions)
+    assert main([*argv, str(root)]) == exit_code
+    err = capsys.readouterr().err
+    on_disk = (root / "README.rst").read_text()
+    for substring in readme_substrings:
+        assert substring in on_disk
+    for substring in stderr_substrings:
+        assert substring in err
+
+
 def test_load_versions_rejects_empty(tmp_path: Path) -> None:
     path = tmp_path / "python_versions.json"
     path.write_text("[]")
     with pytest.raises(ValueError):
         load_versions(path)
-
-
-def test_write_mode_updates_file(tmp_path: Path) -> None:
-    root = _write_lib(
-        tmp_path,
-        "**Supported Python versions: 3.10, 3.11, 3.12, 3.13**\n",
-        ["3.11", "3.12", "3.13"],
-    )
-    assert main([str(root)]) == 0
-    assert (
-        root / "README.rst"
-    ).read_text() == "**Supported Python versions: 3.11, 3.12, 3.13**\n"
-
-
-def test_root_positional_resolves_defaults(tmp_path: Path) -> None:
-    root = _write_lib(tmp_path, "**Supported Python versions: 3.9**\n", ["3.10", "3.11"])
-    assert main([str(root)]) == 0
-    assert "3.10, 3.11" in (root / "README.rst").read_text()
-
-
-def test_check_clean_returns_zero(tmp_path: Path) -> None:
-    root = _write_lib(
-        tmp_path, "**Supported Python versions: 3.10, 3.11**\n", ["3.10", "3.11"]
-    )
-    assert main(["--check", str(root)]) == 0
-
-
-def test_check_drift_returns_one_and_diffs(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = _write_lib(
-        tmp_path,
-        "**Supported Python versions: 3.10, 3.11, 3.12, 3.13**\n",
-        ["3.11", "3.12", "3.13"],
-    )
-    assert main(["--check", str(root)]) == 1
-    err = capsys.readouterr().err
-    assert "out of sync" in err
-    assert "3.10" in err  # the removed version appears in the diff
-    # --check must not modify the file.
-    assert "3.10" in (root / "README.rst").read_text()
-
-
-def test_no_marker_warns_and_returns_zero(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = _write_lib(tmp_path, "No version line here.\n", ["3.10", "3.11"])
-    assert main([str(root)]) == 0
-    assert "no supported-Python marker" in capsys.readouterr().err
-
-
-def test_require_line_flag_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    root = _write_lib(tmp_path, "No version line here.\n", ["3.10", "3.11"])
-    assert main(["--require-line", str(root)]) == 1
-    assert "ERROR" in capsys.readouterr().err
 
 
 def test_console_script_entry_point_registered() -> None:

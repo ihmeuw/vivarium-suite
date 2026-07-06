@@ -1,8 +1,6 @@
-"""Sync a lib README's supported-Python declarations from ``python_versions.json``.
+"""Sync a lib README's supported Python versions from its ``python_versions.json``.
 
-Canonical implementation shared across the vivarium-suite monorepo so each package
-no longer carries its own copy of the updater (MIC-5670). Kept stdlib-only at
-runtime so ``vivarium-build-utils`` stays zero-dependency.
+Shared across the vivarium-suite monorepo so no lib copies its own updater (MIC-5670).
 """
 from __future__ import annotations
 
@@ -13,18 +11,12 @@ import re
 import sys
 from pathlib import Path
 
-# Each pattern captures the invariant prefix in group 1 and matches only the
-# version payload, so surrounding RST markup (e.g. ``**bold**``) is preserved.
-# Enumerated form: "Supported Python versions: 3.10, 3.11, 3.12". The trailing
-# group repeats with ``*`` (not ``+``) so a single-version list still matches.
+# Capture the invariant prefix in group 1 and match only the version payload, so
+# surrounding RST markup (e.g. ``**bold**``) is preserved. The trailing group
+# repeats with ``*`` (not ``+``) so a single-version list still matches.
 _ENUMERATED = re.compile(
     r"(Supported Python versions:[ \t]*)\d+\.\d+(?:[ \t]*,[ \t]*\d+\.\d+)*"
 )
-# Floor form: "requires Python 3.10+".
-_FLOOR = re.compile(r"(requires Python[ \t]+)\d+\.\d+\+")
-# Install-snippet pin: "conda create ... python=3.13". The trailing ``=`` in
-# ``pip install foo==3.13`` is not a digit, so those lines are left untouched.
-_PIN = re.compile(r"(python=)\d+\.\d+")
 
 DEFAULT_README = "README.rst"
 DEFAULT_VERSIONS_FILE = "python_versions.json"
@@ -59,12 +51,10 @@ def load_versions(path: Path) -> list[str]:
 
 
 def update_readme_text(text: str, versions: list[str]) -> tuple[str, int]:
-    """Rewrite supported-Python declarations in README text to match ``versions``.
+    """Rewrite the "Supported Python versions" line in README text to match ``versions``.
 
-    Runs three independent, idempotent substitutions: the enumerated "Supported
-    Python versions" list, a "requires Python X.Y+" floor, and a ``python=X.Y``
-    install-snippet pin. Only version payloads are replaced, so surrounding markup
-    is preserved. Assumes ``X.Y`` (major.minor) versions.
+    Replaces only the enumerated version payload, so surrounding RST markup is
+    preserved. Idempotent. Assumes ``X.Y`` (major.minor) versions.
 
     Parameters
     ----------
@@ -77,18 +67,8 @@ def update_readme_text(text: str, versions: list[str]) -> tuple[str, int]:
     -------
         The updated text and the number of substitutions made.
     """
-    ordered = sorted(versions, key=_version_key)
-    minimum, maximum = ordered[0], ordered[-1]
-    enumerated = ", ".join(ordered)
-
-    total = 0
-    text, count = _ENUMERATED.subn(lambda m: f"{m.group(1)}{enumerated}", text)
-    total += count
-    text, count = _FLOOR.subn(lambda m: f"{m.group(1)}{minimum}+", text)
-    total += count
-    text, count = _PIN.subn(lambda m: f"{m.group(1)}{maximum}", text)
-    total += count
-    return text, total
+    enumerated = ", ".join(sorted(versions, key=_version_key))
+    return _ENUMERATED.subn(lambda m: f"{m.group(1)}{enumerated}", text)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
