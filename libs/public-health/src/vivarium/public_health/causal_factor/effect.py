@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from vivarium.config_tree import ConfigurationError
+from vivarium.config_tree import ConfigTree, ConfigurationError
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lookup import LookupTable
@@ -28,6 +28,7 @@ from vivarium.public_health.causal_factor.distributions import DichotomousDistri
 from vivarium.public_health.causal_factor.exposure import CausalFactor
 from vivarium.public_health.causal_factor.utilities import (
     load_exposure_data,
+    load_tmred,
     pivot_categorical,
 )
 from vivarium.public_health.utilities import EntityString, TargetString
@@ -86,6 +87,24 @@ class CausalFactorEffect(Component, ABC):
                         ``{causal_factor}.population_attributable_fraction``. Used to
                         adjust the target measure to account for the portion
                         attributable to this causal factor.
+                    tmred:
+                        Source for theoretical-minimum-risk exposure (TMRED)
+                        data, used for continuous exposures to compute the
+                        TMREL. Default is the artifact key ``{causal_factor}.tmred``.
+                        Accepts a single-row DataFrame with ``distribution``,
+                        ``min``, and ``max`` columns to bypass the artifact.
+                    relative_risk_scalar:
+                        Source for the relative-risk scalar, used for
+                        continuous exposures to scale the log-linear relative
+                        risk. Default is the artifact key
+                        ``{causal_factor}.relative_risk_scalar``. Accepts a scalar
+                        value to bypass the artifact.
+                    demographic_dimensions:
+                        Source for the demographic dimensions grid, used to
+                        expand a scalar relative risk for a dichotomous
+                        exposure. Default is the artifact key
+                        ``population.demographic_dimensions``. Accepts a DataFrame
+                        to bypass the artifact.
                 data_source_parameters:
                     relative_risk: dict
                         Parameters for scipy.stats distributions when using
@@ -98,6 +117,9 @@ class CausalFactorEffect(Component, ABC):
                 "data_sources": {
                     "relative_risk": f"{self.causal_factor}.relative_risk",
                     "population_attributable_fraction": f"{self.causal_factor}.population_attributable_fraction",
+                    "tmred": f"{self.causal_factor}.tmred",
+                    "relative_risk_scalar": f"{self.causal_factor}.relative_risk_scalar",
+                    "demographic_dimensions": "population.demographic_dimensions",
                 },
                 "data_source_parameters": {
                     "relative_risk": {},
@@ -214,6 +236,27 @@ class CausalFactorEffect(Component, ABC):
             or causal_factor_exposure_component.get_distribution_type(builder)
         )
 
+    def get_tmred(
+        self, builder: Builder, configuration: ConfigTree | None = None
+    ) -> dict[str, Any]:
+        """Load and normalize the TMRED data from the configured data source.
+
+        Parameters
+        ----------
+        builder
+            Access point for utilizing framework interfaces during setup.
+        configuration
+            Optional configuration override. If ``None``, use
+            ``self.configuration``.
+
+        Returns
+        -------
+            The normalized TMRED data as a dict of scalar fields.
+        """
+        if configuration is None:
+            configuration = self.configuration
+        return load_tmred(self.get_data(builder, configuration.data_sources.tmred))
+
     def load_relative_risk(
         self,
         builder: Builder,
@@ -328,7 +371,9 @@ class CausalFactorEffect(Component, ABC):
                     f"exposure distribution type {self._exposure_distribution_type}."
                 )
             causal_factor_type = self.causal_factor.type
-            cat1 = builder.data.load("population.demographic_dimensions")
+            cat1 = self.get_data(
+                builder, self.configuration.data_sources.demographic_dimensions
+            ).copy()
             cat1["parameter"] = DichotomousDistribution.get_exposed(causal_factor_type)
             cat1["value"] = rr_data
             cat2 = cat1.copy()
@@ -418,9 +463,11 @@ class CausalFactorEffect(Component, ABC):
         """
 
         if not self.is_exposure_categorical:
-            tmred = builder.data.load(f"{self.causal_factor}.tmred")
+            tmred = self.get_tmred(builder)
             tmrel = 0.5 * (tmred["min"] + tmred["max"])
-            scale = builder.data.load(f"{self.causal_factor}.relative_risk_scalar")
+            scale = self.get_data(
+                builder, self.configuration.data_sources.relative_risk_scalar
+            )
 
             def generate_relative_risk(index: pd.Index) -> pd.Series:
                 rr = self.relative_risk_table(index)
