@@ -368,10 +368,7 @@ def ensemble_distribution_sim(
 
 
 def test_ensemble_risk(base_config_factory, base_plugins, ensemble_distribution_weights):
-    """End-to-end: an ensemble-distributed risk sets up and steps without error.
-
-    Builds its own sim (not the shared module-scoped one) because it steps.
-    """
+    """End-to-end: an ensemble-distributed risk sets up and steps without error."""
     simulation, distribution = _build_ensemble_distribution_sim(
         base_config_factory(), base_plugins, ensemble_distribution_weights
     )
