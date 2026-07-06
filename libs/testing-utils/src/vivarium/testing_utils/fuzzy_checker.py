@@ -3,6 +3,7 @@
 #################
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import cache
 from itertools import chain, combinations
@@ -792,4 +793,12 @@ class FuzzyChecker:
         areas to be more thorough in manual V&V.
         """
         output = pd.DataFrame(self.proportion_test_diagnostics)
-        output.to_csv(Path(output_directory) / "proportion_test_diagnostics.csv", index=False)
+        # Include the xdist worker id so parallel workers (separate processes)
+        # don't overwrite each other's diagnostics file.
+        worker = os.environ.get("PYTEST_XDIST_WORKER")
+        filename = (
+            f"proportion_test_diagnostics_{worker}.csv"
+            if worker
+            else "proportion_test_diagnostics.csv"
+        )
+        output.to_csv(Path(output_directory) / filename, index=False)
