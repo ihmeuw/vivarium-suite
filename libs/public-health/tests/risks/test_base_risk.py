@@ -530,7 +530,7 @@ class _CalibrationConstantModifier(Component):
 def test_risk_calibration_constant(base_config_factory, base_plugins):
     """Test that when a calibration constant modifier is registered on the
     exposure PPF pipeline, Risk exposures are scaled by (1 - calibration_value)."""
-    population_size = 10000
+    population_size = 1000
     calibration_value = 0.75
 
     exposure_data = pd.DataFrame(

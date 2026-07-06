@@ -161,6 +161,9 @@ configuration. The defaults load from the artifact:
            disability_weight: cause.measles.disability_weight
            excess_mortality_rate: cause.measles.excess_mortality_rate
 
+See :ref:`disease_data_concept` for every data key the disease components read
+and the column layout each one expects.
+
 Recovered State
 +++++++++++++++
 

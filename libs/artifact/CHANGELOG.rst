@@ -1,3 +1,11 @@
+**1.0.6 - 07/06/26**
+
+- Add PyPI classifiers
+
+**1.0.5 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
 **1.0.4 - 06/22/26**
 
 - Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``

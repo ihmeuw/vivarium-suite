@@ -1,3 +1,36 @@
+**6.3.3 - 07/06/26**
+
+- Add PyPI classifiers
+
+**6.3.2 - 07/01/26**
+
+- Reduce population size in test suites to improve runtime
+
+**6.3.1 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
+**6.3.0 - 06/29/26**
+
+- Add Microdata Observer to the results system
+- Support ``filter``, ``timesteps``, and ``row_limit`` configuration for the Microdata Observer
+- Add a ``single_random_sample`` closed-cohort option
+- Require ``vivarium-engine>=5.2.0`` for the callable population filter used by the Microdata Observer's row sampling
+
+**6.2.0 - 06/29/26**
+
+- Apply the calibration constant (PAF) via a value attribute modifier instead of a pipeline post-processor
+- Raise a descriptive ``ValueError`` when combining calibration constants (PAFs) produces NaNs
+- Bugfix: build the ``CausalFactorEffect.get_filtered_data`` target mask as a ``pd.Series`` so filtering applies correctly
+- Add static ``DichotomousDistribution.get_exposed``/``get_unexposed`` and ``rename_deprecated_categories`` helpers
+- Add static ``RiskEffect.get_name``/``InterventionEffect.get_name`` and ``risk``/``intervention`` properties
+
+**6.1.2 - 06/29/26**
+
+- Allow RiskAttributableDisease input data to be defined without an artifact
+- Rewrite the disease tutorial to build every model artifactless, driving all
+  data through configuration.
+
 **6.1.1 - 06/22/26**
 
 - Pin vivarium-build-utils to v4.x and update Makefile to use ``vivarium.build_utils``

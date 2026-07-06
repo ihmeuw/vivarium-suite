@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import math
 import re
@@ -27,7 +29,7 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
-from vivarium.engine.framework.results.interface import PopulationFilter
+from vivarium.engine.framework.results.interface import _PopulationFilter
 from vivarium.engine.framework.results.observation import (
     AddingObservation,
     ConcatenatingObservation,
@@ -42,6 +44,15 @@ from vivarium.engine.types import ScalarMapper, VectorMapper
 def _aggregate_state_person_time(x: pd.DataFrame) -> float:
     """Helper aggregator function for observation testing"""
     return len(x) * (28 / 365.25)
+
+
+def _make_filter_context(
+    mocker: MockerFixture, tracked_query: str = ""
+) -> tuple[pd.DataFrame, ResultsContext]:
+    """Return a population copy and a ResultsContext with get_tracked_query stubbed."""
+    ctx = ResultsContext()
+    mocker.patch.object(ctx, "get_tracked_query", return_value=tracked_query, create=True)
+    return BASE_POPULATION.copy(), ctx
 
 
 @pytest.fixture
@@ -207,13 +218,13 @@ def test_add_stratification_raises(
     [
         {
             "name": "living_person_time",
-            "population_filter": PopulationFilter("is_alive == True and undead == False"),
+            "population_filter": _PopulationFilter("is_alive == True and undead == False"),
             "requires_attributes": ["is_alive", "undead"],
             "when": lifecycle_states.COLLECT_METRICS,
         },
         {
             "name": "undead_person_time",
-            "population_filter": PopulationFilter("undead == True"),
+            "population_filter": _PopulationFilter("undead == True"),
             "requires_attributes": ["undead"],
             "when": lifecycle_states.TIME_STEP_PREPARE,
         },
@@ -240,7 +251,7 @@ def test_register_observation_duplicate_name_raises() -> None:
     ctx.register_observation(
         observation_type=AddingObservation,
         name="some-observation-name",
-        population_filter=PopulationFilter("some-pop-filter"),
+        population_filter=_PopulationFilter("some-pop-filter"),
         when="some-when",
         requires_attributes=[],
         results_formatter=lambda df: df,
@@ -255,7 +266,7 @@ def test_register_observation_duplicate_name_raises() -> None:
         ctx.register_observation(
             observation_type=ConcatenatingObservation,
             name="some-observation-name",
-            population_filter=PopulationFilter("some-other-pop-filter"),
+            population_filter=_PopulationFilter("some-other-pop-filter"),
             when="some-other-when",
             requires_attributes=[],
             stratifications=None,
@@ -320,7 +331,7 @@ def test_adding_observation_gather_results(
     observation = ctx.register_observation(
         observation_type=AddingObservation,
         name="foo",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         requires_attributes=aggregator_sources,
         aggregator_sources=aggregator_sources,
         aggregator=aggregator,
@@ -372,7 +383,7 @@ def test_concatenating_observation_gather_results(
     )
 
     lifecycle_state = lifecycle_states.COLLECT_METRICS
-    population_filter = PopulationFilter(query="house=='hufflepuff'")
+    population_filter = _PopulationFilter("house=='hufflepuff'")
     included_cols = ["familiar", "house"]
     observation = ctx.register_observation(
         observation_type=ConcatenatingObservation,
@@ -472,7 +483,7 @@ def test_gather_results_partial_stratifications_in_results(
     observation = ctx.register_observation(
         observation_type=AddingObservation,
         name=name,
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         requires_attributes=aggregator_sources,
         aggregator_sources=aggregator_sources,
         aggregator=aggregator,
@@ -504,7 +515,7 @@ def test_gather_results_with_empty_pop_filter(event: Event, mocker: MockerFixtur
     observation = ctx.register_observation(
         observation_type=AddingObservation,
         name="wizard_count",
-        population_filter=PopulationFilter("house == 'durmstrang'"),
+        population_filter=_PopulationFilter("house == 'durmstrang'"),
         requires_attributes=["house"],
         aggregator_sources=[],
         aggregator=len,
@@ -531,7 +542,7 @@ def test_gather_results_with_no_stratifications(event: Event, mocker: MockerFixt
     observation = ctx.register_observation(
         observation_type=AddingObservation,
         name="wizard_count",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         requires_attributes=[],
         aggregator_sources=None,
         aggregator=len,
@@ -578,7 +589,7 @@ def test_gather_results_with_zero_column_population(
     observation = ctx.register_observation(
         observation_type=AddingObservation,
         name="row_count",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         requires_attributes=[],
         aggregator_sources=None,
         aggregator=lambda df: len(df),
@@ -616,7 +627,7 @@ def test_gather_results_with_zero_row_zero_column_population(
     observation = ctx.register_observation(
         observation_type=AddingObservation,
         name="row_count",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         requires_attributes=[],
         aggregator_sources=None,
         aggregator=lambda df: len(df),
@@ -660,7 +671,7 @@ def test_bad_aggregator_stratification(event: Event, mocker: MockerFixture) -> N
     observation = ctx.register_observation(
         observation_type=AddingObservation,
         name="this_shouldnt_work",
-        population_filter=PopulationFilter(),
+        population_filter=_PopulationFilter(),
         requires_attributes=[],
         aggregator_sources=[],
         aggregator=sum,
@@ -691,7 +702,7 @@ def test_get_observations(
     ctx = ResultsContext()
     register_observation_kwargs = {
         "observation_type": AddingObservation,
-        "population_filter": PopulationFilter(),
+        "population_filter": _PopulationFilter(),
         "requires_attributes": [],
         "results_formatter": lambda: None,
         "stratifications": (),
@@ -750,7 +761,7 @@ def test_get_required_attributes(
     all_observations = {}
     register_observation_kwargs = {
         "observation_type": AddingObservation,
-        "population_filter": PopulationFilter(include_untracked=include_untracked),
+        "population_filter": _PopulationFilter(include_untracked=include_untracked),
         "when": lifecycle_states.COLLECT_METRICS,
         "results_formatter": lambda: None,
         "stratifications": (),
@@ -812,7 +823,7 @@ def test_get_required_attributes_columns_from_query(mocker: MockerFixture) -> No
     observation = ctx.register_observation(
         observation_type=AddingObservation,
         name="obs_with_query",
-        population_filter=PopulationFilter(
+        population_filter=_PopulationFilter(
             "color in ['black', 'white'] or name == 'Garfield'"
         ),
         when=lifecycle_states.COLLECT_METRICS,
@@ -843,13 +854,11 @@ def test_get_required_attributes_columns_from_query(mocker: MockerFixture) -> No
 def test__filter_population(
     pop_filter: str, include_untracked: bool, tracked_query: str, mocker: MockerFixture
 ) -> None:
-    population = BASE_POPULATION.copy()
-    ctx = ResultsContext()
-    mocker.patch.object(ctx, "get_tracked_query", return_value=tracked_query, create=True)
+    population, ctx = _make_filter_context(mocker, tracked_query)
 
     filtered_pop = ctx._filter_population(
         population=population,
-        population_filter=PopulationFilter(pop_filter, include_untracked=include_untracked),
+        population_filter=_PopulationFilter(pop_filter, include_untracked=include_untracked),
     )
     expected = population.copy()
     if pop_filter:
@@ -859,6 +868,37 @@ def test__filter_population(
         house = tracked_query.split("==")[1].strip("'")
         expected = expected[expected["house"] == house]
     assert filtered_pop.equals(expected)
+
+
+def test__filter_population_with_row_filter_callable(mocker: MockerFixture) -> None:
+    """A callable pop_filter subsets the population by index."""
+    population, ctx = _make_filter_context(mocker)
+
+    def keep_even(index: pd.Index[int]) -> pd.Index[int]:
+        return index[index % 2 == 0]
+
+    filtered_pop = ctx._filter_population(
+        population=population,
+        population_filter=_PopulationFilter(keep_even, include_untracked=True),
+    )
+    assert filtered_pop.equals(population.loc[keep_even(population.index)])
+
+
+def test__filter_population_with_query_and_row_filter(mocker: MockerFixture) -> None:
+    """A (query, callable) pop_filter applies the query first, then the callable."""
+    population, ctx = _make_filter_context(mocker)
+
+    def keep_first(index: pd.Index[int]) -> pd.Index[int]:
+        return index[:1]
+
+    filtered_pop = ctx._filter_population(
+        population=population,
+        population_filter=_PopulationFilter(
+            ('familiar=="cat"', keep_first), include_untracked=True
+        ),
+    )
+    expected = population[population["familiar"] == "cat"]
+    assert filtered_pop.equals(expected.loc[keep_first(expected.index)])
 
 
 @pytest.mark.parametrize(

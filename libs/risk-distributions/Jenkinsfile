@@ -35,5 +35,4 @@ reusable_pipeline(
         "main"
     ],
     env_reqs: "ci_jenkins",
-    run_mypy: false,
 )

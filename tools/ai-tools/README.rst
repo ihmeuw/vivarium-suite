@@ -14,7 +14,7 @@ It includes:
 
 **Code Reviewer**
 
-- ``/viv:code-reviewer <PR or description>`` — parallel multi-lens review that fans out to specialist sub-agents focused on:
+- ``/viv:code-reviewer <PR or description>`` — parallel multi-agent review that fans out to specialist sub-agents focused on:
   
   - Maintainability
   - DRY
@@ -22,7 +22,10 @@ It includes:
   - Testing coverage and quality
   - Documentation
 
-  plus its own functional-correctness pass.
+  plus its own functional-correctness pass. The five review agents run on Sonnet;
+  every finding is then independently scored for confidence (0-100) by a
+  per-finding ``_review_scorer`` Haiku sub-agent, and findings below 50 are
+  dropped — so only verified issues reach the report, each shown with its score.
 
 After the review, findings the user won't address in the current PR can be
 handed to the ``ticket-triage`` skill (see Skills below), to compile and file non-duplicate JIRA tickets.
@@ -110,7 +113,7 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
 - ``vivarium-research`` — connector for the Vivarium Research
   documentation (https://vivarium-research.readthedocs.io). Discovers
   the docs nav tree on demand and searches modelling-strategy content
-  via the Read the Docs v2 API.
+  via the Read the Docs search API.
 - ``design-doc`` — SimSci Engineering convention for drafting a design
   document on the IHME hub
 - ``brainstorming`` — structured design exploration that produces a Jira
@@ -177,7 +180,7 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
 Once installed, the entry points are the slash commands
 ``/viv:code-reviewer``, ``/viv:model-regression-debugger``, and
 ``/viv:framework-development``. These run the sub-agent fan-out at
-main-session level and produce a multi-lens review, a regression
+main-session level and produce a multi-agent review, a regression
 investigation, or an end-to-end feature build.
 
 Delegation mechanism
@@ -190,7 +193,7 @@ field grants the main session permission to spawn the listed
 sub-agents in parallel, and the slash command body is itself the
 orchestration prompt.
 
-The multi-lens review fan-out is defined once, in the internal ``_review-core``
+The multi-agent review fan-out is defined once, in the internal ``_review-core``
 skill (``skills/_review-core/SKILL.md``, hidden from the ``/`` menu via
 ``user-invocable: false``), and invoked **inline** by ``/viv:code-reviewer``
 after it gathers PR context. A skill invoked from a command runs inline in the
@@ -199,6 +202,14 @@ same main session — not as a sub-agent — so ``_review-core`` can spawn the
 review be reused by other main-session commands without duplicating the
 fan-out.
 
+``_review-core`` runs two one-level fan-outs in sequence, tiered by model. The
+five review agents run on **Sonnet**; once they return, ``_review-core`` collects
+every finding (the review agents' plus its own functional-correctness pass) and spawns a
+second fan-out of ``_review_scorer`` agents on **Haiku** — one per finding — to
+score each finding's confidence (0-100) independently of the review agent that raised it.
+It then drops anything below 50 and synthesizes the survivors. Both fan-outs stay
+one level deep because ``_review-core`` itself runs inline in the main session.
+
 
 Security model and recommended deny rules
 =========================================
@@ -206,8 +217,9 @@ Security model and recommended deny rules
 The agents in this plugin have the following shell access on Claude
 Code:
 
-- The 5 ``_review_*`` sub-agents have **no Bash access at all**. They
-  are fed PR context by the slash command and analyze code with
+- The ``_review_*`` sub-agents — the five review agents plus the
+  per-finding ``_review_scorer`` — have **no Bash access at all**. They
+  are fed review context by ``_review-core`` and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
 - ``_claim_auditor`` likewise has **no Bash access** — it verifies
   plaintext claims with ``Read``/``Grep``/``Glob``, read-only MCP calls

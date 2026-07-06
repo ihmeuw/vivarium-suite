@@ -6,6 +6,7 @@ from .causal_factor import (
 from .columns import COLUMNS
 from .disability import DisabilityObserver
 from .disease import DiseaseObserver
+from .microdata import MicrodataObserver
 from .mortality import MortalityObserver
 from .observer import PublicHealthObserver
 from .simple_cause import SimpleCause

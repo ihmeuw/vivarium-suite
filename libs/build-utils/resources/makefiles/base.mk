@@ -188,6 +188,14 @@ lint: # Check for formatting errors
 mypy: # Check for type hinting errors
 	mypy --config-file pyproject.toml .
 
+.PHONY: mypy-if-typed
+mypy-if-typed: # Run mypy only if a py.typed marker exists under src/
+	@if find src -name py.typed 2>/dev/null | grep -q .; then \
+		make mypy; \
+	else \
+		echo "No py.typed marker found under src/; skipping mypy."; \
+	fi
+
 # test: test targets are defined in test.mk
 
 .PHONY: build-docs
@@ -216,8 +224,13 @@ validate-tag: # Validate that current git tag matches CHANGELOG and is valid sem
 tag-version: # Tag current version and push to git
     # TAG_PREFIX is empty for standalone repos and "vivarium-<lib>-" for monorepo libs.
     # Must stay consistent with validate-tag, which filters by the same prefix.
-	git tag -a "${TAG_PREFIX}v${PACKAGE_VERSION}" -m "Tag automatically generated from Jenkins."
-	git push --tags
+	@tag="${TAG_PREFIX}v${PACKAGE_VERSION}"; \
+	if git rev-parse -q --verify "refs/tags/$$tag" >/dev/null; then \
+		echo "Tag $$tag already exists; skipping."; \
+	else \
+		git tag -a "$$tag" -m "Release $$tag"; \
+		git push origin "$$tag"; \
+	fi
 
 .PHONY: build-package
 build-package: # Build pip wheel package
@@ -253,15 +266,9 @@ clean: # Clean build artifacts and temporary files
 .PHONY: check
 check: # Run development checks
 	make lint
-# 	Run mypy if any py.typed marker exists under src/
-# 	Use 'find' command rather than a hardcoded src/$(PACKAGE_NAME)/py.typed path so
-#	this works for both flat layouts (src/<pkg>/py.typed) and namespace layouts under
-#	monorepo (src/vivarium/<pkg>/py.typed).
-	@if find src -name py.typed 2>/dev/null | grep -q .; then \
-		echo; \
-		echo "Running mypy"; \
-		make mypy; \
-	fi
+# 	Run mypy if any py.typed marker exists under src/ (see mypy-if-typed)
+	@echo
+	make mypy-if-typed
 # 	Run all fast tests
 	@echo
 	@echo "Running fast tests"

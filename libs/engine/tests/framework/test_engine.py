@@ -68,7 +68,6 @@ def is_same_object_method(
 @pytest.fixture()
 def SimulationContext() -> Generator[type[SimulationContext_], None, None]:
     yield SimulationContext_
-    SimulationContext_._clear_context_cache()
 
 
 @pytest.fixture
@@ -91,6 +90,18 @@ def test_simulation_with_non_components(
         ComponentConfigError, match="that do not inherit from `vivarium.engine.Component`"
     ):
         SimulationContext(components=components + [NonComponent()])  # type: ignore[list-item]
+
+
+@pytest.fixture(scope="module")
+def _polluted_context_cache() -> None:
+    # Runs before the function-scoped autouse clear (higher scope = earlier setup),
+    # simulating residue a prior test left in the process-global name set.
+    SimulationContext_._created_simulation_contexts.add("prior_test_residue")
+
+
+def test_context_cache_cleared_before_each_test(_polluted_context_cache: None) -> None:
+    # Fails deterministically if the autouse clear in conftest.py is removed.
+    assert SimulationContext_._created_simulation_contexts == set()
 
 
 def test_SimulationContext_get_sim_name(SimulationContext: type[SimulationContext_]) -> None:
