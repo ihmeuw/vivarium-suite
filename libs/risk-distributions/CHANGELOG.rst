@@ -1,3 +1,7 @@
+**3.1.5 - 07/06/26**
+
+- Add PyPI classifiers
+
 **3.1.4 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.

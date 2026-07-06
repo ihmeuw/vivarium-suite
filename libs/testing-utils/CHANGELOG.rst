@@ -1,3 +1,7 @@
+**0.7.3 - 07/06/26**
+
+- Add PyPI classifiers
+
 **0.7.2 - 07/02/26**
 
 - Write a per-xdist-worker file in ``FuzzyChecker.save_diagnostic_output``
