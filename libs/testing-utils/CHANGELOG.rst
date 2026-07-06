@@ -1,3 +1,7 @@
+**0.7.4 - 07/06/26**
+
+- Update ``vivarium-inputs`` pin to ``>=8.0.0`` for the ``gbd_mapping`` monorepo migration
+
 **0.7.3 - 07/06/26**
 
 - Add PyPI classifiers
