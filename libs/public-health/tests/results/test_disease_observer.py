@@ -41,6 +41,20 @@ def _make_t_virus_model(disease: str, year_start: int, year_end: int) -> Disease
     return DiseaseModel(disease, residual_state=healthy, states=[healthy, with_condition])
 
 
+def _build_disease_observer_sim(configuration, base_plugins, components, config_update=None):
+    """Build and set up a disease-observer sim; the caller steps it."""
+    simulation = InteractiveContext(
+        components=components,
+        configuration=configuration,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    if config_update:
+        simulation.configuration.update(config_update)
+    simulation.setup()
+    return simulation
+
+
 @pytest.fixture
 def model(base_config, disease: str) -> DiseaseModel:
     """A dummy SI model where everyone should be `with_condition` by the third timestep."""
@@ -79,19 +93,17 @@ def human_cortico_deficiency():
 def disease_observer_sim(base_config_factory, base_plugins):
     """Return a shared, read-only t_virus observer sim; don't step or mutate it."""
     config = base_config_factory()
-    simulation = InteractiveContext(
-        components=[
+    simulation = _build_disease_observer_sim(
+        config,
+        base_plugins,
+        [
             BasePopulation(),
             _make_t_virus_model("t_virus", config.time.start.year, config.time.end.year),
             ResultsStratifier(),
             DiseaseObserver("t_virus"),
         ],
-        configuration=config,
-        plugin_configuration=base_plugins,
-        setup=False,
+        config_update={"stratification": {"t_virus": {"include": ["sex"]}}},
     )
-    simulation.configuration.update({"stratification": {"t_virus": {"include": ["sex"]}}})
-    simulation.setup()
     disease_states_at_start = simulation.get_population("t_virus")
     simulation.step()
     return simulation, disease_states_at_start
@@ -101,28 +113,12 @@ def disease_observer_sim(base_config_factory, base_plugins):
 def test_previous_state_update(base_config, base_plugins, disease, model):
     """Test that the observer previous_state column is updated as expected."""
     observer = DiseaseObserver(disease)
-    simulation = InteractiveContext(
-        components=[
-            BasePopulation(),
-            model,
-            ResultsStratifier(),
-            observer,
-        ],
-        configuration=base_config,
-        plugin_configuration=base_plugins,
-        setup=False,
+    simulation = _build_disease_observer_sim(
+        base_config,
+        base_plugins,
+        [BasePopulation(), model, ResultsStratifier(), observer],
+        config_update={"stratification": {"t_virus": {"include": ["sex"]}}},
     )
-    simulation.configuration.update(
-        {
-            "stratification": {
-                "t_virus": {
-                    "include": ["sex"],
-                }
-            }
-        }
-    )
-
-    simulation.setup()
     state_cols = [observer.previous_state_column_name, observer.disease]
     pop0 = simulation.get_population(state_cols)
 
@@ -229,8 +225,10 @@ def test_different_results_per_disease(
     vampiris_observer = DiseaseObserver(vampiris.cause)
     hcd_observer = DiseaseObserver(human_cortico_deficiency.cause)
 
-    simulation = InteractiveContext(
-        components=[
+    simulation = _build_disease_observer_sim(
+        base_config,
+        base_plugins,
+        [
             BasePopulation(),
             vampiris,
             human_cortico_deficiency,
@@ -238,12 +236,7 @@ def test_different_results_per_disease(
             vampiris_observer,
             hcd_observer,
         ],
-        configuration=base_config,
-        plugin_configuration=base_plugins,
-        setup=False,
     )
-
-    simulation.setup()
     simulation.step()
     results = simulation.get_results()
     assert set(results) == set(
@@ -270,28 +263,19 @@ def test_category_exclusions(
     """Test that we can exclude diseases via the model spec."""
     vampiris_observer = DiseaseObserver(vampiris.cause)
 
-    # Add exclusions to model spec
-    base_config.update(
-        {
+    simulation = _build_disease_observer_sim(
+        base_config,
+        base_plugins,
+        [BasePopulation(), vampiris, ResultsStratifier(), vampiris_observer],
+        config_update={
             "stratification": {
                 "excluded_categories": {
                     "vampiris": person_time_exclusions,
                     "transition_vampiris": transition_count_exclusions,
                 }
             }
-        }
+        },
     )
-    simulation = InteractiveContext(
-        components=[
-            BasePopulation(),
-            vampiris,
-            ResultsStratifier(),
-            vampiris_observer,
-        ],
-        configuration=base_config,
-        plugin_configuration=base_plugins,
-    )
-
     simulation.step()
     person_time = simulation.get_results()["person_time_vampiris"]
     transition_count = simulation.get_results()["transition_count_vampiris"]

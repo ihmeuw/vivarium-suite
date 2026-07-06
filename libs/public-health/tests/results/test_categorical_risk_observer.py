@@ -14,8 +14,18 @@ from vivarium.public_health.risks.base_risk import Risk
 from vivarium.public_health.utilities import to_years
 
 
-def _make_categorical_risk_data() -> dict:
-    """Build the exposure/category/distribution data for the 4-category test_risk."""
+@pytest.fixture
+def risk():
+    return Risk("risk_factor.test_risk")
+
+
+@pytest.fixture(scope="module")
+def risk_data() -> dict:
+    """Exposure/category/distribution data for the 4-category test_risk.
+
+    Module-scoped so ``categorical_risk_observer_sim`` (also module-scoped) can
+    consume it. Consumers only write it into their own sims, never mutate it.
+    """
     year_start = 1990
     year_end = 2010
     exposure_data = build_table_with_age(
@@ -41,15 +51,9 @@ def _make_categorical_risk_data() -> dict:
     }
 
 
-@pytest.fixture
-def categorical_risk():
-    return Risk("risk_factor.test_risk"), _make_categorical_risk_data()
-
-
 @pytest.fixture(scope="module")
-def categorical_risk_observer_sim(base_config_factory, base_plugins):
+def categorical_risk_observer_sim(base_config_factory, base_plugins, risk_data):
     """Return a shared, read-only test_risk observer sim; don't step or mutate it."""
-    risk_data = _make_categorical_risk_data()
     simulation = InteractiveContext(
         components=[
             BasePopulation(),
@@ -68,12 +72,12 @@ def categorical_risk_observer_sim(base_config_factory, base_plugins):
     simulation.step()
     simulation.finalize()
     simulation.report()
-    return simulation, risk_data
+    return simulation
 
 
 def test_observation_registration(categorical_risk_observer_sim):
     """Test that all expected observation stratifications appear in the results."""
-    simulation, _ = categorical_risk_observer_sim
+    simulation = categorical_risk_observer_sim
     results = simulation.get_results()
     assert set(results) == set(["person_time_test_risk"])
 
@@ -84,9 +88,9 @@ def test_observation_registration(categorical_risk_observer_sim):
     )
 
 
-def test_observation_correctness(categorical_risk_observer_sim):
+def test_observation_correctness(categorical_risk_observer_sim, risk_data):
     """Test that person time appear as expected in the results."""
-    simulation, risk_data = categorical_risk_observer_sim
+    simulation = categorical_risk_observer_sim
     time_step = pd.Timedelta(days=simulation.configuration.time.step_size)
 
     exposure_categories = risk_data["categories"].keys()
@@ -124,10 +128,8 @@ def test_observation_correctness(categorical_risk_observer_sim):
             assert np.isclose(expected_person_time, actual_person_time, rtol=0.001)
 
 
-def test_different_results_per_risk(base_config, base_plugins, categorical_risk):
+def test_different_results_per_risk(base_config, base_plugins, risk, risk_data):
     """Test that each observer saves its own results."""
-
-    risk, risk_data = categorical_risk
     risk_observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
 
     # Set up a second risk factor
@@ -163,8 +165,7 @@ def test_different_results_per_risk(base_config, base_plugins, categorical_risk)
 
 
 @pytest.mark.parametrize("exclusions", [[], ["cat1"], ["cat1", "cat4"]])
-def test_category_exclusions(base_config, base_plugins, categorical_risk, exclusions):
-    risk, risk_data = categorical_risk
+def test_category_exclusions(base_config, base_plugins, risk, risk_data, exclusions):
     observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
     simulation = InteractiveContext(
         components=[
