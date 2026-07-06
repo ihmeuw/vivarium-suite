@@ -102,7 +102,7 @@ class BaseDistribution:
     ) -> pd.DataFrame:
         """Compute the range of exposure values over which the distribution is reliably evaluable.
 
-        Exposure values outside this range fall in the numerically unstable tails and are 
+        Exposure values outside this range fall in the numerically unstable tails and are
         masked out during ``pdf`` evaluation.
 
         Parameters
