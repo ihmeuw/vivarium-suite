@@ -37,7 +37,7 @@ lint = ["vivarium-dependencies[lint]", "vivarium-testing-utils[pandera]"]
 validation = [
     "vivarium-artifact",
     "vivarium-gbd-mapping",
-    "vivarium-inputs>=7.1.0,<8.0.0",
+    "vivarium-inputs>=8.0.0",
     "vivarium-testing-utils[pandera]",
     "pyarrow",
     "seaborn",

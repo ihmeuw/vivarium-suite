@@ -1,3 +1,7 @@
+**0.7.3 - 07/06/26**
+
+- Update ``vivarium-inputs`` pin to ``>=8.0.0`` for the ``gbd_mapping`` monorepo migration
+
 **0.7.2 - 07/02/26**
 
 - Write a per-xdist-worker file in ``FuzzyChecker.save_diagnostic_output``
