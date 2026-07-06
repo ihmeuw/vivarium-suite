@@ -100,6 +100,24 @@ class BaseDistribution:
     def get_computability_bounds(
         cls, parameters: pd.DataFrame, computability_bound: float
     ) -> pd.DataFrame:
+        """Compute the range of exposure values over which the distribution is reliably evaluable.
+
+        Exposure values outside this range fall in the numerically unstable tails and are 
+        masked out during ``pdf`` evaluation.
+
+        Parameters
+        ----------
+        parameters
+            Fitted distribution parameters, one row per draw.
+        computability_bound
+            Tail probability defining the lower and upper quantile cutoffs.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The ``computability_min`` and ``computability_max`` columns, indexed like
+            ``parameters``.
+        """
         kwargs = {parameter: parameters[parameter] for parameter in cls.expected_parameters}
         compatability_min = cls.distribution(**kwargs).ppf(computability_bound)
         compatability_max = cls.distribution(**kwargs).ppf(1 - computability_bound)
@@ -283,13 +301,25 @@ class MirroredDistribution(BaseDistribution):
     def get_computability_bounds(
         cls, parameters: pd.DataFrame, computability_bound: float
     ) -> pd.DataFrame:
-        """Reflect the underlying distribution's support bounds into data space.
+        """Compute the range of exposure values over which the distribution is reliably evaluable.
 
-        A data-space value ``x`` is evaluated via its reflection ``mirror_point - x``,
-        so the underlying quantile bounds (which live in the reflected space) must be
-        mapped back with ``mirror_point - bound`` before the base ``cdf``/``pdf``
-        computability mask can compare them against ``x``. The reflection also swaps the
-        min and max.
+        An exposure value ``x`` is evaluated via its reflection ``mirror_point - x``, so the
+        underlying quantile bounds (which live in the reflected space) must be mapped back with
+        ``mirror_point - bound`` before the base ``pdf``/``cdf`` computability mask can compare
+        them against ``x``. The reflection also swaps the min and max.
+
+        Parameters
+        ----------
+        parameters
+            Fitted distribution parameters, one row per draw.
+        computability_bound
+            Tail probability defining the lower and upper quantile cutoffs.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The ``computability_min`` and ``computability_max`` columns, indexed like
+            ``parameters``.
         """
         transformed = super().get_computability_bounds(parameters, computability_bound)
         mirror_point = parameters["mirror_point"]
