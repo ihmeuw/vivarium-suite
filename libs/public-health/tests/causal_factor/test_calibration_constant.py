@@ -141,6 +141,19 @@ def _add_one_post_processor(
     return value + 1
 
 
+def _calibrated_output(
+    base_config, base_plugins, source, modifiers, pipeline_name
+) -> pd.Series:
+    """Build the sim, step once, and return the ``pipeline_name`` output."""
+    sim = InteractiveContext(
+        components=[BasePopulation(), source, *modifiers],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+    )
+    sim.step()
+    return sim.get_population(pipeline_name).squeeze()
+
+
 # ---------------------------------------------------------------------------
 # Integration tests — attribute / rate producer via _AttributeSource
 # ---------------------------------------------------------------------------
@@ -177,11 +190,16 @@ class TestProducer:
             value = from_yearly(value, time_step)
         return transform(value)
 
-    def test_no_calibration_constant_modifier(
-        self, base_config, base_plugins, is_rate, post_processor
+    @pytest.mark.parametrize(
+        "calibration_values",
+        [[], [0.25], [0.1, 0.3]],
+        ids=["none", "single", "multiple"],
+    )
+    def test_calibration_constants_combine(
+        self, base_config, base_plugins, is_rate, post_processor, calibration_values
     ):
-        """No modifier → base value returned (calibration constant = 0),
-        then post-processors applied."""
+        """Calibration constants combine via the union formula ``1 - prod(1 - c)``
+        (empty = base value, one = ``1 - c``), then post-processors apply."""
         post_processors, transform = post_processor
         base_value = 0.7 if is_rate else 10.0
         time_step = pd.Timedelta(days=base_config.time.step_size)
@@ -192,80 +210,15 @@ class TestProducer:
             is_rate=is_rate,
             additional_post_processors=post_processors,
         )
+        modifiers = [
+            _CalibrationConstantModifier(pipeline_name, c) for c in calibration_values
+        ]
 
-        sim = InteractiveContext(
-            components=[BasePopulation(), source],
-            configuration=base_config,
-            plugin_configuration=base_plugins,
-        )
-        sim.step()
-
-        actual = sim.get_population(pipeline_name).squeeze()
-        expected = self._expected(base_value, 0, is_rate, time_step, transform)
-        assert np.allclose(actual, expected, atol=1e-5)
-
-    def test_single_calibration_constant_modifier(
-        self, base_config, base_plugins, is_rate, post_processor
-    ):
-        """Single calibration constant = c → value * (1 - c),
-        then post-processors applied."""
-        post_processors, transform = post_processor
-        base_value = 0.7 if is_rate else 10.0
-        calibration_value = 0.25
-        time_step = pd.Timedelta(days=base_config.time.step_size)
-        pipeline_name = "test_pipeline"
-        source = _AttributeSource(
-            pipeline_name,
-            base_value,
-            is_rate=is_rate,
-            additional_post_processors=post_processors,
-        )
-        modifier = _CalibrationConstantModifier(pipeline_name, calibration_value)
-
-        sim = InteractiveContext(
-            components=[BasePopulation(), source, modifier],
-            configuration=base_config,
-            plugin_configuration=base_plugins,
-        )
-        sim.step()
-
-        actual = sim.get_population(pipeline_name).squeeze()
-        expected = self._expected(
-            base_value, calibration_value, is_rate, time_step, transform
-        )
-        assert np.allclose(actual, expected, atol=1e-5)
-
-    def test_multiple_calibration_constant_modifiers(
-        self, base_config, base_plugins, is_rate, post_processor
-    ):
-        """Two calibration constants combine via union formula,
-        then post-processors applied."""
-        post_processors, transform = post_processor
-        base_value = 0.7 if is_rate else 10.0
-        c1, c2 = 0.1, 0.3
-        time_step = pd.Timedelta(days=base_config.time.step_size)
-        pipeline_name = "test_pipeline"
-        source = _AttributeSource(
-            pipeline_name,
-            base_value,
-            is_rate=is_rate,
-            additional_post_processors=post_processors,
+        actual = _calibrated_output(
+            base_config, base_plugins, source, modifiers, pipeline_name
         )
 
-        sim = InteractiveContext(
-            components=[
-                BasePopulation(),
-                source,
-                _CalibrationConstantModifier(pipeline_name, c1),
-                _CalibrationConstantModifier(pipeline_name, c2),
-            ],
-            configuration=base_config,
-            plugin_configuration=base_plugins,
-        )
-        sim.step()
-
-        joint_calibration = 1 - (1 - c1) * (1 - c2)
-        actual = sim.get_population(pipeline_name).squeeze()
+        joint_calibration = 1 - np.prod([1 - c for c in calibration_values])
         expected = self._expected(
             base_value, joint_calibration, is_rate, time_step, transform
         )
@@ -278,14 +231,9 @@ class TestProducer:
         source = _AttributeSource(pipeline_name, base_value, is_rate=is_rate)
         modifier = _CalibrationConstantModifier(pipeline_name, 1.0)
 
-        sim = InteractiveContext(
-            components=[BasePopulation(), source, modifier],
-            configuration=base_config,
-            plugin_configuration=base_plugins,
+        actual = _calibrated_output(
+            base_config, base_plugins, source, [modifier], pipeline_name
         )
-        sim.step()
-
-        actual = sim.get_population(pipeline_name).squeeze()
         assert np.allclose(actual, 0.0, atol=1e-10)
 
     def test_calibration_survives_skipped_post_processors(self, base_config, base_plugins):

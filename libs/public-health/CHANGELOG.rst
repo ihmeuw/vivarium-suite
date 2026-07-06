@@ -1,3 +1,7 @@
+**6.3.4 - 07/06/26**
+
+- Deduplicate microdata, calibration, and fertility test setup with shared build helpers and parametrization
+
 **6.3.3 - 07/06/26**
 
 - Share module-scoped InteractiveContext fixtures across observer and ensemble tests to reduce runtime
