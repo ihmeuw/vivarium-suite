@@ -48,9 +48,7 @@ def categorical_risk():
 
 @pytest.fixture(scope="module")
 def categorical_risk_observer_sim(base_config_factory, base_plugins):
-    """One built-stepped-finalized test_risk categorical-observer sim, shared across the
-    registration and correctness tests. Returns ``(simulation, risk_data)``.
-    """
+    """Return a shared, read-only test_risk observer sim; don't step or mutate it."""
     risk_data = _make_categorical_risk_data()
     simulation = InteractiveContext(
         components=[

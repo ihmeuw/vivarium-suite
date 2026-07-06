@@ -1,3 +1,7 @@
+**6.3.3 - 07/06/26**
+
+- Share module-scoped InteractiveContext fixtures across observer and ensemble tests to reduce runtime
+
 **6.3.2 - 07/01/26**
 
 - Reduce population size in test suites to improve runtime

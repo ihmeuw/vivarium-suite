@@ -77,12 +77,7 @@ def human_cortico_deficiency():
 
 @pytest.fixture(scope="module")
 def disease_observer_sim(base_config_factory, base_plugins):
-    """One built-and-stepped t_virus disease-observer sim, shared across the registration
-    and correctness tests, which assert different things on the same end-state.
-
-    Returns ``(simulation, disease_states_at_start)``; the pre-step disease state is
-    captured because the correctness test needs the susceptible-at-start count.
-    """
+    """Return a shared, read-only t_virus observer sim; don't step or mutate it."""
     config = base_config_factory()
     simulation = InteractiveContext(
         components=[
