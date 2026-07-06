@@ -1,3 +1,7 @@
+**4.2.9 - 07/06/26**
+
+- Add PyPI classifiers
+
 **4.2.8 - 06/30/26**
 
 - Isolate cluster-tools mkdir test with tmp_path
