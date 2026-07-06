@@ -28,6 +28,11 @@ to the implementation. You fan out `_validator` and run the shared
 `_review-core` skill for review. Work the phases in order; keep the user in the
 loop at the plan, artifact-build, and PR gates.
 
+**Scope.** You own the model-repo code for this iteration and its verification —
+nothing else. Building or relocating the artifact is a user-gated hand-off (pause
+and ask); a change to a core/framework repo (`vivarium`, `vivarium_public_health`)
+is out of scope — surface it and stop, deferring to `/viv:framework-development`.
+
 ## Control flow
 
 The phases below are the canonical detail; this is the skeleton:
@@ -83,6 +88,11 @@ now rather than discovering it at verify time.
   the contract every later phase builds from, so it must name things concretely:
   - **Layers touched** — which of artifact / component / observer this change
     needs, and which it deliberately leaves alone.
+  - **Prerequisites** — anything the build depends on that this workflow won't
+    produce: **new or changed artifact data** (you build/place it at the artifact
+    gate) and any **core/framework change** (`vivarium`, `vivarium_public_health`
+    — land it first via `/viv:framework-development` or by hand). Name them here
+    so they are arranged up front, not discovered mid-build.
   - **Per-layer change list** — for each touched layer, the specific keys,
     pipelines, state-table columns, and observer outputs to add or change, by
     name. These names are what let the verification author work blind.
@@ -92,7 +102,8 @@ now rather than discovering it at verify time.
   - **Non-goals** — what is explicitly out of scope for this iteration.
 
 **Gate — approve the plan.** Exit the plan phase only with a written iteration plan
-the user has agreed to.
+the user has agreed to — including any prerequisites it names (artifact data, a
+core change).
 
 ## Staged build
 
