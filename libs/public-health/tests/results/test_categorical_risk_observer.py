@@ -204,3 +204,52 @@ def test_category_exclusions(base_config, base_plugins, categorical_risk, exclus
     simulation.step()
     results = simulation.get_results()["person_time_test_risk"]
     assert set(results["sub_entity"]) == {"cat1", "cat2", "cat3", "cat4"} - set(exclusions)
+
+
+# --- MIC-7071: artifact-less (config-tree) data sources ---
+
+
+def test_observer_categories_from_config(base_config, base_plugins, categorical_risk) -> None:
+    """CategoricalCausalFactorObserver registers its exposure stratification from a config categories DataFrame, not the artifact."""
+    risk, risk_data = categorical_risk
+    observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
+    simulation = InteractiveContext(
+        components=[
+            BasePopulation(),
+            ResultsStratifier(),
+            risk,
+            observer,
+        ],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    categories = pd.DataFrame(
+        {
+            "category": ["cat1", "cat2", "cat3", "cat4"],
+            "description": ["severe", "moderate", "mild", "unexposed"],
+        }
+    )
+    simulation.configuration.update(
+        {
+            "stratification": {
+                "test_risk": {
+                    "include": ["sex"],
+                    "data_sources": {"categories": categories},
+                }
+            },
+        }
+    )
+
+    # Provide the exposure and distribution via the artifact, but NOT the
+    # categories key; the observer must source its categories from config.
+    for key, value in risk_data.items():
+        if key == "categories":
+            continue
+        simulation._data.write(f"risk_factor.test_risk.{key}", value)
+
+    simulation.setup()
+    simulation.step()
+
+    results = simulation.get_results()["person_time_test_risk"]
+    assert set(results[COLUMNS.SUB_ENTITY]) == {"cat1", "cat2", "cat3", "cat4"}

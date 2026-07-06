@@ -7,9 +7,12 @@ This module contains tools for observing risk exposure during the simulation.
 
 """
 
+from typing import Any
+
 import pandas as pd
 from vivarium.engine.framework.engine import Builder
 
+from vivarium.public_health.causal_factor.utilities import load_categories
 from vivarium.public_health.results.columns import COLUMNS
 from vivarium.public_health.results.observer import PublicHealthObserver
 from vivarium.public_health.utilities import to_years
@@ -51,6 +54,41 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
 
     """
 
+    ##############
+    # Properties #
+    ##############
+
+    @property
+    def configuration_defaults(self) -> dict[str, Any]:
+        """Default configuration values for this observer.
+
+        Extend the base observer stratification config with a categories
+        data source. An observer's configuration lives under
+        ``stratification.{configuration_name}`` (see
+        :meth:`~vivarium.engine.framework.results.observer.Observer.get_configuration`),
+        so the data source is nested there alongside ``exclude`` / ``include``.
+
+        Configuration structure::
+
+            stratification:
+                {causal_factor}:
+                    data_sources:
+                        categories:
+                            Source for the causal factor's category
+                            descriptions, used to register the exposure
+                            stratification. Default is the artifact key
+                            ``risk_factor.{causal_factor}.categories``. Accepts
+                            a DataFrame with ``category`` and ``description``
+                            columns to bypass the artifact.
+        """
+        configuration_defaults = super().configuration_defaults
+        configuration_defaults["stratification"][self.get_configuration_name()][
+            "data_sources"
+        ] = {
+            "categories": f"risk_factor.{self.causal_factor}.categories",
+        }
+        return configuration_defaults
+
     #####################
     # Lifecycle methods #
     #####################
@@ -74,7 +112,9 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
     def setup(self, builder: Builder) -> None:
         """Set up the observer."""
         self.step_size = builder.time.step_size()
-        self.categories = builder.data.load(f"risk_factor.{self.causal_factor}.categories")
+        self.categories = load_categories(
+            self.get_data(builder, self.configuration.data_sources.categories)
+        )
 
     def get_configuration_name(self) -> str:
         return self.causal_factor
