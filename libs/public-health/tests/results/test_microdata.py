@@ -84,26 +84,33 @@ def _build_microdata_sim(
     )
 
 
-def test_microdata_observer_can_be_registered(base_config, base_plugins) -> None:
-    """The observer sets up in any sim and registers a single named observation."""
-    sim = _build_microdata_sim(base_config, base_plugins, {"columns": ["age"]})
-    assert "microdata_observer" in sim._results._results_context.observations
+@pytest.fixture(scope="module")
+def microdata_observer_sim(base_config_factory, base_plugins) -> InteractiveContext:
+    """Shared read-only sim recording [age, sex] over two steps; don't step or mutate it."""
+    sim = _build_microdata_sim(
+        base_config_factory(), base_plugins, {"columns": ["age", "sex"]}
+    )
+    sim.step()
+    sim.step()
+    return sim
 
 
-def test_microdata_observer_records_configured_columns(base_config, base_plugins) -> None:
+def test_microdata_observer_can_be_registered(microdata_observer_sim) -> None:
+    """The observer sets up and registers a single named observation."""
+    observations = microdata_observer_sim._results._results_context.observations
+    assert "microdata_observer" in observations
+
+
+def test_microdata_observer_records_configured_columns(microdata_observer_sim) -> None:
     """Records exactly the configured columns (+ event_time) for every simulant, each step."""
-    sim = _build_microdata_sim(base_config, base_plugins, {"columns": ["age", "sex"]})
-    n_simulants = len(sim.get_population_index())
+    n_simulants = len(microdata_observer_sim.get_population_index())
+    results = microdata_observer_sim.get_results()["microdata_observer"]
 
-    sim.step()
-    one_step = sim.get_results()["microdata_observer"]
-    sim.step()
-    two_steps = sim.get_results()["microdata_observer"]
-
-    assert set(one_step.columns) == {"age", "sex", "event_time"}
-    assert len(one_step) == n_simulants
-    assert len(two_steps) == 2 * n_simulants  # fixed-size population over two steps
-    assert two_steps["event_time"].nunique() == 2
+    assert set(results.columns) == {"age", "sex", "event_time"}
+    assert results["event_time"].nunique() == 2  # both steps observed
+    # every observed step records the whole fixed-size population
+    assert (results.groupby("event_time").size() == n_simulants).all()
+    assert len(results) == 2 * n_simulants
 
 
 @pytest.mark.parametrize(
