@@ -47,6 +47,20 @@ def crude_birth_rate_data(live_births=500):
     )
 
 
+def _crude_birth_rate_sim(config, base_plugins, live_births=500):
+    """Build a not-yet-set-up FertilityCrudeBirthRate sim with the live-births covariate."""
+    sim = InteractiveContext(
+        components=[TestPopulation(), FertilityCrudeBirthRate()],
+        configuration=config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    sim._data.write(
+        "covariate.live_births_by_sex.estimate", crude_birth_rate_data(live_births)
+    )
+    return sim
+
+
 def test_FertilityDeterministic(config):
     pop_size = config.population.population_size
     annual_new_simulants = 1000
@@ -75,14 +89,7 @@ def test_FertilityDeterministic(config):
 def test_FertilityCrudeBirthRate(config, base_plugins):
     pop_size = config.population.population_size
     num_days = 100
-    components = [TestPopulation(), FertilityCrudeBirthRate()]
-    simulation = InteractiveContext(
-        components=components,
-        configuration=config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    simulation._data.write("covariate.live_births_by_sex.estimate", crude_birth_rate_data())
+    simulation = _crude_birth_rate_sim(config, base_plugins)
 
     simulation.setup()
     simulation.run_for(duration=pd.Timedelta(days=num_days))
@@ -102,15 +109,7 @@ def test_FertilityCrudeBirthRate_extrapolate_fail(config, base_plugins):
             },
         }
     )
-    components = [TestPopulation(), FertilityCrudeBirthRate()]
-
-    simulation = InteractiveContext(
-        components=components,
-        configuration=config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    simulation._data.write("covariate.live_births_by_sex.estimate", crude_birth_rate_data())
+    simulation = _crude_birth_rate_sim(config, base_plugins)
 
     with pytest.raises(ValueError):
         simulation.setup()
@@ -135,17 +134,8 @@ def test_FertilityCrudeBirthRate_extrapolate(base_config, base_plugins):
     pop_size = base_config.population.population_size
     true_pop_size = 20_000  # What's available in the mock artifact
     live_births_by_sex = 500
-    components = [TestPopulation(), FertilityCrudeBirthRate()]
 
-    simulation = InteractiveContext(
-        components=components,
-        configuration=base_config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    simulation._data.write(
-        "covariate.live_births_by_sex.estimate", crude_birth_rate_data(live_births_by_sex)
-    )
+    simulation = _crude_birth_rate_sim(base_config, base_plugins, live_births_by_sex)
     simulation.setup()
 
     birth_rate = []
