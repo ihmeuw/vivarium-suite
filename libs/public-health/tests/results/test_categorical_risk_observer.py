@@ -53,21 +53,32 @@ def risk_data() -> dict:
 
 @pytest.fixture(scope="module")
 def categorical_risk_observer_sim(base_config_factory, base_plugins, risk_data):
-    """Return a shared, read-only test_risk observer sim; don't step or mutate it."""
+    """Return a shared, read-only sim with two independent categorical-risk observers
+    (``test_risk`` and ``another_test_risk``); don't step or mutate it."""
     simulation = InteractiveContext(
         components=[
             BasePopulation(),
             ResultsStratifier(),
             Risk("risk_factor.test_risk"),
             CategoricalRiskObserver("test_risk"),
+            Risk("risk_factor.another_test_risk"),
+            CategoricalRiskObserver("another_test_risk"),
         ],
         configuration=base_config_factory(),
         plugin_configuration=base_plugins,
         setup=False,
     )
-    simulation.configuration.update({"stratification": {"test_risk": {"include": ["sex"]}}})
+    simulation.configuration.update(
+        {
+            "stratification": {
+                "test_risk": {"include": ["sex"]},
+                "another_test_risk": {"include": ["sex"]},
+            }
+        }
+    )
     for key, value in risk_data.items():
         simulation._data.write(f"risk_factor.test_risk.{key}", value)
+        simulation._data.write(f"risk_factor.another_test_risk.{key}", value)
     simulation.setup()
     simulation.step()
     simulation.finalize()
@@ -76,16 +87,26 @@ def categorical_risk_observer_sim(base_config_factory, base_plugins, risk_data):
 
 
 def test_observation_registration(categorical_risk_observer_sim):
-    """Test that all expected observation stratifications appear in the results."""
+    """Each observer registers its own results, stratified by category and sex."""
     simulation = categorical_risk_observer_sim
     results = simulation.get_results()
-    assert set(results) == set(["person_time_test_risk"])
+    assert set(results) == {"person_time_test_risk", "person_time_another_test_risk"}
 
-    person_time = results["person_time_test_risk"]
+    expected = set(itertools.product(["cat1", "cat2", "cat3", "cat4"], ["Female", "Male"]))
+    for key in ("person_time_test_risk", "person_time_another_test_risk"):
+        person_time = results[key]
+        assert set(zip(person_time[COLUMNS.SUB_ENTITY], person_time["sex"])) == expected
 
-    assert set(zip(person_time[COLUMNS.SUB_ENTITY], person_time["sex"])) == set(
-        itertools.product(*[["cat1", "cat2", "cat3", "cat4"], ["Female", "Male"]])
-    )
+    # Each observer saves its own results: independent exposure draws give different
+    # per-cell person-time, so a shared/overwritten output would be caught here. Align
+    # on (category, sex) first -- the two observers don't emit rows in the same order.
+    test_risk_pt = results["person_time_test_risk"].set_index([COLUMNS.SUB_ENTITY, "sex"])[
+        "value"
+    ]
+    another_risk_pt = results["person_time_another_test_risk"].set_index(
+        [COLUMNS.SUB_ENTITY, "sex"]
+    )["value"]
+    assert (test_risk_pt != another_risk_pt.reindex(test_risk_pt.index)).all()
 
 
 def test_observation_correctness(categorical_risk_observer_sim, risk_data):
@@ -97,9 +118,7 @@ def test_observation_correctness(categorical_risk_observer_sim, risk_data):
 
     pop = simulation.get_population(["sex", "test_risk.exposure"])
 
-    results = simulation.get_results()
-    assert set(results) == set(["person_time_test_risk"])
-    results = results["person_time_test_risk"]
+    results = simulation.get_results()["person_time_test_risk"]
 
     # Check columns
     assert set(results.columns) == set(
@@ -126,42 +145,6 @@ def test_observation_correctness(categorical_risk_observer_sim, risk_data):
                 COLUMNS.VALUE,
             ].values[0]
             assert np.isclose(expected_person_time, actual_person_time, rtol=0.001)
-
-
-def test_different_results_per_risk(base_config, base_plugins, risk, risk_data):
-    """Test that each observer saves its own results."""
-    risk_observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
-
-    # Set up a second risk factor
-    another_risk = Risk("risk_factor.another_test_risk")
-    another_risk_observer = CategoricalRiskObserver(f"{another_risk.causal_factor.name}")
-
-    simulation = InteractiveContext(
-        components=[
-            BasePopulation(),
-            ResultsStratifier(),
-            risk,
-            risk_observer,
-            another_risk,
-            another_risk_observer,
-        ],
-        configuration=base_config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    for key, value in risk_data.items():
-        simulation._data.write(f"risk_factor.test_risk.{key}", value)
-        simulation._data.write(f"risk_factor.another_test_risk.{key}", value)
-
-    assert not simulation.get_results()
-    simulation.setup()
-    simulation.step()
-    results = simulation.get_results()
-    assert set(results) == set(["person_time_test_risk", "person_time_another_test_risk"])
-    assert (
-        results["person_time_test_risk"]["value"]
-        != results["person_time_another_test_risk"]["value"]
-    ).all()
 
 
 @pytest.mark.parametrize("exclusions", [[], ["cat1"], ["cat1", "cat4"]])

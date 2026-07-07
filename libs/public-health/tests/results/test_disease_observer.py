@@ -63,35 +63,27 @@ def model(base_config, disease: str) -> DiseaseModel:
     )
 
 
+def _make_vampiris_model() -> DiseaseModel:
+    """Build the 3-state vampiris model (human -> turning -> vampire)."""
+    healthy = SusceptibleState("human")
+    turning = DiseaseState("turning")
+    infected = DiseaseState("vampire")
+    healthy.add_rate_transition(turning)
+    turning.add_rate_transition(infected)
+    return DiseaseModel(
+        "vampiris", residual_state=healthy, states=[healthy, turning, infected]
+    )
+
+
 @pytest.fixture
 def vampiris():
-    vampiris_healthy_state = SusceptibleState("human")
-    vampiris_turning_state = DiseaseState("turning")
-    vampiris_infected_state = DiseaseState("vampire")
-    vampiris_healthy_state.add_rate_transition(vampiris_turning_state)
-    vampiris_turning_state.add_rate_transition(vampiris_infected_state)
-    return DiseaseModel(
-        "vampiris",
-        residual_state=vampiris_healthy_state,
-        states=[vampiris_healthy_state, vampiris_turning_state, vampiris_infected_state],
-    )
-
-
-@pytest.fixture
-def human_cortico_deficiency():
-    hcd_healthy_state = SusceptibleState("not_a_zombie")
-    hcd_infected_state = DiseaseState("a_zombie")
-    hcd_healthy_state.add_rate_transition(hcd_infected_state)
-    return DiseaseModel(
-        "human_cortico_deficiency",
-        residual_state=hcd_healthy_state,
-        states=[hcd_healthy_state, hcd_infected_state],
-    )
+    return _make_vampiris_model()
 
 
 @pytest.fixture(scope="module")
 def disease_observer_sim(base_config_factory, base_plugins):
-    """Return a shared, read-only t_virus observer sim; don't step or mutate it."""
+    """Return a shared, read-only sim with two independent disease observers
+    (``t_virus`` and ``vampiris``); don't step or mutate it."""
     config = base_config_factory()
     simulation = _build_disease_observer_sim(
         config,
@@ -99,8 +91,10 @@ def disease_observer_sim(base_config_factory, base_plugins):
         [
             BasePopulation(),
             _make_t_virus_model("t_virus", config.time.start.year, config.time.end.year),
+            _make_vampiris_model(),
             ResultsStratifier(),
             DiseaseObserver("t_virus"),
+            DiseaseObserver("vampiris"),
         ],
         config_update={"stratification": {"t_virus": {"include": ["sex"]}}},
     )
@@ -147,9 +141,16 @@ def test_previous_state_update(base_config, base_plugins, disease, model):
 
 
 def test_observation_registration(disease_observer_sim):
-    """Test that all expected observation stratifications appear in the results."""
+    """Each observer saves its own results; the t_virus observations are stratified by sex."""
     simulation, _ = disease_observer_sim
     results = simulation.get_results()
+    # Each observer saves its own per-disease results.
+    assert set(results) == {
+        "person_time_t_virus",
+        "transition_count_t_virus",
+        "person_time_vampiris",
+        "transition_count_vampiris",
+    }
     person_time = results["person_time_t_virus"]
     transition_count = results["transition_count_t_virus"]
 
@@ -215,37 +216,6 @@ def test_observation_correctness(disease_observer_sim):
     )
     assert np.isclose(
         actual_person_times["with_condition"], expected_with_condition_person_time, rtol=0.001
-    )
-
-
-def test_different_results_per_disease(
-    vampiris, human_cortico_deficiency, base_config, base_plugins
-):
-    """Test that all eash disease observer saves out its own results."""
-    vampiris_observer = DiseaseObserver(vampiris.cause)
-    hcd_observer = DiseaseObserver(human_cortico_deficiency.cause)
-
-    simulation = _build_disease_observer_sim(
-        base_config,
-        base_plugins,
-        [
-            BasePopulation(),
-            vampiris,
-            human_cortico_deficiency,
-            ResultsStratifier(),
-            vampiris_observer,
-            hcd_observer,
-        ],
-    )
-    simulation.step()
-    results = simulation.get_results()
-    assert set(results) == set(
-        [
-            "person_time_vampiris",
-            "transition_count_vampiris",
-            "person_time_human_cortico_deficiency",
-            "transition_count_human_cortico_deficiency",
-        ]
     )
 
 
