@@ -142,7 +142,7 @@ def _add_one_post_processor(
 
 
 def _calibrated_output(
-    base_config, base_plugins, source, modifiers, pipeline_name
+    base_config, base_plugins, source, modifiers, *, pipeline_name
 ) -> pd.Series:
     """Build the sim, step once, and return the ``pipeline_name`` output."""
     sim = InteractiveContext(
@@ -215,9 +215,10 @@ class TestProducer:
         ]
 
         actual = _calibrated_output(
-            base_config, base_plugins, source, modifiers, pipeline_name
+            base_config, base_plugins, source, modifiers, pipeline_name=pipeline_name
         )
 
+        # np.prod([]) == 1.0, so the empty (no-modifier) case gives joint_calibration == 0
         joint_calibration = 1 - np.prod([1 - c for c in calibration_values])
         expected = self._expected(
             base_value, joint_calibration, is_rate, time_step, transform
@@ -232,7 +233,7 @@ class TestProducer:
         modifier = _CalibrationConstantModifier(pipeline_name, 1.0)
 
         actual = _calibrated_output(
-            base_config, base_plugins, source, [modifier], pipeline_name
+            base_config, base_plugins, source, [modifier], pipeline_name=pipeline_name
         )
         assert np.allclose(actual, 0.0, atol=1e-10)
 

@@ -77,8 +77,10 @@ def _build_microdata_sim(
     population_size: int | None = None,
 ) -> InteractiveContext:
     """Build a sim with a MicrodataObserver configured by ``microdata``."""
+    if components is None:
+        components = [BasePopulation(), MicrodataObserver()]
     return InteractiveContext(
-        components=components or [BasePopulation(), MicrodataObserver()],
+        components=components,
         configuration=_configure(base_config, microdata, population_size=population_size),
         plugin_configuration=base_plugins,
     )
