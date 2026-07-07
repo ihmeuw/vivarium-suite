@@ -74,6 +74,27 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   iterating while preserving the black box. It always creates the feature branch
   up front and gates PR creation on explicit user approval.
 
+**Model Development**
+
+- ``/viv:model-development <ticket, research doc, or iteration description>`` — an
+  end-to-end iteration of a vivarium model concept (a cause, risk, intervention,
+  or observer) in an existing model repo, driven from its vivarium-research
+  documentation. The main session owns the **iteration plan** — the contract
+  that pins the artifact keys, pipeline names, state-table columns, and observer
+  outputs a change touches, plus the quantitative expectations from the research
+  doc. From that contract it runs a **sequential build** in
+  data-dependency order (artifact, then component, then observer — skipping
+  layers the change doesn't touch), while an **internal verification** is authored in
+  parallel and blind to the implementation — InteractiveContext checks and a
+  notebook built from the plan alone. It then **runs the simulation** to verify
+  (the repo's existing suite, the new checks, a local ``simulate`` run, and the
+  notebook) and applies the same multi-lens review as
+  ``/viv:framework-development``. The verification is an internal loop for
+  engineering confidence — not formal V&V — so its **traces** (notebook plots and
+  tables) are posted to the PR, while the artifacts themselves stay out of the
+  repo unless you ask to keep them. Gates the artifact build and the PR on
+  explicit user approval.
+
 **Skills**
 
 - ``plugin-setup`` — walks the user through post-install configuration that the
@@ -229,12 +250,21 @@ Code:
   discourages reaching across via an absolute path, since the worktree is not a
   hard read sandbox. Both are spawned only by the ``/viv:framework-development``
   slash command.
+- ``_model_implementer`` and ``_vv_writer`` (the ``model-development`` workflow)
+  are likewise write-capable (``Write``/``Edit``, no ``Bash``): they author
+  files but never run the simulation, ``git``, or shell commands, and their
+  writes are partitioned. ``_model_implementer`` writes **only its assigned model
+  layer's code** (artifact, component, or observer) — never the verification checks or notebook —
+  dispatched once per layer and working directly on the feature branch (the
+  stages are sequential, so no worktree isolation is needed). ``_vv_writer``
+  writes **the verification checks and notebook**, blind to the implementation. Both
+  are spawned only by the ``/viv:model-development`` skill.
 - ``_validator`` declares ``Bash`` so it can run the package's ``make
   test-*`` / ``make lint`` / ``make mypy`` targets and report a PASS/FAIL
   verdict. It is read-only with respect to source and tests — it never edits
   files — but running a test suite executes arbitrary project code, so this is a
-  broader grant than the read-only git agents above. It is spawned only by the
-  ``/viv:framework-development`` slash command.
+  broader grant than the read-only git agents above. It is spawned by the
+  ``/viv:framework-development`` and ``/viv:model-development`` workflows.
 - ``_propagate_target`` (spawned by the ``change-propagation`` skill) also
   **writes** and runs the test suite: for a monorepo target it adapts files
   into a ``libs/<pkg>/`` subtree and runs that package's ``make check`` inside
@@ -243,13 +273,13 @@ Code:
   commit, or open a PR — every durable write is the lead skill's, after explicit
   approval. For an external target it uses only read-only GitHub MCP calls and
   writes nothing.
-- The ``/viv:code-reviewer``, ``/viv:model-regression-debugger``, and
-  ``/viv:framework-development`` slash command bodies (running in the main
-  session) gather PR/repo context through the GitHub MCP server (a plugin
-  dependency; see the ``plugin-setup`` skill), falling back to read-only
-  git/``gh`` commands when the MCP is unavailable; ``/viv:framework-development``
-  additionally writes source and test files and runs make targets as it builds
-  the feature.
+- The ``/viv:code-reviewer``, ``/viv:model-regression-debugger``,
+  ``/viv:framework-development``, and ``/viv:model-development`` slash command and
+  skill bodies (running in the main session) gather PR/repo context through the
+  GitHub MCP server (a plugin dependency; see the ``plugin-setup`` skill),
+  falling back to read-only git/``gh`` commands when the MCP is unavailable;
+  ``/viv:framework-development`` and ``/viv:model-development`` additionally write
+  files and run make/sim targets as they build.
 
 For destructive or out-of-scope commands, Claude Code's default
 permission system prompts you before execution, so a prompt-injected
