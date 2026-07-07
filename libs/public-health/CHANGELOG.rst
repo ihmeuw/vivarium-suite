@@ -1,3 +1,7 @@
+**6.3.6 - 07/09/26**
+
+- Share a module-scoped InteractiveContext fixture across the population mortality tests to reduce runtime
+
 **6.3.5 - 07/08/26**
 
 - Deduplicate microdata, calibration, and fertility test setup with shared build helpers and parametrization

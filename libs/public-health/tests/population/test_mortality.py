@@ -38,16 +38,16 @@ def stepped_pop_mortality_sim(base_plugins):
 
     Serves the structural tests (lookup-table data / attribute names, which are
     step-invariant) and the post-one-step reads (``mortality_rate``, ylls). Consumers
-    must not step or mutate it. ``test_mortality_updates_population_columns`` keeps its
-    own function-scoped sim because it needs the pre-step snapshot too. No population
-    mock is needed -- the assertions are self-consistent (computed from the sim's own
-    tables), not tied to specific simulants.
+    must not step or mutate it.
     """
     bp = BasePopulation()
     sim = InteractiveContext(components=[bp], plugin_configuration=base_plugins, setup=False)
     sim.configuration.update(
         {
-            "population": {"population_size": 1000, "include_sex": "Male"},
+            # 10000 (not a smaller pop) so ~one step reliably produces deaths for the
+            # ylls read below; the death rate is only ~0.2%/step, so a small pop can
+            # yield zero deaths and make the ylls assertion vacuous.
+            "population": {"population_size": 10000, "include_sex": "Male"},
             "mortality": {"unmodeled_causes": []},
         }
     )
@@ -192,6 +192,8 @@ def test_mortality_ylls(stepped_pop_mortality_sim):
     pop1 = sim.get_population(["is_alive", "years_of_life_lost"])
 
     dead_idx = pop1.index[pop1["is_alive"] == False]
+    # Guard against a degenerate config (no deaths) making the .all() below vacuous.
+    assert len(dead_idx) > 0
     ylls = pop1.loc[dead_idx, "years_of_life_lost"]
     assert (ylls == mortality.life_expectancy_table(dead_idx)).all()
     alive_idx = pop1.index[pop1["is_alive"] == True]
