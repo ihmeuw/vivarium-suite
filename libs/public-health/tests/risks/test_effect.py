@@ -685,9 +685,6 @@ def test_relative_risk_pipeline(dichotomous_risk, base_config, base_plugins):
         assert (relative_risk == rr_mapper[exposure]).all()
 
 
-# --- MIC-7071: artifact-less (config-tree) data sources ---
-
-
 class ConstantContinuousExposureRisk(Risk):
     """Continuous risk that produces a fixed exposure value for every simulant."""
 

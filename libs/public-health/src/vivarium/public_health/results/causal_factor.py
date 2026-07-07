@@ -62,24 +62,13 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
     def configuration_defaults(self) -> dict[str, Any]:
         """Default configuration values for this observer.
 
-        Extend the base observer stratification config with a categories
-        data source. An observer's configuration lives under
+        Add a ``categories`` data source (defaulting to the artifact key
+        ``risk_factor.{causal_factor}.categories``, overridable with a
+        ``category``/``description`` DataFrame) to the base observer config.
+        An observer's configuration lives under
         ``stratification.{configuration_name}`` (see
         :meth:`~vivarium.engine.framework.results.observer.Observer.get_configuration`),
         so the data source is nested there alongside ``exclude`` / ``include``.
-
-        Configuration structure::
-
-            stratification:
-                {causal_factor}:
-                    data_sources:
-                        categories:
-                            Source for the causal factor's category
-                            descriptions, used to register the exposure
-                            stratification. Default is the artifact key
-                            ``risk_factor.{causal_factor}.categories``. Accepts
-                            a DataFrame with ``category`` and ``description``
-                            columns to bypass the artifact.
         """
         configuration_defaults = super().configuration_defaults
         configuration_defaults["stratification"][self.get_configuration_name()][

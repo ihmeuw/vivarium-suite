@@ -305,9 +305,6 @@ def make_categorical_data(data: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(dfs)
 
 
-# --- MIC-7071: artifact-less (config-tree) data sources ---
-
-
 def test_lbwsg_categories_from_config(base_config) -> None:
     """LBWSGDistribution.get_category_intervals parses intervals from a config categories DataFrame, not the artifact."""
     risk = LBWSGRisk()

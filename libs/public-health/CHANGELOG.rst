@@ -1,4 +1,4 @@
-**6.4.0 - 07/06/26**
+**6.4.0 - 07/07/26**
 
 - Allow the risk components ``CausalFactorEffect``/``RiskEffect`` (``tmred``, ``relative_risk_scalar``, ``demographic_dimensions``), ``NonLogLinearRiskEffect`` (``tmred``), ``LBWSGDistribution`` (``categories``), and ``CategoricalCausalFactorObserver`` (``categories``) to source their data via configuration ``data_sources`` instead of requiring an artifact
 

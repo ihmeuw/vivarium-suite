@@ -206,9 +206,6 @@ def test_category_exclusions(base_config, base_plugins, categorical_risk, exclus
     assert set(results["sub_entity"]) == {"cat1", "cat2", "cat3", "cat4"} - set(exclusions)
 
 
-# --- MIC-7071: artifact-less (config-tree) data sources ---
-
-
 def test_observer_categories_from_config(base_config, base_plugins, categorical_risk) -> None:
     """CategoricalCausalFactorObserver registers its exposure stratification from a config categories DataFrame, not the artifact."""
     risk, risk_data = categorical_risk

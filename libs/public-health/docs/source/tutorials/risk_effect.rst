@@ -201,8 +201,8 @@ Any of these can be overridden with scalars in the simulation configuration:
    ``risk_effect.smoking_on_cause.lung_cancer.incidence_rate``).
 
 For dichotomous risks, all data sources can be overridden this way. For
-continuous risks, ``tmred`` and ``relative_risk_scalar`` are likewise
-configurable data sources (defaulting to their artifact keys) - see the
+continuous risks, ``tmred`` and ``relative_risk_scalar`` can be overridden
+the same way (they default to their artifact keys) - see the
 `NonLogLinearRiskEffect`_ section for an example that supplies ``tmred``
 through configuration.
 
