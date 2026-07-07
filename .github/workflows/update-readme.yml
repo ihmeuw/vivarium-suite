@@ -41,9 +41,8 @@ jobs:
       - name: Sync all lib READMEs
         run: |
           for lib in libs/*/; do
-            lib=${lib%/}
             if [ -f "$lib/python_versions.json" ] && [ -f "$lib/README.rst" ]; then
-              (cd "$lib" && make update-readme)
+              update-readme "$lib"
             fi
           done
 

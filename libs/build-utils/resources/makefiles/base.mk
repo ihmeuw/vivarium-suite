@@ -289,10 +289,6 @@ format: # Format code (isort and black)
 	isort $(LOCATIONS)
 	black $(LOCATIONS)
 
-.PHONY: update-readme
-update-readme: # Sync README supported-Python versions from python_versions.json
-	python -m vivarium.build_utils.readme
-
 .PHONY: manual-deploy-artifactory
 manual-deploy-artifactory: # Deploy package; only use if Jenkins deploy fails
 	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set, export using simsci artifactory credentials"; exit 1 )

@@ -84,14 +84,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Package directory holding the README and python_versions.json (default: '.').",
     )
     parser.add_argument(
-        "--readme",
-        help=f"Override the README path (default: <root>/{DEFAULT_README}).",
-    )
-    parser.add_argument(
-        "--versions-file",
-        help=f"Override the versions file path (default: <root>/{DEFAULT_VERSIONS_FILE}).",
-    )
-    parser.add_argument(
         "--check",
         action="store_true",
         help="Exit non-zero with a diff if the README is out of sync; write nothing.",
@@ -108,10 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     """Run the README updater as a CLI and return a process exit code."""
     args = _parse_args(argv)
     root = Path(args.root)
-    readme_path = Path(args.readme) if args.readme else root / DEFAULT_README
-    versions_path = (
-        Path(args.versions_file) if args.versions_file else root / DEFAULT_VERSIONS_FILE
-    )
+    readme_path = root / DEFAULT_README
+    versions_path = root / DEFAULT_VERSIONS_FILE
 
     versions = load_versions(versions_path)
     original = readme_path.read_text()

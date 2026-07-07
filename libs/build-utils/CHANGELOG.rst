@@ -1,6 +1,6 @@
 **4.3.0 - 07/06/26**
 
-- Add shared ``update-readme`` tool and ``make update-readme`` target to sync README supported-Python versions from python_versions.json
+- Add shared ``update-readme`` tool to sync README supported-Python versions from python_versions.json
 
 **4.2.5 - 07/06/26**
 
