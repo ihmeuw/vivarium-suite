@@ -7,7 +7,6 @@ import pytest
 
 from vivarium.engine.framework.lookup.interpolation import (
     Interpolation,
-    Order0Interp,
     check_data_complete,
     validate_parameters,
 )
@@ -332,7 +331,10 @@ def test_check_data_missing_combos() -> None:
     assert "combination" in message
 
 
-def test_order0interp() -> None:
+def test_order_zero_3d_no_key_column() -> None:
+    # Migrated from the former direct Order0Interp test: three continuous
+    # parameters, no categorical key column. Pins the multi-parameter
+    # digitize + merge result through the public Interpolation interface.
     data = pd.DataFrame(
         {
             "year_start": [1990, 1990, 1990, 1990, 1995, 1995, 1995, 1995],
@@ -345,12 +347,12 @@ def test_order0interp() -> None:
         }
     )
 
-    interp = Order0Interp(
+    interp = Interpolation(
         data,
-        ["age", "year", "height"],
-        ["value"],
-        True,
-        True,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=True,
     )
 
     interpolants = pd.DataFrame(
@@ -621,28 +623,303 @@ def test_interpolation_call_validate_option_valid_data(validate: bool) -> None:
     result = i(query)
 
 
-@pytest.mark.parametrize("validate", [True, False])
-def test_order0interp_validate_option_invalid_data(validate: bool) -> None:
+# ---------------------------------------------------------------------------
+# MIC-7097 — vectorized single-merge order-0 interpolation.
+# ---------------------------------------------------------------------------
+
+
+def test_multiple_categorical_columns() -> None:
+    """Two categorical key columns (e.g. sex and location) select the correct value for each (sex, location) group."""
     data = pd.DataFrame(
         {
-            "year_start": [1995, 1995, 2000, 2005, 2010],
-            "year_end": [2000, 2000, 2005, 2010, 2015],
+            "year_start": [1990, 1995, 1990, 1995, 1990, 1995, 1990, 1995],
+            "year_end": [1995, 2000, 1995, 2000, 1995, 2000, 1995, 2000],
+            "sex": [
+                "Male",
+                "Male",
+                "Male",
+                "Male",
+                "Female",
+                "Female",
+                "Female",
+                "Female",
+            ],
+            "location": ["A", "A", "B", "B", "A", "A", "B", "B"],
+            "value": [1, 2, 3, 4, 5, 6, 7, 8],
         }
     )
 
-    if validate:
-        with pytest.raises(ValueError) as error:
-            interp = Order0Interp(data, ["year"], [], True, validate)
-            message = error.value.args[0]
-            assert "year_start" in message and "year_end" in message
-    else:
-        interp = Order0Interp(data, ["year"], [], True, validate)
-
-
-@pytest.mark.parametrize("validate", [True, False])
-def test_order0interp_validate_option_valid_data(validate: bool) -> None:
-    data = pd.DataFrame(
-        {"year_start": [1990, 1995], "year_end": [1995, 2000], "value": [5, 3]}
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=True,
     )
 
-    interp = Order0Interp(data, ["year"], ["value"], True, validate)
+    query = pd.DataFrame(
+        {
+            "year": [1992, 1998, 1992, 1998, 1992],
+            "sex": ["Male", "Male", "Female", "Female", "Male"],
+            "location": ["A", "B", "A", "B", "B"],
+        }
+    )
+
+    # (Male, A, 1992)->1; (Male, B, 1998)->4; (Female, A, 1992)->5;
+    # (Female, B, 1998)->8; (Male, B, 1992)->3.
+    expected = pd.DataFrame({"value": [1, 4, 5, 8, 3]})
+    assert interp(query).equals(expected)
+
+
+def test_no_merge_fanout_on_shared_bin_edges() -> None:
+    """A bin start shared across many categorical groups must not fan out: output length equals input length with the correct per-group value for every simulant."""
+    data = pd.DataFrame(
+        {
+            "location": ["A", "B", "C", "D", "E"],
+            "year_start": [1990, 1990, 1990, 1990, 1990],
+            "year_end": [2000, 2000, 2000, 2000, 2000],
+            "value": [10, 20, 30, 40, 50],
+        }
+    )
+
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=True,
+    )
+
+    query = pd.DataFrame(
+        {
+            "location": ["A", "B", "C", "D", "E"],
+            "year": [1995, 1991, 1999, 1993, 1997],
+        }
+    )
+
+    result = interp(query)
+    assert len(result) == len(query)
+    assert result.equals(pd.DataFrame({"value": [10, 20, 30, 40, 50]}))
+
+
+def test_heterogeneous_bins_across_groups_raises() -> None:
+    """Construction raises when two categorical groups carry different bin edges (the single-merge path requires uniform edges across groups)."""
+    # Male has bins [1990, 1995), [1995, 2000); Female has a single [1990, 2000).
+    data = pd.DataFrame(
+        {
+            "sex": ["Male", "Male", "Female"],
+            "year_start": [1990, 1995, 1990],
+            "year_end": [1995, 2000, 2000],
+            "value": [1, 2, 3],
+        }
+    )
+
+    with pytest.raises(ValueError, match="different bin edges") as error:
+        Interpolation(
+            data,
+            value_columns=pd.Index(["value"]),
+            order=0,
+            extrapolate=True,
+            validate=True,
+        )
+    assert "year" in str(error.value)
+
+
+def test_validate_false_skips_source_validation() -> None:
+    """With validate=False, source data with non-uniform or overlapping bins is accepted at construction without raising."""
+    data = pd.DataFrame(
+        {
+            "sex": ["Male", "Male", "Female"],
+            "year_start": [1990, 1995, 1990],
+            "year_end": [1995, 2000, 2000],
+            "value": [1, 2, 3],
+        }
+    )
+
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=False,
+    )
+    # Prove the object is usable: the "Male" group's bins match the pooled edge
+    # set, so its lookups resolve correctly even though validation was skipped.
+    result = interp(pd.DataFrame({"sex": ["Male", "Male"], "year": [1992, 1997]}))
+    assert result["value"].tolist() == [1, 2]
+
+
+def test_unknown_category_in_query_raises() -> None:
+    """Calling with a categorical value that is absent from the source data raises KeyError."""
+    data = pd.DataFrame(
+        {
+            "year_start": [1990, 1990],
+            "year_end": [2000, 2000],
+            "sex": ["Male", "Female"],
+            "value": [1, 2],
+        }
+    )
+
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=True,
+    )
+
+    query = pd.DataFrame({"year": [1995], "sex": ["Other"]})
+    with pytest.raises(KeyError, match="absent from the interpolation"):
+        interp(query)
+
+
+def test_purely_categorical_multi_row_group_uses_first_row() -> None:
+    """A purely categorical table with multiple rows for a group broadcasts that group's first row, not a fan-out of all its rows."""
+    # "Male" appears twice (values 1 then 99); only the first row should win.
+    data = pd.DataFrame(
+        {
+            "sex": ["Male", "Male", "Female"],
+            "value": [1, 99, 2],
+        }
+    )
+
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=False,
+    )
+
+    query = pd.DataFrame({"sex": ["Male", "Male", "Female"]})
+    result = interp(query)
+    assert len(result) == len(query)
+    assert result.equals(pd.DataFrame({"value": [1, 1, 2]}))
+
+
+def test_no_parameters_broadcasts_first_row() -> None:
+    """A table with neither categorical nor continuous parameters broadcasts its first row's value to every interpolant."""
+    data = pd.DataFrame({"value": [42, 99]})
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=True,
+    )
+
+    # No parameter columns, so the query columns are irrelevant; every row gets
+    # the first data row's value.
+    query = pd.DataFrame({"ignored": [1, 2, 3]}, index=[10, 11, 12])
+    result = interp(query)
+    assert result["value"].tolist() == [42, 42, 42]
+    assert result.index.equals(query.index)
+
+
+def test_integer_value_dtype_preserved() -> None:
+    """Interpolating an integer value column over fully in-range interpolants returns an integer dtype column (no NaN-driven upcast to float)."""
+    data = pd.DataFrame(
+        {
+            "year_start": [1990, 1995],
+            "year_end": [1995, 2000],
+            "value": [10, 20],
+        }
+    )
+    assert pd.api.types.is_integer_dtype(data["value"])
+
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=True,
+    )
+
+    query = pd.DataFrame({"year": [1992, 1998]})
+    result = interp(query)
+    assert pd.api.types.is_integer_dtype(result["value"])
+    assert result["value"].tolist() == [10, 20]
+
+
+def test_empty_interpolants_returns_float64_frame() -> None:
+    """Calling with an empty interpolant frame returns an empty float64 DataFrame carrying the value columns and the interpolant index."""
+    data = pd.DataFrame(
+        {
+            "year_start": [1990, 1995],
+            "year_end": [1995, 2000],
+            "value": [1, 2],
+        }
+    )
+
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value"]),
+        order=0,
+        extrapolate=True,
+        validate=True,
+    )
+
+    query = pd.DataFrame({"year": pd.Series([], dtype="float64")})
+    result = interp(query)
+    assert list(result.columns) == ["value"]
+    assert len(result) == 0
+    assert result["value"].dtype == np.dtype("float64")
+    assert result.index.equals(query.index)
+
+
+def test_order_zero_multi_group_golden() -> None:
+    """A many-group table (multiple categorical groups sharing bin edges) returns the exact expected per-simulant bin values — a golden regression for the vectorized merge."""
+    locations = ["USA", "Canada", "Mexico"]
+    sexes = ["Female", "Male"]
+    age_bins = [(0, 5), (5, 10)]
+    year_bins = [(1990, 2000), (2000, 2010)]
+
+    rows = []
+    for loc_idx, location in enumerate(locations):
+        for sex_idx, sex in enumerate(sexes):
+            for age_idx, (age_start, age_end) in enumerate(age_bins):
+                for year_idx, (year_start, year_end) in enumerate(year_bins):
+                    value = 1000 * loc_idx + 100 * sex_idx + 10 * age_idx + year_idx
+                    rows.append(
+                        {
+                            "location": location,
+                            "sex": sex,
+                            "age_start": age_start,
+                            "age_end": age_end,
+                            "year_start": year_start,
+                            "year_end": year_end,
+                            "value": value,
+                            # A second (float) value column guards against column
+                            # misalignment through the single merge.
+                            "value2": value + 0.5,
+                        }
+                    )
+    data = pd.DataFrame(rows)
+
+    interp = Interpolation(
+        data,
+        value_columns=pd.Index(["value", "value2"]),
+        order=0,
+        extrapolate=True,
+        validate=True,
+    )
+
+    query = pd.DataFrame(
+        {
+            "location": ["USA", "Mexico", "Canada", "USA", "Mexico", "Canada"],
+            "sex": ["Female", "Male", "Female", "Male", "Female", "Male"],
+            "age": [2, 7, 4, 9, 0, 5],
+            "year": [1995, 2005, 2001, 1990, 1999, 2009],
+        },
+        index=[5, 2, 8, 0, 7, 3],
+    )
+
+    # Computed by hand from value = 1000*loc + 100*sex + 10*age_bin + year_bin,
+    # with loc {USA:0, Canada:1, Mexico:2}, sex {Female:0, Male:1},
+    # age_bin {[0,5):0, [5,10):1}, year_bin {[1990,2000):0, [2000,2010):1}.
+    values = [0, 2111, 1001, 110, 2000, 1111]
+    expected = pd.DataFrame(
+        {"value": values, "value2": [v + 0.5 for v in values]},
+        index=[5, 2, 8, 0, 7, 3],
+    )
+    assert interp(query).equals(expected)

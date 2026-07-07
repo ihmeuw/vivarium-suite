@@ -249,6 +249,67 @@ def test_interpolated_tables__only_categorical_parameters(
         assert (output_data.loc[sub_table_mask, "some_value"] == i**2).all()
 
 
+def test_interpolated_table__continuous_and_multiple_categorical(
+    base_config: ConfigTree,
+) -> None:
+    """End-to-end (MIC-7097): a lookup table with continuous parameters (age,
+    year) and multiple categorical keys (sex, location) — the many-group
+    scenario the vectorized merge targets — returns the correct per-simulant
+    value for every (sex, location) group when driven through the manager on a
+    population index. Mirror ``test_interpolated_tables__only_categorical_parameters``
+    for the categorical setup and ``test_interpolated_tables`` for the
+    age/year build_table + InteractiveContext setup.
+    """
+    year_start = base_config.time.start.year
+    year_end = base_config.time.end.year
+
+    sex_values = {"Female": 0.0, "Male": 1.0}
+    location_values = {"USA": 0.0, "Canada": 10.0, "Mexico": 20.0}
+
+    def make_value(item: tuple[Any, ...]) -> float:
+        # ``build_table`` orders the product as (parameter cols..., key cols...);
+        # here that is (age, year, sex, location). Return a value that is
+        # distinct per (sex, location, age-bin, year-bin).
+        age, year, sex, location = item
+        return float(
+            sex_values[sex]
+            + location_values[location]
+            + 100.0 * age
+            + 100_000.0 * (year - year_start)
+        )
+
+    data = build_table(
+        make_value,
+        parameter_columns={"age": (0, 100), "year": (year_start, year_end)},
+        key_columns={"sex": ("Female", "Male"), "location": ("USA", "Canada", "Mexico")},
+        value_columns=["value"],
+    )
+
+    base_config.update({"population": {"population_size": 10000}})
+    component = TestPopulation()
+    simulation = InteractiveContext(components=[component], configuration=base_config)
+    manager = simulation._tables
+    lookup_table = manager._build_table(component, data, "", value_columns="value")
+
+    pop = simulation.get_population(["sex", "location", "age"])
+    result = lookup_table(pop.index)
+
+    # The lookup injects the clock's current (integer) year as the continuous
+    # ``year`` interpolant, so every simulant lands in the same year bin.
+    clock_year = simulation._clock.time.year  # type: ignore [union-attr]
+    expected = (
+        pop["sex"].map(sex_values)
+        + pop["location"].map(location_values)
+        + 100.0 * np.floor(pop["age"])
+        + 100_000.0 * (clock_year - year_start)
+    )
+
+    assert isinstance(result, pd.Series)
+    assert result.name == "value"
+    assert result.index.equals(pop.index)
+    assert np.allclose(result.to_numpy(), expected.reindex(result.index).to_numpy())
+
+
 @pytest.mark.parametrize("data", [(1, 2), [1, 2], ("hello", "world"), ["hello", "world"]])
 def test_lookup_table_scalar_from_list(
     base_config: ConfigTree, data: list[ScalarValue] | tuple[ScalarValue, ...]
@@ -340,14 +401,16 @@ class TestLookupTableResource:
         self,
         lookup_manager: LookupTableManager,
     ) -> None:
+        # Both "foo" groups share the same bar/year bins: interpolation requires
+        # uniform bin edges across categorical groups.
         data = pd.DataFrame(
             {
-                "foo": [1, 2, 3],
-                "bar_start": [0, 1, 2],
-                "bar_end": [1, 2, 3],
-                "year_start": [2000, 2001, 2002],
-                "year_end": [2001, 2002, 2003],
-                "baz": [7, 8, 9],
+                "foo": [1, 1, 2, 2],
+                "bar_start": [0, 1, 0, 1],
+                "bar_end": [1, 2, 1, 2],
+                "year_start": [2000, 2000, 2000, 2000],
+                "year_end": [2001, 2001, 2001, 2001],
+                "baz": [7, 8, 9, 10],
             }
         )
         with warnings.catch_warnings():
@@ -443,10 +506,13 @@ class TestValidateBuildTableParameters:
     def test_build_table_indexed_dataframe_succeeds(
         self, lookup_manager: LookupTableManager
     ) -> None:
+        # Both "a" groups share the same b bins: interpolation requires uniform
+        # bin edges across categorical groups.
         data = pd.DataFrame(
-            {"c": [100, 150]},
+            {"c": [100, 150, 200, 250]},
             index=pd.MultiIndex.from_tuples(
-                [("x", 0, 5), ("y", 5, 10)], names=["a", "b_start", "b_end"]
+                [("x", 0, 5), ("x", 5, 10), ("y", 0, 5), ("y", 5, 10)],
+                names=["a", "b_start", "b_end"],
             ),
         )
         table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
@@ -489,10 +555,12 @@ def test__build_table_from_dict(base_config: ConfigTree) -> None:
     component = TestPopulation()
     simulation = InteractiveContext(components=[component], configuration=base_config)
     manager = simulation._tables
+    # Both "b" groups share the same a bins: interpolation requires uniform bin
+    # edges across categorical groups.
     data = {
-        "a_start": [0.0, 0.5, 1.0, 1.5],
-        "a_end": [0.5, 1.0, 1.5, 2.0],
-        "b": [10.0, 20.0, 30.0, 40.0],
+        "a_start": [0.0, 0.5, 0.0, 0.5],
+        "a_end": [0.5, 1.0, 0.5, 1.0],
+        "b": [10.0, 10.0, 20.0, 20.0],
         "c": [100.0, 200.0, 300.0, 400.0],
     }
     # We convert the dict to a dataframe before we call validate_build_table_parameters so
