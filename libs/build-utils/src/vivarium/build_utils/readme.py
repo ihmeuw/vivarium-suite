@@ -18,13 +18,24 @@ _ENUMERATED = re.compile(
     r"(Supported Python versions:[ \t]*)\d+\.\d+(?:[ \t]*,[ \t]*\d+\.\d+)*"
 )
 
-DEFAULT_README = "README.rst"
+# README filenames to look for, in preference order (RST is the monorepo
+# convention; standalone repos such as vivarium_inputs use Markdown).
+DEFAULT_READMES = ("README.rst", "README.md")
 DEFAULT_VERSIONS_FILE = "python_versions.json"
 
 
 def _version_key(version: str) -> tuple[int, ...]:
     """Return a numeric sort key so ``3.9`` orders before ``3.10``."""
     return tuple(int(part) for part in version.split("."))
+
+
+def _find_readme(root: Path) -> Path:
+    """Return the first existing README under ``root`` (``.rst`` preferred, then ``.md``)."""
+    for name in DEFAULT_READMES:
+        candidate = root / name
+        if candidate.exists():
+            return candidate
+    return root / DEFAULT_READMES[0]  # fall back to README.rst for the error message
 
 
 def load_versions(path: Path) -> list[str]:
@@ -100,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the README updater as a CLI and return a process exit code."""
     args = _parse_args(argv)
     root = Path(args.root)
-    readme_path = root / DEFAULT_README
+    readme_path = _find_readme(root)
     versions_path = root / DEFAULT_VERSIONS_FILE
 
     versions = load_versions(versions_path)

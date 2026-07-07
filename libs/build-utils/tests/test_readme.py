@@ -144,6 +144,22 @@ def test_main(
         assert substring in err
 
 
+def test_main_updates_markdown_readme(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("**Supported Python versions: 3.9**\n")
+    (tmp_path / "python_versions.json").write_text(json.dumps(["3.10", "3.11"]))
+    assert main([str(tmp_path)]) == 0
+    assert "3.10, 3.11" in (tmp_path / "README.md").read_text()
+
+
+def test_main_prefers_rst_over_md(tmp_path: Path) -> None:
+    (tmp_path / "README.rst").write_text("**Supported Python versions: 3.9**\n")
+    (tmp_path / "README.md").write_text("**Supported Python versions: 3.9**\n")
+    (tmp_path / "python_versions.json").write_text(json.dumps(["3.10", "3.11"]))
+    assert main([str(tmp_path)]) == 0
+    assert "3.10, 3.11" in (tmp_path / "README.rst").read_text()
+    assert "3.9" in (tmp_path / "README.md").read_text()  # untouched
+
+
 def test_load_versions_rejects_empty(tmp_path: Path) -> None:
     path = tmp_path / "python_versions.json"
     path.write_text("[]")
