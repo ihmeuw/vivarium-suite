@@ -1,3 +1,7 @@
+**6.3.5 - 07/08/26**
+
+- Share a module-scoped InteractiveContext fixture across the population mortality tests to reduce runtime
+
 **6.3.4 - 07/07/26**
 
 - Share module-scoped InteractiveContext fixtures across observer and ensemble tests to reduce runtime
