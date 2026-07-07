@@ -1,3 +1,7 @@
+**4.2.10 - 07/07/26
+
+- Scope pandas display options in ``print_stat_report`` to avoid mutating global state
+
 **4.2.9 - 07/06/26**
 
 - Add PyPI classifiers
