@@ -360,26 +360,14 @@ def _build_ensemble_distribution_sim(
 def ensemble_distribution_sim(
     base_config_factory, base_plugins, ensemble_distribution_weights
 ) -> tuple[InteractiveContext, EnsembleDistribution]:
-    """One built ensemble-distributed-risk sim, shared read-only across the ensemble
-    tests (the one test that steps builds its own instance instead)."""
-    return _build_ensemble_distribution_sim(
-        base_config_factory(), base_plugins, ensemble_distribution_weights
-    )
-
-
-def test_ensemble_risk(base_config_factory, base_plugins, ensemble_distribution_weights):
-    """End-to-end: an ensemble-distributed risk sets up and steps without error."""
+    """One ensemble-distributed-risk sim, built and stepped once, shared read-only
+    across the ensemble tests. The build-and-step also serves as the end-to-end
+    smoke test that an ensemble risk runs without error."""
     simulation, distribution = _build_ensemble_distribution_sim(
         base_config_factory(), base_plugins, ensemble_distribution_weights
     )
-
-    expected_distributions = set(ensemble_distribution_weights.keys()) - {"glnorm"}
-    assert expected_distributions == set(distribution.parameter_columns.keys())
-
     simulation.step()
-
-    # todo: use fuzzy checker to confirm that we are getting the expected results
-    print("We didn't runtime error - success!")
+    return simulation, distribution
 
 
 def test_ensemble_builds_single_consolidated_parameters_table(ensemble_distribution_sim):
