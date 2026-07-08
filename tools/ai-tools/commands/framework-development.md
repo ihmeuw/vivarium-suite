@@ -1,7 +1,7 @@
 ---
 description: "Guided design→implement→verify→PR loop for a well-scoped framework feature."
 argument-hint: "A MIC ticket key, design doc, or description of the feature to build."
-allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(_test_writer, _feature_implementer, _validator, _review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation)
+allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(_test_writer, _feature_implementer, _validator, _review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation, _review_scorer)
 ---
 
 Run an end-to-end framework development loop for: $ARGUMENTS
@@ -9,7 +9,8 @@ Run an end-to-end framework development loop for: $ARGUMENTS
 You (the main session) own the design and the stubs, then drive a **black-box
 TDD** build: `_test_writer` and `_feature_implementer` produce the tests and the
 implementation in isolation, and you fan out `_validator` and run the shared
-`_review-core` skill for review (it fans out the five `_review_*` specialists). Work the
+`_review-core` skill for review (it fans out the five `_review_*`
+specialists, then confidence-scores and filters their findings). Work the
 phases in order; keep the user in the loop at the design and PR gates.
 
 ## Control flow
@@ -32,11 +33,11 @@ Gate 1 — validate: up to 3 rounds, until green
     still red after the budget  ->  carry residual failures to Phase 5, skip review (don't review red code)
 
 Gate 2 — review: up to 3 rounds, until clean (separate budget from Gate 1)
-    findings = review_core once       # full five-lens fan-out + correctness; always runs once on green
+    findings = review_core once       # full five-agent fan-out + correctness; always runs once on green
     repeat while must-fix findings remain:
         triage & re-dispatch each finding
         re-integrate, then re-validate    # a review fix can't silently break a test
-        re-check each fix with the lens that raised it
+        re-check each fix with the review agent that raised it
     leftover findings  ->  carry to Phase 5
 
 finalize & PR                        # Phase 5: user-gated; residuals -> ticket-triage
@@ -151,12 +152,14 @@ around review.
    **first** time you reach green, invoke the `_review-core` skill
    (`skills/_review-core/SKILL.md`) with the integrated diff, the changed-file
    list, and a one-line feature description — a full fan-out across the five
-   review **lenses** (one `_review_*` specialist per dimension: Design,
+   **review agents** (one `_review_*` specialist per dimension: Design,
    Maintainability, DRY, Tests, Documentation) plus the functional-correctness
    pass in this main-session context, the same definition `/viv:code-reviewer`
-   uses. It returns findings bucketed by lens, alongside your own Functionality
-   pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
-   each already-fixed finding **back to the lens that raised it** for a
+   uses. It then independently confidence-scores every finding (a `_review_scorer`
+   per finding) and drops those below 50, so it returns the surviving findings
+   bucketed by review agent — each annotated with its score — alongside your own
+   Functionality pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
+   each already-fixed finding **back to the review agent that raised it** for a
    resolved/not-resolved verdict. When no must-fix findings remain, run one final full `_review-core`
    pass as the convergence check — it catches any *new* qualitative issue a fix
    introduced, which per-finding routing can't. A clean final pass means

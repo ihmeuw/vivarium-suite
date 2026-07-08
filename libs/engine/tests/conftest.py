@@ -17,7 +17,13 @@ from vivarium.engine.framework.configuration import (
     build_model_specification,
     build_simulation_configuration,
 )
+from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.testing_utilities import metadata
+
+
+@pytest.fixture(autouse=True)
+def _clear_simulation_context_cache() -> None:
+    SimulationContext._clear_context_cache()
 
 
 @pytest.fixture(scope="session")

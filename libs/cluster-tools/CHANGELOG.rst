@@ -1,3 +1,19 @@
+**4.2.10 - 07/07/26
+
+- Scope pandas display options in ``print_stat_report`` to avoid mutating global state
+
+**4.2.9 - 07/06/26**
+
+- Add PyPI classifiers
+
+**4.2.8 - 06/30/26**
+
+- Isolate cluster-tools mkdir test with tmp_path
+
+**4.2.7 - 06/30/26**
+
+- Add support for 'make build-env' without access to the IHME Artifactory.
+
 **4.2.6 - 06/23/26**
 
 - Enforce a fixed schema for central performance logs

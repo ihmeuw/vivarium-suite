@@ -502,8 +502,10 @@ class MeasureMapper:
     """A class to manage measure mappings."""
 
     def __init__(self) -> None:
+        # Copy the inner dicts so a MeasureMapper never mutates the module-level
+        # MEASURE_KEY_MAPPINGS (add_new_measure writes into self.mapper).
         self.mapper: defaultdict[str, dict[str, Callable[..., Measure]]] = defaultdict(
-            dict, MEASURE_KEY_MAPPINGS
+            dict, {k: dict(v) for k, v in MEASURE_KEY_MAPPINGS.items()}
         )
 
     def add_new_measure(self, measure_key: str, measure_class: type[Measure]) -> None:

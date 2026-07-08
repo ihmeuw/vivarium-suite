@@ -38,7 +38,7 @@ from vivarium.engine.framework.results.stratification import (
 )
 
 if TYPE_CHECKING:
-    from vivarium.engine.framework.results.interface import PopulationFilter
+    from vivarium.engine.framework.results.interface import _PopulationFilter
 
 VALUE_COLUMN = "value"
 
@@ -55,7 +55,7 @@ class Observation(ABC):
     name: str
     """Name of the observation. It will also be the name of the output results file
     for this particular observation."""
-    population_filter: PopulationFilter
+    population_filter: _PopulationFilter
     """A named tuple of population filtering details. The first item is a Pandas 
     query string to filter the population down to the simulants who should be 
     considered for the observation. The second item is a boolean indicating whether 
@@ -149,7 +149,7 @@ class UnstratifiedObservation(Observation):
     def __init__(
         self,
         name: str,
-        population_filter: PopulationFilter,
+        population_filter: _PopulationFilter,
         when: str,
         requires_attributes: list[str],
         results_gatherer: Callable[[pd.DataFrame], pd.DataFrame],
@@ -233,7 +233,7 @@ class StratifiedObservation(Observation):
     def __init__(
         self,
         name: str,
-        population_filter: PopulationFilter,
+        population_filter: _PopulationFilter,
         when: str,
         requires_attributes: list[str],
         results_updater: Callable[[pd.DataFrame, pd.DataFrame], pd.DataFrame],
@@ -441,7 +441,7 @@ class AddingObservation(StratifiedObservation):
     def __init__(
         self,
         name: str,
-        population_filter: PopulationFilter,
+        population_filter: _PopulationFilter,
         when: str,
         requires_attributes: list[str],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],
@@ -526,7 +526,7 @@ class ConcatenatingObservation(UnstratifiedObservation):
     def __init__(
         self,
         name: str,
-        population_filter: PopulationFilter,
+        population_filter: _PopulationFilter,
         when: str,
         requires_attributes: list[str],
         results_formatter: Callable[[str, pd.DataFrame], pd.DataFrame],

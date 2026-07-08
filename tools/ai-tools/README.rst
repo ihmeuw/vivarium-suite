@@ -14,7 +14,7 @@ It includes:
 
 **Code Reviewer**
 
-- ``/viv:code-reviewer <PR or description>`` — parallel multi-lens review that fans out to specialist sub-agents focused on:
+- ``/viv:code-reviewer <PR or description>`` — parallel multi-agent review that fans out to specialist sub-agents focused on:
   
   - Maintainability
   - DRY
@@ -22,7 +22,10 @@ It includes:
   - Testing coverage and quality
   - Documentation
 
-  plus its own functional-correctness pass.
+  plus its own functional-correctness pass. The five review agents run on Sonnet;
+  every finding is then independently scored for confidence (0-100) by a
+  per-finding ``_review_scorer`` Haiku sub-agent, and findings below 50 are
+  dropped — so only verified issues reach the report, each shown with its score.
 
 After the review, findings the user won't address in the current PR can be
 handed to the ``ticket-triage`` skill (see Skills below), to compile and file non-duplicate JIRA tickets.
@@ -71,6 +74,27 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   iterating while preserving the black box. It always creates the feature branch
   up front and gates PR creation on explicit user approval.
 
+**Model Development**
+
+- ``/viv:model-development <ticket, research doc, or iteration description>`` — an
+  end-to-end iteration of a vivarium model concept (a cause, risk, intervention,
+  or observer) in an existing model repo, driven from its vivarium-research
+  documentation. The main session owns the **iteration plan** — the contract
+  that pins the artifact keys, pipeline names, state-table columns, and observer
+  outputs a change touches, plus the quantitative expectations from the research
+  doc. From that contract it runs a **sequential build** in
+  data-dependency order (artifact, then component, then observer — skipping
+  layers the change doesn't touch), while an **internal verification** is authored in
+  parallel and blind to the implementation — InteractiveContext checks and a
+  notebook built from the plan alone. It then **runs the simulation** to verify
+  (the repo's existing suite, the new checks, a local ``simulate`` run, and the
+  notebook) and applies the same multi-lens review as
+  ``/viv:framework-development``. The verification is an internal loop for
+  engineering confidence — not formal V&V — so its **traces** (notebook plots and
+  tables) are posted to the PR, while the artifacts themselves stay out of the
+  repo unless you ask to keep them. Gates the artifact build and the PR on
+  explicit user approval.
+
 **Skills**
 
 - ``plugin-setup`` — walks the user through post-install configuration that the
@@ -89,7 +113,7 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
 - ``vivarium-research`` — connector for the Vivarium Research
   documentation (https://vivarium-research.readthedocs.io). Discovers
   the docs nav tree on demand and searches modelling-strategy content
-  via the Read the Docs v2 API.
+  via the Read the Docs search API.
 - ``design-doc`` — SimSci Engineering convention for drafting a design
   document on the IHME hub
 - ``brainstorming`` — structured design exploration that produces a Jira
@@ -103,6 +127,10 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   commands, README, root ``CLAUDE.md``) for drift against upstream
   sources via per-unit ``_claim_auditor`` sub-agents; fixes are gated on
   user approval.
+- ``change-propagation`` — propagate boilerplate across several targets (monorepo libs and/or external
+  repos) in parallel, one ``_propagate_target`` worker per target, then
+  converge them into one draft PR per repo — every durable write gated on
+  one explicit approval.
 - ``workflow-assessment`` — post-hoc audit of an agentic workflow run
   against its own definition: fans out the ``_trace_extractor`` sub-agent
   over the run's session transcripts and grades coverage, ordering/gates,
@@ -152,7 +180,7 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
 Once installed, the entry points are the slash commands
 ``/viv:code-reviewer``, ``/viv:model-regression-debugger``, and
 ``/viv:framework-development``. These run the sub-agent fan-out at
-main-session level and produce a multi-lens review, a regression
+main-session level and produce a multi-agent review, a regression
 investigation, or an end-to-end feature build.
 
 Delegation mechanism
@@ -165,7 +193,7 @@ field grants the main session permission to spawn the listed
 sub-agents in parallel, and the slash command body is itself the
 orchestration prompt.
 
-The multi-lens review fan-out is defined once, in the internal ``_review-core``
+The multi-agent review fan-out is defined once, in the internal ``_review-core``
 skill (``skills/_review-core/SKILL.md``, hidden from the ``/`` menu via
 ``user-invocable: false``), and invoked **inline** by ``/viv:code-reviewer``
 after it gathers PR context. A skill invoked from a command runs inline in the
@@ -174,14 +202,24 @@ same main session — not as a sub-agent — so ``_review-core`` can spawn the
 review be reused by other main-session commands without duplicating the
 fan-out.
 
+``_review-core`` runs two one-level fan-outs in sequence, tiered by model. The
+five review agents run on **Sonnet**; once they return, ``_review-core`` collects
+every finding (the review agents' plus its own functional-correctness pass) and spawns a
+second fan-out of ``_review_scorer`` agents on **Haiku** — one per finding — to
+score each finding's confidence (0-100) independently of the review agent that raised it.
+It then drops anything below 50 and synthesizes the survivors. Both fan-outs stay
+one level deep because ``_review-core`` itself runs inline in the main session.
+
+
 Security model and recommended deny rules
 =========================================
 
 The agents in this plugin have the following shell access on Claude
 Code:
 
-- The 5 ``_review_*`` sub-agents have **no Bash access at all**. They
-  are fed PR context by the slash command and analyze code with
+- The ``_review_*`` sub-agents — the five review agents plus the
+  per-finding ``_review_scorer`` — have **no Bash access at all**. They
+  are fed review context by ``_review-core`` and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
 - ``_claim_auditor`` likewise has **no Bash access** — it verifies
   plaintext claims with ``Read``/``Grep``/``Glob``, read-only MCP calls
@@ -212,19 +250,36 @@ Code:
   discourages reaching across via an absolute path, since the worktree is not a
   hard read sandbox. Both are spawned only by the ``/viv:framework-development``
   slash command.
+- ``_model_implementer`` and ``_vv_writer`` (the ``model-development`` workflow)
+  are likewise write-capable (``Write``/``Edit``, no ``Bash``): they author
+  files but never run the simulation, ``git``, or shell commands, and their
+  writes are partitioned. ``_model_implementer`` writes **only its assigned model
+  layer's code** (artifact, component, or observer) — never the verification checks or notebook —
+  dispatched once per layer and working directly on the feature branch (the
+  stages are sequential, so no worktree isolation is needed). ``_vv_writer``
+  writes **the verification checks and notebook**, blind to the implementation. Both
+  are spawned only by the ``/viv:model-development`` skill.
 - ``_validator`` declares ``Bash`` so it can run the package's ``make
   test-*`` / ``make lint`` / ``make mypy`` targets and report a PASS/FAIL
   verdict. It is read-only with respect to source and tests — it never edits
   files — but running a test suite executes arbitrary project code, so this is a
-  broader grant than the read-only git agents above. It is spawned only by the
-  ``/viv:framework-development`` slash command.
-- The ``/viv:code-reviewer``, ``/viv:model-regression-debugger``, and
-  ``/viv:framework-development`` slash command bodies (running in the main
-  session) gather PR/repo context through the GitHub MCP server (a plugin
-  dependency; see the ``plugin-setup`` skill), falling back to read-only
-  git/``gh`` commands when the MCP is unavailable; ``/viv:framework-development``
-  additionally writes source and test files and runs make targets as it builds
-  the feature.
+  broader grant than the read-only git agents above. It is spawned by the
+  ``/viv:framework-development`` and ``/viv:model-development`` workflows.
+- ``_propagate_target`` (spawned by the ``change-propagation`` skill) also
+  **writes** and runs the test suite: for a monorepo target it adapts files
+  into a ``libs/<pkg>/`` subtree and runs that package's ``make check`` inside
+  an **isolated git worktree** (its verification sandbox). Its prompt constrains
+  it to write only within its assigned target and to **never** push, branch,
+  commit, or open a PR — every durable write is the lead skill's, after explicit
+  approval. For an external target it uses only read-only GitHub MCP calls and
+  writes nothing.
+- The ``/viv:code-reviewer``, ``/viv:model-regression-debugger``,
+  ``/viv:framework-development``, and ``/viv:model-development`` slash command and
+  skill bodies (running in the main session) gather PR/repo context through the
+  GitHub MCP server (a plugin dependency; see the ``plugin-setup`` skill),
+  falling back to read-only git/``gh`` commands when the MCP is unavailable;
+  ``/viv:framework-development`` and ``/viv:model-development`` additionally write
+  files and run make/sim targets as they build.
 
 For destructive or out-of-scope commands, Claude Code's default
 permission system prompts you before execution, so a prompt-injected

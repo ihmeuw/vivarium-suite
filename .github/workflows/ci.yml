@@ -134,12 +134,7 @@ jobs:
         run: cd libs/${{ matrix.library }} && make lint
 
       - name: Mypy ${{ matrix.library }}
-        run: |
-          if find "libs/${{ matrix.library }}/src" -name "py.typed" | grep -q .; then
-            cd libs/${{ matrix.library }} && make mypy
-          else
-            echo "Untyped package, skipping mypy"
-          fi
+        run: cd libs/${{ matrix.library }} && make mypy-if-typed
 
       - name: Test ${{ matrix.library }}
         run: cd libs/${{ matrix.library }} && make test-all
@@ -151,6 +146,15 @@ jobs:
             cd libs/${{ matrix.library }} && make build-docs
           else
             echo "Skipping docs build (only runs on 3.11)"
+          fi
+
+      - name: Test docs for ${{ matrix.library }}
+        run: |
+          # Run doctests on the same canonical 3.11 build as the docs build above
+          if [ "${{ matrix.python-version }}" = "3.11" ]; then
+            cd libs/${{ matrix.library }} && make test-docs
+          else
+            echo "Skipping doctests (only runs on 3.11)"
           fi
 
   ci-status:
