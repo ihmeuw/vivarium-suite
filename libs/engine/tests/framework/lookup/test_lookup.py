@@ -252,10 +252,13 @@ def test_interpolated_tables__only_categorical_parameters(
 def test_interpolated_table__continuous_and_multiple_categorical(
     base_config: ConfigTree,
 ) -> None:
-    """End-to-end: a lookup table with continuous parameters (age, year) and
-    multiple categorical keys (sex, location) returns the correct per-simulant
+    """End-to-end (MIC-7097): a lookup table with continuous parameters (age,
+    year) and multiple categorical keys (sex, location) — the many-group
+    scenario the vectorized merge targets — returns the correct per-simulant
     value for every (sex, location) group when driven through the manager on a
-    population index.
+    population index. Mirror ``test_interpolated_tables__only_categorical_parameters``
+    for the categorical setup and ``test_interpolated_tables`` for the
+    age/year build_table + InteractiveContext setup.
     """
     year_start = base_config.time.start.year
     year_end = base_config.time.end.year
@@ -300,7 +303,11 @@ def test_interpolated_table__continuous_and_multiple_categorical(
         + 100.0 * np.floor(pop["age"])
         + 100_000.0 * (clock_year - year_start)
     )
-    assert np.allclose(result, expected)
+
+    assert isinstance(result, pd.Series)
+    assert result.name == "value"
+    assert result.index.equals(pop.index)
+    assert np.allclose(result.to_numpy(), expected.reindex(result.index).to_numpy())
 
 
 @pytest.mark.parametrize("data", [(1, 2), [1, 2], ("hello", "world"), ["hello", "world"]])
@@ -394,14 +401,16 @@ class TestLookupTableResource:
         self,
         lookup_manager: LookupTableManager,
     ) -> None:
+        # Both "foo" groups share the same bar/year bins: interpolation requires
+        # uniform bin edges across categorical groups.
         data = pd.DataFrame(
             {
-                "foo": [1, 2, 3],
-                "bar_start": [0, 1, 2],
-                "bar_end": [1, 2, 3],
-                "year_start": [2000, 2001, 2002],
-                "year_end": [2001, 2002, 2003],
-                "baz": [7, 8, 9],
+                "foo": [1, 1, 2, 2],
+                "bar_start": [0, 1, 0, 1],
+                "bar_end": [1, 2, 1, 2],
+                "year_start": [2000, 2000, 2000, 2000],
+                "year_end": [2001, 2001, 2001, 2001],
+                "baz": [7, 8, 9, 10],
             }
         )
         with warnings.catch_warnings():
@@ -497,10 +506,13 @@ class TestValidateBuildTableParameters:
     def test_build_table_indexed_dataframe_succeeds(
         self, lookup_manager: LookupTableManager
     ) -> None:
+        # Both "a" groups share the same b bins: interpolation requires uniform
+        # bin edges across categorical groups.
         data = pd.DataFrame(
-            {"c": [100, 150]},
+            {"c": [100, 150, 200, 250]},
             index=pd.MultiIndex.from_tuples(
-                [("x", 0, 5), ("y", 5, 10)], names=["a", "b_start", "b_end"]
+                [("x", 0, 5), ("x", 5, 10), ("y", 0, 5), ("y", 5, 10)],
+                names=["a", "b_start", "b_end"],
             ),
         )
         table = lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
@@ -543,10 +555,12 @@ def test__build_table_from_dict(base_config: ConfigTree) -> None:
     component = TestPopulation()
     simulation = InteractiveContext(components=[component], configuration=base_config)
     manager = simulation._tables
+    # Both "b" groups share the same a bins: interpolation requires uniform bin
+    # edges across categorical groups.
     data = {
-        "a_start": [0.0, 0.5, 1.0, 1.5],
-        "a_end": [0.5, 1.0, 1.5, 2.0],
-        "b": [10.0, 20.0, 30.0, 40.0],
+        "a_start": [0.0, 0.5, 0.0, 0.5],
+        "a_end": [0.5, 1.0, 0.5, 1.0],
+        "b": [10.0, 10.0, 20.0, 20.0],
         "c": [100.0, 200.0, 300.0, 400.0],
     }
     # We convert the dict to a dataframe before we call validate_build_table_parameters so
