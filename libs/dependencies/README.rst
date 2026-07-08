@@ -32,6 +32,8 @@ is not useful on its own. The point is the extras.
 Installation
 ============
 
+**Supported Python versions: 3.13**
+
 You can install ``vivarium-dependencies`` from PyPI:
 
 .. code-block:: bash
