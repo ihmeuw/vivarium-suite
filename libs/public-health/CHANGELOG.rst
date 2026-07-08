@@ -1,3 +1,7 @@
+**6.3.4 - 07/08/26**
+
+- Share module-scoped InteractiveContext fixtures across observer and ensemble tests to reduce runtime
+
 **6.3.3 - 07/06/26**
 
 - Add PyPI classifiers

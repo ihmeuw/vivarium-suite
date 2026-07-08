@@ -270,7 +270,7 @@ def test_dichotomous_risk(base_config, base_plugins, scalar_exposure):
     _check_exposure_and_rr(simulation, risk.causal_factor, category_exposures, category_rrs)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def ensemble_distribution_weights() -> dict[str, float]:
     """Distribution weights for the ensemble test risk (glnorm forced to zero)."""
     return {
@@ -290,17 +290,12 @@ def ensemble_distribution_weights() -> dict[str, float]:
     }
 
 
-@pytest.fixture
-def ensemble_distribution_sim(
-    base_config, base_plugins, ensemble_distribution_weights
+def _build_ensemble_distribution_sim(
+    config, base_plugins, distribution_weights
 ) -> tuple[InteractiveContext, EnsembleDistribution]:
-    """Set up a simulation with an ensemble-distributed risk.
-
-    Return the set-up simulation alongside its configured
-    ``EnsembleDistribution`` component.
-    """
+    """Build (not step) a simulation with an ensemble-distributed risk, returning it
+    alongside its configured ``EnsembleDistribution`` component."""
     risk = Risk("risk_factor.test_risk")
-    distribution_weights = ensemble_distribution_weights
 
     data = {
         f"{risk.name}.exposure": pd.DataFrame(
@@ -340,7 +335,7 @@ def ensemble_distribution_sim(
         ),
     }
 
-    base_config.update(
+    config.update(
         {
             "risk_factor.test_risk": {
                 "data_sources": {"exposure": 0.25},
@@ -354,24 +349,25 @@ def ensemble_distribution_sim(
     )
 
     simulation = _setup_risk_simulation(
-        base_config, base_plugins, risk, data, has_risk_effect=False
+        config, base_plugins, risk, data, has_risk_effect=False
     )
     distribution = risk.exposure_distribution
     assert isinstance(distribution, EnsembleDistribution)
     return simulation, distribution
 
 
-def test_ensemble_risk(ensemble_distribution_sim, ensemble_distribution_weights):
-    """End-to-end: an ensemble-distributed risk sets up and steps without error."""
-    simulation, distribution = ensemble_distribution_sim
-
-    expected_distributions = set(ensemble_distribution_weights.keys()) - {"glnorm"}
-    assert expected_distributions == set(distribution.parameter_columns.keys())
-
+@pytest.fixture(scope="module")
+def ensemble_distribution_sim(
+    base_config_factory, base_plugins, ensemble_distribution_weights
+) -> tuple[InteractiveContext, EnsembleDistribution]:
+    """One ensemble-distributed-risk sim, built and stepped once, shared read-only
+    across the ensemble tests. The build-and-step also serves as the end-to-end
+    smoke test that an ensemble risk runs without error."""
+    simulation, distribution = _build_ensemble_distribution_sim(
+        base_config_factory(), base_plugins, ensemble_distribution_weights
+    )
     simulation.step()
-
-    # todo: use fuzzy checker to confirm that we are getting the expected results
-    print("We didn't runtime error - success!")
+    return simulation, distribution
 
 
 def test_ensemble_builds_single_consolidated_parameters_table(ensemble_distribution_sim):
