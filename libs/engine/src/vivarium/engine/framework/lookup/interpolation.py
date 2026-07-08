@@ -9,6 +9,7 @@ simulations.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Hashable, Sequence
 from typing import Any, ClassVar, NamedTuple, TypeGuard
 
@@ -429,6 +430,9 @@ def check_data_complete(data: pd.DataFrame, continuous_parameters: Sequence[str]
     NotImplementedError
         If a parameter contains non-continuous bins.
     """
+    if not continuous_parameters:
+        return
+
     start_columns = [_edge_columns(p)[0] for p in continuous_parameters]
 
     # A bin repeated for the same combination of the other parameters is an
@@ -439,21 +443,17 @@ def check_data_complete(data: pd.DataFrame, continuous_parameters: Sequence[str]
             f"bins for {_get_bin_edge_columns(continuous_parameters)}."
         )
 
+    # With unique keys, the rows are a subset of the cross product of the
+    # per-parameter edge sets, so matching cardinality means every combination
+    # is present.
+    if len(data) != math.prod(data[c].nunique() for c in start_columns):
+        raise ValueError(
+            f"You must provide a value for every combination of "
+            f"{list(continuous_parameters)}."
+        )
+
     for parameter in continuous_parameters:
         start_column, end_column = _edge_columns(parameter)
-        other_start_columns = [c for c in start_columns if c != start_column]
-
-        if (
-            other_start_columns
-            and (
-                data.groupby(other_start_columns)[start_column].nunique()
-                < data[start_column].nunique()
-            ).any()
-        ):
-            raise ValueError(
-                f"You must provide a value for every combination of "
-                f"{list(continuous_parameters)}."
-            )
 
         if (data.groupby(start_column)[end_column].nunique() > 1).any():
             raise ValueError(
