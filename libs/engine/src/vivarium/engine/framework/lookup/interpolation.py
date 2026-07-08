@@ -127,10 +127,6 @@ class Interpolation:
         )
         """Lookup attributes used to select between value rows."""
         self.data: pd.DataFrame = self._reshape_data(data, value_columns)
-        """Flat DataFrame the interpolation pipeline operates on, and the table
-        the single merge is performed against. Value columns are renamed to
-        opaque internal IDs (see ``_FLAT_COLUMN_PREFIX``); :attr:`value_columns`
-        carries the original user-facing labels and is reapplied to the output
         """Flat DataFrame the interpolation pipeline operates on. Value
         columns are renamed to opaque internal IDs (see ``_FLAT_COLUMN_PREFIX``);
         :attr:`value_columns` carries the original user-facing labels and is
