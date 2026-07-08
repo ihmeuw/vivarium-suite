@@ -132,14 +132,6 @@ class Interpolation:
         :attr:`value_columns` carries the original user-facing labels and is
         reapplied to the output of :meth:`__call__`."""
 
-        if validate:
-            validate_parameters(
-                self.data,
-                self.categorical_parameters,
-                self.continuous_parameters,
-                self._internal_value_columns,
-            )
-
         self.order: int = order
         """Order of interpolation. Only ``0`` is currently supported."""
         self.extrapolate: bool = extrapolate
@@ -150,8 +142,27 @@ class Interpolation:
         self._parameter_bins: dict[str, _ParameterBins] = {}
         """Shared per-continuous-parameter bin edges used by every interpolant,
         keyed by continuous-parameter base name."""
+        for parameter in self.continuous_parameters:
+            start_column, end_column = _edge_columns(parameter)
+            left_edges = self.data[start_column].drop_duplicates().sort_values()
+            self._parameter_bins[parameter] = _ParameterBins(
+                left_edges=left_edges.to_numpy(),
+                max_right=self.data[end_column].drop_duplicates().max(),
+            )
+        self._start_columns: list[str] = [
+            _edge_columns(p)[0] for p in self.continuous_parameters
+        ]
+        self._key_columns: list[str] = list(self.categorical_parameters) + self._start_columns
+        # With no key columns there is nothing to merge against: __call__
+        # broadcasts the single data row directly.
+        self._merge_target: pd.DataFrame | None = (
+            self.data[self._key_columns + self._internal_value_columns]
+            if self._key_columns
+            else None
+        )
 
-        self._prepare()
+        if validate:
+            self._validate()
 
     @staticmethod
     def _get_continuous_parameters(parameter_columns: list[str]) -> list[str]:
@@ -190,40 +201,14 @@ class Interpolation:
             columns=dict(zip(list(returned_columns), self._internal_value_columns))
         )
 
-    def _prepare(self) -> None:
-        """Extract shared bin edges and validate the source table for the single-merge path.
-
-        Populates :attr:`_parameter_bins` with, for each continuous parameter,
-        the ordered unique left bin edges and the maximum right edge, taken from
-        the full table (the edges are shared across categorical groups). Also
-        caches the call-invariant merge structures so :meth:`__call__`
-        rebuilds nothing per query. When :attr:`validate` is set, asserts the
-        key columns uniquely identify a data row, runs
-        :func:`check_data_complete` per categorical group, and asserts that
-        every group carries identical bin edges.
-        """
-        for parameter in self.continuous_parameters:
-            start_column, end_column = _edge_columns(parameter)
-            left_edges = self.data[start_column].drop_duplicates().sort_values()
-            self._parameter_bins[parameter] = _ParameterBins(
-                left_edges=left_edges.to_numpy(),
-                max_right=self.data[end_column].drop_duplicates().max(),
-            )
-
-        self._start_columns: list[str] = [
-            _edge_columns(p)[0] for p in self.continuous_parameters
-        ]
-        self._key_columns: list[str] = list(self.categorical_parameters) + self._start_columns
-        # With no key columns there is nothing to merge against: __call__
-        # broadcasts the single data row directly.
-        self._merge_target: pd.DataFrame | None = (
-            self.data[self._key_columns + self._internal_value_columns]
-            if self._key_columns
-            else None
+    def _validate(self) -> None:
+        """Validate that the source data supports the single-merge lookup."""
+        validate_parameters(
+            self.data,
+            self.categorical_parameters,
+            self.continuous_parameters,
+            self._internal_value_columns,
         )
-
-        if not self.validate:
-            return
 
         if self._key_columns:
             duplicated = self.data.duplicated(subset=self._key_columns, keep=False)
