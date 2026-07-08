@@ -69,7 +69,7 @@ def build_artifacts_in_parallel(
     tool = client.make_tool()
     template = client.make_task_template(
         tool,
-        template_name=workflow_name,
+        template_name="build_artifact",
         command_template="PATH={env_prefix}/bin:$PATH {command}",
         node_args=["command", "env_prefix"],
         task_args=[],
