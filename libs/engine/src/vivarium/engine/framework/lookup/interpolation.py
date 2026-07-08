@@ -10,9 +10,10 @@ simulations.
 from __future__ import annotations
 
 from collections.abc import Hashable, Sequence
-from typing import Any, ClassVar, TypeGuard
+from typing import Any, ClassVar, NamedTuple, TypeGuard
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from vivarium.engine.types import LookupTableData
@@ -35,13 +36,25 @@ _START_SUFFIX = "_start"
 _END_SUFFIX = "_end"
 
 
+def _edge_columns(parameter: str) -> tuple[str, str]:
+    """Get the left- and right-edge column names for a continuous parameter."""
+    return f"{parameter}{_START_SUFFIX}", f"{parameter}{_END_SUFFIX}"
+
+
 def _get_bin_edge_columns(continuous_parameters: Sequence[str]) -> list[str]:
     """Get the column names for the left and right edges of bins for each continuous parameter."""
     return [
-        f"{parameter}{suffix}"
-        for parameter in continuous_parameters
-        for suffix in (_START_SUFFIX, _END_SUFFIX)
+        column for parameter in continuous_parameters for column in _edge_columns(parameter)
     ]
+
+
+class _ParameterBins(NamedTuple):
+    """Shared bin edges for one continuous parameter."""
+
+    left_edges: npt.NDArray[Any]
+    """Ascending unique left bin edges."""
+    max_right: Any
+    """Maximum right bin edge (the exclusive upper bound of the last bin)."""
 
 
 class Interpolation:
@@ -135,12 +148,11 @@ class Interpolation:
         self.validate: bool = validate
         """Whether to validate inputs on construction and on call."""
 
-        self._parameter_bins: dict[str, dict[str, Any]] = {}
-        """Shared per-continuous-parameter bin metadata used by every
-        interpolant. Keys are continuous-parameter base names; values are
-        ``{"bins": <ordered left edges>, "max": <max right edge>}``. The edges
-        are shared across all categorical groups (enforced on construction when
-        ``validate`` is set)."""
+        self._parameter_bins: dict[str, _ParameterBins] = {}
+        """Shared per-continuous-parameter bin edges used by every interpolant,
+        keyed by continuous-parameter base name. The edges are shared across all
+        categorical groups (enforced on construction when ``validate`` is
+        set)."""
 
         self._prepare()
 
@@ -188,30 +200,30 @@ class Interpolation:
         the ordered unique left bin edges and the maximum right edge, taken from
         the full table (the edges are shared across categorical groups). Also
         caches the call-invariant merge structures (:attr:`_start_columns`,
-        :attr:`_merge_target`) so :meth:`__call__` rebuilds nothing per query.
-        When :attr:`validate` is set, runs :func:`check_data_complete` per
-        categorical group and asserts that every group carries identical bin
-        edges (the single-merge path is only correct when the bins are uniform
-        across groups).
+        :attr:`_key_columns`, :attr:`_merge_target`) so :meth:`__call__`
+        rebuilds nothing per query. When :attr:`validate` is set, runs
+        :func:`check_data_complete` per categorical group and asserts that
+        every group carries identical bin edges (the single-merge path is only
+        correct when the bins are uniform across groups).
         """
         for parameter in self.continuous_parameters:
-            start_column, end_column = _get_bin_edge_columns([parameter])
+            start_column, end_column = _edge_columns(parameter)
             left_edges = self.data[start_column].drop_duplicates().sort_values()
-            self._parameter_bins[parameter] = {
-                "bins": left_edges.reset_index(drop=True),
-                "max": self.data[end_column].drop_duplicates().max(),
-            }
+            self._parameter_bins[parameter] = _ParameterBins(
+                left_edges=left_edges.to_numpy(),
+                max_right=self.data[end_column].drop_duplicates().max(),
+            )
 
         self._start_columns: list[str] = [
-            _get_bin_edge_columns([p])[0] for p in self.continuous_parameters
+            _edge_columns(p)[0] for p in self.continuous_parameters
         ]
-        key_columns = list(self.categorical_parameters) + self._start_columns
+        self._key_columns: list[str] = list(self.categorical_parameters) + self._start_columns
         # A purely categorical group can span several rows; keep the first so the
         # many-to-one merge collapses it instead of fanning out. With no key
         # columns at all, __call__ broadcasts the first row directly and never
         # merges, so there is nothing to prepare.
-        self._merge_target: pd.DataFrame = pd.DataFrame()
-        if key_columns:
+        self._merge_target: pd.DataFrame | None = None
+        if self._key_columns:
             merge_source = (
                 self.data
                 if self.continuous_parameters
@@ -219,14 +231,15 @@ class Interpolation:
                     subset=self.categorical_parameters, keep="first"
                 )
             )
-            self._merge_target = merge_source[key_columns + self._internal_value_columns]
+            self._merge_target = merge_source[
+                self._key_columns + self._internal_value_columns
+            ]
 
         if not (self.validate and self.continuous_parameters):
             return
 
         continuous_parameters_with_edges = [
-            (p, f"{p}{_START_SUFFIX}", f"{p}{_END_SUFFIX}")
-            for p in self.continuous_parameters
+            (p, *_edge_columns(p)) for p in self.continuous_parameters
         ]
         # Validate completeness one categorical group at a time: on the full
         # multi-group table the overlap guard would trip on the repeated bins.
@@ -241,13 +254,13 @@ class Interpolation:
         # The single global digitize only resolves the right bin when every
         # categorical group carries identical edges; nothing else enforces this.
         for parameter in self.continuous_parameters:
-            reference_bins = set(self._parameter_bins[parameter]["bins"])
-            reference_max = self._parameter_bins[parameter]["max"]
-            start_column, end_column = _get_bin_edge_columns([parameter])
+            bins = self._parameter_bins[parameter]
+            reference_edges = set(bins.left_edges)
+            start_column, end_column = _edge_columns(parameter)
             for group in groups:
                 if (
-                    set(group[start_column]) != reference_bins
-                    or group[end_column].max() != reference_max
+                    set(group[start_column]) != reference_edges
+                    or group[end_column].max() != bins.max_right
                 ):
                     raise ValueError(
                         f"Continuous parameter '{parameter}' has different bin edges "
@@ -296,28 +309,8 @@ class Interpolation:
 
         original_index = interpolants.index
 
-        resolved_edges: dict[str, Any] = {}
-        for parameter in self.continuous_parameters:
-            bins = self._parameter_bins[parameter]["bins"]
-            max_right = self._parameter_bins[parameter]["max"]
-            values = interpolants[parameter]
-            if not self.extrapolate and (
-                values.min() < bins.iloc[0] or values.max() >= max_right
-            ):
-                raise ValueError(
-                    f"Extrapolation outside the provided bins is disabled, but "
-                    f"parameter '{parameter}' has values outside its bin range "
-                    f"[{bins.iloc[0]}, {max_right})."
-                )
-            # Left edge inclusive, right exclusive; out-of-range values fold to
-            # the nearest edge bin (below the minimum -> first, at/above the
-            # maximum -> last).
-            positions = np.digitize(values, bins.tolist())
-            positions[positions > 0] -= 1
-            resolved_edges[parameter] = bins.loc[positions].to_numpy()
-
-        key_columns = list(self.categorical_parameters) + self._start_columns
-        if not key_columns:
+        if self._merge_target is None:
+            # No categorical or continuous parameters: broadcast the first row.
             first_row = self.data[self._internal_value_columns].iloc[0]
             broadcast = pd.DataFrame(
                 {column: first_row[column] for column in self._internal_value_columns},
@@ -330,14 +323,32 @@ class Interpolation:
         for column in self.categorical_parameters:
             key_frame[column] = interpolants[column].to_numpy()
         for parameter, start_column in zip(self.continuous_parameters, self._start_columns):
-            key_frame[start_column] = resolved_edges[parameter]
+            bins = self._parameter_bins[parameter]
+            values = interpolants[parameter]
+            if not self.extrapolate and (
+                values.min() < bins.left_edges[0] or values.max() >= bins.max_right
+            ):
+                raise ValueError(
+                    f"Extrapolation outside the provided bins is disabled, but "
+                    f"parameter '{parameter}' has values outside its bin range "
+                    f"[{bins.left_edges[0]}, {bins.max_right})."
+                )
+            # Left edge inclusive, right exclusive; out-of-range values fold to
+            # the nearest edge bin (below the minimum -> first, at/above the
+            # maximum -> last).
+            positions = np.digitize(values, bins.left_edges)
+            positions[positions > 0] -= 1
+            key_frame[start_column] = bins.left_edges[positions]
 
         merged = key_frame.merge(
             self._merge_target,
             how="left",
-            on=key_columns,
+            on=self._key_columns,
             validate="many_to_one",
-            indicator=True,
+            # The indicator drives the unknown-category KeyError below; with no
+            # categorical keys a miss is impossible (the resolved edges come
+            # from this same table), so skip it.
+            indicator=bool(self.categorical_parameters),
         )
         # A left many-to-one merge preserves left-row order, so the merged rows
         # line up positionally with the interpolants.
