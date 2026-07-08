@@ -1,6 +1,7 @@
 **5.4.0 - 07/07/26**
 
-- Perform order-0 interpolation with a single vectorized ``numpy.digitize`` + ``pandas.merge`` instead of per-categorical-group dispatch. removes the internal ``Order0Interp`` class.
+- Perform order-0 interpolation with a single vectorized ``numpy.digitize`` + ``pandas.merge`` instead of per-categorical-group dispatch; removes the internal ``Order0Interp`` class.
+- Raise when lookup keys do not uniquely identify a data row (previously a duplicate row in a purely categorical table was silently ignored in favor of the first).
 
 **5.3.2 - 07/02/26**
 

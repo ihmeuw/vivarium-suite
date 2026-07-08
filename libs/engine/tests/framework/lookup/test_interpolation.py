@@ -712,35 +712,60 @@ def test_unknown_category_in_query_raises() -> None:
         interp(query)
 
 
-def test_purely_categorical_multi_row_group_uses_first_row() -> None:
-    """A purely categorical table with multiple rows for a group broadcasts that group's first row, not a fan-out of all its rows."""
-    # "Male" appears twice (values 1 then 99); only the first row should win.
-    data = pd.DataFrame(
-        {
-            "sex": ["Male", "Male", "Female"],
-            "value": [1, 99, 2],
-        }
-    )
-
-    interp = _order0_interpolation(data, validate=False)
+def test_purely_categorical_table() -> None:
+    """A table with only categorical parameters broadcasts each group's value."""
+    data = pd.DataFrame({"sex": ["Male", "Female"], "value": [1, 2]})
+    interp = _order0_interpolation(data)
 
     query = pd.DataFrame({"sex": ["Male", "Male", "Female"]})
     result = interp(query)
-    assert len(result) == len(query)
     assert result.equals(pd.DataFrame({"value": [1, 1, 2]}))
 
 
-def test_no_parameters_broadcasts_first_row() -> None:
-    """A table with neither categorical nor continuous parameters broadcasts its first row's value to every interpolant."""
-    data = pd.DataFrame({"value": [42, 99]})
+class TestDuplicateKeyRows:
+    """Rows that share one lookup key — duplicates must raise, never silently resolve."""
+
+    @pytest.fixture
+    def data(self) -> pd.DataFrame:
+        # "Male" appears twice with conflicting values.
+        return pd.DataFrame(
+            {
+                "sex": ["Male", "Male", "Female"],
+                "value": [1, 99, 2],
+            }
+        )
+
+    def test_validate_true_raises_at_construction(self, data: pd.DataFrame) -> None:
+        """Construction raises, naming the duplicated keys."""
+        with pytest.raises(ValueError, match="uniquely identified") as error:
+            _order0_interpolation(data)
+        assert "Male" in str(error.value)
+
+    def test_validate_false_raises_on_call(self, data: pd.DataFrame) -> None:
+        """With validate=False the duplicate surfaces as a MergeError at call time."""
+        interp = _order0_interpolation(data, validate=False)
+        with pytest.raises(pd.errors.MergeError):
+            interp(pd.DataFrame({"sex": ["Male"]}))
+
+
+def test_no_parameters_broadcasts_value() -> None:
+    """A single-row table with neither categorical nor continuous parameters broadcasts its value to every interpolant."""
+    data = pd.DataFrame({"value": [42]})
     interp = _order0_interpolation(data)
 
     # No parameter columns, so the query columns are irrelevant; every row gets
-    # the first data row's value.
+    # the data row's value.
     query = pd.DataFrame({"ignored": [1, 2, 3]}, index=[10, 11, 12])
     result = interp(query)
     assert result["value"].tolist() == [42, 42, 42]
     assert result.index.equals(query.index)
+
+
+def test_no_parameters_multi_row_raises() -> None:
+    """A multi-row table with no parameters is ambiguous and raises at construction."""
+    data = pd.DataFrame({"value": [42, 99]})
+    with pytest.raises(ValueError, match="single row"):
+        _order0_interpolation(data)
 
 
 def test_integer_value_dtype_preserved() -> None:

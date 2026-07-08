@@ -79,11 +79,11 @@ class Interpolation:
     continuous parameter maps every interpolant to a bin, and a single
     :meth:`pandas.DataFrame.merge` keyed on the categorical columns plus each
     parameter's left bin edge retrieves the values for the whole population at
-    once. This requires the bin edges to be identical across every categorical
-    group, which is validated on construction when ``validate`` is set. With
-    ``validate=False`` the uniformity is not checked; heterogeneous bins across
-    groups then surface as a ``KeyError`` on call (an interpolant's resolved
-    edge is absent for its group).
+    once. This requires that the key columns uniquely identify a data row and
+    that the bin edges are identical across every categorical group; both are
+    validated on construction when ``validate`` is set. With ``validate=False``
+    violations surface as a ``KeyError`` or ``pandas.errors.MergeError`` on
+    call.
 
     """
 
@@ -197,8 +197,9 @@ class Interpolation:
         the ordered unique left bin edges and the maximum right edge, taken from
         the full table (the edges are shared across categorical groups). Also
         caches the call-invariant merge structures so :meth:`__call__`
-        rebuilds nothing per query. When :attr:`validate` is set, runs
-        :func:`check_data_complete` per categorical group and asserts that
+        rebuilds nothing per query. When :attr:`validate` is set, asserts the
+        key columns uniquely identify a data row, runs
+        :func:`check_data_complete` per categorical group, and asserts that
         every group carries identical bin edges.
         """
         for parameter in self.continuous_parameters:
@@ -213,24 +214,35 @@ class Interpolation:
             _edge_columns(p)[0] for p in self.continuous_parameters
         ]
         self._key_columns: list[str] = list(self.categorical_parameters) + self._start_columns
-        # A purely categorical group can span several rows; keep the first so the
-        # many-to-one merge collapses it instead of fanning out. With no key
-        # columns at all, __call__ broadcasts the first row directly and never
-        # merges, so there is nothing to prepare.
-        self._merge_target: pd.DataFrame | None = None
-        if self._key_columns:
-            merge_source = (
-                self.data
-                if self.continuous_parameters
-                else self.data.drop_duplicates(
-                    subset=self.categorical_parameters, keep="first"
-                )
-            )
-            self._merge_target = merge_source[
-                self._key_columns + self._internal_value_columns
-            ]
+        # With no key columns there is nothing to merge against: __call__
+        # broadcasts the single data row directly.
+        self._merge_target: pd.DataFrame | None = (
+            self.data[self._key_columns + self._internal_value_columns]
+            if self._key_columns
+            else None
+        )
 
-        if not (self.validate and self.continuous_parameters):
+        if not self.validate:
+            return
+
+        if self._key_columns:
+            duplicated = self.data.duplicated(subset=self._key_columns, keep=False)
+            if duplicated.any():
+                duplicate_keys = self.data.loc[
+                    duplicated, self._key_columns
+                ].drop_duplicates()
+                raise ValueError(
+                    f"Interpolation data rows must be uniquely identified by the "
+                    f"key columns {self._key_columns}, but multiple rows share "
+                    f"these keys:\n{duplicate_keys.to_string(index=False)}"
+                )
+        elif len(self.data) > 1:
+            raise ValueError(
+                f"Interpolation data with no categorical or continuous parameters "
+                f"must be a single row. You provided {len(self.data)} rows."
+            )
+
+        if not self.continuous_parameters:
             return
 
         continuous_parameters_with_edges = [
