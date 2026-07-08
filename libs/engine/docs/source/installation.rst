@@ -12,7 +12,7 @@ Installing vivarium-engine
 Overview
 --------
 
-``vivarium-engine`` is written in `Python`__ and supports Python 3.10-3.13.
+``vivarium-engine`` is written in `Python`__ and supports Python 3.10-3.12.
 
 __ http://docs.python-guide.org/en/latest/
 

@@ -29,7 +29,7 @@ import Artifact``).
 Installation
 ------------
 
-**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
+**Supported Python versions: 3.11, 3.12, 3.13**
 
 ``vivarium-artifact`` is published on PyPI as part of the vivarium-suite monorepo:
 
