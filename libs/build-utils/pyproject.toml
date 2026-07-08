@@ -39,6 +39,9 @@ dev = ["vivarium-build-utils[docs,interactive,test,lint]"]
 ci_github = ["vivarium-build-utils[test,docs,lint]"]
 ci_jenkins = ["vivarium-build-utils[ci_github,cluster]"]
 
+[project.scripts]
+update-readme = "vivarium.build_utils.readme:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.build_utils and its subpackages. Excluding vivarium

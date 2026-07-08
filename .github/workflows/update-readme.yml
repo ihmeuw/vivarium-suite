@@ -1,0 +1,57 @@
+# Keep each lib's README "Supported Python versions" line in sync with its
+# python_versions.json. Fires only when a python_versions.json changes, runs the
+# shared vivarium-build-utils tool over every lib, and commits any README fix back
+# to the branch.
+name: Update READMEs
+
+on:
+  push:
+    paths:
+      - 'libs/*/python_versions.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-readme-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # 3.11 is the canonical CI version (matches ci.yml); the tool is
+          # version-agnostic, so any supported version would do.
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      # Install from the local checkout, not PyPI: the in-repo tool is by
+      # definition current, and this avoids a release-ordering dependency.
+      - name: Install vivarium-build-utils from local checkout
+        run: uv pip install --system -e libs/build-utils
+
+      - name: Sync all lib READMEs
+        run: |
+          for lib in libs/*/; do
+            if [ -f "$lib/python_versions.json" ] && [ -f "$lib/README.rst" ]; then
+              update-readme "$lib"
+            fi
+          done
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- 'libs/*/README.rst'; then
+            git add libs/*/README.rst
+            git commit -m "Update READMEs with supported Python versions"
+            git push
+          fi
