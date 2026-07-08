@@ -47,11 +47,17 @@ def _get_bin_edge_columns(continuous_parameters: Sequence[str]) -> list[str]:
     ]
 
 
-class _ParameterBins(NamedTuple):
-    """Shared bin edges for one continuous parameter."""
+class _ContinuousParameter(NamedTuple):
+    """A continuous (binned) lookup parameter."""
 
+    name: str
+    """Base name, e.g. ``"age"``; the interpolant column."""
+    start_column: str
+    """Left-edge column name; a merge key."""
+    end_column: str
+    """Right-edge column name."""
     left_edges: npt.NDArray[Any]
-    """Ascending unique left bin edges."""
+    """Ascending unique left bin edges, shared across categorical groups."""
     max_right: Any
     """Maximum right bin edge (the exclusive upper bound of the last bin)."""
 
@@ -89,6 +95,12 @@ class Interpolation:
     _FLAT_COLUMN_PREFIX: ClassVar[str] = "__lookup_col_"
     """Prefix for opaque internal value-column IDs used in interpolation."""
 
+    @property
+    def continuous_parameters(self) -> list[str]:
+        """Lookup attributes used as binned ranges. The base name (e.g.
+        ``"age"``) of each ``<name>_start`` / ``<name>_end`` pair."""
+        return [parameter.name for parameter in self._continuous_parameters]
+
     def __init__(
         self,
         data: pd.DataFrame | pd.Series[Any],
@@ -116,13 +128,9 @@ class Interpolation:
             if has_named_row_index(data)
             else [c for c in data.columns if c not in value_columns]
         )
-        self.continuous_parameters: list[str] = self._get_continuous_parameters(
-            parameter_columns
-        )
-        """Lookup attributes used as binned ranges. The base name (e.g.
-        ``"age"``) of each ``<name>_start`` / ``<name>_end`` pair."""
+        continuous_parameter_names = self._get_continuous_parameters(parameter_columns)
         self.categorical_parameters: list[str] = self._get_categorical_parameters(
-            parameter_columns
+            parameter_columns, continuous_parameter_names
         )
         """Lookup attributes used to select between value rows."""
         self.data: pd.DataFrame = self._reshape_data(data, value_columns)
@@ -138,20 +146,23 @@ class Interpolation:
         self.validate: bool = validate
         """Whether to validate inputs on construction and on call."""
 
-        self._parameter_bins: dict[str, _ParameterBins] = {}
-        """Shared per-continuous-parameter bin edges used by every interpolant,
-        keyed by continuous-parameter base name."""
-        for parameter in self.continuous_parameters:
-            start_column, end_column = _edge_columns(parameter)
+        self._continuous_parameters: list[_ContinuousParameter] = []
+        """Continuous lookup parameters with their edge columns and shared bins."""
+        for name in continuous_parameter_names:
+            start_column, end_column = _edge_columns(name)
             left_edges = self.data[start_column].drop_duplicates().sort_values()
-            self._parameter_bins[parameter] = _ParameterBins(
-                left_edges=left_edges.to_numpy(),
-                max_right=self.data[end_column].drop_duplicates().max(),
+            self._continuous_parameters.append(
+                _ContinuousParameter(
+                    name=name,
+                    start_column=start_column,
+                    end_column=end_column,
+                    left_edges=left_edges.to_numpy(),
+                    max_right=self.data[end_column].drop_duplicates().max(),
+                )
             )
-        self._start_columns: list[str] = [
-            _edge_columns(p)[0] for p in self.continuous_parameters
+        self._key_columns: list[str] = list(self.categorical_parameters) + [
+            parameter.start_column for parameter in self._continuous_parameters
         ]
-        self._key_columns: list[str] = list(self.categorical_parameters) + self._start_columns
         # With no key columns there is nothing to merge against: __call__
         # broadcasts the single data row directly.
         self._merge_target: pd.DataFrame | None = (
@@ -175,9 +186,12 @@ class Interpolation:
                     continuous_columns.append(base)
         return continuous_columns
 
-    def _get_categorical_parameters(self, parameter_columns: list[str]) -> list[str]:
+    @staticmethod
+    def _get_categorical_parameters(
+        parameter_columns: list[str], continuous_parameters: list[str]
+    ) -> list[str]:
         """Get categorical parameter columns from the given list of parameter columns."""
-        bin_edge_columns = set(_get_bin_edge_columns(self.continuous_parameters))
+        bin_edge_columns = set(_get_bin_edge_columns(continuous_parameters))
         return [col for col in parameter_columns if col not in bin_edge_columns]
 
     def _reshape_data(
@@ -226,7 +240,7 @@ class Interpolation:
                 f"must be a single row. You provided {len(self.data)} rows."
             )
 
-        if not self.continuous_parameters:
+        if not self._continuous_parameters:
             return
 
         # Validate completeness one categorical group at a time: on the full
@@ -239,18 +253,16 @@ class Interpolation:
         for group in groups:
             check_data_complete(group, self.continuous_parameters)
 
-        for parameter in self.continuous_parameters:
-            bins = self._parameter_bins[parameter]
-            reference_edges = set(bins.left_edges)
-            start_column, end_column = _edge_columns(parameter)
+        for parameter in self._continuous_parameters:
+            reference_edges = set(parameter.left_edges)
             for group in groups:
                 if (
-                    set(group[start_column]) != reference_edges
-                    or group[end_column].max() != bins.max_right
+                    set(group[parameter.start_column]) != reference_edges
+                    or group[parameter.end_column].max() != parameter.max_right
                 ):
                     raise ValueError(
-                        f"Continuous parameter '{parameter}' has different bin edges "
-                        f"across categorical groups. The vectorized single-merge "
+                        f"Continuous parameter '{parameter.name}' has different bin "
+                        f"edges across categorical groups. The vectorized single-merge "
                         f"lookup requires uniform bin edges across all categorical "
                         f"groups."
                     )
@@ -307,23 +319,22 @@ class Interpolation:
         key_frame = pd.DataFrame(index=original_index)
         for column in self.categorical_parameters:
             key_frame[column] = interpolants[column].to_numpy()
-        for parameter, start_column in zip(self.continuous_parameters, self._start_columns):
-            bins = self._parameter_bins[parameter]
-            values = interpolants[parameter]
+        for parameter in self._continuous_parameters:
+            values = interpolants[parameter.name]
             if not self.extrapolate and (
-                values.min() < bins.left_edges[0] or values.max() >= bins.max_right
+                values.min() < parameter.left_edges[0] or values.max() >= parameter.max_right
             ):
                 raise ValueError(
                     f"Extrapolation outside the provided bins is disabled, but "
-                    f"parameter '{parameter}' has values outside its bin range "
-                    f"[{bins.left_edges[0]}, {bins.max_right})."
+                    f"parameter '{parameter.name}' has values outside its bin range "
+                    f"[{parameter.left_edges[0]}, {parameter.max_right})."
                 )
             # Left edge inclusive, right exclusive; out-of-range values fold to
             # the nearest edge bin (below the minimum -> first, at/above the
             # maximum -> last).
-            positions = np.digitize(values, bins.left_edges)
+            positions = np.digitize(values, parameter.left_edges)
             positions[positions > 0] -= 1
-            key_frame[start_column] = bins.left_edges[positions]
+            key_frame[parameter.start_column] = parameter.left_edges[positions]
 
         merged = key_frame.merge(
             self._merge_target,
