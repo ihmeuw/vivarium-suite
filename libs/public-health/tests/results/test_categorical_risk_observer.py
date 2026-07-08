@@ -206,8 +206,12 @@ def test_category_exclusions(base_config, base_plugins, categorical_risk, exclus
     assert set(results["sub_entity"]) == {"cat1", "cat2", "cat3", "cat4"} - set(exclusions)
 
 
-def test_observer_categories_from_config(base_config, base_plugins, categorical_risk) -> None:
-    """CategoricalCausalFactorObserver registers its exposure stratification from a config categories DataFrame, not the artifact."""
+def test_observer_sources_categories_from_risk_component(
+    base_config, base_plugins, categorical_risk
+) -> None:
+    """The observer stratifies over the categories from the risk component's
+    config data source when the ``categories`` artifact key is withheld.
+    """
     risk, risk_data = categorical_risk
     observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
     simulation = InteractiveContext(
@@ -229,17 +233,12 @@ def test_observer_categories_from_config(base_config, base_plugins, categorical_
     )
     simulation.configuration.update(
         {
-            "stratification": {
-                "test_risk": {
-                    "include": ["sex"],
-                    "data_sources": {"categories": categories},
-                }
-            },
+            "risk_factor.test_risk": {"data_sources": {"categories": categories}},
+            "stratification": {"test_risk": {"include": ["sex"]}},
         }
     )
 
-    # Provide the exposure and distribution via the artifact, but NOT the
-    # categories key; the observer must source its categories from config.
+    # Write every artifact key except ``categories``, which comes from config.
     for key, value in risk_data.items():
         if key == "categories":
             continue

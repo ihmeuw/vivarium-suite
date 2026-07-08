@@ -10,6 +10,7 @@ from abc import ABC
 from typing import Any
 
 import pandas as pd
+from vivarium.config_tree import ConfigurationError
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.population import SimulantData
@@ -124,6 +125,13 @@ class CausalFactor(Component, ABC):
                         Source for exposure standard deviation data (only used
                         for continuous distributions). Default is the artifact
                         key ``{causal_factor}.exposure_standard_deviation``.
+                    categories:
+                        Source for the category descriptions of a categorical
+                        causal factor (only used by categorical consumers such
+                        as the LBWSG distribution and the categorical observer).
+                        Default is the artifact key ``{causal_factor}.categories``.
+                        Accepts a DataFrame with ``category`` and ``description``
+                        columns to bypass the artifact.
                 distribution_type: str
                     Type of exposure distribution. Can be one of:
                     ``"dichotomous"``, ``"ordered_polytomous"``,
@@ -146,6 +154,7 @@ class CausalFactor(Component, ABC):
                     "exposure": f"{self.causal_factor}.exposure",
                     "ensemble_distribution_weights": f"{self.causal_factor}.exposure_distribution_weights",
                     "exposure_standard_deviation": f"{self.causal_factor}.exposure_standard_deviation",
+                    "categories": f"{self.causal_factor}.categories",
                 },
                 "distribution_type": f"{self.causal_factor}.distribution",
                 # rebinned_exposed only used for DichotomousDistribution
@@ -248,6 +257,69 @@ class CausalFactor(Component, ABC):
                 )
             distribution_type = "dichotomous"
         return distribution_type
+
+    def get_categories(self, builder: Builder) -> dict[str, str]:
+        """Load and normalize this causal factor's category descriptions.
+
+        Consumers that need categories (e.g. the LBWSG distribution or the
+        categorical observer) obtain them from the owning causal factor via this
+        method rather than loading the ``categories`` key independently.
+
+        The data is resolved from the ``categories`` data source (the artifact
+        key ``{causal_factor}.categories`` by default) and normalized to a
+        ``{category: description}`` dict, so callers can iterate ``.items()``
+        regardless of whether the data came from the artifact (a dict) or a
+        configuration data source (a ``category``/``description`` DataFrame).
+
+        The DataFrame (config) form must have ``category`` and ``description``
+        columns and no duplicate categories; the dict (artifact) form is used
+        as-is. The resulting mapping is validated to be non-empty with string
+        descriptions.
+
+        Parameters
+        ----------
+        builder
+            Access point for utilizing framework interfaces during setup.
+
+        Returns
+        -------
+            A mapping of category name to description string.
+
+        Raises
+        ------
+        ValueError
+            If the data is malformed: a DataFrame missing a required column or
+            containing duplicate categories, or a normalized mapping that is
+            empty or has non-string descriptions.
+        ConfigurationError
+            If the resolved data is neither a dict nor a DataFrame.
+        """
+        if not self.configuration:
+            self.configuration = self.get_configuration(builder)
+        data = self.get_data(builder, self.configuration.data_sources.categories)
+
+        if isinstance(data, pd.DataFrame):
+            required_columns = {"category", "description"}
+            missing_columns = required_columns - set(data.columns)
+            if missing_columns:
+                raise ValueError(
+                    f"Categories data is missing required columns: {sorted(missing_columns)}."
+                )
+            # Uniqueness can only be violated by a DataFrame; a dict cannot hold
+            # duplicate keys, so this check is DataFrame-only by construction.
+            if data["category"].duplicated().any():
+                raise ValueError("Categories data must not contain duplicate categories.")
+            data = dict(zip(data["category"], data["description"]))
+        elif not isinstance(data, dict):
+            raise ConfigurationError(
+                f"Categories data must be a dict or a DataFrame, but got {type(data)}."
+            )
+
+        if not data:
+            raise ValueError("Categories data must not be empty.")
+        if not all(isinstance(description, str) for description in data.values()):
+            raise ValueError("Category descriptions must be strings.")
+        return data
 
     def get_exposure_distribution(self, builder: Builder) -> CausalFactorDistribution:
         """Create and set up the exposure distribution component for the causal

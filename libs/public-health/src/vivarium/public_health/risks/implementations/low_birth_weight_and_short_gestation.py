@@ -26,7 +26,6 @@ from vivarium.engine.types import LookupTableData
 from vivarium.public_health.causal_factor.distributions import PolytomousDistribution
 from vivarium.public_health.causal_factor.utilities import (
     get_exposure_post_processor,
-    load_categories,
     pivot_categorical,
 )
 from vivarium.public_health.risks import Risk, RiskEffect
@@ -212,9 +211,8 @@ class LBWSGDistribution(PolytomousDistribution):
         -------
             The intervals for each category.
         """
-        categories: dict[str, str] = load_categories(
-            self.get_data(builder, self.configuration["data_sources"]["categories"])
-        )
+        risk_component = builder.components.get_component(self.causal_factor)
+        categories: dict[str, str] = risk_component.get_categories(builder)
         category_intervals = {GESTATIONAL_AGE: {}, BIRTH_WEIGHT: {}}
 
         for category, description in categories.items():
@@ -431,12 +429,10 @@ class LBWSGRisk(Risk):
                         joint distribution of birth weight and gestational
                         age categories at birth.
                     categories:
-                        Source for the LBWSG category descriptions, from
-                        which birth-weight and gestational-age intervals are
-                        parsed. Default is the artifact key
-                        ``{risk}.categories``. Accepts a DataFrame with
-                        ``category`` and ``description`` columns to bypass the
-                        artifact.
+                        Source for the LBWSG category descriptions, from which
+                        birth-weight and gestational-age intervals are parsed.
+                        Inherited from CausalFactor; default is the artifact key
+                        ``{risk}.categories``.
                 distribution_type: str
                     Fixed to ``"lbwsg"`` for this component, using the
                     specialized LBWSGDistribution.
@@ -446,9 +442,6 @@ class LBWSGRisk(Risk):
         configuration_defaults[self.name]["data_sources"][
             "birth_exposure"
         ] = f"{self.causal_factor}.birth_exposure"
-        configuration_defaults[self.name]["data_sources"][
-            "categories"
-        ] = f"{self.causal_factor}.categories"
         configuration_defaults[self.name]["distribution_type"] = "lbwsg"
         return configuration_defaults
 

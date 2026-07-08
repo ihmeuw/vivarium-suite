@@ -7,12 +7,9 @@ This module contains tools for observing risk exposure during the simulation.
 
 """
 
-from typing import Any
-
 import pandas as pd
 from vivarium.engine.framework.engine import Builder
 
-from vivarium.public_health.causal_factor.utilities import load_categories
 from vivarium.public_health.results.columns import COLUMNS
 from vivarium.public_health.results.observer import PublicHealthObserver
 from vivarium.public_health.utilities import to_years
@@ -54,30 +51,6 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
 
     """
 
-    ##############
-    # Properties #
-    ##############
-
-    @property
-    def configuration_defaults(self) -> dict[str, Any]:
-        """Default configuration values for this observer.
-
-        Add a ``categories`` data source (defaulting to the artifact key
-        ``risk_factor.{causal_factor}.categories``, overridable with a
-        ``category``/``description`` DataFrame) to the base observer config.
-        An observer's configuration lives under
-        ``stratification.{configuration_name}`` (see
-        :meth:`~vivarium.engine.framework.results.observer.Observer.get_configuration`),
-        so the data source is nested there alongside ``exclude`` / ``include``.
-        """
-        configuration_defaults = super().configuration_defaults
-        configuration_defaults["stratification"][self.get_configuration_name()][
-            "data_sources"
-        ] = {
-            "categories": f"risk_factor.{self.causal_factor}.categories",
-        }
-        return configuration_defaults
-
     #####################
     # Lifecycle methods #
     #####################
@@ -99,11 +72,17 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
     #################
 
     def setup(self, builder: Builder) -> None:
-        """Set up the observer."""
+        """Set up the observer.
+
+        Categories come from the observed causal factor's component rather than
+        being configured on the observer, so the observer stratifies over the
+        categories the risk defines.
+        """
         self.step_size = builder.time.step_size()
-        self.categories = load_categories(
-            self.get_data(builder, self.configuration.data_sources.categories)
+        causal_factor_component = builder.components.get_component(
+            f"risk_factor.{self.causal_factor}"
         )
+        self.categories = causal_factor_component.get_categories(builder)
 
     def get_configuration_name(self) -> str:
         return self.causal_factor
