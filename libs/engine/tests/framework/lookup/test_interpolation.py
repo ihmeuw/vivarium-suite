@@ -7,11 +7,17 @@ import pandas as pd
 import pytest
 
 from vivarium.engine.framework.lookup.interpolation import (
+    ContinuousParameter,
     Interpolation,
     Order0Interp,
     check_data_complete,
     validate_parameters,
 )
+
+
+def _continuous_param(name: str) -> ContinuousParameter:
+    """Build a parameter record from its base name."""
+    return ContinuousParameter(name, f"{name}_start", f"{name}_end")
 
 
 def make_bin_edges(data: pd.DataFrame, col: str) -> pd.DataFrame:
@@ -267,7 +273,7 @@ def test_validate_parameters__empty_data() -> None:
                 columns=["age_start", "age_end", "sex", "year_start", "year_end", "value"]
             ),
             ["sex"],
-            ["age", "year"],
+            [_continuous_param("age"), _continuous_param("year")],
             ["value"],
         )
 
@@ -289,7 +295,7 @@ def test_validate_parameters__extra_columns() -> None:
         validate_parameters(
             data,
             ["sex"],
-            ["age"],
+            [_continuous_param("age")],
             ["value"],
         )
 
@@ -305,9 +311,7 @@ def test_check_data_complete_gaps() -> None:
     )
 
     with pytest.raises(NotImplementedError) as error:
-        check_data_complete(
-            data, [("year", "year_start", "year_end"), ("age", "age_start", "age_end")]
-        )
+        check_data_complete(data, [_continuous_param("year"), _continuous_param("age")])
 
     message = error.value.args[0]
 
@@ -323,7 +327,7 @@ def test_check_data_complete_overlap() -> None:
     )
 
     with pytest.raises(ValueError) as error:
-        check_data_complete(data, [("year", "year_start", "year_end")])
+        check_data_complete(data, [_continuous_param("year")])
 
     message = error.value.args[0]
 
@@ -341,9 +345,7 @@ def test_check_data_missing_combos() -> None:
     )
 
     with pytest.raises(ValueError) as error:
-        check_data_complete(
-            data, [("year", "year_start", "year_end"), ("age", "age_start", "age_end")]
-        )
+        check_data_complete(data, [_continuous_param("year"), _continuous_param("age")])
 
     message = error.value.args[0]
 
@@ -365,7 +367,7 @@ def test_order0interp() -> None:
 
     interp = Order0Interp(
         data,
-        ["age", "year", "height"],
+        [_continuous_param("age"), _continuous_param("year"), _continuous_param("height")],
         ["value"],
         True,
         True,
@@ -844,11 +846,11 @@ def test_order0interp_validate_option_invalid_data(validate: bool) -> None:
 
     if validate:
         with pytest.raises(ValueError) as error:
-            interp = Order0Interp(data, ["year"], [], True, validate)
+            interp = Order0Interp(data, [_continuous_param("year")], [], True, validate)
             message = error.value.args[0]
             assert "year_start" in message and "year_end" in message
     else:
-        interp = Order0Interp(data, ["year"], [], True, validate)
+        interp = Order0Interp(data, [_continuous_param("year")], [], True, validate)
 
 
 @pytest.mark.parametrize("validate", [True, False])
@@ -857,4 +859,4 @@ def test_order0interp_validate_option_valid_data(validate: bool) -> None:
         {"year_start": [1990, 1995], "year_end": [1995, 2000], "value": [5, 3]}
     )
 
-    interp = Order0Interp(data, ["year"], ["value"], True, validate)
+    interp = Order0Interp(data, [_continuous_param("year")], ["value"], True, validate)
