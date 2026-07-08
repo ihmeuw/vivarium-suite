@@ -1,8 +1,6 @@
 **5.4.0 - 07/07/26**
 
-- Performance: order-0 interpolation resolves the whole population with a single vectorized ``numpy.digitize`` + ``pandas.merge`` instead of per-categorical-group dispatch.
-- API: remove the internal ``Order0Interp`` class; ``Interpolation`` performs the order-0 lookup directly.
-- Raise: continuous-parameter bin edges must be identical across all categorical groups; non-uniform edges raise ``ValueError`` at construction when ``validate`` is enabled.
+- Perform order-0 interpolation with a single vectorized ``numpy.digitize`` + ``pandas.merge`` instead of per-categorical-group dispatch. removes the internal ``Order0Interp`` class.
 
 **5.3.2 - 07/02/26**
 

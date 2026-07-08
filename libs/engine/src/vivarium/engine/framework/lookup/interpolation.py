@@ -73,7 +73,7 @@ class Interpolation:
     — it is the interpolation primitive that
     :class:`~vivarium.engine.framework.lookup.table.LookupTable` is built on.
 
-    For order 0 (the only supported order) a call resolves each interpolant to
+    For order 0 (currently the only supported order) a call resolves each interpolant to
     the bin its continuous parameters fall in and returns that bin's values.
     The lookup is fully vectorized: a single :func:`numpy.digitize` pass per
     continuous parameter maps every interpolant to a bin, and a single
@@ -83,7 +83,7 @@ class Interpolation:
     group, which is validated on construction when ``validate`` is set. With
     ``validate=False`` the uniformity is not checked; heterogeneous bins across
     groups then surface as a ``KeyError`` on call (an interpolant's resolved
-    edge is absent for its group) rather than as silently wrong values.
+    edge is absent for its group).
 
     """
 
@@ -131,7 +131,10 @@ class Interpolation:
         the single merge is performed against. Value columns are renamed to
         opaque internal IDs (see ``_FLAT_COLUMN_PREFIX``); :attr:`value_columns`
         carries the original user-facing labels and is reapplied to the output
-        of :meth:`__call__`."""
+        """Flat DataFrame the interpolation pipeline operates on. Value
+        columns are renamed to opaque internal IDs (see ``_FLAT_COLUMN_PREFIX``);
+        :attr:`value_columns` carries the original user-facing labels and is
+        reapplied to the output of :meth:`__call__`."""
 
         if validate:
             validate_parameters(
@@ -150,9 +153,7 @@ class Interpolation:
 
         self._parameter_bins: dict[str, _ParameterBins] = {}
         """Shared per-continuous-parameter bin edges used by every interpolant,
-        keyed by continuous-parameter base name. The edges are shared across all
-        categorical groups (enforced on construction when ``validate`` is
-        set)."""
+        keyed by continuous-parameter base name."""
 
         self._prepare()
 
@@ -199,12 +200,10 @@ class Interpolation:
         Populates :attr:`_parameter_bins` with, for each continuous parameter,
         the ordered unique left bin edges and the maximum right edge, taken from
         the full table (the edges are shared across categorical groups). Also
-        caches the call-invariant merge structures (:attr:`_start_columns`,
-        :attr:`_key_columns`, :attr:`_merge_target`) so :meth:`__call__`
+        caches the call-invariant merge structures so :meth:`__call__`
         rebuilds nothing per query. When :attr:`validate` is set, runs
         :func:`check_data_complete` per categorical group and asserts that
-        every group carries identical bin edges (the single-merge path is only
-        correct when the bins are uniform across groups).
+        every group carries identical bin edges.
         """
         for parameter in self.continuous_parameters:
             start_column, end_column = _edge_columns(parameter)
@@ -251,8 +250,6 @@ class Interpolation:
         for group in groups:
             check_data_complete(group, continuous_parameters_with_edges)
 
-        # The single global digitize only resolves the right bin when every
-        # categorical group carries identical edges; nothing else enforces this.
         for parameter in self.continuous_parameters:
             bins = self._parameter_bins[parameter]
             reference_edges = set(bins.left_edges)
@@ -275,8 +272,7 @@ class Interpolation:
         Runs one :func:`numpy.digitize` per continuous parameter over the whole
         population to resolve each interpolant's bin, then performs a single
         left :meth:`pandas.DataFrame.merge` keyed on the categorical columns
-        plus each parameter's left bin edge. The result is returned in the
-        original interpolant order with the user-facing value-column labels.
+        plus each parameter's left bin edge.
 
         Parameters
         ----------
