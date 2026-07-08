@@ -685,217 +685,146 @@ def test_relative_risk_pipeline(dichotomous_risk, base_config, base_plugins):
         assert (relative_risk == rr_mapper[exposure]).all()
 
 
-class ConstantContinuousExposureRisk(Risk):
-    """Continuous risk that produces a fixed exposure value for every simulant."""
+def _loaded_artifact_keys(
+    config: ConfigTree,
+    plugins: ConfigTree,
+    risk: Risk,
+    risk_effect: RiskEffect,
+    data: dict[str, Any],
+    mocker,
+) -> list[str]:
+    """Set up a risk-effect simulation and return the artifact keys it loaded.
 
-    def __init__(self, risk: str, exposure_value: float):
-        super().__init__(risk)
-        self._exposure_value = exposure_value
-
-    # noinspection PyAttributeOutsideInit
-    def setup(self, builder: Builder) -> None:
-        # A falsy distribution_type routes the effect through its continuous
-        # branch (see CausalFactorEffect.is_exposure_categorical).
-        self.distribution_type = None
-        builder.value.register_attribute_producer(
-            f"{self.causal_factor.name}.exposure", source=self.get_exposure
-        )
-
-    def get_exposure(self, index: pd.Index) -> pd.Series:
-        return pd.Series(self._exposure_value, index=index, dtype=float)
-
-
-@pytest.mark.parametrize(
-    "tmrel, rr_value, scale",
-    [
-        pytest.param(50.0, 2.0, 50.0, id="tmred_from_config"),
-        pytest.param(60.0, 8.0, 40.0, id="relative_risk_scalar_from_config"),
-    ],
-)
-def test_continuous_effect_data_sources_from_config(
-    tmrel, rr_value, scale, base_config, base_plugins
-):
-    """A continuous RiskEffect sources TMRED and relative_risk_scalar from config data sources rather than the artifact."""
-    exposure_value = 100.0
-    risk = ConstantContinuousExposureRisk("risk_factor.test_risk", exposure_value)
-    effect = RiskEffect(risk.name, "cause.test_cause.incidence_rate")
-
-    # min == max makes TMREL = 0.5 * (min + max) deterministic. The mock artifact
-    # supplies a default TMRED (TMREL 90) but no relative_risk_scalar at all, so
-    # the expected value can only be produced from the config data sources.
-    tmred = pd.DataFrame(
-        {
-            "distribution": ["uniform"],
-            "min": [tmrel],
-            "max": [tmrel],
-            "inverted": [False],
-        }
-    )
-    base_config.update(
-        {
-            "risk_effect.test_risk_on_cause.test_cause.incidence_rate": {
-                "data_sources": {
-                    "relative_risk": rr_value,
-                    "tmred": tmred,
-                    "relative_risk_scalar": scale,
-                }
-            }
-        }
-    )
-
-    data = {
-        f"{risk.name}.population_attributable_fraction": 0,
-        "cause.test_cause.incidence_rate": 1,
-    }
-    simulation = _setup_risk_effect_simulation(base_config, base_plugins, risk, effect, data)
-
-    pop_idx = simulation.get_population_index()
-    rate = simulation._values.get_attribute("test_cause.incidence_rate")(
-        pop_idx, mode="skip_post_processor"
-    )
-    expected = max(rr_value ** ((exposure_value - tmrel) / scale), 1.0)
-    assert np.allclose(rate, expected)
-
-
-def test_continuous_effect_data_sources_from_artifact(base_config, base_plugins):
-    """A continuous RiskEffect still sources TMRED and relative_risk_scalar from the artifact when their config data sources are left at their defaults."""
-    exposure_value = 100.0
-    tmrel = 50.0
-    scale = 50.0
-    rr_value = 2.0
-    risk = ConstantContinuousExposureRisk("risk_factor.test_risk", exposure_value)
-    effect = RiskEffect(risk.name, "cause.test_cause.incidence_rate")
-
-    # Only relative_risk is configured; tmred and relative_risk_scalar keep their
-    # artifact-key defaults and are written to the mock artifact below.
-    base_config.update(
-        {
-            "risk_effect.test_risk_on_cause.test_cause.incidence_rate": {
-                "data_sources": {"relative_risk": rr_value}
-            }
-        }
-    )
-
-    data = {
-        f"{risk.name}.tmred": {
-            "distribution": "uniform",
-            "min": tmrel,
-            "max": tmrel,
-            "inverted": False,
-        },
-        f"{risk.name}.relative_risk_scalar": scale,
-        f"{risk.name}.population_attributable_fraction": 0,
-        "cause.test_cause.incidence_rate": 1,
-    }
-    simulation = _setup_risk_effect_simulation(base_config, base_plugins, risk, effect, data)
-
-    pop_idx = simulation.get_population_index()
-    rate = simulation._values.get_attribute("test_cause.incidence_rate")(
-        pop_idx, mode="skip_post_processor"
-    )
-    expected = max(rr_value ** ((exposure_value - tmrel) / scale), 1.0)
-    assert np.allclose(rate, expected)
-
-
-def test_dichotomous_scalar_rr_demographic_dimensions_from_config(
-    dichotomous_risk, base_config, base_plugins, mocker
-):
-    """A dichotomous scalar-RR effect expands the RR using demographic_dimensions supplied by config, not the artifact."""
-    risk = dichotomous_risk[0]
-    effect = RiskEffect(risk.name, "cause.test_cause.incidence_rate")
-    base_config.update({"risk_factor.test_risk": {"data_sources": {"exposure": 1.0}}})
-
-    # TMREL of 1
-    tmred = {"distribution": "uniform", "min": 1, "max": 1, "inverted": False}
-    rr_value = 2.5
-    demographic_dimensions = make_uniform_pop_data().drop(columns=["location", "value"])
-
-    data = {
-        f"{risk.name}.tmred": tmred,
-        f"{risk.name}.population_attributable_fraction": 0,
-        "cause.test_cause.incidence_rate": 1,
-    }
-    base_config.update(
-        {
-            "risk_effect.test_risk_on_cause.test_cause.incidence_rate": {
-                "data_sources": {
-                    "relative_risk": rr_value,
-                    "demographic_dimensions": demographic_dimensions,
-                }
-            }
-        }
-    )
-    base_config.update({"risk_factor.test_risk": {"distribution_type": "dichotomous"}})
-
+    Mirrors :func:`_setup_risk_effect_simulation` but spies on ``_data.load``,
+    so a test can assert whether a given key was loaded from the artifact or
+    supplied through a configuration data source.
+    """
     simulation = InteractiveContext(
-        components=[BasePopulation(), risk, SI("test_cause"), effect],
-        configuration=base_config,
-        plugin_configuration=base_plugins,
+        components=[BasePopulation(), risk, SI("test_cause"), risk_effect],
+        configuration=config,
+        plugin_configuration=plugins,
         setup=False,
     )
     for key, value in data.items():
         simulation._data.write(key, value)
-
-    # The config-supplied grid is intentionally identical to the mock artifact's
-    # default, so behavior alone cannot prove config-sourcing. Spy on the artifact
-    # loads to prove the demographic grid key is never requested.
     load_spy = mocker.patch.object(simulation._data, "load", wraps=simulation._data.load)
     simulation.setup()
+    return [call.args[0] for call in load_spy.call_args_list if call.args]
 
-    loaded_keys = [call.args[0] for call in load_spy.call_args_list if call.args]
-    assert "population.demographic_dimensions" not in loaded_keys
 
-    # An exposure of 1.0 places every simulant in the exposed category, so the
-    # (grid-expanded) scalar RR is applied to the whole population.
-    pop_idx = simulation.get_population_index()
-    rate = simulation._values.get_attribute("test_cause.incidence_rate")(
-        pop_idx, mode="skip_post_processor"
+@pytest.mark.parametrize("source", ["config", "artifact"])
+def test_continuous_effect_tmred_and_scalar_data_source(
+    source, base_config, base_plugins, mocker
+):
+    """A continuous ``RiskEffect`` reads ``tmred`` and ``relative_risk_scalar``
+    from its config data sources when supplied, and from the artifact by
+    default.
+    """
+    risk = CustomExposureRisk("risk_factor.test_risk")
+    effect = RiskEffect(risk.name, "cause.test_cause.incidence_rate")
+    tmred_key = f"{risk.name}.tmred"
+    scalar_key = f"{risk.name}.relative_risk_scalar"
+
+    # CustomExposureRisk initializes exactly len(custom_exposure_values) simulants.
+    base_config.update({"population": {"population_size": len(custom_exposure_values)}})
+    data = {
+        f"{risk.name}.population_attributable_fraction": 0,
+        "cause.test_cause.incidence_rate": 1,
+    }
+    data_sources = {"relative_risk": 2.0}
+    if source == "config":
+        data_sources["tmred"] = pd.DataFrame(
+            {"distribution": ["uniform"], "min": [1.0], "max": [1.0]}
+        )
+        data_sources["relative_risk_scalar"] = 50.0
+    else:
+        data[tmred_key] = {"distribution": "uniform", "min": 1.0, "max": 1.0}
+        data[scalar_key] = 50.0
+    base_config.update({effect.name: {"data_sources": data_sources}})
+
+    loaded_keys = _loaded_artifact_keys(base_config, base_plugins, risk, effect, data, mocker)
+
+    assert (tmred_key in loaded_keys) == (source == "artifact")
+    assert (scalar_key in loaded_keys) == (source == "artifact")
+
+
+@pytest.mark.parametrize("source", ["config", "artifact"])
+def test_dichotomous_effect_demographic_dimensions_data_source(
+    source, dichotomous_risk, base_config, base_plugins, mocker
+):
+    """A dichotomous scalar-RR ``RiskEffect`` reads ``demographic_dimensions``
+    from its config data source when supplied, and from the artifact by default.
+    """
+    risk = dichotomous_risk[0]
+    effect = RiskEffect(risk.name, "cause.test_cause.incidence_rate")
+    grid_key = "population.demographic_dimensions"
+
+    base_config.update(
+        {
+            "risk_factor.test_risk": {
+                "data_sources": {"exposure": 1.0},
+                "distribution_type": "dichotomous",
+            }
+        }
     )
-    assert set(rate.unique()) == {rr_value}
+    data = {
+        f"{risk.name}.tmred": {"distribution": "uniform", "min": 1, "max": 1},
+        f"{risk.name}.population_attributable_fraction": 0,
+        "cause.test_cause.incidence_rate": 1,
+    }
+    data_sources = {"relative_risk": 2.5}
+    grid = make_uniform_pop_data().drop(columns=["location", "value"])
+    if source == "config":
+        data_sources["demographic_dimensions"] = grid
+    else:
+        data[grid_key] = grid
+    base_config.update({effect.name: {"data_sources": data_sources}})
+
+    loaded_keys = _loaded_artifact_keys(base_config, base_plugins, risk, effect, data, mocker)
+
+    assert (grid_key in loaded_keys) == (source == "artifact")
 
 
-def test_non_loglinear_effect_tmred_from_config(base_config, base_plugins):
-    """A NonLogLinearRiskEffect sources TMRED from a config DataFrame; RR is normalized at the config-derived TMREL."""
+@pytest.mark.parametrize("source", ["config", "artifact"])
+def test_non_loglinear_effect_tmred_data_source(source, base_config, base_plugins, mocker):
+    """A ``NonLogLinearRiskEffect`` reads ``tmred`` from its config data source
+    when supplied, and from the artifact by default.
+    """
     risk = CustomExposureRisk("risk_factor.test_risk")
     effect = NonLogLinearRiskEffect(risk.name, "cause.test_cause.incidence_rate")
+    tmred_key = f"{risk.name}.tmred"
 
-    rr_parameter_data = [1, 2, 5]
-    risk_effect_rrs = [2.0, 2.4, 4.0]
     rr_data = pd.DataFrame(
         {
             "affected_entity": "test_cause",
             "affected_measure": "incidence_rate",
             "year_start": 1990,
             "year_end": 1991,
-            "parameter": rr_parameter_data,
-            "value": risk_effect_rrs,
+            "parameter": [1, 2, 5],
+            "value": [2.0, 2.4, 4.0],
         },
     )
-    # TMREL of 1 supplied as a single-row DataFrame via config. The RR at the
-    # TMREL (exposure 1) is 2.0, so RRs are normalized by 2.0. The mock artifact
-    # default TMRED (min 80, max 100) would instead normalize by the max RR,
-    # clipping every RR to 1.0.
-    tmred = pd.DataFrame(
-        {"distribution": ["uniform"], "min": [1.0], "max": [1.0], "inverted": [False]}
-    )
-
     data = {
         f"{risk.name}.relative_risk": rr_data,
         f"{risk.name}.population_attributable_fraction": 0,
         "cause.test_cause.incidence_rate": 1,
     }
     base_config.update({"population": {"population_size": 10}})
-    base_config.update({effect.name: {"data_sources": {"tmred": tmred}}})
+    if source == "config":
+        base_config.update(
+            {
+                effect.name: {
+                    "data_sources": {
+                        "tmred": pd.DataFrame(
+                            {"distribution": ["uniform"], "min": [1.0], "max": [1.0]}
+                        )
+                    }
+                }
+            }
+        )
+    else:
+        data[tmred_key] = {"distribution": "uniform", "min": 1.0, "max": 1.0}
 
-    simulation = _setup_risk_effect_simulation(base_config, base_plugins, risk, effect, data)
+    loaded_keys = _loaded_artifact_keys(base_config, base_plugins, risk, effect, data, mocker)
 
-    pop_idx = simulation.get_population_index()
-    rate = simulation._values.get_attribute("test_cause.incidence_rate")(
-        pop_idx, mode="skip_post_processor"
-    )
-    expected_values = np.interp(
-        custom_exposure_values,
-        rr_parameter_data,
-        np.array(risk_effect_rrs) / 2,  # RRs get divided by RR at TMREL
-    )
-    assert np.isclose(rate.values, expected_values, rtol=0.0000001).all()
+    assert (tmred_key in loaded_keys) == (source == "artifact")

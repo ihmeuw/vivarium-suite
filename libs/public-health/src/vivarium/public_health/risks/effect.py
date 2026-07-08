@@ -130,7 +130,9 @@ class NonLogLinearRiskEffect(RiskEffect):
                         risk is normalized to 1. Default is the artifact key
                         ``{risk}.tmred``. Accepts a single-row DataFrame with
                         ``distribution``, ``min``, and ``max`` columns to
-                        bypass the artifact.
+                        bypass the artifact. The ``distribution`` column must be
+                        one of ``"uniform"`` (TMREL drawn uniformly from
+                        ``[min, max]``) or ``"draws"`` (draw-level TMRELs).
         """
         return {
             self.name: {

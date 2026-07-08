@@ -28,7 +28,6 @@ from vivarium.public_health.causal_factor.distributions import DichotomousDistri
 from vivarium.public_health.causal_factor.exposure import CausalFactor
 from vivarium.public_health.causal_factor.utilities import (
     load_exposure_data,
-    load_tmred,
     pivot_categorical,
 )
 from vivarium.public_health.utilities import EntityString, TargetString
@@ -92,7 +91,11 @@ class CausalFactorEffect(Component, ABC):
                         data, used for continuous exposures to compute the
                         TMREL. Default is the artifact key ``{causal_factor}.tmred``.
                         Accepts a single-row DataFrame with ``distribution``,
-                        ``min``, and ``max`` columns to bypass the artifact.
+                        ``min``, and ``max`` columns to bypass the artifact. The
+                        ``distribution`` column names how the TMREL is drawn from
+                        the ``[min, max]`` range and must be one of ``"uniform"``
+                        (TMREL drawn uniformly from the range) or ``"draws"``
+                        (draw-level TMRELs, supplied by the research team).
                     relative_risk_scalar:
                         Source for the relative-risk scalar, used for
                         continuous exposures to scale the log-linear relative
@@ -241,6 +244,17 @@ class CausalFactorEffect(Component, ABC):
     ) -> dict[str, Any]:
         """Load and normalize the TMRED data from the configured data source.
 
+        The data is resolved from the ``tmred`` data source and normalized to a
+        dict of scalar fields, so callers can read ``result["distribution"]``,
+        ``result["min"]``, and ``result["max"]`` regardless of whether it came
+        from the artifact (a dict) or a configuration data source (a single-row
+        DataFrame).
+
+        The single-row DataFrame (config) form, with ``distribution``, ``min``,
+        and ``max`` columns (and optionally ``inverted``), is converted to a
+        dict; the dict (artifact) form is used as-is. The resulting dict is
+        validated regardless of source.
+
         Parameters
         ----------
         builder
@@ -252,10 +266,61 @@ class CausalFactorEffect(Component, ABC):
         Returns
         -------
             The normalized TMRED data as a dict of scalar fields.
+
+        Raises
+        ------
+        ValueError
+            If the data is malformed: a DataFrame that is not exactly one row,
+            a missing ``distribution``/``min``/``max`` field, an unrecognized
+            ``distribution``, or (for a ``uniform`` distribution) ``min`` > ``max``.
+        ConfigurationError
+            If the resolved data is neither a dict nor a DataFrame.
         """
         if configuration is None:
             configuration = self.configuration
-        return load_tmred(self.get_data(builder, configuration.data_sources.tmred))
+        data = self.get_data(builder, configuration.data_sources.tmred)
+
+        supported_distributions = {"uniform", "draws"}
+        if isinstance(data, pd.DataFrame):
+            # A single row is required so the DataFrame can be coerced to one
+            # record of scalars; a dict cannot violate this by construction.
+            if len(data) != 1:
+                raise ValueError(
+                    f"TMRED data must contain exactly one row, but found {len(data)} rows."
+                )
+            required_columns = {"distribution", "min", "max"}
+            missing_columns = required_columns - set(data.columns)
+            if missing_columns:
+                raise ValueError(
+                    f"TMRED data is missing required columns: {sorted(missing_columns)}."
+                )
+            data = data.iloc[0].to_dict()
+        elif not isinstance(data, dict):
+            raise ConfigurationError(
+                f"TMRED data must be a dict or a DataFrame, but got {type(data)}."
+            )
+
+        if "distribution" not in data:
+            raise ValueError("TMRED data is missing the required 'distribution' field.")
+        if data["distribution"] not in supported_distributions:
+            raise ValueError(
+                f"TMRED distribution must be one of {sorted(supported_distributions)}, "
+                f"but got {data['distribution']!r}."
+            )
+        # Only the 'uniform' distribution reads min/max (see
+        # NonLogLinearRiskEffect.load_relative_risk); 'draws' carries its TMREL
+        # elsewhere, so we don't require a numeric range for it.
+        if data["distribution"] == "uniform":
+            missing_fields = {"min", "max"} - set(data)
+            if missing_fields:
+                raise ValueError(
+                    f"TMRED data is missing required fields: {sorted(missing_fields)}."
+                )
+            if data["min"] > data["max"]:
+                raise ValueError(
+                    f"TMRED 'min' ({data['min']}) must not exceed 'max' ({data['max']})."
+                )
+        return data
 
     def load_relative_risk(
         self,

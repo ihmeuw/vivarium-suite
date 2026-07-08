@@ -513,11 +513,11 @@ no artifact is needed for it:
 .. note::
 
    ``tmred`` is supplied as a single-row DataFrame (with ``distribution``,
-   ``min``, and ``max`` columns) because a configuration tree cannot hold a
-   plain dict as a value. Only the affected cause's incidence rate is still
-   written to the artifact here (via the internal ``sim._data`` API with
-   ``setup=False``), since disease-model data is out of scope for this
-   example.
+   ``min``, and ``max`` columns), which overrides the data source's default
+   artifact key; ``get_tmred`` then normalizes it to the dict its consumers
+   expect. Only the affected cause's incidence rate is still written to the
+   artifact here (via the internal ``sim._data`` API with ``setup=False``),
+   since disease-model data is out of scope for this example.
 
 .. testcode::
 
