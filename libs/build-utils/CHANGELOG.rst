@@ -1,4 +1,4 @@
-**4.3.0 - 07/06/26**
+**4.3.0 - 07/08/26**
 
 - Add shared ``update-readme`` tool to sync README supported-Python versions from python_versions.json
 
