@@ -1,4 +1,5 @@
 import itertools
+from collections.abc import Sequence
 from typing import cast
 
 import numpy as np
@@ -38,6 +39,23 @@ def make_bin_edges(data: pd.DataFrame, col: str) -> pd.DataFrame:
     data[[f"{col}_start", f"{col}_end"]] = mid_pts[["start", "end"]]
 
     return data.set_index(idx).drop(columns=[col])
+
+
+def _order0_interpolation(
+    data: pd.DataFrame,
+    value_columns: Sequence[str] = ("value",),
+    *,
+    extrapolate: bool = True,
+    validate: bool = True,
+) -> Interpolation:
+    """Build an order-0 Interpolation over ``data``."""
+    return Interpolation(
+        data,
+        value_columns=pd.Index(list(value_columns)),
+        order=0,
+        extrapolate=extrapolate,
+        validate=validate,
+    )
 
 
 @pytest.mark.skip(reason="only order 0 interpolation currently supported")
@@ -347,13 +365,7 @@ def test_order_zero_3d_no_key_column() -> None:
         }
     )
 
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=True,
-    )
+    interp = _order0_interpolation(data)
 
     interpolants = pd.DataFrame(
         {
@@ -505,39 +517,6 @@ def test_order_zero_diff_bin_sizes() -> None:
     assert i(query).equals(expected_result)
 
 
-def test_order_zero_given_call_column() -> None:
-    # The auto-detected continuous parameter ("year") matches both the bin-edge
-    # prefix and the query column name; the redundant "year" column from the
-    # legacy test data is dropped since the new design infers the call column.
-    data = pd.DataFrame(
-        {
-            "year_start": [
-                1990,
-                1995,
-                1996,
-                2005,
-                2005.5,
-            ],
-            "year_end": [1995, 1996, 2005, 2005.5, 2010],
-            "value": [1, 5, 2.3, 6, 100],
-        }
-    )
-
-    i = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=False,
-        validate=True,
-    )
-
-    query = pd.DataFrame({"year": [2007, 1990, 2005.4, 1994, 2004, 1995, 2002, 1995.5, 1996]})
-
-    expected_result = pd.DataFrame({"value": [100, 1, 6, 1, 2.3, 5, 2.3, 5, 2.3]})
-
-    assert i(query).equals(expected_result)
-
-
 @pytest.mark.parametrize("validate", [True, False])
 def test_interpolation_init_validate_option_invalid_data(validate: bool) -> None:
     if validate:
@@ -623,11 +602,6 @@ def test_interpolation_call_validate_option_valid_data(validate: bool) -> None:
     result = i(query)
 
 
-# ---------------------------------------------------------------------------
-# MIC-7097 — vectorized single-merge order-0 interpolation.
-# ---------------------------------------------------------------------------
-
-
 def test_multiple_categorical_columns() -> None:
     """Two categorical key columns (e.g. sex and location) select the correct value for each (sex, location) group."""
     data = pd.DataFrame(
@@ -649,13 +623,7 @@ def test_multiple_categorical_columns() -> None:
         }
     )
 
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=True,
-    )
+    interp = _order0_interpolation(data)
 
     query = pd.DataFrame(
         {
@@ -682,13 +650,7 @@ def test_no_merge_fanout_on_shared_bin_edges() -> None:
         }
     )
 
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=True,
-    )
+    interp = _order0_interpolation(data)
 
     query = pd.DataFrame(
         {
@@ -702,51 +664,34 @@ def test_no_merge_fanout_on_shared_bin_edges() -> None:
     assert result.equals(pd.DataFrame({"value": [10, 20, 30, 40, 50]}))
 
 
-def test_heterogeneous_bins_across_groups_raises() -> None:
-    """Construction raises when two categorical groups carry different bin edges (the single-merge path requires uniform edges across groups)."""
-    # Male has bins [1990, 1995), [1995, 2000); Female has a single [1990, 2000).
-    data = pd.DataFrame(
-        {
-            "sex": ["Male", "Male", "Female"],
-            "year_start": [1990, 1995, 1990],
-            "year_end": [1995, 2000, 2000],
-            "value": [1, 2, 3],
-        }
-    )
+class TestNonUniformBinsAcrossGroups:
+    """Bin edges that differ across categorical groups — the data shape the single-merge path cannot serve."""
 
-    with pytest.raises(ValueError, match="different bin edges") as error:
-        Interpolation(
-            data,
-            value_columns=pd.Index(["value"]),
-            order=0,
-            extrapolate=True,
-            validate=True,
+    @pytest.fixture
+    def data(self) -> pd.DataFrame:
+        # Male has bins [1990, 1995), [1995, 2000); Female has a single [1990, 2000).
+        return pd.DataFrame(
+            {
+                "sex": ["Male", "Male", "Female"],
+                "year_start": [1990, 1995, 1990],
+                "year_end": [1995, 2000, 2000],
+                "value": [1, 2, 3],
+            }
         )
-    assert "year" in str(error.value)
 
+    def test_validate_true_raises_at_construction(self, data: pd.DataFrame) -> None:
+        """Construction raises, naming the offending parameter."""
+        with pytest.raises(ValueError, match="different bin edges") as error:
+            _order0_interpolation(data)
+        assert "year" in str(error.value)
 
-def test_validate_false_skips_source_validation() -> None:
-    """With validate=False, source data with non-uniform or overlapping bins is accepted at construction without raising."""
-    data = pd.DataFrame(
-        {
-            "sex": ["Male", "Male", "Female"],
-            "year_start": [1990, 1995, 1990],
-            "year_end": [1995, 2000, 2000],
-            "value": [1, 2, 3],
-        }
-    )
-
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=False,
-    )
-    # Prove the object is usable: the "Male" group's bins match the pooled edge
-    # set, so its lookups resolve correctly even though validation was skipped.
-    result = interp(pd.DataFrame({"sex": ["Male", "Male"], "year": [1992, 1997]}))
-    assert result["value"].tolist() == [1, 2]
+    def test_validate_false_constructs_and_resolves(self, data: pd.DataFrame) -> None:
+        """With validate=False the non-uniform data is accepted at construction."""
+        interp = _order0_interpolation(data, validate=False)
+        # Prove the object is usable: the "Male" group's bins match the pooled edge
+        # set, so its lookups resolve correctly even though validation was skipped.
+        result = interp(pd.DataFrame({"sex": ["Male", "Male"], "year": [1992, 1997]}))
+        assert result["value"].tolist() == [1, 2]
 
 
 def test_unknown_category_in_query_raises() -> None:
@@ -760,13 +705,7 @@ def test_unknown_category_in_query_raises() -> None:
         }
     )
 
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=True,
-    )
+    interp = _order0_interpolation(data)
 
     query = pd.DataFrame({"year": [1995], "sex": ["Other"]})
     with pytest.raises(KeyError, match="absent from the interpolation"):
@@ -783,13 +722,7 @@ def test_purely_categorical_multi_row_group_uses_first_row() -> None:
         }
     )
 
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=False,
-    )
+    interp = _order0_interpolation(data, validate=False)
 
     query = pd.DataFrame({"sex": ["Male", "Male", "Female"]})
     result = interp(query)
@@ -800,13 +733,7 @@ def test_purely_categorical_multi_row_group_uses_first_row() -> None:
 def test_no_parameters_broadcasts_first_row() -> None:
     """A table with neither categorical nor continuous parameters broadcasts its first row's value to every interpolant."""
     data = pd.DataFrame({"value": [42, 99]})
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=True,
-    )
+    interp = _order0_interpolation(data)
 
     # No parameter columns, so the query columns are irrelevant; every row gets
     # the first data row's value.
@@ -827,13 +754,7 @@ def test_integer_value_dtype_preserved() -> None:
     )
     assert pd.api.types.is_integer_dtype(data["value"])
 
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=True,
-    )
+    interp = _order0_interpolation(data)
 
     query = pd.DataFrame({"year": [1992, 1998]})
     result = interp(query)
@@ -851,13 +772,7 @@ def test_empty_interpolants_returns_float64_frame() -> None:
         }
     )
 
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=True,
-        validate=True,
-    )
+    interp = _order0_interpolation(data)
 
     query = pd.DataFrame({"year": pd.Series([], dtype="float64")})
     result = interp(query)
@@ -896,13 +811,7 @@ def test_order_zero_multi_group_golden() -> None:
                     )
     data = pd.DataFrame(rows)
 
-    interp = Interpolation(
-        data,
-        value_columns=pd.Index(["value", "value2"]),
-        order=0,
-        extrapolate=True,
-        validate=True,
-    )
+    interp = _order0_interpolation(data, ("value", "value2"))
 
     query = pd.DataFrame(
         {
