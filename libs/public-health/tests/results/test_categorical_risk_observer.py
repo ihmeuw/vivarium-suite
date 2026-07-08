@@ -97,9 +97,12 @@ def test_observation_registration(categorical_risk_observer_sim):
         person_time = results[key]
         assert set(zip(person_time[COLUMNS.SUB_ENTITY], person_time["sex"])) == expected
 
-    # Each observer saves its own results: independent exposure draws give different
-    # per-cell person-time, so a shared/overwritten output would be caught here. Align
-    # on (category, sex) first -- the two observers don't emit rows in the same order.
+
+def test_different_results_per_risk(categorical_risk_observer_sim):
+    """Independent exposure draws give each observer different per-cell person-time,
+    so a shared/overwritten output would be caught here."""
+    results = categorical_risk_observer_sim.get_results()
+    # Align on (category, sex) first -- the two observers don't emit rows in the same order.
     test_risk_pt = results["person_time_test_risk"].set_index([COLUMNS.SUB_ENTITY, "sex"])[
         "value"
     ]
