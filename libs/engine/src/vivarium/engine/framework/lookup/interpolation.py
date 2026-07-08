@@ -340,10 +340,7 @@ class Interpolation:
         # line up positionally with the interpolants.
         merged.index = original_index
 
-        # A left merge would silently return NaN for an interpolant whose key is
-        # missing from the source; the per-group dispatch used to raise, so
-        # mirror that. With validate=False and non-uniform bins a known category
-        # can also miss here (its resolved edge is absent for its group).
+        # Raise if interpolant's key is missing from the source
         if self.categorical_parameters:
             unmatched = merged["_merge"].to_numpy() == "left_only"
             if unmatched.any():
