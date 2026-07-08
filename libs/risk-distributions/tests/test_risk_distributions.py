@@ -244,6 +244,36 @@ def test_mirrored_distribution_from_parameters_only(
     assert not np.isnan(result).any()
 
 
+@pytest.mark.parametrize(
+    "distribution",
+    [risk_distributions.MirroredGumbel, risk_distributions.MirroredGamma],
+)
+def test_mirrored_cdf_within_support_is_not_nan(
+    distribution: type[MirroredDistribution],
+) -> None:
+    """Regression test: a mirrored cdf must not spuriously return NaN inside its support.
+
+    The computability window is derived from the underlying (reflected) distribution, so
+    it must be mapped back into data space before gating cdf/pdf inputs. Previously the
+    raw data-space value was compared against reflected-space bounds, dropping valid
+    values to NaN for tight (low coefficient-of-variation) distributions.
+    """
+    mean = pd.Series([125.0])
+    sd = pd.Series([12.5])
+    x = pd.Series([110.0])
+    dist = distribution(mean=mean, sd=sd)
+
+    result = cast("pd.Series[Any]", dist.cdf(x))
+    assert not np.isnan(result).any()
+
+    # The value equals the underlying distribution's cdf, reflected about the mirror point.
+    row = dist.parameters.loc[0]
+    params = {name: float(row[name]) for name in distribution.expected_parameters}
+    mirror_point = float(dist.mirror_point.loc[0])
+    expected = 1 - distribution.distribution(**params).cdf(mirror_point - x.loc[0])
+    assert np.allclose(result, expected)
+
+
 def test_ensemble_distribution_with_mirrored_components_is_callable() -> None:
     """Regression test: EnsembleDistribution.ppf must work when mirrored sub-distributions carry weight.
 
