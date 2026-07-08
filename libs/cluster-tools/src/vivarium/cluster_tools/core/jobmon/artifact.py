@@ -66,22 +66,20 @@ def build_artifacts_in_parallel(
     Returns
     -------
         A ``(workflow_status, monitoring_url)`` tuple from
-        :func:`~vivarium.cluster_tools.core.jobmon.client.bind_and_run_workflow`.
+        ``client.bind_and_run_workflow``.
 
     Raises
     ------
+    ValueError
+        If ``build_commands`` is empty.
     RuntimeError
         If the workflow finishes in any state other than complete.
     """
+    if not build_commands:
+        raise ValueError("build_commands is empty; there are no location artifacts to build.")
+
     tool = client.make_tool()
-    template = client.make_task_template(
-        tool,
-        template_name="build_artifact",
-        command_template="PATH={env_prefix}/bin:$PATH {command}",
-        node_args=["command", "env_prefix"],
-        task_args=[],
-        op_args=[],
-    )
+    template = client.make_single_command_template(tool, template_name="build_artifact")
     compute_resources = native_specification.to_jobmon_spec(worker_logging_root)
     tasks = [
         client.create_task(
@@ -108,9 +106,11 @@ def build_artifacts_in_parallel(
     )
     if wf_status != client.JOBMON_STATUS_DONE:
         completed = client.count_completed_tasks(workflow)
+        unfinished = client.get_incomplete_task_names(workflow)
         raise RuntimeError(
             f"Artifact workflow {workflow_name!r} finished with status {wf_status!r}: "
             f"{completed}/{len(build_commands)} location artifacts built. "
+            f"Did not finish: {', '.join(sorted(unfinished))}. "
             "See the Jobmon GUI for per-location failures."
         )
     return wf_status, monitoring_url

@@ -40,7 +40,9 @@ __all__ = [
     "count_completed_tasks",
     "create_task",
     "create_tasks",
+    "get_incomplete_task_names",
     "get_monitoring_url",
+    "make_single_command_template",
     "make_task_template",
     "make_tool",
     "make_workflow",
@@ -81,6 +83,23 @@ def make_task_template(
     if default_compute_resources is not None:
         kwargs["default_compute_resources"] = default_compute_resources
     return tool.get_task_template(**kwargs)
+
+
+def make_single_command_template(tool: Tool, template_name: str) -> TaskTemplate:
+    """Register a task template that runs one shell command in a conda env.
+
+    The single command step prepends ``{env_prefix}/bin`` to ``PATH`` and runs
+    ``{command}``; both are per-task ``node_args``. This is the shape shared by the
+    dagger command steps and the parallel artifact builder.
+    """
+    return make_task_template(
+        tool,
+        template_name=template_name,
+        command_template="PATH={env_prefix}/bin:$PATH {command}",
+        node_args=["command", "env_prefix"],
+        task_args=[],
+        op_args=[],
+    )
 
 
 def create_task(
@@ -228,6 +247,11 @@ def run_workflow(
 def count_completed_tasks(workflow: Workflow) -> int:
     """Count tasks in *workflow* whose ``final_status`` is :data:`JOBMON_STATUS_DONE`."""
     return sum(1 for t in workflow.tasks.values() if t.final_status == JOBMON_STATUS_DONE)
+
+
+def get_incomplete_task_names(workflow: Workflow) -> list[str]:
+    """Return the names of *workflow*'s tasks whose ``final_status`` isn't :data:`JOBMON_STATUS_DONE`."""
+    return [t.name for t in workflow.tasks.values() if t.final_status != JOBMON_STATUS_DONE]
 
 
 def bind_and_run_workflow(
