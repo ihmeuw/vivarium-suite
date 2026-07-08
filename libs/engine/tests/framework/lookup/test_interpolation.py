@@ -304,9 +304,7 @@ def test_check_data_complete_gaps() -> None:
     )
 
     with pytest.raises(NotImplementedError) as error:
-        check_data_complete(
-            data, [("year", "year_start", "year_end"), ("age", "age_start", "age_end")]
-        )
+        check_data_complete(data, ["year", "age"])
 
     message = error.value.args[0]
 
@@ -322,7 +320,7 @@ def test_check_data_complete_overlap() -> None:
     )
 
     with pytest.raises(ValueError) as error:
-        check_data_complete(data, [("year", "year_start", "year_end")])
+        check_data_complete(data, ["year"])
 
     message = error.value.args[0]
 
@@ -340,9 +338,7 @@ def test_check_data_missing_combos() -> None:
     )
 
     with pytest.raises(ValueError) as error:
-        check_data_complete(
-            data, [("year", "year_start", "year_end"), ("age", "age_start", "age_end")]
-        )
+        check_data_complete(data, ["year", "age"])
 
     message = error.value.args[0]
 
