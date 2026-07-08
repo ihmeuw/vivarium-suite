@@ -123,21 +123,22 @@ class Interpolation:
             f"{self._FLAT_COLUMN_PREFIX}{i}" for i in range(len(value_columns))
         ]
         """Opaque internal column IDs used in the interpolation pipeline."""
-        parameter_columns = (
-            list(data.index.names)
-            if has_named_row_index(data)
-            else [c for c in data.columns if c not in value_columns]
-        )
-        continuous_parameter_names = self._get_continuous_parameters(parameter_columns)
-        self.categorical_parameters: list[str] = self._get_categorical_parameters(
-            parameter_columns, continuous_parameter_names
-        )
-        """Lookup attributes used to select between value rows."""
         self.data: pd.DataFrame = self._reshape_data(data, value_columns)
         """Flat DataFrame the interpolation pipeline operates on. Value
         columns are renamed to opaque internal IDs (see ``_FLAT_COLUMN_PREFIX``);
         :attr:`value_columns` carries the original user-facing labels and is
         reapplied to the output of :meth:`__call__`."""
+        parameter_columns = [
+            c for c in self.data.columns if c not in self._internal_value_columns
+        ]
+        self._continuous_parameters: list[
+            _ContinuousParameter
+        ] = self._get_continuous_parameters(parameter_columns, self.data)
+        """Continuous lookup parameters with their edge columns and shared bins."""
+        self.categorical_parameters: list[str] = self._get_categorical_parameters(
+            parameter_columns, self._continuous_parameters
+        )
+        """Lookup attributes used to select between value rows."""
 
         self.order: int = order
         """Order of interpolation. Only ``0`` is currently supported."""
@@ -146,20 +147,6 @@ class Interpolation:
         self.validate: bool = validate
         """Whether to validate inputs on construction and on call."""
 
-        self._continuous_parameters: list[_ContinuousParameter] = []
-        """Continuous lookup parameters with their edge columns and shared bins."""
-        for name in continuous_parameter_names:
-            start_column, end_column = _edge_columns(name)
-            left_edges = self.data[start_column].drop_duplicates().sort_values()
-            self._continuous_parameters.append(
-                _ContinuousParameter(
-                    name=name,
-                    start_column=start_column,
-                    end_column=end_column,
-                    left_edges=left_edges.to_numpy(),
-                    max_right=self.data[end_column].drop_duplicates().max(),
-                )
-            )
         self._key_columns: list[str] = list(self.categorical_parameters) + [
             parameter.start_column for parameter in self._continuous_parameters
         ]
@@ -175,23 +162,39 @@ class Interpolation:
             self._validate()
 
     @staticmethod
-    def _get_continuous_parameters(parameter_columns: list[str]) -> list[str]:
-        """Get continuous parameter columns from the given list of parameter columns."""
+    def _get_continuous_parameters(
+        parameter_columns: list[str], data: pd.DataFrame
+    ) -> list[_ContinuousParameter]:
+        """Build a ``_ContinuousParameter`` for each ``<name>_start`` / ``<name>_end`` column pair."""
         parameter_columns_set = set(parameter_columns)
-        continuous_columns: list[str] = []
+        parameters: list[_ContinuousParameter] = []
         for column in parameter_columns:
             if str(column).endswith(_START_SUFFIX):
-                base = str(column).removesuffix(_START_SUFFIX)
-                if f"{base}{_END_SUFFIX}" in parameter_columns_set:
-                    continuous_columns.append(base)
-        return continuous_columns
+                name = str(column).removesuffix(_START_SUFFIX)
+                start_column, end_column = _edge_columns(name)
+                if end_column in parameter_columns_set:
+                    left_edges = data[start_column].drop_duplicates().sort_values()
+                    parameters.append(
+                        _ContinuousParameter(
+                            name=name,
+                            start_column=start_column,
+                            end_column=end_column,
+                            left_edges=left_edges.to_numpy(),
+                            max_right=data[end_column].drop_duplicates().max(),
+                        )
+                    )
+        return parameters
 
     @staticmethod
     def _get_categorical_parameters(
-        parameter_columns: list[str], continuous_parameters: list[str]
+        parameter_columns: list[str], continuous_parameters: list[_ContinuousParameter]
     ) -> list[str]:
         """Get categorical parameter columns from the given list of parameter columns."""
-        bin_edge_columns = set(_get_bin_edge_columns(continuous_parameters))
+        bin_edge_columns = {
+            column
+            for parameter in continuous_parameters
+            for column in (parameter.start_column, parameter.end_column)
+        }
         return [col for col in parameter_columns if col not in bin_edge_columns]
 
     def _reshape_data(
