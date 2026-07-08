@@ -47,6 +47,20 @@ def crude_birth_rate_data(live_births=500):
     )
 
 
+def _crude_birth_rate_sim(config, base_plugins, live_births=500):
+    """Build a not-yet-set-up FertilityCrudeBirthRate sim with the live-births covariate."""
+    sim = InteractiveContext(
+        components=[TestPopulation(), FertilityCrudeBirthRate()],
+        configuration=config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    sim._data.write(
+        "covariate.live_births_by_sex.estimate", crude_birth_rate_data(live_births)
+    )
+    return sim
+
+
 def test_FertilityDeterministic(config):
     pop_size = config.population.population_size
     annual_new_simulants = 1000
@@ -72,52 +86,18 @@ def test_FertilityDeterministic(config):
     )
 
 
-def test_FertilityCrudeBirthRate(config, base_plugins):
-    pop_size = config.population.population_size
-    num_days = 100
-    components = [TestPopulation(), FertilityCrudeBirthRate()]
-    simulation = InteractiveContext(
-        components=components,
-        configuration=config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    simulation._data.write("covariate.live_births_by_sex.estimate", crude_birth_rate_data())
+@pytest.fixture(scope="module")
+def stepped_crude_birth_rate_sim(
+    base_config_factory, base_plugins
+) -> tuple[InteractiveContext, list[int]]:
+    """Shared FertilityCrudeBirthRate sim (extrapolated, 5000 simulants), stepped 10 times.
 
-    simulation.setup()
-    simulation.run_for(duration=pd.Timedelta(days=num_days))
-    pop = simulation.get_population(["age", "is_alive"])
-
-    assert np.all(pop["is_alive"] == True)
-    assert len(pop["age"]) > pop_size
-
-
-def test_FertilityCrudeBirthRate_extrapolate_fail(config, base_plugins):
+    Returns the stepped sim plus the population size before the first step and after each of
+    the 10 steps, so consumers can read either the end state or the per-step birth counts.
+    Read-only -- don't step or mutate it further.
+    """
+    config = base_config_factory()
     config.update(
-        {
-            "interpolation": {"extrapolate": False},
-            "time": {
-                "start": {"year": 2016},
-                "end": {"year": 2025},
-            },
-        }
-    )
-    components = [TestPopulation(), FertilityCrudeBirthRate()]
-
-    simulation = InteractiveContext(
-        components=components,
-        configuration=config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    simulation._data.write("covariate.live_births_by_sex.estimate", crude_birth_rate_data())
-
-    with pytest.raises(ValueError):
-        simulation.setup()
-
-
-def test_FertilityCrudeBirthRate_extrapolate(base_config, base_plugins):
-    base_config.update(
         {
             "population": {
                 "population_size": 5000,
@@ -132,29 +112,51 @@ def test_FertilityCrudeBirthRate_extrapolate(base_config, base_plugins):
             },
         }
     )
-    pop_size = base_config.population.population_size
+    sim = _crude_birth_rate_sim(config, base_plugins, live_births=500)
+    sim.setup()
+    population_sizes = [len(sim.get_population_index())]
+    for _ in range(10):
+        sim.step()
+        population_sizes.append(len(sim.get_population_index()))
+    return sim, population_sizes
+
+
+def test_FertilityCrudeBirthRate(stepped_crude_birth_rate_sim):
+    """FertilityCrudeBirthRate adds simulants over time and none die."""
+    sim, population_sizes = stepped_crude_birth_rate_sim
+    pop = sim.get_population(["age", "is_alive"])
+
+    assert np.all(pop["is_alive"] == True)
+    assert population_sizes[-1] > population_sizes[0]
+
+
+def test_FertilityCrudeBirthRate_extrapolate_fail(config, base_plugins):
+    config.update(
+        {
+            "interpolation": {"extrapolate": False},
+            "time": {
+                "start": {"year": 2016},
+                "end": {"year": 2025},
+            },
+        }
+    )
+    simulation = _crude_birth_rate_sim(config, base_plugins)
+
+    with pytest.raises(ValueError):
+        simulation.setup()
+
+
+def test_FertilityCrudeBirthRate_extrapolate(stepped_crude_birth_rate_sim):
+    """Under extrapolation, each step's crude birth rate matches the expected rate."""
+    _, population_sizes = stepped_crude_birth_rate_sim
+    pop_size = population_sizes[0]
     true_pop_size = 20_000  # What's available in the mock artifact
     live_births_by_sex = 500
-    components = [TestPopulation(), FertilityCrudeBirthRate()]
 
-    simulation = InteractiveContext(
-        components=components,
-        configuration=base_config,
-        plugin_configuration=base_plugins,
-        setup=False,
-    )
-    simulation._data.write(
-        "covariate.live_births_by_sex.estimate", crude_birth_rate_data(live_births_by_sex)
-    )
-    simulation.setup()
-
-    birth_rate = []
-    for i in range(10):
-        pop_start = len(simulation.get_population_index())
-        simulation.step()
-        pop_end = len(simulation.get_population_index())
-        birth_rate.append((pop_end - pop_start) / pop_size)
-
+    birth_rate = [
+        (pop_end - pop_start) / pop_size
+        for pop_start, pop_end in zip(population_sizes, population_sizes[1:])
+    ]
     given_birth_rate = 2 * live_births_by_sex / true_pop_size
     np.testing.assert_allclose(birth_rate, given_birth_rate, atol=0.01)
 

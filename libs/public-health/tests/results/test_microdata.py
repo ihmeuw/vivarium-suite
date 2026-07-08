@@ -68,60 +68,93 @@ def _configure(
     return base_config
 
 
-def test_microdata_observer_can_be_registered(base_config, base_plugins) -> None:
-    """The observer sets up in any sim and registers a single named observation."""
-    config = _configure(base_config, {"columns": ["age"]})
-    sim = InteractiveContext(
-        components=[BasePopulation(), MicrodataObserver()],
-        configuration=config,
+def _build_microdata_sim(
+    base_config: ConfigTree,
+    base_plugins: ConfigTree,
+    microdata: dict,
+    *,
+    components: list[Component] | None = None,
+    population_size: int | None = None,
+) -> InteractiveContext:
+    """Build a sim with a MicrodataObserver configured by ``microdata``."""
+    if components is None:
+        components = [BasePopulation(), MicrodataObserver()]
+    return InteractiveContext(
+        components=components,
+        configuration=_configure(base_config, microdata, population_size=population_size),
         plugin_configuration=base_plugins,
     )
-    assert "microdata_observer" in sim._results._results_context.observations
 
 
-def test_microdata_observer_records_configured_columns(base_config, base_plugins) -> None:
+@pytest.fixture(scope="module")
+def microdata_observer_sim(base_config_factory, base_plugins) -> InteractiveContext:
+    """Shared read-only sim recording [age, sex] over two steps; don't step or mutate it."""
+    sim = _build_microdata_sim(
+        base_config_factory(), base_plugins, {"columns": ["age", "sex"]}
+    )
+    sim.step()
+    sim.step()
+    return sim
+
+
+def test_microdata_observer_can_be_registered(microdata_observer_sim) -> None:
+    """The observer sets up and registers a single named observation."""
+    observations = microdata_observer_sim._results._results_context.observations
+    assert "microdata_observer" in observations
+
+
+def test_microdata_observer_records_configured_columns(microdata_observer_sim) -> None:
     """Records exactly the configured columns (+ event_time) for every simulant, each step."""
-    config = _configure(base_config, {"columns": ["age", "sex"]})
-    sim = InteractiveContext(
-        components=[BasePopulation(), MicrodataObserver()],
-        configuration=config,
-        plugin_configuration=base_plugins,
-    )
-    n_simulants = len(sim.get_population_index())
+    n_simulants = len(microdata_observer_sim.get_population_index())
+    results = microdata_observer_sim.get_results()["microdata_observer"]
 
-    sim.step()
-    one_step = sim.get_results()["microdata_observer"]
-    sim.step()
-    two_steps = sim.get_results()["microdata_observer"]
-
-    assert set(one_step.columns) == {"age", "sex", "event_time"}
-    assert len(one_step) == n_simulants
-    assert len(two_steps) == 2 * n_simulants  # fixed-size population over two steps
-    assert two_steps["event_time"].nunique() == 2
+    assert set(results.columns) == {"age", "sex", "event_time"}
+    assert results["event_time"].nunique() == 2  # both steps observed
+    # every observed step records the whole fixed-size population
+    assert (results.groupby("event_time").size() == n_simulants).all()
+    assert len(results) == 2 * n_simulants
 
 
-def test_microdata_observer_requires_columns(base_config, base_plugins) -> None:
-    """An empty `columns` list raises a configuration error at setup."""
-    config = _configure(base_config, {"columns": []})
-    with pytest.raises(ResultsConfigurationError, match="columns"):
-        InteractiveContext(
-            components=[BasePopulation(), MicrodataObserver()],
-            configuration=config,
-            plugin_configuration=base_plugins,
-        )
+@pytest.mark.parametrize(
+    "microdata, match",
+    [
+        ({"columns": []}, "columns"),
+        (
+            # 1 // 2 observed timesteps floors to 0 rows per timestep
+            {
+                "columns": ["age"],
+                "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
+                "row_limit": 1,
+            },
+            "row_limit",
+        ),
+        # row_limit below the estimated step count
+        ({"columns": ["age"], "row_limit": 1}, "row_limit"),
+        # single_random_sample with no row_limit
+        ({"columns": ["age"], "single_random_sample": True}, "single_random_sample"),
+    ],
+    ids=[
+        "empty_columns",
+        "row_limit_below_timestep_count",
+        "row_limit_below_step_estimate",
+        "single_random_sample_without_row_limit",
+    ],
+)
+def test_microdata_observer_invalid_config_raises(
+    base_config, base_plugins, microdata, match
+) -> None:
+    """Invalid microdata_observer configs raise a ResultsConfigurationError at setup."""
+    with pytest.raises(ResultsConfigurationError, match=match):
+        _build_microdata_sim(base_config, base_plugins, microdata)
 
 
 def test_microdata_observer_filter_subsets_simulants(base_config, base_plugins) -> None:
     """`filter` entries restrict recording to matching simulants, AND-combined."""
-    config = _configure(
+    sim = _build_microdata_sim(
         base_config,
+        base_plugins,
         {"columns": ["age", "sex"], "filter": ['sex == "Female"', "age >= 20"]},
         population_size=250,
-    )
-    sim = InteractiveContext(
-        components=[BasePopulation(), MicrodataObserver()],
-        configuration=config,
-        plugin_configuration=base_plugins,
     )
     n_simulants = len(sim.get_population_index())
     sim.step()
@@ -137,11 +170,8 @@ def test_microdata_observer_observes_only_configured_timesteps(
     base_config, base_plugins
 ) -> None:
     """Only timesteps whose event time matches `timesteps` are recorded."""
-    config = _configure(base_config, {"columns": ["age"], "timesteps": [SECOND_EVENT_TIME]})
-    sim = InteractiveContext(
-        components=[BasePopulation(), MicrodataObserver()],
-        configuration=config,
-        plugin_configuration=base_plugins,
+    sim = _build_microdata_sim(
+        base_config, base_plugins, {"columns": ["age"], "timesteps": [SECOND_EVENT_TIME]}
     )
 
     sim.step()  # event_time FIRST_EVENT_TIME -> not in timesteps
@@ -154,22 +184,17 @@ def test_microdata_observer_row_limit_randomly_samples_per_timestep(
     base_config, base_plugins
 ) -> None:
     """`row_limit` caps to row_limit // n_observed_timesteps rows, randomly resampled each step."""
-    config = _configure(
+    sim = _build_microdata_sim(
         base_config,
+        base_plugins,
+        # 2 observed timesteps -> 200 // 2 = 100 rows each
         {
             "columns": ["simulant_id"],
-            "timesteps": [
-                FIRST_EVENT_TIME,
-                SECOND_EVENT_TIME,
-            ],  # 2 observed -> 200 // 2 = 100
+            "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
             "row_limit": 200,
         },
-        population_size=250,
-    )
-    sim = InteractiveContext(
         components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
-        configuration=config,
-        plugin_configuration=base_plugins,
+        population_size=250,
     )
 
     sim.step()  # FIRST_EVENT_TIME -> observed
@@ -186,18 +211,13 @@ def test_microdata_observer_row_limit_without_timesteps_uses_step_estimate(
     base_config, base_plugins
 ) -> None:
     """With no `timesteps`, the per-step cap divides `row_limit` by the estimated step count."""
-    config = _configure(
+    sim = _build_microdata_sim(
         base_config,
-        {
-            "columns": ["simulant_id"],
-            "row_limit": 2 * ESTIMATED_TIMESTEPS,
-        },  # -> 2 rows per step
-        population_size=250,
-    )
-    sim = InteractiveContext(
+        base_plugins,
+        # row_limit 2 * ESTIMATED_TIMESTEPS -> 2 rows per step
+        {"columns": ["simulant_id"], "row_limit": 2 * ESTIMATED_TIMESTEPS},
         components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
-        configuration=config,
-        plugin_configuration=base_plugins,
+        population_size=250,
     )
 
     sim.step()
@@ -207,92 +227,35 @@ def test_microdata_observer_row_limit_without_timesteps_uses_step_estimate(
     assert (result.groupby("event_time").size() == 2).all()
 
 
-def test_microdata_observer_row_limit_below_timestep_count_errors(
-    base_config, base_plugins
-) -> None:
-    """A row_limit smaller than the number of observed timesteps raises at setup."""
-    config = _configure(
-        base_config,
-        {
-            "columns": ["age"],
-            "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],  # 2 observed timesteps
-            "row_limit": 1,  # 1 // 2 would floor to 0 rows per timestep
-        },
-    )
-    with pytest.raises(ResultsConfigurationError, match="row_limit"):
-        InteractiveContext(
-            components=[BasePopulation(), MicrodataObserver()],
-            configuration=config,
-            plugin_configuration=base_plugins,
-        )
-
-
-def test_microdata_observer_row_limit_below_step_estimate_errors(
-    base_config, base_plugins
-) -> None:
-    """Without `timesteps`, a row_limit below the simulation's step count raises at setup."""
-    config = _configure(base_config, {"columns": ["age"], "row_limit": 1})
-    with pytest.raises(ResultsConfigurationError, match="row_limit"):
-        InteractiveContext(
-            components=[BasePopulation(), MicrodataObserver()],
-            configuration=config,
-            plugin_configuration=base_plugins,
-        )
-
-
 def test_microdata_observer_warns_and_deduplicates_timesteps(
     base_config, base_plugins, caplog
 ) -> None:
     """Duplicate dates in `timesteps` are deduplicated with a warning, not an error."""
-    config = _configure(
-        base_config, {"columns": ["age"], "timesteps": [FIRST_EVENT_TIME, FIRST_EVENT_TIME]}
-    )
-    InteractiveContext(
-        components=[BasePopulation(), MicrodataObserver()],
-        configuration=config,
-        plugin_configuration=base_plugins,
+    _build_microdata_sim(
+        base_config,
+        base_plugins,
+        {"columns": ["age"], "timesteps": [FIRST_EVENT_TIME, FIRST_EVENT_TIME]},
     )
     assert "duplicate" in caplog.text
     assert any(record.levelname == "WARNING" for record in caplog.records)
-
-
-def test_microdata_observer_single_random_sample_requires_row_limit(
-    base_config, base_plugins
-) -> None:
-    """single_random_sample without a row_limit raises a configuration error at setup."""
-    config = _configure(
-        base_config,
-        {"columns": ["age"], "single_random_sample": True},  # no row_limit
-    )
-    with pytest.raises(ResultsConfigurationError, match="single_random_sample"):
-        InteractiveContext(
-            components=[BasePopulation(), MicrodataObserver()],
-            configuration=config,
-            plugin_configuration=base_plugins,
-        )
 
 
 def test_microdata_observer_single_random_sample_records_fixed_cohort(
     base_config, base_plugins
 ) -> None:
     """single_random_sample records the same once-sampled cohort at every observed step."""
-    config = _configure(
+    sim = _build_microdata_sim(
         base_config,
+        base_plugins,
+        # 2 observed timesteps -> 200 // 2 = 100 rows each
         {
             "columns": ["simulant_id"],
-            "timesteps": [
-                FIRST_EVENT_TIME,
-                SECOND_EVENT_TIME,
-            ],  # 2 observed -> 200 // 2 = 100
+            "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
             "row_limit": 200,
             "single_random_sample": True,
         },
-        population_size=250,
-    )
-    sim = InteractiveContext(
         components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
-        configuration=config,
-        plugin_configuration=base_plugins,
+        population_size=250,
     )
 
     sim.step()  # FIRST_EVENT_TIME -> observed
@@ -309,8 +272,9 @@ def test_microdata_observer_single_random_sample_drops_members_leaving_filter(
     base_config, base_plugins
 ) -> None:
     """A cohort member that leaves the filter is dropped and never refilled (upper bound)."""
-    config = _configure(
+    sim = _build_microdata_sim(
         base_config,
+        base_plugins,
         {
             "columns": ["simulant_id"],
             "filter": ["eligible == True"],
@@ -318,12 +282,8 @@ def test_microdata_observer_single_random_sample_drops_members_leaving_filter(
             "row_limit": 200,  # cohort size 100
             "single_random_sample": True,
         },
-        population_size=250,
-    )
-    sim = InteractiveContext(
         components=[BasePopulation(), _SimulantID(), _Disqualifier(), MicrodataObserver()],
-        configuration=config,
-        plugin_configuration=base_plugins,
+        population_size=250,
     )
 
     sim.step()  # FIRST_EVENT_TIME -> full cohort still eligible
