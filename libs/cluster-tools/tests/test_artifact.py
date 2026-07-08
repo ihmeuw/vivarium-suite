@@ -32,7 +32,9 @@ def test_builds_one_independent_task_per_location(client):
 
     # One task per location...
     assert client.create_task.call_count == 2
-    assert {c.kwargs["name"] for c in client.create_task.call_args_list} == set(build_commands)
+    assert {c.kwargs["name"] for c in client.create_task.call_args_list} == set(
+        build_commands
+    )
     assert {c.kwargs["command"] for c in client.create_task.call_args_list} == set(
         build_commands.values()
     )
@@ -43,6 +45,7 @@ def test_builds_one_independent_task_per_location(client):
     client.add_tasks.assert_called_once()
     assert len(client.add_tasks.call_args.args[1]) == 2
     assert (status, url) == ("D", "http://monitor")
+    assert client.bind_and_run_workflow.call_args.kwargs["resume"] is False
 
 
 @mock.patch(_CLIENT)
@@ -54,8 +57,28 @@ def test_raises_when_workflow_does_not_complete(client):
     with pytest.raises(RuntimeError, match="Artifact workflow .* finished with status"):
         artifact.build_artifacts_in_parallel(
             workflow_name="make_artifacts_x",
-            build_commands={"Pakistan_artifact": "build pak", "Nigeria_artifact": "build nga"},
+            build_commands={
+                "Pakistan_artifact": "build pak",
+                "Nigeria_artifact": "build nga",
+            },
             native_specification=mock.MagicMock(),
             worker_logging_root=Path("/logs"),
             env_prefix="/env",
         )
+
+
+@mock.patch(_CLIENT)
+def test_resume_is_forwarded_to_the_workflow_run(client):
+    client.JOBMON_STATUS_DONE = "D"
+    client.bind_and_run_workflow.return_value = ("D", None)
+
+    artifact.build_artifacts_in_parallel(
+        workflow_name="make_artifacts_x",
+        build_commands={"Pakistan_artifact": "build pak"},
+        native_specification=mock.MagicMock(),
+        worker_logging_root=Path("/logs"),
+        env_prefix="/env",
+        resume=True,
+    )
+
+    assert client.bind_and_run_workflow.call_args.kwargs["resume"] is True

@@ -24,6 +24,7 @@ def build_artifacts_in_parallel(
     native_specification: NativeSpecification,
     worker_logging_root: Path,
     env_prefix: str,
+    resume: bool = False,
     max_attempts: int = 2,
     max_concurrently_running: int | None = None,
 ) -> tuple[str, str | None]:
@@ -39,8 +40,9 @@ def build_artifacts_in_parallel(
     Parameters
     ----------
     workflow_name
-        Name (and ``workflow_args``) for the Jobmon workflow. Make it unique
-        per invocation for a fresh build rather than a resume.
+        Name (and ``workflow_args``) identifying the Jobmon workflow. Use a
+        fresh, unique name to start a new build; reuse a prior run's name
+        together with ``resume=True`` to resume that workflow.
     build_commands
         Mapping of task name (e.g. ``"<location>_artifact"``) to the shell
         command that builds that location's artifact.
@@ -51,6 +53,11 @@ def build_artifacts_in_parallel(
     env_prefix
         Absolute prefix of the conda env whose ``bin`` is prepended to
         ``PATH`` so each build command's interpreter resolves without ``conda``.
+    resume
+        If True, resume the workflow with the same ``workflow_name`` instead of
+        starting fresh: Jobmon skips the location builds that already completed
+        and reruns only the unfinished ones. Requires ``workflow_name`` to match
+        the original run.
     max_attempts
         Times Jobmon retries each location's build before giving up.
     max_concurrently_running
@@ -96,7 +103,9 @@ def build_artifacts_in_parallel(
     )
     client.add_tasks(workflow, tasks)
 
-    wf_status, monitoring_url = client.bind_and_run_workflow(workflow, worker_logging_root)
+    wf_status, monitoring_url = client.bind_and_run_workflow(
+        workflow, worker_logging_root, resume=resume
+    )
     if wf_status != client.JOBMON_STATUS_DONE:
         completed = client.count_completed_tasks(workflow)
         raise RuntimeError(
