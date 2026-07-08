@@ -345,10 +345,7 @@ class Interpolation:
             how="left",
             on=self._key_columns,
             validate="many_to_one",
-            # The indicator drives the unknown-category KeyError below; with no
-            # categorical keys a miss is impossible (the resolved edges come
-            # from this same table), so skip it.
-            indicator=bool(self.categorical_parameters),
+            indicator=True,
         )
         # A left many-to-one merge preserves left-row order, so the merged rows
         # line up positionally with the interpolants.
