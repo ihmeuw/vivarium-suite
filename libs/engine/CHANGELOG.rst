@@ -2,7 +2,7 @@
 
 - Perform order-0 interpolation with a single vectorized ``numpy.digitize`` + ``pandas.merge`` instead of per-categorical-group dispatch; removes the internal ``Order0Interp`` class.
 - Raise when lookup keys do not uniquely identify a data row (previously a duplicate row in a purely categorical table was silently ignored in favor of the first).
-- API: ``check_data_complete`` takes continuous-parameter base names instead of ``(name, start, end)`` tuples.
+- API: the interpolation validators (``check_data_complete``, ``validate_parameters``, ``validate_call_data``) take continuous-parameter records instead of ``(name, start, end)`` tuples.
 - API: ``has_named_row_index`` moved from ``vivarium.engine.framework.lookup.interpolation`` to ``vivarium.engine.types``.
 
 **5.3.2 - 07/02/26**

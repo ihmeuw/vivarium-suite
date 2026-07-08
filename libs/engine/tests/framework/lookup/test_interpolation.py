@@ -8,9 +8,15 @@ import pytest
 
 from vivarium.engine.framework.lookup.interpolation import (
     Interpolation,
+    _ContinuousParameter,
     check_data_complete,
     validate_parameters,
 )
+
+
+def _parameter(name: str) -> _ContinuousParameter:
+    """Build a naming-only parameter record for direct validator calls."""
+    return _ContinuousParameter(name, f"{name}_start", f"{name}_end", np.array([]), None)
 
 
 def make_bin_edges(data: pd.DataFrame, col: str) -> pd.DataFrame:
@@ -266,7 +272,7 @@ def test_validate_parameters__empty_data() -> None:
                 columns=["age_start", "age_end", "sex", "year_start", "year_end", "value"]
             ),
             ["sex"],
-            ["age", "year"],
+            [_parameter("age"), _parameter("year")],
             ["value"],
         )
 
@@ -288,7 +294,7 @@ def test_validate_parameters__extra_columns() -> None:
         validate_parameters(
             data,
             ["sex"],
-            ["age"],
+            [_parameter("age")],
             ["value"],
         )
 
@@ -304,7 +310,7 @@ def test_check_data_complete_gaps() -> None:
     )
 
     with pytest.raises(NotImplementedError) as error:
-        check_data_complete(data, ["year", "age"])
+        check_data_complete(data, [_parameter("year"), _parameter("age")])
 
     message = error.value.args[0]
 
@@ -320,7 +326,7 @@ def test_check_data_complete_overlap() -> None:
     )
 
     with pytest.raises(ValueError) as error:
-        check_data_complete(data, ["year"])
+        check_data_complete(data, [_parameter("year")])
 
     message = error.value.args[0]
 
@@ -338,7 +344,7 @@ def test_check_data_missing_combos() -> None:
     )
 
     with pytest.raises(ValueError) as error:
-        check_data_complete(data, ["year", "age"])
+        check_data_complete(data, [_parameter("year"), _parameter("age")])
 
     message = error.value.args[0]
 

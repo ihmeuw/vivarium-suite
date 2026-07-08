@@ -23,11 +23,6 @@ _START_SUFFIX = "_start"
 _END_SUFFIX = "_end"
 
 
-def _edge_columns(parameter: str) -> tuple[str, str]:
-    """Get the left- and right-edge column names for a continuous parameter."""
-    return f"{parameter}{_START_SUFFIX}", f"{parameter}{_END_SUFFIX}"
-
-
 class _ContinuousParameter(NamedTuple):
     """A continuous (binned) lookup parameter."""
 
@@ -153,7 +148,8 @@ class Interpolation:
         for column in parameter_columns:
             if str(column).endswith(_START_SUFFIX):
                 name = str(column).removesuffix(_START_SUFFIX)
-                start_column, end_column = _edge_columns(name)
+                start_column = f"{name}{_START_SUFFIX}"
+                end_column = f"{name}{_END_SUFFIX}"
                 if end_column in parameter_columns_set:
                     left_edges = data[start_column].drop_duplicates().sort_values()
                     parameters.append(
@@ -204,7 +200,7 @@ class Interpolation:
         validate_parameters(
             self.data,
             self.categorical_parameters,
-            self.continuous_parameters,
+            self._continuous_parameters,
             self._internal_value_columns,
         )
 
@@ -236,7 +232,7 @@ class Interpolation:
             else [self.data]
         )
         for group in groups:
-            check_data_complete(group, self.continuous_parameters)
+            check_data_complete(group, self._continuous_parameters)
 
         for parameter in self._continuous_parameters:
             reference_edges = set(parameter.left_edges)
@@ -281,7 +277,7 @@ class Interpolation:
         """
         if self.validate:
             validate_call_data(
-                interpolants, self.categorical_parameters, self.continuous_parameters
+                interpolants, self.categorical_parameters, self._continuous_parameters
             )
 
         if interpolants.empty:
@@ -355,7 +351,7 @@ class Interpolation:
 def validate_parameters(
     data: pd.DataFrame,
     categorical_parameters: Sequence[str],
-    continuous_parameters: Sequence[str],
+    continuous_parameters: Sequence[_ContinuousParameter],
     value_columns: Sequence[Hashable],
 ) -> None:
     if data.empty:
@@ -364,12 +360,13 @@ def validate_parameters(
     if not value_columns:
         raise ValueError(
             f"No non-parameter data. Available columns: {data.columns}, "
-            f"Parameter columns: {set(categorical_parameters) | set(continuous_parameters)}"
+            f"Parameter columns: "
+            f"{set(categorical_parameters) | {p.name for p in continuous_parameters}}"
         )
 
     required_cols = {
         *categorical_parameters,
-        *(column for p in continuous_parameters for column in _edge_columns(p)),
+        *(c for p in continuous_parameters for c in (p.start_column, p.end_column)),
         *value_columns,
     }
     if extra_columns := list(data.columns.difference(list(required_cols))):
@@ -382,7 +379,7 @@ def validate_parameters(
 def validate_call_data(
     data: pd.DataFrame,
     categorical_parameters: Sequence[str],
-    continuous_parameters: Sequence[str],
+    continuous_parameters: Sequence[_ContinuousParameter],
 ) -> None:
     if not isinstance(data, pd.DataFrame):
         raise TypeError(
@@ -390,11 +387,12 @@ def validate_call_data(
             f"passed {type(data)}."
         )
 
-    if not set(continuous_parameters) <= set(data.columns.values.tolist()):
+    continuous_parameter_names = [p.name for p in continuous_parameters]
+    if not set(continuous_parameter_names) <= set(data.columns.values.tolist()):
         raise ValueError(
             f"The continuous continuous parameters with which you built the Interpolation must all "
             f"be present in the data you call it on. The Interpolation has key "
-            f"columns: {continuous_parameters} and your data has columns: "
+            f"columns: {continuous_parameter_names} and your data has columns: "
             f"{data.columns.values.tolist()}"
         )
 
@@ -409,14 +407,15 @@ def validate_call_data(
         )
 
 
-def check_data_complete(data: pd.DataFrame, continuous_parameters: Sequence[str]) -> None:
+def check_data_complete(
+    data: pd.DataFrame, continuous_parameters: Sequence[_ContinuousParameter]
+) -> None:
     """Check that data provides complete, contiguous bins for each continuous parameter.
 
-    For each parameter (given by base name, with ``<name>_start`` /
-    ``<name>_end`` edge columns), require that every combination of parameter
-    bins is present, that each left edge pairs with exactly one right edge,
-    and that the bins tile a continuous range: each bin's exclusive right edge
-    equals the next bin's inclusive left edge.
+    For each parameter, require that every combination of parameter bins is
+    present, that each left edge pairs with exactly one right edge, and that
+    the bins tile a continuous range: each bin's exclusive right edge equals
+    the next bin's inclusive left edge.
 
     Raises
     ------
@@ -429,14 +428,14 @@ def check_data_complete(data: pd.DataFrame, continuous_parameters: Sequence[str]
     if not continuous_parameters:
         return
 
-    start_columns = [_edge_columns(p)[0] for p in continuous_parameters]
+    start_columns = [p.start_column for p in continuous_parameters]
 
     # A bin repeated for the same combination of the other parameters is an
     # overlap of itself.
     if data.duplicated(subset=start_columns).any():
         raise ValueError(
             f"Parameter data must not contain overlaps. Data contains duplicate "
-            f"bins for {[_edge_columns(p) for p in continuous_parameters]}."
+            f"bins for {[(p.start_column, p.end_column) for p in continuous_parameters]}."
         )
 
     # With unique keys, the rows are a subset of the cross product of the
@@ -445,11 +444,11 @@ def check_data_complete(data: pd.DataFrame, continuous_parameters: Sequence[str]
     if len(data) != math.prod(data[c].nunique() for c in start_columns):
         raise ValueError(
             f"You must provide a value for every combination of "
-            f"{list(continuous_parameters)}."
+            f"{[p.name for p in continuous_parameters]}."
         )
 
     for parameter in continuous_parameters:
-        start_column, end_column = _edge_columns(parameter)
+        start_column, end_column = parameter.start_column, parameter.end_column
 
         if (data.groupby(start_column)[end_column].nunique() > 1).any():
             raise ValueError(
