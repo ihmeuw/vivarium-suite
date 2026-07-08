@@ -11,25 +11,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Hashable, Sequence
-from typing import Any, ClassVar, NamedTuple, TypeGuard
+from typing import Any, ClassVar, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from vivarium.engine.types import LookupTableData
-
-
-def has_named_row_index(
-    data: LookupTableData,
-) -> TypeGuard[pd.DataFrame | pd.Series[Any]]:
-    """Return True if ``data`` carries its lookup attributes on the row index."""
-    if isinstance(data, pd.Series):
-        return True
-    if isinstance(data, pd.DataFrame):
-        return any(name is not None for name in data.index.names)
-    return False
-
+from vivarium.engine.types import has_named_row_index
 
 _START_SUFFIX = "_start"
 _END_SUFFIX = "_end"
@@ -38,13 +26,6 @@ _END_SUFFIX = "_end"
 def _edge_columns(parameter: str) -> tuple[str, str]:
     """Get the left- and right-edge column names for a continuous parameter."""
     return f"{parameter}{_START_SUFFIX}", f"{parameter}{_END_SUFFIX}"
-
-
-def _get_bin_edge_columns(continuous_parameters: Sequence[str]) -> list[str]:
-    """Get the column names for the left and right edges of bins for each continuous parameter."""
-    return [
-        column for parameter in continuous_parameters for column in _edge_columns(parameter)
-    ]
 
 
 class _ContinuousParameter(NamedTuple):
@@ -66,7 +47,8 @@ class Interpolation:
     """A callable that interpolates value columns over categorical/continuous parameters.
 
     Lookup attributes are inferred from the input data: when the data has its
-    lookup attributes in the row index (see :func:`has_named_row_index`), the
+    lookup attributes in the row index (see
+    ``vivarium.engine.types.has_named_row_index``), the
     row-index level names are the attributes; when the data is a flat
     DataFrame (deprecated), the attributes are the columns not listed in
     ``value_columns``. Attributes whose names follow the ``<name>_start`` /
@@ -387,7 +369,7 @@ def validate_parameters(
 
     required_cols = {
         *categorical_parameters,
-        *_get_bin_edge_columns(continuous_parameters),
+        *(column for p in continuous_parameters for column in _edge_columns(p)),
         *value_columns,
     }
     if extra_columns := list(data.columns.difference(list(required_cols))):
@@ -454,7 +436,7 @@ def check_data_complete(data: pd.DataFrame, continuous_parameters: Sequence[str]
     if data.duplicated(subset=start_columns).any():
         raise ValueError(
             f"Parameter data must not contain overlaps. Data contains duplicate "
-            f"bins for {_get_bin_edge_columns(continuous_parameters)}."
+            f"bins for {[_edge_columns(p) for p in continuous_parameters]}."
         )
 
     # With unique keys, the rows are a subset of the cross product of the
