@@ -350,9 +350,6 @@ def test_check_data_missing_combos() -> None:
 
 
 def test_order_zero_3d_no_key_column() -> None:
-    # Migrated from the former direct Order0Interp test: three continuous
-    # parameters, no categorical key column. Pins the multi-parameter
-    # digitize + merge result through the public Interpolation interface.
     data = pd.DataFrame(
         {
             "year_start": [1990, 1990, 1990, 1990, 1995, 1995, 1995, 1995],
