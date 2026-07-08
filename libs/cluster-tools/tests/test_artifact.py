@@ -15,7 +15,7 @@ _CLIENT = "vivarium.cluster_tools.core.jobmon.artifact.client"
 
 
 @mock.patch(_CLIENT)
-def test_builds_one_independent_task_per_location(client):
+def test_builds_one_independent_task_per_location(client: mock.MagicMock) -> None:
     client.JOBMON_STATUS_DONE = "D"
     client.bind_and_run_workflow.return_value = ("D", "http://monitor")
     client.create_task.side_effect = lambda *a, **k: mock.MagicMock(name=k["name"])
@@ -49,7 +49,7 @@ def test_builds_one_independent_task_per_location(client):
 
 
 @mock.patch(_CLIENT)
-def test_raises_when_workflow_does_not_complete(client):
+def test_raises_when_workflow_does_not_complete(client: mock.MagicMock) -> None:
     client.JOBMON_STATUS_DONE = "D"
     client.bind_and_run_workflow.return_value = ("F", None)
     client.count_completed_tasks.return_value = 1
@@ -68,7 +68,7 @@ def test_raises_when_workflow_does_not_complete(client):
 
 
 @mock.patch(_CLIENT)
-def test_resume_is_forwarded_to_the_workflow_run(client):
+def test_resume_is_forwarded_to_the_workflow_run(client: mock.MagicMock) -> None:
     client.JOBMON_STATUS_DONE = "D"
     client.bind_and_run_workflow.return_value = ("D", None)
 
