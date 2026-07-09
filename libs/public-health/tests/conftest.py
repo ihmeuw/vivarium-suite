@@ -22,6 +22,7 @@ def base_config_factory() -> Callable[[], ConfigTree]:
             {
                 "time": {"start": {"year": 1990}, "end": {"year": 2010}, "step_size": 30.5},
                 "randomness": {"key_columns": ["entrance_time", "age"]},
+                "interpolation": {"validate": False},
             },
             source=str(Path(__file__).resolve()),
             layer="model_override",
