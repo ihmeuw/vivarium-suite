@@ -33,9 +33,6 @@ def build_artifacts_in_parallel(
     Each ``(name, command)`` in ``build_commands`` -- one per location --
     becomes an independent Jobmon task with **no upstream dependencies**, so
     the locations build concurrently (up to ``max_concurrently_running``).
-    Every task shares ``native_specification`` for its compute resources and
-    runs in the environment at ``env_prefix``. Raises if the workflow does
-    not complete, naming how many location artifacts finished.
 
     Parameters
     ----------
@@ -79,7 +76,14 @@ def build_artifacts_in_parallel(
         raise ValueError("build_commands is empty; there are no location artifacts to build.")
 
     tool = client.make_tool()
-    template = client.make_single_command_template(tool, template_name="build_artifact")
+    template = client.make_task_template(
+        tool,
+        template_name="build_artifact",
+        command_template="PATH={env_prefix}/bin:$PATH {command}",
+        node_args=["command", "env_prefix"],
+        task_args=[],
+        op_args=[],
+    )
     compute_resources = native_specification.to_jobmon_spec(worker_logging_root)
     tasks = [
         client.create_task(

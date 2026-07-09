@@ -128,8 +128,13 @@ def get_single_command_task(
     output flows directly to the per-step log files that the Jobmon GUI
     surfaces.
     """
-    task_template = client.make_single_command_template(
-        tool, template_name="workflow_command_step"
+    task_template = client.make_task_template(
+        tool,
+        template_name="workflow_command_step",
+        command_template="PATH={env_prefix}/bin:$PATH {command}",
+        node_args=["command", "env_prefix"],
+        task_args=[],
+        op_args=[],
     )
     compute_resources = resources.to_native_specification(name).to_jobmon_spec(
         worker_logging_root=output_directory,

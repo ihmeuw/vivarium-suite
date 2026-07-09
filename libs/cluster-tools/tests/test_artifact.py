@@ -41,10 +41,11 @@ def test_builds_one_independent_task_per_location(client: mock.MagicMock) -> Non
     )
     assert {c.kwargs["env_prefix"] for c in client.create_task.call_args_list} == {"/env"}
 
-    # Tasks are built from the shared single-command template.
-    client.make_single_command_template.assert_called_once_with(
-        client.make_tool.return_value, template_name="build_artifact"
-    )
+    # Tasks run the env-prefixed single-command template.
+    template_kwargs = client.make_task_template.call_args.kwargs
+    assert template_kwargs["template_name"] == "build_artifact"
+    assert template_kwargs["command_template"] == "PATH={env_prefix}/bin:$PATH {command}"
+    assert template_kwargs["node_args"] == ["command", "env_prefix"]
 
     # Every task gets the compute resources the native spec produced for the log root.
     native_specification.to_jobmon_spec.assert_called_once_with(Path("/logs"))
