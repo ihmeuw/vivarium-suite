@@ -2,6 +2,10 @@
 
 - Allow the risk components ``CausalFactorEffect``/``RiskEffect`` (``tmred``, ``relative_risk_scalar``, ``demographic_dimensions``), ``NonLogLinearRiskEffect`` (``tmred``), and ``CausalFactor`` (``categories``) to source their data via configuration ``data_sources`` instead of requiring an artifact. The ``LBWSGDistribution`` and ``CategoricalCausalFactorObserver`` now read categories from the owning ``CausalFactor`` component rather than loading them independently
 
+**6.3.6 - 07/08/26**
+
+- Share a module-scoped InteractiveContext fixture across the population mortality tests to reduce runtime
+
 **6.3.5 - 07/08/26**
 
 - Deduplicate microdata, calibration, and fertility test setup with shared build helpers and parametrization
