@@ -22,6 +22,9 @@ def base_config_factory() -> Callable[[], ConfigTree]:
             {
                 "time": {"start": {"year": 1990}, "end": {"year": 2010}, "step_size": 30.5},
                 "randomness": {"key_columns": ["entrance_time", "age"]},
+                # Disabled for speed (skips the engine's per-build lookup-table
+                # completeness check). The shared mock-data helpers are validated
+                # once in tests/test_lookup_data_validation.py.
                 "interpolation": {"validate": False},
             },
             source=str(Path(__file__).resolve()),
