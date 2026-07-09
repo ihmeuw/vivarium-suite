@@ -712,13 +712,9 @@ def _loaded_artifact_keys(
     return [call.args[0] for call in load_spy.call_args_list if call.args]
 
 
-@pytest.mark.parametrize("source", ["config", "artifact"])
-def test_continuous_effect_tmred_and_scalar_data_source(
-    source, base_config, base_plugins, mocker
-):
-    """A continuous ``RiskEffect`` reads ``tmred`` and ``relative_risk_scalar``
-    from its config data sources when supplied, and from the artifact by
-    default.
+def test_continuous_effect_tmred_and_scalar_from_config(base_config, base_plugins, mocker):
+    """A continuous ``RiskEffect`` sources ``tmred`` and ``relative_risk_scalar``
+    from its config data sources without consulting the artifact.
     """
     risk = CustomExposureRisk("risk_factor.test_risk")
     effect = RiskEffect(risk.name, "cause.test_cause.incidence_rate")
@@ -727,33 +723,35 @@ def test_continuous_effect_tmred_and_scalar_data_source(
 
     # CustomExposureRisk initializes exactly len(custom_exposure_values) simulants.
     base_config.update({"population": {"population_size": len(custom_exposure_values)}})
+    base_config.update(
+        {
+            effect.name: {
+                "data_sources": {
+                    "relative_risk": 2.0,
+                    "tmred": pd.DataFrame(
+                        {"distribution": ["uniform"], "min": [1.0], "max": [1.0]}
+                    ),
+                    "relative_risk_scalar": 50.0,
+                }
+            }
+        }
+    )
     data = {
         f"{risk.name}.population_attributable_fraction": 0,
         "cause.test_cause.incidence_rate": 1,
     }
-    data_sources = {"relative_risk": 2.0}
-    if source == "config":
-        data_sources["tmred"] = pd.DataFrame(
-            {"distribution": ["uniform"], "min": [1.0], "max": [1.0]}
-        )
-        data_sources["relative_risk_scalar"] = 50.0
-    else:
-        data[tmred_key] = {"distribution": "uniform", "min": 1.0, "max": 1.0}
-        data[scalar_key] = 50.0
-    base_config.update({effect.name: {"data_sources": data_sources}})
 
     loaded_keys = _loaded_artifact_keys(base_config, base_plugins, risk, effect, data, mocker)
 
-    assert (tmred_key in loaded_keys) == (source == "artifact")
-    assert (scalar_key in loaded_keys) == (source == "artifact")
+    assert tmred_key not in loaded_keys
+    assert scalar_key not in loaded_keys
 
 
-@pytest.mark.parametrize("source", ["config", "artifact"])
-def test_dichotomous_effect_demographic_dimensions_data_source(
-    source, dichotomous_risk, base_config, base_plugins, mocker
+def test_dichotomous_effect_demographic_dimensions_from_config(
+    dichotomous_risk, base_config, base_plugins, mocker
 ):
-    """A dichotomous scalar-RR ``RiskEffect`` reads ``demographic_dimensions``
-    from its config data source when supplied, and from the artifact by default.
+    """A dichotomous scalar-RR ``RiskEffect`` sources ``demographic_dimensions``
+    from its config data source without consulting the artifact.
     """
     risk = dichotomous_risk[0]
     effect = RiskEffect(risk.name, "cause.test_cause.incidence_rate")
@@ -767,28 +765,32 @@ def test_dichotomous_effect_demographic_dimensions_data_source(
             }
         }
     )
+    base_config.update(
+        {
+            effect.name: {
+                "data_sources": {
+                    "relative_risk": 2.5,
+                    "demographic_dimensions": make_uniform_pop_data().drop(
+                        columns=["location", "value"]
+                    ),
+                }
+            }
+        }
+    )
     data = {
         f"{risk.name}.tmred": {"distribution": "uniform", "min": 1, "max": 1},
         f"{risk.name}.population_attributable_fraction": 0,
         "cause.test_cause.incidence_rate": 1,
     }
-    data_sources = {"relative_risk": 2.5}
-    grid = make_uniform_pop_data().drop(columns=["location", "value"])
-    if source == "config":
-        data_sources["demographic_dimensions"] = grid
-    else:
-        data[grid_key] = grid
-    base_config.update({effect.name: {"data_sources": data_sources}})
 
     loaded_keys = _loaded_artifact_keys(base_config, base_plugins, risk, effect, data, mocker)
 
-    assert (grid_key in loaded_keys) == (source == "artifact")
+    assert grid_key not in loaded_keys
 
 
-@pytest.mark.parametrize("source", ["config", "artifact"])
-def test_non_loglinear_effect_tmred_data_source(source, base_config, base_plugins, mocker):
-    """A ``NonLogLinearRiskEffect`` reads ``tmred`` from its config data source
-    when supplied, and from the artifact by default.
+def test_non_loglinear_effect_tmred_from_config(base_config, base_plugins, mocker):
+    """A ``NonLogLinearRiskEffect`` sources ``tmred`` from its config data source
+    without consulting the artifact.
     """
     risk = CustomExposureRisk("risk_factor.test_risk")
     effect = NonLogLinearRiskEffect(risk.name, "cause.test_cause.incidence_rate")
@@ -810,21 +812,18 @@ def test_non_loglinear_effect_tmred_data_source(source, base_config, base_plugin
         "cause.test_cause.incidence_rate": 1,
     }
     base_config.update({"population": {"population_size": 10}})
-    if source == "config":
-        base_config.update(
-            {
-                effect.name: {
-                    "data_sources": {
-                        "tmred": pd.DataFrame(
-                            {"distribution": ["uniform"], "min": [1.0], "max": [1.0]}
-                        )
-                    }
+    base_config.update(
+        {
+            effect.name: {
+                "data_sources": {
+                    "tmred": pd.DataFrame(
+                        {"distribution": ["uniform"], "min": [1.0], "max": [1.0]}
+                    )
                 }
             }
-        )
-    else:
-        data[tmred_key] = {"distribution": "uniform", "min": 1.0, "max": 1.0}
+        }
+    )
 
     loaded_keys = _loaded_artifact_keys(base_config, base_plugins, risk, effect, data, mocker)
 
-    assert (tmred_key in loaded_keys) == (source == "artifact")
+    assert tmred_key not in loaded_keys
