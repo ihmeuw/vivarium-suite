@@ -220,7 +220,10 @@ def test_prevalence_multiple_sequelae(
     test = simulation.get_population("test").squeeze()
     for i, expected_prevalence in enumerate(test_prevalence_level):
         fuzzy_checker.fuzzy_assert_proportion(
-            (test == f"sequela{i}").sum(), test.size, expected_prevalence
+            (test == f"sequela{i}").sum(),
+            test.size,
+            expected_prevalence,
+            name=f"sequela{i}_prevalence",
         )
 
 
@@ -393,7 +396,12 @@ def test_prevalence_birth_prevalence_initial_assignment(
         population_configuration={"age_start": 0, "age_end": 0, "sim_state": "time_step"},
     )
     test = simulation.get_population("test").squeeze()
-    fuzzy_checker.fuzzy_assert_proportion((test == "with_condition").sum(), test.size, 0.75)
+    fuzzy_checker.fuzzy_assert_proportion(
+        (test == "with_condition").sum(),
+        test.size,
+        0.75,
+        name="with_condition_newborn_birth_prevalence",
+    )
 
     # and prevalence should be used for ages not start = end = 0
     simulation.step()
@@ -402,7 +410,12 @@ def test_prevalence_birth_prevalence_initial_assignment(
         population_configuration={"age_start": 0, "age_end": 5, "sim_state": "time_step"},
     )
     test = simulation.get_population("test").squeeze()
-    fuzzy_checker.fuzzy_assert_proportion((test == "with_condition").sum(), test.size, 0.83)
+    fuzzy_checker.fuzzy_assert_proportion(
+        (test == "with_condition").sum(),
+        test.size,
+        0.83,
+        name="with_condition_age_0_to_5_prevalence",
+    )
 
 
 def test_no_birth_prevalence_initial_assignment(

@@ -187,6 +187,11 @@ def _check_exposure_and_rr(
             name=f"{risk.name}.exposure.{category}",
             name_additional=name_additional,
         )
+        # TODO: MIC-7279 - fuzzy_assert_proportion only warns (doesn't fail) when the sample
+        # is too small to be conclusive; fail loudly.
+        assert (
+            fuzzy_checker.proportion_test_diagnostics[-1].confidence == "Conclusive"
+        ), f"fuzzy check '{risk.name}.exposure.{category}' was inconclusive at this population size"
 
         actual_incidence_rates = incidence_rate[is_in_category]
         expected_incidence_rates = unexposed_incidence * relative_risk

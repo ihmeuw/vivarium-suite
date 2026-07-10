@@ -650,9 +650,13 @@ def _check_population(simulants, initial_age, step_size, include_sex, fuzzy_chec
 
 def _check_sexes(simulants, include_sex, fuzzy_checker):
     if include_sex == "Both":
-        # The one real proportion: sex is sampled, so expect ~50/50.
+        # No non-binary/NaN sex may leak in, then the sampled split should be ~50/50.
+        assert simulants.sex.isin(["Male", "Female"]).all()
         fuzzy_checker.fuzzy_assert_proportion(
-            len(simulants[simulants.sex == "Male"]), len(simulants), 0.5
+            len(simulants[simulants.sex == "Male"]),
+            len(simulants),
+            0.5,
+            name="both_sexes_male_proportion",
         )
     else:
         # Single-sex mode is a categorical filter: no simulant of the other sex may leak through.
@@ -660,8 +664,8 @@ def _check_sexes(simulants, include_sex, fuzzy_checker):
 
 
 def _check_locations(simulants):
-    # Single-location mock data: every simulant must be assigned that one location.
-    assert (simulants.location == simulants.location.iloc[0]).all()
+    # make_uniform_pop_data uses a single location (1); every simulant must be assigned it.
+    assert (simulants.location == 1).all()
 
 
 ######################
@@ -820,7 +824,12 @@ class TestScaledPopulationDataSources:
         assert len(pop) == 25_000
         assert (pop["location"] == "ScaledLand").all()
         # Verify scaling: males should be ~75% of population
-        fuzzy_checker.fuzzy_assert_proportion((pop["sex"] == "Male").sum(), len(pop), 0.75)
+        fuzzy_checker.fuzzy_assert_proportion(
+            (pop["sex"] == "Male").sum(),
+            len(pop),
+            0.75,
+            name="scaled_population_male_proportion",
+        )
 
 
 # Module-level function used by the '::' string test
