@@ -195,7 +195,7 @@ def test_prevalence_single_state_with_migration(
     [[0.15, 0.05, 0.35], [0, 0.15, 0.5], [0.2, 0.3, 0.5], [0, 0, 1], [0, 0, 0]],
 )
 def test_prevalence_multiple_sequelae(
-    base_config, base_plugins, disease, test_prevalence_level
+    fuzzy_checker, base_config, base_plugins, disease, test_prevalence_level
 ):
     healthy = BaseDiseaseState("healthy")
     sequela = {
@@ -217,18 +217,11 @@ def test_prevalence_multiple_sequelae(
         configuration=base_config,
         plugin_configuration=base_plugins,
     )
-    error_message = (
-        "initial sequela status of simulants should be matched to the prevalence data."
-    )
-    assert np.allclose(
-        [
-            get_test_prevalence(simulation, "sequela0"),
-            get_test_prevalence(simulation, "sequela1"),
-            get_test_prevalence(simulation, "sequela2"),
-        ],
-        test_prevalence_level,
-        0.02,
-    ), error_message
+    test = simulation.get_population("test").squeeze()
+    for i, expected_prevalence in enumerate(test_prevalence_level):
+        fuzzy_checker.fuzzy_assert_proportion(
+            (test == f"sequela{i}").sum(), test.size, expected_prevalence
+        )
 
 
 def test_mortality_rate(base_config, base_plugins, disease):
@@ -363,7 +356,9 @@ def test__assign_event_time_for_prevalent_cases():
     assert (expected == actual).all()
 
 
-def test_prevalence_birth_prevalence_initial_assignment(base_config, base_plugins, disease):
+def test_prevalence_birth_prevalence_initial_assignment(
+    fuzzy_checker, base_config, base_plugins, disease
+):
     healthy = SusceptibleState("healthy")
     with_condition = DiseaseState(
         "with_condition", prevalence=1, birth_prevalence=0.5, disability_weight=0
@@ -387,8 +382,9 @@ def test_prevalence_birth_prevalence_initial_assignment(base_config, base_plugin
         plugin_configuration=base_plugins,
     )
 
-    # prevalence should be used for assigning initial status at sim start
-    assert np.isclose(get_test_prevalence(simulation, "with_condition"), 1)
+    # prevalence should be used for assigning initial status at sim start.
+    # prevalence=1 assigns deterministically, so this is an exact check, not a proportion.
+    assert get_test_prevalence(simulation, "with_condition") == 1
 
     # birth prevalence should be used for assigning initial status to newly-borns on time steps
     simulation.step()
@@ -396,7 +392,8 @@ def test_prevalence_birth_prevalence_initial_assignment(base_config, base_plugin
         pop_size,
         population_configuration={"age_start": 0, "age_end": 0, "sim_state": "time_step"},
     )
-    assert np.isclose(get_test_prevalence(simulation, "with_condition"), 0.75, 0.01)
+    test = simulation.get_population("test").squeeze()
+    fuzzy_checker.fuzzy_assert_proportion((test == "with_condition").sum(), test.size, 0.75)
 
     # and prevalence should be used for ages not start = end = 0
     simulation.step()
@@ -404,7 +401,8 @@ def test_prevalence_birth_prevalence_initial_assignment(base_config, base_plugin
         pop_size,
         population_configuration={"age_start": 0, "age_end": 5, "sim_state": "time_step"},
     )
-    assert np.isclose(get_test_prevalence(simulation, "with_condition"), 0.83, 0.01)
+    test = simulation.get_population("test").squeeze()
+    fuzzy_checker.fuzzy_assert_proportion((test == "with_condition").sum(), test.size, 0.83)
 
 
 def test_no_birth_prevalence_initial_assignment(

@@ -252,7 +252,9 @@ def test_generate_population_initial_age(
     age_bounds_mock.assert_not_called()
 
 
-def test__assign_demography_with_initial_age(config, base_simulants, include_sex):
+def test__assign_demography_with_initial_age(
+    config, base_simulants, include_sex, fuzzy_checker
+):
     pop_data = dt.assign_demographic_proportions(
         make_uniform_pop_data(age_bin_midpoint=True),
         include_sex=include_sex,
@@ -265,10 +267,12 @@ def test__assign_demography_with_initial_age(config, base_simulants, include_sex
     base_simulants = bp._assign_demography_with_initial_age(
         base_simulants, pop_data, initial_age, step_size, r, lambda *args, **kwargs: None
     )
-    _check_population(base_simulants, initial_age, step_size, include_sex)
+    _check_population(base_simulants, initial_age, step_size, include_sex, fuzzy_checker)
 
 
-def test__assign_demography_with_initial_age_zero(base_simulants, config, include_sex):
+def test__assign_demography_with_initial_age_zero(
+    base_simulants, config, include_sex, fuzzy_checker
+):
     pop_data = dt.assign_demographic_proportions(
         make_uniform_pop_data(age_bin_midpoint=True),
         include_sex=include_sex,
@@ -281,7 +285,7 @@ def test__assign_demography_with_initial_age_zero(base_simulants, config, includ
     base_simulants = bp._assign_demography_with_initial_age(
         base_simulants, pop_data, initial_age, step_size, r, lambda *args, **kwargs: None
     )
-    _check_population(base_simulants, initial_age, step_size, include_sex)
+    _check_population(base_simulants, initial_age, step_size, include_sex, fuzzy_checker)
 
 
 def test__assign_demography_with_initial_age_error(base_simulants, include_sex):
@@ -301,7 +305,9 @@ def test__assign_demography_with_initial_age_error(base_simulants, include_sex):
 
 
 @pytest.mark.parametrize(["age_start", "age_end"], [[0, 180], [5, 50], [12, 57]])
-def test__assign_demography_with_age_bounds(base_simulants, include_sex, age_start, age_end):
+def test__assign_demography_with_age_bounds(
+    base_simulants, include_sex, age_start, age_end, fuzzy_checker
+):
     pop_data = dt.assign_demographic_proportions(
         make_uniform_pop_data(age_bin_midpoint=True),
         include_sex=include_sex,
@@ -321,7 +327,7 @@ def test__assign_demography_with_age_bounds(base_simulants, include_sex, age_sta
         base_simulants, pop_data, age_start, age_end, r, lambda *args, **kwargs: None
     )
 
-    _check_sexes(base_simulants, include_sex)
+    _check_sexes(base_simulants, include_sex, fuzzy_checker)
     _check_locations(base_simulants)
 
     ages = np.sort(base_simulants.age.values)
@@ -634,35 +640,28 @@ def test__find_bin_start_index():
         bp._find_bin_start_index(9, sorted_values)
 
 
-def _check_population(simulants, initial_age, step_size, include_sex):
+def _check_population(simulants, initial_age, step_size, include_sex, fuzzy_checker):
     assert len(simulants) == len(simulants.age.unique())
     assert simulants.age.min() > initial_age
     assert simulants.age.max() < initial_age + utilities.to_years(step_size)
-    _check_sexes(simulants, include_sex)
+    _check_sexes(simulants, include_sex, fuzzy_checker)
     _check_locations(simulants)
 
 
-def _check_sexes(simulants, include_sex):
-    male_prob, female_prob = {
-        "Male": (1.0, 0.0),
-        "Female": (0.0, 1.0),
-        "Both": (0.5, 0.5),
-    }[include_sex]
-    for sex, prob in [("Male", male_prob), ("Female", female_prob)]:
-        assert math.isclose(
-            len(simulants[simulants.sex == sex]) / len(simulants),
-            prob,
-            abs_tol=0.01,
+def _check_sexes(simulants, include_sex, fuzzy_checker):
+    if include_sex == "Both":
+        # The one real proportion: sex is sampled, so expect ~50/50.
+        fuzzy_checker.fuzzy_assert_proportion(
+            len(simulants[simulants.sex == "Male"]), len(simulants), 0.5
         )
+    else:
+        # Single-sex mode is a categorical filter: no simulant of the other sex may leak through.
+        assert (simulants.sex == include_sex).all()
 
 
 def _check_locations(simulants):
-    for location in simulants.location.unique():
-        assert math.isclose(
-            len(simulants[simulants.location == location]) / len(simulants),
-            1 / len(simulants.location.unique()),
-            abs_tol=0.01,
-        )
+    # Single-location mock data: every simulant must be assigned that one location.
+    assert (simulants.location == simulants.location.iloc[0]).all()
 
 
 ######################
@@ -793,7 +792,7 @@ class TestScaledPopulationDataSources:
     """Tests for ScaledPopulation with configured data sources."""
 
     def test_scaled_population_with_dataframe_sources(
-        self, data_sources_config, base_plugins
+        self, data_sources_config, base_plugins, fuzzy_checker: FuzzyChecker
     ):
         """ScaledPopulation works with DataFrame data sources."""
         pop_data = make_uniform_pop_data()
@@ -821,8 +820,7 @@ class TestScaledPopulationDataSources:
         assert len(pop) == 25_000
         assert (pop["location"] == "ScaledLand").all()
         # Verify scaling: males should be ~75% of population
-        male_fraction = (pop["sex"] == "Male").sum() / len(pop)
-        assert np.isclose(male_fraction, 0.75, atol=0.01)
+        fuzzy_checker.fuzzy_assert_proportion((pop["sex"] == "Male").sum(), len(pop), 0.75)
 
 
 # Module-level function used by the '::' string test
