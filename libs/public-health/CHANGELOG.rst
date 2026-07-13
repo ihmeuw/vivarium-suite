@@ -1,4 +1,4 @@
-**6.3.7 - 07/10/26**
+**6.3.7 - 07/13/26**
 
 - Skip per-build lookup-table interpolation validation
 
