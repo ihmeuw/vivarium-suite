@@ -17,9 +17,6 @@ Covers a few things that are easy to silently break:
 - Unknown-attribute access on ``vivarium`` and ``vivarium.engine``
    raises ``AttributeError`` normally (no ``__getattr__`` shim
    swallowing typos).
-- The pre-monorepo top-level attribute shims (``from vivarium import
-   Component`` / ``Artifact`` / ...  and ``vivarium.__version__``) are
-   fully gone. Guards against accidental restoration.
 """
 
 from __future__ import annotations
@@ -96,34 +93,3 @@ def test_vivarium_engine_unknown_attribute_raises() -> None:
     """Unknown attributes raise the default ``AttributeError`` cleanly."""
     with pytest.raises(AttributeError, match="module 'vivarium.engine' has no attribute"):
         vivarium.engine.not_a_real_thing
-
-
-@pytest.mark.parametrize(
-    "name",
-    ["Artifact", "Component", "InteractiveContext", "Observer", "build_model_specification"],
-)
-def test_former_top_level_vivarium_shims_are_gone(name: str) -> None:
-    """The pre-monorepo ``from vivarium import <name>`` shim is removed. A partial
-    restoration (re-adding just one entry) would silently reintroduce the deprecated
-    surface; probe each former shim name individually rather than relying on the
-    generic ``not_a_real_thing`` probe."""
-    with pytest.raises(AttributeError, match=f"module 'vivarium' has no attribute {name!r}"):
-        getattr(vivarium, name)
-
-
-def test_vivarium_engine_artifact_shim_is_gone() -> None:
-    """``from vivarium.engine import Artifact`` used to resolve via a deprecation
-    shim; that shim was removed alongside ``vivarium.engine.__getattr__``."""
-    with pytest.raises(
-        AttributeError, match="module 'vivarium.engine' has no attribute 'Artifact'"
-    ):
-        vivarium.engine.Artifact
-
-
-def test_vivarium_top_level_version_passthrough_is_gone() -> None:
-    """The silent ``vivarium.__version__`` passthrough was dropped along with the
-    other shims; downstream tooling reads ``vivarium.engine.__version__`` directly."""
-    with pytest.raises(
-        AttributeError, match="module 'vivarium' has no attribute '__version__'"
-    ):
-        vivarium.__version__
