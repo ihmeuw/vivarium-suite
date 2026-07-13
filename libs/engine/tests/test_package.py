@@ -86,10 +86,10 @@ def test_vivarium_unknown_attribute_raises() -> None:
     """Anything not exposed as a real submodule of the ``vivarium`` namespace
     should raise ``AttributeError``."""
     with pytest.raises(AttributeError, match="module 'vivarium' has no attribute"):
-        vivarium.not_a_real_thing
+        vivarium.not_a_real_thing  # type: ignore [attr-defined]
 
 
 def test_vivarium_engine_unknown_attribute_raises() -> None:
     """Unknown attributes raise the default ``AttributeError`` cleanly."""
     with pytest.raises(AttributeError, match="module 'vivarium.engine' has no attribute"):
-        vivarium.engine.not_a_real_thing
+        vivarium.engine.not_a_real_thing  # type: ignore [attr-defined]
