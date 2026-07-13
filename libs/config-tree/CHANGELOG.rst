@@ -1,3 +1,7 @@
+**6.0.0 - 07/14/26**
+
+- Remove support for old class name ``LayeredConfigTree``
+
 **5.0.9 - 07/06/26**
 
 - Add PyPI classifiers
