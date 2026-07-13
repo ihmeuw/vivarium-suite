@@ -1,3 +1,7 @@
+**6.0.0 - 07/13/26**
+
+- Remove support for ``PopulationView.get()``'s ``skip_post_processor`` argument.
+
 **5.3.2 - 07/02/26**
 
 - Fix order-dependent ``SimulationContext`` name cache in tests under pytest-xdist

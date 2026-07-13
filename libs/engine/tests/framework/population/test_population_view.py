@@ -149,20 +149,6 @@ def test_get_empty_idx(pies_and_cubes_pop_mgr: PopulationManager) -> None:
     assert pop.empty
 
 
-def test_get_skip_post_processor_deprecation(
-    pies_and_cubes_pop_mgr: PopulationManager,
-) -> None:
-    """Ensure skip_post_processor is removed by 2026-07-12."""
-    assert datetime.date.today() <= datetime.date(2026, 7, 12), (
-        "The deprecated 'skip_post_processor' parameter should have been removed by now. "
-        "Remove the parameter from PopulationView.get and delete this test."
-    )
-    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    full_idx = pd.RangeIndex(0, len(PIE_RECORDS))
-    with pytest.warns(DeprecationWarning, match="skip_post_processor"):
-        pv.get(full_idx, "pie", skip_post_processor=True)
-
-
 def test_get_raises(pies_and_cubes_pop_mgr: PopulationManager) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
     index = pd.Index([])
@@ -175,20 +161,7 @@ def test_get_raises(pies_and_cubes_pop_mgr: PopulationManager) -> None:
 
 
 @pytest.mark.parametrize("attribute", ["pie", ["pie"]])
-def test_get_skip_post_processor(
-    attribute: str | list[str], pies_and_cubes_pop_mgr: PopulationManager
-) -> None:
-    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    full_idx = pd.RangeIndex(0, len(PIE_RECORDS))
-
-    key = attribute if isinstance(attribute, str) else attribute[0]
-    mocked_pie_pipeline = pies_and_cubes_pop_mgr._attribute_pipelines[key]
-    pv.get(full_idx, attribute, skip_post_processor=True)
-    mocked_pie_pipeline.assert_called_once_with(full_idx, mode="no-post-processors")  # type: ignore[attr-defined]
-
-
-@pytest.mark.parametrize("attribute", ["pie", ["pie"]])
-def test_get_mode_skip_post_processor(
+def test_get_mode_no_post_processors(
     attribute: str | list[str], pies_and_cubes_pop_mgr: PopulationManager
 ) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
@@ -200,20 +173,7 @@ def test_get_mode_skip_post_processor(
     mocked_pie_pipeline.assert_called_once_with(full_idx, mode="no-post-processors")  # type: ignore[attr-defined]
 
 
-def test_get_skip_post_processor_raises(
-    pies_and_cubes_pop_mgr: PopulationManager,
-) -> None:
-    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    full_idx = pd.RangeIndex(0, len(PIE_RECORDS))
-
-    with pytest.raises(
-        ValueError,
-        match="a single attribute must be requested",
-    ):
-        pv.get(full_idx, ["pie", "pi"], skip_post_processor=True)
-
-
-def test_get_mode_skip_post_processor_raises(
+def test_get_mode_no_post_processors_raises(
     pies_and_cubes_pop_mgr: PopulationManager,
 ) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
@@ -226,28 +186,15 @@ def test_get_mode_skip_post_processor_raises(
         pv.get(full_idx, ["pie", "pi"], mode="no-post-processors")
 
 
-def test_get_skip_post_processor_with_mode_source_raises(
-    pies_and_cubes_pop_mgr: PopulationManager,
-) -> None:
-    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    full_idx = pd.RangeIndex(0, len(PIE_RECORDS))
-
-    with pytest.raises(
-        ValueError,
-        match="Cannot use skip_post_processor=True with mode='source'",
-    ):
-        pv.get(full_idx, "pie", skip_post_processor=True, mode="source")
-
-
 @pytest.mark.parametrize(
     "attribute, query", [("pie", "pie == 'apple'"), ("pie", "cube > 1000")]
 )
-def test_get_skip_post_processor_with_query(
+def test_get_mode_no_post_processors_with_query(
     attribute: str,
     query: str,
     pies_and_cubes_pop_mgr: PopulationManager,
 ) -> None:
-    """Test that the index is reduced when a query is passed with skip_post_processor=True."""
+    """Test that the index is reduced when a query is passed with mode='no-post-processors'."""
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
     full_idx = pd.RangeIndex(0, len(PIE_RECORDS))
 
@@ -266,9 +213,9 @@ def test_get_skip_post_processor_with_query(
     pies_and_cubes_pop_mgr._attribute_pipelines["pie"].side_effect = mock_pie_pipeline  # type: ignore[attr-defined]
     pies_and_cubes_pop_mgr._attribute_pipelines["cube"].side_effect = mock_cube_pipeline  # type: ignore[attr-defined]
 
-    # Execute get with a query and skip_post_processor=True
+    # Execute get with a query and mode="no-post-processors"
     # Query should filter the data
-    result = pv.get(full_idx, attribute, query=query, skip_post_processor=True)
+    result = pv.get(full_idx, attribute, query=query, mode="no-post-processors")
 
     # The expected index should be the filtered index based on the query
     expected_index = pd.concat([PIE_DF, CUBE_DF], axis=1).query(query).index
@@ -284,10 +231,10 @@ def test_get_skip_post_processor_with_query(
     assert call_args[1] == {"mode": "no-post-processors"}
 
 
-def test_get_skip_post_processor_returns_queried_attribute(
+def test_get_mode_no_post_processors_returns_queried_attribute(
     pies_and_cubes_pop_mgr: PopulationManager,
 ) -> None:
-    """Test that skip_post_processor returns the attribute even when it's also used in the query."""
+    """Test that mode=no_post_processors returns the attribute even when it's also used in the query."""
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
     full_idx = pd.RangeIndex(0, len(PIE_RECORDS))
 
@@ -299,15 +246,15 @@ def test_get_skip_post_processor_returns_queried_attribute(
     pies_and_cubes_pop_mgr._attribute_pipelines["pie"].side_effect = mock_pie_pipeline  # type: ignore[attr-defined]
 
     # No query - full attribute
-    result = pv.get(full_idx, "pie", skip_post_processor=True)
+    result = pv.get(full_idx, "pie", mode="no-post-processors")
     pd.testing.assert_series_equal(result, PIE_DF["pie"])
 
     # Request "pie" while querying "cube"
-    result = pv.get(full_idx, "pie", query="pi > 1000", skip_post_processor=True)
+    result = pv.get(full_idx, "pie", query="pi > 1000", mode="no-post-processors")
     pd.testing.assert_series_equal(result, PIE_DF.loc[PIE_DF["pi"] > 1000, "pie"])
 
     # Request "pie" while also querying on "pie" -- the attribute should still be returned
-    result = pv.get(full_idx, "pie", query="pie == 'apple'", skip_post_processor=True)
+    result = pv.get(full_idx, "pie", query="pie == 'apple'", mode="no-post-processors")
     pd.testing.assert_series_equal(result, PIE_DF.loc[PIE_DF["pie"] == "apple", "pie"])
 
 

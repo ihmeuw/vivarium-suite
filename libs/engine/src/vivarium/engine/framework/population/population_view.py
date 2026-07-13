@@ -94,7 +94,6 @@ class PopulationView:
         attributes: str,
         query: str = "",
         include_untracked: bool | None = None,
-        skip_post_processor: Literal[False] = False,
         mode: Literal["default"] = "default",
     ) -> pd.Series[Any]:
         ...
@@ -106,7 +105,6 @@ class PopulationView:
         attributes: list[str] | tuple[str, ...],
         query: str = "",
         include_untracked: bool | None = None,
-        skip_post_processor: Literal[False] = False,
         mode: Literal["default"] = "default",
     ) -> pd.DataFrame:
         ...
@@ -118,30 +116,16 @@ class PopulationView:
         attributes: str | list[str] | tuple[str, ...],
         query: str = "",
         include_untracked: bool | None = None,
-        skip_post_processor: Literal[True] = ...,
         mode: Literal["default", "source", "no-post-processors"] = "default",
     ) -> Any:
         ...
 
-    @overload
     def get(
         self,
         index: pd.Index[int],
         attributes: str | list[str] | tuple[str, ...],
         query: str = "",
         include_untracked: bool | None = None,
-        skip_post_processor: Literal[False] = False,
-        mode: Literal["source", "no-post-processors"] = ...,
-    ) -> Any:
-        ...
-
-    def get(
-        self,
-        index: pd.Index[int],
-        attributes: str | list[str] | tuple[str, ...],
-        query: str = "",
-        include_untracked: bool | None = None,
-        skip_post_processor: Literal[True, False] = False,
         mode: Literal["default", "source", "no-post-processors"] = "default",
     ) -> Any:
         """Gets a specific subset of the population state table.
@@ -165,24 +149,18 @@ class PopulationView:
             simulants are excluded unless this pipeline was called during population
             creation or inside another pipeline call. Untracked simulants are always
             included if True and always excluded if False.
-        skip_post_processor
-            Whether we should invoke the post-processor on the combined
-            source and mutator output or return without post-processing.
-            This is useful when the post-processor acts as some sort of final
-            unit conversion (e.g. the rescale post processor).
         mode
             The mode for pipeline evaluation. One of "default", "source",
             or "no-post-processors".
 
         Notes
         -----
-        If ``skip_post_processor`` is True, the returned data will not be squeezed.
+        If ``mode`` is not "default", the returned data will not be squeezed.
 
         Returns
         -------
             The attribute(s) requested subset to the ``index`` and filtered using
-            the various optional queries. If ``skip_post_processor`` is False, will
-            return a Series if a single attribute is requested or a Dataframe otherwise.
+            the various optional queries.
 
         Raises
         ------
@@ -193,18 +171,6 @@ class PopulationView:
         valid_modes = ("default", "source", "no-post-processors")
         if mode not in valid_modes:
             raise ValueError(f"Invalid mode '{mode}'. Must be one of {valid_modes}.")
-
-        if skip_post_processor:
-            warnings.warn(
-                "The 'skip_post_processor' parameter is deprecated. "
-                "Use mode='no-post-processors' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if mode == "source":
-                raise ValueError("Cannot use skip_post_processor=True with mode='source'.")
-
-            mode = "no-post-processors"
 
         squeeze: Literal[True, False] = isinstance(attributes, str)
         attributes = [attributes] if isinstance(attributes, str) else list(attributes)
