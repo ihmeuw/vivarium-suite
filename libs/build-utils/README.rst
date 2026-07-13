@@ -107,3 +107,20 @@ Fetching from internal Artifactory
 (``make install IHME_PYPI=``) in environments that can't reach IHME's network
 (e.g. GitHub Actions runners). ``make deploy-package-artifactory`` requires a
 non-empty ``IHME_PYPI`` and is Jenkins/internal-only.
+
+Cross-library PRs
+-----------------
+
+A single PR can modify several interdependent monorepo libraries, including
+bumping one and consuming the new version of another even though the upstream's
+dependency on it still resolves against PyPI (where the new version
+isn't released yet). ``make install CHANGED_LIBS="<lib1> <lib2> ..."`` opts a build
+into in-tree resolution where any ``CHANGED_LIBS`` (libraries whose source changed
+in the PR) that are also (1) reachable from the package being built and (2) whose
+pending ``CHANGELOG.rst`` version satisfies the dependents' pins are installed
+editably from local source (at the pending version) with a single ``uv`` invocation.
+Unchanged dependencies still resolve from PyPI. 
+
+``CHANGED_LIBS`` is a no-op when empty, so single-package installs are unaffected.
+
+The GitHub Actions CI and release workflows wire this automatically.

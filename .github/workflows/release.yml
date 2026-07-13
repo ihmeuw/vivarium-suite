@@ -24,20 +24,22 @@ jobs:
     name: Detect Packages to Release
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.detect.outputs.matrix }}
-      has-releases: ${{ steps.detect.outputs.has-releases }}
+      matrix: ${{ steps.order.outputs.matrix }}
+      has-releases: ${{ steps.order.outputs.has-releases }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Detect packages to release
-        id: detect
+      - name: Collect packages to release
+        # Writes "<lib> <version>" lines to package_versions.txt
         env:
           PACKAGE: ${{ github.event.inputs.package }}
           VERSION: ${{ github.event.inputs.version }}
         run: |
+          rm -f package_versions.txt
+          touch package_versions.txt
           if [ "${{ github.event_name }}" = "release" ]; then
             # Tag was created by the GitHub UI release. Parse it to find the lib and version.
             # Tag format: "vivarium-<lib>-v<X.Y.Z>" where <lib> matches the libs/<lib>/ dir.
@@ -54,8 +56,7 @@ jobs:
               exit 1
             fi
 
-            echo "matrix={\"include\":[{\"library\":\"${LIBRARY}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
-            echo "has-releases=true" >> $GITHUB_OUTPUT
+            echo "${LIBRARY} ${VERSION}" >> package_versions.txt
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # Manual release.yml dispatch. Validate inputs and use them directly.
             if [ ! -d "libs/${PACKAGE}" ]; then
@@ -69,8 +70,7 @@ jobs:
               exit 1
             fi
 
-            echo "matrix={\"include\":[{\"library\":\"${PACKAGE}\",\"version\":\"${VERSION}\"}]}" >> $GITHUB_OUTPUT
-            echo "has-releases=true" >> $GITHUB_OUTPUT
+            echo "${PACKAGE} ${VERSION}" >> package_versions.txt
           else
             # Push to main. Detect all changed CHANGELOG.rst files and parse versions.
             BEFORE="${{ github.event.before }}"
@@ -81,8 +81,6 @@ jobs:
 
             CHANGED_CHANGELOGS=$(git diff --name-only "$BEFORE" "$AFTER" | grep '^libs/.*/CHANGELOG\.rst$' || true)
 
-            MATRIX_INCLUDE="["
-            FIRST=true
             while IFS= read -r changelog; do
               [ -z "$changelog" ] && continue
               LIB=$(echo "$changelog" | sed 's|libs/||; s|/CHANGELOG.rst||')
@@ -99,18 +97,31 @@ jobs:
                 continue
               fi
 
-              [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
-              MATRIX_INCLUDE+="{\"library\":\"${LIB}\",\"version\":\"${VERSION}\"}"
+              echo "${LIB} ${VERSION}" >> package_versions.txt
             done <<< "$CHANGED_CHANGELOGS"
-            MATRIX_INCLUDE+="]"
+          fi
+          echo "Collected package versions:"; cat package_versions.txt
 
-            if [ "$MATRIX_INCLUDE" = "[]" ]; then
-              echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-              echo "has-releases=false" >> $GITHUB_OUTPUT
-            else
-              echo "matrix={\"include\":${MATRIX_INCLUDE}}" >> $GITHUB_OUTPUT
-              echo "has-releases=true" >> $GITHUB_OUTPUT
-            fi
+      - name: Install vivarium_build_utils
+        # Editable from the in-tree checkout so the release ordering is computed
+        # by THIS push's dependency graph/resolver (vbu may itself be in the batch)
+        run: |
+          python -m pip install uv
+          uv pip install --system -e libs/build-utils
+
+      - name: Order releases dependencies-first
+        id: order
+        # vivarium.build_utils.dependency_graph builds the matrix ordered
+        # dependencies-first; each entry carries the in-batch upstreams it must
+        # wait for on PyPI. Fails loudly on a cycle or a missing version.
+        run: |
+          matrix=$(python -m vivarium.build_utils.dependency_graph build-release-matrix --versions package_versions.txt)
+          echo "Ordered release matrix: ${matrix}"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          if [ "$(echo "$matrix" | jq '.include | length')" -eq 0 ]; then
+            echo "has-releases=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-releases=true" >> "$GITHUB_OUTPUT"
           fi
 
   release:
@@ -122,6 +133,10 @@ jobs:
       contents: write
       id-token: write
     strategy:
+      # Jobs run concurrently; the matrix is ordered dependencies-first and each
+      # job waits for its in-batch upstreams on PyPI before installing. Independent
+      # packages release in parallel
+      # fail-fast=false so one package's failure does not cancel unrelated releases
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
     steps:
@@ -151,15 +166,11 @@ jobs:
           fi
 
       - name: Install vivarium_build_utils
-        # Install early so `make validate-tag` is available
-        # For build-utils, install from local checkout since the latest PyPI
-        # release is by definition stale relative to this PR
+        # Editable from the in-tree checkout so the release ordering is computed
+        # by THIS push's dependency graph/resolver (vbu may itself be in the batch)
         run: |
-          if [ "${{ matrix.library }}" = "build-utils" ]; then
-            uv pip install --system --no-cache -e libs/build-utils
-          else
-            uv pip install --system --no-cache vivarium-build-utils
-          fi
+          python -m pip install uv
+          uv pip install --system -e libs/build-utils
 
       - name: Validate tag
         # Runs before the tag is created so a bad version never reaches origin.
@@ -185,10 +196,43 @@ jobs:
           # detect job parsed, rather than re-deriving it from CHANGELOG.rst.
           cd libs/${{ matrix.library }} && make tag-version PACKAGE_VERSION=${{ matrix.version }}
 
+      - name: Wait for upstream releases
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys, time
+  
+          TIMEOUT_SECONDS = 300  # per upstream; PyPI propagation can lag a publish by a minute+
+          POLL_SECONDS = 15
+  
+          wait_for = json.loads(r'''${{ toJson(matrix.wait_for) }}''')
+          if not wait_for:
+              print("No in-batch upstreams to wait for.")
+              sys.exit(0)
+  
+          for upstream in wait_for:
+              spec = f"{upstream['dist']}=={upstream['version']}"
+              print(f"Waiting for {spec} on PyPI...")
+              deadline = time.time() + TIMEOUT_SECONDS
+              while True:
+                  installable = subprocess.run(
+                      ["uv", "pip", "install", "--system", "--dry-run",
+                       "--no-deps", "--no-cache", spec],
+                      capture_output=True,
+                  ).returncode == 0
+                  if installable:
+                      print(f"  {spec} is installable.")
+                      break
+                  if time.time() >= deadline:
+                      print(f"::error::timed out ({TIMEOUT_SECONDS}s) waiting for {spec} on PyPI")
+                      sys.exit(1)
+                  time.sleep(POLL_SECONDS)
+          PY
+
       - name: Install ${{ matrix.library }}
-        # IHME_PYPI= disables the artifactory extra-index since the runner can't
-        # reach it (firewalled). Libs that need artifactory-only packages
-        # are tested/released via Jenkins.
+        # IHME_PYPI= (a blank) disables the GitHub Enterprise extra-index since the
+        # runner can't reach it (firewalled); libs that need packages hosted there
+        # are tested/released via Jenkins. Upstreams are guaranteed installable
+        # by the wait gate above, so this resolves them from PyPI normally.
         # Only use pip cache on push/PR, not on release
         run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github UV_FLAGS='--system --no-cache' IHME_PYPI=
 
@@ -202,6 +246,9 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: libs/${{ matrix.library }}/dist/
+          # Skip (don't fail) if the version is already on PyPI - e.g. a manual
+          # re-run of an already-published entry in a concurrent batch.
+          skip-existing: true
 
       - name: Create GitHub Release
         env:
