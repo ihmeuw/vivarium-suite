@@ -1,9 +1,17 @@
-**4.3.0 - 07/02/26**
+**4.4.0 - 07/13/26**
 
 - Add ``vivarium.build_utils.dependency_graph`` package for cross-library handling
 - Add ``make install CHANGED_LIBS="<lib> ..."`` to install modified, reachable,
   version-compatible upstream libraries editably at their pending versions
 - Add runtime dependencies ``packaging`` and ``tomli`` (the latter only on Python < 3.11)
+
+**4.3.0 - 07/08/26**
+
+- Add shared ``update-readme`` tool to sync README supported-Python versions from python_versions.json
+
+**4.2.5 - 07/06/26**
+
+- Add PyPI classifiers
 
 **4.2.4 - 07/01/26**
 

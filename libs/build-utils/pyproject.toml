@@ -10,6 +10,22 @@ requires-python = ">=3.10"
 license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX",
+    "Operating System :: POSIX :: BSD",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Build Tools",
+]
 dependencies = [
     "packaging",
     "tomli; python_version < '3.11'",
@@ -24,6 +40,9 @@ lint = ["vivarium-dependencies[lint]"]
 dev = ["vivarium-build-utils[docs,interactive,test,lint]"]
 ci_github = ["vivarium-build-utils[test,docs,lint]"]
 ci_jenkins = ["vivarium-build-utils[ci_github,cluster]"]
+
+[project.scripts]
+update-readme = "vivarium.build_utils.readme:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

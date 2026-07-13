@@ -10,14 +10,24 @@ requires-python = ">=3.10"
 license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX",
+    "Operating System :: POSIX :: BSD",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
-    # vivarium-compat is a transitional dep: it installs the import hook that
-    # redirects `import vivarium_profiling` to `vivarium.profiling`. Declaring
-    # it here means anyone pulling in vivarium-profiling ends up with the redirect
-    # in place. When compat is eventually retired (see
-    # libs/compat/tests/test_removal_deadline.py) we drop this entry in a major
-    # version bump.
-    "vivarium-compat>=0.3.1",
     "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-gbd-mapping>=6.0.0",
