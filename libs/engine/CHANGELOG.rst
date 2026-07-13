@@ -2,11 +2,19 @@
 
 **Breaking changes.** Remove the pre-monorepo attribute-import shims that have lived
 on the ``vivarium`` namespace since the monorepo migration. Callers must now reach
-for the canonical module directly.
+for the canonical module directly:
+
+- ``from vivarium import Component`` / ``InteractiveContext`` / ``Observer`` /
+  ``build_model_specification`` -> ``from vivarium.engine import ...``.
+- ``from vivarium import Artifact`` and ``from vivarium.engine import Artifact``
+  -> ``from vivarium.artifact import Artifact``.
+- ``vivarium.__version__`` -> ``vivarium.engine.__version__``.
+
+Mechanics of the removal:
 
 - Delete the module-level ``__getattr__`` in ``vivarium/__init__.py``.
 - Delete the module-level ``__getattr__`` in ``vivarium/engine/__init__.py``.
-- Drop the silent ``vivarium.__version__`` passthrough that had piggy- backed on
+- Drop the silent ``vivarium.__version__`` passthrough that had piggy-backed on
   the same ``__getattr__``.
 - Delete the ``_DEPRECATED_REDIRECTS`` table and its accompanying tests in ``libs/engine/tests/test_package.py``.
 

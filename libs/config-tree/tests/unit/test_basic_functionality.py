@@ -753,3 +753,16 @@ def test_repr_display() -> None:
     tree.update({"Key1": "value_ov_1"}, layer="override_1", source="ov1_src")
     tree.update({"Key1": "value_ov_2"}, layer="override_2", source="ov2_src")
     assert repr(tree) == textwrap.dedent(expected_repr)
+
+
+def test_layered_config_tree_alias_removed() -> None:
+    """The pre-monorepo ``LayeredConfigTree`` alias resolved via a module-level
+    ``__getattr__``; that shim was removed in v6.0.0. Guard against accidental
+    restoration."""
+    import vivarium.config_tree as mod
+
+    with pytest.raises(
+        AttributeError,
+        match="module 'vivarium.config_tree' has no attribute 'LayeredConfigTree'",
+    ):
+        mod.LayeredConfigTree

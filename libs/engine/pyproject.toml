@@ -63,12 +63,9 @@ simulate = "vivarium.engine.interface.cli:simulate"
 [tool.setuptools.packages.find]
 where = ["src"]
 # vivarium-engine owns the ``vivarium`` namespace's __init__.py: it ships the
-# pkgutil ``extend_path`` namespace marker AND a ``__getattr__`` shim that
-# soft-deprecates the pre-monorepo ``from vivarium import Component`` / etc.
-# imports, routing each to its new canonical module (``vivarium.engine`` or
-# ``vivarium.artifact``) with a DeprecationWarning. Sibling libs
-# (vivarium-artifact, vivarium-config-tree, ...) deliberately do NOT ship a
-# ``vivarium/__init__.py`` to avoid file conflicts at install time.
+# pkgutil ``extend_path`` namespace marker. Sibling libs (vivarium-artifact,
+# vivarium-config-tree, ...) deliberately do NOT ship a ``vivarium/__init__.py``
+# to avoid file conflicts at install time.
 include = [
     "vivarium",
     "vivarium.engine",

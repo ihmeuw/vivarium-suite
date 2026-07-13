@@ -13,8 +13,6 @@ Top-level re-exports for common API surface:
 - ``build_model_specification``: load a model spec from yaml + config.
 """
 
-from __future__ import annotations
-
 from importlib.metadata import PackageNotFoundError, version
 
 try:
