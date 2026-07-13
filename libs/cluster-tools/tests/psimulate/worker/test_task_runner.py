@@ -6,6 +6,8 @@ plumbing, and logging setup.  The actual work horses and result writing
 are mocked — they have their own dedicated test suites.
 """
 
+import sys
+from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -200,12 +202,21 @@ class TestMainMissingMetadata:
             )
 
 
+@pytest.fixture
+def _restore_loguru() -> Generator[None, None, None]:
+    # _configure_dual_sink removes all loguru sinks with no teardown; restore a
+    # default sink so the routing doesn't leak to later tests on the same worker.
+    yield
+    logger.remove()
+    logger.add(sys.stderr)
+
+
 class TestConfigureDualSink:
     """Tests for ``_configure_dual_sink`` — the loguru routing setup that
     keeps INFO+ on stdout and WARNING+ on stderr."""
 
     def test_routes_levels_to_correct_streams(
-        self, capfd: pytest.CaptureFixture[str]
+        self, capfd: pytest.CaptureFixture[str], _restore_loguru: None
     ) -> None:
         """INFO+ records go to stdout; WARNING+ records also go to stderr;
         INFO records must NOT leak to stderr."""
