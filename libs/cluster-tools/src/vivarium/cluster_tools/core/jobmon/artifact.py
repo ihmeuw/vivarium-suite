@@ -30,7 +30,7 @@ def build_artifacts_in_parallel(
 ) -> tuple[str, str | None]:
     """Build location artifacts in parallel as a single Jobmon workflow.
 
-    Each ``(name, command)`` in ``build_commands`` -- one per location --
+    Each ``(name, command)`` in ``build_commands`` - one per location -
     becomes an independent Jobmon task with **no upstream dependencies**, so
     the locations build concurrently (up to ``max_concurrently_running``).
 

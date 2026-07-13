@@ -232,7 +232,7 @@ def count_completed_tasks(workflow: Workflow) -> int:
 
 
 def get_incomplete_task_names(workflow: Workflow) -> list[str]:
-    """Return the names of *workflow*'s tasks whose ``final_status`` isn't :data:`JOBMON_STATUS_DONE`."""
+    """Return the names of tasks whose ``final_status`` is not :data:`JOBMON_STATUS_DONE`."""
     return [t.name for t in workflow.tasks.values() if t.final_status != JOBMON_STATUS_DONE]
 
 
