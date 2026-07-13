@@ -40,6 +40,7 @@ __all__ = [
     "count_completed_tasks",
     "create_task",
     "create_tasks",
+    "get_incomplete_task_names",
     "get_monitoring_url",
     "make_task_template",
     "make_tool",
@@ -228,6 +229,11 @@ def run_workflow(
 def count_completed_tasks(workflow: Workflow) -> int:
     """Count tasks in *workflow* whose ``final_status`` is :data:`JOBMON_STATUS_DONE`."""
     return sum(1 for t in workflow.tasks.values() if t.final_status == JOBMON_STATUS_DONE)
+
+
+def get_incomplete_task_names(workflow: Workflow) -> list[str]:
+    """Return the names of tasks whose ``final_status`` is not :data:`JOBMON_STATUS_DONE`."""
+    return [t.name for t in workflow.tasks.values() if t.final_status != JOBMON_STATUS_DONE]
 
 
 def bind_and_run_workflow(
