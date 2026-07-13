@@ -102,6 +102,14 @@ jobs:
           fi
           echo "Collected package versions:"; cat package_versions.txt
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
       - name: Install vivarium_build_utils
         # Editable from the in-tree checkout so the release ordering is computed
         # by THIS push's dependency graph/resolver (vbu may itself be in the batch)
