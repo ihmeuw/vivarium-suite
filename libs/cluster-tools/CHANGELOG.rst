@@ -1,4 +1,4 @@
-**4.2.11 - 07/09/26**
+**4.2.11 - 07/13/26**
 
 - Add ``build_artifacts_in_parallel`` to run a model's per-location artifact builds as a single parallel Jobmon workflow
 
