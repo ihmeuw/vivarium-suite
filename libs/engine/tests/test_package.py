@@ -2,26 +2,21 @@
 
 Covers a few things that are easy to silently break:
 
-1. ``__version__`` resolves via ``importlib.metadata`` and isn't the
+- ``__version__`` resolves via ``importlib.metadata`` and isn't the
    ``"0.0.0+not-installed"`` fallback - guards against a misspelled
    distribution name in ``__init__.py``.
-2. Top-level re-exports on ``vivarium.engine`` are the same objects as
+- Top-level re-exports on ``vivarium.engine`` are the same objects as
    in their source modules (no shadowing).
-3. ``vivarium.engine.framework.artifact`` is engine's integration layer
+- ``vivarium.engine.framework.artifact`` is engine's integration layer
    only and does NOT re-export ``Artifact`` / ``ArtifactException`` /
    ``EntityKey`` from vivarium-artifact. Guards against accidental
    restoration of the deprecated re-export.
-4. Sibling namespace packages (``vivarium.artifact``,
+- Sibling namespace packages (``vivarium.artifact``,
    ``vivarium.config_tree``) coexist with engine's ownership of
    ``vivarium/__init__.py``.
-5. Unknown-attribute access on ``vivarium`` and ``vivarium.engine``
+- Unknown-attribute access on ``vivarium`` and ``vivarium.engine``
    raises ``AttributeError`` normally (no ``__getattr__`` shim
    swallowing typos).
-
-Historical context: prior to MIC-7100 this module also validated the
-pre-monorepo deprecation shims on ``vivarium.__getattr__`` and
-``vivarium.engine.__getattr__``. Those shims are gone; the tests that
-verified them have been removed with them.
 """
 
 from __future__ import annotations
@@ -89,15 +84,12 @@ def test_sibling_namespace_imports_work() -> None:
 
 def test_vivarium_unknown_attribute_raises() -> None:
     """Anything not exposed as a real submodule of the ``vivarium`` namespace
-    should raise ``AttributeError`` - the pre-MIC-7100 ``__getattr__`` shim
-    that transparently redirected the pre-monorepo top-level names is gone."""
+    should raise ``AttributeError``."""
     with pytest.raises(AttributeError, match="module 'vivarium' has no attribute"):
         vivarium.not_a_real_thing
 
 
 def test_vivarium_engine_unknown_attribute_raises() -> None:
-    """Engine no longer has a module-level ``__getattr__``; unknown
-    attributes raise the default ``AttributeError`` cleanly rather than
-    routing through a deprecation shim."""
+    """Unknown attributes raise the default ``AttributeError`` cleanly."""
     with pytest.raises(AttributeError, match="module 'vivarium.engine' has no attribute"):
         vivarium.engine.not_a_real_thing
