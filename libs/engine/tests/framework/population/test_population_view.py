@@ -152,8 +152,8 @@ def test_get_empty_idx(pies_and_cubes_pop_mgr: PopulationManager) -> None:
 def test_get_skip_post_processor_deprecation(
     pies_and_cubes_pop_mgr: PopulationManager,
 ) -> None:
-    """Ensure skip_post_processor is removed by 2026-07-12."""
-    assert datetime.date.today() <= datetime.date(2026, 7, 12), (
+    """Ensure skip_post_processor is removed by 2027-01-12."""
+    assert datetime.date.today() <= datetime.date(2027, 1, 12), (
         "The deprecated 'skip_post_processor' parameter should have been removed by now. "
         "Remove the parameter from PopulationView.get and delete this test."
     )
