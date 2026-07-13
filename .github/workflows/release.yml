@@ -159,22 +159,6 @@ jobs:
             uv pip install --system --no-cache -e libs/build-utils
           else
             uv pip install --system --no-cache vivarium-build-utils
-<<<<<<< HEAD
-          fi
-
-      - name: Create and push tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if ! git tag -l "$TAG" | grep -q .; then
-            git tag "$TAG"
-            git push origin "$TAG"
-=======
->>>>>>> main
           fi
 
       - name: Validate tag
