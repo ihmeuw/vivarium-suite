@@ -650,7 +650,6 @@ def _check_population(simulants, initial_age, step_size, include_sex, fuzzy_chec
 
 def _check_sexes(simulants, include_sex, fuzzy_checker):
     if include_sex == "Both":
-        # No non-binary/NaN sex may leak in, then the sampled split should be ~50/50.
         assert simulants.sex.isin(["Male", "Female"]).all()
         fuzzy_checker.fuzzy_assert_proportion(
             len(simulants[simulants.sex == "Male"]),
@@ -659,7 +658,6 @@ def _check_sexes(simulants, include_sex, fuzzy_checker):
             name="both_sexes_male_proportion",
         )
     else:
-        # Single-sex mode is a categorical filter: no simulant of the other sex may leak through.
         assert (simulants.sex == include_sex).all()
 
 

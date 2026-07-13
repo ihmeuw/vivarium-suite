@@ -26,19 +26,6 @@ def disease():
     return "test"
 
 
-def get_test_prevalence(simulation, key):
-    """
-    Helper function to calculate the prevalence for the given state(key)
-    """
-    try:
-        test = simulation.get_population("test").squeeze()
-        simulants_status_counts = test.value_counts().to_dict()
-        result = float(simulants_status_counts[key] / test.size)
-    except KeyError:
-        result = 0
-    return result
-
-
 def test_dwell_time(base_config, base_plugins, disease):
     time_step = 10
 
@@ -386,8 +373,8 @@ def test_prevalence_birth_prevalence_initial_assignment(
     )
 
     # prevalence should be used for assigning initial status at sim start.
-    # prevalence=1 assigns deterministically, so this is an exact check, not a proportion.
-    assert get_test_prevalence(simulation, "with_condition") == 1
+    # prevalence=1 assigns deterministically, so every simulant must have the condition.
+    assert (simulation.get_population("test").squeeze() == "with_condition").all()
 
     # birth prevalence should be used for assigning initial status to newly-borns on time steps
     simulation.step()
