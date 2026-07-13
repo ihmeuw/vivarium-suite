@@ -11,7 +11,7 @@ Vivarium Testing Utils
 
 This library contains utility features to help test Vivarium software.
 
-**Vivarium Testing Utils requires Python 3.10+ to run**
+**Supported Python versions: 3.10, 3.11**
 
 You can install ``vivarium-testing-utils`` from PyPI with pip:
 

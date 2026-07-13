@@ -11,14 +11,12 @@
 # serve to show the default.
 
 import importlib.metadata
-
 from pathlib import Path
 
 from docutils.nodes import Element, Text
 from sphinx.application import Sphinx
 from sphinx.environment import BuildEnvironment
 from sphinx.ext.intersphinx import missing_reference
-
 
 # -- Project information -----------------------------------------------------
 
