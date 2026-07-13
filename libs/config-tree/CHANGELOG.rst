@@ -1,28 +1,11 @@
 **6.0.0 - 07/14/26**
 
-**Breaking change.** Remove the ``LayeredConfigTree`` deprecation alias
-that has been re-exported from ``vivarium.config_tree`` since the
-monorepo migration. Callers must now use the canonical name
-``ConfigTree``. See MIC-7100 for the broader retirement arc.
+**Breaking change.** Remove the ``LayeredConfigTree`` deprecation alias that has
+been re-exported from ``vivarium.config_tree`` since the monorepo migration. Callers
+must now use the canonical name ``ConfigTree``.
 
-- Delete the module-level ``__getattr__`` in
-  ``vivarium/config_tree/__init__.py`` that returned ``ConfigTree`` in
-  response to ``LayeredConfigTree`` attribute access (with a
-  ``DeprecationWarning``). Migrate:
-
-  - ``from vivarium.config_tree import LayeredConfigTree`` -> ``from vivarium.config_tree import ConfigTree``
-  - ``import vivarium.config_tree; vivarium.config_tree.LayeredConfigTree`` -> ``vivarium.config_tree.ConfigTree``
-
-- Drop the now-unused ``warnings`` and ``typing.Any`` imports from
-  ``vivarium/config_tree/__init__.py``.
-- Delete ``libs/config-tree/tests/unit/test_removal_deadline.py``
-  (time-bomb test whose whole purpose was to fire when this alias
-  should be removed) and the LCT-alias deprecation test case in
-  ``libs/config-tree/tests/unit/test_basic_functionality.py``.
-
-The alias resolved to the exact same ``ConfigTree`` class, so
-downstream callers that update their imports get identical runtime
-behavior - only the name changes.
+- Delete the module-level ``__getattr__`` in ``vivarium/config_tree/__init__.py``.
+- Delete related deprecation test cases.
 
 **5.0.9 - 07/06/26**
 
