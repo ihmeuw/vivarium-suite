@@ -128,7 +128,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = f'{project}doc'
+htmlhelp_basename = f"{project}doc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -154,8 +154,8 @@ latex_elements: dict[str, str] = {
 latex_documents = [
     (
         main_doc,
-        f'{project}.tex',
-        f'{project} Documentation',
+        f"{project}.tex",
+        f"{project} Documentation",
         author,
         "manual",
     ),
@@ -166,9 +166,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (main_doc, f'{project}', f'{project} Documentation', [author], 1)
-]
+man_pages = [(main_doc, f"{project}", f"{project} Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -179,10 +177,10 @@ man_pages = [
 texinfo_documents = [
     (
         main_doc,
-        f'{project}',
-        f'{project} Documentation',
+        f"{project}",
+        f"{project} Documentation",
         author,
-        f'{project}',
+        f"{project}",
         "A set of tools for running simulation using vivarium on cluster.",
         "Miscellaneous",
     ),
