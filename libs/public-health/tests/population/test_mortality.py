@@ -32,16 +32,40 @@ def setup_sim_with_pop_and_mortality(
     return sim, bp, sim.list_components()["mortality"]
 
 
-def test_mortality_default_lookup_configuration(setup_sim_with_pop_and_mortality):
-    _, __, mortality = setup_sim_with_pop_and_mortality
+@pytest.fixture(scope="module")
+def stepped_pop_mortality_sim(base_plugins):
+    """Shared [BasePopulation + Mortality] sim, built and stepped once, read-only.
+
+    Serves the structural tests (lookup-table data / attribute names, which are
+    step-invariant) and the post-one-step reads (``mortality_rate``, ylls). Consumers
+    must not step or mutate it.
+    """
+    bp = BasePopulation()
+    sim = InteractiveContext(components=[bp], plugin_configuration=base_plugins, setup=False)
+    sim.configuration.update(
+        {
+            # 10000 (not a smaller pop) so ~one step reliably produces deaths for the
+            # ylls read below; the death rate is only ~0.2%/step, so a small pop can
+            # yield zero deaths and make the ylls assertion vacuous.
+            "population": {"population_size": 10000, "include_sex": "Male"},
+            "mortality": {"unmodeled_causes": []},
+        }
+    )
+    sim.setup()
+    sim.step()
+    return sim, bp, sim.list_components()["mortality"]
+
+
+def test_mortality_default_lookup_configuration(stepped_pop_mortality_sim):
+    _, __, mortality = stepped_pop_mortality_sim
 
     assert (mortality.acmr_table.data["value"] == 0.5).all()
     assert mortality.unmodeled_csmr_table.data == 0.0
     assert (mortality.life_expectancy_table.data["value"] == 98.0).all()
 
 
-def test_mortality_creates_attributes(setup_sim_with_pop_and_mortality):
-    sim, bp, mortality = setup_sim_with_pop_and_mortality
+def test_mortality_creates_attributes(stepped_pop_mortality_sim):
+    sim, bp, mortality = stepped_pop_mortality_sim
     attributes = sim.get_attribute_names()
     expected_columns_created = mortality.private_columns
     expected_attributes_created = [
@@ -63,9 +87,8 @@ def test_mortality_creates_attributes(setup_sim_with_pop_and_mortality):
     )
 
 
-def test_mortality_rate(setup_sim_with_pop_and_mortality):
-    sim, _, mortality = setup_sim_with_pop_and_mortality
-    sim.step()
+def test_mortality_rate(stepped_pop_mortality_sim):
+    sim, _, mortality = stepped_pop_mortality_sim
     mortality_rates = sim.get_population("mortality_rate")
     # Calculate mortality rate like component to cmpare
     pop_idx = mortality_rates.index
@@ -183,12 +206,13 @@ def test_mortality_cause_of_death(
             )
 
 
-def test_mortality_ylls(setup_sim_with_pop_and_mortality):
-    sim, bp, mortality = setup_sim_with_pop_and_mortality
-    sim.step()
+def test_mortality_ylls(stepped_pop_mortality_sim):
+    sim, bp, mortality = stepped_pop_mortality_sim
     pop1 = sim.get_population(["is_alive", "years_of_life_lost"])
 
     dead_idx = pop1.index[pop1["is_alive"] == False]
+    # Guard against a degenerate config (no deaths) making the .all() below vacuous.
+    assert len(dead_idx) > 0
     ylls = pop1.loc[dead_idx, "years_of_life_lost"]
     assert (ylls == mortality.life_expectancy_table(dead_idx)).all()
     alive_idx = pop1.index[pop1["is_alive"] == True]
@@ -196,8 +220,8 @@ def test_mortality_ylls(setup_sim_with_pop_and_mortality):
     assert (no_ylls == 0).all()
 
 
-def test_no_unmodeled_causes(setup_sim_with_pop_and_mortality):
-    _, __, mortality = setup_sim_with_pop_and_mortality
+def test_no_unmodeled_causes(stepped_pop_mortality_sim):
+    _, __, mortality = stepped_pop_mortality_sim
     # No unmodeled causes by default
     assert mortality.unmodeled_csmr_table.data == 0.0
 

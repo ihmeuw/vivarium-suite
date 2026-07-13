@@ -1,3 +1,17 @@
+**4.3.0 - 07/08/26**
+
+- Add shared ``update-readme`` tool to sync README supported-Python versions from python_versions.json
+
+**4.2.5 - 07/06/26**
+
+- Add PyPI classifiers
+
+**4.2.4 - 07/01/26**
+
+- Make ``make tag-version`` idempotent and skip if the tag already exists
+- Push only the newly created tag rather than all local tags
+- Add tests against 'make tag-version'
+
 **4.2.3 - 07/01/26**
 
 - Use the pip cache only on push/PR (feature-branch) builds; main, nightly (cron), and deploy builds install cache-free so a from-source wheel build failure isn't masked by a cached wheel

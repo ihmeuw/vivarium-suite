@@ -3,6 +3,14 @@
 - Add support for observations to specify priority for lifecycle events
 - Added priority attribute to `Event`
 
+**5.3.3 - 07/13/26**
+
+- Push back the ``test_get_skip_post_processor_deprecation`` date to 2027-01-12
+
+**5.3.2 - 07/02/26**
+
+- Fix order-dependent ``SimulationContext`` name cache in tests under pytest-xdist
+
 **5.3.1 - 06/30/26**
 
 - Fix order-dependent randomness in results test fixtures

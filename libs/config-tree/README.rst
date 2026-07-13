@@ -24,7 +24,7 @@ To build it from source, clone the monorepo and install from the package directo
 
    git clone https://github.com/ihmeuw/vivarium-suite.git
    cd vivarium-suite
-   conda create -n ENVIRONMENT_NAME python=3.13
+   conda create -n ENVIRONMENT_NAME
    conda activate ENVIRONMENT_NAME
    pip install libs/config-tree
 

@@ -2,6 +2,22 @@
 
 - Update when population characteristics happen in lifecycle methods
 
+**6.3.6 - 07/08/26**
+
+- Share a module-scoped InteractiveContext fixture across the population mortality tests to reduce runtime
+
+**6.3.5 - 07/08/26**
+
+- Deduplicate microdata, calibration, and fertility test setup with shared build helpers and parametrization
+
+**6.3.4 - 07/08/26**
+
+- Share module-scoped InteractiveContext fixtures across observer and ensemble tests to reduce runtime
+
+**6.3.3 - 07/06/26**
+
+- Add PyPI classifiers
+
 **6.3.2 - 07/01/26**
 
 - Reduce population size in test suites to improve runtime
