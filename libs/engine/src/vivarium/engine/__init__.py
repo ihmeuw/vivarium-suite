@@ -15,9 +15,7 @@ Top-level re-exports for common API surface:
 
 from __future__ import annotations
 
-import warnings
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, Any
 
 try:
     __version__ = version("vivarium-engine")
@@ -32,27 +30,3 @@ from vivarium.engine.component import Component
 from vivarium.engine.framework.configuration import build_model_specification
 from vivarium.engine.framework.results.observer import Observer
 from vivarium.engine.interface import InteractiveContext
-
-
-def __getattr__(name: str) -> Any:
-    if name == "Artifact":
-        warnings.warn(
-            "'from vivarium.engine import Artifact' is deprecated. "
-            "Artifact now lives in the vivarium-artifact distribution; "
-            "use 'from vivarium.artifact import Artifact' instead. "
-            "This shim will be removed in a future release; see "
-            "vivarium-engine CHANGELOG entry for v5.0.0.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        from vivarium.artifact import Artifact
-
-        return Artifact
-    raise AttributeError(f"module 'vivarium.engine' has no attribute {name!r}")
-
-
-if TYPE_CHECKING:
-    # Keep ``Artifact`` visible to static analyzers on ``vivarium.engine``
-    # for the soft-landing period - imports from ``vivarium.engine`` won't
-    # type-error even though the runtime resolution warns.
-    from vivarium.artifact import Artifact as Artifact

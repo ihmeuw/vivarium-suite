@@ -1,3 +1,36 @@
+**6.0.0 - 07/14/26**
+
+**Breaking changes.** Remove the pre-monorepo attribute-import shims that
+have lived on the ``vivarium`` namespace since the monorepo migration.
+Callers must now reach for the canonical module directly. See MIC-7100
+for the broader retirement arc.
+
+- Delete the module-level ``__getattr__`` in
+  ``vivarium/__init__.py`` (previously routed ``from vivarium import
+  Component`` / ``Observer`` / ``InteractiveContext`` /
+  ``build_model_specification`` / ``Artifact`` with a
+  ``DeprecationWarning``). Migrate:
+
+  - ``from vivarium import Component`` -> ``from vivarium.engine import Component``
+  - ``from vivarium import Observer`` -> ``from vivarium.engine import Observer``
+  - ``from vivarium import InteractiveContext`` -> ``from vivarium.engine import InteractiveContext``
+  - ``from vivarium import build_model_specification`` -> ``from vivarium.engine import build_model_specification``
+  - ``from vivarium import Artifact`` -> ``from vivarium.artifact import Artifact``
+
+- Delete the module-level ``__getattr__`` in ``vivarium/engine/__init__.py``
+  (previously routed ``from vivarium.engine import Artifact`` with a
+  ``DeprecationWarning``). Migrate to ``from vivarium.artifact import
+  Artifact``.
+
+- Drop the silent ``vivarium.__version__`` passthrough that had piggy-
+  backed on the same ``__getattr__``. Tooling that read
+  ``vivarium.__version__`` should switch to
+  ``importlib.metadata.version("vivarium-engine")`` (or the appropriate
+  sibling distribution).
+
+- Delete the ``_DEPRECATED_REDIRECTS`` table and its accompanying tests
+  in ``libs/engine/tests/test_package.py``.
+
 **5.3.3 - 07/13/26**
 
 - Push back the ``test_get_skip_post_processor_deprecation`` date to 2027-01-12
