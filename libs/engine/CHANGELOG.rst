@@ -1,4 +1,4 @@
-**6.0.0 - 07/14/26**
+**5.3.4 - 07/14/26**
 
 **Breaking changes.** Remove the pre-monorepo attribute-import shims that have lived
 on the ``vivarium`` namespace since the monorepo migration. Callers must now reach
