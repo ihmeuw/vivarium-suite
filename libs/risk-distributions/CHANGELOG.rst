@@ -1,3 +1,8 @@
+**3.1.7 - 07/14/26**
+
+- Update stale references for monorepo libraries
+- Update SPHINXPROJ name
+
 **3.1.6 - 07/08/26**
 
 - Fix mirrored distributions returning NaN for valid inputs by reflecting the

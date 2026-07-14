@@ -1,3 +1,7 @@
+**0.7.5 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
 **0.7.4 - 07/06/26**
 
 - Update ``vivarium-inputs`` pin to ``>=8.0.0`` for the ``gbd_mapping`` monorepo migration

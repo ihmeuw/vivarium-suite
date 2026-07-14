@@ -86,8 +86,8 @@ build-env: # Create a new environment with installed packages
 	esac
 
 	conda create -n $(name) python=$(py) --yes
-# 	Bootstrap vivarium_build_utils into the new environment
-	conda run -n $(name) pip install vivarium_build_utils
+# 	Bootstrap vivarium.build_utils into the new environment
+	conda run -n $(name) pip install vivarium-build-utils
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
 	conda run -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 

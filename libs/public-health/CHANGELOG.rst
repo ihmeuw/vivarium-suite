@@ -1,3 +1,7 @@
+**6.3.9 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
 **6.3.8 - 07/13/26**
 
 - Move stochastic-proportion test assertions to FuzzyChecker and tighten deterministic equality assertions

@@ -1,3 +1,7 @@
+**5.3.4 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
 **5.3.3 - 07/13/26**
 
 - Push back the ``test_get_skip_post_processor_deprecation`` date to 2027-01-12
