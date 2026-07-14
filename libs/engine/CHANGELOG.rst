@@ -1,3 +1,7 @@
+**5.3.5 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
 **5.3.4 - 07/14/26**
 
 **Breaking changes.** Remove the pre-monorepo attribute-import shims that have lived

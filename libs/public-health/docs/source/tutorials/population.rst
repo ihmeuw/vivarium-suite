@@ -448,7 +448,7 @@ Aging out of a simulation
 
 Setting ``untracking_age`` causes simulants to be removed from the tracked
 population once they reach that age (see the
-`vivarium population concepts <https://vivarium.readthedocs.io/en/latest/concepts/population.html>`_
+`vivarium population concepts <https://vivarium-engine.readthedocs.io/en/latest/concepts/population.html>`_
 documentation for more on untracking). This is useful when a model only
 cares about a specific age window. The ``is_aged_out`` column is populated
 by the ``AgeOutSimulants`` sub-component when ``untracking_age`` is set:
