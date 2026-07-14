@@ -61,11 +61,9 @@ where = ["src"]
 # sibling ``vivarium.gbd_mapping_helpers`` shipped by another lib.
 #
 # Excluding ``vivarium`` itself means the wheel does not ship
-# ``vivarium/__init__.py``. The "namespace owner" (standalone vivarium today,
-# vivarium-core post-monorepo-migration) ships the canonical
-# ``vivarium/__init__.py`` with backward-compat re-exports. If we shipped our
-# own here, pip would overwrite the canonical one and break imports like
-# ``from vivarium import Component``.
+# ``vivarium/__init__.py``, which is owned by vivarium-engine; two
+# distributions writing the same file would clobber each other at install
+# time.
 include = [
     "vivarium.gbd_mapping",
     "vivarium.gbd_mapping.*",
