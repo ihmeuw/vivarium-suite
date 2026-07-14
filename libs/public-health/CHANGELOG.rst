@@ -1,3 +1,7 @@
+**6.3.8 - 07/13/26**
+
+- Move stochastic-proportion test assertions to FuzzyChecker and tighten deterministic equality assertions
+
 **6.3.7 - 07/13/26**
 
 - Skip per-build lookup-table interpolation validation
