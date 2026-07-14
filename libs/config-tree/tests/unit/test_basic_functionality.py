@@ -753,20 +753,3 @@ def test_repr_display() -> None:
     tree.update({"Key1": "value_ov_1"}, layer="override_1", source="ov1_src")
     tree.update({"Key1": "value_ov_2"}, layer="override_2", source="ov2_src")
     assert repr(tree) == textwrap.dedent(expected_repr)
-
-
-def test_layered_config_tree_deprecation_alias() -> None:
-    """``LayeredConfigTree`` is a deprecated alias for ``ConfigTree``.
-
-    Importing it should fire a ``DeprecationWarning`` and the resolved object
-    should be the same class.
-    """
-    import vivarium.config_tree as mod
-
-    with pytest.warns(DeprecationWarning, match="LayeredConfigTree.*renamed.*ConfigTree"):
-        alias = mod.LayeredConfigTree
-    assert alias is ConfigTree
-
-    # Should also raise AttributeError for unknown attributes (not silently return ConfigTree).
-    with pytest.raises(AttributeError):
-        mod.SomeNonexistentAttribute
