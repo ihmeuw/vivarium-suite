@@ -1,4 +1,4 @@
-**6.0.0 - 07/14/26**
+**5.0.10 - 07/14/26**
 
 **Breaking change.** Remove the ``LayeredConfigTree`` deprecation alias that has
 been re-exported from ``vivarium.config_tree`` since the monorepo migration. Callers
