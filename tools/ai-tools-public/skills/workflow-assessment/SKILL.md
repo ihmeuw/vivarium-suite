@@ -1,7 +1,7 @@
 ---
 name: workflow-assessment
 description: Assess a finished run of an agentic workflow — did the multi-agent handoffs and tool invocations happen the way the workflow's definition says they should? Reads the Claude Code session transcripts and judges the trace against the workflow definition across coverage, ordering/gates, parallelism, handoff completeness, tool appropriateness, and result propagation. Trigger whenever the user wants to debug or verify the procedural correctness of a Claude session, especially ones with engineered orchestration or multi-agentic workflows.
-allowed-tools: Read, Grep, Glob, Agent(_trace_extractor)
+allowed-tools: Read, Grep, Glob, Agent(viv-public:_trace_extractor)
 ---
 
 # Workflow assessment
@@ -23,7 +23,7 @@ The user describes the session, not its id. Resolve it from cheap metadata —
    worktree slugs.
 3. **Fingerprint without opening transcripts.** The `.jsonl`'s **mtime** is when
    it ran; the tiny `subagents/agent-*.meta.json` sidecars name the workflow by
-   their `agentType`s (e.g. `_claim_auditor` ⟹ repo-maintenance). No `subagents/`
+   their `agentType`s (e.g. `viv-public:_review_design` ⟹ `/viv-public:code-reviewer`). No `subagents/`
    ⟹ no sub-agents ran. Still ambiguous? Grep the opening `<command-name>` tag.
 4. **Confirm** by naming your pick back by time and shape, not its id; a short
    table if several match.
@@ -45,7 +45,7 @@ and result propagation (6); mark the rest `N/A`.
 ## Extraction fan-out
 
 Enumerate the sub-agent transcripts yourself (Glob `subagents/*.meta.json`). Then
-dispatch `_trace_extractor` **in a single message** — one per transcript (main +
+dispatch `viv-public:_trace_extractor` **in a single message** — one per transcript (main +
 each sub-agent). Each brief carries the absolute path, the role hint from its
 `meta.json`, and any spec-driven focus; the main-transcript brief also carries
 the `subagents/` directory for cross-checking. Hand it paths and questions, not

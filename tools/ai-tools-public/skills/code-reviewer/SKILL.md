@@ -2,15 +2,15 @@
 name: code-reviewer
 description: "Parallel multi-agent code review across maintainability, DRY, design, tests, documentation, and functional correctness."
 argument-hint: "A pull request to review, or a description of the changes to review."
-allowed-tools: Read, Grep, Glob, Bash, Agent(_review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation, _review_scorer)
+allowed-tools: Read, Grep, Glob, Bash, Agent(viv-public:_review_maintainability, viv-public:_review_dry, viv-public:_review_design, viv-public:_review_tests, viv-public:_review_documentation, viv-public:_review_scorer)
 ---
 
 Run a parallel multi-agent code review of: $ARGUMENTS
 
 This command gathers the review target, then hands it to the internal
-`_review-core` skill (`skills/_review-core/SKILL.md`) for the fan-out. That
-fan-out runs in this main-session context — `_review-core` invoked inline from
-here spawns the specialists directly, kept one level deep by design. `_review-core` is the
+`viv-public:_review-core` skill (`skills/_review-core/SKILL.md`) for the fan-out. That
+fan-out runs in this main-session context — `viv-public:_review-core` invoked inline from
+here spawns the specialists directly, kept one level deep by design. `viv-public:_review-core` is the
 single definition of the review, so it can be reused inline by other
 main-session commands without duplicating the fan-out.
 
@@ -28,19 +28,21 @@ $ARGUMENTS as a free-form description.
 
 ## Step 2 — Run the review
 
-Invoke the `_review-core` skill, handing it the changed-file list, the diff
+Invoke the `viv-public:_review-core` skill, handing it the changed-file list, the diff
 (or the salient slice), and a one-line description of the change (the PR
 title/body is the `<subject>`). It fans out to the five `_review_*`
 specialists, runs the functional-correctness pass, independently scores every
 finding for confidence (dropping anything below 50), synthesizes the survivors —
 each annotated with its confidence score — and returns the structured review.
-Present that review to the user as-is — `_review-core` owns the output format and
+Present that review to the user as-is — `viv-public:_review-core` owns the output format and
 the review constraints.
 
-## Step 3 — Offer ticket triage
+## Step 3 — Offer post-review triage (if a skill covers it)
 
 After presenting the review, if it surfaced findings the user is not going
-to address in the current PR, offer to run the `ticket-triage` skill on
-them. That skill classifies the leftovers, checks the backlog for
-duplicates, and files approval-gated Jira tickets — don't duplicate any of
-that here; just make the offer and invoke the skill if accepted.
+to address in the current PR **and** an installed skill covers filing
+tickets from review findings (e.g. a ticket-triage skill), offer to run
+that skill on them, and invoke it and follow it if accepted — don't
+duplicate any of its classification or filing logic here. If no such
+skill is installed, end after Step 2 — the presented review is the final
+output.

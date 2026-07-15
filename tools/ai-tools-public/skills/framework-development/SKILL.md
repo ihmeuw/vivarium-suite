@@ -1,16 +1,16 @@
 ---
 name: framework-development
 description: "Guided design→implement→verify→PR loop for a well-scoped framework feature."
-argument-hint: "A MIC ticket key, design doc, or description of the feature to build."
-allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(_test_writer, _feature_implementer, _validator, _review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation, _review_scorer)
+argument-hint: "A ticket key, design doc link, or feature description."
+allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(viv-public:_test_writer, viv-public:_feature_implementer, viv-public:_validator, viv-public:_review_maintainability, viv-public:_review_dry, viv-public:_review_design, viv-public:_review_tests, viv-public:_review_documentation, viv-public:_review_scorer)
 ---
 
 Run an end-to-end framework development loop for: $ARGUMENTS
 
 You (the main session) own the design and the stubs, then drive a **black-box
-TDD** build: `_test_writer` and `_feature_implementer` produce the tests and the
-implementation in isolation, and you fan out `_validator` and run the shared
-`_review-core` skill for review (it fans out the five `_review_*`
+TDD** build: `viv-public:_test_writer` and `viv-public:_feature_implementer` produce the tests and the
+implementation in isolation, and you fan out `viv-public:_validator` and run the shared
+`/viv-public:_review-core` skill for review (it fans out the five `viv-public:_review_*`
 specialists, then confidence-scores and filters their findings). Work the
 phases in order; keep the user in the loop at the design and PR gates.
 
@@ -22,7 +22,7 @@ The phases below are the canonical detail; this is the skeleton:
 setup                                # Phase 0: package, env, feature branch
 design  = brainstorm with user       # Phase 1: incl. scope-tightening; user-gated
 stubs   = author contract            # Phase 2: source + body-less test stubs; commit baseline
-build impl_wt, test_wt               # Phase 3: _feature_implementer || _test_writer, isolated
+build impl_wt, test_wt               # Phase 3: viv-public:_feature_implementer || viv-public:_test_writer, isolated
 
 # Phase 4 — converge: two gates, each with its own independent budget
 
@@ -41,23 +41,27 @@ Gate 2 — review: up to 3 rounds, until clean (separate budget from Gate 1)
         re-check each fix with the review agent that raised it
     leftover findings  ->  carry to Phase 5
 
-finalize & PR                        # Phase 5: user-gated; residuals -> ticket-triage
+finalize & PR                        # Phase 5: user-gated; residuals -> follow-up tickets
 ```
 
 ## Phase 0 — Setup
 
-1. Resolve the target ``libs/<pkg>`` package from $ARGUMENTS and ``cd`` there.
-2. Use the `environments` skill to activate the right conda env.
-3. Use the `team-conventions` branch convention (from the MIC key, or ask) and
-   **create the branch now**.
+1. Locate the target package/project directory from $ARGUMENTS and ``cd`` there.
+2. Activate the project's development environment — if an installed skill covers
+   environment setup, use it; otherwise follow the project's docs.
+3. Create a work branch per your team's naming conventions (if an installed
+   skill covers them, invoke it and follow it; otherwise ask or use a sensible
+   name) and **create the branch now**.
 
 ## Phase 1 — Design
 
-- If $ARGUMENTS references a groomed ticket/design doc, fetch it (Jira MCP
-  ``get_issue`` / hub ``get_page``).
-- Then, invoke the `brainstorming` skill (and `design-doc` if it warrants a
+- If $ARGUMENTS references a groomed ticket/design doc, fetch it via whichever
+  ticket or wiki MCP is configured, or accept a pasted document.
+- Then, if an installed skill covers structured brainstorming, invoke it and
+  follow it; otherwise work through the design with the user directly (and
+  follow your team's design-doc process, if any, when the feature warrants a
   design document).
-- Either way — including for a groomed ticket — run the `brainstorming` skill's
+- Either way — including for a groomed ticket — run a
   **scope-tightening pass** before confirming: treat each acceptance criterion as
   intent to validate rather than literal law (flag any "every X" broader than the
   need), check whether a broadly-applied change should instead be a meaningful
@@ -107,9 +111,9 @@ package/env, and the **absolute path of its own worktree** (the real path you
 just created — not a placeholder) with a "work only inside it" instruction —
 never the other's output.
 
-- `_test_writer` (in ``<tests_path>``) fleshes out the test stub bodies;
+- `viv-public:_test_writer` (in ``<tests_path>``) fleshes out the test stub bodies;
   escalates any missing case instead of inventing one.
-- `_feature_implementer` (in ``<impl_path>``) fills in the source stub bodies;
+- `viv-public:_feature_implementer` (in ``<impl_path>``) fills in the source stub bodies;
   the test stubs are read-only criteria it never fills, runs, or sees filled.
 
 Neither changes a public signature; if a stub looks wrong it reports back and
@@ -135,14 +139,15 @@ around review.
    stub. Then assemble the two disjoint lineages into the feature branch
    (``git checkout <branch>-impl -- <src paths>`` and ``<branch>-tests --
    <test paths>``, or merge both); reconcile rather than force-merge if a
-   signature changed. With an **editable install**, re-run ``make install`` from
-   the integration checkout first, so the env imports the integrated code and not
+   signature changed. With an **editable install**, re-run the project's
+   editable-install command (a make target or equivalent) from the integration
+   checkout first, so the env imports the integrated code and not
    whichever worktree it was last installed from.
 
-2. **Gate 1 — validate.** Spawn `_validator` with the package path, env, and
-   targets (typically ``make test-*``, ``make lint``, and ``make mypy`` if typed);
-   it returns a compact PASS/FAIL report. A working env from Phase 0 (the package
-   importable, ``make`` targets runnable) is a precondition — if it can't be
+2. **Gate 1 — validate.** Spawn `viv-public:_validator` with the package path, env, and
+   targets — the project's test, lint, and type-check commands (e.g. make
+   targets or equivalents); it returns a compact PASS/FAIL report. A working env from Phase 0 (the package
+   importable, the check commands runnable) is a precondition — if it can't be
    built, validation can't run, so resolve that rather than reporting a false
    PASS. **On FAIL, skip review this round** (don't review red code): triage and
    re-dispatch the fixes (below), then start the next round. When auto-fixing lint
@@ -150,18 +155,18 @@ around review.
    sweeps unrelated files into the diff.
 
 3. **Gate 2 — review (only on green).** Once validation passes, run review. The
-   **first** time you reach green, invoke the `_review-core` skill
-   (`skills/_review-core/SKILL.md`) with the integrated diff, the changed-file
-   list, and a one-line feature description — a full fan-out across the five
-   **review agents** (one `_review_*` specialist per dimension: Design,
+   **first** time you reach green, invoke the `/viv-public:_review-core` skill
+   with the integrated diff, the changed-file list, and a one-line feature
+   description — a full fan-out across the five
+   **review agents** (one `viv-public:_review_*` specialist per dimension: Design,
    Maintainability, DRY, Tests, Documentation) plus the functional-correctness
-   pass in this main-session context, the same definition `/viv:code-reviewer`
-   uses. It then independently confidence-scores every finding (a `_review_scorer`
+   pass in this main-session context, the same definition `/viv-public:code-reviewer`
+   uses. It then independently confidence-scores every finding (a `viv-public:_review_scorer`
    per finding) and drops those below 50, so it returns the surviving findings
    bucketed by review agent — each annotated with its score — alongside your own
    Functionality pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
    each already-fixed finding **back to the review agent that raised it** for a
-   resolved/not-resolved verdict. When no must-fix findings remain, run one final full `_review-core`
+   resolved/not-resolved verdict. When no must-fix findings remain, run one final full `/viv-public:_review-core`
    pass as the convergence check — it catches any *new* qualitative issue a fix
    introduced, which per-finding routing can't. A clean final pass means
    **converged** → go to Phase 5. Otherwise triage and re-dispatch (below), then
@@ -171,10 +176,10 @@ around review.
 that owns it, in its existing worktree (the lineages stay separate, so the black
 box holds across rounds):
 
-- **Implementation bug** → `_feature_implementer` in ``<impl_path>``, failure
+- **Implementation bug** → `viv-public:_feature_implementer` in ``<impl_path>``, failure
   described in behavioral terms (input → expected output), never as test source.
 - **Test bug** (asserts beyond the criteria, *or* an existing test that encodes
-  now-superseded behavior the feature deliberately changes) → `_test_writer` in
+  now-superseded behavior the feature deliberately changes) → `viv-public:_test_writer` in
   ``<tests_path>``. Existing-test breakage is common: a feature that changes
   observable behavior will trip tests that pinned the old behavior.
 - **Spec gap** (legit behavior with no stub) → add the body-less stub to the
@@ -198,13 +203,16 @@ dropped.
 2. Summarize what was built, the test results, and any residual validation
    failures or review findings carried out of the Phase 4 loop.
 3. **Triage leftover findings.** For review findings you deliberately did not
-   address in this build (residual or out-of-scope after the Phase 4 loop),
-   invoke the `ticket-triage` skill to classify them, dedup against the backlog,
-   and file approval-gated Jira tickets. Skip if nothing is left unaddressed.
+   address in this build (residual or out-of-scope after the Phase 4 loop): if an
+   installed skill covers filing tickets from review findings (e.g. a
+   ticket-triage skill), invoke it and follow it; otherwise summarize them for
+   the user as follow-up ticket candidates. Skip if nothing is left unaddressed.
 4. **Ask the user to approve the PR.** Without approval, stop and leave the
    branch in place.
-5. On approval, use the `commit-splitter` skill to organize the work into clean,
-   reviewable commits, then follow `team-conventions` to push the branch and open
-   the PR with the repo's PR template. Report
-   the URL and offer the ``#vivarium_dev`` flag. Post a summary of the leftover
+5. On approval, use the `/viv-public:commit-splitter` skill to organize the work into clean,
+   reviewable commits, then push the branch and open the PR — if an installed
+   skill covers your team's push/PR conventions, invoke it and follow it;
+   otherwise use the repo's PR template if one exists (a draft PR is a safe
+   default). Report
+   the URL and offer to announce the PR in your team channel. Post a summary of the leftover
    findings from step 3 as a comment in the PR.

@@ -9,24 +9,26 @@ tools:
 user-invocable: false
 ---
 
-You run a vivarium package's checks and return a concise PASS/FAIL verdict,
+You run a package's checks and return a concise PASS/FAIL verdict,
 keeping the verbose suite output out of the orchestrator's context — it gets a
 verdict and the salient failures, not thousands of lines of pytest log.
 
 ## Input
 
-- **Package path** — the directory containing the Makefile (a monorepo
-  ``libs/<pkg>`` directory, or a standalone model repo's root) — **env** to
-  activate, and **targets** to run — typically ``make check`` or individual targets like
-  ``make test-*``, ``make lint``, and ``make mypy`` if typed.
+- **Package path** — the directory containing the Makefile (or equivalent build
+  file) — **env** to
+  activate, and **targets** to run — whatever check targets the caller supplies
+  (such as ``make check``, ``make test``, ``make lint``).
 
 ## Approach
 
-1. ``cd`` into the package, activate the env, run each target. Prefer
-   ``make test-*`` over raw ``pytest``; rerun a single failing test
-   (``pytest path::test -xvs``) only to extract a clean traceback.
+1. ``cd`` into the package, activate the env, run each target. Prefer the
+   repo's make/test targets over invoking the test runner directly; rerun a
+   single failing test (e.g. ``pytest path::test -xvs``) only to extract a clean
+   traceback.
 2. Read source/test files only as needed to locate a failure — you are read-only
-   and do not review code holistically (that's the ``_review_*`` agents' job).
+   and do not review code holistically (code review is out of scope for this
+   agent).
 
 ## Output
 

@@ -1,6 +1,6 @@
 ---
 name: _review_scorer
-description: "Use when: independently scoring a single code-review finding for confidence (0-100) against the verbatim rubric, so low-confidence findings can be filtered out before synthesis. Spawned one-per-finding by _review-core."
+description: "Use when: independently scoring a single code-review finding for confidence (0-100) against the verbatim rubric, so low-confidence findings can be filtered out before synthesis. Spawned one-per-finding by viv-public:_review-core."
 tools:
   - Read
   - Grep
