@@ -97,8 +97,8 @@ build-env: # Create a new environment with installed packages
 	@$(call validate_arg,$(artifactory_access),yes no,artifactory_access)
 
 	conda create -n $(name) python=$(py) --yes
-# 	Bootstrap vivarium_build_utils into the new environment
-	conda run -n $(name) pip install vivarium_build_utils
+# 	Bootstrap vivarium.build_utils into the new environment
+	conda run -n $(name) pip install vivarium-build-utils
 #	Install packages based on type. artifactory_access=no passes an empty IHME_PYPI,
 #	which clears base.mk's EXTRA_INDEX_FLAGS.
 	@if [ "$(type)" = "simulation" ]; then \

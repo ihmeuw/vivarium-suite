@@ -1,3 +1,7 @@
+**1.0.7 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
 **1.0.6 - 07/06/26**
 
 - Add PyPI classifiers

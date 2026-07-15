@@ -26,6 +26,19 @@ endif
 DIST_NAME ?= $(if $(DIST_NAME_FROM_PROJECT),$(DIST_NAME_FROM_PROJECT),$(PACKAGE_NAME))
 
 # Build the editable_mode=compat config-settings flag only when DIST_NAME was parsed from [project].
+# NOTE: editable_mode=compat: produces a classic .pth-based editable install
+#   (sys.path entry pointing at src/) instead of the PEP 660 default
+#   (sys.meta_path finder). The PEP 660 mode breaks mypy's discovery of
+#   sibling-namespace packages in monorepo dev setups - mypy's static
+#   path-walk doesn't invoke meta_path finders, so it sees an empty
+#   site-packages/<namespace>/ directory and reports the lib as untyped
+#   even when py.typed is shipped in source. Classic mode produces real
+#   sys.path entries that mypy traverses normally.
+#   Scoped to the local package via --config-settings-package (not the
+#   global --config-settings). The setting is a setuptools-only concept;
+#   passing it globally leaks it to transitive sdist builds whose backends
+#   don't recognize it (numpy 1.x's meson-python errors on it with
+#   "Unknown option editable_mode").
 EDITABLE_COMPAT_FLAG := $(if $(DIST_NAME_FROM_PROJECT),--config-settings-package $(DIST_NAME_FROM_PROJECT):editable_mode=compat,)
 
 PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
@@ -141,23 +154,17 @@ create-env: # Create a new conda environment
 .PHONY: install
 install: ENV_REQS?=dev
 install: UV_FLAGS?=
+install: CHANGED_LIBS?=
 install: # Install package and dependencies
 	pip install uv
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
-	# NOTE: editable_mode=compat: produces a classic .pth-based editable install
-	#   (sys.path entry pointing at src/) instead of the PEP 660 default
-	#   (sys.meta_path finder). The PEP 660 mode breaks mypy's discovery of
-	#   sibling-namespace packages in monorepo dev setups - mypy's static
-	#   path-walk doesn't invoke meta_path finders, so it sees an empty
-	#   site-packages/<namespace>/ directory and reports the lib as untyped
-	#   even when py.typed is shipped in source. Classic mode produces real
-	#   sys.path entries that mypy traverses normally.
-	#   Scoped to the local package via --config-settings-package (not the
-	#   global --config-settings). The setting is a setuptools-only concept;
-	#   passing it globally leaks it to transitive sdist builds whose backends
-	#   don't recognize it (numpy 1.x's meson-python errors on it with
-	#   "Unknown option editable_mode").
-	uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}
+	@if [ -z "$(strip $(CHANGED_LIBS))" ]; then \
+		set -x; uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}; \
+	else \
+		set -x; python -m vivarium.build_utils.dependency_graph install-editable $(notdir $(CURDIR)) \
+			--changed="$(CHANGED_LIBS)" --env-reqs="$(ENV_REQS)" \
+			--ihme-pypi="$(IHME_PYPI)" --uv-flags="$(UV_FLAGS)"; \
+	fi
 	@$(MAKE) setup-slack
 
 # Path to shared Slack bot token on the team filesystem.

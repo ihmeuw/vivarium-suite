@@ -1,7 +1,23 @@
-**5.4.0 - TBD/TBD/26**
+**5.4.0 - 07/15/26**
 
 - Add support for observations to specify priority for lifecycle events
-- Added priority attribute to `Event`
+- Add priority attribute to `Event`
+
+**5.3.5 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
+**5.3.4 - 07/14/26**
+
+**Breaking changes.** Remove the pre-monorepo attribute-import shims that have lived
+on the ``vivarium`` namespace since the monorepo migration. Callers must now reach
+for the canonical module directly.
+
+- Delete the module-level ``__getattr__`` in ``vivarium/__init__.py``.
+- Delete the module-level ``__getattr__`` in ``vivarium/engine/__init__.py``.
+- Drop the silent ``vivarium.__version__`` passthrough that had piggy-backed on
+  the same ``__getattr__``.
+- Delete the ``_DEPRECATED_REDIRECTS`` table and its accompanying tests in ``libs/engine/tests/test_package.py``.
 
 **5.3.3 - 07/13/26**
 

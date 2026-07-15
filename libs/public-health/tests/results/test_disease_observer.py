@@ -209,7 +209,7 @@ def test_observation_correctness(disease_observer_sim):
         COLUMNS.VALUE,
     ].sum()
     actual_person_times = person_time.groupby(COLUMNS.SUB_ENTITY)[COLUMNS.VALUE].sum()
-    assert np.isclose(actual_tx_count, susceptible_at_start, rtol=0.001)
+    assert actual_tx_count == susceptible_at_start
     assert np.isclose(
         actual_person_times["susceptible_to_with_condition"],
         expected_susceptible_person_time,

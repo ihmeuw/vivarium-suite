@@ -1,6 +1,18 @@
-**6.4.0 - TBD/TBD/26**
+**6.4.0 - 07/15/26**
 
 - Update when population characteristics happen in lifecycle methods
+
+**6.3.9 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
+**6.3.8 - 07/13/26**
+
+- Move stochastic-proportion test assertions to FuzzyChecker and tighten deterministic equality assertions
+
+**6.3.7 - 07/13/26**
+
+- Skip per-build lookup-table interpolation validation
 
 **6.3.6 - 07/08/26**
 
