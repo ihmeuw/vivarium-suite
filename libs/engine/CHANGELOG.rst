@@ -1,3 +1,8 @@
+**5.4.0 - 07/15/26**
+
+- Add support for observations to specify priority for lifecycle events
+- Add priority attribute to `Event`
+
 **5.3.5 - 07/14/26**
 
 - Update stale references for monorepo libraries
