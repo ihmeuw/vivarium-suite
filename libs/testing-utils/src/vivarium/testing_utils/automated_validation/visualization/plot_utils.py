@@ -276,7 +276,6 @@ def _get_combined_data(
     """Get the combined data from the test and reference datasets."""
     test_data, reference_data = comparison.align_datasets(stratifications)
 
-    # Scenario levels were already filtered and dropped during bundle formatting.
 
     # Add input draw with placeholder if necessary
     if DRAW_INDEX in test_data.index.names and DRAW_INDEX not in reference_data.index.names:
