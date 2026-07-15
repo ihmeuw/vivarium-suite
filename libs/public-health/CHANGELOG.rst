@@ -1,3 +1,7 @@
+**6.3.9 - 07/16/26**
+
+- Add class constants to define causal factor observer entity types
+
 **6.3.8 - 07/13/26**
 
 - Move stochastic-proportion test assertions to FuzzyChecker and tighten deterministic equality assertions
