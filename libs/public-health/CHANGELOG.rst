@@ -1,3 +1,15 @@
+**6.3.9 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
+**6.3.8 - 07/13/26**
+
+- Move stochastic-proportion test assertions to FuzzyChecker and tighten deterministic equality assertions
+
+**6.3.7 - 07/13/26**
+
+- Skip per-build lookup-table interpolation validation
+
 **6.3.6 - 07/08/26**
 
 - Share a module-scoped InteractiveContext fixture across the population mortality tests to reduce runtime

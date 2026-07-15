@@ -1,3 +1,7 @@
+**1.2.4 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
 **1.2.3 - 06/30/26**
 
 - Add support for 'make build-env' without access to the IHME Artifactory.

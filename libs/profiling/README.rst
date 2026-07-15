@@ -59,8 +59,8 @@ Profiling and Benchmarking
 
 This repository provides tools for profiling and benchmarking Vivarium simulations
 to analyze their performance characteristics. See the tutorials at
-https://vivarium.readthedocs.io/en/latest/tutorials/running_a_simulation/index.html
-and https://vivarium.readthedocs.io/en/latest/tutorials/exploration.html for general instructions
+https://vivarium-engine.readthedocs.io/en/latest/tutorials/running_a_simulation/index.html
+and https://vivarium-engine.readthedocs.io/en/latest/tutorials/exploration.html for general instructions
 on running simulations with Vivarium.
 
 Configuring Scaling Simulations
