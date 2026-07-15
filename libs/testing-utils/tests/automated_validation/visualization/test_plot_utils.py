@@ -54,13 +54,10 @@ def base_sample_data() -> pd.DataFrame:
 
 @pytest.fixture
 def sample_test_data(base_sample_data: pd.DataFrame) -> pd.DataFrame:
-    """Create test data with two unconditioned variables where the first has more unique values."""
-    # rename extra column to extra test column
+    """Create sim data as bundle formatting produces it: draw level present, scenario level dropped."""
     test_data = base_sample_data.copy()
-    test_data[DRAW_INDEX] = 0  # Add input_draw column
-    test_data["scenario"] = "baseline"
+    test_data[DRAW_INDEX] = 0
     test_data.set_index(DRAW_INDEX, append=True, inplace=True)
-    test_data.set_index("scenario", append=True, inplace=True)
     return test_data
 
 
@@ -85,7 +82,9 @@ def sample_comparison(
         return_value=(sample_test_data, sample_ref_data)
     )
 
-    # Set up test bundle with source and scenarios
+    # Set up test bundle with source and scenarios. Non-empty scenarios paired
+    # with scenario-free data mirrors the real pipeline, where bundle formatting
+    # has already dropped the level (MIC-7214 regression shape).
     mock_comparison.test_bundle = mocker.Mock()
     mock_comparison.test_bundle.source = DataSource.SIM
     mock_comparison.test_bundle.scenarios = {"scenario": "baseline"}
@@ -403,11 +402,10 @@ class TestHelperFunctions:
         sample_ref_data: pd.DataFrame,
     ) -> None:
         """Test that combined data has correct index structure."""
-        test_data = sample_test_data.droplevel("scenario")
         ref_data = sample_ref_data.assign(input_draw=np.nan).set_index(
             [DRAW_INDEX], append=True
         )
-        test_data = test_data.reorder_levels(ref_data.index.names)
+        test_data = sample_test_data.reorder_levels(ref_data.index.names)
         combined_data = pd.concat(
             [test_data, ref_data],
             keys=[

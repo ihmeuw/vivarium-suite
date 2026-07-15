@@ -1,3 +1,8 @@
+**0.7.6 - 07/15/26**
+
+- Fix ``KeyError: 'Level scenario not found'`` when plotting comparisons created
+  with ``scenario_columns`` (``plot_comparison`` / ``plot_all`` / ``generate_results``)
+
 **0.7.5 - 07/14/26**
 
 - Update stale references for monorepo libraries

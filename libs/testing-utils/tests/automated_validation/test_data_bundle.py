@@ -77,6 +77,26 @@ def test_data_bundle_init(
         )
 
 
+def test_data_bundle_init_drops_declared_scenario_levels(
+    sample_age_group_df: pd.DataFrame,
+    sim_result_dir: Path,
+) -> None:
+    """Test that bundle formatting filters and drops declared scenario levels (MIC-7214)."""
+    bundle = RatioMeasureDataBundle(
+        measure=Incidence("disease"),
+        source=DataSource.SIM,
+        data_loader=DataLoader(sim_result_dir),
+        age_group_df=sample_age_group_df,
+        scenarios={"scenario": "baseline"},
+    )
+
+    expected_index = pd.Index(["A", "B"], name="stratify_column")
+    expected_numerator_data = pd.DataFrame({"value": [3.0, 5.0]}, index=expected_index)
+    expected_denominator_data = pd.DataFrame({"value": [17.0, 29.0]}, index=expected_index)
+    assert bundle.datasets["numerator_data"].equals(expected_numerator_data)
+    assert bundle.datasets["denominator_data"].equals(expected_denominator_data)
+
+
 def test_get_metadata(
     mocker: MockFixture,
     mock_ratio_measure: RatioMeasure,
