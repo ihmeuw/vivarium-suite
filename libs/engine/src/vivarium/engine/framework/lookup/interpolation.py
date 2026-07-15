@@ -222,7 +222,7 @@ class Interpolation:
         Raises
         ------
         ValueError
-            If ``extrapolate`` is off and an interpolant falls outside the bins.
+            If ``extrapolate`` is False and an interpolant falls outside the bins.
         KeyError
             If an interpolant carries a categorical value not present in the
             source data.
