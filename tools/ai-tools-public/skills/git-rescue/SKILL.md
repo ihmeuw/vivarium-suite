@@ -1,4 +1,5 @@
 ---
+name: git-rescue
 description: "Diagnose and untangle a messy git situation (stuck rebases, stacked-branch conflicts after squash-merge, divergent history, dropped commits)."
 argument-hint: "Optional: short description of what's wrong. If omitted, inspect the current branch and figure it out."
 allowed-tools: Read, Edit, Write, Bash

@@ -1,4 +1,5 @@
 ---
+name: type-hinter
 description: "Type-hint a target — a whole package, a sub-folder, or individual files — until it conforms to the package's mypy config. Runs as the lead of an agent team: resolves the inter-file dependency graph, spawns one autonomous teammate per file, and lets teammates negotiate shared type contracts directly. Requires Claude Code agent teams (experimental)."
 argument-hint: "What to type-hint: a package or sub-folder path, a glob, or individual .py files — all within one libs/<pkg>/."
 allowed-tools: Read, Edit, Grep, Glob, Bash, Agent(_type_hint_file)

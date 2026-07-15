@@ -1,4 +1,5 @@
 ---
+name: model-regression-debugger
 description: "Trace a simulation regression across vivarium repositories to identify the behavioral change causing it."
 argument-hint: "Describe the regression symptom, repos/branches involved, and any researcher hypotheses."
 allowed-tools: Read, Grep, Glob, Bash, Agent(_diff_analyzer, _hypothesis_tester)

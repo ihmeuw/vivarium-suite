@@ -1,4 +1,5 @@
 ---
+name: framework-development
 description: "Guided design→implement→verify→PR loop for a well-scoped framework feature."
 argument-hint: "A MIC ticket key, design doc, or description of the feature to build."
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(_test_writer, _feature_implementer, _validator, _review_maintainability, _review_dry, _review_design, _review_tests, _review_documentation, _review_scorer)
