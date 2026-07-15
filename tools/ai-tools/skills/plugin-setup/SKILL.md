@@ -7,9 +7,9 @@ description: Use when the user is performing post-install configuration for comp
 
 Some components shipped by this plugin need configuration that the plugin install itself doesn't perform. When the user asks about completing setup for one of the items below, walk them through it.
 
-## Experimental agent teams (for `/viv:type-hinter`)
+## Experimental agent teams (for `/viv-public:type-hinter`)
 
-The `/viv:type-hinter` command runs as an agent team — one autonomous
+The `/viv-public:type-hinter` skill runs as an agent team — one autonomous
 teammate per file, coordinating directly. Agent teams are an
 experimental, opt-in Claude Code feature, and the command has no
 single-agent fallback, so enable it before using the command. Two

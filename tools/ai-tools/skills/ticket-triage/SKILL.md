@@ -1,6 +1,6 @@
 ---
 name: ticket-triage
-description: Use after a code review when some findings won't be addressed in the current PR — triages them into Jira ticket recommendations. Classifies each unaddressed finding (address-now / ticket / drop), groups ticket candidates by theme, checks the MIC backlog for duplicates via the `_duplicate_finder` sub-agent, then drafts and files tickets per team conventions, every write gated on explicit user approval. Trigger on "triage the findings", "file tickets for the rest", "turn these review comments into tickets", or when the user defers review findings after `/viv:code-reviewer`.
+description: Use after a code review when some findings won't be addressed in the current PR — triages them into Jira ticket recommendations. Classifies each unaddressed finding (address-now / ticket / drop), groups ticket candidates by theme, checks the MIC backlog for duplicates via the `_duplicate_finder` sub-agent, then drafts and files tickets per team conventions, every write gated on explicit user approval. Trigger on "triage the findings", "file tickets for the rest", "turn these review comments into tickets", or when the user defers review findings after `/viv-public:code-reviewer`.
 ---
 
 # Ticket triage

@@ -1,6 +1,6 @@
 ---
 name: repo-maintenance
-description: Audit the repo's AI plaintext — the ai-tools plugin (skills, agents, commands, README) and CLAUDE.md — for drift against the upstream sources those docs mirror, then fix approved findings. Use when the user asks to "audit the skills", "check the AI docs for staleness", "run repo maintenance", or wonders whether the tooling docs are still accurate. Expensive (a fan-out over every unit with live upstream checks) — don't trigger it as a side effect of other work.
+description: Audit the repo's AI plaintext — both ai-tools plugins, viv (tools/ai-tools) and viv-public (tools/ai-tools-public) (skills, agents, READMEs), and CLAUDE.md — for drift against the upstream sources those docs mirror, then fix approved findings. Use when the user asks to "audit the skills", "check the AI docs for staleness", "run repo maintenance", or wonders whether the tooling docs are still accurate. Expensive (a fan-out over every unit with live upstream checks) — don't trigger it as a side effect of other work.
 ---
 
 # Repo maintenance
@@ -12,17 +12,16 @@ move; the plaintext doesn't. This skill audits every unit against its
 upstreams, reports what has drifted, and applies fixes the user
 approves.
 
-The audited surface is `tools/ai-tools/**` plus the repo root
-`CLAUDE.md`.
+The audited surface is `tools/ai-tools/**` and `tools/ai-tools-public/**`
+plus the repo root `CLAUDE.md`.
 
 ## Process
 
 1. **Enumerate.** Build the unit list: one unit per directory under
-   `tools/ai-tools/skills/` (all files in the directory belong to the
-   unit), one per file in `tools/ai-tools/agents/` and
-   `tools/ai-tools/commands/`, plus `tools/ai-tools/README.rst` and the
-   repo root `CLAUDE.md`. The CHANGELOG is history, not claims — skip
-   it. Record the count; the final report must account for every unit.
+   each plugin's `skills/` (all files in the directory belong to the
+   unit), one per file in each plugin's `agents/`, plus each plugin's
+   `README.rst` and the repo root `CLAUDE.md`. The CHANGELOGs are
+   history, not claims — skip them. Record the count; the final report must account for every unit.
 2. **Fan out.** Spawn one `viv:_claim_auditor` sub-agent per unit (in
    parallel batches). Each extracts the unit's load-bearing checkable
    claims and verifies them in the same pass — the agent file owns the
