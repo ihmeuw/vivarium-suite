@@ -9,15 +9,14 @@ import pytest
 from vivarium.engine.framework.lookup.interpolation import (
     ContinuousParameter,
     Interpolation,
-    Order0Interp,
     check_data_complete,
     validate_parameters,
 )
 
 
 def _continuous_param(name: str) -> ContinuousParameter:
-    """Build a parameter record from its base name."""
-    return ContinuousParameter(name, f"{name}_start", f"{name}_end")
+    """Build a naming-only parameter record for direct validator calls."""
+    return ContinuousParameter(name, f"{name}_start", f"{name}_end", np.array([]), None)
 
 
 def make_bin_edges(data: pd.DataFrame, col: str) -> pd.DataFrame:
@@ -352,7 +351,7 @@ def test_check_data_missing_combos() -> None:
     assert "combination" in message
 
 
-def test_order0interp() -> None:
+def test_order_zero_3d_no_key_column() -> None:
     data = pd.DataFrame(
         {
             "year_start": [1990, 1990, 1990, 1990, 1995, 1995, 1995, 1995],
@@ -365,13 +364,7 @@ def test_order0interp() -> None:
         }
     )
 
-    interp = Order0Interp(
-        data,
-        [_continuous_param("age"), _continuous_param("year"), _continuous_param("height")],
-        ["value"],
-        True,
-        True,
-    )
+    interp = _order0_interpolation(data)
 
     interpolants = pd.DataFrame(
         {
@@ -494,39 +487,6 @@ def test_order_zero_3d_with_key_col() -> None:
 
 
 def test_order_zero_diff_bin_sizes() -> None:
-    data = pd.DataFrame(
-        {
-            "year_start": [
-                1990,
-                1995,
-                1996,
-                2005,
-                2005.5,
-            ],
-            "year_end": [1995, 1996, 2005, 2005.5, 2010],
-            "value": [1, 5, 2.3, 6, 100],
-        }
-    )
-
-    i = Interpolation(
-        data,
-        value_columns=pd.Index(["value"]),
-        order=0,
-        extrapolate=False,
-        validate=True,
-    )
-
-    query = pd.DataFrame({"year": [2007, 1990, 2005.4, 1994, 2004, 1995, 2002, 1995.5, 1996]})
-
-    expected_result = pd.DataFrame({"value": [100, 1, 6, 1, 2.3, 5, 2.3, 5, 2.3]})
-
-    assert i(query).equals(expected_result)
-
-
-def test_order_zero_given_call_column() -> None:
-    # The auto-detected continuous parameter ("year") matches both the bin-edge
-    # prefix and the query column name; the redundant "year" column from the
-    # legacy test data is dropped since the new design infers the call column.
     data = pd.DataFrame(
         {
             "year_start": [
@@ -745,7 +705,7 @@ def test_unknown_category_in_query_raises() -> None:
     interp = _order0_interpolation(data)
 
     query = pd.DataFrame({"year": [1995], "sex": ["Other"]})
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="absent from the interpolation"):
         interp(query)
 
 
@@ -777,6 +737,12 @@ class TestDuplicateKeyRows:
         with pytest.raises(ValueError, match="uniquely identified") as error:
             _order0_interpolation(data)
         assert "Male" in str(error.value)
+
+    def test_validate_false_raises_on_call(self, data: pd.DataFrame) -> None:
+        """With validate=False the duplicate surfaces as a MergeError at call time."""
+        interp = _order0_interpolation(data, validate=False)
+        with pytest.raises(pd.errors.MergeError):
+            interp(pd.DataFrame({"sex": ["Male"]}))
 
 
 def test_no_parameters_broadcasts_value() -> None:
@@ -888,30 +854,3 @@ def test_order_zero_multi_group() -> None:
         index=[5, 2, 8, 0, 7, 3],
     )
     assert interp(query).equals(expected)
-
-
-@pytest.mark.parametrize("validate", [True, False])
-def test_order0interp_validate_option_invalid_data(validate: bool) -> None:
-    data = pd.DataFrame(
-        {
-            "year_start": [1995, 1995, 2000, 2005, 2010],
-            "year_end": [2000, 2000, 2005, 2010, 2015],
-        }
-    )
-
-    if validate:
-        with pytest.raises(ValueError) as error:
-            interp = Order0Interp(data, [_continuous_param("year")], [], True, validate)
-            message = error.value.args[0]
-            assert "year_start" in message and "year_end" in message
-    else:
-        interp = Order0Interp(data, [_continuous_param("year")], [], True, validate)
-
-
-@pytest.mark.parametrize("validate", [True, False])
-def test_order0interp_validate_option_valid_data(validate: bool) -> None:
-    data = pd.DataFrame(
-        {"year_start": [1990, 1995], "year_end": [1995, 2000], "value": [5, 3]}
-    )
-
-    interp = Order0Interp(data, [_continuous_param("year")], ["value"], True, validate)
