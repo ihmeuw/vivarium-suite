@@ -6,7 +6,6 @@
    Use your best judgement.
 
 """
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -15,15 +14,12 @@ import click
 from loguru import logger
 
 from {{cookiecutter.package_name}}.constants import data_keys, metadata
-from {{cookiecutter.package_name}}.tools.app_logging import (
-    add_logging_sink,
-    decode_status
-)
+from {{cookiecutter.package_name}}.tools.app_logging import add_logging_sink
 from {{cookiecutter.package_name}}.utilities import sanitize_location
 
 
 def running_from_cluster() -> bool:
-    import vivarium_cluster_tools as vct
+    import vivarium.cluster_tools as vct
 
     return "slurm" in vct.get_cluster_name()
 
@@ -78,6 +74,7 @@ def build_artifacts(
     append: bool,
     replace_keys: tuple,
     verbose: int,
+    resume: bool = False,
 ) -> None:
     """Main application function for building artifacts.
     Parameters
@@ -101,20 +98,33 @@ def build_artifacts(
         False or if there is no existing artifact at the output location
     verbose
         How noisy the logger should be.
+    resume
+        Resume the previous ``-l all`` build in ``output_dir`` instead of
+        starting fresh, rerunning only the locations that did not finish.
+        Supported only for on-cluster ``all`` builds.
     """
-    import vivarium_cluster_tools as vct
+    import vivarium.cluster_tools as vct
 
     output_dir = Path(output_dir)
     vct.mkdir(output_dir, parents=True, exists_ok=True)
 
-    check_for_existing(output_dir, location, append, replace_keys)
+    on_cluster = running_from_cluster()
+    if resume and not (location == "all" and on_cluster):
+        raise ValueError(
+            "--resume is only supported for on-cluster '-l all' builds "
+            f"(got location={location!r}, on cluster={on_cluster})."
+        )
+
+    # A resume keeps the finished artifacts, so skip the delete-and-rebuild prompt.
+    if not resume:
+        check_for_existing(output_dir, location, append, replace_keys)
 
     if location in metadata.LOCATIONS:
         build_single(location, years, output_dir, replace_keys)
     elif location == "all":
-        if running_from_cluster():
+        if on_cluster:
             # parallel build when on cluster
-            build_all_artifacts(output_dir, years, verbose)
+            build_all_artifacts(output_dir, years, verbose, resume=resume)
         else:
             # serial build when not on cluster
             for loc in metadata.LOCATIONS:
@@ -126,8 +136,36 @@ def build_artifacts(
         )
 
 
-def build_all_artifacts(output_dir: Path, years: str | None, verbose: int) -> None:
-    """Builds artifacts for all locations in parallel.
+def _resolve_workflow_name(output_dir: Path, resume: bool) -> str:
+    """Return the Jobmon workflow name for this build.
+
+    A fresh build gets a unique, timestamped name recorded in a small sidecar file
+    in ``output_dir``; a resume reads that sidecar back so Jobmon matches the prior
+    run and reruns only its unfinished tasks. The sidecar is overwritten on each
+    fresh build, so it never needs manual cleanup.
+    """
+    sidecar = output_dir / ".artifact_workflow"
+    if resume:
+        if not sidecar.exists():
+            raise FileNotFoundError(
+                f"No previous build found to resume in {output_dir} (missing "
+                f"'{sidecar.name}'). Run without --resume to start a fresh build."
+            )
+        return sidecar.read_text().strip()
+    workflow_name = f"make_artifacts_{int(time.time())}"
+    sidecar.write_text(workflow_name)
+    return workflow_name
+
+
+def build_all_artifacts(
+    output_dir: Path, years: str | None, verbose: int, resume: bool = False
+) -> None:
+    """Build artifacts for all locations in parallel via a Jobmon workflow.
+
+    Fan one independent task out per location into a single Jobmon workflow so
+    the locations build concurrently on SLURM. Each task re-invokes this
+    module's ``__main__`` entry point to build one location's artifact.
+
     Parameters
     ----------
     output_dir
@@ -137,66 +175,66 @@ def build_all_artifacts(output_dir: Path, years: str | None, verbose: int) -> No
         If not specified, make for most recent year.
     verbose
         How noisy the logger should be.
+    resume
+        Resume the previous build in ``output_dir`` (matched via the workflow name
+        recorded there) instead of starting fresh, rerunning only the locations
+        that did not finish.
+
     Note
     ----
         This function should not be called directly.  It is intended to be
         called by the :func:`build_artifacts` function located in the same
         module.
     """
-    from vivarium_cluster_tools.utilities import get_drmaa
+    from vivarium.cluster_tools.core.cluster.interface import NativeSpecification
+    from vivarium.cluster_tools.core.jobmon.artifact import build_artifacts_in_parallel
 
-    drmaa = get_drmaa()
+    worker_logging_root = output_dir / "logs"
+    worker_logging_root.mkdir(parents=True, exist_ok=True)
 
-    jobs = {}
-    with drmaa.Session() as session:
-        for location in metadata.LOCATIONS:
-            location_cleaned = sanitize_location(location)
-            path = output_dir / f"{location_cleaned}.hdf"
+    workflow_name = _resolve_workflow_name(output_dir, resume)
 
-            job_template = session.createJobTemplate()
-            job_template.remoteCommand = shutil.which("python")
-            job_template.args = [__file__, str(path), f'"{location}"', str(years)]
-            job_template.jobEnvironment = {
-                "LC_ALL": "en_US.UTF-8",
-                "LANG": "en_US.UTF-8",
-            }
-            job_template.nativeSpecification = (
-                f"-A {metadata.CLUSTER_PROJECT} "
-                f"-p {metadata.CLUSTER_QUEUE} "
-                f"--mem={metadata.MAKE_ARTIFACT_MEM*1024} "
-                f"-c {metadata.MAKE_ARTIFACT_CPU} "
-                f"-t {metadata.MAKE_ARTIFACT_RUNTIME} "
-                f"-C archive "  # Need J-drive access for data
-                f"-J {location_cleaned}_artifact"  # Name of the job
-            )
-            jobs[location] = (session.runJob(job_template), drmaa.JobState.UNDETERMINED)
-            logger.info(
-                f"Submitted job {jobs[location][0]} to build artifact for {location}."
-            )
-            session.deleteJobTemplate(job_template)
+    python = sys.executable
+    this_file = Path(__file__).resolve()
+    build_commands: dict[str, str] = {}
+    for location in metadata.LOCATIONS:
+        location_cleaned = sanitize_location(location)
+        artifact_path = output_dir / f"{location_cleaned}.hdf"
+        build_commands[
+            f"{location_cleaned}_artifact"
+        ] = f'{python} {this_file} "{artifact_path}" "{location}" {years}'
 
-        if verbose:
-            logger.info("Entering monitoring loop.")
-            logger.info("-------------------------")
-            logger.info("")
+    native_specification = NativeSpecification(
+        job_name="make_artifacts",
+        project=metadata.CLUSTER_PROJECT,
+        queue=metadata.CLUSTER_QUEUE,
+        peak_memory=metadata.MAKE_ARTIFACT_MEM,
+        max_runtime=metadata.MAKE_ARTIFACT_RUNTIME,
+        hardware=[],
+        cores=metadata.MAKE_ARTIFACT_CPU,
+        requires_archive_node=True,  # need archive-node (J-drive) access for input data
+    )
 
-            while any(
-                [
-                    job[1] not in [drmaa.JobState.DONE, drmaa.JobState.FAILED]
-                    for job in jobs.values()
-                ]
-            ):
-                for location, (job_id, status) in jobs.items():
-                    jobs[location] = (job_id, session.jobStatus(job_id))
-                    logger.info(
-                        f"{location:<35}: {decode_status(drmaa, jobs[location][1]):>15}"
-                    )
-                logger.info("")
-                time.sleep(metadata.MAKE_ARTIFACT_SLEEP)
-                logger.info("Checking status again")
-                logger.info("---------------------")
-                logger.info("")
+    try:
+        _, monitoring_url = build_artifacts_in_parallel(
+            workflow_name=workflow_name,
+            build_commands=build_commands,
+            native_specification=native_specification,
+            worker_logging_root=worker_logging_root,
+            env_prefix=sys.prefix,
+            resume=resume,
+            max_concurrently_running=len(build_commands),
+        )
+    except RuntimeError:
+        logger.error(
+            "Some location artifacts did not finish. Rerun the same command with "
+            "--resume to retry only the locations that did not complete."
+        )
+        raise
 
+    logger.info(f"Built artifacts for {len(build_commands)} locations.")
+    if monitoring_url:
+        logger.info(f"Monitor progress in the Jobmon GUI at: {monitoring_url}")
     logger.info("**Done**")
 
 
