@@ -62,7 +62,7 @@ class FertilityDeterministic(Component):
     # Event-driven methods #
     ########################
 
-    def on_time_step(self, event: Event) -> None:
+    def on_time_step_prepare(self, event: Event) -> None:
         """Add a set number of simulants to the population each time step.
 
         Parameters
@@ -334,7 +334,7 @@ class FertilityCrudeBirthRate(Component):
     # Event-driven methods #
     ########################
 
-    def on_time_step(self, event: Event) -> None:
+    def on_time_step_prepare(self, event: Event) -> None:
         """Add new simulants based on :term:`crude birth rate <Crude Birth Rate>` and a Poisson distribution.
 
         Parameters
@@ -468,7 +468,7 @@ class FertilityAgeSpecificRates(Component):
 
         self.population_view.initialize(pop_update)
 
-    def on_time_step(self, event: Event) -> None:
+    def on_time_step_prepare(self, event: Event) -> None:
         """Produce new children and update parent status on time steps.
 
         Parameters
