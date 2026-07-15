@@ -1,7 +1,7 @@
 **5.4.0 - 07/15/26**
 
 - Add support for observations to specify priority for lifecycle events
-- Added priority attribute to `Event`
+- Add priority attribute to `Event`
 
 **5.3.5 - 07/14/26**
 
