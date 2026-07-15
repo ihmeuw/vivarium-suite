@@ -64,12 +64,16 @@ Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst
 
 `workflow_dispatch` and `release: published` paths exist for manual/recovery releases of a specific lib.
 
-The `tools/ai-tools` Claude Code plugin is *not* a PyPI package, so it has its own
-`.github/workflows/release-ai-tools.yml`. It fires when `tools/ai-tools/CHANGELOG.rst` is
-touched on `main`, parses the version from the same `**X.Y.Z - MM/DD/YY**` first line, and
-creates+pushes a `vivarium-ai-tools-v<X.Y.Z>` tag plus a GitHub Release - no build, test, or
-PyPI publish. It is kept separate from `release.yml` so the plugin release never touches that
-workflow's PyPI trusted-publishing credential path (its `id-token: write` permission).
+The Claude Code plugins are *not* PyPI packages, so each has its own tag-and-release
+workflow: `tools/ai-tools` (the `viv` plugin) releases via
+`.github/workflows/release-ai-tools.yml` (tag `vivarium-ai-tools-v<X.Y.Z>`), and
+`tools/ai-tools-public` (the `viv-public` plugin, the generic subset any IHME team can
+install) via `.github/workflows/release-ai-tools-public.yml` (tag
+`vivarium-ai-tools-public-v<X.Y.Z>`). Each fires when its plugin's `CHANGELOG.rst` is
+touched on `main` and parses the version from the same `**X.Y.Z - MM/DD/YY**` first line —
+no build, test, or PyPI publish. They are kept separate from `release.yml` so plugin
+releases never touch that workflow's PyPI trusted-publishing credential path (its
+`id-token: write` permission).
 
 ## Note on packaging
 
