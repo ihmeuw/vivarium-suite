@@ -1,7 +1,6 @@
 **0.7.6 - 07/15/26**
 
-- Fix ``KeyError: 'Level scenario not found'`` when plotting comparisons created
-  with ``scenario_columns`` (``plot_comparison`` / ``plot_all`` / ``generate_results``)
+- Remove duplicated scenario level filter
 
 **0.7.5 - 07/14/26**
 
