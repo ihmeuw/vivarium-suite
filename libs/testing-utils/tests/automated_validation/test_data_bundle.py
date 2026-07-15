@@ -81,7 +81,7 @@ def test_data_bundle_init_drops_declared_scenario_levels(
     sample_age_group_df: pd.DataFrame,
     sim_result_dir: Path,
 ) -> None:
-    """Test that bundle formatting filters and drops declared scenario levels (MIC-7214)."""
+    """Test that bundle formatting filters and drops declared scenario levels.."""
     bundle = RatioMeasureDataBundle(
         measure=Incidence("disease"),
         source=DataSource.SIM,

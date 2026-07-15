@@ -82,9 +82,8 @@ def sample_comparison(
         return_value=(sample_test_data, sample_ref_data)
     )
 
-    # Set up test bundle with source and scenarios. Non-empty scenarios paired
-    # with scenario-free data mirrors the real pipeline, where bundle formatting
-    # has already dropped the level (MIC-7214 regression shape).
+    # Set up test bundle with source and scenarios.
+    # Bundle formatting drops the scenario level.
     mock_comparison.test_bundle = mocker.Mock()
     mock_comparison.test_bundle.source = DataSource.SIM
     mock_comparison.test_bundle.scenarios = {"scenario": "baseline"}
