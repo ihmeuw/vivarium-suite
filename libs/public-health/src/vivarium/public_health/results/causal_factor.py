@@ -51,7 +51,7 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
 
     """
 
-    ENTITY_TYPE = "risk_factor"
+    ARTIFACT_ENTITY_TYPE = "risk_factor"
 
     #####################
     # Lifecycle methods #
@@ -77,7 +77,7 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
         """Set up the observer."""
         self.step_size = builder.time.step_size()
         self.categories = builder.data.load(
-            f"{self.ENTITY_TYPE}.{self.causal_factor}.categories"
+            f"{self.ARTIFACT_ENTITY_TYPE}.{self.causal_factor}.categories"
         )
 
     def get_configuration_name(self) -> str:
@@ -256,7 +256,7 @@ class CategoricalInterventionObserver(CategoricalCausalFactorObserver):
 
     """
 
-    ENTITY_TYPE = "intervention"
+    ARTIFACT_ENTITY_TYPE = "intervention"
 
     @property
     def name(self) -> str:

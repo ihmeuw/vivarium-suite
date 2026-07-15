@@ -1,6 +1,7 @@
 **6.3.9 - 07/16/26**
 
-- Add class constants to define causal factor observer entity types
+- Fix ``CategoricalInterventionObserver`` to load categories from the ``intervention``
+  artifact key instead of the hardcoded ``risk_factor`` key
 
 **6.3.8 - 07/13/26**
 
