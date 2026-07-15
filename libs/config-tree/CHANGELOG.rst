@@ -1,3 +1,16 @@
+**5.0.11 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
+**5.0.10 - 07/14/26**
+
+**Breaking change.** Remove the ``LayeredConfigTree`` deprecation alias that has
+been re-exported from ``vivarium.config_tree`` since the monorepo migration. Callers
+must now use the canonical name ``ConfigTree``.
+
+- Delete the module-level ``__getattr__`` in ``vivarium/config_tree/__init__.py``.
+- Delete related deprecation test cases.
+
 **5.0.9 - 07/06/26**
 
 - Add PyPI classifiers

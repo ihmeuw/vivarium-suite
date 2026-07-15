@@ -192,7 +192,7 @@ intersphinx_mapping = {
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "tables": ("https://www.pytables.org/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "vivarium": ("https://vivarium.readthedocs.io/en/latest/", None),
+    "vivarium_engine": ("https://vivarium-engine.readthedocs.io/en/latest/", None),
     "click": ("https://click.palletsprojects.com/en/latest/", None),
 }
 
