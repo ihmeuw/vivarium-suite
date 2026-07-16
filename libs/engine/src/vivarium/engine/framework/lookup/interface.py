@@ -15,7 +15,6 @@ from typing import Any, overload
 
 import pandas as pd
 
-from vivarium.engine.framework.lookup.interpolation import has_named_row_index
 from vivarium.engine.framework.lookup.manager import LookupTableManager
 from vivarium.engine.framework.lookup.table import (
     FLAT_DATAFRAME_DEPRECATION_MESSAGE,
@@ -23,7 +22,12 @@ from vivarium.engine.framework.lookup.table import (
     LookupTable,
 )
 from vivarium.engine.manager import Interface
-from vivarium.engine.types import DataFrameMapping, LookupTableData, ScalarValue
+from vivarium.engine.types import (
+    DataFrameMapping,
+    LookupTableData,
+    ScalarValue,
+    has_named_row_index,
+)
 
 _ScalarOrListData = ScalarValue | list[ScalarValue] | tuple[ScalarValue, ...]
 
