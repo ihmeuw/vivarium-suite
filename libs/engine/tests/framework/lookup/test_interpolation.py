@@ -703,6 +703,34 @@ def test_no_merge_fanout_on_shared_bin_edges() -> None:
     assert result.equals(pd.DataFrame({"value": [10, 20, 30, 40, 50]}))
 
 
+class TestNonUniformBinsAcrossGroups:
+    """Bin edges that differ across categorical groups — the data shape uniform-bins validation rejects."""
+
+    @pytest.fixture
+    def data(self) -> pd.DataFrame:
+        # Male has bins [1990, 1995), [1995, 2000); Female has a single [1990, 2000).
+        return pd.DataFrame(
+            {
+                "sex": ["Male", "Male", "Female"],
+                "year_start": [1990, 1995, 1990],
+                "year_end": [1995, 2000, 2000],
+                "value": [1, 2, 3],
+            }
+        )
+
+    def test_validate_true_raises_at_construction(self, data: pd.DataFrame) -> None:
+        """Construction raises, naming the offending parameter."""
+        with pytest.raises(ValueError, match="different bin edges") as error:
+            _order0_interpolation(data)
+        assert "year" in str(error.value)
+
+    def test_validate_false_constructs_and_resolves(self, data: pd.DataFrame) -> None:
+        """With validate=False the non-uniform data is accepted at construction."""
+        interp = _order0_interpolation(data, validate=False)
+        result = interp(pd.DataFrame({"sex": ["Male", "Male"], "year": [1992, 1997]}))
+        assert result["value"].tolist() == [1, 2]
+
+
 def test_unknown_category_in_query_raises() -> None:
     """Calling with a categorical value that is absent from the source data raises KeyError."""
     data = pd.DataFrame(
@@ -731,6 +759,26 @@ def test_purely_categorical_table() -> None:
     assert result.equals(pd.DataFrame({"value": [1, 1, 2]}))
 
 
+class TestDuplicateKeyRows:
+    """Rows that share one lookup key — duplicates must raise, never silently resolve."""
+
+    @pytest.fixture
+    def data(self) -> pd.DataFrame:
+        # "Male" appears twice with conflicting values.
+        return pd.DataFrame(
+            {
+                "sex": ["Male", "Male", "Female"],
+                "value": [1, 99, 2],
+            }
+        )
+
+    def test_validate_true_raises_at_construction(self, data: pd.DataFrame) -> None:
+        """Construction raises, naming the duplicated keys."""
+        with pytest.raises(ValueError, match="uniquely identified") as error:
+            _order0_interpolation(data)
+        assert "Male" in str(error.value)
+
+
 def test_no_parameters_broadcasts_value() -> None:
     """A single-row table with neither categorical nor continuous parameters broadcasts its value to every interpolant."""
     data = pd.DataFrame({"value": [42]})
@@ -742,6 +790,13 @@ def test_no_parameters_broadcasts_value() -> None:
     result = interp(query)
     assert result["value"].tolist() == [42, 42, 42]
     assert result.index.equals(query.index)
+
+
+def test_no_parameters_multi_row_raises() -> None:
+    """A multi-row table with no parameters is ambiguous and raises at construction."""
+    data = pd.DataFrame({"value": [42, 99]})
+    with pytest.raises(ValueError, match="single row"):
+        _order0_interpolation(data)
 
 
 def test_integer_value_dtype_preserved() -> None:
