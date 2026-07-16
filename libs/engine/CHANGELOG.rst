@@ -1,3 +1,8 @@
+**5.5.0 - 07/16/26**
+
+- Vectorize order-0 interpolation into a single ``numpy.digitize`` + ``pandas.merge`` (removing ``Order0Interp``), and validate the lookup contract more strictly: raise on non-unique keys or bin edges that differ across categorical groups.
+- API: continuous lookup parameters are now ``ContinuousParameter`` records, and ``has_named_row_index`` moved to ``vivarium.engine.types``.
+
 **5.4.0 - 07/15/26**
 
 - Add support for observations to specify priority for lifecycle events
