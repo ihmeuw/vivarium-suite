@@ -9,7 +9,6 @@ from vivarium.engine import InteractiveContext
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.population import BasePopulation
 from vivarium.public_health.results.causal_factor import (
-    CategoricalCausalFactorObserver,
     CategoricalInterventionObserver,
     CategoricalRiskObserver,
 )
@@ -22,10 +21,6 @@ from vivarium.public_health.utilities import to_years
 @pytest.mark.parametrize(
     "observer, expected_key",
     [
-        (
-            CategoricalCausalFactorObserver("test_factor"),
-            "risk_factor.test_factor.categories",
-        ),
         (CategoricalRiskObserver("test_risk"), "risk_factor.test_risk.categories"),
         (
             CategoricalInterventionObserver("test_intervention"),

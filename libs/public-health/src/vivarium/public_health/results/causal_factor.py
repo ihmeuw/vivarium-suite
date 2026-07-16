@@ -51,8 +51,6 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
 
     """
 
-    ARTIFACT_ENTITY_TYPE = "risk_factor"
-
     #####################
     # Lifecycle methods #
     #####################
@@ -203,6 +201,8 @@ class CategoricalRiskObserver(CategoricalCausalFactorObserver):
         The categories of the risk factor.
 
     """
+
+    ARTIFACT_ENTITY_TYPE = "risk_factor"
 
     @property
     def name(self) -> str:
