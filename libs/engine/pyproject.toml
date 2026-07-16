@@ -128,9 +128,3 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests/"]
-
-[tool.coverage.run]
-source = ["vivarium.engine"]
-
-[tool.coverage.report]
-show_missing = true

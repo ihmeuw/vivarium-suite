@@ -1,3 +1,10 @@
+**4.4.1 - 07/15/26**
+
+- Stop publishing test-coverage HTML reports in CI: remove the orphaned
+  ``publishHTML`` step and the unused ``--cov`` makefile plumbing, which logged a
+  spurious "Specified HTML directory does not exist" error on every build
+- Drop the now-unused ``[tool.coverage]`` configuration
+
 **4.4.0 - 07/13/26**
 
 - Add ``vivarium.build_utils.dependency_graph`` package for cross-library handling

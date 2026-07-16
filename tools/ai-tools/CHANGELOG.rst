@@ -1,3 +1,7 @@
+**0.23.1 - 07/15/26**
+
+ - ``pytest`` skill: remove stale coverage instructions (the ``--cov``/``htmlcov`` command and ``## Coverage`` section, plus the README catalog blurb) now that CI no longer reports test coverage
+
 **0.23.0 - 07/06/26**
 
  - Add ``model-development`` skill (``/viv:model-development``) for an end-to-end model iteration loop

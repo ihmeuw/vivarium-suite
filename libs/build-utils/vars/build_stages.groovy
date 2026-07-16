@@ -147,18 +147,6 @@ def runTests(List test_types, boolean runWeekly) {
                     ["${full_name(it)} Tests" : {
                         stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
                             sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}${runWeekly ? ' RUNWEEKLY=1' : ''}"
-                            // Map test target names to coverage directory names
-                            // test-all -> htmlcov_tests, test-unit -> htmlcov_unit, etc.
-                            def coverageDir = it == 'test-all' ? 'tests' : it.replace('test-', '')
-                            publishHTML([
-                                allowMissing: true,
-                                alwaysLinkToLastBuild: false,
-                                keepAll: true,
-                                reportDir: "output/htmlcov_${coverageDir}",
-                                reportFiles: "index.html",
-                                reportName: "Coverage Report - ${full_name(it)} tests",
-                                reportTitles: ''
-                            ])
                         }
                     }]
                 }
