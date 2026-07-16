@@ -57,11 +57,7 @@ class Interpolation:
 
     For order 0 (currently the only supported order) a call resolves each interpolant to
     the bin its continuous parameters fall in and returns that bin's values.
-    The lookup is fully vectorized: a single :func:`numpy.digitize` pass per
-    continuous parameter maps every interpolant to a bin, and a single
-    :meth:`pandas.DataFrame.merge` keyed on the categorical columns plus each
-    parameter's left bin edge retrieves the values for the whole population at
-    once. This requires that the key columns uniquely identify a data row and
+    This requires that the key columns uniquely identify a data row and
     that the bin edges are identical across every categorical group; both are
     validated on construction when ``validate`` is set. With ``validate=False``
     violations surface as a ``KeyError`` or ``pandas.errors.MergeError`` on
@@ -127,8 +123,7 @@ class Interpolation:
         self._key_columns: list[str] = list(self.categorical_parameters) + [
             parameter.start_column for parameter in self._continuous_parameters
         ]
-        # With no key columns there is nothing to merge against: __call__
-        # broadcasts the single data row directly.
+        # No key columns → __call__ broadcasts the single data row.
         self._merge_target: pd.DataFrame | None = (
             self.data[self._key_columns + self._internal_value_columns]
             if self._key_columns

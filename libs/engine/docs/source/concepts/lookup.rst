@@ -54,12 +54,11 @@ population index when called. If the data is a :class:`pandas.DataFrame` or
 :class:`Interpolation <vivarium.engine.framework.lookup.interpolation.Interpolation>`
 object that handles both categorical and continuous parameter lookups. The
 :class:`Interpolation <vivarium.engine.framework.lookup.interpolation.Interpolation>`
-resolves each continuous parameter to a bin with a single vectorized
-``numpy.digitize`` pass over the whole population, then retrieves the values
-for every simulant with one merge keyed on the categorical (key) columns and
-the resolved bin edges. This requires the bin edges to be the same across all
-categorical groups. Tables with only categorical parameters are simply the
-special case where there are no continuous parameters to bin on.
+resolves each continuous parameter to the bin its value falls in and returns
+that bin's values for every simulant. This requires the bin edges to be the
+same across all categorical groups. Tables with only categorical parameters
+are simply the special case where there are no continuous parameters to bin
+on.
 
 Scalars and lists/tuples of scalars are first-class input forms — they're
 broadcast over the population index when the table is called and require no
