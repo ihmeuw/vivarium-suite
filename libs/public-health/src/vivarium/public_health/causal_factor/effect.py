@@ -95,7 +95,7 @@ class CausalFactorEffect(Component, ABC):
                         ``distribution`` column names how the TMREL is drawn from
                         the ``[min, max]`` range and must be one of ``"uniform"``
                         (TMREL drawn uniformly from the range) or ``"draws"``
-                        (draw-level TMRELs, supplied by the research team).
+                        (draw-level TMRELs, one value per draw).
                     relative_risk_scalar:
                         Source for the relative-risk scalar, used for
                         continuous exposures to scale the log-linear relative
@@ -245,15 +245,16 @@ class CausalFactorEffect(Component, ABC):
         """Load and normalize the TMRED data from the configured data source.
 
         The data is resolved from the ``tmred`` data source and normalized to a
-        dict of scalar fields, so callers can read ``result["distribution"]``,
-        ``result["min"]``, and ``result["max"]`` regardless of whether it came
-        from the artifact (a dict) or a configuration data source (a single-row
-        DataFrame).
+        dict of scalar fields keyed by ``distribution``. The ``uniform``
+        distribution additionally carries ``min`` and ``max``; the ``draws``
+        distribution carries its TMREL elsewhere and needs no range. The
+        normalization is identical whether the data came from the artifact (a
+        dict) or a configuration data source (a single-row DataFrame).
 
-        The single-row DataFrame (config) form, with ``distribution``, ``min``,
-        and ``max`` columns (and optionally ``inverted``), is converted to a
-        dict; the dict (artifact) form is used as-is. The resulting dict is
-        validated regardless of source.
+        The single-row DataFrame (config) form, with a ``distribution`` column
+        and — for ``uniform`` — ``min``/``max`` columns, is converted to a dict;
+        the dict (artifact) form is used as-is. The resulting dict is validated
+        regardless of source.
 
         Parameters
         ----------

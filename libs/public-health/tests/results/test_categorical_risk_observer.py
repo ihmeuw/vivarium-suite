@@ -19,27 +19,31 @@ from vivarium.public_health.utilities import to_years
 
 
 @pytest.mark.parametrize(
-    "observer, expected_key",
+    "observer, expected_component",
     [
-        (CategoricalRiskObserver("test_risk"), "risk_factor.test_risk.categories"),
+        (CategoricalRiskObserver("test_risk"), "risk_factor.test_risk"),
         (
             CategoricalInterventionObserver("test_intervention"),
-            "intervention.test_intervention.categories",
+            "intervention.test_intervention",
         ),
     ],
 )
-def test_categories_key_resolution(observer, expected_key):
-    """Each observer resolves its categories from the artifact key for its own
-    entity type; the intervention observer must not use the risk_factor prefix."""
+def test_categories_sourced_from_entity_type_component(observer, expected_component):
+    """Each observer sources categories from its own entity type's component
+    (not the artifact directly); the intervention observer must not use the
+    risk_factor prefix."""
 
-    loaded_keys = []
+    requested = []
 
     builder = MagicMock()
-    builder.data.load.side_effect = lambda key: loaded_keys.append(key)
+    builder.components.get_component.side_effect = (
+        lambda name: requested.append(name) or MagicMock()
+    )
 
     observer.setup(builder)
 
-    assert loaded_keys == [expected_key]
+    assert requested == [expected_component]
+    builder.data.load.assert_not_called()
 
 
 @pytest.fixture
@@ -215,12 +219,11 @@ def test_category_exclusions(base_config, base_plugins, risk, risk_data, exclusi
 
 
 def test_observer_sources_categories_from_risk_component(
-    base_config, base_plugins, categorical_risk
+    base_config, base_plugins, risk, risk_data
 ) -> None:
     """The observer stratifies over the categories from the risk component's
     config data source when the ``categories`` artifact key is withheld.
     """
-    risk, risk_data = categorical_risk
     observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
     simulation = InteractiveContext(
         components=[

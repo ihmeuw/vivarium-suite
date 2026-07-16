@@ -261,9 +261,11 @@ class CausalFactor(Component, ABC):
     def get_categories(self, builder: Builder) -> dict[str, str]:
         """Load and normalize this causal factor's category descriptions.
 
-        Consumers that need categories (e.g. the LBWSG distribution or the
-        categorical observer) obtain them from the owning causal factor via this
-        method rather than loading the ``categories`` key independently.
+        These human-readable descriptions are consumed outside the causal
+        factor (e.g. the LBWSG distribution or the categorical observer), which
+        obtain them here rather than loading the ``categories`` key
+        independently. The component's own distribution works with the category
+        keys carried on the exposure data, so it does not call this method.
 
         The data is resolved from the ``categories`` data source (the artifact
         key ``{causal_factor}.categories`` by default) and normalized to a

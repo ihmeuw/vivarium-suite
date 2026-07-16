@@ -89,9 +89,10 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
         categories the risk defines.
         """
         self.step_size = builder.time.step_size()
-        self.categories = builder.data.load(
-            f"{self.ARTIFACT_ENTITY_TYPE}.{self.causal_factor}.categories"
+        causal_factor_component = builder.components.get_component(
+            f"{self.ARTIFACT_ENTITY_TYPE}.{self.causal_factor}"
         )
+        self.categories = causal_factor_component.get_categories(builder)
 
     def get_configuration_name(self) -> str:
         return self.causal_factor
