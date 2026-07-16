@@ -117,7 +117,12 @@ class Interpolation:
         """Whether to validate inputs on construction and on call."""
 
         if validate:
-            self._validate()
+            validate_parameters(
+                self.data,
+                self.categorical_parameters,
+                self._continuous_parameters,
+                self._internal_value_columns,
+            )
 
         sub_tables: _SubTablesType
 
@@ -202,51 +207,6 @@ class Interpolation:
             columns=dict(zip(list(returned_columns), self._internal_value_columns))
         )
 
-    def _validate(self) -> None:
-        """Validate that the source data satisfies the lookup contract."""
-        validate_parameters(
-            self.data,
-            self.categorical_parameters,
-            self._continuous_parameters,
-            self._internal_value_columns,
-        )
-
-        key_columns = list(self.categorical_parameters) + [
-            parameter.start_column for parameter in self._continuous_parameters
-        ]
-        if key_columns:
-            duplicated = self.data.duplicated(subset=key_columns, keep=False)
-            if duplicated.any():
-                duplicate_keys = self.data.loc[duplicated, key_columns].drop_duplicates()
-                raise ValueError(
-                    f"Interpolation data rows must be uniquely identified by the "
-                    f"key columns {key_columns}, but multiple rows share "
-                    f"these keys:\n{duplicate_keys.to_string(index=False)}"
-                )
-        elif len(self.data) > 1:
-            raise ValueError(
-                f"Interpolation data with no categorical or continuous parameters "
-                f"must be a single row. You provided {len(self.data)} rows."
-            )
-
-        if not (self._continuous_parameters and self.categorical_parameters):
-            return
-
-        groups = [group for _, group in self.data.groupby(self.categorical_parameters)]
-        for parameter in self._continuous_parameters:
-            reference_edges = set(self.data[parameter.start_column])
-            reference_max = self.data[parameter.end_column].max()
-            for group in groups:
-                if (
-                    set(group[parameter.start_column]) != reference_edges
-                    or group[parameter.end_column].max() != reference_max
-                ):
-                    raise ValueError(
-                        f"Continuous parameter '{parameter.name}' has different bin "
-                        f"edges across categorical groups. Interpolation requires "
-                        f"uniform bin edges across all categorical groups."
-                    )
-
     def __call__(self, interpolants: pd.DataFrame) -> pd.DataFrame:
         """Get the interpolated results for the parameters in interpolants.
 
@@ -306,6 +266,7 @@ def validate_parameters(
     continuous_parameters: Sequence[ContinuousParameter],
     value_columns: Sequence[Hashable],
 ) -> None:
+    """Validate that the source data satisfies the lookup contract."""
     if data.empty:
         raise ValueError("You must supply non-empty data to create the interpolation.")
 
@@ -326,6 +287,42 @@ def validate_parameters(
             "Data contains extra columns not in key_columns, parameter_columns, or "
             f"value_columns: {extra_columns}"
         )
+
+    key_columns = list(categorical_parameters) + [
+        parameter.start_column for parameter in continuous_parameters
+    ]
+    if key_columns:
+        duplicated = data.duplicated(subset=key_columns, keep=False)
+        if duplicated.any():
+            duplicate_keys = data.loc[duplicated, key_columns].drop_duplicates()
+            raise ValueError(
+                f"Interpolation data rows must be uniquely identified by the "
+                f"key columns {key_columns}, but multiple rows share "
+                f"these keys:\n{duplicate_keys.to_string(index=False)}"
+            )
+    elif len(data) > 1:
+        raise ValueError(
+            f"Interpolation data with no categorical or continuous parameters "
+            f"must be a single row. You provided {len(data)} rows."
+        )
+
+    if not (continuous_parameters and categorical_parameters):
+        return
+
+    groups = [group for _, group in data.groupby(list(categorical_parameters))]
+    for parameter in continuous_parameters:
+        reference_edges = set(data[parameter.start_column])
+        reference_max = data[parameter.end_column].max()
+        for group in groups:
+            if (
+                set(group[parameter.start_column]) != reference_edges
+                or group[parameter.end_column].max() != reference_max
+            ):
+                raise ValueError(
+                    f"Continuous parameter '{parameter.name}' has different bin "
+                    f"edges across categorical groups. Interpolation requires "
+                    f"uniform bin edges across all categorical groups."
+                )
 
 
 def validate_call_data(
