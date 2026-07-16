@@ -390,7 +390,10 @@ named after the input Series:
    Constructing a lookup table currently requires your data meet specific
    conditions. These are a consequence of the method the lookup table uses to
    arrive at the correct data. Specifically, your parameter columns must
-   represent bins and they must not overlap or have gaps.
+   represent bins and they must not overlap or have gaps. When the data also
+   has categorical key columns, every group must share the same bin edges for
+   each continuous parameter; non-uniform bins across groups raise a
+   ``ValueError`` when interpolation ``validate`` is enabled.
 
 Estimating Unknown Values
 -------------------------
