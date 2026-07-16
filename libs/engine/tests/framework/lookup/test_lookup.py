@@ -249,6 +249,60 @@ def test_interpolated_tables__only_categorical_parameters(
         assert (output_data.loc[sub_table_mask, "some_value"] == i**2).all()
 
 
+def test_interpolated_table__continuous_and_multiple_categorical(
+    base_config: ConfigTree,
+) -> None:
+    """End-to-end: a lookup table with continuous parameters (age, year) and
+    multiple categorical keys (sex, location) returns the correct per-simulant
+    value for every (sex, location) group when driven through the manager on a
+    population index.
+    """
+    year_start = base_config.time.start.year
+    year_end = base_config.time.end.year
+
+    sex_values = {"Female": 0.0, "Male": 1.0}
+    location_values = {"USA": 0.0, "Canada": 10.0, "Mexico": 20.0}
+
+    def make_value(item: tuple[Any, ...]) -> float:
+        # ``build_table`` orders the product as (parameter cols..., key cols...);
+        # here that is (age, year, sex, location). Return a value that is
+        # distinct per (sex, location, age-bin, year-bin).
+        age, year, sex, location = item
+        return float(
+            sex_values[sex]
+            + location_values[location]
+            + 100.0 * age
+            + 100_000.0 * (year - year_start)
+        )
+
+    data = build_table(
+        make_value,
+        parameter_columns={"age": (0, 100), "year": (year_start, year_end)},
+        key_columns={"sex": ("Female", "Male"), "location": ("USA", "Canada", "Mexico")},
+        value_columns=["value"],
+    )
+
+    base_config.update({"population": {"population_size": 10000}})
+    component = TestPopulation()
+    simulation = InteractiveContext(components=[component], configuration=base_config)
+    manager = simulation._tables
+    lookup_table = manager._build_table(component, data, "", value_columns="value")
+
+    pop = simulation.get_population(["sex", "location", "age"])
+    result = lookup_table(pop.index)
+
+    # The lookup injects the clock's current (integer) year as the continuous
+    # ``year`` interpolant, so every simulant lands in the same year bin.
+    clock_year = simulation._clock.time.year  # type: ignore [union-attr]
+    expected = (
+        pop["sex"].map(sex_values)
+        + pop["location"].map(location_values)
+        + 100.0 * np.floor(pop["age"])
+        + 100_000.0 * (clock_year - year_start)
+    )
+    assert np.allclose(result, expected)
+
+
 @pytest.mark.parametrize("data", [(1, 2), [1, 2], ("hello", "world"), ["hello", "world"]])
 def test_lookup_table_scalar_from_list(
     base_config: ConfigTree, data: list[ScalarValue] | tuple[ScalarValue, ...]

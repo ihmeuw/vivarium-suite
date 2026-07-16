@@ -1,4 +1,5 @@
 import itertools
+from collections.abc import Sequence
 from typing import cast
 
 import numpy as np
@@ -39,6 +40,23 @@ def make_bin_edges(data: pd.DataFrame, col: str) -> pd.DataFrame:
     data[[f"{col}_start", f"{col}_end"]] = mid_pts[["start", "end"]]
 
     return data.set_index(idx).drop(columns=[col])
+
+
+def _order0_interpolation(
+    data: pd.DataFrame,
+    value_columns: Sequence[str] = ("value",),
+    *,
+    extrapolate: bool = True,
+    validate: bool = True,
+) -> Interpolation:
+    """Build an order-0 Interpolation over ``data``."""
+    return Interpolation(
+        data,
+        value_columns=pd.Index(list(value_columns)),
+        order=0,
+        extrapolate=extrapolate,
+        validate=validate,
+    )
 
 
 @pytest.mark.skip(reason="only order 0 interpolation currently supported")
@@ -619,6 +637,200 @@ def test_interpolation_call_validate_option_valid_data(validate: bool) -> None:
     query = pd.DataFrame({"year": [2007, 1990, 2005.4, 1994, 2004, 1995, 2002, 1995.5, 1996]})
 
     result = i(query)
+
+
+def test_multiple_categorical_columns() -> None:
+    """Two categorical key columns (e.g. sex and location) select the correct value for each (sex, location) group."""
+    data = pd.DataFrame(
+        {
+            "year_start": [1990, 1995, 1990, 1995, 1990, 1995, 1990, 1995],
+            "year_end": [1995, 2000, 1995, 2000, 1995, 2000, 1995, 2000],
+            "sex": [
+                "Male",
+                "Male",
+                "Male",
+                "Male",
+                "Female",
+                "Female",
+                "Female",
+                "Female",
+            ],
+            "location": ["A", "A", "B", "B", "A", "A", "B", "B"],
+            "value": [1, 2, 3, 4, 5, 6, 7, 8],
+        }
+    )
+
+    interp = _order0_interpolation(data)
+
+    query = pd.DataFrame(
+        {
+            "year": [1992, 1998, 1992, 1998, 1992],
+            "sex": ["Male", "Male", "Female", "Female", "Male"],
+            "location": ["A", "B", "A", "B", "B"],
+        }
+    )
+
+    # (Male, A, 1992)->1; (Male, B, 1998)->4; (Female, A, 1992)->5;
+    # (Female, B, 1998)->8; (Male, B, 1992)->3.
+    expected = pd.DataFrame({"value": [1, 4, 5, 8, 3]})
+    assert interp(query).equals(expected)
+
+
+def test_no_merge_fanout_on_shared_bin_edges() -> None:
+    """A bin start shared across many categorical groups must not fan out: output length equals input length with the correct per-group value for every simulant."""
+    data = pd.DataFrame(
+        {
+            "location": ["A", "B", "C", "D", "E"],
+            "year_start": [1990, 1990, 1990, 1990, 1990],
+            "year_end": [2000, 2000, 2000, 2000, 2000],
+            "value": [10, 20, 30, 40, 50],
+        }
+    )
+
+    interp = _order0_interpolation(data)
+
+    query = pd.DataFrame(
+        {
+            "location": ["A", "B", "C", "D", "E"],
+            "year": [1995, 1991, 1999, 1993, 1997],
+        }
+    )
+
+    result = interp(query)
+    assert len(result) == len(query)
+    assert result.equals(pd.DataFrame({"value": [10, 20, 30, 40, 50]}))
+
+
+def test_unknown_category_in_query_raises() -> None:
+    """Calling with a categorical value that is absent from the source data raises KeyError."""
+    data = pd.DataFrame(
+        {
+            "year_start": [1990, 1990],
+            "year_end": [2000, 2000],
+            "sex": ["Male", "Female"],
+            "value": [1, 2],
+        }
+    )
+
+    interp = _order0_interpolation(data)
+
+    query = pd.DataFrame({"year": [1995], "sex": ["Other"]})
+    with pytest.raises(KeyError):
+        interp(query)
+
+
+def test_purely_categorical_table() -> None:
+    """A table with only categorical parameters broadcasts each group's value."""
+    data = pd.DataFrame({"sex": ["Male", "Female"], "value": [1, 2]})
+    interp = _order0_interpolation(data)
+
+    query = pd.DataFrame({"sex": ["Male", "Male", "Female"]})
+    result = interp(query)
+    assert result.equals(pd.DataFrame({"value": [1, 1, 2]}))
+
+
+def test_no_parameters_broadcasts_value() -> None:
+    """A single-row table with neither categorical nor continuous parameters broadcasts its value to every interpolant."""
+    data = pd.DataFrame({"value": [42]})
+    interp = _order0_interpolation(data)
+
+    # No parameter columns, so the query columns are irrelevant; every row gets
+    # the data row's value.
+    query = pd.DataFrame({"ignored": [1, 2, 3]}, index=[10, 11, 12])
+    result = interp(query)
+    assert result["value"].tolist() == [42, 42, 42]
+    assert result.index.equals(query.index)
+
+
+def test_integer_value_dtype_preserved() -> None:
+    """Interpolating an integer value column over fully in-range interpolants returns an integer dtype column (no NaN-driven upcast to float)."""
+    data = pd.DataFrame(
+        {
+            "year_start": [1990, 1995],
+            "year_end": [1995, 2000],
+            "value": [10, 20],
+        }
+    )
+    assert pd.api.types.is_integer_dtype(data["value"])
+
+    interp = _order0_interpolation(data)
+
+    query = pd.DataFrame({"year": [1992, 1998]})
+    result = interp(query)
+    assert pd.api.types.is_integer_dtype(result["value"])
+    assert result["value"].tolist() == [10, 20]
+
+
+def test_empty_interpolants_returns_float64_frame() -> None:
+    """Calling with an empty interpolant frame returns an empty float64 DataFrame carrying the value columns and the interpolant index."""
+    data = pd.DataFrame(
+        {
+            "year_start": [1990, 1995],
+            "year_end": [1995, 2000],
+            "value": [1, 2],
+        }
+    )
+
+    interp = _order0_interpolation(data)
+
+    query = pd.DataFrame({"year": pd.Series([], dtype="float64")})
+    result = interp(query)
+    assert list(result.columns) == ["value"]
+    assert len(result) == 0
+    assert result["value"].dtype == np.dtype("float64")
+    assert result.index.equals(query.index)
+
+
+def test_order_zero_multi_group() -> None:
+    """A many-group table (multiple categorical groups sharing bin edges) returns the exact expected per-simulant bin values — a regression for the categorical + binned lookup."""
+    locations = ["USA", "Canada", "Mexico"]
+    sexes = ["Female", "Male"]
+    age_bins = [(0, 5), (5, 10)]
+    year_bins = [(1990, 2000), (2000, 2010)]
+
+    rows = []
+    for loc_idx, location in enumerate(locations):
+        for sex_idx, sex in enumerate(sexes):
+            for age_idx, (age_start, age_end) in enumerate(age_bins):
+                for year_idx, (year_start, year_end) in enumerate(year_bins):
+                    value = 1000 * loc_idx + 100 * sex_idx + 10 * age_idx + year_idx
+                    rows.append(
+                        {
+                            "location": location,
+                            "sex": sex,
+                            "age_start": age_start,
+                            "age_end": age_end,
+                            "year_start": year_start,
+                            "year_end": year_end,
+                            "value": value,
+                            # A second (float) value column guards against column
+                            # misalignment through the lookup.
+                            "value2": value + 0.5,
+                        }
+                    )
+    data = pd.DataFrame(rows)
+
+    interp = _order0_interpolation(data, ("value", "value2"))
+
+    query = pd.DataFrame(
+        {
+            "location": ["USA", "Mexico", "Canada", "USA", "Mexico", "Canada"],
+            "sex": ["Female", "Male", "Female", "Male", "Female", "Male"],
+            "age": [2, 7, 4, 9, 0, 5],
+            "year": [1995, 2005, 2001, 1990, 1999, 2009],
+        },
+        index=[5, 2, 8, 0, 7, 3],
+    )
+
+    # Computed by hand from value = 1000*loc + 100*sex + 10*age_bin + year_bin,
+    # with loc {USA:0, Canada:1, Mexico:2}, sex {Female:0, Male:1},
+    # age_bin {[0,5):0, [5,10):1}, year_bin {[1990,2000):0, [2000,2010):1}.
+    values = [0, 2111, 1001, 110, 2000, 1111]
+    expected = pd.DataFrame(
+        {"value": values, "value2": [v + 0.5 for v in values]},
+        index=[5, 2, 8, 0, 7, 3],
+    )
+    assert interp(query).equals(expected)
 
 
 @pytest.mark.parametrize("validate", [True, False])
