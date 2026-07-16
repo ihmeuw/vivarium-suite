@@ -382,46 +382,47 @@ def check_data_complete(
 
     start_columns = [p.start_column for p in continuous_parameters]
 
-    # A bin repeated for the same combination of the other parameters is an
-    # overlap of itself.
+    # Per-parameter geometry: each parameter's distinct bins must tile a
+    # contiguous range. Checked before the cross-parameter grid below so a
+    # malformed bin reports as such rather than as a spurious missing or
+    # duplicate combination.
+    for parameter in continuous_parameters:
+        start_column, end_column = parameter.start_column, parameter.end_column
+        bins = data[[start_column, end_column]].drop_duplicates().sort_values(start_column)
+        starts = bins[start_column].to_numpy()
+        ends = bins[end_column].to_numpy()
+        if len(np.unique(starts)) != len(starts):
+            raise ValueError(
+                f"Parameter ('{start_column}', '{end_column}') pairs a left edge "
+                f"with multiple right edges; each bin start must map to one end."
+            )
+        # For contiguous bins each bin's exclusive right edge equals the next
+        # bin's inclusive left edge; a positive step is an overlap, negative a gap.
+        step = ends[:-1] - starts[1:]
+        if (step > 0).any():
+            raise ValueError(
+                f"Parameter ('{start_column}', '{end_column}') has overlapping "
+                f"bins: a right edge extends past the next bin's left edge."
+            )
+        if (step < 0).any():
+            raise NotImplementedError(
+                f"Interpolation only supports contiguous bins. Parameter "
+                f"('{start_column}', '{end_column}') leaves gaps between bins."
+            )
+
+    # Cross-parameter completeness: with each parameter a clean tiling, the rows
+    # must be the full cross product of the per-parameter bins, present once.
     if data.duplicated(subset=start_columns).any():
         raise ValueError(
-            f"Parameter data must not contain overlaps. Data contains duplicate "
-            f"bins for {[(p.start_column, p.end_column) for p in continuous_parameters]}."
+            f"Parameter data contains duplicate bins: multiple rows share the "
+            f"same left edges for "
+            f"{[(p.start_column, p.end_column) for p in continuous_parameters]}."
         )
-
-    # With unique keys, the rows are a subset of the cross product of the
-    # per-parameter edge sets, so matching cardinality means every combination
-    # is present.
-    if len(data) != math.prod(data[c].nunique() for c in start_columns):
+    if len(data) != math.prod(data[col].nunique() for col in start_columns):
         raise ValueError(
             f"You must provide a value for every combination of "
             f"{[p.name for p in continuous_parameters]}."
         )
-
-    for parameter in continuous_parameters:
-        start_column, end_column = parameter.start_column, parameter.end_column
-
-        if (data.groupby(start_column)[end_column].nunique() > 1).any():
-            raise ValueError(
-                f"Parameter data must not contain overlaps. Parameter "
-                f"('{start_column}', '{end_column}') contains overlapping data."
-            )
-
-        bins = data[[start_column, end_column]].drop_duplicates().sort_values(start_column)
-        previous_end = bins[end_column].to_numpy()[:-1]
-        next_start = bins[start_column].to_numpy()[1:]
-        if (previous_end > next_start).any():
-            raise ValueError(
-                f"Parameter data must not contain overlaps. Parameter "
-                f"('{start_column}', '{end_column}') contains overlapping data."
-            )
-        if (previous_end < next_start).any():
-            raise NotImplementedError(
-                f"Interpolation only supported for continuous parameters with "
-                f"continuous bins. Parameter ('{start_column}', '{end_column}') "
-                f"contains non-continuous bins."
-            )
 
 
 class Order0Interp:
