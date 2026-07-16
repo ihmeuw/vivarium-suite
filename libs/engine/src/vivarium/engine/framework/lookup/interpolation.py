@@ -10,45 +10,36 @@ simulations.
 from __future__ import annotations
 
 from collections.abc import Hashable, Sequence
-from typing import Any, ClassVar, TypeGuard
+from typing import Any, ClassVar, NamedTuple
 
 import numpy as np
 import pandas as pd
 
-from vivarium.engine.types import LookupTableData
+from vivarium.engine.types import has_named_row_index
 
 _SubTablesType = list[tuple[tuple[Hashable, ...] | Hashable | None, pd.DataFrame]]
-
-
-def has_named_row_index(
-    data: LookupTableData,
-) -> TypeGuard[pd.DataFrame | pd.Series[Any]]:
-    """Return True if ``data`` carries its lookup attributes on the row index."""
-    if isinstance(data, pd.Series):
-        return True
-    if isinstance(data, pd.DataFrame):
-        return any(name is not None for name in data.index.names)
-    return False
-
 
 _START_SUFFIX = "_start"
 _END_SUFFIX = "_end"
 
 
-def _get_bin_edge_columns(continuous_parameters: Sequence[str]) -> list[str]:
-    """Get the column names for the left and right edges of bins for each continuous parameter."""
-    return [
-        f"{parameter}{suffix}"
-        for parameter in continuous_parameters
-        for suffix in (_START_SUFFIX, _END_SUFFIX)
-    ]
+class ContinuousParameter(NamedTuple):
+    """A continuous (binned) lookup parameter."""
+
+    name: str
+    """Base name, e.g. ``"age"``; the interpolant column."""
+    start_column: str
+    """Left-edge column name."""
+    end_column: str
+    """Right-edge column name."""
 
 
 class Interpolation:
     """A callable that interpolates value columns over categorical/continuous parameters.
 
     Lookup attributes are inferred from the input data: when the data has its
-    lookup attributes in the row index (see :func:`has_named_row_index`), the
+    lookup attributes in the row index (see
+    ``vivarium.engine.types.has_named_row_index``), the
     row-index level names are the attributes; when the data is a flat
     DataFrame (deprecated), the attributes are the columns not listed in
     ``value_columns``. Attributes whose names follow the ``<name>_start`` /
@@ -64,6 +55,12 @@ class Interpolation:
 
     _FLAT_COLUMN_PREFIX: ClassVar[str] = "__lookup_col_"
     """Prefix for opaque internal value-column IDs used in interpolation."""
+
+    @property
+    def continuous_parameters(self) -> list[str]:
+        """Lookup attributes used as binned ranges. The base name (e.g.
+        ``"age"``) of each ``<name>_start`` / ``<name>_end`` pair."""
+        return [parameter.name for parameter in self._continuous_parameters]
 
     def __init__(
         self,
@@ -92,13 +89,12 @@ class Interpolation:
             if has_named_row_index(data)
             else [c for c in data.columns if c not in value_columns]
         )
-        self.continuous_parameters: list[str] = self._get_continuous_parameters(
-            parameter_columns
-        )
-        """Lookup attributes used as binned ranges. The base name (e.g.
-        ``"age"``) of each ``<name>_start`` / ``<name>_end`` pair."""
+        self._continuous_parameters: list[
+            ContinuousParameter
+        ] = self._get_continuous_parameters(parameter_columns)
+        """Continuous lookup parameters with their edge columns."""
         self.categorical_parameters: list[str] = self._get_categorical_parameters(
-            parameter_columns
+            parameter_columns, self._continuous_parameters
         )
         """Lookup attributes used to select between interpolation sub-tables."""
         self.data: pd.DataFrame = self._reshape_data(data, value_columns)
@@ -111,7 +107,7 @@ class Interpolation:
             validate_parameters(
                 self.data,
                 self.categorical_parameters,
-                self.continuous_parameters,
+                self._continuous_parameters,
                 self._internal_value_columns,
             )
 
@@ -145,27 +141,44 @@ class Interpolation:
             # since order 0, we can interpolate all values at once
             self.interpolations[key] = Order0Interp(
                 base_table,
-                self.continuous_parameters,
+                self._continuous_parameters,
                 self._internal_value_columns,
                 self.extrapolate,
                 self.validate,
             )
 
     @staticmethod
-    def _get_continuous_parameters(parameter_columns: list[str]) -> list[str]:
-        """Get continuous parameter columns from the given list of parameter columns."""
+    def _get_continuous_parameters(
+        parameter_columns: list[str],
+    ) -> list[ContinuousParameter]:
+        """Build a ``ContinuousParameter`` for each ``<name>_start`` / ``<name>_end`` column pair."""
         parameter_columns_set = set(parameter_columns)
-        continuous_columns: list[str] = []
+        parameters: list[ContinuousParameter] = []
         for column in parameter_columns:
             if str(column).endswith(_START_SUFFIX):
-                base = str(column).removesuffix(_START_SUFFIX)
-                if f"{base}{_END_SUFFIX}" in parameter_columns_set:
-                    continuous_columns.append(base)
-        return continuous_columns
+                name = str(column).removesuffix(_START_SUFFIX)
+                start_column = f"{name}{_START_SUFFIX}"
+                end_column = f"{name}{_END_SUFFIX}"
+                if end_column in parameter_columns_set:
+                    parameters.append(
+                        ContinuousParameter(
+                            name=name,
+                            start_column=start_column,
+                            end_column=end_column,
+                        )
+                    )
+        return parameters
 
-    def _get_categorical_parameters(self, parameter_columns: list[str]) -> list[str]:
+    @staticmethod
+    def _get_categorical_parameters(
+        parameter_columns: list[str], continuous_parameters: list[ContinuousParameter]
+    ) -> list[str]:
         """Get categorical parameter columns from the given list of parameter columns."""
-        bin_edge_columns = set(_get_bin_edge_columns(self.continuous_parameters))
+        bin_edge_columns = {
+            column
+            for parameter in continuous_parameters
+            for column in (parameter.start_column, parameter.end_column)
+        }
         return [col for col in parameter_columns if col not in bin_edge_columns]
 
     def _reshape_data(
@@ -203,7 +216,7 @@ class Interpolation:
 
         if self.validate:
             validate_call_data(
-                interpolants, self.categorical_parameters, self.continuous_parameters
+                interpolants, self.categorical_parameters, self._continuous_parameters
             )
 
         sub_tables: _SubTablesType
@@ -244,31 +257,22 @@ class Interpolation:
 def validate_parameters(
     data: pd.DataFrame,
     categorical_parameters: Sequence[str],
-    continuous_parameters: Sequence[str],
+    continuous_parameters: Sequence[ContinuousParameter],
     value_columns: Sequence[Hashable],
 ) -> None:
     if data.empty:
         raise ValueError("You must supply non-empty data to create the interpolation.")
 
-    for p in continuous_parameters:
-        if not isinstance(p, str):
-            raise ValueError(
-                f"Interpolation is only supported for binned data. You must specify a list or tuple "
-                f"containing, in order, the column name used when interpolation is called, "
-                f"the column name for the left edge (inclusive), and the column name for "
-                f"the right edge (exclusive). You provided {p}."
-            )
-
-    # break out the individual columns from binned column name lists
     if not value_columns:
         raise ValueError(
             f"No non-parameter data. Available columns: {data.columns}, "
-            f"Parameter columns: {set(categorical_parameters) | set(continuous_parameters)}"
+            f"Parameter columns: "
+            f"{set(categorical_parameters) | {p.name for p in continuous_parameters}}"
         )
 
     required_cols = {
         *categorical_parameters,
-        *_get_bin_edge_columns(continuous_parameters),
+        *(c for p in continuous_parameters for c in (p.start_column, p.end_column)),
         *value_columns,
     }
     if extra_columns := list(data.columns.difference(list(required_cols))):
@@ -281,7 +285,7 @@ def validate_parameters(
 def validate_call_data(
     data: pd.DataFrame,
     categorical_parameters: Sequence[str],
-    continuous_parameters: Sequence[str],
+    continuous_parameters: Sequence[ContinuousParameter],
 ) -> None:
     if not isinstance(data, pd.DataFrame):
         raise TypeError(
@@ -289,11 +293,12 @@ def validate_call_data(
             f"passed {type(data)}."
         )
 
-    if not set(continuous_parameters) <= set(data.columns.values.tolist()):
+    continuous_parameter_names = [p.name for p in continuous_parameters]
+    if not set(continuous_parameter_names) <= set(data.columns.values.tolist()):
         raise ValueError(
             f"The continuous continuous parameters with which you built the Interpolation must all "
             f"be present in the data you call it on. The Interpolation has key "
-            f"columns: {continuous_parameters} and your data has columns: "
+            f"columns: {continuous_parameter_names} and your data has columns: "
             f"{data.columns.values.tolist()}"
         )
 
@@ -309,15 +314,14 @@ def validate_call_data(
 
 
 def check_data_complete(
-    data: pd.DataFrame, continuous_parameters: Sequence[tuple[str, str, str]]
+    data: pd.DataFrame, continuous_parameters: Sequence[ContinuousParameter]
 ) -> None:
     """Check that data is complete for interpolation.
 
-    For any parameters specified with edges, make sure edges
-    don't overlap and don't have any gaps. Assumes that edges are
-    specified with ends and starts overlapping (but one exclusive and
-    the other inclusive) so can check that end of previous == start
-    of current.
+    For each parameter, make sure the bin edges don't overlap and don't have
+    any gaps. Assumes that edges are specified with ends and starts
+    overlapping (but one exclusive and the other inclusive) so can check that
+    end of previous == start of current.
 
     If multiple parameters, make sure all combinations of parameters
     are present in data.
@@ -337,29 +341,30 @@ def check_data_complete(
     NotImplementedError
         If a parameter contains non-continuous bins.
     """
-    param_edges = [p[1:] for p in continuous_parameters]  # strip out call column name
-
     sub_tables: _SubTablesType
 
     # check no overlaps/gaps
-    for p in param_edges:
-        other_params = [p_ed[0] for p_ed in param_edges if p_ed != p]
-        if other_params:
-            sub_tables = list(data.groupby(list(other_params)))
+    for parameter in continuous_parameters:
+        start_column, end_column = parameter.start_column, parameter.end_column
+        other_start_columns = [
+            p.start_column for p in continuous_parameters if p != parameter
+        ]
+        if other_start_columns:
+            sub_tables = list(data.groupby(other_start_columns))
         else:
             sub_tables = [(None, data)]
 
-        n_p_total = len(set(data[p[0]]))
+        n_p_total = len(set(data[start_column]))
 
         for _, table in sub_tables:
-            param_data = table[[p[0], p[1]]].copy().sort_values(by=p[0])
-            start, end = param_data[p[0]].reset_index(drop=True), param_data[
-                p[1]
-            ].reset_index(drop=True)
+            param_data = table[[start_column, end_column]].sort_values(by=start_column)
+            start = param_data[start_column].reset_index(drop=True)
+            end = param_data[end_column].reset_index(drop=True)
 
             if len(set(start)) < n_p_total:
                 raise ValueError(
-                    f"You must provide a value for every combination of {continuous_parameters}."
+                    f"You must provide a value for every combination of "
+                    f"{[p.name for p in continuous_parameters]}."
                 )
 
             if len(start) <= 1:
@@ -369,14 +374,14 @@ def check_data_complete(
                 s = start[i]
                 if e > s or s == start[i - 1]:
                     raise ValueError(
-                        f"Parameter data must not contain overlaps. Parameter {p} "
-                        f"contains overlapping data."
+                        f"Parameter data must not contain overlaps. Parameter "
+                        f"('{start_column}', '{end_column}') contains overlapping data."
                     )
                 if e < s:
                     raise NotImplementedError(
                         f"Interpolation only supported for continuous parameters "
-                        f"with continuous bins. Parameter {p} contains "
-                        f"non-continuous bins."
+                        f"with continuous bins. Parameter ('{start_column}', "
+                        f"'{end_column}') contains non-continuous bins."
                     )
 
 
@@ -386,7 +391,7 @@ class Order0Interp:
     def __init__(
         self,
         data: pd.DataFrame,
-        continuous_parameters: Sequence[str],
+        continuous_parameters: Sequence[ContinuousParameter],
         value_columns: list[str],
         extrapolate: bool,
         validate: bool,
@@ -395,14 +400,11 @@ class Order0Interp:
         Parameters
         ----------
         data
-            Data frame used to build interpolation. Must contain a
-            ``<name>_start`` and ``<name>_end`` column for each entry in
-            ``continuous_parameters``.
+            Data frame used to build interpolation. Must contain each
+            parameter's ``start_column`` (inclusive left edge) and
+            ``end_column`` (exclusive right edge).
         continuous_parameters
-            Base names of the continuous (binned) parameters. For each base
-            name ``<name>``, ``data`` must carry an inclusive-left
-            ``<name>_start`` column and an exclusive-right ``<name>_end``
-            column.
+            The continuous (binned) parameters.
         value_columns
             Columns to be interpolated.
         extrapolate
@@ -410,12 +412,8 @@ class Order0Interp:
         validate
             Whether or not to validate the data.
         """
-        continuous_parameters_with_edges = [
-            (p, f"{p}{_START_SUFFIX}", f"{p}{_END_SUFFIX}") for p in continuous_parameters
-        ]
-
         if validate:
-            check_data_complete(data, continuous_parameters_with_edges)
+            check_data_complete(data, continuous_parameters)
 
         self.data: pd.DataFrame = data.copy()
         """The data from which to build the interpolation."""
@@ -424,16 +422,16 @@ class Order0Interp:
         self.extrapolate: bool = extrapolate
         """Whether to extrapolate beyond the edges of the supplied bins."""
 
-        self.parameter_bins: dict[tuple[str, str, str], dict[str, Any]] = {}
-        """Per-continuous-parameter bin metadata. Keys are
-        ``(name, name_start, name_end)`` tuples; values are
-        ``{"bins": <ordered left edges>, "max": <max right edge>}``."""
+        self.parameter_bins: dict[ContinuousParameter, dict[str, Any]] = {}
+        """Per-continuous-parameter bin metadata:
+        ``{"bins": <ordered left edges>, "max": <max right edge>}``,
+        keyed by parameter."""
 
-        for param in continuous_parameters_with_edges:
-            left_edge = self.data[param[1]].drop_duplicates().sort_values()
-            max_right = self.data[param[2]].drop_duplicates().max()
+        for parameter in continuous_parameters:
+            left_edge = self.data[parameter.start_column].drop_duplicates().sort_values()
+            max_right = self.data[parameter.end_column].drop_duplicates().max()
 
-            self.parameter_bins[param] = {
+            self.parameter_bins[parameter] = {
                 "bins": left_edge.reset_index(drop=True),
                 "max": max_right,
             }
@@ -463,24 +461,24 @@ class Order0Interp:
         interpolant_bins = pd.DataFrame(index=interpolants.index)
 
         merge_cols = []
-        for cols, d in self.parameter_bins.items():
+        for parameter, d in self.parameter_bins.items():
             bins = d["bins"]
             max_right = d["max"]
-            merge_cols.append(cols[1])
-            interpolant_col = interpolants[cols[0]]
+            merge_cols.append(parameter.start_column)
+            interpolant_col = interpolants[parameter.name]
             if not self.extrapolate and (
                 interpolant_col.min() < bins[0] or interpolant_col.max() >= max_right
             ):
                 raise ValueError(
                     f"Extrapolation outside of bins used to set up interpolation is only allowed "
                     f"when explicitly set in creation of Interpolation. Extrapolation is currently "
-                    f"off for this interpolation, and parameter {cols[0]} includes data outside of "
-                    f"original bins."
+                    f"off for this interpolation, and parameter {parameter.name} includes data "
+                    f"outside of original bins."
                 )
             bin_indices = np.digitize(interpolant_col, bins.tolist())
             # digitize uses 0 to indicate < min and len(bins) for > max so adjust to actual indices into bin_indices
             bin_indices[bin_indices > 0] -= 1
-            interpolant_bins[cols[1]] = bins.loc[bin_indices].values
+            interpolant_bins[parameter.start_column] = bins.loc[bin_indices].values
 
         index = interpolant_bins.index
 
