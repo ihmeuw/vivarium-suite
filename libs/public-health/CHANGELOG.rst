@@ -1,3 +1,8 @@
+**6.4.2 - 07/20/26**
+
+- Import ``FuzzyChecker`` from ``vivarium-fuzzy-checker`` (extracted from ``vivarium-testing-utils``)
+  and add it as a test dependency
+
 **6.4.1 - 07/16/26**
 
 - Fix ``CategoricalInterventionObserver`` to load categories from the ``intervention``

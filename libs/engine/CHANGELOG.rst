@@ -1,3 +1,8 @@
+**5.4.1 - 07/20/26**
+
+- Import ``FuzzyChecker`` from ``vivarium-fuzzy-checker`` (extracted from ``vivarium-testing-utils``)
+  and add it as a test dependency
+
 **5.4.0 - 07/15/26**
 
 - Add support for observations to specify priority for lifecycle events
