@@ -1,3 +1,11 @@
+**4.2.12 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
+**4.2.11 - 07/13/26**
+
+- Add ``build_artifacts_in_parallel`` to run a model's per-location artifact builds as a single parallel Jobmon workflow
+
 **4.2.10 - 07/07/26
 
 - Scope pandas display options in ``print_stat_report`` to avoid mutating global state

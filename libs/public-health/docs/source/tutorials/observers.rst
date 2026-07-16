@@ -9,7 +9,7 @@ stratification.
 These observer classes are public-health-specific helpers built on top of the
 vivarium framework's
 :class:`~vivarium.engine.framework.results.observer.Observer` base class (see the
-`vivarium results concepts <https://vivarium.readthedocs.io/en/latest/concepts/results.html>`_
+`vivarium results concepts <https://vivarium-engine.readthedocs.io/en/latest/concepts/results.html>`_
 documentation for details on the underlying results system).
 
 .. contents::

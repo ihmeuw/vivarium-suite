@@ -71,10 +71,6 @@ creates+pushes a `vivarium-ai-tools-v<X.Y.Z>` tag plus a GitHub Release - no bui
 PyPI publish. It is kept separate from `release.yml` so the plugin release never touches that
 workflow's PyPI trusted-publishing credential path (its `id-token: write` permission).
 
-## The `vivarium-compat` shim
-
-`libs/compat/` exists only for the monorepo migration. It installs `vivarium_compat.pth` to site-packages, which executes at interpreter startup and inserts a `_CompatFinder` at position 0 of `sys.meta_path`. The finder redirects old import names (e.g. `import vivarium_profiling`) to new ones (`vivarium.profiling`) and emits a `DeprecationWarning`. The active redirect table is `_REDIRECTS` in `libs/compat/src/vivarium_compat/_compat.py` - uncomment entries as packages migrate, and bump the compat version. If the new location is not yet installed, the loader currently falls back to importing the old on-disk package (the `MIC-7100` FIXME) rather than raising `ModuleNotFoundError`, and still emits the `DeprecationWarning`. The entire `libs/compat/` directory is removed once the deprecation period ends.
-
 ## Note on packaging
 
-`libs/<pkg>/pyproject.toml` deliberately uses `include = ["vivarium.<pkg>", "vivarium.<pkg>.*"]` so the wheel ships only the `vivarium/<pkg>/` subtree and *not* `vivarium/__init__.py`. The canonical `vivarium/__init__.py` is owned by `vivarium-core` (today the standalone `vivarium` package); shipping our own would clobber it and break `from vivarium import Component`. Apply this same pattern to any other package that lives under the `vivarium.*` namespace.
+`libs/<pkg>/pyproject.toml` deliberately uses `include = ["vivarium.<pkg>", "vivarium.<pkg>.*"]` so the wheel ships only the `vivarium/<pkg>/` subtree and *not* `vivarium/__init__.py`. The canonical `vivarium/__init__.py` is owned by `vivarium-engine`; shipping our own would clobber it at install time (two distributions writing the same file). Apply this same pattern to any other package that lives under the `vivarium.*` namespace.

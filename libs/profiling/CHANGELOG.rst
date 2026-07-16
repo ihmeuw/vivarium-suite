@@ -1,3 +1,11 @@
+**0.5.3 - 07/16/26**
+
+- Stop xfailing two tests
+
+**0.5.2 - 07/14/26**
+
+- Update stale references for monorepo libraries
+
 **0.5.1 - 07/06/26**
 
 - Add PyPI classifiers

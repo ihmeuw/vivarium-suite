@@ -8,6 +8,7 @@ from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lookup import LookupTable
+from vivarium.testing_utils import FuzzyChecker
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.causal_factor.calibration_constant import (
@@ -165,6 +166,8 @@ def _check_exposure_and_rr(
     risk: EntityString,
     expected_exposures: dict[str, float],
     expected_rrs: dict[str, float],
+    fuzzy_checker: FuzzyChecker,
+    name_additional: str = "",
 ) -> None:
     population = simulation.get_population(
         [f"{risk.name}.exposure", "some_disease.incidence_rate"]
@@ -177,20 +180,30 @@ def _check_exposure_and_rr(
     for category, expected_exposure in expected_exposures.items():
         relative_risk = expected_rrs[category]
         is_in_category = exposure == category
-        # todo use fuzzy checker for these tests
-        assert np.isclose(is_in_category.mean(), expected_exposure, 0.02)
+        fuzzy_checker.fuzzy_assert_proportion(
+            int(is_in_category.sum()),
+            len(is_in_category),
+            expected_exposure,
+            name=f"{risk.name}.exposure.{category}",
+            name_additional=name_additional,
+        )
+        # TODO: MIC-7279 - fuzzy_assert_proportion only warns (doesn't fail) when the sample
+        # is too small to be conclusive; fail loudly.
+        assert (
+            fuzzy_checker.proportion_test_diagnostics[-1].confidence == "Conclusive"
+        ), f"fuzzy check '{risk.name}.exposure.{category}' was inconclusive at this population size"
 
         actual_incidence_rates = incidence_rate[is_in_category]
         expected_incidence_rates = unexposed_incidence * relative_risk
         assert np.isclose(actual_incidence_rates, expected_incidence_rates).all()
 
 
-def test_polytomous_risk(polytomous_risk, base_config, base_plugins):
+def test_polytomous_risk(polytomous_risk, base_config, base_plugins, fuzzy_checker):
     risk, risk_data = polytomous_risk
     rr_data = risk_data[f"{risk.name}.relative_risk"].set_index("parameter")
     exposure_data = risk_data[f"{risk.name}.exposure"].groupby("parameter")["value"].mean()
 
-    base_config.update({"population": {"population_size": 50000}})
+    base_config.update({"population": {"population_size": 10000}})
 
     simulation = _setup_risk_simulation(base_config, base_plugins, risk, risk_data)
 
@@ -199,6 +212,8 @@ def test_polytomous_risk(polytomous_risk, base_config, base_plugins):
         risk.causal_factor,
         exposure_data.to_dict(),
         rr_data["value"].to_dict(),
+        fuzzy_checker,
+        name_additional="pre_step",
     )
 
     simulation.step()
@@ -208,11 +223,13 @@ def test_polytomous_risk(polytomous_risk, base_config, base_plugins):
         risk.causal_factor,
         exposure_data.to_dict(),
         rr_data["value"].to_dict(),
+        fuzzy_checker,
+        name_additional="post_step",
     )
 
 
 @pytest.mark.parametrize("scalar_exposure", [True, False])
-def test_dichotomous_risk(base_config, base_plugins, scalar_exposure):
+def test_dichotomous_risk(base_config, base_plugins, scalar_exposure, fuzzy_checker):
     risk = Risk("risk_factor.test_risk")
     rr_data = pd.DataFrame(
         {
@@ -251,7 +268,7 @@ def test_dichotomous_risk(base_config, base_plugins, scalar_exposure):
     data_sources = {"data_sources": {"exposure": 0.25}} if scalar_exposure else {}
     base_config.update(
         {
-            "population": {"population_size": 50000},
+            "population": {"population_size": 10000},
             "risk_factor.test_risk": {
                 **data_sources,
                 **{"distribution_type": "dichotomous"},
@@ -263,11 +280,25 @@ def test_dichotomous_risk(base_config, base_plugins, scalar_exposure):
 
     simulation = _setup_risk_simulation(base_config, base_plugins, risk, data)
 
-    _check_exposure_and_rr(simulation, risk.causal_factor, category_exposures, category_rrs)
+    _check_exposure_and_rr(
+        simulation,
+        risk.causal_factor,
+        category_exposures,
+        category_rrs,
+        fuzzy_checker,
+        name_additional="pre_step",
+    )
 
     simulation.step()
 
-    _check_exposure_and_rr(simulation, risk.causal_factor, category_exposures, category_rrs)
+    _check_exposure_and_rr(
+        simulation,
+        risk.causal_factor,
+        category_exposures,
+        category_rrs,
+        fuzzy_checker,
+        name_additional="post_step",
+    )
 
 
 @pytest.fixture(scope="module")

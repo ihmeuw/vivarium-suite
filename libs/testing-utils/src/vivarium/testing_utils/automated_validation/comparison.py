@@ -385,7 +385,8 @@ class FuzzyComparison(Comparison):
             else stratifications,
         )
 
-        ## At this point, the only non-common index levels should be scenarios and draws.
+        ## At this point, the only non-common index level should be draws;
+        ## scenario levels were already dropped during bundle formatting.
         return stratified_test_data, aggregated_reference_data
 
     def _cast_across_indexes(
