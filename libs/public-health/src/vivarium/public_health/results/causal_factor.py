@@ -7,6 +7,8 @@ This module contains tools for observing risk exposure during the simulation.
 
 """
 
+from abc import abstractmethod
+
 import pandas as pd
 from vivarium.engine.framework.engine import Builder
 
@@ -16,9 +18,12 @@ from vivarium.public_health.utilities import to_years
 
 
 class CategoricalCausalFactorObserver(PublicHealthObserver):
-    """An observer for a categorical causal factor.
+    """Abstract base observer for a categorical causal factor.
 
-    Observes category person time for a causal factor.
+    Observes category person time for a causal factor. This is an abstract
+    base class: concrete observers (e.g. :class:`CategoricalRiskObserver`,
+    :class:`CategoricalInterventionObserver`) must set ``ARTIFACT_ENTITY_TYPE``
+    to the artifact entity type their categories are keyed under.
 
     By default, this observer computes aggregate categorical person time
     over the full course of the simulation. It can be configured to add or
@@ -51,6 +56,11 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
 
     """
 
+    @property
+    @abstractmethod
+    def ARTIFACT_ENTITY_TYPE(self) -> str:
+        """The artifact entity type the observer's categories are keyed under."""
+
     #####################
     # Lifecycle methods #
     #####################
@@ -74,7 +84,9 @@ class CategoricalCausalFactorObserver(PublicHealthObserver):
     def setup(self, builder: Builder) -> None:
         """Set up the observer."""
         self.step_size = builder.time.step_size()
-        self.categories = builder.data.load(f"risk_factor.{self.causal_factor}.categories")
+        self.categories = builder.data.load(
+            f"{self.ARTIFACT_ENTITY_TYPE}.{self.causal_factor}.categories"
+        )
 
     def get_configuration_name(self) -> str:
         return self.causal_factor
@@ -200,6 +212,8 @@ class CategoricalRiskObserver(CategoricalCausalFactorObserver):
 
     """
 
+    ARTIFACT_ENTITY_TYPE = "risk_factor"
+
     @property
     def name(self) -> str:
         return f"categorical_risk_observer.{self.causal_factor}"
@@ -252,6 +266,8 @@ class CategoricalInterventionObserver(CategoricalCausalFactorObserver):
         The categories of the intervention.
 
     """
+
+    ARTIFACT_ENTITY_TYPE = "intervention"
 
     @property
     def name(self) -> str:
