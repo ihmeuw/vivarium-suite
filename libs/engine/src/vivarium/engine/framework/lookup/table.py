@@ -24,10 +24,10 @@ from typing import TypeVar, cast
 import pandas as pd
 
 from vivarium.engine.component import Component
-from vivarium.engine.framework.lookup.interpolation import Interpolation, has_named_row_index
+from vivarium.engine.framework.lookup.interpolation import Interpolation
 from vivarium.engine.framework.population.population_view import PopulationView
 from vivarium.engine.framework.resource import Resource
-from vivarium.engine.types import LookupTableData
+from vivarium.engine.types import LookupTableData, has_named_row_index
 
 if TYPE_CHECKING:
     from vivarium.engine.framework.lookup.manager import LookupTableManager
