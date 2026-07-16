@@ -781,8 +781,8 @@ def test_empty_interpolants_returns_float64_frame() -> None:
     assert result.index.equals(query.index)
 
 
-def test_order_zero_multi_group_golden() -> None:
-    """A many-group table (multiple categorical groups sharing bin edges) returns the exact expected per-simulant bin values — a golden regression for the categorical + binned lookup."""
+def test_order_zero_multi_group() -> None:
+    """A many-group table (multiple categorical groups sharing bin edges) returns the exact expected per-simulant bin values — a regression for the categorical + binned lookup."""
     locations = ["USA", "Canada", "Mexico"]
     sexes = ["Female", "Male"]
     age_bins = [(0, 5), (5, 10)]
