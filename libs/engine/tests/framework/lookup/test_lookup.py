@@ -252,7 +252,7 @@ def test_interpolated_tables__only_categorical_parameters(
 def test_interpolated_table__continuous_and_multiple_categorical(
     base_config: ConfigTree,
 ) -> None:
-    """End-to-end (MIC-7097): a lookup table with continuous parameters (age,
+    """A lookup table with continuous parameters (age,
     year) and multiple categorical keys (sex, location) — the many-group
     scenario the vectorized merge targets — returns the correct per-simulant
     value for every (sex, location) group when driven through the manager on a
