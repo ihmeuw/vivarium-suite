@@ -14,11 +14,10 @@ from collections.abc import Hashable, Sequence
 from typing import Any, ClassVar, NamedTuple
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from vivarium.engine.types import has_named_row_index
-
-_SubTablesType = list[tuple[tuple[Hashable, ...] | Hashable | None, pd.DataFrame]]
 
 _START_SUFFIX = "_start"
 _END_SUFFIX = "_end"
@@ -30,9 +29,13 @@ class ContinuousParameter(NamedTuple):
     name: str
     """Base name, e.g. ``"age"``; the interpolant column."""
     start_column: str
-    """Left-edge column name."""
+    """Left-edge column name; a merge key."""
     end_column: str
     """Right-edge column name."""
+    left_edges: npt.NDArray[Any]
+    """Ascending unique left bin edges, shared across categorical groups."""
+    max_right: Any
+    """Maximum right bin edge (the exclusive upper bound of the last bin)."""
 
 
 class Interpolation:
@@ -52,10 +55,13 @@ class Interpolation:
     — it is the interpolation primitive that
     :class:`~vivarium.engine.framework.lookup.table.LookupTable` is built on.
 
-    The key columns (categorical values plus each parameter's left bin edge)
-    must uniquely identify a data row, and bin edges must be identical across
-    every categorical group; both are validated on construction when
-    ``validate`` is set.
+    For order 0 (currently the only supported order) a call resolves each interpolant to
+    the bin its continuous parameters fall in and returns that bin's values.
+    This requires that the key columns uniquely identify a data row and
+    that the bin edges are identical across every categorical group; both are
+    validated on construction when ``validate`` is set. With ``validate=False``
+    violations surface as a ``KeyError`` or ``pandas.errors.MergeError`` on
+    call.
 
     """
 
@@ -90,24 +96,22 @@ class Interpolation:
             f"{self._FLAT_COLUMN_PREFIX}{i}" for i in range(len(value_columns))
         ]
         """Opaque internal column IDs used in the interpolation pipeline."""
-        parameter_columns = (
-            list(data.index.names)
-            if has_named_row_index(data)
-            else [c for c in data.columns if c not in value_columns]
-        )
-        self._continuous_parameters: list[
-            ContinuousParameter
-        ] = self._get_continuous_parameters(parameter_columns)
-        """Continuous lookup parameters with their edge columns."""
-        self.categorical_parameters: list[str] = self._get_categorical_parameters(
-            parameter_columns, self._continuous_parameters
-        )
-        """Lookup attributes used to select between interpolation sub-tables."""
         self.data: pd.DataFrame = self._reshape_data(data, value_columns)
         """Flat DataFrame the interpolation pipeline operates on. Value
         columns are renamed to opaque internal IDs (see ``_FLAT_COLUMN_PREFIX``);
         :attr:`value_columns` carries the original user-facing labels and is
         reapplied to the output of :meth:`__call__`."""
+        parameter_columns = [
+            c for c in self.data.columns if c not in self._internal_value_columns
+        ]
+        self._continuous_parameters: list[
+            ContinuousParameter
+        ] = self._get_continuous_parameters(parameter_columns, self.data)
+        """Continuous lookup parameters with their edge columns and shared bins."""
+        self.categorical_parameters: list[str] = self._get_categorical_parameters(
+            parameter_columns, self._continuous_parameters
+        )
+        """Lookup attributes used to select between value rows."""
 
         self.order: int = order
         """Order of interpolation. Only ``0`` is currently supported."""
@@ -115,6 +119,16 @@ class Interpolation:
         """Whether to extrapolate beyond the edges of the supplied bins."""
         self.validate: bool = validate
         """Whether to validate inputs on construction and on call."""
+
+        self._key_columns: list[str] = list(self.categorical_parameters) + [
+            parameter.start_column for parameter in self._continuous_parameters
+        ]
+        # No key columns → __call__ broadcasts the single data row.
+        self._merge_target: pd.DataFrame | None = (
+            self.data[self._key_columns + self._internal_value_columns]
+            if self._key_columns
+            else None
+        )
 
         if validate:
             validate_parameters(
@@ -124,38 +138,9 @@ class Interpolation:
                 self._internal_value_columns,
             )
 
-        sub_tables: _SubTablesType
-
-        if self.categorical_parameters:
-            # Since there are categorical_parameters we need to group the table
-            # by those columns to get the sub-tables to fit
-            sub_tables = list(self.data.groupby(list(self.categorical_parameters)))
-        else:
-            # There are no categorical parameters, so we will fit the whole table
-            sub_tables = [(None, self.data)]
-
-        self.interpolations: dict[Any, Order0Interp] = {}
-        """Per-categorical-group :class:`Order0Interp` instances, keyed by the
-        categorical-parameter tuple (or ``None`` when there are no categorical
-        parameters)."""
-
-        for key, base_table in sub_tables:
-            if (
-                base_table.empty
-            ):  # if one of the categorical parameters is a category and not all values are present in data
-                continue
-            # since order 0, we can interpolate all values at once
-            self.interpolations[key] = Order0Interp(
-                base_table,
-                self._continuous_parameters,
-                self._internal_value_columns,
-                self.extrapolate,
-                self.validate,
-            )
-
     @staticmethod
     def _get_continuous_parameters(
-        parameter_columns: list[str],
+        parameter_columns: list[str], data: pd.DataFrame
     ) -> list[ContinuousParameter]:
         """Build a ``ContinuousParameter`` for each ``<name>_start`` / ``<name>_end`` column pair."""
         parameter_columns_set = set(parameter_columns)
@@ -166,11 +151,14 @@ class Interpolation:
                 start_column = f"{name}{_START_SUFFIX}"
                 end_column = f"{name}{_END_SUFFIX}"
                 if end_column in parameter_columns_set:
+                    left_edges = data[start_column].drop_duplicates().sort_values()
                     parameters.append(
                         ContinuousParameter(
                             name=name,
                             start_column=start_column,
                             end_column=end_column,
+                            left_edges=left_edges.to_numpy(),
+                            max_right=data[end_column].drop_duplicates().max(),
                         )
                     )
         return parameters
@@ -210,49 +198,96 @@ class Interpolation:
     def __call__(self, interpolants: pd.DataFrame) -> pd.DataFrame:
         """Get the interpolated results for the parameters in interpolants.
 
+        Runs one :func:`numpy.digitize` per continuous parameter over the whole
+        population to resolve each interpolant's bin, then performs a single
+        left :meth:`pandas.DataFrame.merge` keyed on the categorical columns
+        plus each parameter's left bin edge.
+
         Parameters
-         ----------
+        ----------
         interpolants
             Data frame containing the parameters to interpolate.
 
         Returns
         -------
-            A table with the interpolated values for the given interpolants.
-        """
+            A table with the interpolated values for the given interpolants,
+            indexed by ``interpolants.index`` with columns
+            :attr:`value_columns`.
 
+        Raises
+        ------
+        ValueError
+            If ``extrapolate`` is False and an interpolant falls outside the bins.
+        KeyError
+            If an interpolant carries a categorical value not present in the
+            source data.
+        """
         if self.validate:
             validate_call_data(
                 interpolants, self.categorical_parameters, self._continuous_parameters
             )
 
-        sub_tables: _SubTablesType
+        if interpolants.empty:
+            return pd.DataFrame(
+                index=interpolants.index, columns=self.value_columns, dtype=np.float64
+            )
 
+        original_index = interpolants.index
+
+        if self._merge_target is None:
+            # No categorical or continuous parameters: broadcast the first row.
+            first_row = self.data[self._internal_value_columns].iloc[0]
+            broadcast = pd.DataFrame(
+                {column: first_row[column] for column in self._internal_value_columns},
+                index=original_index,
+            )
+            broadcast.columns = self.value_columns
+            return broadcast
+
+        key_frame = pd.DataFrame(index=original_index)
+        for column in self.categorical_parameters:
+            key_frame[column] = interpolants[column].to_numpy()
+        for parameter in self._continuous_parameters:
+            values = interpolants[parameter.name]
+            if not self.extrapolate and (
+                values.min() < parameter.left_edges[0] or values.max() >= parameter.max_right
+            ):
+                raise ValueError(
+                    f"Extrapolation outside the provided bins is disabled, but "
+                    f"parameter '{parameter.name}' has values outside its bin range "
+                    f"[{parameter.left_edges[0]}, {parameter.max_right})."
+                )
+            # Left edge inclusive, right exclusive; out-of-range values fold to
+            # the nearest edge bin (below the minimum -> first, at/above the
+            # maximum -> last).
+            positions = np.digitize(values, parameter.left_edges)
+            positions[positions > 0] -= 1
+            key_frame[parameter.start_column] = parameter.left_edges[positions]
+
+        merged = key_frame.merge(
+            self._merge_target,
+            how="left",
+            on=self._key_columns,
+            validate="many_to_one",
+            indicator=True,
+        )
+        # A left many-to-one merge preserves left-row order, so the merged rows
+        # line up positionally with the interpolants.
+        merged.index = original_index
+
+        # Raise if interpolant's key is missing from the source
         if self.categorical_parameters:
-            sub_tables = list(
-                interpolants.groupby(list(self.categorical_parameters), observed=False)
-            )
-        else:
-            sub_tables = [(None, interpolants)]
-        parts = []
-        for key, sub_table in sub_tables:
-            if sub_table.empty:
-                continue
-            parts.append(self.interpolations[key](sub_table))
+            unmatched = merged["_merge"].to_numpy() == "left_only"
+            if unmatched.any():
+                unknown = merged.loc[unmatched, self.categorical_parameters].drop_duplicates()
+                raise KeyError(
+                    f"Interpolants carry categorical values absent from the "
+                    f"interpolation data (or, with validate=False, bin edges that "
+                    f"differ across categorical groups):\n"
+                    f"{unknown.to_string(index=False)}"
+                )
 
-        if parts:
-            result = pd.concat(parts)
-            result = result.reindex(interpolants.index)[self._internal_value_columns]
-        else:
-            # specify some numeric type for columns, so they won't be objects but
-            # will be updated with whatever column type it actually is
-            result = pd.DataFrame(
-                index=interpolants.index,
-                columns=self._internal_value_columns,
-                dtype=np.float64,
-            )
-
-        # Restore the user-facing column labels (and column-index level names);
-        # the pipeline used opaque ``_FLAT_COLUMN_PREFIX`` IDs internally.
+        result = merged[self._internal_value_columns]
         result.columns = self.value_columns
         return result
 
@@ -306,10 +341,19 @@ def validate_parameters(
             f"must be a single row. You provided {len(data)} rows."
         )
 
-    if not (continuous_parameters and categorical_parameters):
+    if not continuous_parameters:
         return
 
-    groups = [group for _, group in data.groupby(list(categorical_parameters))]
+    # Validate completeness one categorical group at a time: on the full
+    # multi-group table the duplicate-bin guard would trip on the repeated bins.
+    groups = (
+        [group for _, group in data.groupby(list(categorical_parameters))]
+        if categorical_parameters
+        else [data]
+    )
+    for group in groups:
+        check_data_complete(group, continuous_parameters)
+
     for parameter in continuous_parameters:
         reference_edges = set(data[parameter.start_column])
         reference_max = data[parameter.end_column].max()
@@ -420,106 +464,3 @@ def check_data_complete(
             f"You must provide a value for every combination of "
             f"{[p.name for p in continuous_parameters]}."
         )
-
-
-class Order0Interp:
-    """A callable that returns the result of order 0 interpolation over input data."""
-
-    def __init__(
-        self,
-        data: pd.DataFrame,
-        continuous_parameters: Sequence[ContinuousParameter],
-        value_columns: list[str],
-        extrapolate: bool,
-        validate: bool,
-    ):
-        """
-        Parameters
-        ----------
-        data
-            Data frame used to build interpolation. Must contain each
-            parameter's ``start_column`` (inclusive left edge) and
-            ``end_column`` (exclusive right edge).
-        continuous_parameters
-            The continuous (binned) parameters.
-        value_columns
-            Columns to be interpolated.
-        extrapolate
-            Whether or not to extrapolate beyond the edge of supplied bins.
-        validate
-            Whether or not to validate the data.
-        """
-        if validate:
-            check_data_complete(data, continuous_parameters)
-
-        self.data: pd.DataFrame = data.copy()
-        """The data from which to build the interpolation."""
-        self.value_columns: list[str] = value_columns
-        """Columns to be interpolated."""
-        self.extrapolate: bool = extrapolate
-        """Whether to extrapolate beyond the edges of the supplied bins."""
-
-        self.parameter_bins: dict[ContinuousParameter, dict[str, Any]] = {}
-        """Per-continuous-parameter bin metadata:
-        ``{"bins": <ordered left edges>, "max": <max right edge>}``,
-        keyed by parameter."""
-
-        for parameter in continuous_parameters:
-            left_edge = self.data[parameter.start_column].drop_duplicates().sort_values()
-            max_right = self.data[parameter.end_column].drop_duplicates().max()
-
-            self.parameter_bins[parameter] = {
-                "bins": left_edge.reset_index(drop=True),
-                "max": max_right,
-            }
-
-    def __call__(self, interpolants: pd.DataFrame) -> pd.DataFrame:
-        """Find the bins for each parameter for each interpolant in interpolants
-        and return the values from data there.
-
-        Parameters
-        ----------
-        interpolants
-            Data frame containing the parameters to interpolate.
-
-        Returns
-        -------
-            A table with the interpolated values for the given interpolants.
-        """
-        if not self.parameter_bins:
-            # No continuous parameters — just broadcast the data values.
-            # With only categorical parameters, each sub-table has a single row.
-            return pd.DataFrame(
-                {col: self.data[col].iloc[0] for col in self.value_columns},
-                index=interpolants.index,
-            )
-
-        # build a dataframe where we have the start of each parameter bin for each interpolant
-        interpolant_bins = pd.DataFrame(index=interpolants.index)
-
-        merge_cols = []
-        for parameter, d in self.parameter_bins.items():
-            bins = d["bins"]
-            max_right = d["max"]
-            merge_cols.append(parameter.start_column)
-            interpolant_col = interpolants[parameter.name]
-            if not self.extrapolate and (
-                interpolant_col.min() < bins[0] or interpolant_col.max() >= max_right
-            ):
-                raise ValueError(
-                    f"Extrapolation outside of bins used to set up interpolation is only allowed "
-                    f"when explicitly set in creation of Interpolation. Extrapolation is currently "
-                    f"off for this interpolation, and parameter {parameter.name} includes data "
-                    f"outside of original bins."
-                )
-            bin_indices = np.digitize(interpolant_col, bins.tolist())
-            # digitize uses 0 to indicate < min and len(bins) for > max so adjust to actual indices into bin_indices
-            bin_indices[bin_indices > 0] -= 1
-            interpolant_bins[parameter.start_column] = bins.loc[bin_indices].values
-
-        index = interpolant_bins.index
-
-        interp_vals = interpolant_bins.merge(self.data, how="left", on=merge_cols).set_index(
-            index
-        )
-        return interp_vals[self.value_columns]
