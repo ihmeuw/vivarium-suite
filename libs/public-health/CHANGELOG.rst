@@ -1,3 +1,14 @@
+**6.4.1 - 07/16/26**
+
+- Fix ``CategoricalInterventionObserver`` to load categories from the ``intervention``
+  artifact key instead of the hardcoded ``risk_factor`` key
+- Make ``CategoricalCausalFactorObserver`` an abstract base class
+
+Breaking changes:
+
+- ``CategoricalCausalFactorObserver`` can no longer be instantiated directly (it
+  was never intended to be which is why we are patch-releasing this change).
+
 **6.4.0 - 07/15/26**
 
 - Update when population characteristics happen in lifecycle methods

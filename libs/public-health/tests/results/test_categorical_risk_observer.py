@@ -1,4 +1,5 @@
 import itertools
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
@@ -7,11 +8,38 @@ from vivarium.engine import InteractiveContext
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.population import BasePopulation
-from vivarium.public_health.results.causal_factor import CategoricalRiskObserver
+from vivarium.public_health.results.causal_factor import (
+    CategoricalInterventionObserver,
+    CategoricalRiskObserver,
+)
 from vivarium.public_health.results.columns import COLUMNS
 from vivarium.public_health.results.stratification import ResultsStratifier
 from vivarium.public_health.risks.base_risk import Risk
 from vivarium.public_health.utilities import to_years
+
+
+@pytest.mark.parametrize(
+    "observer, expected_key",
+    [
+        (CategoricalRiskObserver("test_risk"), "risk_factor.test_risk.categories"),
+        (
+            CategoricalInterventionObserver("test_intervention"),
+            "intervention.test_intervention.categories",
+        ),
+    ],
+)
+def test_categories_key_resolution(observer, expected_key):
+    """Each observer resolves its categories from the artifact key for its own
+    entity type; the intervention observer must not use the risk_factor prefix."""
+
+    loaded_keys = []
+
+    builder = MagicMock()
+    builder.data.load.side_effect = lambda key: loaded_keys.append(key)
+
+    observer.setup(builder)
+
+    assert loaded_keys == [expected_key]
 
 
 @pytest.fixture
