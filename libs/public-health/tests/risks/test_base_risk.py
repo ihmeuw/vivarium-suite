@@ -8,7 +8,7 @@ from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lookup import LookupTable
-from vivarium.testing_utils import FuzzyChecker
+from vivarium.fuzzy_checker import FuzzyChecker
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.causal_factor.calibration_constant import (

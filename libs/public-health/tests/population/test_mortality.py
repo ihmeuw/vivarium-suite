@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from vivarium.engine import Component, InteractiveContext
-from vivarium.testing_utils import FuzzyChecker
+from vivarium.fuzzy_checker import FuzzyChecker
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.disease import BaseDiseaseState, DiseaseModel, DiseaseState
