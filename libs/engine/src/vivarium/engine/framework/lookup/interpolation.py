@@ -9,6 +9,7 @@ simulations.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Hashable, Sequence
 from typing import Any, ClassVar, NamedTuple
 
@@ -50,6 +51,11 @@ class Interpolation:
     continuous from categorical parameters, so the class is not fully generic
     — it is the interpolation primitive that
     :class:`~vivarium.engine.framework.lookup.table.LookupTable` is built on.
+
+    The key columns (categorical values plus each parameter's left bin edge)
+    must uniquely identify a data row, and bin edges must be identical across
+    every categorical group; both are validated on construction when
+    ``validate`` is set.
 
     """
 
@@ -103,6 +109,13 @@ class Interpolation:
         :attr:`value_columns` carries the original user-facing labels and is
         reapplied to the output of :meth:`__call__`."""
 
+        self.order: int = order
+        """Order of interpolation. Only ``0`` is currently supported."""
+        self.extrapolate: bool = extrapolate
+        """Whether to extrapolate beyond the edges of the supplied bins."""
+        self.validate: bool = validate
+        """Whether to validate inputs on construction and on call."""
+
         if validate:
             validate_parameters(
                 self.data,
@@ -110,13 +123,6 @@ class Interpolation:
                 self._continuous_parameters,
                 self._internal_value_columns,
             )
-
-        self.order: int = order
-        """Order of interpolation. Only ``0`` is currently supported."""
-        self.extrapolate: bool = extrapolate
-        """Whether to extrapolate beyond the edges of the supplied bins."""
-        self.validate: bool = validate
-        """Whether to validate inputs on construction and on call."""
 
         sub_tables: _SubTablesType
 
@@ -260,6 +266,7 @@ def validate_parameters(
     continuous_parameters: Sequence[ContinuousParameter],
     value_columns: Sequence[Hashable],
 ) -> None:
+    """Validate that the source data satisfies the lookup contract."""
     if data.empty:
         raise ValueError("You must supply non-empty data to create the interpolation.")
 
@@ -280,6 +287,42 @@ def validate_parameters(
             "Data contains extra columns not in key_columns, parameter_columns, or "
             f"value_columns: {extra_columns}"
         )
+
+    key_columns = list(categorical_parameters) + [
+        parameter.start_column for parameter in continuous_parameters
+    ]
+    if key_columns:
+        duplicated = data.duplicated(subset=key_columns, keep=False)
+        if duplicated.any():
+            duplicate_keys = data.loc[duplicated, key_columns].drop_duplicates()
+            raise ValueError(
+                f"Interpolation data rows must be uniquely identified by the "
+                f"key columns {key_columns}, but multiple rows share "
+                f"these keys:\n{duplicate_keys.to_string(index=False)}"
+            )
+    elif len(data) > 1:
+        raise ValueError(
+            f"Interpolation data with no categorical or continuous parameters "
+            f"must be a single row. You provided {len(data)} rows."
+        )
+
+    if not (continuous_parameters and categorical_parameters):
+        return
+
+    groups = [group for _, group in data.groupby(list(categorical_parameters))]
+    for parameter in continuous_parameters:
+        reference_edges = set(data[parameter.start_column])
+        reference_max = data[parameter.end_column].max()
+        for group in groups:
+            if (
+                set(group[parameter.start_column]) != reference_edges
+                or group[parameter.end_column].max() != reference_max
+            ):
+                raise ValueError(
+                    f"Continuous parameter '{parameter.name}' has different bin "
+                    f"edges across categorical groups. Interpolation requires "
+                    f"uniform bin edges across all categorical groups."
+                )
 
 
 def validate_call_data(
@@ -316,73 +359,67 @@ def validate_call_data(
 def check_data_complete(
     data: pd.DataFrame, continuous_parameters: Sequence[ContinuousParameter]
 ) -> None:
-    """Check that data is complete for interpolation.
+    """Check that data provides complete, contiguous bins for each continuous parameter.
 
-    For each parameter, make sure the bin edges don't overlap and don't have
-    any gaps. Assumes that edges are specified with ends and starts
-    overlapping (but one exclusive and the other inclusive) so can check that
-    end of previous == start of current.
-
-    If multiple parameters, make sure all combinations of parameters
-    are present in data.
-
-    Requires that bins of each parameter be standard across all values
-    of other parameters, i.e., all bins for one parameter when de-duplicated
-    should cover a continuous range of that parameter with no overlaps or gaps
-    and the range covered should be the same for all combinations of other
-    parameter values.
+    For each parameter, require that every combination of parameter bins is
+    present, that each left edge pairs with exactly one right edge, and that
+    the bins tile a continuous range: each bin's exclusive right edge equals
+    the next bin's inclusive left edge.
 
     Raises
     ------
     ValueError
-        If there are missing values for every combinations of continuous parameters.
-    ValueError
-        If the parameter data contains overlaps.
+        If bins are duplicated or overlap, or if a combination of continuous
+        parameters is missing.
     NotImplementedError
         If a parameter contains non-continuous bins.
     """
-    sub_tables: _SubTablesType
+    if not continuous_parameters:
+        return
 
-    # check no overlaps/gaps
+    start_columns = [p.start_column for p in continuous_parameters]
+
+    # Per-parameter geometry: each parameter's distinct bins must tile a
+    # contiguous range. Checked before the cross-parameter grid below so a
+    # malformed bin reports as such rather than as a spurious missing or
+    # duplicate combination.
     for parameter in continuous_parameters:
         start_column, end_column = parameter.start_column, parameter.end_column
-        other_start_columns = [
-            p.start_column for p in continuous_parameters if p != parameter
-        ]
-        if other_start_columns:
-            sub_tables = list(data.groupby(other_start_columns))
-        else:
-            sub_tables = [(None, data)]
+        bins = data[[start_column, end_column]].drop_duplicates().sort_values(start_column)
+        starts = bins[start_column].to_numpy()
+        ends = bins[end_column].to_numpy()
+        if len(np.unique(starts)) != len(starts):
+            raise ValueError(
+                f"Parameter ('{start_column}', '{end_column}') pairs a left edge "
+                f"with multiple right edges; each bin start must map to one end."
+            )
+        # For contiguous bins each bin's exclusive right edge equals the next
+        # bin's inclusive left edge; a positive step is an overlap, negative a gap.
+        step = ends[:-1] - starts[1:]
+        if (step > 0).any():
+            raise ValueError(
+                f"Parameter ('{start_column}', '{end_column}') has overlapping "
+                f"bins: a right edge extends past the next bin's left edge."
+            )
+        if (step < 0).any():
+            raise NotImplementedError(
+                f"Interpolation only supports contiguous bins. Parameter "
+                f"('{start_column}', '{end_column}') leaves gaps between bins."
+            )
 
-        n_p_total = len(set(data[start_column]))
-
-        for _, table in sub_tables:
-            param_data = table[[start_column, end_column]].sort_values(by=start_column)
-            start = param_data[start_column].reset_index(drop=True)
-            end = param_data[end_column].reset_index(drop=True)
-
-            if len(set(start)) < n_p_total:
-                raise ValueError(
-                    f"You must provide a value for every combination of "
-                    f"{[p.name for p in continuous_parameters]}."
-                )
-
-            if len(start) <= 1:
-                continue
-            for i in range(1, len(start)):
-                e = end[i - 1]
-                s = start[i]
-                if e > s or s == start[i - 1]:
-                    raise ValueError(
-                        f"Parameter data must not contain overlaps. Parameter "
-                        f"('{start_column}', '{end_column}') contains overlapping data."
-                    )
-                if e < s:
-                    raise NotImplementedError(
-                        f"Interpolation only supported for continuous parameters "
-                        f"with continuous bins. Parameter ('{start_column}', "
-                        f"'{end_column}') contains non-continuous bins."
-                    )
+    # Cross-parameter completeness: with each parameter a clean tiling, the rows
+    # must be the full cross product of the per-parameter bins, present once.
+    if data.duplicated(subset=start_columns).any():
+        raise ValueError(
+            f"Parameter data contains duplicate bins: multiple rows share the "
+            f"same left edges for "
+            f"{[(p.start_column, p.end_column) for p in continuous_parameters]}."
+        )
+    if len(data) != math.prod(data[col].nunique() for col in start_columns):
+        raise ValueError(
+            f"You must provide a value for every combination of "
+            f"{[p.name for p in continuous_parameters]}."
+        )
 
 
 class Order0Interp:
