@@ -136,17 +136,14 @@ default.
 Data sources
 ^^^^^^^^^^^^
 
-Some components support a ``data_sources`` configuration pattern that lets
-you override individual data keys. This is especially useful during
-development or for simple tutorial examples like the ones in this page.
-Components that support it declare their data needs in
-``configuration_defaults``; by default each key points to the
-corresponding data key string. You can override any of them with:
+Population components support a ``data_sources`` configuration pattern that lets
+you override individual data keys to run without an artifact. Each key defaults
+to an artifact key but can be overridden with:
 
 - **Scalar** (int or float) - broadcast a constant value to all simulants.
 - **DataFrame** - use the DataFrame directly.
 - **Callable** - call the function at setup time to produce the data.
-- **Data key** (string) - load a different key from the data plugin.
+- **Artifact key** (string) - load a different key from the artifact.
 
 For example, :class:`~vivarium.public_health.population.mortality.Mortality` declares
 three configurable data sources:

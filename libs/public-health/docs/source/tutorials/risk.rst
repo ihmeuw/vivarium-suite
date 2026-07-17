@@ -134,7 +134,7 @@ Data sources
 ^^^^^^^^^^^^
 
 Risk components support a ``data_sources`` configuration pattern that lets
-you override individual data keys without rebuilding the artifact. You can
+you override individual data keys to run without an artifact. You can
 override any key with:
 
 - **Scalar** (int or float) - broadcast a constant value to all simulants.

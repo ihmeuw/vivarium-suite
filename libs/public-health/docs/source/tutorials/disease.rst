@@ -138,7 +138,7 @@ For the full list of data keys and the column layout each one expects, see
      - ``prevalence=`` or ``{state}.data_sources.prevalence``
    * - birth_prevalence
      - :class:`~vivarium.public_health.disease.state.DiseaseState` (neonatal models)
-     - ``cause.{cause}.birth_prevalence``
+     - ``0.0`` (scalar default; not loaded from the artifact)
      - ``birth_prevalence=`` or ``{state}.data_sources.birth_prevalence``
    * - disability_weight
      - :class:`~vivarium.public_health.disease.state.DiseaseState`
@@ -1350,13 +1350,15 @@ Configuration Summary
      - Default data key(s) (used if not supplied directly)
    * - ``DiseaseModel``
      - ``cause_specific_mortality_rate=`` (constructor) or
-       ``1{cause}.data_sources.cause_specific_mortality_rate``
+       ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
      - ``cause.{cause}.cause_specific_mortality_rate``
    * - ``DiseaseState``
      - ``prevalence=``, ``birth_prevalence=``, ``dwell_time=``,
        ``disability_weight=``, ``excess_mortality_rate=`` (constructor)
        or the matching ``disease_state.{state_id}.data_sources.{measure}``
-     - Keys matching the pattern ``cause.{state_id}.{measure}``
+     - ``cause.{state_id}.{measure}`` for ``prevalence``,
+       ``disability_weight``, and ``excess_mortality_rate``;
+       ``birth_prevalence`` and ``dwell_time`` default to ``0.0``
    * - ``RateTransition``
      - ``transition_rate=`` via ``add_rate_transition``;
        ``{transition}.rate_conversion_type``

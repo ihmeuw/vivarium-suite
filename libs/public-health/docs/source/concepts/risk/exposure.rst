@@ -76,11 +76,11 @@ the mean) independently of the final exposure value.
 Configuration
 +++++++++++++
 
-Risk exposure data is loaded from the simulation artifact by default, but can
-be overridden with a scalar value or a covariate name in the configuration.
-The distribution type is similarly configurable. See the
-:class:`~vivarium.public_health.risks.base_risk.Risk` class documentation for
-the full set of configuration keys and YAML examples.
+A ``Risk``'s input data is configured through ``data_sources`` -- each entry
+defaults to an artifact key but can be supplied as a scalar, ``DataFrame``, or
+callable so it can run without an artifact. See the
+:doc:`risk tutorial </tutorials/risk>` for the available data sources and
+examples.
 
 .. _exposure_rebinning_concept:
 

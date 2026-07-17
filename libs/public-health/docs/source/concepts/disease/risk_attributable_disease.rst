@@ -115,6 +115,12 @@ provides the same mortality and disability pipelines as a standard
 Both EMR and CSMR can be disabled by setting ``mortality: false`` in the
 configuration, in which case they default to 0.
 
+``RiskAttributableDisease``'s input data is configured through ``data_sources``
+-- each entry defaults to an artifact key but can be supplied as a scalar,
+``DataFrame``, or callable so it can run without an artifact. See the
+:doc:`disease tutorial </tutorials/disease>` for the available data sources and
+examples.
+
 Recoverability
 --------------
 

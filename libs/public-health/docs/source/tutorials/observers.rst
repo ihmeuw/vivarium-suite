@@ -65,6 +65,33 @@ Common Setup
    config = make_base_config()
 
 
+Data sources
+------------
+
+Most observers aggregate pipeline values and register no input data of their
+own. The exception is :class:`~vivarium.public_health.results.ResultsStratifier`,
+which sources the age bins used for age-group stratification through a
+``data_sources`` configuration pattern that lets you run without an artifact.
+Its ``age_bins`` key defaults to the artifact key ``population.age_bins`` but
+can be overridden with:
+
+- **Scalar** (int or float) - broadcast a constant value to all simulants.
+- **DataFrame** - use the DataFrame directly.
+- **Callable** - call the function at setup time to produce the data.
+- **Artifact key** (string) - load a different key from the artifact.
+
+.. code-block:: yaml
+
+   configuration:
+     results_stratifier:
+       data_sources:
+         age_bins: some.artifact.key  # or a DataFrame passed in code
+
+:class:`~vivarium.public_health.results.CategoricalRiskObserver` has no data
+source of its own -- it obtains its categories from the observed risk
+component (see `CategoricalRiskObserver`_).
+
+
 DiseaseObserver
 ---------------
 

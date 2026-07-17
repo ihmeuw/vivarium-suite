@@ -365,16 +365,15 @@ cause-specific mortality rate (CSMR) data from the artifact and registers a
 modifier that adds the disease's CSMR to the total.
 
 For YLD-only causes (those with no associated mortality), the CSMR defaults
-to 0. This is detected automatically from the cause's ``restrictions`` metadata
-in the artifact.
+to 0. On the default path this is detected automatically from the cause's
+``restrictions`` metadata in the artifact.
 
-The ``cause_specific_mortality_rate`` data source is configurable:
-
-.. code-block:: yaml
-
-   measles:
-       data_sources:
-           cause_specific_mortality_rate: cause.measles.cause_specific_mortality_rate
+``DiseaseModel``'s input data is configured through ``data_sources`` -- each
+entry defaults to an artifact key but can be supplied as a scalar, ``DataFrame``,
+or callable so it can run without an artifact; overriding the
+``cause_specific_mortality_rate`` data source also skips the ``restrictions``
+lookup entirely. See the :doc:`disease tutorial </tutorials/disease>` for the
+available data sources and examples.
 
 See :mod:`vivarium.public_health.population.mortality` for details on how
 cause-specific mortality rates are aggregated.

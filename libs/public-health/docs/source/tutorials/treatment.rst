@@ -91,6 +91,24 @@ To run any example in a standalone script, include all of these at the top:
    config = make_base_config()
 
 
+Data sources
+------------
+
+Treatment components support a ``data_sources`` configuration pattern that lets
+you override individual data keys to run without an artifact. Each key defaults
+to an artifact key but can be overridden with:
+
+- **Scalar** (int or float) - broadcast a constant value to all simulants.
+- **DataFrame** - use the DataFrame directly.
+- **Callable** - call the function at setup time to produce the data.
+- **Artifact key** (string) - load a different key from the artifact.
+
+The per-component ``data_sources`` keys are listed in the
+`Configuration Summary`_ below, and the examples in each component section
+supply them via configuration. All examples in this tutorial run without an
+artifact.
+
+
 Intervention
 ------------
 
@@ -444,8 +462,10 @@ The configuration specifies dates and endpoint values:
          start: 0.2   # matches initial coverage
          end: 0.8     # target coverage after scale-up
 
-The ``value.start`` and ``value.end`` can be numeric scalars or the string
-``"data"`` to load endpoint values from the artifact.
+The ``value.start`` and ``value.end`` can be numeric scalars, or the string
+``"data"`` to resolve the endpoint from the corresponding ``data_sources``
+entry -- an artifact key by default, or a ``DataFrame``/scalar supplied through
+the configuration to run without an artifact.
 
 
 Scale-up behavior

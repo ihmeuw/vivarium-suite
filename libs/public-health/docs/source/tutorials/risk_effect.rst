@@ -78,7 +78,7 @@ Artifact Data Format
 This section documents the **key name** and **column layout** that the
 risk effect components expect. Risk effect components support the
 ``data_sources`` configuration pattern that lets you override individual
-keys with a scalar, DataFrame, or callable without rebuilding the artifact
+keys with a scalar, DataFrame, or callable to run without an artifact
 (see `Data sources`_).
 
 
@@ -166,7 +166,7 @@ Data sources
 ^^^^^^^^^^^^
 
 Risk effect components support a ``data_sources`` configuration pattern that
-lets you override individual data keys without rebuilding the artifact. You
+lets you override individual data keys to run without an artifact. You
 can override any key with:
 
 - **Scalar** (int or float) - broadcast a constant value to all simulants.
