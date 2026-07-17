@@ -8,6 +8,8 @@ by specified characteristics through the vivarium results interface.
 
 """
 
+from typing import Any
+
 import pandas as pd
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
@@ -29,6 +31,26 @@ class ResultsStratifier(Component):
     end_year
         The end year of the simulation.
     """
+
+    ##############
+    # Properties #
+    ##############
+
+    @property
+    def configuration_defaults(self) -> dict[str, Any]:
+        """Default configuration values for this component.
+
+        Configuration structure::
+
+            results_stratifier:
+                data_sources:
+                    age_bins:
+                        Source for age bin data. Default is the artifact key
+                        ``population.age_bins``. The data must be a DataFrame
+                        with ``age_start``, ``age_end``, and ``age_group_name``
+                        columns.
+        """
+        return {self.name: {"data_sources": {"age_bins": "population.age_bins"}}}
 
     #####################
     # Lifecycle methods #
@@ -131,9 +153,14 @@ class ResultsStratifier(Component):
         """
         return pop.squeeze(axis=1).dt.year.apply(str)
 
-    @staticmethod
-    def get_age_bins(builder: Builder) -> pd.DataFrame:
+    def get_age_bins(self, builder: Builder) -> pd.DataFrame:
         """Get the age bins for stratifying by age.
+
+        Resolve the ``age_bins`` data source via
+        :meth:`~vivarium.engine.component.Component.get_data` — the
+        ``population.age_bins`` artifact key by default, or a DataFrame
+        supplied through the configuration tree — then restrict the bins to
+        the simulation's age range and normalize the age-group names.
 
         Parameters
         ----------
@@ -142,16 +169,17 @@ class ResultsStratifier(Component):
 
         Returns
         -------
-            The age bins for stratifying by age.
+            The filtered, name-normalized age bins for stratifying by age.
         """
-        raw_age_bins = builder.data.load("population.age_bins")
+        raw_age_bins = self.get_data(builder, self.configuration.data_sources.age_bins)
+
         age_start = builder.configuration.population.initialization_age_min
         exit_age = builder.configuration.population.untracking_age
 
         age_start_mask = age_start < raw_age_bins["age_end"]
         exit_age_mask = raw_age_bins["age_start"] < exit_age if exit_age else True
 
-        age_bins = raw_age_bins.loc[age_start_mask & exit_age_mask, :].copy()
+        age_bins = raw_age_bins[age_start_mask & exit_age_mask].copy()
         age_bins["age_group_name"] = (
             age_bins["age_group_name"].str.replace(" ", "_").str.lower()
         )

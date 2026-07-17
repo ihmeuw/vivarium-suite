@@ -1,3 +1,8 @@
+**6.4.3 - 07/16/26**
+
+- Allow ``ResultsStratifier`` (``age_bins``), ``LinearScaleUp`` (endpoint ``start``/``end`` exposures), and ``LBWSGRiskEffect`` (``age_bins``, ``relative_risk_interpolator``) to source their data via configuration ``data_sources`` instead of requiring an artifact
+- Document the ``cause_specific_mortality_rate`` config override that lets ``DiseaseModel`` run artifact-less
+
 **6.4.2 - 07/16/26**
 
 - Allow the risk components ``CausalFactorEffect``/``RiskEffect`` (``tmred``, ``relative_risk_scalar``, ``demographic_dimensions``), ``NonLogLinearRiskEffect`` (``tmred``), and ``CausalFactor`` (``categories``) to source their data via configuration ``data_sources`` instead of requiring an artifact. The ``LBWSGDistribution`` and ``CategoricalCausalFactorObserver`` now read categories from the owning ``CausalFactor`` component rather than loading them independently
