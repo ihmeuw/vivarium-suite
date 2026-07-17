@@ -66,11 +66,13 @@ where:
 - :math:`x` is the simulant's current exposure value,
 - :math:`\text{TMREL}` is the :term:`theoretical minimum-risk exposure level
   <TMREL>`, computed as the midpoint of the :term:`TMRED`,
-- :math:`RR_{\text{per-unit}}` is the relative risk per unit of exposure loaded
-  from the artifact, and
-- :math:`\text{scale}` is a scalar loaded from the artifact
-  (``{risk}.relative_risk_scalar``) that defines the exposure increment to
-  which the per-unit RR corresponds.
+- :math:`RR_{\text{per-unit}}` is the relative risk per unit of exposure, and
+- :math:`\text{scale}` is a scalar (``{risk}.relative_risk_scalar``) that
+  defines the exposure increment to which the per-unit RR corresponds.
+
+Both ``tmred`` (which yields the TMREL) and ``relative_risk_scalar`` default to
+their artifact keys but can be supplied through the effect's ``data_sources``
+configuration, like ``relative_risk``.
 
 The result is clipped to a minimum of 1, so the relative risk never falls
 below the baseline.
@@ -85,8 +87,9 @@ well described by a log-linear curve, the
 :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect` component
 can be used instead. This component:
 
-1. Loads :term:`TMRED` data from the artifact and computes the :term:`TMREL`
-   as a uniform random draw between the TMRED's minimum and maximum.
+1. Loads :term:`TMRED` data from its configured data source (the artifact by
+   default) and computes the :term:`TMREL` as a uniform random draw between the
+   TMRED's minimum and maximum.
 2. Interpolates the RR at the TMREL from the configured RR data points and
    divides all RR values by this quantity, so that the RR at the TMREL equals
    1. The result is clipped to a minimum of 1.

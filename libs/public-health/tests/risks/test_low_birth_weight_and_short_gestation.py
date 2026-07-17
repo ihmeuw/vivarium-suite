@@ -8,6 +8,8 @@ from vivarium.engine.testing_utilities import TestPopulation
 from tests.risks.test_effect import _setup_risk_effect_simulation
 from tests.test_utilities import make_age_bins
 from vivarium.public_health.risks.implementations.low_birth_weight_and_short_gestation import (
+    BIRTH_WEIGHT,
+    GESTATIONAL_AGE,
     LBWSGDistribution,
     LBWSGRisk,
     LBWSGRiskEffect,
@@ -301,3 +303,52 @@ def make_categorical_data(data: pd.DataFrame) -> pd.DataFrame:
         dfs.append(age_sex_df)
 
     return pd.concat(dfs)
+
+
+def test_lbwsg_categories_from_config(base_config) -> None:
+    """LBWSGDistribution builds its category intervals from the categories in
+    the risk's config data source when no artifact ``categories`` key is
+    provided.
+    """
+    risk = LBWSGRisk()
+
+    birth_exposure = pd.DataFrame(
+        {
+            "sex": ["Male", "Female", "Male", "Female"],
+            "year_start": [2021, 2021, 2021, 2021],
+            "year_end": [2022, 2022, 2022, 2022],
+            "parameter": ["cat81", "cat81", "cat82", "cat82"],
+            "value": [0.75, 0.75, 0.25, 0.25],
+        }
+    )
+    categories = pd.DataFrame(
+        {
+            "category": ["cat81", "cat82"],
+            "description": [
+                "Neonatal preterm and LBWSG (estimation years) - [28, 30) wks, [2500, 3000) g",
+                "Neonatal preterm and LBWSG (estimation years) - [28, 30) wks, [3000, 3500) g",
+            ],
+        }
+    )
+
+    override_config = {
+        "population": {
+            "initialization_age_start": 0.0,
+            "initialization_age_max": 0.0,
+        },
+        risk.name: {
+            "data_sources": {
+                "birth_exposure": birth_exposure,
+                "categories": categories,
+            }
+        },
+    }
+    InteractiveContext(
+        base_config,
+        components=[TestPopulation(), risk],
+        configuration=override_config,
+    )
+
+    intervals = risk.exposure_distribution.category_intervals
+    assert set(intervals[GESTATIONAL_AGE]) == {"cat81", "cat82"}
+    assert set(intervals[BIRTH_WEIGHT]) == {"cat81", "cat82"}

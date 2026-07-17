@@ -253,8 +253,14 @@ in each exposure category and multiplies by the step size (converted to
 years) to produce person-time.
 
 The observer registers a stratification for the risk factor whose categories
-are loaded from the artifact at ``risk_factor.{name}.categories``, and the
-exposure values come from the ``{name}.exposure`` pipeline.
+are obtained from the observed risk component, so the observer stratifies over
+the categories the risk defines. See the
+:class:`~vivarium.public_health.risks.base_risk.Risk` component (and its
+:class:`~vivarium.public_health.causal_factor.exposure.CausalFactor` parent) for
+how those categories are configured. To stratify over only a subset, exclude
+the unwanted categories with the usual stratification exclusion configuration
+(``stratification.{name}.exclude``). The exposure values come from the
+``{name}.exposure`` pipeline.
 
 The observer's configuration key matches the risk factor name (e.g.
 ``configuration.stratification.child_wasting``).

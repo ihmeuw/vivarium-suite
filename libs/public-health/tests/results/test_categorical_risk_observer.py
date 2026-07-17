@@ -1,4 +1,5 @@
 import itertools
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
@@ -7,11 +8,42 @@ from vivarium.engine import InteractiveContext
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.population import BasePopulation
-from vivarium.public_health.results.causal_factor import CategoricalRiskObserver
+from vivarium.public_health.results.causal_factor import (
+    CategoricalInterventionObserver,
+    CategoricalRiskObserver,
+)
 from vivarium.public_health.results.columns import COLUMNS
 from vivarium.public_health.results.stratification import ResultsStratifier
 from vivarium.public_health.risks.base_risk import Risk
 from vivarium.public_health.utilities import to_years
+
+
+@pytest.mark.parametrize(
+    "observer, expected_component",
+    [
+        (CategoricalRiskObserver("test_risk"), "risk_factor.test_risk"),
+        (
+            CategoricalInterventionObserver("test_intervention"),
+            "intervention.test_intervention",
+        ),
+    ],
+)
+def test_categories_sourced_from_entity_type_component(observer, expected_component):
+    """Each observer sources categories from its own entity type's component
+    (not the artifact directly); the intervention observer must not use the
+    risk_factor prefix."""
+
+    requested = []
+
+    builder = MagicMock()
+    builder.components.get_component.side_effect = (
+        lambda name: requested.append(name) or MagicMock()
+    )
+
+    observer.setup(builder)
+
+    assert requested == [expected_component]
+    builder.data.load.assert_not_called()
 
 
 @pytest.fixture
@@ -184,3 +216,47 @@ def test_category_exclusions(base_config, base_plugins, risk, risk_data, exclusi
     simulation.step()
     results = simulation.get_results()["person_time_test_risk"]
     assert set(results["sub_entity"]) == {"cat1", "cat2", "cat3", "cat4"} - set(exclusions)
+
+
+def test_observer_sources_categories_from_risk_component(
+    base_config, base_plugins, risk, risk_data
+) -> None:
+    """The observer stratifies over the categories from the risk component's
+    config data source when the ``categories`` artifact key is withheld.
+    """
+    observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
+    simulation = InteractiveContext(
+        components=[
+            BasePopulation(),
+            ResultsStratifier(),
+            risk,
+            observer,
+        ],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+        setup=False,
+    )
+    categories = pd.DataFrame(
+        {
+            "category": ["cat1", "cat2", "cat3", "cat4"],
+            "description": ["severe", "moderate", "mild", "unexposed"],
+        }
+    )
+    simulation.configuration.update(
+        {
+            "risk_factor.test_risk": {"data_sources": {"categories": categories}},
+            "stratification": {"test_risk": {"include": ["sex"]}},
+        }
+    )
+
+    # Write every artifact key except ``categories``, which comes from config.
+    for key, value in risk_data.items():
+        if key == "categories":
+            continue
+        simulation._data.write(f"risk_factor.test_risk.{key}", value)
+
+    simulation.setup()
+    simulation.step()
+
+    results = simulation.get_results()["person_time_test_risk"]
+    assert set(results[COLUMNS.SUB_ENTITY]) == {"cat1", "cat2", "cat3", "cat4"}
