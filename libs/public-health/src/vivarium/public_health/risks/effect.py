@@ -87,7 +87,8 @@ class NonLogLinearRiskEffect(RiskEffect):
 
     This component:
 
-    1. Reads TMRED data from the artifact and defines the TMREL.
+    1. Reads TMRED data from its configured data source (the artifact by
+       default) and defines the TMREL.
     2. Calculates the relative risk at TMREL by linearly interpolating over
        relative risk data defined in the configuration.
     3. Divides relative risk data from configuration by RR at TMREL
@@ -123,12 +124,22 @@ class NonLogLinearRiskEffect(RiskEffect):
                         ``{risk}.population_attributable_fraction``. Used to
                         adjust the target rate to account for the portion
                         attributable to this risk.
+                    tmred:
+                        Source for theoretical-minimum-risk exposure (TMRED)
+                        data, used to compute the TMREL at which the relative
+                        risk is normalized to 1. Default is the artifact key
+                        ``{risk}.tmred``. Accepts a single-row DataFrame with
+                        ``distribution``, ``min``, and ``max`` columns to
+                        bypass the artifact. The ``distribution`` column must be
+                        one of ``"uniform"`` (TMREL drawn uniformly from
+                        ``[min, max]``) or ``"draws"`` (draw-level TMRELs).
         """
         return {
             self.name: {
                 "data_sources": {
                     "relative_risk": f"{self.causal_factor}.relative_risk",
                     "population_attributable_fraction": f"{self.causal_factor}.population_attributable_fraction",
+                    "tmred": f"{self.causal_factor}.tmred",
                 },
             }
         }
@@ -237,7 +248,7 @@ class NonLogLinearRiskEffect(RiskEffect):
             configuration = self.configuration
 
         # get TMREL
-        tmred = builder.data.load(f"{self.causal_factor}.tmred")
+        tmred = self.get_tmred(builder, configuration)
         if tmred["distribution"] == "uniform":
             draw = builder.configuration.input_data.input_draw_number
             rng = np.random.default_rng(builder.randomness.get_seed(self.name + str(draw)))

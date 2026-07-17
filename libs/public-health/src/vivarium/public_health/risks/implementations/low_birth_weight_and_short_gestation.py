@@ -211,7 +211,8 @@ class LBWSGDistribution(PolytomousDistribution):
         -------
             The intervals for each category.
         """
-        categories: dict[str, str] = builder.data.load(f"{self.causal_factor}.categories")
+        risk_component = builder.components.get_component(self.causal_factor)
+        categories: dict[str, str] = risk_component.get_categories(builder)
         category_intervals = {GESTATIONAL_AGE: {}, BIRTH_WEIGHT: {}}
 
         for category, description in categories.items():
@@ -427,6 +428,11 @@ class LBWSGRisk(Risk):
                         ``{risk}.birth_exposure``. This provides the
                         joint distribution of birth weight and gestational
                         age categories at birth.
+                    categories:
+                        Source for the LBWSG category descriptions, from which
+                        birth-weight and gestational-age intervals are parsed.
+                        Inherited from CausalFactor; default is the artifact key
+                        ``{risk}.categories``.
                 distribution_type: str
                     Fixed to ``"lbwsg"`` for this component, using the
                     specialized LBWSGDistribution.

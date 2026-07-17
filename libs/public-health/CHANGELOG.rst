@@ -1,7 +1,11 @@
-**6.4.2 - 07/20/26**
+**6.4.3 - 07/20/26**
 
 - Import ``FuzzyChecker`` from ``vivarium-fuzzy-checker`` (extracted from ``vivarium-testing-utils``)
   and add it as a test dependency
+
+**6.4.2 - 07/16/26**
+
+- Allow the risk components ``CausalFactorEffect``/``RiskEffect`` (``tmred``, ``relative_risk_scalar``, ``demographic_dimensions``), ``NonLogLinearRiskEffect`` (``tmred``), and ``CausalFactor`` (``categories``) to source their data via configuration ``data_sources`` instead of requiring an artifact. The ``LBWSGDistribution`` and ``CategoricalCausalFactorObserver`` now read categories from the owning ``CausalFactor`` component rather than loading them independently
 
 **6.4.1 - 07/16/26**
 
