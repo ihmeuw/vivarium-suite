@@ -9,8 +9,6 @@ has been archived. The import path changed from ``vivarium_public_health`` to
 
 """
 
-# testing pr labeler
-
 from importlib.metadata import PackageNotFoundError, version
 
 try:
