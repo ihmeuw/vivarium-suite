@@ -252,12 +252,14 @@ def test_component_lookup_table_configuration(hdf_file_path: Path) -> None:
             "test_column_3_end": [1, 2, 3],
         }
     ).set_index(["test_column_3_start", "test_column_3_end"])
+    # Both categorical groups (test_column_2) share the same test_column_3 bins:
+    # interpolation now requires uniform bin edges across categorical groups.
     favorite_color = pd.DataFrame(
         {
-            "value": ["color_1", "color_2", "color_3"],
-            "test_column_2": ["value_1", "value_2", "value_3"],
-            "test_column_3_start": [0, 1, 2],
-            "test_column_3_end": [1, 2, 3],
+            "value": ["color_1", "color_2", "color_3", "color_4"],
+            "test_column_2": ["value_1", "value_1", "value_2", "value_2"],
+            "test_column_3_start": [0, 1, 0, 1],
+            "test_column_3_end": [1, 2, 1, 2],
         }
     ).set_index(["test_column_2", "test_column_3_start", "test_column_3_end"])
     cooling_time = pd.DataFrame(
