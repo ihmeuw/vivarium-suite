@@ -92,6 +92,12 @@ multi_line_output = 3
 # work the same as in-lib invocations.
 testpaths = ["tests"]
 
+[tool.coverage.run]
+source = ["vivarium.public_health"]
+
+[tool.coverage.report]
+show_missing = true
+
 [tool.mypy]
 # WARNING: settings here that aren't mypy_path / explicit_package_bases must be
 # kept in sync manually with the monorepo-root [tool.mypy]. The local

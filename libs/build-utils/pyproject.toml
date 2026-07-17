@@ -71,6 +71,12 @@ fallback_version = "0.0.0+no-git-tag"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+source = ["vivarium.build_utils"]
+
+[tool.coverage.report]
+show_missing = true
+
 [tool.black]
 line-length = 94
 

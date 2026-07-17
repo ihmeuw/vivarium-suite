@@ -1,9 +1,11 @@
 define test
-	pytest -vvv -n auto $(if $(RUNSLOW),--runslow,) $(if $(RUNWEEKLY),--runweekly,) tests/$(1)
+	export COVERAGE_FILE=./output/.coverage.$(1) && \
+	pytest -vvv -n auto $(if $(RUNSLOW),--runslow,) $(if $(RUNWEEKLY),--runweekly,) $(if $(COV),--cov --cov-report term --cov-report html:./output/htmlcov_$(1),) tests/$(1)
 endef
 
 test-all: # Run all tests
-	pytest -vvv -n auto $(if $(RUNSLOW),--runslow,) $(if $(RUNWEEKLY),--runweekly,) tests/
+	export COVERAGE_FILE=./output/.coverage && \
+	pytest -vvv -n auto $(if $(RUNSLOW),--runslow,) $(if $(RUNWEEKLY),--runweekly,) $(if $(COV),--cov --cov-report term --cov-report html:./output/htmlcov_tests,) tests/
 
 test-e2e: # Run end-to-end tests
 	$(call test,e2e)

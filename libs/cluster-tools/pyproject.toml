@@ -119,3 +119,9 @@ explicit_package_bases = true
 # so mypy can still check the rest of the source on non-cluster envs.
 module = ["dill", "jobmon.*", "jobmon_installer_ihme.*"]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["vivarium.cluster_tools"]
+
+[tool.coverage.report]
+show_missing = true

@@ -1,9 +1,7 @@
-**4.4.1 - 07/15/26**
+**4.4.1 - 07/17/26**
 
-- Stop publishing test-coverage HTML reports in CI: remove the orphaned
-  ``publishHTML`` step and the unused ``--cov`` makefile plumbing, which logged a
-  spurious "Specified HTML directory does not exist" error on every build
-- Drop the now-unused ``[tool.coverage]`` configuration
+- Remove the orphaned ``publishHTML`` CI step that logged a spurious "Specified
+  HTML directory does not exist" error on every build
 
 **4.4.0 - 07/13/26**
 

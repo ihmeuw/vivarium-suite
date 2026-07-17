@@ -144,3 +144,13 @@ module = [
     "vivarium.gbd_mapping.*",
 ]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["vivarium.testing_utils"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
