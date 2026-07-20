@@ -65,7 +65,7 @@ def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) ->
     assert np.all(pop["entrance_time"] == datetime(2021, 12, 31, 12))
 
     for sex in ["Female", "Male"]:
-        fuzzy_checker.fuzzy_assert_proportion(
+        fuzzy_checker.assert_proportion(
             observed_numerator=(pop["sex"] == sex).sum(),
             observed_denominator=len(pop),
             target_proportion=0.5,
@@ -86,7 +86,7 @@ def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) ->
 
     alive_target = from_yearly(20, timedelta(days=0.5))
     assert isinstance(alive_target, float)
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         observed_numerator=(len(pop[~is_alive])),
         observed_denominator=len(pop),
         target_proportion=alive_target,
@@ -99,7 +99,7 @@ def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) ->
     )
     lri_target = from_yearly(25, timedelta(days=0.5))
     assert isinstance(lri_target, float)
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         observed_numerator=(len(pop[is_alive & has_lri])),
         observed_denominator=len(pop[is_alive]),
         target_proportion=lri_target,
