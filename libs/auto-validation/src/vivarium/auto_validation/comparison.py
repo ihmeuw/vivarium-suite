@@ -6,16 +6,14 @@ from loguru import logger
 
 # StratValue and TargetIntervalConfig now live in vivarium-fuzzy-checker (they
 # configure FuzzyChecker's target intervals). Re-exported here so the historical
-# ``vivarium.testing_utils.automated_validation.comparison`` import path keeps resolving.
+# ``vivarium.auto_validation.comparison`` import path keeps resolving.
 from vivarium.fuzzy_checker import FuzzyChecker, StratValue, TargetIntervalConfig, TestResult
 
-from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
-from vivarium.testing_utils.automated_validation.constants import DRAW_INDEX, DataSource
-from vivarium.testing_utils.automated_validation.data_transformation.calculations import (
-    stratify,
-)
-from vivarium.testing_utils.automated_validation.data_transformation.measures import Measure
-from vivarium.testing_utils.automated_validation.visualization import dataframe_utils
+from vivarium.auto_validation.bundle import RatioMeasureDataBundle
+from vivarium.auto_validation.constants import DRAW_INDEX, DataSource
+from vivarium.auto_validation.data_transformation.calculations import stratify
+from vivarium.auto_validation.data_transformation.measures import Measure
+from vivarium.auto_validation.visualization import dataframe_utils
 
 
 class Comparison(ABC):

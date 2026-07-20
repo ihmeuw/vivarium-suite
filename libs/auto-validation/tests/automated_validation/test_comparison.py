@@ -11,24 +11,18 @@ from pytest_mock import MockFixture
 from vivarium.fuzzy_checker import TestResult
 from vivarium_inputs import interface
 
-from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
-from vivarium.testing_utils.automated_validation.comparison import (
-    FuzzyComparison,
-    TargetIntervalConfig,
-)
-from vivarium.testing_utils.automated_validation.constants import (
+from vivarium.auto_validation.bundle import RatioMeasureDataBundle
+from vivarium.auto_validation.comparison import FuzzyComparison, TargetIntervalConfig
+from vivarium.auto_validation.constants import (
     DAYS_PER_YEAR,
     DRAW_INDEX,
     INPUT_DATA_INDEX_NAMES,
     SEED_INDEX,
     DataSource,
 )
-from vivarium.testing_utils.automated_validation.data_loader import DataLoader
-from vivarium.testing_utils.automated_validation.data_transformation import age_groups
-from vivarium.testing_utils.automated_validation.data_transformation.measures import (
-    Incidence,
-    RatioMeasure,
-)
+from vivarium.auto_validation.data_loader import DataLoader
+from vivarium.auto_validation.data_transformation import age_groups
+from vivarium.auto_validation.data_transformation.measures import Incidence, RatioMeasure
 
 
 @pytest.fixture
@@ -44,7 +38,7 @@ def test_bundle(
 
     # mock loading of datasets
     mocker.patch(
-        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
+        "vivarium.auto_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
         return_value=test_data,
     )
 
@@ -69,13 +63,13 @@ def reference_bundle(
 
     # mock loading of datasets
     mocker.patch(
-        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
+        "vivarium.auto_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
         return_value={
             "data": reference_data,
         },
     )
     mocker.patch(
-        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_aggregated_weights",
+        "vivarium.auto_validation.bundle.RatioMeasureDataBundle._get_aggregated_weights",
         return_value=reference_weights,
     )
 

@@ -2,7 +2,7 @@ from typing import Any
 
 import pandas as pd
 
-from vivarium.testing_utils.automated_validation.data_loader import DataSource
+from vivarium.auto_validation.data_loader import DataSource
 
 REQUIRED_KEYS = (
     "measure_key",

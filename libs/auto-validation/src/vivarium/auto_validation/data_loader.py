@@ -10,19 +10,14 @@ from vivarium.gbd_mapping import causes, covariates, risk_factors
 from vivarium_inputs import interface
 from vivarium_inputs.mapping_extension import alternative_risk_factors
 
-from vivarium.testing_utils.automated_validation.constants import (
+from vivarium.auto_validation.constants import (
     DRAW_PREFIX,
     LOCATION_ARTIFACT_KEY,
     POPULATION_STRUCTURE_ARTIFACT_KEY,
     DataSource,
 )
-from vivarium.testing_utils.automated_validation.data_transformation import (
-    calculations,
-    utils,
-)
-from vivarium.testing_utils.automated_validation.data_transformation.data_schema import (
-    SimOutputData,
-)
+from vivarium.auto_validation.data_transformation import calculations, utils
+from vivarium.auto_validation.data_transformation.data_schema import SimOutputData
 
 
 class DataLoader:

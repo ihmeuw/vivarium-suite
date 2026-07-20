@@ -17,34 +17,32 @@ from matplotlib.figure import Figure
 from vivarium.fuzzy_checker import TestResult
 from vivarium_inputs import utilities as vi
 
-from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
-from vivarium.testing_utils.automated_validation.comparison import (
+from vivarium.auto_validation.bundle import RatioMeasureDataBundle
+from vivarium.auto_validation.comparison import (
     Comparison,
     FuzzyComparison,
     StratValue,
     TargetIntervalConfig,
 )
-from vivarium.testing_utils.automated_validation.constants import DAYS_PER_YEAR
-from vivarium.testing_utils.automated_validation.data_loader import DataLoader, DataSource
-from vivarium.testing_utils.automated_validation.data_transformation import report
-from vivarium.testing_utils.automated_validation.data_transformation.calculations import (
-    filter_data,
-)
-from vivarium.testing_utils.automated_validation.data_transformation.measures import (
+from vivarium.auto_validation.constants import DAYS_PER_YEAR
+from vivarium.auto_validation.data_loader import DataLoader, DataSource
+from vivarium.auto_validation.data_transformation import report
+from vivarium.auto_validation.data_transformation.calculations import filter_data
+from vivarium.auto_validation.data_transformation.measures import (
     CategoricalRelativeRisk,
     Measure,
     MeasureMapper,
     RatioMeasure,
 )
-from vivarium.testing_utils.automated_validation.data_transformation.utils import (
+from vivarium.auto_validation.data_transformation.utils import (
     add_comparison_metadata_levels,
     drop_extra_columns,
     get_measure_index_names,
     set_gbd_index,
     set_validation_index,
 )
-from vivarium.testing_utils.automated_validation.results import VerificationResults
-from vivarium.testing_utils.automated_validation.visualization import plot_utils
+from vivarium.auto_validation.results import VerificationResults
+from vivarium.auto_validation.visualization import plot_utils
 
 
 class ValidationContext:

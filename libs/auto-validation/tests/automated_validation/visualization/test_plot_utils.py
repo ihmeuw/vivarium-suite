@@ -8,10 +8,10 @@ import pytest
 from pandas.testing import assert_frame_equal
 from pytest_mock import MockerFixture
 
-from vivarium.testing_utils.automated_validation.comparison import Comparison
-from vivarium.testing_utils.automated_validation.constants import DRAW_INDEX, SEED_INDEX
-from vivarium.testing_utils.automated_validation.data_loader import DataSource
-from vivarium.testing_utils.automated_validation.visualization.plot_utils import (
+from vivarium.auto_validation.comparison import Comparison
+from vivarium.auto_validation.constants import DRAW_INDEX, SEED_INDEX
+from vivarium.auto_validation.data_loader import DataSource
+from vivarium.auto_validation.visualization.plot_utils import (
     _append_condition_to_title,
     _drop_missing_groups,
     _get_combined_data,
@@ -184,7 +184,7 @@ class TestPlotComparison:
     def test_valid_type(self, sample_comparison: Comparison, mocker: MockerFixture) -> None:
         # Setup
         mock_line_plot = mocker.patch(
-            "vivarium.testing_utils.automated_validation.visualization.plot_utils._line_plot"
+            "vivarium.auto_validation.visualization.plot_utils._line_plot"
         )
         mock_line_plot.return_value = plt.figure()
 
@@ -218,7 +218,7 @@ class TestLinePlot:
     ) -> None:
 
         mock_rel_plot = mocker.patch(
-            "vivarium.testing_utils.automated_validation.visualization.plot_utils._rel_plot"
+            "vivarium.auto_validation.visualization.plot_utils._rel_plot"
         )
         mock_rel_plot.return_value = plt.figure()
         fig = _line_plot(

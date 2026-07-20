@@ -8,18 +8,11 @@ import pytest
 from pytest_mock import MockFixture
 from vivarium_inputs import interface
 
-from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
-from vivarium.testing_utils.automated_validation.constants import (
-    DRAW_INDEX,
-    INPUT_DATA_INDEX_NAMES,
-    DataSource,
-)
-from vivarium.testing_utils.automated_validation.data_loader import DataLoader
-from vivarium.testing_utils.automated_validation.data_transformation import age_groups
-from vivarium.testing_utils.automated_validation.data_transformation.measures import (
-    Incidence,
-    RatioMeasure,
-)
+from vivarium.auto_validation.bundle import RatioMeasureDataBundle
+from vivarium.auto_validation.constants import DRAW_INDEX, INPUT_DATA_INDEX_NAMES, DataSource
+from vivarium.auto_validation.data_loader import DataLoader
+from vivarium.auto_validation.data_transformation import age_groups
+from vivarium.auto_validation.data_transformation.measures import Incidence, RatioMeasure
 
 
 @pytest.mark.parametrize("data_source", [DataSource.SIM, DataSource.ARTIFACT])
@@ -163,7 +156,7 @@ def test_aggregate_scenario_stratifications(
 
     # mock loading of datasets
     mocker.patch(
-        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
+        "vivarium.auto_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
         return_value=test_data,
     )
     bundle = RatioMeasureDataBundle(
@@ -203,11 +196,11 @@ def test_aggregate_reference_stratifications(
 ) -> None:
     # mock loading of datasets
     mocker.patch(
-        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
+        "vivarium.auto_validation.bundle.RatioMeasureDataBundle._get_formatted_datasets",
         return_value={"data": reference_data},
     )
     mocker.patch(
-        "vivarium.testing_utils.automated_validation.bundle.RatioMeasureDataBundle._get_aggregated_weights",
+        "vivarium.auto_validation.bundle.RatioMeasureDataBundle._get_aggregated_weights",
         return_value=reference_weights,
     )
     bundle = RatioMeasureDataBundle(

@@ -19,31 +19,21 @@ import yaml
 from pytest import TempPathFactory
 from vivarium.artifact import Artifact
 
-from vivarium.testing_utils.automated_validation.constants import (
+from vivarium.auto_validation.constants import (
     DAYS_PER_YEAR,
     DRAW_INDEX,
     INPUT_DATA_INDEX_NAMES,
     LOCATION_ARTIFACT_KEY,
     SEED_INDEX,
 )
-from vivarium.testing_utils.automated_validation.data_loader import (
-    _convert_to_total_person_time,
-)
-from vivarium.testing_utils.automated_validation.data_transformation import (
-    calculations,
-    utils,
-)
-from vivarium.testing_utils.automated_validation.data_transformation.age_groups import (
-    AgeSchema,
-    AgeTuple,
-)
-from vivarium.testing_utils.automated_validation.data_transformation.data_schema import (
+from vivarium.auto_validation.data_loader import _convert_to_total_person_time
+from vivarium.auto_validation.data_transformation import calculations, utils
+from vivarium.auto_validation.data_transformation.age_groups import AgeSchema, AgeTuple
+from vivarium.auto_validation.data_transformation.data_schema import (
     DrawData,
     SingleNumericColumn,
 )
-from vivarium.testing_utils.automated_validation.data_transformation.measures import (
-    RatioMeasure,
-)
+from vivarium.auto_validation.data_transformation.measures import RatioMeasure
 
 
 @utils.check_io(out=SingleNumericColumn)
