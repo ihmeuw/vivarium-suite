@@ -3,21 +3,58 @@
 #################
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("vivarium-fuzzy-checker")
+except PackageNotFoundError:
+    __version__ = "0.0.0+not-installed"
+
 import os
 from dataclasses import dataclass
 from functools import cache
 from itertools import chain, combinations
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from vivarium.testing_utils.automated_validation.comparison import TargetIntervalConfig
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import scipy.stats
 from loguru import logger
 from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_frozen
+
+StratValue = str | int | float
+
+
+@dataclass
+class TargetIntervalConfig:
+    """Configuration for applying a relative error interval to target proportions
+    for specific stratification subsets.
+
+    Parameters
+    ----------
+    stratifications
+        A mapping of stratification names to filter values.
+        - "all": match groups where this stratification is NOT present
+        - "specific": match groups where this stratification IS present (any value)
+        - A specific value: match groups where this stratification
+          is present with that exact value
+        - If multiple stratifications are specified, all conditions must be met for a match.
+          Same behavior as an AND filter across the stratifications.
+    relative_error
+        The relative error to apply to the target proportion, creating an interval
+        of (target * (1 - relative_error), target * (1 + relative_error)).
+    """
+
+    stratifications: dict[str, StratValue]
+    relative_error: float
+
+    def __post_init__(self) -> None:
+        if not (0 < self.relative_error <= 1):
+            raise ValueError(
+                f"relative_error must be between 0 (exclusive) and 1 (inclusive), "
+                f"got {self.relative_error}"
+            )
 
 
 @dataclass

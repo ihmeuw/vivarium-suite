@@ -13,6 +13,7 @@ from pandas.testing import assert_frame_equal
 from pytest import TempPathFactory
 from pytest_mock import MockFixture
 from vivarium.artifact import Artifact, ArtifactException
+from vivarium.fuzzy_checker import TestResult
 from vivarium_inputs import get_age_bins
 
 from tests.automated_validation.conftest import get_model_spec
@@ -42,7 +43,6 @@ from vivarium.testing_utils.automated_validation.data_transformation.rate_aggreg
     population_weighted,
 )
 from vivarium.testing_utils.automated_validation.interface import ValidationContext
-from vivarium.testing_utils.fuzzy_checker import TestResult
 
 MEASURE_DATA_MAPPER = {
     "risk_factor.child_wasting.exposure": "exposure",

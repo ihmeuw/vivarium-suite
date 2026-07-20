@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, Collection, Literal
 
 import pandas as pd
 from loguru import logger
+
+# StratValue and TargetIntervalConfig now live in vivarium-fuzzy-checker (they
+# configure FuzzyChecker's target intervals). Re-exported here so the historical
+# ``vivarium.testing_utils.automated_validation.comparison`` import path keeps resolving.
+from vivarium.fuzzy_checker import FuzzyChecker, StratValue, TargetIntervalConfig, TestResult
 
 from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
 from vivarium.testing_utils.automated_validation.constants import DRAW_INDEX, DataSource
@@ -12,40 +16,6 @@ from vivarium.testing_utils.automated_validation.data_transformation.calculation
 )
 from vivarium.testing_utils.automated_validation.data_transformation.measures import Measure
 from vivarium.testing_utils.automated_validation.visualization import dataframe_utils
-from vivarium.testing_utils.fuzzy_checker import FuzzyChecker, TestResult
-
-StratValue = str | int | float
-
-
-@dataclass
-class TargetIntervalConfig:
-    """Configuration for applying a relative error interval to target proportions
-    for specific stratification subsets.
-
-    Parameters
-    ----------
-    stratifications
-        A mapping of stratification names to filter values.
-        - "all": match groups where this stratification is NOT present
-        - "specific": match groups where this stratification IS present (any value)
-        - A specific value: match groups where this stratification
-          is present with that exact value
-        - If multiple stratifications are specified, all conditions must be met for a match.
-          Same behavior as an AND filter across the stratifications.
-    relative_error
-        The relative error to apply to the target proportion, creating an interval
-        of (target * (1 - relative_error), target * (1 + relative_error)).
-    """
-
-    stratifications: dict[str, StratValue]
-    relative_error: float
-
-    def __post_init__(self) -> None:
-        if not (0 < self.relative_error <= 1):
-            raise ValueError(
-                f"relative_error must be between 0 (exclusive) and 1 (inclusive), "
-                f"got {self.relative_error}"
-            )
 
 
 class Comparison(ABC):

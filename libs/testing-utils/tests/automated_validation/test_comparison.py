@@ -8,6 +8,7 @@ import pytest
 from pandas.testing import assert_frame_equal
 from pytest_check import check
 from pytest_mock import MockFixture
+from vivarium.fuzzy_checker import TestResult
 from vivarium_inputs import interface
 
 from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
@@ -28,7 +29,6 @@ from vivarium.testing_utils.automated_validation.data_transformation.measures im
     Incidence,
     RatioMeasure,
 )
-from vivarium.testing_utils.fuzzy_checker import TestResult
 
 
 @pytest.fixture
