@@ -45,3 +45,7 @@ testing-utils:
 ai-tools:
   - changed-files:
     - any-glob-to-any-file: 'tools/ai-tools/**'
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
