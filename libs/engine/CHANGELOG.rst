@@ -1,3 +1,8 @@
+**5.5.1 - 07/20/26**
+
+- Import ``FuzzyChecker`` from ``vivarium-fuzzy-checker`` (extracted from ``vivarium-testing-utils``)
+  and add it as a test dependency
+
 **5.5.0 - 07/17/26**
 
 - Vectorize order-0 interpolation into a single merge, and validate the lookup contract more strictly: raise on non-unique keys or bin edges that differ across categorical groups.

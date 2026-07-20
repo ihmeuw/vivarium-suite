@@ -10,4 +10,4 @@ import numpy
 
 numpy.seterr(all="raise")
 
-from vivarium.testing_utils.fuzzy_checker import FuzzyChecker
+from vivarium.fuzzy_checker import FuzzyChecker

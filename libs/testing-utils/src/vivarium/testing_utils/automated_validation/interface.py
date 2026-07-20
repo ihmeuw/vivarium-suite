@@ -14,6 +14,7 @@ import yaml
 from IPython.display import HTML, display
 from loguru import logger
 from matplotlib.figure import Figure
+from vivarium.fuzzy_checker import TestResult
 from vivarium_inputs import utilities as vi
 
 from vivarium.testing_utils.automated_validation.bundle import RatioMeasureDataBundle
@@ -44,7 +45,6 @@ from vivarium.testing_utils.automated_validation.data_transformation.utils impor
 )
 from vivarium.testing_utils.automated_validation.results import VerificationResults
 from vivarium.testing_utils.automated_validation.visualization import plot_utils
-from vivarium.testing_utils.fuzzy_checker import TestResult
 
 
 class ValidationContext:
