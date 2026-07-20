@@ -1,9 +1,10 @@
 ---
 name: _propagate_target
-description: "Use when: adapting a reference file/dir into one propagation target (a monorepo package or an external repo) and reporting the result back to the lead. Spawned by the change-propagation skill, one worker per target."
+description: "Use when: adapting a reference file/dir into one propagation target (a package or path in the reference's own repo, or an external repo) and reporting the result back to the lead. Spawned by the change-propagation skill, one worker per target."
 tools:
   # Edits files and runs the target's checks inside a local checkout — a git
-  # worktree for a monorepo target, a clone for an external repo.
+  # worktree of the reference's repo for a local target, a clone for an
+  # external repo.
   - Read
   - Write
   - Edit
@@ -19,8 +20,8 @@ reconciled with what the target already has — then report the result back to
 the lead.
 
 Your working directory is the **local checkout** the lead provisioned for this
-target: a git worktree of the monorepo for a monorepo target, a clone of
-the repo for an external target. You edit in it and leave your changes there;
+target: a git worktree of the reference's own repository for a local target, a
+clone of the repo for an external target. You edit in it and leave your changes there;
 the lead integrates that checkout and does all durable git (branch, commit,
 push, PR) after the user approves.
 
@@ -28,10 +29,11 @@ push, PR) after the user approves.
 
 The lead's brief gives you:
 
-- **`target`**: the single target — a monorepo package (the brief gives its
-  path within the repo), a shared monorepo root file, or an external repo
+- **`target`**: the single target — a package or directory within the
+  reference's repository (the brief gives its path; the repo may but need not
+  be a monorepo), a shared root file in that repository, or an external repo
   (`owner/repo`).
-- **`substrate`**: `monorepo` or `external`.
+- **`substrate`**: `local` (same repository as the reference) or `external`.
 - **`reference_files`**: the reference file set — for each, its path and its
   content (the lead has already resolved these from the reference source).
 - **`source_package`**: the package/repo the reference was taken from, and a
@@ -100,7 +102,7 @@ Send the lead a structured report with these sections (use "none" where empty):
 
 ```
 ## Target
-<owner/repo or package name> — substrate: <monorepo|external> — status: <adapted|no-op|conflict|failed>
+<owner/repo or package name> — substrate: <local|external> — status: <adapted|no-op|conflict|failed>
 
 ## Changed files
 - <path> — <created|modified|deleted>

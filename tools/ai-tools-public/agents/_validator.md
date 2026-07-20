@@ -15,15 +15,16 @@ verdict and the salient failures, not thousands of lines of pytest log.
 
 ## Input
 
-- **Package path** — the directory containing the Makefile (or equivalent build
-  file) — **env** to
-  activate, and **targets** to run — whatever check targets the caller supplies
-  (such as ``make check``, ``make test``, ``make lint``).
+- **Package path** — the directory containing the project's build/config file
+  (Makefile, pyproject.toml, package.json, or equivalent) — an **environment**
+  to activate (if any), and **checks** to run — whatever the caller supplies
+  (e.g. ``make check``, ``npm test``, ``pytest``).
 
 ## Approach
 
-1. ``cd`` into the package, activate the env, run each target. Prefer the
-   repo's make/test targets over invoking the test runner directly; rerun a
+1. ``cd`` into the package, activate an environment if one is relevant, and run
+   each check. Prefer the repo's comprehensive testing targets (e.g. make
+   commands or package scripts) over invoking the test runner directly; rerun a
    single failing test (e.g. ``pytest path::test -xvs``) only to extract a clean
    traceback.
 2. Read source/test files only as needed to locate a failure — you are read-only
