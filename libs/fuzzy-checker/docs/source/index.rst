@@ -13,12 +13,14 @@ It is one of the libraries in the
 `vivarium-suite <https://github.com/ihmeuw/vivarium-suite>`_ monorepo, maintained
 by the Institute for Health Metrics and Evaluation's Simulation Science team.
 
-More detail about the statistics used here can be found in the
+See :doc:`fuzzy_checking` for the statistical methodology. Broader background on
+the team's verification and validation process lives in the
 `Vivarium Research documentation
-<https://vivarium-research.readthedocs.io/en/latest/model_design/vivarium_features/automated_v_and_v/index.html#fuzzy-checking>`_.
+<https://vivarium-research.readthedocs.io/en/latest/model_design/designing_vivarium_model/results_processing_steps/index.html>`_.
 
 .. toctree::
    :hidden:
    :maxdepth: 2
 
    self
+   fuzzy_checking
