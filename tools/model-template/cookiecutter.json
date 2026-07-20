@@ -5,7 +5,7 @@
     "package_description": "Vivarium simulation model for the {{cookiecutter.package_name}} project.",
     "package_url": "https://github.com/ihmeuw/{{cookiecutter.package_name}}",
     "ssh_url": "git@github.com:ihmeuw/{{cookiecutter.package_name}}.git",
-    "vivarium_version": "",
+    "vivarium_engine_version": "",
     "vivarium_public_health_version": "",
     "vivarium_cluster_tools_version": "",
     "vivarium_inputs_version": "",

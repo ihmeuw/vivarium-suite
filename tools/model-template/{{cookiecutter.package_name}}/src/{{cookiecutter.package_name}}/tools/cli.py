@@ -1,6 +1,7 @@
 import click
 from loguru import logger
-from vivarium.framework.utilities import handle_exceptions
+from vivarium.engine.framework.utilities import handle_exceptions
+from vivarium.engine.interface.cli_tools import verbose_option
 
 from {{cookiecutter.package_name}}.constants import metadata, paths
 from {{cookiecutter.package_name}}.tools import (
@@ -49,7 +50,7 @@ from {{cookiecutter.package_name}}.tools import (
         "the locations that did not finish. Applies to on-cluster '-l all' builds only."
     ),
 )
-@click.option("-v", "verbose", count=True, help="Configure logging verbosity.")
+@verbose_option(help="Configure logging verbosity.")
 @click.option(
     "--pdb",
     "with_debugger",

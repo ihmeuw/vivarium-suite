@@ -46,7 +46,7 @@ if __name__ == "__main__":
         "vivarium_dependencies[pandas,numpy,scipy,click,tables,loguru]",
         "vivarium_build_utils>={{cookiecutter.vivarium_build_utils_version}}",
         "gbd_mapping>={{cookiecutter.gbd_mapping_version}}",
-        "vivarium>={{cookiecutter.vivarium_version}}",
+        "vivarium-engine>={{cookiecutter.vivarium_engine_version}}",
         "vivarium_public_health>={{cookiecutter.vivarium_public_health_version}}",
         "jinja2",
         "pyyaml",
