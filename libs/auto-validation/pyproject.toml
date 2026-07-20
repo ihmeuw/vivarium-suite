@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[numpy,pandas,scipy,loguru,pyyaml]",
+    "vivarium-dependencies[numpy,pandas,loguru,pyyaml]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-config-tree",
     "vivarium-fuzzy-checker",
@@ -62,6 +62,11 @@ validation = [
     "pyarrow",
     "seaborn",
     "jinja2>=3.0.0",
+    # matplotlib/ipython are imported unconditionally by the feature (plotting
+    # and in-notebook HTML report display), so they belong here rather than only
+    # in `docs`, or `pip install vivarium-auto-validation[validation]` can't
+    # import the package.
+    "vivarium-dependencies[matplotlib,ipython]",
 ]
 dev = ["vivarium-auto-validation[test,docs,interactive,lint,validation]"]
 ci_github = ["vivarium-auto-validation[test,docs,lint]"]
