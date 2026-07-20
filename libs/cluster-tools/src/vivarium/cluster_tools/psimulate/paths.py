@@ -24,12 +24,7 @@ CENTRAL_PERFORMANCE_LOGS_DIRECTORY = Path(
 def build_perf_log_filename(
     task_id: str, array_job_id: str = "", array_task_id: str = ""
 ) -> str:
-    """Return the worker perf-log filename, prefixed with the SLURM array id when both are set.
-
-    The ``<array_job_id>_<array_task_id>`` prefix matches the id SLURM shows for an array
-    task in ``squeue`` and the Jobmon GUI, so that id locates the log. Outside a running
-    SLURM array task the ids are empty and this is the legacy ``perf.<task_id>.log``.
-    """
+    """Return the worker perf-log filename, prefixed with the SLURM array id when both are set."""
     prefix = f"{array_job_id}_{array_task_id}." if array_job_id and array_task_id else ""
     return f"{prefix}perf.{task_id}.log"
 
