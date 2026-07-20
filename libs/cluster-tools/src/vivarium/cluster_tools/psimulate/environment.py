@@ -39,10 +39,20 @@ class __EnvVariables(NamedTuple):
     HOSTNAME: EnvVariable
     JOBMON_TASK_ID: EnvVariable
     JOBMON_WORKFLOW_RUN_ID: EnvVariable
+    SLURM_ARRAY_JOB_ID: EnvVariable
+    SLURM_ARRAY_TASK_ID: EnvVariable
+
+
+def _optional(name: str) -> str:
+    """Read an env var that may be unset (absent off-cluster) as an empty string."""
+    return os.environ.get(name, "")
 
 
 ENV_VARIABLES = __EnvVariables(
     HOSTNAME=EnvVariable("HOSTNAME", finder=lambda name: socket.gethostname()),
     JOBMON_TASK_ID=EnvVariable("JOBMON_TASK_ID"),
     JOBMON_WORKFLOW_RUN_ID=EnvVariable("JOBMON_WORKFLOW_RUN_ID"),
+    # SLURM sets these only inside a running array task.
+    SLURM_ARRAY_JOB_ID=EnvVariable("SLURM_ARRAY_JOB_ID", finder=_optional),
+    SLURM_ARRAY_TASK_ID=EnvVariable("SLURM_ARRAY_TASK_ID", finder=_optional),
 )

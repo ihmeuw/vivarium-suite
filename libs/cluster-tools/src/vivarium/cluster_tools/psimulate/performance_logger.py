@@ -1,10 +1,12 @@
 import glob
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
 from loguru import logger
 
+from vivarium.cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium.cluster_tools.psimulate.paths import (
     CENTRAL_PERFORMANCE_LOGS_DIRECTORY,
     OutputPaths,
@@ -13,6 +15,23 @@ from vivarium.cluster_tools.utilities import NUM_ROWS_PER_CENTRAL_LOG_FILE
 
 # Central log files are named ``log_summary_<NNNN>.csv``.
 LOG_FILE_PREFIX = "log_summary_"
+
+# Worker perf logs. On the cluster the name leads with the SLURM array element id
+# (``<array_job_id>_<array_task_id>``) so the id copied from ``squeue`` locates the file;
+# the pattern also matches the legacy unprefixed ``perf.<hash>.log`` for older runs.
+PERF_LOG_PATTERN = re.compile(r"^(?:\d+_\d+\.)?perf\.[0-9a-f]{16}\.log$")
+
+
+def build_perf_log_filename(task_id: str) -> str:
+    """Return the worker perf-log filename, prefixed with the SLURM array id when set.
+
+    Off-cluster (the SLURM env vars are unset) this is the legacy ``perf.<task_id>.log``.
+    """
+    array_job_id = ENV_VARIABLES.SLURM_ARRAY_JOB_ID.value
+    array_task_id = ENV_VARIABLES.SLURM_ARRAY_TASK_ID.value
+    prefix = f"{array_job_id}_{array_task_id}." if array_job_id and array_task_id else ""
+    return f"{prefix}perf.{task_id}.log"
+
 
 CENTRAL_LOG_SCHEMA = (
     "host",

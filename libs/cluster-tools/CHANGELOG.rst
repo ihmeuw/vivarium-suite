@@ -1,3 +1,7 @@
+**4.2.13 - 07/20/26**
+
+- Prefix performance logs with the job id
+
 **4.2.12 - 07/14/26**
 
 - Update stale references for monorepo libraries

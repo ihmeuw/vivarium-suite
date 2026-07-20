@@ -61,6 +61,7 @@ class NativeSpecification(NamedTuple):
             "memory": self.peak_memory,  # GB – Jobmon converts to MB
             "runtime": self._runtime_to_seconds(self.max_runtime),
             "cores": self.cores,
+            # Jobmon names the files here "<task_name>.o<job_id>"/".e<job_id>"; job_id matches ``squeue --me`` and the GUI.
             "stdout": str(worker_logging_root),
             "stderr": str(worker_logging_root),
         }

@@ -15,6 +15,8 @@ from typing import Generator
 import pandas as pd
 from loguru import logger
 
+from vivarium.cluster_tools.psimulate.performance_logger import PERF_LOG_PATTERN
+
 BASE_PERF_INDEX_COLS = ["host", "job_number", "task_number", "draw", "seed"]
 
 # The number of scenario columns beyond which we shorten the scenarios to a single string
@@ -44,9 +46,7 @@ class PerformanceSummary:
 
     def get_summaries(self) -> Generator[pd.DataFrame, None, None]:
         """Generator to get all performance summary log messages in PerformanceSummary"""
-        for log in [
-            f for f in self.log_dir.iterdir() if self.PERF_LOG_PATTERN.fullmatch(f.name)
-        ]:
+        for log in [f for f in self.log_dir.iterdir() if PERF_LOG_PATTERN.fullmatch(f.name)]:
             with log.open("r") as f:
                 count: int = 0
                 for line in f.readlines():
@@ -80,13 +80,10 @@ class PerformanceSummary:
         return perf_df
 
     TELEMETRY_PATTERN = re.compile(r"^{\"host\".+\"job_number\".+}$")
-    PERF_LOG_PATTERN = re.compile(r"^perf\.[0-9a-f]{16}\.log$")
 
     def clean_perf_logs(self) -> None:
         """Remove all performance logs from the log_dir (after to_df has been called)"""
-        for log in [
-            f for f in self.log_dir.iterdir() if self.PERF_LOG_PATTERN.fullmatch(f.name)
-        ]:
+        for log in [f for f in self.log_dir.iterdir() if PERF_LOG_PATTERN.fullmatch(f.name)]:
             log.unlink()
 
 

@@ -21,6 +21,7 @@ from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium.cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
+from vivarium.cluster_tools.psimulate.performance_logger import build_perf_log_filename
 from vivarium.cluster_tools.vipin.perf_counters import CounterSnapshot
 
 
@@ -227,7 +228,7 @@ def do_sim_epilogue(
     logger.info(f'Total simulation run time {exec_time["total_minutes"]:.3f} minutes.')
 
     perf_log = logger.add(
-        Path(parameters.worker_logging_root) / f"perf.{parameters.task_id}.log",
+        Path(parameters.worker_logging_root) / build_perf_log_filename(parameters.task_id),
         level="DEBUG",
         serialize=True,
     )
