@@ -2,6 +2,10 @@ artifact:
   - changed-files:
     - any-glob-to-any-file: 'libs/artifact/**'
 
+auto-validation:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/auto-validation/**'
+
 build-utils:
   - changed-files:
     - any-glob-to-any-file: 'libs/build-utils/**'
@@ -22,6 +26,10 @@ engine:
   - changed-files:
     - any-glob-to-any-file: 'libs/engine/**'
 
+fuzzy-checker:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/fuzzy-checker/**'
+
 gbd-mapping:
   - changed-files:
     - any-glob-to-any-file: 'libs/gbd-mapping/**'
@@ -33,6 +41,10 @@ profiling:
 public-health:
   - changed-files:
     - any-glob-to-any-file: 'libs/public-health/**'
+
+pytest-plugins:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/pytest-plugins/**'
 
 risk-distributions:
   - changed-files:

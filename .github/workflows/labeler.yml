@@ -1,6 +1,8 @@
 name: "Pull Request Labeler"
 on:
   pull_request:
+    # 'synchronize' re-runs the labeler on every push to an open PR, so labels
+    # stay in sync as files are added or removed (see sync-labels below).
     types: [opened, synchronize]
 
 permissions:
