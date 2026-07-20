@@ -82,7 +82,7 @@ def _get_default_template_path() -> Path:
     -------
         Path to the default template file
     """
-    # Template will be in a 'templates' directory within the automated_validation package
+    # Template will be in a 'templates' directory within the auto_validation package
     current_file = Path(__file__)
     validation_package = current_file.parent.parent
     template_path = validation_package / "templates" / "report_template.html"
