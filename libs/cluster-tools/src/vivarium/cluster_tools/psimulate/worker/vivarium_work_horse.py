@@ -21,7 +21,7 @@ from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium.cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
-from vivarium.cluster_tools.psimulate.performance_logger import build_perf_log_filename
+from vivarium.cluster_tools.psimulate.paths import build_perf_log_filename
 from vivarium.cluster_tools.vipin.perf_counters import CounterSnapshot
 
 

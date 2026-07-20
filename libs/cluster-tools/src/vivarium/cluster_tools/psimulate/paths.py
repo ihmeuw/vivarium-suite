@@ -14,11 +14,23 @@ from vivarium.engine.interface.utilities import get_output_model_name_string
 
 from vivarium.cluster_tools import utilities as vct_utils
 from vivarium.cluster_tools.psimulate import COMMANDS
+from vivarium.cluster_tools.psimulate.environment import ENV_VARIABLES
 
 DEFAULT_LOAD_TESTS_DIR = "/mnt/team/simulation_science/priv/engineering/load_tests"
 CENTRAL_PERFORMANCE_LOGS_DIRECTORY = Path(
     "/mnt/team/simulation_science/pub/performance_logs/"
 )
+
+
+def build_perf_log_filename(task_id: str) -> str:
+    """Return the worker perf-log filename, prefixed with the SLURM array id when set.
+
+    Off-cluster (the SLURM env vars are unset) this is the legacy ``perf.<task_id>.log``.
+    """
+    array_job_id = ENV_VARIABLES.SLURM_ARRAY_JOB_ID.value
+    array_task_id = ENV_VARIABLES.SLURM_ARRAY_TASK_ID.value
+    prefix = f"{array_job_id}_{array_task_id}." if array_job_id and array_task_id else ""
+    return f"{prefix}perf.{task_id}.log"
 
 
 class InputPaths(NamedTuple):

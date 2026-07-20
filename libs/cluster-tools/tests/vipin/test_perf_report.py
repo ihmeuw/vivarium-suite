@@ -4,8 +4,12 @@ import pandas as pd
 import pytest
 from loguru import logger
 
-from vivarium.cluster_tools.psimulate.performance_logger import build_perf_log_filename
-from vivarium.cluster_tools.vipin.perf_report import PerformanceSummary, print_stat_report
+from vivarium.cluster_tools.psimulate.paths import build_perf_log_filename
+from vivarium.cluster_tools.vipin.perf_report import (
+    PERF_LOG_PATTERN,
+    PerformanceSummary,
+    print_stat_report,
+)
 
 TASK_ID = "0123456789abcdef"
 
@@ -53,3 +57,28 @@ def test_reader_discovers_name_the_worker_writes(
     PerformanceSummary(tmp_path).clean_perf_logs()
 
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        f"525_3.perf.{TASK_ID}.log",  # prefixed
+        f"525_31.perf.{TASK_ID}.log",  # multi-digit array task id
+        f"perf.{TASK_ID}.log",  # legacy, unprefixed
+    ],
+)
+def test_perf_log_pattern_accepts_valid_names(name: str) -> None:
+    assert PERF_LOG_PATTERN.fullmatch(name)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "log_summary.csv",
+        "main.log",
+        f"525_3perf.{TASK_ID}.log",  # missing the '.' delimiter after the id
+        "perf.0123456789abcde.log",  # 15-char hash, too short
+    ],
+)
+def test_perf_log_pattern_rejects_non_perf_names(name: str) -> None:
+    assert PERF_LOG_PATTERN.fullmatch(name) is None

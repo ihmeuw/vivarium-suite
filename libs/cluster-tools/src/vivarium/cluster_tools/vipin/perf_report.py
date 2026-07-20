@@ -15,12 +15,14 @@ from typing import Generator
 import pandas as pd
 from loguru import logger
 
-from vivarium.cluster_tools.psimulate.performance_logger import PERF_LOG_PATTERN
-
 BASE_PERF_INDEX_COLS = ["host", "job_number", "task_number", "draw", "seed"]
 
 # The number of scenario columns beyond which we shorten the scenarios to a single string
 COMPOUND_SCENARIO_COL_COUNT = 2
+
+# Worker perf-log filenames produced by ``paths.build_perf_log_filename``: an optional
+# ``<array_job_id>_<array_task_id>.`` SLURM prefix, then the legacy ``perf.<hash>.log``.
+PERF_LOG_PATTERN = re.compile(r"^(?:\d+_\d+\.)?perf\.[0-9a-f]{16}\.log$")
 
 
 class PerformanceSummary:
