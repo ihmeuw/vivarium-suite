@@ -64,9 +64,9 @@ the `target_basis` you gathered in step 1.  Then:
   metadata-only edits (see the worker's step 4) — leaving the result in the
   worktree for you to integrate directly.
 - **External workers** each work in a **local clone** of the target repo that
-  you provision — it's outside the monorepo, but the worker still gets a real
-  checkout to edit in and to run the repo's checks against when an env is
-  available.
+  you provision — it's outside the reference's repo, but the worker still gets
+  a real checkout to edit in and to run the repo's checks against when an env
+  is available.
 
 ### 3. Collect and converge
 
