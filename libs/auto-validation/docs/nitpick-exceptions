@@ -1,26 +1,4 @@
-# pandas
-py:class pandas.core.indexes.base.Index
-py:class pandas.core.indexes.multi.MultiIndex
-py:class pandas._libs.tslibs.timestamps.Timestamp
-py:class pandas._libs.tslibs.timedeltas.Timedelta
-py:class pandas.core.frame.DataFrame
-py:class pandas.core.series.Series
-py:class pandas.core.generic.PandasObject
-
-#scipy
-py:class scipy.stats._distn_infrastructure.rv_continuous
-
-# loguru
-py:class loguru._logger.Logger
-
-# vivarium
-# Type aliases don't play nicely with sphinx when you import them
-# elsewhere. Works fine for static type checker though. I think this
-# is because sphinx does runtime checks.
-py:class Time
-py:class vivarium.engine.framework.time.Time
-py:class Timedelta
-py:class vivarium.engine.framework.time.Timedelta
-
-# loguru Logger leaks into runtime type-check contexts
-py:class Logger
+# Add "py:class <target>" entries here for cross-references that Sphinx's
+# nitpicky mode cannot resolve. Empty for now: these docs are narrative-only,
+# so no autodoc-generated type references need suppressing. Populate this when
+# the package starts auto-documenting its API.
