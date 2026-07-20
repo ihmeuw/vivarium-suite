@@ -1,0 +1,32 @@
+"""Smoke tests for the ``vivarium-auto-validation`` distribution."""
+from importlib.metadata import version
+
+import pytest
+from packaging.version import Version
+
+
+def test_distribution_is_installed() -> None:
+    """Verify the distribution metadata resolves to a real version.
+
+    Reads distribution metadata without importing the package, so it runs even
+    without the ``validation`` extra (whose IHME-artifactory-only deps the
+    package imports at module load). Guards against a misspelled distribution
+    name and ensures ``make test-all`` always collects at least one test.
+    """
+    Version(version("vivarium-auto-validation"))
+
+
+def test_version_resolves_to_installed_distribution() -> None:
+    """Verify ``__version__`` came from importlib.metadata, not the fallback.
+
+    Guards against a misspelled distribution name in ``__init__.py`` silently
+    degrading to the ``"0.0.0+not-installed"`` sentinel. Requires the
+    ``validation`` extra, since importing the package pulls ``vivarium-inputs``.
+    """
+    pytest.importorskip("vivarium_inputs")
+    pytest.importorskip("vivarium.artifact")
+
+    import vivarium.auto_validation
+
+    assert vivarium.auto_validation.__version__ != "0.0.0+not-installed"
+    Version(vivarium.auto_validation.__version__)
