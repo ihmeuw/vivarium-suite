@@ -135,7 +135,8 @@ However, simulation rates can drift slightly from population-level rates in the 
 due to demographic change over the course of the simulation.
 All these checks were implemented as proportion checks on the proportion of simulants experiencing the vent.
 Checking at the population level makes use of the binomial approximation to the Poisson binomial,
-as described in the proportions section.
+as described in the proportions section of the `vivarium-fuzzy-checker documentation
+<https://vivarium-fuzzy-checker.readthedocs.io/en/latest/fuzzy_checking.html>`_.
 
 For rates of migration within the US, we check the migration rate at each time step, and overall.
 We set the target range for each time step by assuming with 95% certainty that the drift will be at most 1% per time step that has elapsed

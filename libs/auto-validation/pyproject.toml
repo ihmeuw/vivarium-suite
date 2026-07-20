@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[numpy,pandas,scipy,loguru]",
+    "vivarium-dependencies[numpy,pandas,scipy,loguru,pyyaml]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-config-tree",
     "vivarium-fuzzy-checker",
@@ -39,6 +39,9 @@ cluster = []
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-check",
+    # For the pytest plugin (the `--runslow`/`--runweekly` options and the
+    # `-n auto` worker cap that `make test-all` relies on). To be repointed at
+    # vivarium-pytest-plugins once that package is extracted (MIC-7033 PR3).
     "vivarium-testing-utils",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]

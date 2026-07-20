@@ -1,4 +1,5 @@
 """Smoke tests for the ``vivarium-auto-validation`` distribution."""
+import inspect
 from importlib.metadata import version
 
 import pytest
@@ -30,3 +31,18 @@ def test_version_resolves_to_installed_distribution() -> None:
 
     assert vivarium.auto_validation.__version__ != "0.0.0+not-installed"
     Version(vivarium.auto_validation.__version__)
+
+
+def test_public_api_exports() -> None:
+    """Verify the package exposes ``ValidationContext`` as the real class.
+
+    Guards against ``__init__`` drift dropping the export (which a plain import
+    of the package would not catch). Requires the ``validation`` extra, since
+    importing the package pulls ``vivarium-inputs``.
+    """
+    pytest.importorskip("vivarium_inputs")
+    pytest.importorskip("vivarium.artifact")
+
+    import vivarium.auto_validation
+
+    assert inspect.isclass(vivarium.auto_validation.ValidationContext)
