@@ -7,16 +7,13 @@ from typing import Any
 
 import pandas as pd
 
-from vivarium.testing_utils.automated_validation.constants import DataSource
-from vivarium.testing_utils.automated_validation.data_transformation import (
-    calculations,
-    utils,
-)
-from vivarium.testing_utils.automated_validation.data_transformation.data_schema import (
+from vivarium.auto_validation.constants import DataSource
+from vivarium.auto_validation.data_transformation import calculations, utils
+from vivarium.auto_validation.data_transformation.data_schema import (
     SimOutputData,
     SingleNumericColumn,
 )
-from vivarium.testing_utils.automated_validation.data_transformation.formatting import (
+from vivarium.auto_validation.data_transformation.formatting import (
     Deaths,
     RiskStatePersonTime,
     SimDataFormatter,
@@ -24,7 +21,7 @@ from vivarium.testing_utils.automated_validation.data_transformation.formatting 
     TotalPopulationPersonTime,
     TransitionCounts,
 )
-from vivarium.testing_utils.automated_validation.data_transformation.rate_aggregation import (
+from vivarium.auto_validation.data_transformation.rate_aggregation import (
     RateAggregationWeights,
     population_weighted,
 )

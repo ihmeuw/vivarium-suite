@@ -1,7 +1,7 @@
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
-from vivarium.testing_utils.automated_validation.data_transformation.formatting import (
+from vivarium.auto_validation.data_transformation.formatting import (
     Deaths,
     RiskStatePersonTime,
     StatePersonTime,

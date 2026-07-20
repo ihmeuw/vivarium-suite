@@ -6,18 +6,13 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from vivarium.testing_utils.automated_validation.constants import (
-    DAYS_PER_YEAR,
-    INPUT_DATA_INDEX_NAMES,
-)
+from vivarium.auto_validation.constants import DAYS_PER_YEAR, INPUT_DATA_INDEX_NAMES
 
 AgeTuple = tuple[str, int | float, int | float]
 AgeRange = tuple[int | float, int | float]
 
-from vivarium.testing_utils.automated_validation.data_transformation import utils
-from vivarium.testing_utils.automated_validation.data_transformation.data_schema import (
-    SingleNumericColumn,
-)
+from vivarium.auto_validation.data_transformation import utils
+from vivarium.auto_validation.data_transformation.data_schema import SingleNumericColumn
 
 # Tolerance for floating-point age comparisons, sufficient to handle floating-point precision issues
 # while still catching legitimate data problems

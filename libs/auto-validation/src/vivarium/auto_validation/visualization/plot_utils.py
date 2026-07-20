@@ -8,9 +8,9 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
-from vivarium.testing_utils.automated_validation.comparison import Comparison
-from vivarium.testing_utils.automated_validation.constants import DRAW_INDEX, SEED_INDEX
-from vivarium.testing_utils.automated_validation.data_transformation import calculations
+from vivarium.auto_validation.comparison import Comparison
+from vivarium.auto_validation.constants import DRAW_INDEX, SEED_INDEX
+from vivarium.auto_validation.data_transformation import calculations
 
 
 def plot_comparison(
