@@ -1,7 +1,7 @@
 **0.2.0 - 07/20/26**
 
-- Reorganize package: define classes in ``fuzzy_checker`` and ``data_structures`` modules instead of ``__init__``
-- **Breaking change.** Rename ``FuzzyChecker.fuzzy_assert_proportion`` to ``FuzzyChecker.assert_proportion``. Callers must update all call sites; there is no deprecated alias.
+- Define classes in ``fuzzy_checker`` and ``data_structures`` modules instead of ``__init__``
+- **Breaking change.** Rename ``FuzzyChecker.fuzzy_assert_proportion`` to ``FuzzyChecker.assert_proportion``.
 
 **0.1.0 - 07/20/26**
 

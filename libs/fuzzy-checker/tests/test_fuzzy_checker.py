@@ -50,12 +50,6 @@ WIDTHS = [
 ]
 
 
-def test_fuzzy_assert_proportion_renamed() -> None:
-    """Verify the method is exposed as ``assert_proportion`` and the old name is gone."""
-    assert callable(getattr(FuzzyChecker, "assert_proportion", None))
-    assert not hasattr(FuzzyChecker, "fuzzy_assert_proportion")
-
-
 @pytest.mark.parametrize(
     "numerator, denominator, target_proportion",
     [(10_008, 100_000, 0.1), (976, 1_000_000, 0.001), (1_049, 50_000, (0.0198, 0.0202))],

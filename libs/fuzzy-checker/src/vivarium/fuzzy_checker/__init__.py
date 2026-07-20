@@ -14,10 +14,3 @@ from vivarium.fuzzy_checker.data_structures import (
     TestResult,
 )
 from vivarium.fuzzy_checker.fuzzy_checker import FuzzyChecker
-
-__all__ = [
-    "FuzzyChecker",
-    "StratValue",
-    "TargetIntervalConfig",
-    "TestResult",
-]
