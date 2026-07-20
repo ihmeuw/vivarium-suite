@@ -33,4 +33,4 @@ For broader monorepo development setup, see the monorepo README at
 https://github.com/ihmeuw/vivarium-suite.
 
 `Check out the docs! <https://vivarium-fuzzy-checker.readthedocs.io/en/latest/>`_
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
