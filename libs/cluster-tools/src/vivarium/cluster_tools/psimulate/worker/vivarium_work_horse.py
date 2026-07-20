@@ -228,7 +228,12 @@ def do_sim_epilogue(
     logger.info(f'Total simulation run time {exec_time["total_minutes"]:.3f} minutes.')
 
     perf_log = logger.add(
-        Path(parameters.worker_logging_root) / build_perf_log_filename(parameters.task_id),
+        Path(parameters.worker_logging_root)
+        / build_perf_log_filename(
+            parameters.task_id,
+            ENV_VARIABLES.SLURM_ARRAY_JOB_ID.value,
+            ENV_VARIABLES.SLURM_ARRAY_TASK_ID.value,
+        ),
         level="DEBUG",
         serialize=True,
     )

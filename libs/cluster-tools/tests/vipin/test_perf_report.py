@@ -45,14 +45,10 @@ def test_clean_perf_logs_discovers_prefixed_and_legacy(tmp_path: Path) -> None:
     assert {p.name for p in tmp_path.iterdir()} == {"log_summary.csv"}
 
 
-def test_reader_discovers_name_the_worker_writes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_reader_discovers_name_the_worker_writes(tmp_path: Path) -> None:
     """The name the worker builds on the cluster is discovered by the reader -
     guards the writer<->reader contract end to end."""
-    monkeypatch.setenv("SLURM_ARRAY_JOB_ID", "525")
-    monkeypatch.setenv("SLURM_ARRAY_TASK_ID", "3")
-    (tmp_path / build_perf_log_filename(TASK_ID)).write_text("{}")
+    (tmp_path / build_perf_log_filename(TASK_ID, "525", "3")).write_text("{}")
 
     PerformanceSummary(tmp_path).clean_perf_logs()
 
