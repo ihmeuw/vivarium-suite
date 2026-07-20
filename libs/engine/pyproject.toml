@@ -44,6 +44,7 @@ interactive = ["vivarium-dependencies[interactive]"]
 test = [
     "vivarium-dependencies[pytest]",
     "vivarium-testing-utils>=0.6.0",
+    "vivarium-fuzzy-checker",
 ]
 docs = [
     "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",

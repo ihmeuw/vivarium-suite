@@ -1,0 +1,111 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-fuzzy-checker"
+description = "Statistical fuzzy-checking utilities for verifying Vivarium simulation outputs."
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX",
+    "Operating System :: POSIX :: BSD",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "vivarium-dependencies[numpy,pandas,scipy,loguru]",
+    "vivarium-build-utils>=4.0.0,<5.0.0",
+]
+
+[project.optional-dependencies]
+cluster = []
+test = [
+    "vivarium-dependencies[pytest]",
+    "vivarium-testing-utils",
+]
+docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
+interactive = ["vivarium-dependencies[interactive]"]
+lint = ["vivarium-dependencies[lint]"]
+dev = ["vivarium-fuzzy-checker[test,docs,interactive,lint]"]
+ci_github = ["vivarium-fuzzy-checker[test,docs,lint]"]
+ci_jenkins = ["vivarium-fuzzy-checker[ci_github,cluster]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.fuzzy_checker and its subpackages. Excluding vivarium
+# itself means the wheel does not ship vivarium/__init__.py, which is owned by
+# vivarium-engine; two distributions writing the same file would clobber each
+# other at install time.
+include = ["vivarium.fuzzy_checker", "vivarium.fuzzy_checker.*"]
+
+[tool.setuptools.package-data]
+# Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
+# users install it from PyPI and so mypy also finds the marker via the
+# editable install during in-repo type checks.
+"vivarium.fuzzy_checker" = ["py.typed"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with "vivarium-fuzzy-checker-v"
+# (e.g. ``vivarium-fuzzy-checker-v0.1.0``). tag_regex strips the prefix so
+# setuptools_scm sees a clean semver; git_describe_command filters to only this
+# lib's tags so siblings' releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-fuzzy-checker-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-fuzzy-checker-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3
+
+[tool.mypy]
+# WARNING: settings here that aren't mypy_path / explicit_package_bases must be
+# kept in sync manually with the monorepo-root [tool.mypy]. The local
+# `make mypy` passes --config-file pyproject.toml (this file), so mypy doesn't
+# read the root config. If you change the root, change this too.
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+exclude = [
+    "build",
+    "docs/source/conf.py",
+]
+mypy_path = "src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# Upstream lacks py.typed/stubs entirely.
+module = [
+    "py._path.local",
+    "scipy.*",
+]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["vivarium.fuzzy_checker"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
