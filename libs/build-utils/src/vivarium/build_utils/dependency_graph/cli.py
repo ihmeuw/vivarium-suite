@@ -14,10 +14,15 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .editable import build_install_plan, get_editable_upstreams, run_install
-from .graph import sort_topologically
+from .graph import get_transitive_downstreams, sort_topologically
 from .loading import load_libs
-from .models import DependencyConflictError, DependencyCycleError
+from .models import DependencyConflictError, DependencyCycleError, Lib
 from .release import get_release_matrix
+
+# Canonical Python version for a single-version downstream run (see
+# ``build-downstream-matrix``). 3.11 is the minimum every library supports and the
+# version CI builds docs on; libraries that drop it fall back to their lowest.
+CANONICAL_PYTHON_VERSION = "3.11"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -34,6 +39,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         Read ``"<name> <version>"`` lines from the ``--versions`` file and print
         the dependency-ordered release matrix JSON to stdout. Used by the
         release workflow's detect job.
+
+    ``build-downstream-matrix --released "<names>"
+        [--python-version <ver> | --all-versions] [--libs-dir <path>]``
+        Print the GitHub Actions matrix JSON of the libraries downstream of the
+        released ``<names>`` (their transitive dependents, excluding the released
+        set), one entry per library at its canonical Python version. Used by the
+        CI workflow's release-gate to test dependents against pending versions.
 
     ``verify-editable <target> --changed "<names>" [--libs-dir <path>]``
         Recompute the editable upstreams selected of ``target`` and assert each
@@ -71,6 +83,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     matrix_parser.add_argument("--versions", required=True)
     matrix_parser.add_argument("--libs-dir", default=None)
 
+    # build-downstream-matrix
+    downstream_parser = subparsers.add_parser("build-downstream-matrix")
+    downstream_parser.add_argument("--released", default="")
+    downstream_parser.add_argument("--python-version", default=None)
+    downstream_parser.add_argument("--all-versions", action="store_true")
+    downstream_parser.add_argument("--libs-dir", default=None)
+
     # verify-editable
     verify_parser = subparsers.add_parser("verify-editable")
     verify_parser.add_argument("target")
@@ -89,6 +108,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_verify_editable(args)
     if args.command == "check-acyclic":
         return _run_check_acyclic(args)
+    if args.command == "build-downstream-matrix":
+        return _run_build_downstream_matrix(args)
     return _run_build_release_matrix(args)
 
 
@@ -188,6 +209,52 @@ def _run_build_release_matrix(args: argparse.Namespace) -> int:
         return 1
     print(json.dumps(matrix))
     return 0
+
+
+def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
+    """Handle the ``build-downstream-matrix`` subcommand."""
+    libs_dir = _discover_libs_dir(args.libs_dir)
+    # Default (ci_github) extras: a release can break a dependent through a
+    # test-dep edge too, and downstream reachability tolerates the cycles those add.
+    libs = load_libs(libs_dir)
+    released = args.released.split()
+    try:
+        downstream = get_transitive_downstreams(released, libs)
+    except KeyError as error:
+        print(f"unknown library: {error.args[0]}", file=sys.stderr)
+        return 1
+
+    include: list[dict[str, str]] = []
+    for name in sorted(downstream):
+        for python_version in _downstream_python_versions(libs[name], args):
+            include.append({"library": name, "python-version": python_version})
+    print(json.dumps({"include": include}))
+    return 0
+
+
+def _downstream_python_versions(lib: Lib, args: argparse.Namespace) -> list[str]:
+    """Return the Python versions to test ``lib`` on for a downstream run.
+
+    One canonical version by default (the cost lever); the full
+    ``python_versions.json`` matrix under ``--all-versions``; or an explicit
+    ``--python-version``.
+    """
+    if args.python_version:
+        return [args.python_version]
+    versions = _read_python_versions(lib.path)
+    if args.all_versions:
+        return versions
+    if not versions or CANONICAL_PYTHON_VERSION in versions:
+        return [CANONICAL_PYTHON_VERSION]
+    return [min(versions, key=lambda v: tuple(int(part) for part in v.split(".")))]
+
+
+def _read_python_versions(lib_path: Path) -> list[str]:
+    """Read a library's ``python_versions.json`` (empty list if absent)."""
+    versions_file = lib_path / "python_versions.json"
+    if not versions_file.exists():
+        return []
+    return list(json.loads(versions_file.read_text()))
 
 
 def _discover_libs_dir(libs_path: str | None) -> Path:

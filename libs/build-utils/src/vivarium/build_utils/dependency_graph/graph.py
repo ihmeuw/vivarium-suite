@@ -3,9 +3,60 @@
 from __future__ import annotations
 
 import graphlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from .models import DependencyCycleError, Lib
+
+
+def get_transitive_downstreams(targets: Iterable[str], libs: Mapping[str, Lib]) -> set[str]:
+    """Return all in-tree libraries that transitively depend on any of ``targets``.
+
+    Inverts the ``upstreams`` edges and walks them outward from every target, so the
+    result is the set of libraries a release of ``targets`` could break. The result
+    excludes the targets themselves. Reachability tolerates cycles, so ``libs`` may be
+    resolved over any extras (including the ``ci_github`` test-dep edges).
+
+    Parameters
+    ----------
+    targets
+        Library ``name``s whose dependents to compute.
+    libs
+        The full set of parsed libraries.
+
+    Returns
+    -------
+        Names of the in-tree libraries downstream of ``targets``.
+
+    Raises
+    ------
+    KeyError
+        If any of ``targets`` is not a key in ``libs``.
+    """
+    targets = list(targets)
+    for target in targets:
+        if target not in libs:
+            raise KeyError(target)
+    dist_to_name = _get_dist_to_name_mapping(libs)
+
+    # Reverse adjacency: each upstream name -> the libraries that depend on it.
+    downstreams: dict[str, set[str]] = {name: set() for name in libs}
+    for name, lib in libs.items():
+        for dep_dist in lib.upstreams:
+            dep_name = dist_to_name.get(dep_dist)
+            if dep_name is not None:
+                downstreams[dep_name].add(name)
+
+    reached: set[str] = set()
+    stack = list(targets)
+    while stack:
+        current = stack.pop()
+        for dependent in downstreams.get(current, ()):
+            if dependent not in reached:
+                # A new dependent was found, so record it and keep walking outward.
+                reached.add(dependent)
+                stack.append(dependent)
+    reached.difference_update(targets)
+    return reached
 
 
 def get_transitive_upstreams(target: str, libs: Mapping[str, Lib]) -> set[str]:

@@ -18,6 +18,9 @@ jobs:
       matrix: ${{ steps.detect.outputs.matrix }}
       has-changes: ${{ steps.detect.outputs.has-changes }}
       changed-libs: ${{ steps.detect.outputs.changed-libs }}
+      releasing-libs: ${{ steps.detect.outputs.releasing-libs }}
+      downstream-matrix: ${{ steps.detect.outputs.downstream-matrix }}
+      has-downstream: ${{ steps.detect.outputs.has-downstream }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -110,91 +113,104 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
 
+          # Release gate: a "releasing" lib is one whose CHANGELOG.rst changed in
+          # this diff. Its in-tree dependents (downstream, minus the releasing set
+          # itself) are tested against the pending versions so a release can't
+          # break a sibling. Non-release PRs have no releasing libs and skip this.
+          RELEASING=()
+          for lib in $ALL_LIBS; do
+            if echo "$CHANGED" | grep -q "^libs/${lib}/CHANGELOG\.rst$"; then
+              RELEASING+=("$lib")
+            fi
+          done
+          echo "releasing-libs=${RELEASING[*]}" >> $GITHUB_OUTPUT
+          echo "Releasing libraries: ${RELEASING[*]:-(none)}"
+
+          if [ ${#RELEASING[@]} -eq 0 ]; then
+            echo "downstream-matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            echo "has-downstream=false" >> $GITHUB_OUTPUT
+          else
+            DOWNSTREAM=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph build-downstream-matrix --released "${RELEASING[*]}")
+            echo "Downstream matrix: ${DOWNSTREAM}"
+            echo "downstream-matrix=${DOWNSTREAM}" >> $GITHUB_OUTPUT
+            COUNT=$(echo "$DOWNSTREAM" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['include']))")
+            if [ "$COUNT" -eq 0 ]; then
+              echo "has-downstream=false" >> $GITHUB_OUTPUT
+            else
+              echo "has-downstream=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
   build-and-test:
-    name: ${{ matrix.library }} (Python ${{ matrix.python-version }})
     needs: detect-changes
     if: needs.detect-changes.outputs.has-changes == 'true'
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    # Per-lib recipe lives in the reusable workflow (single source of truth,
+    # shared with the downstream-gate below).
+    uses: ./.github/workflows/_lib-test.yml
+    with:
+      library: ${{ matrix.library }}
+      python-version: ${{ matrix.python-version }}
+      changed-libs: ${{ needs.detect-changes.outputs.changed-libs }}
+      run-lint: true
+      run-docs: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install vivarium_build_utils
-        # Install editably from in-tree checkout (not PyPI) to capture changes in this PR
-        run: uv pip install --system -e libs/build-utils
-
-      - name: Install ${{ matrix.library }}
-        # UV_FLAGS=--system installs into the runner's system Python (no venv).
-        # IHME_PYPI= disables the artifactory extra-index, since IHME's
-        # artifactory is firewalled and unreachable from GH-hosted runners.
-        # Libs that depend on artifactory-only packages won't fully install in
-        # this environment by design - those are tested via Jenkins.
-        # CHANGED_LIBS lists the libraries whose source changed in this PR.
-        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github CHANGED_LIBS="${{ needs.detect-changes.outputs.changed-libs }}" UV_FLAGS=--system IHME_PYPI=
-
-      - name: Verify changed libraries resolved from source
-        # Positive check that each library we intended to resolve in-tree (changed
-        # + reachable + version-compatible) is actually an editable install.
-        run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ matrix.library }} --changed "${{ needs.detect-changes.outputs.changed-libs }}"
-
-      - name: Lint ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make lint
-
-      - name: Mypy ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make mypy-if-typed
-
-      - name: Test ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make test-all
-
-      - name: Build docs for ${{ matrix.library }}
-        run: |
-          # 3.11 is the minimum version all packages support; use it as the canonical docs build
-          if [ "${{ matrix.python-version }}" = "3.11" ]; then
-            cd libs/${{ matrix.library }} && make build-docs
-          else
-            echo "Skipping docs build (only runs on 3.11)"
-          fi
-
-      - name: Test docs for ${{ matrix.library }}
-        run: |
-          # Run doctests on the same canonical 3.11 build as the docs build above
-          if [ "${{ matrix.python-version }}" = "3.11" ]; then
-            cd libs/${{ matrix.library }} && make test-docs
-          else
-            echo "Skipping doctests (only runs on 3.11)"
-          fi
+  downstream-gate:
+    # Release gate: when a PR bumps a lib's CHANGELOG, test that lib's in-tree
+    # dependents against the pending version so a release can't break a sibling.
+    # Single canonical Python per dependent, test + mypy only (no lint/docs).
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-downstream == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.downstream-matrix) }}
+    uses: ./.github/workflows/_lib-test.yml
+    with:
+      library: ${{ matrix.library }}
+      python-version: ${{ matrix.python-version }}
+      changed-libs: ${{ needs.detect-changes.outputs.releasing-libs }}
+      run-lint: false
+      run-docs: false
 
   ci-status:
     name: CI Status
-    needs: [detect-changes, build-and-test]
+    needs: [detect-changes, build-and-test, downstream-gate]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check status
         run: |
-          if [ "${{ needs.detect-changes.outputs.has-changes }}" = "false" ]; then
-            echo "No package changes - CI passed"
-            exit 0
-          elif [ "${{ needs.build-and-test.result }}" = "success" ]; then
-            echo "All builds passed"
-            exit 0
-          elif [ "${{ needs.build-and-test.result }}" = "skipped" ]; then
-            echo "No packages to build"
-            exit 0
-          else
-            echo "Some builds failed"
-            exit 1
-          fi
+          BUILD="${{ needs.build-and-test.result }}"
+          GATE="${{ needs.downstream-gate.result }}"
+          echo "build-and-test: ${BUILD:-<none>} ; downstream-gate: ${GATE:-<none>}"
+          # success and skipped both pass; only failure/cancelled fail CI.
+          for result in "$BUILD" "$GATE"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "A required job did not pass"
+              exit 1
+            fi
+          done
+          echo "CI passed"
+
+  downstream-alert:
+    # Team email only for a real break on main (a merged release broke a
+    # dependent). On PRs the red downstream-gate check is the author's signal -
+    # no email there, to avoid spamming the team list on every release-PR push.
+    name: Downstream break notification
+    needs: [detect-changes, downstream-gate]
+    if: always() && needs.downstream-gate.result == 'failure' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send failure notification
+        uses: dawidd6/action-send-mail@v2
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.NOTIFY_EMAIL }}
+          password: ${{ secrets.NOTIFY_PASSWORD }}
+          subject: "Downstream break on main: releasing ${{ needs.detect-changes.outputs.releasing-libs }}"
+          body: "Releasing ${{ needs.detect-changes.outputs.releasing-libs }} broke one or more downstream libraries on main. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          to: uw_ihme_simulationscience@uw.edu
+          from: Vivarium Notifications
