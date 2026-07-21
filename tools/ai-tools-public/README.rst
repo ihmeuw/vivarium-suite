@@ -38,7 +38,7 @@ It includes:
 
 **Regression Debugger**
 
-- ``/viv-public:model-regression-debugger <symptom and context>`` — traces
+- ``/viv-public:regression-debugger <symptom and context>`` — traces
   behavioral changes across repositories to find the cause of a regression.
 
 **Git Rescue**
@@ -145,7 +145,7 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
    /plugin install viv-public@vivarium-ai-tools
 
 Once installed, the entry points are ``/viv-public:code-reviewer``,
-``/viv-public:model-regression-debugger``, ``/viv-public:git-rescue``,
+``/viv-public:regression-debugger``, ``/viv-public:git-rescue``,
 ``/viv-public:type-hinter``, and ``/viv-public:framework-development``, plus the
 auto-triggering skills above.
 
@@ -234,7 +234,7 @@ Code:
 - ``_type_hint_file`` (the type-hinter's per-file teammate) is write-capable
   within its assigned file and runs the package's mypy invocation via
   ``Bash``.
-- The ``/viv-public:code-reviewer``, ``/viv-public:model-regression-debugger``,
+- The ``/viv-public:code-reviewer``, ``/viv-public:regression-debugger``,
   and ``/viv-public:framework-development`` skill bodies (running in the main
   session) gather PR/repo context through the GitHub MCP server (a plugin
   dependency), falling back to read-only git/``gh`` commands when the MCP is

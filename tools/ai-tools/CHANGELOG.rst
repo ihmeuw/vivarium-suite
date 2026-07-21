@@ -8,7 +8,7 @@
    - ``/viv:code-reviewer`` → ``/viv-public:code-reviewer``
    - ``/viv:git-rescue`` → ``/viv-public:git-rescue``
    - ``/viv:type-hinter`` → ``/viv-public:type-hinter``
-   - ``/viv:model-regression-debugger`` → ``/viv-public:model-regression-debugger``
+   - ``/viv:model-regression-debugger`` → ``/viv-public:regression-debugger``
    - ``/viv:framework-development`` → ``/viv-public:framework-development``
    - ``commit-splitter``, ``change-propagation``, ``workflow-assessment``, and
      ``_review-core`` skills (and their sub-agents, plus the ``_review_*``,

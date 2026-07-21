@@ -1,5 +1,5 @@
 ---
-name: model-regression-debugger
+name: regression-debugger
 description: "Trace a regression across repositories to identify the behavioral change causing it."
 argument-hint: "Describe the regression symptom, repos/branches involved, and any existing hypotheses."
 allowed-tools: Read, Grep, Glob, Bash, Agent(viv-public:_diff_analyzer, viv-public:_hypothesis_tester)
