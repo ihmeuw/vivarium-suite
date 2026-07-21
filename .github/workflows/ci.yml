@@ -9,6 +9,10 @@ on:
       - 'release_candidate/**'
       - 'epic/**'
   pull_request:
+  # Fires only when a PR is enqueued in the merge queue (if one is enabled in
+  # branch protection). The downstream release-gate runs here - at merge time -
+  # rather than on every PR commit. Inert until the queue is turned on.
+  merge_group:
 
 jobs:
   detect-changes:
@@ -47,6 +51,11 @@ jobs:
             HEAD_REF="${{ github.event.pull_request.head.sha }}"
             git fetch origin "$BASE_REF"
             CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_REF}")
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            # The queued group is (latest main + this PR's commits); diff that range.
+            BASE="${{ github.event.merge_group.base_sha }}"
+            HEAD="${{ github.event.merge_group.head_sha }}"
+            CHANGED=$(git diff --name-only "$BASE" "$HEAD")
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
             BASE="${{ github.event.before }}"
             HEAD="${{ github.event.after }}"
@@ -158,11 +167,13 @@ jobs:
       run-docs: true
 
   downstream-gate:
-    # Release gate: when a PR bumps a lib's CHANGELOG, test that lib's in-tree
-    # dependents against the pending version so a release can't break a sibling.
-    # Single canonical Python per dependent, test + mypy only (no lint/docs).
+    # Release gate: when a queued PR bumps a lib's CHANGELOG, test that lib's
+    # in-tree dependents against the pending version so a release can't break a
+    # sibling. Single canonical Python per dependent, test + mypy only (no
+    # lint/docs). Runs ONLY in the merge queue (merge_group) - i.e. at merge
+    # time, not on every PR commit.
     needs: detect-changes
-    if: needs.detect-changes.outputs.has-downstream == 'true'
+    if: needs.detect-changes.outputs.has-downstream == 'true' && github.event_name == 'merge_group'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.downstream-matrix) }}
@@ -193,24 +204,3 @@ jobs:
             fi
           done
           echo "CI passed"
-
-  downstream-alert:
-    # Team email only for a real break on main (a merged release broke a
-    # dependent). On PRs the red downstream-gate check is the author's signal -
-    # no email there, to avoid spamming the team list on every release-PR push.
-    name: Downstream break notification
-    needs: [detect-changes, downstream-gate]
-    if: always() && needs.downstream-gate.result == 'failure' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send failure notification
-        uses: dawidd6/action-send-mail@v2
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.NOTIFY_EMAIL }}
-          password: ${{ secrets.NOTIFY_PASSWORD }}
-          subject: "Downstream break on main: releasing ${{ needs.detect-changes.outputs.releasing-libs }}"
-          body: "Releasing ${{ needs.detect-changes.outputs.releasing-libs }} broke one or more downstream libraries on main. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          to: uw_ihme_simulationscience@uw.edu
-          from: Vivarium Notifications
