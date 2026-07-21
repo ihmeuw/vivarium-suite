@@ -1,6 +1,6 @@
 **4.5.0 - TBD/TBD/2026**
 
-- Run downstream libraries' CI on release to catch dependency breakages
+- Run downstream libraries' CI on release to catch dependency breaking changes
 
 **4.4.0 - 07/13/26**
 
