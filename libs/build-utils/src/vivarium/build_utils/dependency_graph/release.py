@@ -3,14 +3,36 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import TypedDict
 
 from .graph import get_transitive_upstreams, sort_topologically
 from .models import Lib
 
 
+class WaitForEntry(TypedDict):
+    """A single in-batch upstream a release must wait for on PyPI."""
+
+    dist: str
+    version: str
+
+
+class ReleaseEntry(TypedDict):
+    """One library's entry in the release matrix."""
+
+    library: str
+    version: str
+    wait_for: list[WaitForEntry]
+
+
+class ReleaseMatrix(TypedDict):
+    """The GitHub Actions ``strategy.matrix`` object for the release workflow."""
+
+    include: list[ReleaseEntry]
+
+
 def get_release_matrix(
     release_versions: Mapping[str, str], libs: Mapping[str, Lib]
-) -> dict[str, object]:
+) -> ReleaseMatrix:
     """Build the dependency-ordered GitHub Actions release matrix.
 
     Given the libraries to release and their versions, returns a matrix object
@@ -49,12 +71,12 @@ def get_release_matrix(
     batch = set(release_versions)
     ordered_lib_names = sort_topologically(list(release_versions), libs)
 
-    include: list[dict[str, object]] = []
+    include: list[ReleaseEntry] = []
     for lib_name in ordered_lib_names:
         upstreams = sort_topologically(
             sorted(get_transitive_upstreams(lib_name, libs) & batch), libs
         )
-        wait_for = [
+        wait_for: list[WaitForEntry] = [
             {"dist": libs[upstream].dist_name, "version": release_versions[upstream]}
             for upstream in upstreams
         ]
