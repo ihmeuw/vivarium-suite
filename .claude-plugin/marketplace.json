@@ -3,7 +3,7 @@
   "owner": {
     "name": "IHME"
   },
-  "description": "Marketplace for the IHME ai-tools plugins: viv-public (generic developer workflows for any IHME team) and viv (SimSci/vivarium-specific workflows).",
+  "description": "Marketplace for the IHME Simulation Science Team ai-tools plugins: viv-public (generic developer workflows for any IHME team) and viv (SimSci/vivarium-specific workflows).",
   "allowCrossMarketplaceDependenciesOn": ["claude-plugins-official"],
   "plugins": [
     {
