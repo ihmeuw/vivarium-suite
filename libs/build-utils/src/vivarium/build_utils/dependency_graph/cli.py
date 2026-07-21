@@ -19,9 +19,7 @@ from .loading import load_libs
 from .models import DependencyConflictError, DependencyCycleError, Lib
 from .release import get_release_matrix
 
-# Canonical Python version for a single-version downstream run (see
-# ``build-downstream-matrix``). 3.11 is the minimum every library supports and the
-# version CI builds docs on; libraries that drop it fall back to their lowest.
+
 CANONICAL_PYTHON_VERSION = "3.11"
 
 

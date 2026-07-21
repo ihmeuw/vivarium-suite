@@ -9,9 +9,6 @@ on:
       - 'release_candidate/**'
       - 'epic/**'
   pull_request:
-  # Fires only when a PR is enqueued in the merge queue (if one is enabled in
-  # branch protection). The downstream release-gate runs here - at merge time -
-  # rather than on every PR commit. Inert until the queue is turned on.
   merge_group:
 
 jobs:
@@ -169,9 +166,7 @@ jobs:
   downstream-gate:
     # Release gate: when a queued PR bumps a lib's CHANGELOG, test that lib's
     # in-tree dependents against the pending version so a release can't break a
-    # sibling. Single canonical Python per dependent, test + mypy only (no
-    # lint/docs). Runs ONLY in the merge queue (merge_group) - i.e. at merge
-    # time, not on every PR commit.
+    # sibling. Single canonical Python per dependent. Runs ONLY in the merge queue (merge_group)
     needs: detect-changes
     if: needs.detect-changes.outputs.has-downstream == 'true' && github.event_name == 'merge_group'
     strategy:
