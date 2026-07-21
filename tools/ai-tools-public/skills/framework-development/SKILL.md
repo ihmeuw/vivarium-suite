@@ -1,11 +1,11 @@
 ---
 name: framework-development
-description: "Guided design→implement→verify→PR loop for a well-scoped framework feature."
+description: "Guided design→implement→verify→PR loop for a well-scoped feature."
 argument-hint: "A ticket key, design doc link, or feature description."
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(viv-public:_test_writer, viv-public:_feature_implementer, viv-public:_validator, viv-public:_review_maintainability, viv-public:_review_dry, viv-public:_review_design, viv-public:_review_tests, viv-public:_review_documentation, viv-public:_review_scorer)
 ---
 
-Run an end-to-end framework development loop for: $ARGUMENTS
+Run an end-to-end feature development loop for: $ARGUMENTS
 
 You (the main session) own the design and the stubs, then drive a **black-box
 TDD** build: `viv-public:_test_writer` and `viv-public:_feature_implementer` produce the tests and the
@@ -58,15 +58,18 @@ finalize & PR                        # Phase 5: user-gated; residuals -> follow-
 - If $ARGUMENTS references a groomed ticket/design doc, fetch it via whichever
   ticket or wiki MCP is configured, or accept a pasted document.
 - Then, if an installed skill covers structured brainstorming, invoke it and
-  follow it; otherwise work through the design with the user directly (and
-  follow your team's design-doc process, if any, when the feature warrants a
-  design document).
+  follow it; otherwise work through the design with the user directly.
+- When the feature warrants a design document — whether or not a brainstorming
+  skill handled the exploration: if an installed skill covers drafting your
+  team's design documents, invoke it and follow it; otherwise follow your
+  team's design-doc process, if any.
 - Either way — including for a groomed ticket — run a
   **scope-tightening pass** before confirming: treat each acceptance criterion as
   intent to validate rather than literal law (flag any "every X" broader than the
   need), check whether a broadly-applied change should instead be a meaningful
-  subset, and defer single-caller abstractions. A groomed acceptance criterion is still intent, not
-  law; surface any gap to the user rather than building the literal wording.
+  subset, and defer single-caller abstractions; surface any gap between a
+  criterion's literal wording and the actual need to the user rather than
+  building the wording.
 
 Exit with a short written design summary the user has agreed to.
 
@@ -101,9 +104,9 @@ git worktree add -b <branch>-impl  .claude/worktrees/<branch>-impl  <stub-commit
 git worktree add -b <branch>-tests .claude/worktrees/<branch>-tests <stub-commit>
 ```
 
-(Under the Bash sandbox these live in the writable workspace, and the main
-repo's ``.git`` is already writable for linked worktrees — so ``git worktree
-add``/``commit`` work.)
+(If Bash runs sandboxed, worktrees inside the repo stay within the writable
+workspace; note that ``git worktree add``/``commit`` also need the main repo's
+``.git`` to be writable — verify your sandbox permits this before dispatching.)
 
 **Dispatch both agents in one message** (parallel). Give each the design
 summary, the source stubs + body-less test stubs and their paths, the
@@ -145,14 +148,14 @@ around review.
    whichever worktree it was last installed from.
 
 2. **Gate 1 — validate.** Spawn `viv-public:_validator` with the package path, env, and
-   targets — the project's test, lint, and type-check commands (e.g. make
+   checks to run — the project's test, lint, and type-check commands (e.g. make
    targets or equivalents); it returns a compact PASS/FAIL report. A working env from Phase 0 (the package
    importable, the check commands runnable) is a precondition — if it can't be
    built, validation can't run, so resolve that rather than reporting a false
    PASS. **On FAIL, skip review this round** (don't review red code): triage and
    re-dispatch the fixes (below), then start the next round. When auto-fixing lint
-   (``black``/``isort``), scope it to the changed files — a package-wide reformat
-   sweeps unrelated files into the diff.
+   (e.g. with formatters like ``black``/``isort``), scope it to the changed files
+   — a package-wide reformat sweeps unrelated files into the diff.
 
 3. **Gate 2 — review (only on green).** Once validation passes, run review. The
    **first** time you reach green, invoke the `/viv-public:_review-core` skill

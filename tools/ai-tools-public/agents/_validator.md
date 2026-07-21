@@ -16,9 +16,10 @@ verdict and the salient failures, not thousands of lines of pytest log.
 ## Input
 
 - **Package path** — the directory containing the project's build/config file
-  (Makefile, pyproject.toml, package.json, or equivalent) — an **environment**
-  to activate (if any), and **checks** to run — whatever the caller supplies
-  (e.g. ``make check``, ``npm test``, ``pytest``).
+  (Makefile, pyproject.toml, package.json, or equivalent).
+- **Environment** to activate, if any.
+- **Checks** to run — whatever the caller supplies (e.g. ``make check``,
+  ``npm test``, ``pytest``).
 
 ## Approach
 
@@ -33,9 +34,9 @@ verdict and the salient failures, not thousands of lines of pytest log.
 
 ## Output
 
-- **Verdict**: PASS or FAIL (FAIL if any target fails, or cannot run — report
+- **Verdict**: PASS or FAIL (FAIL if any check fails, or cannot run — report
   the reason rather than guessing).
-- **Per-target results**: one line each (e.g. ``test-unit: FAIL — 2 failed, 41
+- **Per-check results**: one line each (e.g. ``test-unit: FAIL — 2 failed, 41
   passed``).
 - **Failures**: test/check name, file:line, and a trimmed traceback (the
   assertion or exception, not the full log).

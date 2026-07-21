@@ -18,11 +18,14 @@ everything the user must sign off on.
 
 ## Step 0 — Preflight the team feature
 
-Agent teams are experimental and opt-in. Confirm that agent subteams are configured via tool availability.
-There is no subagent fallback, so don't emulate the
+Agent teams are experimental and opt-in. Confirm agent teams are enabled
+by checking your tool list for the team tools (spawning persistent
+teammates, the shared task list, the team mailbox); if they are absent,
+the feature is off. There is no subagent fallback, so don't emulate the
 team with one-shot sub-agents. If teams aren't available, ask the user
-to turn on Claude Code's experimental agent-teams setting in their
-Claude Code settings and re-run once it's enabled.
+to enable Claude Code's experimental agent-teams feature (see the Claude
+Code settings documentation for the current flag) and re-run once it's
+enabled.
 
 ## Step 1 — Resolve the target
 
@@ -37,16 +40,18 @@ Expand it into the concrete **target set** of `.py` files:
 Verify the set is non-empty and every member is an existing `.py` file.
 Test files (`tests/**`) are in scope — hint them like any other file.
 
-All resolved files must resolve under a single package root — the
-directory where its `pyproject.toml` / mypy config lives. Set `PKG_ROOT`
-to that directory.
+All resolved files must live under a single package root — the
+directory where the package's `pyproject.toml` / mypy config lives. Set
+`PKG_ROOT` to that directory.
 
 ## Step 2 — Probe the package
 
-Read `${PKG_ROOT}/pyproject.toml`. If it lacks a `[tool.mypy]` block with
-`mypy_path = "src"` and `explicit_package_bases = true`, add it, starting
-from this template (adjust `mypy_path` if the sources don't live under
-`src/`):
+Find the package's mypy config — a `[tool.mypy]` block in
+`pyproject.toml`, or a `[mypy]` section in `mypy.ini` / `setup.cfg` (the
+ini files take precedence over `pyproject.toml`). Only if the package has
+no mypy config at all, bootstrap this template into
+`${PKG_ROOT}/pyproject.toml` (adjust `mypy_path` if the sources don't
+live under `src/`):
 
 ```toml
 [tool.mypy]
@@ -56,8 +61,11 @@ strict = true
 ```
 
 Announce the diff and proceed — don't
-gate on it; the user wants the skill to bootstrap missing config. The
-block must exist before teammates spawn, since each teammate's mypy runs
+gate on it; the user wants the skill to bootstrap missing config. If
+config exists but per-file mypy runs need `mypy_path` /
+`explicit_package_bases`, propose the minimal addition and get sign-off
+first; never rewrite an existing config or add `strict = true` to one.
+Config must exist before teammates spawn, since each teammate's mypy runs
 read it.
 
 ## Step 3 — Capture the baseline
@@ -155,7 +163,8 @@ in; then run step 8 yourself.
 ## Step 8 — Final verification and `py.typed`
 
 Run the package's whole-package mypy invocation a final time — plus the
-repo's broader check command, if it defines one. Confirm
+repo's broader check command, if it defines one; report any non-mypy
+failures it surfaces to the user rather than fixing them here. Confirm
 zero errors in target files and that the non-target errors are a **subset**
 of the step-3 baseline — no error you didn't start with, even if the total
 count dropped. If either fails, return to step 7 (or re-engage the relevant
@@ -165,16 +174,18 @@ errors are ones the user explicitly accepted.
 Then decide `py.typed`: **if and only if this final run reports zero
 errors for the whole package** (not just the target files — accepted ones
 left on the floor count as errors), the package is now fully typed, so add
-the marker at `${PKG_ROOT}/src/.../py.typed`, alongside the package's
-top-level `__init__.py`.
+the marker in the package's top-level import directory, alongside its
+top-level `__init__.py` (e.g. `${PKG_ROOT}/src/<package>/py.typed` under
+a src layout).
 If any error remains, leave `py.typed` absent — the package isn't fully
 typed and this run is a partial conversion. If your CI keys mypy
 enforcement off the marker, it must be honest.
 
-Adding `py.typed` is a two-part change: setuptools doesn't ship
-non-Python files in the wheel, so the marker also needs a
-`[tool.setuptools.package-data]` entry in `${PKG_ROOT}/pyproject.toml`.
-Add it keyed on the package's own import path, comment included:
+If the build backend is setuptools, adding `py.typed` is a two-part
+change: setuptools doesn't ship non-Python files in the wheel, so the
+marker also needs a `[tool.setuptools.package-data]` entry in
+`${PKG_ROOT}/pyproject.toml`. Add it keyed on the package's own import
+path, comment included:
 
 ```toml
 [tool.setuptools.package-data]
@@ -186,7 +197,9 @@ Add it keyed on the package's own import path, comment included:
 
 Never add one without the other — a marker without the entry silently
 leaves installed copies of the package untyped, and the entry without
-the marker is dead config.
+the marker is dead config. Other backends (hatchling, poetry-core,
+flit-core) include `py.typed` automatically once it sits inside the
+package — add no setuptools config there.
 
 ## Step 9 — Report
 
@@ -199,8 +212,9 @@ Leave all changes in the working tree — don't stage or commit. Print:
 - Items the user accepted (declined logic changes, accepted ignores,
   applied overrides).
 - Whether step 2 bootstrapped `[tool.mypy]`, and whether step 8 added
-  `py.typed` and its `[tool.setuptools.package-data]` entry (if not,
-  note the package is still a partial conversion).
+  `py.typed` (plus, under setuptools, its
+  `[tool.setuptools.package-data]` entry); if not, note the package is
+  still a partial conversion.
 
 Then point the user at `/viv-public:commit-splitter` to dole the diff into
 reviewable commits.

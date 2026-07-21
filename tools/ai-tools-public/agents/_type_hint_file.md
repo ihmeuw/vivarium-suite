@@ -37,7 +37,7 @@ The lead's brief gives you:
   consumers **first** so they can adapt.
 - **`owned_symbols`**: the shared symbols you are the owner of.
 - **`baseline`**: a reminder that the whole-package mypy run (however
-  the repo invokes it, per the lead's brief) — the baseline
+  the repo invokes it) — the baseline
   and final gate — is the lead's to run, not yours. You iterate with mypy
   scoped to your own file (see step 3); the lead reconciles your file
   against the whole package at the end.
@@ -82,9 +82,9 @@ This is a bounded loop, not a one-shot pass. You own your iteration.
 
 ## Style
 
-Match the conventions of already-typed code in this repo — consult one
-or two already-typed files for a concrete
-example; don't read them wholesale:
+Match the conventions of already-typed code in this repo, if any exists —
+consult one or two already-typed files for a concrete example (don't
+read them wholesale); otherwise the rules below are the default:
 
 - **`from __future__ import annotations`**: add it whenever the file gains
   `if TYPE_CHECKING:` imports (see below) or an annotation references a
@@ -200,6 +200,5 @@ ignore_missing_imports = true
 - Do NOT push, branch, or commit — the lead owns git.
 - Run mypy **scoped to your own file** (`mypy <your file>` from
   `package`), not the whole-package mypy run (however the repo invokes
-  it, per the lead's brief) — that's the lead's
-  baseline and final gate. Never run mypy against other packages. Fix
-  only your file's errors.
+  it) — that's the lead's baseline and final gate. Never widen your
+  mypy run beyond your own file. Fix only your file's errors.

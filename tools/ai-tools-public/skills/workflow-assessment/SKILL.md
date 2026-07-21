@@ -23,15 +23,19 @@ The user describes the session, not its id. Resolve it from cheap metadata —
    worktree slugs.
 3. **Fingerprint without opening transcripts.** The `.jsonl`'s **mtime** is when
    it ran; the tiny `subagents/agent-*.meta.json` sidecars name the workflow by
-   their `agentType`s (e.g. `viv-public:_review_design` ⟹ `/viv-public:code-reviewer`). No `subagents/`
+   their `agentType`s (e.g. `viv-public:_split_proposer` ⟹ `/viv-public:commit-splitter`). No `subagents/`
    ⟹ no sub-agents ran. Still ambiguous? Grep the opening `<command-name>` tag.
 4. **Confirm** by naming your pick back by time and shape, not its id; a short
    table if several match.
 
 ## Loading the spec
 
-The definition is the contract — the slash-command (`commands/<name>.md`) or
-skill (`skills/<name>/SKILL.md`). Distill only what it *mandates*:
+The definition is the contract — the workflow's slash-command or skill file,
+wherever it is defined: the project's or user's `.claude/commands/<name>.md` /
+`.claude/skills/<name>/SKILL.md`, or, for a namespaced workflow like
+`/viv-public:code-reviewer`, the `commands/`/`skills/` tree of the installed
+plugin (resolve the plugin from the `plugin:name` prefix in the
+`<command-name>` tag). Distill only what it *mandates*:
 
 - which sub-agents run, and how many of each;
 - what's dispatched **in parallel** ("in a single message") vs. sequenced;

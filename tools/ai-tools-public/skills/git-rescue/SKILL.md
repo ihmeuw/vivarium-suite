@@ -21,11 +21,12 @@ know how to untangle: $ARGUMENTS
    confirmation.
 4. Execute. Resolve conflicts file-by-file with Read/Edit, narrating
    each choice.
-5. Verify with `git log --oneline -10` and `git diff @{u}...HEAD --stat`.
-6. Run the repo's standard verification command (test suite / lint
-   target) if one exists — e.g. `make check`, `make test`, or the
-   project's CI script.
-7. Summarize changes for user.
+5. Verify with `git log --oneline -10` and, if an upstream is set,
+   `git diff @{u}...HEAD --stat`.
+6. Run the repo's standard verification command directly in Bash if
+   one exists (e.g. `make check`, `make test`, or the project's CI
+   script) — just execute it; no skill lookup is needed for this step.
+7. Summarize the changes for the user.
 8. Ask before pushing. On explicit OK, `git push --force-with-lease`.
 
 ## Non-obvious diagnostic worth knowing

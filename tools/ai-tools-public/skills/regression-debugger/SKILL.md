@@ -14,7 +14,7 @@ itself acting as the orchestration prompt.
 
 Gather from $ARGUMENTS (and ask the user for anything missing):
 
-- **Symptom**: What metric is wrong and in what direction? (e.g., "output value too low", "metric off by 15%")
+- **Symptom**: What output or behavior is wrong, and in what direction? (e.g., "computed total too low", "aggregate metric off by 15%", "query returns empty results")
 - **Repos**: Which repositories are involved?
 - **Affected entities**: Which components, modules, or features are implicated?
 - **Hypotheses**: Any suspicions about specific components?
@@ -44,8 +44,8 @@ Wait for all diff analyses to complete before proceeding.
 
 ## Phase 4 — Trace the Data Flow (in this session)
 
-Starting from the affected output metric, trace backward through the
-code to find where old and new behavior diverge:
+Starting from the affected output or behavior, trace backward through
+the code to find where old and new behavior diverge:
 
 1. Find the code that produces the affected metric
 2. For each input or dependency, trace to its own source (data, other components, configuration)
@@ -78,12 +78,12 @@ Structure findings with these sections:
 
 ## Common Pitfalls
 
-When analyzing framework code, avoid these mistakes:
+When analyzing code built on a shared library or framework, always check:
 
-- **Do check that subclass overrides match the base class signature.** A method that returned a value in the library might return None in a subclass override if the subclass handles the data differently.
-- **Do check shared data transformation utilities.** Their signatures and behavior may have changed between refs.
+- **Subclass overrides against the base-class signature.** A method that returns a value in the upstream library may return None in a downstream override if the subclass handles the data differently.
+- **Shared data-transformation utilities.** Their signatures and behavior may have changed between refs.
 
-If a project skill documents domain-specific regression pitfalls, consult it.
+If an installed skill provides domain reference documentation or known regression pitfalls for the code under investigation, invoke it and fold its guidance into the diff-analysis and hypothesis phases.
 
 ## Constraints
 

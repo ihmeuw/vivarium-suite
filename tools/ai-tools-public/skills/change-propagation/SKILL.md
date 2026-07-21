@@ -36,35 +36,35 @@ a misread reference or target before any work fans out.
   files you'll carry. Identify the **source package/repo** so workers know
   what is source-specific versus the generalizable boilerplate.
 - **Target list** → resolve each entry to a **repository plus a path within
-  it**: a package name or path (`config-tree`, `packages/engine`) → the
+  it**: a package name or path (`my-package`, `packages/core`) → the
   reference's own repo; an `owner/repo` (`my-org/some-repo`) → that repo (its
   root package, or a named path within it).
 - **Per-target source material.** If adapting a target needs more than the
   shared reference — e.g. each target's *own* pre-migration file, recovered
   from an archived external repo or older git history — resolve that **here**,
-  while you (the lead) still have GitHub/network access. Workers don't; they
-  only ever see what you put in their brief (see step 2).
-- **Optional ticket key.** If the user names a motivating ticket, use it for
-  branch names and PR linkage. If not, offer to file one.
+  up front: workers get no GitHub tools and may be network-restricted — they
+  should only ever need what you put in their brief (see step 2).
+- **Optional ticket key.** If the user names a motivating ticket or issue,
+  use it for branch names and PR linkage; otherwise proceed without one.
 
 ### 2. Fan out one worker per target
 
 Spawn one `viv-public:_propagate_target` worker per target, **in parallel**.
 Brief each worker with: its single `target` (its repository and resolved
-path within it), the `reference_files` (path + content),
-the `source_package` note, the `intent`, the repo's check command when you
-know it, and — when the adaptation needs material specific to that target —
-the `target_basis` you gathered in step 1.  Then:
+path within it), the `reference_files` (path + content), the
+`source_package` note, the `intent`, the `check_command` when you know it,
+and — when the adaptation needs material specific to that target — the
+`target_basis` you gathered in step 1. Then:
 
 - **Workers targeting the reference's own repo** each run in their own
-  **isolated git worktree** — spawn
-  them with the Agent tool's `isolation: "worktree"`, so the worker's working
-  directory *is* a fresh checkout, cut from the same base you'll branch the
-  integration branch from. They adapt into their package's directory (or a
-  shared root file) and verify proportionate to the change — the repo's
-  canonical check command for code, a parse + targeted-validity check for
-  metadata-only edits (see the worker's step 4) — leaving the result in the
-  worktree for you to integrate directly.
+  **isolated git worktree** — spawn them with the Agent tool's
+  `isolation: "worktree"`, so the worker's working directory *is* a fresh
+  checkout, cut from the same base you'll branch the integration branch from.
+  They adapt into their package's directory (or a shared root file) and
+  verify proportionate to the change — the repo's canonical check command for
+  code, a parse + targeted-validity check for metadata-only edits (see the
+  worker's step 4) — leaving the result in the worktree for you to integrate
+  directly.
 - **Workers targeting another repo** each work in a **local clone** you
   provision — the worker still gets a real checkout to edit in and to run the
   repo's checks against when an env is available.
@@ -82,12 +82,11 @@ pass per target — a second agent checking each adapted file against the intent
 — is worth the cost. Then converge **by repository**: group workers by the
 repo their target lives in and integrate each group onto a single branch of
 that repo (their subtrees are disjoint, so they union cleanly) — one branch,
-one PR, per repository. For **small, uniform,
-disjoint** edits — one field added to
-each `pyproject.toml`, say — you needn't juggle N worktrees: a worker can
-return its adapted content or a diff and you apply them onto one branch
-yourself. Reserve full per-worktree integration for substantial, multi-file
-per-target changes.
+one PR, per repository. For **small, uniform, disjoint** edits — one field
+added to each `pyproject.toml`, say — you needn't juggle N worktrees: a
+worker can return its adapted content or a diff and you apply them onto one
+branch yourself. Reserve full per-worktree integration for substantial,
+multi-file per-target changes.
 
 Sort targets into what you'll file versus what you'll hold:
 
@@ -120,10 +119,11 @@ conventions skill), invoke it and follow it for the PR mechanics. Otherwise:
 name branches descriptively (include the ticket key when there is one), fill
 in each repo's PR template (`.github/pull_request_template.md`) when it has
 one, and open every PR as a **draft**. File one PR per repository from its
-integrated branch. Offer to announce the PRs in your team channel.
+integrated branch. If your team announces PRs in a chat channel and you have
+a tool to post there, offer to do so.
 
 ### 6. Report
 
-List, per target: the filed PR (key/URL) or the reason it was held (conflict,
+List, per target: the filed PR (number/URL) or the reason it was held (conflict,
 failure, no-op, worker death). Confirm every target from step 1 is accounted
 for. Stop — committing further, merging, and un-drafting are the user's call.

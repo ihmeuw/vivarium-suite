@@ -77,8 +77,9 @@ The lead's brief gives you:
      run, report `unverified — relies on CI`.
    - **Metadata-only changes** (classifiers, URLs, description, authors, a
      lint-config tweak that can't change imports) → running the full check
-     suite buys zero signal. Instead confirm the file parses and run a targeted
-      validity check , and note that the suite was deliberately skipped.
+     suite buys zero signal. Instead confirm the file parses and run a
+     targeted validity check (e.g. a TOML/YAML parse, or a linter on just
+     that file), and note that the suite was deliberately skipped.
    When a check fails, determine whether **your change caused it** or it is a
    **pre-existing** failure (check against the unmodified target if in doubt)
    and report which.
@@ -91,7 +92,9 @@ The lead's brief gives you:
      target, or the target is unreadable.
 
 6. **Report to the lead** (see "Output"). Leave your edits in the checkout —
-   the lead integrates it directly; you don't serialize file contents back.
+   the lead integrates it directly; don't serialize file contents back unless
+   the lead's brief explicitly asks for the adapted content or a diff inline
+   (used for small, uniform edits).
 
 ## Output
 

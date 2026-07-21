@@ -80,12 +80,12 @@ It includes:
   iterating while preserving the black box. It always creates the feature branch
   up front and gates PR creation on explicit user approval.
 
-**Skills**
+**Auto-triggering skills**
 
 - ``commit-splitter`` — dole out a bulk uncommitted diff into reviewable
   commits, and PR-sized branches when scope warrants.
 - ``change-propagation`` — propagate boilerplate across several targets
-  (monorepo packages and/or external repos) in parallel, one
+  (packages in the current repository and/or external repos) in parallel, one
   ``_propagate_target`` worker per target, then converge them into one draft
   PR per repo — every durable write gated on one explicit approval.
 - ``workflow-assessment`` — post-hoc audit of an agentic workflow run
@@ -224,9 +224,10 @@ Code:
   ``/viv-public:framework-development`` (and by the ``viv`` plugin's
   model-development workflow when that plugin is installed).
 - ``_propagate_target`` (spawned by the ``change-propagation`` skill) also
-  **writes** and runs the test suite: for a monorepo target it adapts files
-  into the target package's subtree and runs that package's check command
-  inside an **isolated git worktree** (its verification sandbox). Its prompt
+  **writes** and runs the test suite: for a target in the local repository
+  it adapts files into the target package's subtree and runs that package's
+  check command inside an **isolated git worktree** (its verification
+  sandbox). Its prompt
   constrains it to write only within its assigned target and to **never**
   push, branch, commit, or open a PR — every durable write is the lead
   skill's, after explicit approval. For an external target it uses only
@@ -295,13 +296,19 @@ for ``~/.claude/settings.json``:
      }
    }
 
-``allowWrite`` covers ``conda``/``pip``; ``denyRead`` closes the
-credential-exfil path; ``network.allowedDomains`` is the egress allowlist
-for sandboxed Bash. That ``denyRead`` of ``gh``'s token is why the ``gh``
+``allowWrite`` covers ``conda``/``pip``; the baseline assumes a conda/pip
+toolchain with installs routed through IHME's Artifactory mirror — adjust
+``allowWrite`` and ``allowedDomains`` for your stack (e.g. add
+``files.pythonhosted.org`` for direct pip installs, or your npm registry
+for Node). ``denyRead`` closes the credential-exfil path;
+``network.allowedDomains`` is the egress allowlist for sandboxed Bash. That ``denyRead`` of ``gh``'s token is why the ``gh``
 CLI can't run sandboxed — hence the GitHub MCP dependency, whose calls run
 outside the sandbox. Even ``git push`` runs sandboxed once ``github.com``
 is allowlisted and git's credential helper points at a sandbox-readable
-token file, so no un-sandboxing is needed for normal git/GitHub work.
+token file — for example
+``git config --global credential.helper "store --file ~/.config/git/gh-token"``
+with a personal-access token in that file (any path outside ``denyRead``)
+— so no un-sandboxing is needed for normal git/GitHub work.
 
 Top-level project metadata (license, code of conduct, contributing guide)
 lives at the monorepo root and applies to this tool as well; a copy of the

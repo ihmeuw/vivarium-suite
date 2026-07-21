@@ -17,14 +17,15 @@ main-session commands without duplicating the fan-out.
 ## Step 1 — Gather PR context
 
 If $ARGUMENTS references a pull request (e.g. "#6", "PR 6", a GitHub URL),
-use the GitHub MCP tools — `mcp__github__get_pull_request` for the title
-and body, `mcp__github__get_pull_request_diff` (or
-`get_pull_request_files`) for the diff and changed-file list — plus
-`git log` for recent commit messages on the branch. Prefer the MCP over
-the `gh` CLI: it works inside the sandbox (where `gh` cannot read its
-credential file) and needs no shell. Fall back to `gh pr view`/`gh pr
-diff` only if the GitHub MCP is unavailable. Otherwise work from
-$ARGUMENTS as a free-form description.
+use your GitHub MCP server's pull-request tools to fetch the PR title/body,
+the diff, and the changed-file list (on the official GitHub MCP server,
+`pull_request_read` with the `get`, `get_diff`, and `get_files` methods) —
+plus `git log` for recent commit messages on the branch. Prefer the MCP
+over the `gh` CLI when both are available: it needs no shell access and
+works in sandboxed environments where `gh` may be unable to read its
+credentials. Fall back to `gh pr view`/`gh pr diff` only if the GitHub
+MCP is unavailable. Otherwise work from $ARGUMENTS as a free-form
+description.
 
 ## Step 2 — Run the review
 
@@ -42,7 +43,7 @@ the review constraints.
 After presenting the review, if it surfaced findings the user is not going
 to address in the current PR **and** an installed skill covers filing
 tickets from review findings (e.g. a ticket-triage skill), offer to run
-that skill on them, and invoke it and follow it if accepted — don't
+that skill on them; if the user accepts, invoke it and follow it — don't
 duplicate any of its classification or filing logic here. If no such
 skill is installed, end after Step 2 — the presented review is the final
 output.
