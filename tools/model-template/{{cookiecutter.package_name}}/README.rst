@@ -21,6 +21,7 @@ First, clone this repository::
 
   :~$ git clone https://github.com/ihmeuw/{{ cookiecutter.package_name }}.git
   ...git will copy the repository from github and place it in your home directory...
+  :~$ cd {{ cookiecutter.package_name }}
 
 You will need ``conda`` to install all of this repository's requirements.
 We recommend installing `Miniforge <https://github.com/conda-forge/miniforge>`_.
@@ -28,27 +29,48 @@ The platform-specific instructions for installation can be found at that link.
 Once you have ``conda`` installed, you are ready to proceed.
 
 Currently, the process of making artifacts and running simulations requires
-two distinct conda environments.
+two distinct environments.
 **Note that it will not be possible to create the environment for making artifacts
 unless you are on the IHME network.**
 We call these the "artifact" and "simulation" environments.
-You'll create these by running::
 
-  :~$ bash environment.sh
-  :~$ bash environment.sh -t artifact # only on IHME cluster
+There are two environment options: a **local conda environment** (for personal
+machines) or a **shared environment on the cluster** with a lightweight venv wrapper.
 
-You can activate and deactivate the environments like so::
+To create or update an environment, use ``source environment.sh``. This will
+automatically create the environment if it doesn't exist.
 
-  :~$ conda activate {{ cookiecutter.package_name }}_simulation
-  ({{ cookiecutter.package_name }}_simulation) :~$ conda deactivate # note the change in prompt
-  :~$ conda activate {{ cookiecutter.package_name }}_artifact
-  ({{ cookiecutter.package_name }}_artifact) :~$ conda deactivate # note the change in prompt
+**Local conda environment** (default)::
 
-The ``({{ cookiecutter.package_name }})`` that precedes your shell prompt will probably show
-up by default, though it may not.  It's just a visual reminder that you
-are installing and running things in an isolated programming environment
-so it doesn't conflict with other source code and libraries on your
-system.
+  :~$ source environment.sh
+  ...creates/activates the simulation conda environment...
+  :~$ source environment.sh -t artifact
+  ...creates/activates the artifact conda environment...
+
+Local conda environments are automatically rebuilt if they are stale (older
+than a week). To deactivate a local conda environment, run ``conda deactivate``.
+
+**Shared environment on the cluster** (recommended for cluster development)::
+
+  :~$ source environment.sh -s
+  ...creates/activates a venv overlay on the shared simulation environment...
+  :~$ source environment.sh -s -t artifact
+  ...creates/activates a venv overlay on the shared artifact environment...
+
+To deactivate a shared cluster environment, run ``deactivate``.
+
+The shared environments are conda environments built nightly by Jenkins;
+``source environment.sh -s`` layers a lightweight virtual environment on top
+of one, with this repository installed in editable mode. Note that this
+requires the repository to have been added to the Jenkins shared-environment
+nightly build; until then (or if the shared environment is otherwise
+unavailable), use the local conda environment instead.
+
+Additional options are available; pass the ``-h`` flag to see them
+(e.g. ``-f`` to force a rebuild, ``-l`` to install git lfs).
+The underlying ``make`` targets can also be run directly: ``make build-env``
+and ``make build-shared-env``; see the ``help`` target in the ``Makefile``
+for their arguments.
 
 Supported Python versions: 3.10, 3.11, 3.12
 
@@ -61,7 +83,9 @@ artifacts; see the next section for how to do this.
 
 In order to make an artifact for a location (e.g. Pakistan), you will first have to add the
 location to the ``LOCATIONS`` constant in the ``src/{{ cookiecutter.package_name }}/constants/metadata.py`` file.
-Then, you can make the artifact by activating the artifact conda environment and running the following::
+Then, you can make the artifact by activating the artifact environment
+(``source environment.sh -t artifact``, plus ``-s`` for a shared environment)
+and running the following::
 
   ({{ cookiecutter.package_name }}_artifact) :~$ make_artifacts -vvv -l "Pakistan" -o src/{{ cookiecutter.package_name }}/artifacts
 
@@ -97,7 +121,7 @@ You can run tests with::
   ...pytest will run all tests in the tests directory...
 
 It may be the case that a different set of tests will run, depending on whether you are in the artifact
-or simulation conda environment.
+or simulation environment.
 To be safe, it is best to run the tests in both environments.
 
 Repository Layout
