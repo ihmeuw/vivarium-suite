@@ -1,3 +1,7 @@
+**5.5.2 - 07/21/26**
+
+- Replace ``FuzzyChecker.fuzzy_assert_proportion()`` calls with ``FuzzyChecker.assert_proportion()``
+
 **5.5.1 - 07/20/26**
 
 - Import ``FuzzyChecker`` from ``vivarium-fuzzy-checker`` (extracted from ``vivarium-testing-utils``)

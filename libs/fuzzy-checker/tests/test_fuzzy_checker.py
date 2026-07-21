@@ -54,10 +54,10 @@ WIDTHS = [
     "numerator, denominator, target_proportion",
     [(10_008, 100_000, 0.1), (976, 1_000_000, 0.001), (1_049, 50_000, (0.0198, 0.0202))],
 )
-def test_pass_fuzzy_assert_proportion(
+def test_pass_assert_proportion(
     numerator: int, denominator: int, target_proportion: float
 ) -> None:
-    FuzzyChecker().fuzzy_assert_proportion(numerator, denominator, target_proportion)
+    FuzzyChecker().assert_proportion(numerator, denominator, target_proportion)
 
 
 @pytest.mark.parametrize(
@@ -67,19 +67,19 @@ def test_pass_fuzzy_assert_proportion(
         (1_150, 50_000, 0.02, "is significantly greater than expected"),
     ],
 )
-def test_fail_fuzzy_assert_proportion(
+def test_fail_assert_proportion(
     numerator: int, denominator: int, target_proportion: float, match: str
 ) -> None:
     with pytest.raises(AssertionError, match=match):
-        FuzzyChecker().fuzzy_assert_proportion(numerator, denominator, target_proportion)
+        FuzzyChecker().assert_proportion(numerator, denominator, target_proportion)
 
 
-def test_small_sample_size_fuzzy_assert_proportion(caplog: LogCaptureFixture) -> None:
-    FuzzyChecker().fuzzy_assert_proportion(1, 10, 0.1)
+def test_small_sample_size_assert_proportion(caplog: LogCaptureFixture) -> None:
+    FuzzyChecker().assert_proportion(1, 10, 0.1)
     assert "Sample size too small" in caplog.text
 
 
-def test_not_conclusive_fuzzy_assert_proportion(caplog: LogCaptureFixture) -> None:
+def test_not_conclusive_assert_proportion(caplog: LogCaptureFixture) -> None:
     """This test verifies we will pass, then be inconclusive, then fail.
     The numbers used in this test are arbitrary but are intended to be conservative
     estimates of the number of iterations needed to reach each state
@@ -89,7 +89,7 @@ def test_not_conclusive_fuzzy_assert_proportion(caplog: LogCaptureFixture) -> No
     numerator = 1_000
     while True:
         caplog.clear()
-        fuzzy_checker.fuzzy_assert_proportion(numerator, 10_000, 0.1)
+        fuzzy_checker.assert_proportion(numerator, 10_000, 0.1)
         if "is not conclusive" in caplog.text:
             assert numerator > 1050
             break
@@ -100,7 +100,7 @@ def test_not_conclusive_fuzzy_assert_proportion(caplog: LogCaptureFixture) -> No
     while True:
         caplog.clear()
         try:
-            fuzzy_checker.fuzzy_assert_proportion(numerator, 10_000, 0.1)
+            fuzzy_checker.assert_proportion(numerator, 10_000, 0.1)
             assert "is not conclusive" in caplog.text
         except AssertionError as e:
             assert "is significantly greater" in str(e)
@@ -226,7 +226,7 @@ def test__quantile_squared_error(lower_bound: float, width: float) -> None:
 
 def test_save_diagnostic_output(tmpdir: LocalPath) -> None:
     fuzzy_checker = FuzzyChecker()
-    fuzzy_checker.fuzzy_assert_proportion(10_008, 100_000, 0.1)
+    fuzzy_checker.assert_proportion(10_008, 100_000, 0.1)
     fuzzy_checker.save_diagnostic_output(tmpdir)
     assert len(tmpdir.listdir()) == 1
 

@@ -180,14 +180,14 @@ def _check_exposure_and_rr(
     for category, expected_exposure in expected_exposures.items():
         relative_risk = expected_rrs[category]
         is_in_category = exposure == category
-        fuzzy_checker.fuzzy_assert_proportion(
+        fuzzy_checker.assert_proportion(
             int(is_in_category.sum()),
             len(is_in_category),
             expected_exposure,
             name=f"{risk.name}.exposure.{category}",
             name_additional=name_additional,
         )
-        # TODO: MIC-7279 - fuzzy_assert_proportion only warns (doesn't fail) when the sample
+        # TODO: MIC-7279 - assert_proportion only warns (doesn't fail) when the sample
         # is too small to be conclusive; fail loudly.
         assert (
             fuzzy_checker.proportion_test_diagnostics[-1].confidence == "Conclusive"

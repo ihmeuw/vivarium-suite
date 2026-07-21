@@ -1,4 +1,4 @@
-**4.4.1 - 07/17/26**
+**4.4.1 - 07/21/26**
 
 - Remove the orphaned ``publishHTML`` CI step that logged a spurious "Specified
   HTML directory does not exist" error on every build

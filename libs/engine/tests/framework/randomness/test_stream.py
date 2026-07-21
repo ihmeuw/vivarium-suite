@@ -164,14 +164,14 @@ def test_filter_for_rate_single_probability(
 ) -> None:
     scaled_rate = rate * (time_scaling_factor / 365.0)
     sub_index = randomness_stream.filter_for_rate(index, scaled_rate)
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         len(sub_index),
         len(index),
         scaled_rate,
     )
 
     sub_sub_index = randomness_stream.filter_for_rate(sub_index, scaled_rate)
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         len(sub_sub_index),
         len(sub_index),
         scaled_rate,
@@ -183,7 +183,7 @@ def test_filter_for_rate_multiple_probabilities(
 ) -> None:
     rates = pd.Series([0.3, 0.3, 0.3, 0.6, 0.6] * (index.size // 5), index=index)
     sub_index = randomness_stream.filter_for_rate(index, rates)
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         len(sub_index),
         len(index),
         0.3 * (3 / 5) + 0.6 * (2 / 5),
