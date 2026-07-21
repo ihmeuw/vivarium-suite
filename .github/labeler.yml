@@ -2,9 +2,9 @@ artifact:
   - changed-files:
     - any-glob-to-any-file: 'libs/artifact/**'
 
-auto-validation:
+validation:
   - changed-files:
-    - any-glob-to-any-file: 'libs/auto-validation/**'
+    - any-glob-to-any-file: 'libs/validation/**'
 
 build-utils:
   - changed-files:
