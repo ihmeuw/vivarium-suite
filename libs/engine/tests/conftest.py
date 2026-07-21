@@ -11,7 +11,7 @@ from _pytest.logging import LogCaptureFixture
 from loguru import logger
 from vivarium.artifact import Artifact
 from vivarium.config_tree import ConfigTree
-from vivarium.testing_utils import FuzzyChecker
+from vivarium.fuzzy_checker import FuzzyChecker
 
 from vivarium.engine.framework.configuration import (
     build_model_specification,
