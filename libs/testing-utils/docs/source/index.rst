@@ -13,4 +13,3 @@ microsimulation framework.
    :maxdepth: 2
 
    self
-   automated_v_and_v/index
