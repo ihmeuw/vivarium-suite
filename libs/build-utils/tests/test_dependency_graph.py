@@ -549,7 +549,7 @@ class TestGetReleaseMatrix:
         entry = next(e for e in matrix["include"] if e["library"] == "a")
         assert entry["wait_for"] == [{"dist": "vivarium-b", "version": "2.0.0"}]
 
-    def test_entry_carries_dist_name_which_need_not_be_vivarium_prefixed(
+    def test_entry_carries_dist_name(
         self,
         make_monorepo: MonorepoFactory,
     ) -> None:

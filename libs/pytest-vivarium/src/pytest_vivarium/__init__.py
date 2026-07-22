@@ -8,8 +8,5 @@ except PackageNotFoundError:
 
 import numpy
 
-# Every consumer that ran pytest with vivarium-testing-utils installed inherited this:
-# pytest auto-loaded the plugin, which imported the package and turned numpy
-# floating-point warnings into errors process-wide for the test run. Preserved here so
-# extracting the plugin does not silently relax that strictness across the ecosystem.
+# Turn numpy floating-point warnings into errors process-wide for the test runs
 numpy.seterr(all="raise")
