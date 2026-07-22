@@ -1,3 +1,7 @@
+**0.23.1 - 07/22/26**
+
+ - Fix references to the packages split out of ``vivarium-testing-utils``: the pytest plugin is now ``pytest-vivarium`` and ``FuzzyChecker`` lives in ``vivarium-fuzzy-checker``
+
 **0.23.0 - 07/06/26**
 
  - Add ``model-development`` skill (``/viv:model-development``) for an end-to-end model iteration loop
