@@ -162,7 +162,7 @@ def test_aged_out_simulant_untracking(
     # population out of the sim.
     sim.step()
     pop1 = sim.get_population(["age", "is_aged_out"], include_untracked=True)
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         observed_numerator=pop1["is_aged_out"].sum(),
         observed_denominator=len(pop1),
         target_proportion=0.5,
@@ -172,7 +172,7 @@ def test_aged_out_simulant_untracking(
     # Take another step which should age the rest of the population out of the sim.
     sim.step()
     pop2 = sim.get_population(["age", "is_aged_out"], include_untracked=True)
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         observed_numerator=pop2["is_aged_out"].sum(),
         observed_denominator=len(pop2),
         target_proportion=1.0,
@@ -419,7 +419,7 @@ def test_scaled_population(
                 & (pop["sex"] == sex)
             ]
         )
-        fuzzy_checker.fuzzy_assert_proportion(
+        fuzzy_checker.assert_proportion(
             observed_numerator=number_of_sims,
             observed_denominator=len(pop),
             target_proportion=target_proportion,
@@ -653,7 +653,7 @@ def _check_population(simulants, initial_age, step_size, include_sex, fuzzy_chec
 def _check_sexes(simulants, include_sex, fuzzy_checker):
     if include_sex == "Both":
         assert simulants.sex.isin(["Male", "Female"]).all()
-        fuzzy_checker.fuzzy_assert_proportion(
+        fuzzy_checker.assert_proportion(
             len(simulants[simulants.sex == "Male"]),
             len(simulants),
             0.5,
@@ -824,7 +824,7 @@ class TestScaledPopulationDataSources:
         assert len(pop) == 25_000
         assert (pop["location"] == "ScaledLand").all()
         # Verify scaling: males should be ~75% of population
-        fuzzy_checker.fuzzy_assert_proportion(
+        fuzzy_checker.assert_proportion(
             (pop["sex"] == "Male").sum(),
             len(pop),
             0.75,

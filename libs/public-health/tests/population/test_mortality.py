@@ -198,7 +198,7 @@ def test_mortality_cause_of_death(
                 continue
             else:
                 mortality_rate = mortality_rate
-            fuzzy_checker.fuzzy_assert_proportion(
+            fuzzy_checker.assert_proportion(
                 name=f"test_mortality_rate_{cause}",
                 observed_numerator=len(dead),
                 observed_denominator=len(alive_idx_after_step1),

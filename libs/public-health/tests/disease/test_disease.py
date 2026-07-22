@@ -161,7 +161,7 @@ def test_prevalence_single_state_with_migration(
     )
 
     disease_status = simulation.get_population(disease).squeeze()
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         (disease_status == "sick").sum(), disease_status.size, test_prevalence_level
     )
 
@@ -172,7 +172,7 @@ def test_prevalence_single_state_with_migration(
             population_configuration={"age_start": 0, "age_end": 5, "sim_state": "time_step"},
         )
         disease_status = simulation.get_population(disease).squeeze()
-        fuzzy_checker.fuzzy_assert_proportion(
+        fuzzy_checker.assert_proportion(
             (disease_status == "sick").sum(), disease_status.size, test_prevalence_level
         )
 
@@ -206,7 +206,7 @@ def test_prevalence_multiple_sequelae(
     )
     test = simulation.get_population("test").squeeze()
     for i, expected_prevalence in enumerate(test_prevalence_level):
-        fuzzy_checker.fuzzy_assert_proportion(
+        fuzzy_checker.assert_proportion(
             (test == f"sequela{i}").sum(),
             test.size,
             expected_prevalence,
@@ -386,7 +386,7 @@ def test_prevalence_birth_prevalence_initial_assignment(
         population_configuration={"age_start": 0, "age_end": 0, "sim_state": "time_step"},
     )
     test = simulation.get_population("test").squeeze()
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         (test == "with_condition").sum(),
         test.size,
         0.75,
@@ -400,7 +400,7 @@ def test_prevalence_birth_prevalence_initial_assignment(
         population_configuration={"age_start": 0, "age_end": 5, "sim_state": "time_step"},
     )
     test = simulation.get_population("test").squeeze()
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         (test == "with_condition").sum(),
         test.size,
         0.83,
@@ -433,7 +433,7 @@ def test_no_birth_prevalence_initial_assignment(
 
     # prevalence should be used for assigning initial status at sim start
     disease_status = simulation.get_population(disease).squeeze()
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         (disease_status == "with_condition").sum(), disease_status.size, 1
     )
 
@@ -445,7 +445,7 @@ def test_no_birth_prevalence_initial_assignment(
     )
 
     disease_status = simulation.get_population(disease).squeeze()
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         (disease_status == "with_condition").sum(), disease_status.size, 0.5
     )
 
@@ -457,7 +457,7 @@ def test_no_birth_prevalence_initial_assignment(
     )
 
     disease_status = simulation.get_population(disease).squeeze()
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         (disease_status == "with_condition").sum(), disease_status.size, 2.0 / 3.0
     )
 
@@ -490,7 +490,7 @@ def test_birth_prevalence_initial_assignment(
 
     # birth prevalence should be used for assigning initial status at sim start
     disease_status = simulation.get_population(disease).squeeze()
-    fuzzy_checker.fuzzy_assert_proportion(
+    fuzzy_checker.assert_proportion(
         (disease_status == "with_condition").sum(), disease_status.size, 0.5
     )
 

@@ -2,6 +2,11 @@
 
 - Run downstream libraries' CI on release to catch dependency breaking changes
 
+**4.4.1 - 07/21/26**
+
+- Remove the orphaned ``publishHTML`` CI step that logged a spurious "Specified
+  HTML directory does not exist" error on every build
+
 **4.4.0 - 07/13/26**
 
 - Add ``vivarium.build_utils.dependency_graph`` package for cross-library handling

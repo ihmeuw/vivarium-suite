@@ -20,9 +20,9 @@ BASE_PERF_INDEX_COLS = ["host", "job_number", "task_number", "draw", "seed"]
 # The number of scenario columns beyond which we shorten the scenarios to a single string
 COMPOUND_SCENARIO_COL_COUNT = 2
 
-# Worker perf-log filenames produced by ``paths.build_perf_log_filename``: an optional
-# ``<array_job_id>_<array_task_id>.`` SLURM prefix, then the legacy ``perf.<hash>.log``.
-PERF_LOG_PATTERN = re.compile(r"^(?:\d+_\d+\.)?perf\.[0-9a-f]{16}\.log$")
+# Worker perf-log filenames produced by ``paths.build_perf_log_filename``: ``perf.`` then an
+# optional ``<array_job_id>_<array_task_id>.`` SLURM segment, then the 16-hex task-id hash.
+PERF_LOG_PATTERN = re.compile(r"^perf\.(?:\d+_\d+\.)?[0-9a-f]{16}\.log$")
 
 
 class PerformanceSummary:
