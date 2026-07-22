@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 from vivarium.config_tree import ConfigTree
 
 from vivarium.public_health.results.stratification import ResultsStratifier
@@ -177,16 +178,20 @@ def test_results_stratifier_get_age_bins(mocker):
     assert age_bins.equals(pd.DataFrame(AGE_BINS_EXPECTED_DICT))
 
 
-def test_results_stratifier_get_age_bins_from_config_dataframe(mocker):
-    """A config-supplied DataFrame is passed through as the age_bins source (no artifact load)."""
-    raw_bins = fake_data_load_population_age_bins()
+@pytest.mark.parametrize(
+    "age_bins_source",
+    [fake_data_load_population_age_bins(), fake_data_load_population_age_bins],
+    ids=["dataframe", "callable"],
+)
+def test_results_stratifier_get_age_bins_from_config(mocker, age_bins_source):
+    """A config-supplied DataFrame or callable is used as the age_bins source (no artifact load)."""
     builder = _mock_age_bins_builder(mocker, initialization_age_min=0.0, untracking_age=5.0)
     builder.data.load = mocker.Mock()
 
     rs = ResultsStratifier()
-    rs.configuration = ConfigTree({"data_sources": {"age_bins": raw_bins}})
+    rs.configuration = ConfigTree({"data_sources": {"age_bins": age_bins_source}})
 
     age_bins = rs.get_age_bins(builder)
 
     builder.data.load.assert_not_called()
-    assert not age_bins.empty
+    assert age_bins.equals(pd.DataFrame(AGE_BINS_EXPECTED_DICT))

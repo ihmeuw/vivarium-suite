@@ -36,7 +36,8 @@ Default Stratifications
      - ``age``
      - Bins simulant ages into age-group name strings (e.g.
        ``"early_neonatal"``, ``"1_to_4"``). Bins come from the ``age_bins``
-       data source (default ``population.age_bins``, overridable via config)
+       data source (default ``population.age_bins``, overridable via the
+       ``results_stratifier.data_sources.age_bins`` configuration key)
        and are filtered to the configured ``initialization_age_min`` and
        ``untracking_age`` range.
    * - ``current_year``
@@ -84,7 +85,7 @@ Group names are normalized to lowercase with underscores (e.g.
 ``"Early Neonatal"`` becomes ``"early_neonatal"``).
 
 ``ResultsStratifier``'s input data (its ``age_bins``) is configured through
-``data_sources`` -- the entry defaults to an artifact key but can be supplied as
+``data_sources``. The entry defaults to an artifact key but can be supplied as
 a scalar, ``DataFrame``, or callable so it can run without an artifact. See the
 :doc:`observers tutorial </tutorials/observers>` for the available data sources
 and examples.

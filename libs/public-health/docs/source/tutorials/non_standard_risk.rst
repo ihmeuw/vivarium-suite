@@ -305,7 +305,7 @@ is specified as
 where ``<risk_name>`` is the ``<name>`` provided to the associated
 :class:`~vivarium.public_health.risks.base_risk.Risk` component and
 ``<target>`` is the full target string (``<type>.<name>.<measure>``) passed to
-the :class:`~vivarium.public_health.risks.effect.RiskEffect` — e.g.
+the :class:`~vivarium.public_health.risks.effect.RiskEffect`, e.g.
 ``risk_effect.my_risk_factor_on_cause.my_infectious_disease.incidence_rate``.
 
 Specifying a Relative Risk Value

@@ -76,7 +76,7 @@ the mean) independently of the final exposure value.
 Configuration
 +++++++++++++
 
-A ``Risk``'s input data is configured through ``data_sources`` -- each entry
+A ``Risk``'s input data is configured through ``data_sources``. Each entry
 defaults to an artifact key but can be supplied as a scalar, ``DataFrame``, or
 callable so it can run without an artifact. See the
 :doc:`risk tutorial </tutorials/risk>` for the available data sources and

@@ -75,10 +75,35 @@ which sources the age bins used for age-group stratification through a
 Its ``age_bins`` key defaults to the artifact key ``population.age_bins`` but
 can be overridden with:
 
-- **Scalar** (int or float) - broadcast a constant value to all simulants.
 - **DataFrame** - use the DataFrame directly.
-- **Callable** - call the function at setup time to produce the data.
+- **Callable** - call the function at setup time to return such a DataFrame.
 - **Artifact key** (string) - load a different key from the artifact.
+
+``age_bins`` must resolve to a table of age-group bounds, so a scalar override
+(valid for scalar-valued data sources elsewhere) does not apply here.
+
+For ``age_bins``, the DataFrame (or the DataFrame returned by a callable) must
+have one row per age group with the columns ``age_start`` and ``age_end`` (the
+bin bounds in years, as floats) and ``age_group_name`` (the group label). Rows
+should be ordered by ascending age, and the bins should be contiguous (each
+``age_start`` equal to the previous row's ``age_end``). For example, the age
+bins covering the first year of life look like:
+
+.. list-table::
+   :header-rows: 1
+
+   * - age_start
+     - age_end
+     - age_group_name
+   * - 0.0
+     - 0.019178
+     - early_neonatal
+   * - 0.019178
+     - 0.076712
+     - late_neonatal
+   * - 0.076712
+     - 1.0
+     - post_neonatal
 
 .. code-block:: yaml
 
@@ -88,7 +113,7 @@ can be overridden with:
          age_bins: some.artifact.key  # or a DataFrame passed in code
 
 :class:`~vivarium.public_health.results.CategoricalRiskObserver` has no data
-source of its own -- it obtains its categories from the observed risk
+source of its own and instead obtains its categories from the observed risk
 component (see `CategoricalRiskObserver`_).
 
 

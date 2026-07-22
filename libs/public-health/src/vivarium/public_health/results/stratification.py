@@ -157,9 +157,9 @@ class ResultsStratifier(Component):
         """Get the age bins for stratifying by age.
 
         Resolve the ``age_bins`` data source via
-        :meth:`~vivarium.engine.component.Component.get_data` — the
+        :meth:`~vivarium.engine.component.Component.get_data` (the
         ``population.age_bins`` artifact key by default, or a DataFrame
-        supplied through the configuration tree — then restrict the bins to
+        supplied through the configuration tree), then restrict the bins to
         the simulation's age range and normalize the age-group names.
 
         Parameters

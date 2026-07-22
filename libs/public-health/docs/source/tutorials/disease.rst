@@ -112,7 +112,7 @@ you supply each measure as a:
 - **Data key** (string) - load the measure from the artifact at that key.
 
 By default each measure loads from the artifact at the data key shown below.
-Supplying a scalar instead - as every example in this tutorial does - lets the
+Supplying a scalar instead (as every example in this tutorial does) lets the
 model run without an artifact. The pre-built factories take no data arguments,
 so with a factory every measure is set through the configuration. When building
 states and transitions directly you may instead pass them as constructor
@@ -138,8 +138,12 @@ For the full list of data keys and the column layout each one expects, see
      - ``prevalence=`` or ``{state}.data_sources.prevalence``
    * - birth_prevalence
      - :class:`~vivarium.public_health.disease.state.DiseaseState` (neonatal models)
-     - ``0.0`` (scalar default; not loaded from the artifact)
+     - ``0.0`` (no artifact key; defaults to zero unless overridden)
      - ``birth_prevalence=`` or ``{state}.data_sources.birth_prevalence``
+   * - dwell_time
+     - :class:`~vivarium.public_health.disease.state.DiseaseState`
+     - ``0.0`` (no artifact key; defaults to zero unless overridden)
+     - ``dwell_time=`` or ``{state}.data_sources.dwell_time``
    * - disability_weight
      - :class:`~vivarium.public_health.disease.state.DiseaseState`
      - ``cause.{cause}.disability_weight``
@@ -160,11 +164,23 @@ For the full list of data keys and the column layout each one expects, see
      - ``cause.{cause}.remission_rate``
      - ``add_rate_transition(transition_rate=...)`` or the transition's
        (auto-generated) ``data_sources.transition_rate``
+   * - proportion
+     - :class:`~vivarium.public_health.disease.transition.ProportionTransition`
+     - none (no artifact key; supplied directly)
+     - ``add_proportion_transition(proportion=...)`` or the transition's
+       (auto-generated) ``data_sources.proportion``
    * - cause_specific_mortality_rate
      - :class:`~vivarium.public_health.disease.model.DiseaseModel`
      - ``cause.{cause}.cause_specific_mortality_rate``
      - ``cause_specific_mortality_rate=`` or
        ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
+
+Any measure can be supplied as a scalar, ``DataFrame``, or callable through its
+``data_sources`` override (or the constructor argument shown above); the
+**Default data key** column only lists what each measure resolves to when
+nothing is supplied. Most default to an artifact key, but ``birth_prevalence``
+(and ``dwell_time``) have no artifact key and default to the scalar ``0.0``, so
+a model that does not set them gets zero rather than an artifact load.
 
 For example, :class:`~vivarium.public_health.disease.state.DiseaseState`
 declares five configurable data sources:

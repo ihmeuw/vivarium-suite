@@ -47,7 +47,7 @@ The initializer computes conditional sampling distributions from the
 population structure data with
 :func:`~vivarium.public_health.population.data_transformations.assign_demographic_proportions`.
 
-``BasePopulation``'s input data is configured through ``data_sources`` -- each
+``BasePopulation``'s input data is configured through ``data_sources``. Each
 entry defaults to an artifact key but can be supplied as a scalar, ``DataFrame``,
 or callable so it can run without an artifact. See the
 :doc:`population tutorial </tutorials/population>` for the available data sources

@@ -368,7 +368,7 @@ For YLD-only causes (those with no associated mortality), the CSMR defaults
 to 0. On the default path this is detected automatically from the cause's
 ``restrictions`` metadata in the artifact.
 
-``DiseaseModel``'s input data is configured through ``data_sources`` -- each
+``DiseaseModel``'s input data is configured through ``data_sources``. Each
 entry defaults to an artifact key but can be supplied as a scalar, ``DataFrame``,
 or callable so it can run without an artifact; overriding the
 ``cause_specific_mortality_rate`` data source also skips the ``restrictions``

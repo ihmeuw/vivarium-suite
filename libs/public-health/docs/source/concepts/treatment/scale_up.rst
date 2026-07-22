@@ -54,7 +54,7 @@ When the value ``"data"`` is used instead of a numeric value, the endpoint
 value is resolved from the corresponding ``data_sources`` entry (a numeric
 ``value`` is used directly and ignores the data source).
 
-``LinearScaleUp``'s endpoint data is configured through ``data_sources`` -- each
+``LinearScaleUp``'s endpoint data is configured through ``data_sources``. Each
 entry defaults to an artifact key but can be supplied as a scalar, ``DataFrame``,
 or callable so it can run without an artifact. See the
 :doc:`treatment tutorial </tutorials/treatment>` for the available data sources

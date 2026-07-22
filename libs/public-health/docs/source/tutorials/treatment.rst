@@ -103,6 +103,34 @@ to an artifact key but can be overridden with:
 - **Callable** - call the function at setup time to produce the data.
 - **Artifact key** (string) - load a different key from the artifact.
 
+A ``DataFrame`` data source (or the DataFrame returned by a callable) uses the
+standard lookup-table layout: the demographic key and parameter columns
+(``sex``, ``age_start``, ``age_end``, ``year_start``, ``year_end``) plus a
+``value`` column. For example, a constant 40% coverage value across all
+demographics:
+
+.. list-table::
+   :header-rows: 1
+
+   * - sex
+     - age_start
+     - age_end
+     - year_start
+     - year_end
+     - value
+   * - Female
+     - 0.0
+     - 125.0
+     - 2020
+     - 2021
+     - 0.4
+   * - Male
+     - 0.0
+     - 125.0
+     - 2020
+     - 2021
+     - 0.4
+
 The per-component ``data_sources`` keys are listed in the
 `Configuration Summary`_ below, and the examples in each component section
 supply them via configuration. All examples in this tutorial run without an
@@ -464,7 +492,7 @@ The configuration specifies dates and endpoint values:
 
 The ``value.start`` and ``value.end`` can be numeric scalars, or the string
 ``"data"`` to resolve the endpoint from the corresponding ``data_sources``
-entry -- an artifact key by default, or a ``DataFrame``/scalar supplied through
+entry: an artifact key by default, or a ``DataFrame``/scalar supplied through
 the configuration to run without an artifact.
 
 

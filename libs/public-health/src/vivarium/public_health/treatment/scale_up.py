@@ -27,7 +27,7 @@ class LinearScaleUp(Component):
     between a start value and an end value over a specified date range. Before
     the start date, the start value is used; after the end date, the end value
     is used. Each endpoint value can be a numeric configuration parameter, or
-    ``"data"`` to resolve from the corresponding ``data_sources`` entry — an
+    ``"data"`` to resolve from the corresponding ``data_sources`` entry: an
     artifact key by default, or a DataFrame/scalar supplied through the
     configuration to bypass the artifact.
 
