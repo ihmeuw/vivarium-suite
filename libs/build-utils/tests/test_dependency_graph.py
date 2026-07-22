@@ -910,6 +910,11 @@ class TestCLIBuildReleaseMatrix:
         out = json.loads(capsys.readouterr().out)
         libraries = [entry["library"] for entry in out["include"]]
         assert libraries.index("b") < libraries.index("a")
+        # The dist name (the release workflow's git-tag prefix) is carried through.
+        assert {e["library"]: e["dist"] for e in out["include"]} == {
+            "a": "vivarium-a",
+            "b": "vivarium-b",
+        }
 
     def test_empty_when_no_pairs(
         self,

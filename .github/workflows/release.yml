@@ -32,6 +32,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Collect packages to release
         # Writes "<lib> <version>" lines to package_versions.txt
         env:
@@ -42,8 +47,11 @@ jobs:
           touch package_versions.txt
           # The git tag prefix is the package's PyPI dist name (pyproject
           # [project].name), which is NOT always "vivarium-<dir>" - e.g. the
-          # pytest-vivarium plugin. Resolve it from pyproject rather than assuming.
-          get_dist() { grep -m1 -oP '(?<=^name = ")[^"]+' "libs/$1/pyproject.toml"; }
+          # pytest-vivarium plugin. Parse it with tomllib (same as the release
+          # matrix's own resolver) so it is [project]-scoped and raises loudly on
+          # a missing/malformed pyproject rather than silently yielding an empty
+          # tag prefix. Requires the "Set up Python" step to run first.
+          get_dist() { python -c "import tomllib,sys; print(tomllib.load(open(f'libs/{sys.argv[1]}/pyproject.toml','rb'))['project']['name'])" "$1"; }
           if [ "${{ github.event_name }}" = "release" ]; then
             # Tag was created by the GitHub UI release. Parse it to find the lib and version.
             # Tag format: "<dist>-v<X.Y.Z>" where <dist> is a lib's [project].name.
@@ -56,6 +64,7 @@ jobs:
             VERSION="${BASH_REMATCH[2]}"
 
             # Find the libs/<dir> whose pyproject [project].name equals DIST.
+            # Dist names are unique across libs, so the first match is the one.
             LIBRARY=""
             for d in libs/*/; do
               [ -f "${d}pyproject.toml" ] || continue
@@ -77,7 +86,8 @@ jobs:
               exit 1
             fi
 
-            TAG="$(get_dist "$PACKAGE")-v${VERSION}"
+            DIST="$(get_dist "$PACKAGE")"
+            TAG="${DIST}-v${VERSION}"
             if git tag -l "$TAG" | grep -q .; then
               echo "Tag $TAG already exists"
               exit 1
@@ -104,7 +114,8 @@ jobs:
                 exit 1
               fi
 
-              TAG="$(get_dist "$LIB")-v${VERSION}"
+              DIST="$(get_dist "$LIB")"
+              TAG="${DIST}-v${VERSION}"
               if git tag -l "$TAG" | grep -q .; then
                 echo "Tag $TAG already exists, skipping"
                 continue
@@ -114,11 +125,6 @@ jobs:
             done <<< "$CHANGED_CHANGELOGS"
           fi
           echo "Collected package versions:"; cat package_versions.txt
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
