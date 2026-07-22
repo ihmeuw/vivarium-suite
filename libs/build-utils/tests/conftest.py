@@ -1,9 +1,9 @@
 """Pytest configuration for vivarium-build-utils' own test suite.
 
 This deliberately duplicates the ``--runslow`` and ``--runweekly`` handling
-from ``vivarium.testing_utils``' pytest plugin. vbu cannot depend on
-vivarium-testing-utils to pick up that plugin, because vtu depends on vbu;
-registering the options here lets the shared Jenkins ``pytest`` invocations
+from the ``pytest-vivarium`` plugin. vbu cannot depend on pytest-vivarium to
+pick up that plugin, because pytest-vivarium depends on vbu; registering the
+options here lets the shared Jenkins ``pytest`` invocations
 (which pass ``--runslow`` and ``--runweekly``) run against vbu without erroring
 on an unrecognized option.
 """

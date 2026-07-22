@@ -10,7 +10,7 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 | `libs/public-health/` | `vivarium-public-health` | `import vivarium.public_health` |
 | `libs/config-tree/` | `vivarium-config-tree` | `import vivarium.config_tree` |
 | `libs/cluster-tools/` | `vivarium-cluster-tools` | `import vivarium.cluster_tools` |
-| `libs/testing-utils/` | `vivarium-testing-utils` | `import vivarium.testing_utils` |
+| `libs/pytest-vivarium/` | `pytest-vivarium` | *(pytest plugin — auto-loaded)* |
 | `libs/helpers/` | `vivarium-helpers` | `import vivarium.helpers` |
 | `libs/gbd-mapping/` | `vivarium-gbd-mapping` | `import vivarium.gbd_mapping` |
 | `libs/risk-distributions/` | `vivarium-risk-distributions` | `import vivarium.risk_distributions` |
