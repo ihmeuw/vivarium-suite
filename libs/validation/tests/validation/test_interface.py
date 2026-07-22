@@ -16,7 +16,7 @@ from vivarium.artifact import Artifact, ArtifactException
 from vivarium.fuzzy_checker import TestResult
 from vivarium_inputs import get_age_bins
 
-from tests.automated_validation.conftest import get_model_spec
+from tests.validation.conftest import get_model_spec
 from vivarium.validation.comparison import FuzzyComparison, TargetIntervalConfig
 from vivarium.validation.constants import DRAW_INDEX, INPUT_DATA_INDEX_NAMES, DataSource
 from vivarium.validation.data_loader import DataLoader
