@@ -28,5 +28,7 @@ def test_pytest11_entry_point_is_registered() -> None:
     typo in ``pyproject.toml`` should fail loudly here rather than silently
     disabling the markers/fixtures everywhere downstream.
     """
-    targets = {ep.value for ep in entry_points(group="pytest11")}
-    assert "pytest_vivarium.plugin" in targets
+    eps = entry_points(group="pytest11")
+    assert "pytest_vivarium" in eps.names
+    # Load through the entry point so a broken target (not just a wrong string) fails here.
+    assert eps["pytest_vivarium"].load().__name__ == "pytest_vivarium.plugin"

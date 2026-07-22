@@ -30,9 +30,10 @@ classifiers = [
     "Topic :: Software Development :: Testing",
 ]
 dependencies = [
-    # pytest/pytest-mock/pytest-xdist are runtime deps: pytest auto-loads plugin.py,
-    # which imports them (and ConfigTree) at module load. numpy backs the seterr in
-    # __init__.py.
+    # pytest/pytest-mock are runtime deps: pytest auto-loads plugin.py, which imports
+    # them (and ConfigTree) at module load. pytest-xdist is required functionally, not
+    # by import - the -n auto worker-cap hook is a no-op without it. numpy backs the
+    # seterr in __init__.py.
     "vivarium-dependencies[pytest,numpy]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-config-tree",

@@ -12,6 +12,8 @@ projects: the ``slow``/``weekly``/``cluster`` markers and their ``--runslow`` /
 It is one of the libraries in the
 `vivarium-suite <https://github.com/ihmeuw/vivarium-suite>`_ monorepo.
 
+**Supported Python versions: 3.10, 3.11**
+
 Installation
 ------------
 

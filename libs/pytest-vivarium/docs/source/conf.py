@@ -167,7 +167,7 @@ texinfo_documents = [
         f"{project} Documentation",
         author,
         project,
-        "Automated verification and validation tooling for Vivarium simulations.",
+        "Shared pytest configuration and fixtures for Vivarium projects.",
         "Miscellaneous",
     ),
 ]

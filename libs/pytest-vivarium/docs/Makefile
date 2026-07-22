@@ -3,7 +3,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = vivarium.validation
+SPHINXPROJ    = pytest_vivarium
 SOURCEDIR     = source
 BUILDDIR      = build
 
