@@ -31,7 +31,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "pytest-vivarium",
 ]
 docs = [
     "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
