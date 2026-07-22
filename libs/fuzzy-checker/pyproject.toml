@@ -36,7 +36,7 @@ dependencies = [
 cluster = []
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "pytest-vivarium",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
