@@ -45,12 +45,7 @@ jobs:
         run: |
           rm -f package_versions.txt
           touch package_versions.txt
-          # The git tag prefix is the package's PyPI dist name (pyproject
-          # [project].name), which is NOT always "vivarium-<dir>" - e.g. the
-          # pytest-vivarium plugin. Parse it with tomllib (same as the release
-          # matrix's own resolver) so it is [project]-scoped and raises loudly on
-          # a missing/malformed pyproject rather than silently yielding an empty
-          # tag prefix. Requires the "Set up Python" step to run first.
+          # The git tag prefix is the package's PyPI dist name (pyproject [project].name)
           get_dist() { python -c "import tomllib,sys; print(tomllib.load(open(f'libs/{sys.argv[1]}/pyproject.toml','rb'))['project']['name'])" "$1"; }
           if [ "${{ github.event_name }}" = "release" ]; then
             # Tag was created by the GitHub UI release. Parse it to find the lib and version.
