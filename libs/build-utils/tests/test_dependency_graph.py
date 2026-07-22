@@ -549,6 +549,31 @@ class TestGetReleaseMatrix:
         entry = next(e for e in matrix["include"] if e["library"] == "a")
         assert entry["wait_for"] == [{"dist": "vivarium-b", "version": "2.0.0"}]
 
+    def test_entry_carries_dist_name_which_need_not_be_vivarium_prefixed(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """Each entry carries its PyPI dist name (the release workflow's git tag
+        prefix), which need not be ``vivarium-<dir>`` - e.g. the ``pytest-vivarium``
+        plugin, whose dir is ``pytest-vivarium`` and dist is also ``pytest-vivarium``."""
+        libs_dir = make_monorepo(
+            {
+                "config-tree": {"version": "1.0.0"},
+                "pytest-vivarium": {
+                    "dist_name": "pytest-vivarium",
+                    "deps": ["vivarium-config-tree"],
+                    "version": "0.1.0",
+                },
+            }
+        )
+        libs = load_libs(libs_dir)
+        matrix = get_release_matrix(
+            {"config-tree": "1.0.0", "pytest-vivarium": "0.1.0"}, libs
+        )
+        entries = {e["library"]: e for e in matrix["include"]}
+        assert entries["config-tree"]["dist"] == "vivarium-config-tree"
+        assert entries["pytest-vivarium"]["dist"] == "pytest-vivarium"
+
     def test_wait_for_empty_for_independent_library(
         self,
         make_monorepo: MonorepoFactory,
