@@ -61,6 +61,10 @@ ci_jenkins = ["vivarium-engine[ci_github,cluster]"]
 [project.scripts]
 simulate = "vivarium.engine.interface.cli:simulate"
 
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/engine"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # vivarium-engine owns the ``vivarium`` namespace's __init__.py: it ships the

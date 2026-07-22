@@ -1,4 +1,8 @@
-"""Testing utilities for the vivarium ecosystem."""
+"""vivarium.testing_utils
+
+Testing utilities for the vivarium ecosystem.
+"""
+
 from importlib.metadata import PackageNotFoundError, version
 
 try:

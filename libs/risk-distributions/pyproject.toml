@@ -45,6 +45,10 @@ dev = ["vivarium-risk-distributions[test,docs,interactive,lint]"]
 ci_github = ["vivarium-risk-distributions[test,docs,lint]"]
 ci_jenkins = ["vivarium-risk-distributions[ci_github,cluster]"]
 
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/risk-distributions"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.risk_distributions and its subpackages. Excluding

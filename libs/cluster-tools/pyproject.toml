@@ -64,6 +64,10 @@ psimulate = "vivarium.cluster_tools.psimulate.cli:psimulate"
 dagger = "vivarium.cluster_tools.dagger.cli:dagger"
 vipin = "vivarium.cluster_tools.vipin.cli:vipin"
 
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/cluster-tools"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.cluster_tools and its subpackages. Excluding vivarium

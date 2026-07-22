@@ -66,6 +66,10 @@ run_benchmark = "vivarium.profiling.tools.cli:run_benchmark"
 profile_sim = "vivarium.profiling.tools.cli:profile_sim"
 summarize = "vivarium.profiling.tools.cli:summarize"
 
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/profiling"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.profiling and its subpackages. Excluding vivarium

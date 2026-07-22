@@ -49,6 +49,10 @@ ci_jenkins = ["vivarium-testing-utils[ci_github,cluster]"]
 [project.entry-points.pytest11]
 vivarium_testing_utils = "vivarium.testing_utils.pytest_plugin"
 
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/testing-utils"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.testing_utils and its subpackages. Excluding vivarium

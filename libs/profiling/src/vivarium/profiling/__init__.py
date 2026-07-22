@@ -1,7 +1,6 @@
 """vivarium.profiling
 
 Profiling and benchmarking tools for Vivarium simulations.
-
 """
 
 from importlib.metadata import PackageNotFoundError, version

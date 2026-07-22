@@ -1,6 +1,10 @@
-#################
-# Fuzzy Checker #
-#################
+"""vivarium.fuzzy_checker
+
+The ``FuzzyChecker`` is a tool for statistical "fuzzy" checks of values subject
+to stochastic variation and used to verify and validate Vivarium simulation
+outputs.
+"""
+
 from importlib.metadata import PackageNotFoundError, version
 
 try:

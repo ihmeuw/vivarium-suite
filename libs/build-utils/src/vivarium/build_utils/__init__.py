@@ -1,10 +1,6 @@
-"""
-====================
-vivarium.build_utils
-====================
+"""vivarium.build_utils
 
 Shared build utilities and Jenkins pipeline library for Vivarium projects.
-
 """
 
 from importlib.metadata import PackageNotFoundError, version

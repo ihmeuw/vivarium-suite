@@ -1,4 +1,4 @@
-"""Vivarium data artifacts.
+"""vivarium.artifact
 
 A data artifact is an archive on disk that packages all data relevant to a
 particular simulation. This package provides the artifact model and the HDF5

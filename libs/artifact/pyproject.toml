@@ -45,6 +45,10 @@ cluster = []
 ci_github = ["vivarium-artifact[test,docs,lint]"]
 ci_jenkins = ["vivarium-artifact[ci_github,cluster]"]
 
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/artifact"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.artifact and its subpackages. Excluding vivarium
