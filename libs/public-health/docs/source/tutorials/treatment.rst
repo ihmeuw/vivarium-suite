@@ -672,7 +672,9 @@ Configuration Summary
      - ``{name}_scale_up.date.start``,
        ``{name}_scale_up.date.end``,
        ``{name}_scale_up.value.start``,
-       ``{name}_scale_up.value.end``
+       ``{name}_scale_up.value.end``,
+       ``{name}_scale_up.data_sources.start``,
+       ``{name}_scale_up.data_sources.end``
      - Linearly ramp coverage over time
    * - ``TherapeuticInertia``
      - ``therapeutic_inertia.triangle_min``,

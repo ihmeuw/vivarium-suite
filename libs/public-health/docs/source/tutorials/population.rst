@@ -104,8 +104,10 @@ default.
      - age, sex, year, location
      - ``value`` (population count)
      - :class:`~vivarium.public_health.population.base_population.BasePopulation`,
-       :class:`~vivarium.public_health.population.base_population.ScaledPopulation`
-     - ``population.population_structure``
+       :class:`~vivarium.public_health.population.base_population.ScaledPopulation`,
+       :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
+     - ``population.population_structure``,
+       ``fertility.data_sources.population_structure``
    * - ``population.location``
      - *(scalar)*
      - A string (e.g. ``"Kenya"``)
@@ -506,11 +508,11 @@ Configuration summary for BasePopulation
      - 10000
      - Number of simulants to create.
    * - ``population.population_structure``
-     - internal method (loads ``population.structure``)
+     - ``"population.structure"``
      - Population structure data. Accepts a DataFrame, callable,
        or data key.
    * - ``population.location``
-     - internal method (loads ``population.location``)
+     - ``"population.location"``
      - Location string. Accepts a scalar string, callable,
        or data key.
    * - ``population.initialization_age_min``
@@ -538,6 +540,10 @@ Configuration summary for BasePopulation
      - internal method
      - CSMR for unmodeled causes. Accepts a scalar, DataFrame, callable,
        or data key.
+   * - ``mortality.unmodeled_causes``
+     - ``[]``
+     - Cause names whose CSMR is combined into the unmodeled-cause
+       pipeline so modeled risks can modify it.
 
 
 ScaledPopulation

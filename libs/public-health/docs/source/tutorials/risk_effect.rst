@@ -98,12 +98,14 @@ The table below lists every data key used by the risk effect components.
    * - ``risk_factor.{name}.relative_risk``
      - age, sex, year, parameter, affected_entity, affected_measure
      - ``value`` (relative risk per category)
-     - :class:`~vivarium.public_health.risks.effect.RiskEffect`
+     - :class:`~vivarium.public_health.risks.effect.RiskEffect`,
+       :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect`
      - Yes - ``risk_effect.{name}_on_{target}.data_sources.relative_risk``
    * - ``risk_factor.{name}.population_attributable_fraction``
      - age, sex, year, affected_entity, affected_measure
      - ``value`` (fraction)
-     - :class:`~vivarium.public_health.risks.effect.RiskEffect`
+     - :class:`~vivarium.public_health.risks.effect.RiskEffect`,
+       :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect`
      - Yes - ``risk_effect.{name}_on_{target}.data_sources.population_attributable_fraction``
    * - ``risk_factor.{name}.tmred``
      - (scalar record)
@@ -634,6 +636,7 @@ Configuration Summary
        ``risk_factor.{name}.population_attributable_fraction``
    * - ``NonLogLinearRiskEffect``
      - ``non_log_linear_risk_effect.{name}_on_{target}.data_sources.relative_risk``,
+       ``non_log_linear_risk_effect.{name}_on_{target}.data_sources.population_attributable_fraction``,
        ``non_log_linear_risk_effect.{name}_on_{target}.data_sources.tmred``
      - ``risk_factor.{name}.relative_risk``,
        ``risk_factor.{name}.tmred``,
@@ -641,6 +644,6 @@ Configuration Summary
 
 .. note::
 
-   For more advanced use cases - including polytomous risks, coverage gaps,
-   alternative risk factors, and parameterized effect distributions - see
-   the :doc:`non_standard_risk` tutorial.
+   For more advanced use cases (including polytomous risks, alternative risk
+   factors, and parameterized effect distributions) see the
+   :doc:`non_standard_risk` tutorial.
