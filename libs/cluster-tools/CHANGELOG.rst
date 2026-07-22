@@ -1,6 +1,6 @@
-**4.2.13 - 07/21/26**
+**4.2.13 - 07/22/26**
 
-- Prefix performance logs with their job id
+- Include job id in performance log names
 
 **4.2.12 - 07/14/26**
 
