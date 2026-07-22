@@ -286,15 +286,15 @@ class TestGetTransitiveUpstreams:
         self,
         make_monorepo: MonorepoFactory,
     ) -> None:
-        """A dep activated only via the resolved extra (e.g. testing-utils via [test]) is reachable."""
+        """A dep activated only via the resolved extra (e.g. fake-plugin via [test]) is reachable."""
         libs_dir = make_monorepo(
             {
-                "a": {"extras": {"ci_github": ["vivarium-testing-utils"]}},
-                "testing-utils": {"dist_name": "vivarium-testing-utils"},
+                "a": {"extras": {"ci_github": ["vivarium-fake-plugin"]}},
+                "fake-plugin": {"dist_name": "vivarium-fake-plugin"},
             }
         )
         libs = load_libs(libs_dir, extras=("ci_github",))
-        assert get_transitive_upstreams("a", libs) == {"testing-utils"}
+        assert get_transitive_upstreams("a", libs) == {"fake-plugin"}
 
     def test_excludes_target_itself(
         self,
@@ -989,7 +989,7 @@ class TestCLIBuildReleaseMatrix:
     ) -> None:
         """Release ordering uses runtime deps, so a test-extra cycle does not break it.
 
-        Mirrors config-tree <-> testing-utils: a depends on b only via a test extra
+        Mirrors config-tree <-> pytest-vivarium: a depends on b only via a test extra
         (in ci_github), while b depends on a at runtime. The ci_github graph cycles;
         the runtime graph (b -> a) is a DAG, so the matrix orders a before b.
         """
