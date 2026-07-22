@@ -54,8 +54,8 @@ simulation begins:
 Common Setup
 ------------
 
-Population components load their data through the ``data_sources``
-configuration pattern (see `Data sources`_). The `Expected Data Layout`_
+Population components load their data through the configuration tree (see
+`Data sources`_). The `Expected Data Layout`_
 section shows the key names and column layouts for every data key so that
 you know exactly what format your data should have.
 
@@ -88,9 +88,9 @@ Data keys
 ^^^^^^^^^
 
 The table below lists every data key used by the population components.
-All of them can be overridden in the ``data_sources`` section of the
-configuration (see `Data sources`_); the data key shown is simply the
-default.
+All of them can be overridden through the configuration (see the
+**Configuration override** column below and `Data sources`_); the data key
+shown is simply the default.
 
 .. list-table::
    :header-rows: 1
@@ -146,6 +146,17 @@ to an artifact key but can be overridden with:
 - **DataFrame** - use the DataFrame directly.
 - **Callable** - call the function at setup time to produce the data.
 - **Artifact key** (string) - load a different key from the artifact.
+
+.. note::
+
+   :class:`~vivarium.public_health.population.mortality.Mortality` and the
+   fertility components nest these sources under a ``data_sources`` block (e.g.
+   ``mortality.data_sources.all_cause_mortality_rate``).
+   :class:`~vivarium.public_health.population.base_population.BasePopulation` and
+   :class:`~vivarium.public_health.population.base_population.ScaledPopulation`
+   are the exception: their ``population_structure``, ``location``, and
+   ``scaling_factor`` sources are set as direct keys under ``population`` (e.g.
+   ``population.population_structure``), not inside a ``data_sources`` block.
 
 For example, :class:`~vivarium.public_health.population.mortality.Mortality` declares
 three configurable data sources:
@@ -246,8 +257,8 @@ Overriding the default data
 
 By default, every data source loads from the artifact (configured via
 ``BASE_PLUGINS`` in these examples). You can bypass the artifact and supply
-data directly through ``data_sources`` - pass a DataFrame, callable, or
-literal string:
+``BasePopulation``'s data directly under the ``population`` configuration key
+(pass a DataFrame, callable, or literal string):
 
 .. testcode::
 
@@ -264,10 +275,8 @@ literal string:
        {
            "population": {
                "population_size": 5_000,
-               "data_sources": {
-                   "population_structure": pop_data,
-                   "location": "Kenya",
-               },
+               "population_structure": pop_data,
+               "location": "Kenya",
            },
            "mortality": {"data_sources": {"all_cause_mortality_rate": 0}},
        },
@@ -736,10 +745,8 @@ Both data sources can be supplied via configuration:
                "population_size": 10_000,
                "initialization_age_min": 0,
                "initialization_age_max": 125,
-               "data_sources": {
-                   "population_structure": population_structure(),
-                   "location": "Kenya",
-               },
+               "population_structure": population_structure(),
+               "location": "Kenya",
            },
            "time": {"step_size": 10},
            "mortality": {"data_sources": {"all_cause_mortality_rate": 0}},
