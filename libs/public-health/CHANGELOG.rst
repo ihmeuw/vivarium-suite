@@ -1,7 +1,16 @@
-**6.4.3 - 07/16/26**
+**6.4.5 - 07/16/26**
 
 - Allow ``ResultsStratifier`` (``age_bins``), ``LinearScaleUp`` (endpoint ``start``/``end`` exposures), and ``LBWSGRiskEffect`` (``age_bins``, ``relative_risk_interpolator``) to source their data via configuration ``data_sources`` instead of requiring an artifact
 - Document the ``cause_specific_mortality_rate`` config override that lets ``DiseaseModel`` run artifact-less
+
+**6.4.4 - 07/21/26**
+
+- Replace ``FuzzyChecker.fuzzy_assert_proportion()`` calls with ``FuzzyChecker.assert_proportion()``
+
+**6.4.3 - 07/20/26**
+
+- Import ``FuzzyChecker`` from ``vivarium-fuzzy-checker`` (extracted from ``vivarium-testing-utils``)
+  and add it as a test dependency
 
 **6.4.2 - 07/16/26**
 

@@ -1,0 +1,63 @@
+artifact:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/artifact/**'
+
+validation:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/validation/**'
+
+build-utils:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/build-utils/**'
+
+cluster-tools:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/cluster-tools/**'
+
+config-tree:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/config-tree/**'
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/dependencies/**'
+
+engine:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/engine/**'
+
+fuzzy-checker:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/fuzzy-checker/**'
+
+gbd-mapping:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/gbd-mapping/**'
+
+profiling:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/profiling/**'
+
+public-health:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/public-health/**'
+
+pytest-plugins:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/pytest-plugins/**'
+
+risk-distributions:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/risk-distributions/**'
+
+testing-utils:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/testing-utils/**'
+
+ai-tools:
+  - changed-files:
+    - any-glob-to-any-file: 'tools/ai-tools/**'
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
