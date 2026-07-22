@@ -40,19 +40,32 @@ jobs:
         run: |
           rm -f package_versions.txt
           touch package_versions.txt
+          # The git tag prefix is the package's PyPI dist name (pyproject
+          # [project].name), which is NOT always "vivarium-<dir>" - e.g. the
+          # pytest-vivarium plugin. Resolve it from pyproject rather than assuming.
+          get_dist() { grep -m1 -oP '(?<=^name = ")[^"]+' "libs/$1/pyproject.toml"; }
           if [ "${{ github.event_name }}" = "release" ]; then
             # Tag was created by the GitHub UI release. Parse it to find the lib and version.
-            # Tag format: "vivarium-<lib>-v<X.Y.Z>" where <lib> matches the libs/<lib>/ dir.
+            # Tag format: "<dist>-v<X.Y.Z>" where <dist> is a lib's [project].name.
             TAG_NAME="${{ github.event.release.tag_name }}"
-            if [[ ! "$TAG_NAME" =~ ^vivarium-(.+)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-              echo "Tag '${TAG_NAME}' does not match 'vivarium-<lib>-v<X.Y.Z>'"
+            if [[ ! "$TAG_NAME" =~ ^(.+)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              echo "Tag '${TAG_NAME}' does not match '<dist>-v<X.Y.Z>'"
               exit 1
             fi
-            LIBRARY="${BASH_REMATCH[1]}"
+            DIST="${BASH_REMATCH[1]}"
             VERSION="${BASH_REMATCH[2]}"
 
-            if [ ! -d "libs/${LIBRARY}" ]; then
-              echo "Could not find lib directory 'libs/${LIBRARY}'"
+            # Find the libs/<dir> whose pyproject [project].name equals DIST.
+            LIBRARY=""
+            for d in libs/*/; do
+              [ -f "${d}pyproject.toml" ] || continue
+              if [ "$(get_dist "$(basename "$d")")" = "$DIST" ]; then
+                LIBRARY="$(basename "$d")"
+                break
+              fi
+            done
+            if [ -z "$LIBRARY" ]; then
+              echo "Could not find a libs/<dir> with [project].name == '${DIST}'"
               exit 1
             fi
 
@@ -64,7 +77,7 @@ jobs:
               exit 1
             fi
 
-            TAG="vivarium-${PACKAGE}-v${VERSION}"
+            TAG="$(get_dist "$PACKAGE")-v${VERSION}"
             if git tag -l "$TAG" | grep -q .; then
               echo "Tag $TAG already exists"
               exit 1
@@ -91,7 +104,7 @@ jobs:
                 exit 1
               fi
 
-              TAG="vivarium-${LIB}-v${VERSION}"
+              TAG="$(get_dist "$LIB")-v${VERSION}"
               if git tag -l "$TAG" | grep -q .; then
                 echo "Tag $TAG already exists, skipping"
                 continue
@@ -190,13 +203,13 @@ jobs:
         # lookup to this lib's tags. Validation is independent of whether the
         # tag exists yet (it injects RELEASE_VERSION into the bump check).
         env:
-          RELEASE_TAG: vivarium-${{ matrix.library }}-v${{ matrix.version }}
-          TAG_PREFIX: vivarium-${{ matrix.library }}-
+          RELEASE_TAG: ${{ matrix.dist }}-v${{ matrix.version }}
+          TAG_PREFIX: ${{ matrix.dist }}-
         run: cd libs/${{ matrix.library }} && make validate-tag
 
       - name: Create and push tag
         env:
-          TAG_PREFIX: vivarium-${{ matrix.library }}-
+          TAG_PREFIX: ${{ matrix.dist }}-
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -262,9 +275,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="vivarium-${{ matrix.library }}-v${{ matrix.version }}"
+          TAG="${{ matrix.dist }}-v${{ matrix.version }}"
           gh release view "$TAG" 2>/dev/null || gh release create "$TAG" \
-            --title "vivarium-${{ matrix.library }} v${{ matrix.version }}" \
+            --title "${{ matrix.dist }} v${{ matrix.version }}" \
             --generate-notes
 
       - name: Send failure notification
