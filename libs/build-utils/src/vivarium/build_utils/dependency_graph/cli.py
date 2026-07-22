@@ -144,7 +144,7 @@ def _run_check_acyclic(args: argparse.Namespace) -> int:
     """Handle the ``check-acyclic`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
     # Runtime deps only: the ``ci_github`` extra pulls in test dependencies that
-    # legitimately cycle (e.g. config-tree's tests use testing-utils, which
+    # legitimately cycle (e.g. config-tree's tests use pytest-vivarium, which
     # depends on config-tree at runtime). Only a *runtime* dependency cycle is a
     # real problem, and that graph is the one release ordering must be acyclic over.
     libs = load_libs(libs_dir, extras=())
@@ -175,7 +175,7 @@ def _run_build_release_matrix(args: argparse.Namespace) -> int:
     # dependent's install can't resolve until its runtime upstreams are on PyPI;
     # its test deps just need to already be published). The ci_github extra adds
     # test-dep edges that legitimately cycle (e.g. config-tree's tests use
-    # testing-utils, which depends on config-tree at runtime), and a topological
+    # pytest-vivarium, which depends on config-tree at runtime), and a topological
     # sort can't be defined over a cyclic graph.
     libs = load_libs(libs_dir, extras=())
     try:
