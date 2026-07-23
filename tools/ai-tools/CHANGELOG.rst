@@ -1,4 +1,4 @@
-**0.23.1 - 07/22/26**
+**0.23.1 - 07/23/26**
 
  - Fix references to the packages split out of ``vivarium-testing-utils``: the pytest plugin is now ``pytest-vivarium`` and ``FuzzyChecker`` lives in ``vivarium-fuzzy-checker``
 
