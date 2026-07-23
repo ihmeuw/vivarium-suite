@@ -1,7 +1,6 @@
 **4.5.0 - TBD/TBD/2026**
 
-- Run downstream libraries' CI on release to catch dependency breaking changes
-- Add ``make merge-prep`` (and a merge-prep workflow) to squash a branch and correct its CHANGELOG date before the merge queue
+- Add ``build-downstream-matrix`` powering a required Downstream Check that tests a releasing library's in-tree dependents before merge
 
 **4.4.1 - 07/21/26**
 

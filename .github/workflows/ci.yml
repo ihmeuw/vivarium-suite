@@ -9,7 +9,6 @@ on:
       - 'release_candidate/**'
       - 'epic/**'
   pull_request:
-  merge_group:
 
 jobs:
   detect-changes:
@@ -19,9 +18,6 @@ jobs:
       matrix: ${{ steps.detect.outputs.matrix }}
       has-changes: ${{ steps.detect.outputs.has-changes }}
       changed-libs: ${{ steps.detect.outputs.changed-libs }}
-      releasing-libs: ${{ steps.detect.outputs.releasing-libs }}
-      downstream-matrix: ${{ steps.detect.outputs.downstream-matrix }}
-      has-downstream: ${{ steps.detect.outputs.has-downstream }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -48,11 +44,6 @@ jobs:
             HEAD_REF="${{ github.event.pull_request.head.sha }}"
             git fetch origin "$BASE_REF"
             CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_REF}")
-          elif [ "${{ github.event_name }}" = "merge_group" ]; then
-            # The queued group is (latest main + this PR's commits); diff that range.
-            BASE="${{ github.event.merge_group.base_sha }}"
-            HEAD="${{ github.event.merge_group.head_sha }}"
-            CHANGED=$(git diff --name-only "$BASE" "$HEAD")
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
             BASE="${{ github.event.before }}"
             HEAD="${{ github.event.after }}"
@@ -119,42 +110,13 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
 
-          # Release gate: a "releasing" lib is one whose CHANGELOG.rst changed in
-          # this diff. Its in-tree dependents (downstream, minus the releasing set
-          # itself) are tested against the pending versions so a release can't
-          # break a sibling. Non-release PRs have no releasing libs and skip this.
-          RELEASING=()
-          for lib in $ALL_LIBS; do
-            if echo "$CHANGED" | grep -q "^libs/${lib}/CHANGELOG\.rst$"; then
-              RELEASING+=("$lib")
-            fi
-          done
-          echo "releasing-libs=${RELEASING[*]}" >> $GITHUB_OUTPUT
-          echo "Releasing libraries: ${RELEASING[*]:-(none)}"
-
-          if [ ${#RELEASING[@]} -eq 0 ]; then
-            echo "downstream-matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "has-downstream=false" >> $GITHUB_OUTPUT
-          else
-            DOWNSTREAM=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph build-downstream-matrix --released "${RELEASING[*]}")
-            echo "Downstream matrix: ${DOWNSTREAM}"
-            echo "downstream-matrix=${DOWNSTREAM}" >> $GITHUB_OUTPUT
-            COUNT=$(echo "$DOWNSTREAM" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['include']))")
-            if [ "$COUNT" -eq 0 ]; then
-              echo "has-downstream=false" >> $GITHUB_OUTPUT
-            else
-              echo "has-downstream=true" >> $GITHUB_OUTPUT
-            fi
-          fi
-
   build-and-test:
     needs: detect-changes
     if: needs.detect-changes.outputs.has-changes == 'true'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
-    # Per-lib recipe lives in the reusable workflow (single source of truth,
-    # shared with the downstream-gate below).
+    # Per-lib recipe lives in the reusable workflow (also reused by downstream-check.yml).
     uses: ./.github/workflows/_lib-test.yml
     with:
       library: ${{ matrix.library }}
@@ -163,39 +125,19 @@ jobs:
       run-lint: true
       run-docs: true
 
-  downstream-gate:
-    # Release gate: when a queued PR bumps a lib's CHANGELOG, test that lib's
-    # in-tree dependents against the pending version so a release can't break a
-    # sibling. Single canonical Python per dependent. Runs ONLY in the merge queue (merge_group)
-    needs: detect-changes
-    if: needs.detect-changes.outputs.has-downstream == 'true' && github.event_name == 'merge_group'
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.detect-changes.outputs.downstream-matrix) }}
-    uses: ./.github/workflows/_lib-test.yml
-    with:
-      library: ${{ matrix.library }}
-      python-version: ${{ matrix.python-version }}
-      changed-libs: ${{ needs.detect-changes.outputs.releasing-libs }}
-      run-lint: false
-      run-docs: false
-
   ci-status:
     name: CI Status
-    needs: [detect-changes, build-and-test, downstream-gate]
+    needs: [detect-changes, build-and-test]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check status
         run: |
           BUILD="${{ needs.build-and-test.result }}"
-          GATE="${{ needs.downstream-gate.result }}"
-          echo "build-and-test: ${BUILD:-<none>} ; downstream-gate: ${GATE:-<none>}"
+          echo "build-and-test: ${BUILD:-<none>}"
           # success and skipped both pass; only failure/cancelled fail CI.
-          for result in "$BUILD" "$GATE"; do
-            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
-              echo "A required job did not pass"
-              exit 1
-            fi
-          done
+          if [ "$BUILD" = "failure" ] || [ "$BUILD" = "cancelled" ]; then
+            echo "build-and-test did not pass"
+            exit 1
+          fi
           echo "CI passed"

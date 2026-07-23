@@ -1,0 +1,130 @@
+# Downstream release gate for PRs into main.
+#
+# When a PR bumps a library's version (its CHANGELOG.rst), that library's in-tree
+# dependents are tested against the *pending* version so a release can't break a
+# sibling. The expensive fan-out runs only on demand - add the `run-downstream`
+# label (or run this workflow manually) when the PR is ready to merge.
+#
+# The `downstream-status` job is the required status check on main: every PR into
+# main runs the downstream check before merging. It stays red ("add the
+# run-downstream label") until the check has run for the PR, then reflects the
+# results. A PR with no in-tree dependents passes as a no-op once run.
+name: Downstream Check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_dispatch:
+
+concurrency:
+  group: downstream-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect downstream libraries
+    runs-on: ubuntu-latest
+    outputs:
+      releasing-libs: ${{ steps.detect.outputs.releasing-libs }}
+      downstream-matrix: ${{ steps.detect.outputs.downstream-matrix }}
+      has-downstream: ${{ steps.detect.outputs.has-downstream }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Detect releasing libraries and their downstream dependents
+        id: detect
+        run: |
+          pip install packaging
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.ref }}"
+            HEAD_REF="${{ github.event.pull_request.head.sha }}"
+            git fetch origin "$BASE_REF"
+            CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_REF}")
+          else
+            git fetch origin main
+            CHANGED=$(git diff --name-only "origin/main...HEAD")
+          fi
+
+          ALL_LIBS=$(find libs -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | sort)
+
+          # A "releasing" lib is one whose CHANGELOG.rst changed in this PR.
+          RELEASING=()
+          for lib in $ALL_LIBS; do
+            if echo "$CHANGED" | grep -q "^libs/${lib}/CHANGELOG\.rst$"; then
+              RELEASING+=("$lib")
+            fi
+          done
+          echo "releasing-libs=${RELEASING[*]}" >> $GITHUB_OUTPUT
+          echo "Releasing libraries: ${RELEASING[*]:-(none)}"
+
+          if [ ${#RELEASING[@]} -eq 0 ]; then
+            echo "downstream-matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            echo "has-downstream=false" >> $GITHUB_OUTPUT
+          else
+            DOWNSTREAM=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph build-downstream-matrix --released "${RELEASING[*]}")
+            echo "Downstream matrix: ${DOWNSTREAM}"
+            echo "downstream-matrix=${DOWNSTREAM}" >> $GITHUB_OUTPUT
+            COUNT=$(echo "$DOWNSTREAM" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['include']))")
+            if [ "$COUNT" -eq 0 ]; then
+              echo "has-downstream=false" >> $GITHUB_OUTPUT
+            else
+              echo "has-downstream=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  downstream:
+    # The fan-out: run each dependent's tests against the releasing libs installed
+    # editably at their pending versions. Runs only when there ARE dependents AND
+    # the run was requested (the label is present, or a manual dispatch).
+    needs: detect
+    if: >-
+      needs.detect.outputs.has-downstream == 'true' &&
+      (contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch')
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.downstream-matrix) }}
+    uses: ./.github/workflows/_lib-test.yml
+    with:
+      library: ${{ matrix.library }}
+      python-version: ${{ matrix.python-version }}
+      changed-libs: ${{ needs.detect.outputs.releasing-libs }}
+      run-lint: false
+      run-docs: false
+
+  downstream-status:
+    # The required status check on main. Auto-passes when there's nothing
+    # downstream; otherwise green only once the check has actually run and passed.
+    name: downstream-status
+    needs: [detect, downstream]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report downstream status
+        run: |
+          HAS="${{ needs.detect.outputs.has-downstream }}"
+          RESULT="${{ needs.downstream.result }}"
+          REQUESTED="${{ contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch' }}"
+
+          if [ "$REQUESTED" != "true" ]; then
+            echo "::error::Add the 'run-downstream' label (or run the Downstream Check workflow manually) to run the downstream check before merging into main."
+            exit 1
+          fi
+          if [ "$HAS" != "true" ]; then
+            echo "Downstream check ran: this PR has no in-tree dependents to test."
+            exit 0
+          fi
+          if [ "$RESULT" = "success" ]; then
+            echo "Downstream check passed."
+            exit 0
+          fi
+          echo "::error::Downstream check did not pass (downstream job: ${RESULT})."
+          exit 1
