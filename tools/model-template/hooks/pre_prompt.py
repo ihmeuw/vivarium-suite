@@ -14,7 +14,7 @@ PACKAGES = {
     "vivarium_public_health_version": "vivarium-public-health",
     "vivarium_cluster_tools_version": "vivarium-cluster-tools",
     "vivarium_inputs_version": "vivarium_inputs",
-    "gbd_mapping_version": "vivarium-gbd-mapping",
+    "vivarium_gbd_mapping_version": "vivarium-gbd-mapping",
     "vivarium_build_utils_version": "vivarium-build-utils",
 }
 

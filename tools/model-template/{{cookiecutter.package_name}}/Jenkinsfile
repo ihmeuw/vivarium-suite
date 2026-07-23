@@ -35,6 +35,4 @@ reusable_pipeline(
       // for subsequent scheduled builds to run.
       'main'
     ],
-    skip_doc_build: true,
-    upstream_repos: ['vivarium-suite', 'vivarium_inputs'],
 )

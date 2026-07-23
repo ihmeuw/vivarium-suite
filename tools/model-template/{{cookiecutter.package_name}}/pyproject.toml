@@ -13,7 +13,7 @@ dynamic = ["version"]
 dependencies = [
     "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
     "vivarium-build-utils>={{cookiecutter.vivarium_build_utils_version}}",
-    "vivarium-gbd-mapping>={{cookiecutter.gbd_mapping_version}}",
+    "vivarium-gbd-mapping>={{cookiecutter.vivarium_gbd_mapping_version}}",
     "vivarium-engine>={{cookiecutter.vivarium_engine_version}}",
     "vivarium-public-health>={{cookiecutter.vivarium_public_health_version}}",
     "jinja2",
@@ -24,7 +24,7 @@ dependencies = [
 test = ["vivarium-dependencies[pytest]"]
 cluster = ["vivarium-cluster-tools>={{cookiecutter.vivarium_cluster_tools_version}}"]
 data = [
-    "vivarium_inputs>={{cookiecutter.vivarium_inputs_version}}",
+    "vivarium-inputs>={{cookiecutter.vivarium_inputs_version}}",
     "{{cookiecutter.package_name}}[cluster]",
 ]
 interactive = ["vivarium-dependencies[interactive]"]
