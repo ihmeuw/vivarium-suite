@@ -1,4 +1,4 @@
-**6.4.5 - 07/16/26**
+**6.4.5 - 07/22/26**
 
 - Allow ``ResultsStratifier`` (``age_bins``), ``LinearScaleUp`` (endpoint ``start``/``end`` exposures), and ``LBWSGRiskEffect`` (``age_bins``, ``relative_risk_interpolator``) to source their data via configuration ``data_sources`` instead of requiring an artifact
 - Document the ``cause_specific_mortality_rate`` config override that lets ``DiseaseModel`` run artifact-less
