@@ -9,5 +9,8 @@
     "vivarium_cluster_tools_version": "",
     "vivarium_inputs_version": "",
     "vivarium_gbd_mapping_version": "",
-    "vivarium_build_utils_version": ""
+    "vivarium_build_utils_version": "",
+    "__prompts__": {
+        "package_name": "package_name (lowercase and underscores only, e.g. my_new_model)"
+    }
 }
