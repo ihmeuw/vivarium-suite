@@ -12,7 +12,7 @@ authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
     "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
-    "vivarium-build-utils>={{cookiecutter.vivarium_build_utils_version}}",
+    "vivarium-build-utils>={{cookiecutter.vivarium_build_utils_version}},<{{cookiecutter.vivarium_build_utils_next_major_version}}.0.0",
     "vivarium-gbd-mapping>={{cookiecutter.vivarium_gbd_mapping_version}}",
     "vivarium-engine>={{cookiecutter.vivarium_engine_version}}",
     "vivarium-public-health>={{cookiecutter.vivarium_public_health_version}}",
@@ -21,7 +21,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["vivarium-dependencies[pytest]"]
+test = [
+    "vivarium-dependencies[pytest]",
+    "vivarium-testing-utils",
+]
 cluster = ["vivarium-cluster-tools>={{cookiecutter.vivarium_cluster_tools_version}}"]
 data = [
     "vivarium-inputs>={{cookiecutter.vivarium_inputs_version}}",
@@ -44,8 +47,6 @@ where = ["src"]
 "{{cookiecutter.package_name}}" = ["**/*.yaml", "**/*.ipynb"]
 
 [tool.setuptools_scm]
-write_to = "src/{{cookiecutter.package_name}}/_version.py"
-write_to_template = '__version__ = "{version}"\n'
 tag_regex = '^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
 fallback_version = "0.0.0+no-git-tag"
 

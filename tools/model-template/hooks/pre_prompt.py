@@ -3,17 +3,14 @@ import os
 from datetime import datetime
 
 import requests
+from packaging.version import parse
 
 # Map cookiecutter.json version key -> PyPI distribution name.
-# Names use dash-form as they appear on PyPI (PEP 503 normalizes underscore
-# variants, but keeping the canonical form is cleaner). vivarium_inputs is
-# still a standalone repo (not yet migrated to the monorepo), so its PyPI
-# name is unchanged.
 PACKAGES = {
     "vivarium_engine_version": "vivarium-engine",
     "vivarium_public_health_version": "vivarium-public-health",
     "vivarium_cluster_tools_version": "vivarium-cluster-tools",
-    "vivarium_inputs_version": "vivarium_inputs",
+    "vivarium_inputs_version": "vivarium-inputs",
     "vivarium_gbd_mapping_version": "vivarium-gbd-mapping",
     "vivarium_build_utils_version": "vivarium-build-utils",
 }
@@ -35,10 +32,26 @@ def main():
     with open(context_file, "r") as file:
         context = json.load(file)
 
+    # Guard against PACKAGES <-> cookiecutter.json drift: any *_version key
+    # declared in the static JSON must have a fetch entry, else the generated
+    # project gets a blank version pin.
+    unfetched = {k for k in context if k.endswith("_version")} - set(PACKAGES)
+    if unfetched:
+        raise ValueError(
+            f"cookiecutter.json declares {sorted(unfetched)} but PACKAGES has "
+            f"no fetch entry. Add them to PACKAGES in this file."
+        )
+
     context["current_year"] = str(datetime.now().year)
 
     for context_key, pypi_name in PACKAGES.items():
         context[context_key] = get_latest_version(pypi_name)
+
+    # Expose next-major of vivarium-build-utils so the generated pyproject.toml
+    # can render a bounded pin (>=X.Y.Z,<(X+1).0.0) at template time. Keeps the
+    # pin logic in one place and eliminates the need for a post-gen fixup.
+    vbu = context["vivarium_build_utils_version"]
+    context["vivarium_build_utils_next_major_version"] = str(parse(vbu).major + 1)
 
     with open(context_file, "w") as file:
         json.dump(context, file, indent=4)
