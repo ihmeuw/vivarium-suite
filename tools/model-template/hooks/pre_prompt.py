@@ -1,35 +1,54 @@
 import json
 import os
+import re
 from datetime import datetime
 
 import requests
 
-# PyPI distribution names of the versioned dependencies the template pins.
-# The cookiecutter.json key for each is derived by rule: dash -> underscore,
-# then suffix _version (e.g. "vivarium-engine" -> "vivarium_engine_version").
-PACKAGES = [
+# Public PyPI packages: fetched from https://pypi.org/pypi/<name>/json.
+PYPI_PACKAGES = [
     "vivarium-engine",
     "vivarium-public-health",
     "vivarium-cluster-tools",
-    "vivarium-inputs",
     "vivarium-gbd-mapping",
     "vivarium-build-utils",
 ]
 
+# IHME-Artifactory-only packages: fetched from the Artifactory pypi-shared
+# simple index (pypi.org doesn't have the current releases for these).
+ARTIFACTORY_PACKAGES = [
+    "vivarium-inputs",
+]
 
 def context_key(pypi_name):
     """cookiecutter.json version-key for a PyPI package name."""
     return f"{pypi_name.replace('-', '_')}_version"
 
 
-def get_latest_version(package_name):
-    """Fetch the latest version of a package from PyPI."""
+def get_latest_from_pypi(package_name):
+    """Fetch the latest version of a package from public PyPI."""
     url = f"https://pypi.org/pypi/{package_name}/json"
     response = requests.get(url)
     if response.status_code == 200:
-        data = response.json()
-        return data["info"]["version"]
-    raise ValueError(f"Could not fetch version for {package_name}")
+        return response.json()["info"]["version"]
+    raise ValueError(f"Could not fetch version for {package_name} at {url}")
+
+
+def get_latest_from_artifactory(package_name):
+    """Fetch the latest version of a package from IHME Artifactory's pypi-shared.
+
+    Artifactory's simple index is HTML, so we parse wheel/sdist filenames
+    (``<normalized_name>-<version>-*``) and return the max semver.
+    """
+    url = f"https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/simple/{package_name}/"
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise ValueError(f"Could not fetch version for {package_name} at {url}")
+    normalized = package_name.replace("-", "_")
+    versions = re.findall(rf"{re.escape(normalized)}-(\d+\.\d+\.\d+)", response.text)
+    if not versions:
+        raise ValueError(f"No versions found for {package_name} at {url}")
+    return sorted(versions, key=lambda v: tuple(int(x) for x in v.split(".")))[-1]
 
 
 def main():
@@ -45,7 +64,7 @@ def main():
     # developer added a dep to PACKAGES but forgot to wire it into
     # cookiecutter.json + the templates.
     json_version_keys = {k for k in context if k.endswith("_version")}
-    pkg_keys = {context_key(name) for name in PACKAGES}
+    pkg_keys = {context_key(n) for n in PYPI_PACKAGES + ARTIFACTORY_PACKAGES}
     if json_version_keys != pkg_keys:
         parts = []
         if json_version_keys - pkg_keys:
@@ -62,8 +81,10 @@ def main():
 
     context["current_year"] = str(datetime.now().year)
 
-    for pypi_name in PACKAGES:
-        context[context_key(pypi_name)] = get_latest_version(pypi_name)
+    for name in PYPI_PACKAGES:
+        context[context_key(name)] = get_latest_from_pypi(name)
+    for name in ARTIFACTORY_PACKAGES:
+        context[context_key(name)] = get_latest_from_artifactory(name)
 
     with open(context_file, "w") as file:
         json.dump(context, file, indent=4)
