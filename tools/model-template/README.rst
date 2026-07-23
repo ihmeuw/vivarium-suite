@@ -13,10 +13,12 @@ Cookiecutter template for producing research model repositories that use the
 Usage
 -----
 
-Create a new model repository from this template by running:
+Navigate to the directory where you want the new model repository to be created,
+then run the cookiecutter:
 
 .. code-block:: bash
 
+   cd /path/to/parent/directory
    cookiecutter git@github.com:ihmeuw/vivarium-suite.git --directory tools/model-template
 
 Complete instructions for setting up a new model repository can be found
