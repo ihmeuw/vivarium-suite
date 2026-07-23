@@ -1,4 +1,7 @@
-"""vivarium.build_utils
+"""
+====================
+Vivarium Build Utils
+====================
 
 Shared build utilities and Jenkins pipeline library for Vivarium projects.
 """

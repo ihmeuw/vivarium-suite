@@ -1,4 +1,7 @@
-"""vivarium.profiling
+"""
+==================
+Vivarium Profiling
+==================
 
 Profiling and benchmarking tools for Vivarium simulations.
 """

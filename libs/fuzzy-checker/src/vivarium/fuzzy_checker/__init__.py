@@ -1,4 +1,7 @@
-"""vivarium.fuzzy_checker
+"""
+======================
+Vivarium Fuzzy Checker
+======================
 
 The ``FuzzyChecker`` is a tool for statistical "fuzzy" checks of values subject
 to stochastic variation and used to verify and validate Vivarium simulation

@@ -1,4 +1,7 @@
-"""vivarium.gbd_mapping
+"""
+====================
+Vivarium GBD Mapping
+====================
 
 A programmatically accessible mapping of GBD entities.
 """

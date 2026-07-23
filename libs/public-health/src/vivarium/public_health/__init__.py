@@ -1,4 +1,7 @@
-"""vivarium.public_health
+"""
+======================
+Vivarium Public Health
+======================
 
 Components for modeling diseases, risks, and interventions with vivarium.
 """

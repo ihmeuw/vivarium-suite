@@ -1,4 +1,7 @@
-"""vivarium.engine
+"""
+===============
+Vivarium Engine
+===============
 
 The simulation lifecycle, component model, and runtime for the vivarium
 microsimulation framework.

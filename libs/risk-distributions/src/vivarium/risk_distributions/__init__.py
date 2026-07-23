@@ -1,4 +1,7 @@
-"""vivarium.risk_distributions
+"""
+===========================
+Vivarium Risk Distributions
+===========================
 
 Risk distributions for use with the ``vivarium`` simulation framework.
 """

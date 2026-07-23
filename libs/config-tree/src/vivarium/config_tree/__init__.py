@@ -1,4 +1,7 @@
-"""vivarium.config_tree
+"""
+====================
+Vivarium Config Tree
+====================
 
 A configuration structure supporting cascading layers.
 """
