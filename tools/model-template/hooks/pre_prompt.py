@@ -31,15 +31,27 @@ def main():
     with open(context_file, "r") as file:
         context = json.load(file)
 
-    # Guard against PACKAGES <-> cookiecutter.json drift: any *_version key
-    # declared in the static JSON must have a fetch entry, else the generated
-    # project gets a blank version pin.
-    unfetched = {k for k in context if k.endswith("_version")} - set(PACKAGES)
-    if unfetched:
-        raise ValueError(
-            f"cookiecutter.json declares {sorted(unfetched)} but PACKAGES has "
-            f"no fetch entry. Add them to PACKAGES in this file."
-        )
+    # Guard against PACKAGES <-> cookiecutter.json drift. Both directions are
+    # bugs: a key in the JSON without a PACKAGES entry yields a blank pin in the
+    # generated project; a key in PACKAGES without a JSON entry gets silently
+    # written into the (temp) JSON as a phantom prompt, signaling that the
+    # developer added a dep to PACKAGES but forgot to wire it into
+    # cookiecutter.json + the templates.
+    json_version_keys = {k for k in context if k.endswith("_version")}
+    pkg_keys = set(PACKAGES)
+    if json_version_keys != pkg_keys:
+        parts = []
+        if json_version_keys - pkg_keys:
+            parts.append(
+                f"in cookiecutter.json but not in PACKAGES: "
+                f"{sorted(json_version_keys - pkg_keys)}"
+            )
+        if pkg_keys - json_version_keys:
+            parts.append(
+                f"in PACKAGES but not in cookiecutter.json: "
+                f"{sorted(pkg_keys - json_version_keys)}"
+            )
+        raise ValueError("PACKAGES <-> cookiecutter.json drift: " + "; ".join(parts))
 
     context["current_year"] = str(datetime.now().year)
 
