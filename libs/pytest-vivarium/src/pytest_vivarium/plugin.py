@@ -1,6 +1,6 @@
 """Pytest plugin providing common fixtures for vivarium projects.
 
-This module is automatically loaded by pytest when vivarium.testing_utils is installed,
+This module is automatically loaded by pytest when pytest-vivarium is installed,
 via the pytest11 entry point declared in pyproject.toml.
 """
 
@@ -55,6 +55,7 @@ def pytest_addoption(parser: argparsing.Parser) -> None:
 
 def pytest_configure(config: Config) -> None:
     config.addinivalue_line("markers", "slow: mark test as slow to run")
+    config.addinivalue_line("markers", "weekly: mark test as a weekly test")
     config.addinivalue_line(
         "markers", "cluster: mark test as requiring a SLURM cluster environment"
     )

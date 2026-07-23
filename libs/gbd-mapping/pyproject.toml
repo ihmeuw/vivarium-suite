@@ -41,7 +41,7 @@ dependencies = [
 data = ["vivarium-gbd-access>=5.0.0, <6.0.0"]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "pytest-vivarium",
 ]
 docs = ["vivarium-dependencies[sphinx]"]
 interactive = ["vivarium-dependencies[interactive]"]

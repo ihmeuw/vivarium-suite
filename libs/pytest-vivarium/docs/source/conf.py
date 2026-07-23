@@ -17,11 +17,11 @@ from sphinx.ext.intersphinx import missing_reference
 
 # -- Project information -----------------------------------------------------
 
-project = "vivarium.testing_utils"
+project = "pytest-vivarium"
 author = "The vivarium developers"
 copyright = "2023, Institute for Health Metrics and Evaluation"
 
-version = importlib.metadata.version("vivarium-testing-utils")
+version = importlib.metadata.version("pytest-vivarium")
 release = version
 
 
@@ -43,8 +43,6 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
-    "sphinx_click.ext",
-    "matplotlib.sphinxext.plot_directive",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -169,7 +167,7 @@ texinfo_documents = [
         f"{project} Documentation",
         author,
         project,
-        "Project to store testing utilities for Vivarium software.",
+        "Shared pytest configuration and fixtures for Vivarium projects.",
         "Miscellaneous",
     ),
 ]
