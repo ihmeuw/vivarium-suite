@@ -14,6 +14,13 @@ AgeRange = tuple[int | float, int | float]
 from vivarium.validation.data_transformation import utils
 from vivarium.validation.data_transformation.data_schema import SingleNumericColumn
 
+# NaN-preserving stack() kwargs per pandas version; see the call site below.
+_STACK_KWARGS: dict[str, bool] = (
+    {"future_stack": True}
+    if tuple(int(part) for part in pd.__version__.split(".")[:2]) >= (2, 1)
+    else {"dropna": False}
+)
+
 # Tolerance for floating-point age comparisons, sufficient to handle floating-point precision issues
 # while still catching legitimate data problems
 AGE_TOLERANCE = 1e-8
@@ -652,10 +659,13 @@ def rebin_count_dataframe(
         # Name the column GBD_INDEX_NAMES.AGE_GROUP for re-stacking
         result_matrix_for_col.columns.name = INPUT_DATA_INDEX_NAMES.AGE_GROUP
 
-        # Stack the new age group columns into the index
-        # Use dropna=False to preserve rows with NaN values for age groups with no source data
+        # Stack the new age group columns into the index, preserving rows with NaN
+        # values for age groups with no source data. dropna= was removed in pandas 3
+        # and future_stack= (accepted-but-inert there) only exists from pandas 2.1,
+        # while the Jenkins validation env still runs pandas 1.5 — hence the gate.
+        # Collapse to a bare stack() once pandas <3 support ends.
         stacked_series_for_col = result_matrix_for_col.stack(
-            level=INPUT_DATA_INDEX_NAMES.AGE_GROUP, dropna=False
+            level=INPUT_DATA_INDEX_NAMES.AGE_GROUP, **_STACK_KWARGS
         )
         stacked_series_for_col.name = val_col
 

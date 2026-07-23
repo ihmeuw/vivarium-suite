@@ -128,8 +128,12 @@ def _line_plot(
         unconditioned = _get_unconditioned_index_names(combined_data.index, x_axis)
         figures = []
 
-        # Create individual figures for each condition
-        for grouped_idx, grouped_df in combined_data.groupby(level=unconditioned):
+        # Create individual figures for each condition. observed=True (the pandas 3
+        # default) skips unobserved category combinations, which would otherwise
+        # produce empty figures.
+        for grouped_idx, grouped_df in combined_data.groupby(
+            level=unconditioned, observed=True
+        ):
             if not isinstance(grouped_idx, tuple):
                 grouped_idx = (grouped_idx,)
             fig = plt.figure(figsize=(10, 6))
