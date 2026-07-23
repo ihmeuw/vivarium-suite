@@ -51,7 +51,7 @@ pytest_vivarium = "pytest_vivarium.plugin"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
-Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/testing-utils"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/pytest-vivarium"
 
 [tool.setuptools.packages.find]
 where = ["src"]
