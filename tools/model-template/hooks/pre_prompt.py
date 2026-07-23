@@ -4,15 +4,22 @@ from datetime import datetime
 
 import requests
 
-# Map cookiecutter.json version key -> PyPI distribution name.
-PACKAGES = {
-    "vivarium_engine_version": "vivarium-engine",
-    "vivarium_public_health_version": "vivarium-public-health",
-    "vivarium_cluster_tools_version": "vivarium-cluster-tools",
-    "vivarium_inputs_version": "vivarium-inputs",
-    "vivarium_gbd_mapping_version": "vivarium-gbd-mapping",
-    "vivarium_build_utils_version": "vivarium-build-utils",
-}
+# PyPI distribution names of the versioned dependencies the template pins.
+# The cookiecutter.json key for each is derived by rule: dash -> underscore,
+# then suffix _version (e.g. "vivarium-engine" -> "vivarium_engine_version").
+PACKAGES = [
+    "vivarium-engine",
+    "vivarium-public-health",
+    "vivarium-cluster-tools",
+    "vivarium-inputs",
+    "vivarium-gbd-mapping",
+    "vivarium-build-utils",
+]
+
+
+def context_key(pypi_name):
+    """cookiecutter.json version-key for a PyPI package name."""
+    return f"{pypi_name.replace('-', '_')}_version"
 
 
 def get_latest_version(package_name):
@@ -38,7 +45,7 @@ def main():
     # developer added a dep to PACKAGES but forgot to wire it into
     # cookiecutter.json + the templates.
     json_version_keys = {k for k in context if k.endswith("_version")}
-    pkg_keys = set(PACKAGES)
+    pkg_keys = {context_key(name) for name in PACKAGES}
     if json_version_keys != pkg_keys:
         parts = []
         if json_version_keys - pkg_keys:
@@ -55,8 +62,8 @@ def main():
 
     context["current_year"] = str(datetime.now().year)
 
-    for context_key, pypi_name in PACKAGES.items():
-        context[context_key] = get_latest_version(pypi_name)
+    for pypi_name in PACKAGES:
+        context[context_key(pypi_name)] = get_latest_version(pypi_name)
 
     with open(context_file, "w") as file:
         json.dump(context, file, indent=4)
