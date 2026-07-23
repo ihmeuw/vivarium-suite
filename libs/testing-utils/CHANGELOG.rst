@@ -1,3 +1,8 @@
+**0.7.7 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
 **0.7.6 - 07/16/26**
 
 - Remove duplicated scenario level filter
