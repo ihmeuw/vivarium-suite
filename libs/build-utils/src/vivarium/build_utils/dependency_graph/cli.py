@@ -19,7 +19,6 @@ from .loading import load_libs
 from .models import DependencyConflictError, DependencyCycleError, Lib
 from .release import get_release_matrix
 
-
 CANONICAL_PYTHON_VERSION = "3.11"
 
 

@@ -1,0 +1,63 @@
+# Prepare a PR for the merge queue the moment its author clicks "Merge when ready"
+# (which enables auto-merge and fires the auto_merge_enabled event): squash the
+# branch (unless protected) and correct the CHANGELOG release date, then push.
+# Auto-merge stays armed across this push - provided branch protection does NOT
+# "dismiss stale approvals on push" - and enqueues the squashed commit once its
+# required checks pass.
+#
+# The push uses a GitHub App token (not GITHUB_TOKEN) so the squashed commit
+# re-triggers CI - a GITHUB_TOKEN push does not start new workflow runs.
+#
+# Alternative trigger: a manual `merge-prep` label (`types: [labeled]` + a label
+# check + a label-removal step). Switch to that if the repo ever enables "dismiss
+# stale approvals on push", which would otherwise clear the approval on this push
+# and stall auto-merge.
+name: Merge Prep
+
+on:
+  pull_request:
+    types: [auto_merge_enabled]
+
+concurrency:
+  group: merge-prep-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  merge-prep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.MERGE_PREP_APP_ID }}
+          private-key: ${{ secrets.MERGE_PREP_APP_PRIVATE_KEY }}
+
+      - name: Checkout the PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Squash and correct CHANGELOG date
+        env:
+          BRANCH: ${{ github.head_ref }}
+          MESSAGE: ${{ github.event.pull_request.title }}
+          # merge_prep.py has no third-party deps, so a source path is enough.
+          PYTHONPATH: libs/build-utils/src
+        run: bash libs/build-utils/resources/scripts/merge_prep.sh
+      # No "enable auto-merge" step: auto-merge is already on (it's what triggered
+      # this run) and stays armed across the push, so it enqueues the squashed
+      # commit once CI is green. Re-enabling it with the App token would re-fire
+      # auto_merge_enabled and loop.

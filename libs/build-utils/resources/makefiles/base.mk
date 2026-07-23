@@ -222,6 +222,11 @@ test-docs: # Test documentation examples
 		echo "No 'docs/' folder found - skipping."; \
 	fi
 
+.PHONY: merge-prep
+merge-prep: # Squash the current branch (unless protected) and correct CHANGELOG dates for the merge queue
+    # Run locally before clicking "Merge when ready"; the merge-prep workflow runs the same script on the merge-prep label.
+	@bash $(UTILS_DIR)resources/scripts/merge_prep.sh
+
 .PHONY: validate-tag
 validate-tag: # Validate that current git tag matches CHANGELOG and is valid semver
     # This is intended to be used only by github deploy workflows
