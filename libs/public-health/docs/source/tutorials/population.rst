@@ -882,9 +882,9 @@ Fertility configuration summary
      - ``covariate.live_births_by_sex.estimate``,
        ``population.structure`` (defaults)
      - Requires ``initialization_age_min == 0``. Supports
-       ``data_sources`` overrides (DataFrame, callable, data key).
+       ``data_sources`` overrides (DataFrame, callable, or data key).
    * - ``FertilityAgeSpecificRates``
      - ``fertility_age_specific_rates.data_sources.age_specific_fertility_rate``
      - ``covariate.age_specific_fertility_rate.estimate`` (default)
-     - Supports ``data_sources`` overrides (scalar, DataFrame, callable).
-       Tracks parent-child relationships.
+     - Supports ``data_sources`` overrides (scalar, DataFrame, callable, or
+       data key). Tracks parent-child relationships.

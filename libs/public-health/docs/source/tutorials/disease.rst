@@ -108,6 +108,7 @@ Disease components support a ``data_sources`` configuration pattern that lets
 you supply each measure as a:
 
 - **Scalar** (int or float) - broadcast a constant value to all simulants.
+- **DataFrame** - use the DataFrame directly.
 - **Callable** - call the function at setup time to produce the data.
 - **Data key** (string) - load the measure from the artifact at that key.
 
@@ -175,8 +176,9 @@ For the full list of data keys and the column layout each one expects, see
      - ``cause_specific_mortality_rate=`` or
        ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
 
-Any measure can be supplied as a scalar, ``DataFrame``, or callable through its
-``data_sources`` override (or the constructor argument shown above); the
+Any measure can be supplied as a scalar, ``DataFrame``, callable, or artifact
+key (string) through its ``data_sources`` override (or the constructor argument
+shown above); the
 **Default data key** column only lists what each measure resolves to when
 nothing is supplied. Most default to an artifact key, but ``birth_prevalence``
 (and ``dwell_time``) have no artifact key and default to the scalar ``0.0``, so
@@ -239,8 +241,8 @@ Default configuration
    expressed in YAML.
 
 The default loads from the artifact at
-``cause.{cause}.cause_specific_mortality_rate``. Supply a scalar, callable, or
-data key instead - through the configuration (as the factory examples below
+``cause.{cause}.cause_specific_mortality_rate``. Supply a scalar, ``DataFrame``,
+callable, or data key instead, through the configuration (as the factory examples below
 do) or, when constructing a :class:`~vivarium.public_health.disease.model.DiseaseModel`
 directly, via its ``cause_specific_mortality_rate`` argument (as the
 from-scratch examples do).
