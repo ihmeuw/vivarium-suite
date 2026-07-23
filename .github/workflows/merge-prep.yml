@@ -61,3 +61,13 @@ jobs:
       # this run) and stays armed across the push, so it enqueues the squashed
       # commit once CI is green. Re-enabling it with the App token would re-fire
       # auto_merge_enabled and loop.
+
+      - name: Disable auto-merge if prep failed
+        # merge-prep can't be a required check (it doesn't run on the final squashed
+        # commit), so a failure wouldn't otherwise block the merge. Turn auto-merge
+        # back off so an un-prepped branch can't silently enqueue; the author fixes
+        # the failure and clicks "Merge when ready" again to re-run.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh pr merge --disable-auto "${{ github.event.pull_request.number }}"
