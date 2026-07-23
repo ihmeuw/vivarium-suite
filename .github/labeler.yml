@@ -50,9 +50,9 @@ risk-distributions:
   - changed-files:
     - any-glob-to-any-file: 'libs/risk-distributions/**'
 
-testing-utils:
+pytest-vivarium:
   - changed-files:
-    - any-glob-to-any-file: 'libs/testing-utils/**'
+    - any-glob-to-any-file: 'libs/pytest-vivarium/**'
 
 ai-tools:
   - changed-files:

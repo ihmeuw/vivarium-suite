@@ -1,0 +1,4 @@
+# Add "py:class <target>" entries here for cross-references that Sphinx's
+# nitpicky mode cannot resolve. Empty for now: these docs are narrative-only,
+# so no autodoc-generated type references need suppressing. Populate this when
+# the package starts auto-documenting its API.

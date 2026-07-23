@@ -45,7 +45,7 @@ dependencies = [
 cluster = ["jobmon_installer_ihme"]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils>=0.3.4",
+    "pytest-vivarium",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]"]
 interactive = ["vivarium-dependencies[interactive]"]
