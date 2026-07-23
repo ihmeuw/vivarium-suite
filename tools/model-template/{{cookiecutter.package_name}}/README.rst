@@ -97,7 +97,7 @@ The model specification file is located at ``src/{{ cookiecutter.package_name }}
 It is a description of the Vivarium model in a `YAML <https://en.wikipedia.org/wiki/YAML>`__ format.
 You can edit this file to modify the simulation that runs.
 For more about this, see the documentation at
-https://vivarium.readthedocs.io/en/latest/concepts/model_specification/index.html
+https://vivarium-engine.readthedocs.io/en/latest/concepts/model_specification/index.html
 
 With the simulation environment active, you can run a single simulation (1 draw, 1 seed, and 1 scenario) by, e.g.::
 
@@ -105,8 +105,8 @@ With the simulation environment active, you can run a single simulation (1 draw,
 
 The ``-v`` flag will log verbosely, so you will get log messages every time
 step. For more ways to run simulations, see the tutorials at
-https://vivarium.readthedocs.io/en/latest/tutorials/running_a_simulation/index.html
-and https://vivarium.readthedocs.io/en/latest/tutorials/exploration.html
+https://vivarium-engine.readthedocs.io/en/latest/tutorials/running_a_simulation/index.html
+and https://vivarium-engine.readthedocs.io/en/latest/tutorials/exploration.html
 
 **If you are on the IHME cluster**, you can also run simulations of multiple draws, seeds, and scenarios in parallel across nodes::
 

@@ -34,4 +34,4 @@ we will additionally create the following directory:
   This directory contains all input data used to run the simulations.
   You can open these files and examine the input data using the Vivarium
   artifact tools.
-  A tutorial can be found at https://vivarium.readthedocs.io/en/latest/tutorials/artifact.html#reading-data
+  A tutorial can be found at https://vivarium-artifact.readthedocs.io/en/latest/tutorials/artifact.html#reading-data

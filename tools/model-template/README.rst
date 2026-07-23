@@ -1,10 +1,10 @@
-==========================
-Vivarium Research Template
-==========================
+=======================
+Vivarium Model Template
+=======================
 
-Template for producing research repositories for use with
-`vivarium <https://github.com/ihmeuw/vivarium>`_ and
-`vivarium_public_health <https://github.com/ihmeuw/vivarium_public_health>_`.
+Cookiecutter template for producing research model repositories that use the
+`vivarium-suite <https://github.com/ihmeuw/vivarium-suite>`_ framework
+(``vivarium-engine`` + ``vivarium-public-health`` etc.).
 
 .. contents::
    :depth: 1
@@ -13,23 +13,27 @@ Template for producing research repositories for use with
 Usage
 -----
 
-A new github repository can be created using this template by running:
+Create a new model repository from this template by running:
 
-   ``> cookiecutter git@githubcom:ihmeuw/vivarium_research_template.git``
+   ``> cookiecutter gh:ihmeuw/vivarium-suite --directory tools/model-template``
 
-Complete instructions for setting up a new github model repository can be found
+Complete instructions for setting up a new model repository can be found
 `on the hub <https://hub.ihme.washington.edu/display/SSE/Creating+A+New+Model+Repository>`_.
 
 Development
 -----------
 
-First, we recommend creating a conda environment or virtualenv to isolate your development environment.
-Then install the dependencies with ``pip install -r requirements.txt``.
-To test out your changes, you can run ``cookiecutter <repo_dir>`` where repo_dir is the path to your clone of this repository.
-That command will create the instance of the template in the current directory.
+To iterate on the template itself:
+
+1. Create a conda environment or virtualenv to isolate your development environment.
+2. Install the dependencies with ``pip install -r requirements.txt``.
+3. To test out your changes, run ``cookiecutter <path>`` where ``<path>`` is the
+   path to your local ``tools/model-template/`` directory. That command creates
+   an instance of the template in the current working directory.
 
 Things for the ``Vivarium Developers`` to keep an eye on:
 
-- ``model_specifications/{{cookiecutter.package_name}}.yaml``
+- ``{{cookiecutter.package_name}}/src/{{cookiecutter.package_name}}/model_specifications/model_spec.yaml``
 
-  Ensure the components and configuration keys supplied are kept up to date.
+  Ensure the components and configuration keys supplied are kept up to date
+  with the current ``vivarium-engine`` / ``vivarium-public-health`` releases.

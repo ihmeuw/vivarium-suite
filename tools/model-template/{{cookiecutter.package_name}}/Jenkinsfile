@@ -1,7 +1,8 @@
 /* This Jenkinsfile simply loads the `reusable_pipeline` pipeline from the
-vivariu_build_utils repository (https://github.com/ihmeuw/vivarium_build_utils).
+vivarium-build-utils package, which lives at ``libs/build-utils/`` inside the
+``ihmeuw/vivarium-suite`` monorepo (https://github.com/ihmeuw/vivarium-suite).
 
-vivarium_build_utils is loaded as a Jenkins shared library 
+vivarium-build-utils is loaded as a Jenkins shared library
 (https://www.jenkins.io/doc/book/pipeline/shared-libraries/).
 Jenkins shared library convention dictates that importable modules must be stored
 in the 'vars' folder.
@@ -20,7 +21,7 @@ Jenkins shared libraries can be configured in the Jenkins UI:
 Note that updating the shared repo will take affect on the next pipeline invocation.
 */ 
 
-// Load the get_vbu_version function from vivarium_build_utils/bootstrap/
+// Load the get_vbu_version function from build-utils/bootstrap/
 // (the directory to load from is defined in the Jenkins shared library configuration)
 @Library("get_vbu_version@main") _
 
@@ -35,5 +36,5 @@ reusable_pipeline(
       'main'
     ],
     skip_doc_build: true,
-    upstream_repos: ['vivarium', 'vivarium_public_health', 'gbd_mapping', 'vivarium_cluster_tools', 'vivarium_inputs'],
+    upstream_repos: ['vivarium-suite', 'vivarium_inputs'],
 )

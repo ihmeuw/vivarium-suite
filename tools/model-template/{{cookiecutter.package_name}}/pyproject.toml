@@ -1,8 +1,58 @@
 [build-system]
-requires = ["packaging", "setuptools"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{cookiecutter.package_name}}"
+description = "{{cookiecutter.package_description}}"
+readme = "README.rst"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+dependencies = [
+    "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
+    "vivarium-build-utils>={{cookiecutter.vivarium_build_utils_version}}",
+    "vivarium-gbd-mapping>={{cookiecutter.gbd_mapping_version}}",
+    "vivarium-engine>={{cookiecutter.vivarium_engine_version}}",
+    "vivarium-public-health>={{cookiecutter.vivarium_public_health_version}}",
+    "jinja2",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+test = ["vivarium-dependencies[pytest]"]
+cluster = ["vivarium-cluster-tools>={{cookiecutter.vivarium_cluster_tools_version}}"]
+data = [
+    "vivarium_inputs>={{cookiecutter.vivarium_inputs_version}}",
+    "{{cookiecutter.package_name}}[cluster]",
+]
+interactive = ["vivarium-dependencies[interactive]"]
+lint = ["vivarium-dependencies[lint]"]
+dev = ["{{cookiecutter.package_name}}[test,cluster,interactive,lint]"]
+
+[project.urls]
+Homepage = "{{cookiecutter.package_url}}"
+
+[project.scripts]
+make_artifacts = "{{cookiecutter.package_name}}.tools.cli:make_artifacts"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"{{cookiecutter.package_name}}" = ["**/*.yaml", "**/*.ipynb"]
+
+[tool.setuptools_scm]
+write_to = "src/{{cookiecutter.package_name}}/_version.py"
+write_to_template = '__version__ = "{version}"\n'
+tag_regex = '^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
+fallback_version = "0.0.0+no-git-tag"
 
 [tool.black]
-line_length = 94
+line-length = 94
 
 [tool.isort]
 profile = "black"
+line_length = 94
+multi_line_output = 3
