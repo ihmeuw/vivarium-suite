@@ -216,4 +216,7 @@ def format_call_data(
         call_data = pd.Series(call_data, copy=True)
         parameters = parameters.reindex(call_data.index, method="nearest")
 
-    return call_data, parameters
+    # float: the pdf/ppf pre-processors write transformed (float) values back
+    # into this series, which raises on integer input under pandas 3
+    # (upcasting removed)
+    return call_data.astype(float), parameters

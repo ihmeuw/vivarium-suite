@@ -1,9 +1,8 @@
 """Smoke tests for the ``vivarium-fuzzy-checker`` distribution."""
 import inspect
 
-from packaging.version import Version
-
 import vivarium.fuzzy_checker
+from packaging.version import Version
 
 
 def test_version_resolves_to_installed_distribution() -> None:

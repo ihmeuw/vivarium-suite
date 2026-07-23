@@ -1,3 +1,8 @@
+**1.0.8 - 07/23/26**
+
+- Run pandas >=2.1 test suites with copy-on-write and ``future.infer_string``
+  enabled to exercise pandas 3 semantics ahead of the unpin (MIC-6773)
+
 **1.0.7 - 07/14/26**
 
 - Update stale references for monorepo libraries

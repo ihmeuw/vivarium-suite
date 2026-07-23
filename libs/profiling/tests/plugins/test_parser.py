@@ -1,6 +1,10 @@
 import pytest
 from vivarium.config_tree import ConfigTree
 from vivarium.engine.interface.interactive import InteractiveContext
+from vivarium.profiling.plugins.parser import (
+    MultiComponentParser,
+    MultiComponentParsingErrors,
+)
 from vivarium.public_health.disease import DiseaseModel
 from vivarium.public_health.results import DiseaseObserver
 from vivarium.public_health.results.causal_factor import CategoricalRiskObserver
@@ -8,10 +12,6 @@ from vivarium.public_health.risks.base_risk import Risk
 from vivarium.public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
 
 from tests.conftest import IS_ON_SLURM, TEST_ARTIFACT_PATH
-from vivarium.profiling.plugins.parser import (
-    MultiComponentParser,
-    MultiComponentParsingErrors,
-)
 
 
 def test_multi_component_parser():

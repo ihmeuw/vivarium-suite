@@ -1,3 +1,10 @@
+**3.1.8 - 07/23/26**
+
+- Support pandas 3 (MIC-6773): cast ensemble weights and distribution call data
+  to float before writing transformed values into them (pandas 3 removed silent
+  integer upcasting on setitem), and run pandas >=2.1 test suites with
+  copy-on-write and ``future.infer_string`` enabled
+
 **3.1.7 - 07/14/26**
 
 - Update stale references for monorepo libraries

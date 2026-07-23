@@ -1,3 +1,8 @@
+**0.2.1 - 07/23/26**
+
+- Run pandas >=2.1 test suites with copy-on-write and ``future.infer_string``
+  enabled to exercise pandas 3 semantics ahead of the unpin (MIC-6773)
+
 **0.2.0 - 07/21/26**
 
 - Define classes in ``fuzzy_checker`` and ``data_structures`` modules instead of ``__init__``

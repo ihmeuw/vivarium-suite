@@ -7,7 +7,6 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import pytest
-
 from vivarium.risk_distributions.formatting import (
     Parameter,
     cast_to_series,
