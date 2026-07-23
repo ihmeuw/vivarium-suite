@@ -3,7 +3,6 @@ import os
 from datetime import datetime
 
 import requests
-from packaging.version import parse
 
 # Map cookiecutter.json version key -> PyPI distribution name.
 PACKAGES = {
@@ -46,12 +45,6 @@ def main():
 
     for context_key, pypi_name in PACKAGES.items():
         context[context_key] = get_latest_version(pypi_name)
-
-    # Expose next-major of vivarium-build-utils so the generated pyproject.toml
-    # can render a bounded pin (>=X.Y.Z,<(X+1).0.0) at template time. Keeps the
-    # pin logic in one place and eliminates the need for a post-gen fixup.
-    vbu = context["vivarium_build_utils_version"]
-    context["vivarium_build_utils_next_major_version"] = str(parse(vbu).major + 1)
 
     with open(context_file, "w") as file:
         json.dump(context, file, indent=4)

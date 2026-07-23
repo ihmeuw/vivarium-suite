@@ -12,7 +12,7 @@ authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 dependencies = [
     "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
-    "vivarium-build-utils>={{cookiecutter.vivarium_build_utils_version}},<{{cookiecutter.vivarium_build_utils_next_major_version}}.0.0",
+    "vivarium-build-utils>={{cookiecutter.vivarium_build_utils_version}},<{{ (cookiecutter.vivarium_build_utils_version.split('.')[0] | int) + 1 }}.0.0",
     "vivarium-gbd-mapping>={{cookiecutter.vivarium_gbd_mapping_version}}",
     "vivarium-engine>={{cookiecutter.vivarium_engine_version}}",
     "vivarium-public-health>={{cookiecutter.vivarium_public_health_version}}",
