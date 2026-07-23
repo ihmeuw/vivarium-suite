@@ -17,6 +17,7 @@ import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, overload
 
+import numpy as np
 import pandas as pd
 
 import vivarium.engine.framework.population.utilities as pop_utils
@@ -592,6 +593,32 @@ class PopulationView:
         return update
 
     @staticmethod
+    def _dtypes_compatible(
+        update_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
+        existing_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
+    ) -> bool:
+        """Check whether two column dtypes can represent the same data.
+
+        String columns infer as ``object`` under pandas 2 but ``str`` under
+        pandas 3, and datetime columns can differ only in unit (pandas 3
+        infers microseconds where pandas 2 inferred nanoseconds). Neither
+        difference indicates a component corrupting the population table.
+        """
+        if update_dtype == existing_dtype:
+            return True
+        # Array-level dtypes wrap plain numpy dtypes in NumpyEADtype, which
+        # is_string_dtype does not recognize; unwrap before checking.
+        update_dtype = getattr(update_dtype, "numpy_dtype", update_dtype)
+        existing_dtype = getattr(existing_dtype, "numpy_dtype", existing_dtype)
+        if getattr(update_dtype, "kind", None) == "M" and (
+            getattr(existing_dtype, "kind", None) == "M"
+        ):
+            return True
+        return pd.api.types.is_string_dtype(update_dtype) and pd.api.types.is_string_dtype(
+            existing_dtype
+        )
+
+    @staticmethod
     def _update_column_and_ensure_dtype(
         update: pd.Series[Any],
         existing: pd.Series[Any],
@@ -633,21 +660,28 @@ class PopulationView:
         new_values = existing.array.copy()
         update_index_positional = existing.index.get_indexer(update.index)  # type: ignore [no-untyped-call]
 
-        # Assumes the update index labels can be interpreted as an array position.
-        new_values[update_index_positional] = update_values
-
         unmatched_dtypes = new_values.dtype != update_values.dtype
         if unmatched_dtypes and not adding_simulants:
-            # This happens when the population is being grown because extending
-            # the index forces columns that don't have a natural null type
-            # to become 'object'
-            raise PopulationError(
-                "A component is corrupting the population table by modifying the dtype of "
-                f"the {update.name} column from {existing.dtype} to {update.dtype}."
-            )
+            # Mismatches also arise while the population is being grown, because
+            # extending the index forces columns that don't have a natural null
+            # type to become 'object' — hence the adding_simulants exemption.
+            if not PopulationView._dtypes_compatible(update_values.dtype, new_values.dtype):
+                raise PopulationError(
+                    "A component is corrupting the population table by modifying the dtype of "
+                    f"the {update.name} column from {existing.dtype} to {update.dtype}."
+                )
+            # Compatible-but-unequal dtypes (str- vs object-backed strings,
+            # datetime64 unit differences): the existing column's dtype wins so
+            # the population table's dtypes stay stable over the simulation.
+            update_values = update_values.astype(new_values.dtype)
+
+        # Assumes the update index labels can be interpreted as an array position.
+        new_values[update_index_positional] = update_values
         new_values = new_values.astype(update_values.dtype)
+        # The explicit dtype stops the constructor from re-inferring object
+        # arrays of strings as the str dtype under pandas 3.
         new_data: pd.Series[Any] = pd.Series(
-            new_values, index=existing.index, name=existing.name
+            new_values, index=existing.index, name=existing.name, dtype=new_values.dtype
         )
         return new_data
 

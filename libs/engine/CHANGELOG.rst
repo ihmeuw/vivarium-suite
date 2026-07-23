@@ -1,3 +1,12 @@
+**5.6.0 - 07/23/26**
+
+- Support pandas 3 (MIC-6773): treat str- vs object-backed string columns and
+  datetime64 unit differences as compatible in the population-table dtype guard,
+  with the existing column's dtype winning; pass ``observed=True`` when grouping
+  interpolation-validation data; run pandas >=2.1 test suites with copy-on-write
+  and ``future.infer_string`` enabled; make test aggregators and dtype assertions
+  pandas-version-agnostic. Suite verified green on pandas 2.3.3 and 3.0.3.
+
 **5.5.2 - 07/21/26**
 
 - Replace ``FuzzyChecker.fuzzy_assert_proportion()`` calls with ``FuzzyChecker.assert_proportion()``
