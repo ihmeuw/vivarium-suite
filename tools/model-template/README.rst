@@ -15,7 +15,9 @@ Usage
 
 Create a new model repository from this template by running:
 
-   ``> cookiecutter gh:ihmeuw/vivarium-suite --directory tools/model-template``
+.. code-block:: bash
+
+   cookiecutter gh:ihmeuw/vivarium-suite --directory tools/model-template
 
 Complete instructions for setting up a new model repository can be found
 `on the hub <https://hub.ihme.washington.edu/display/SSE/Creating+A+New+Model+Repository>`_.
@@ -26,10 +28,19 @@ Development
 To iterate on the template itself:
 
 1. Create a conda environment or virtualenv to isolate your development environment.
-2. Install the dependencies with ``pip install -r requirements.txt``.
-3. To test out your changes, run ``cookiecutter <path>`` where ``<path>`` is the
-   path to your local ``tools/model-template/`` directory. That command creates
-   an instance of the template in the current working directory.
+2. Install the dependencies:
+
+   .. code-block:: bash
+
+      pip install -r requirements.txt
+
+3. To test out your changes, run the following, where ``<path>`` is the path to
+   your local ``tools/model-template/`` directory. That command creates an
+   instance of the template in the current working directory.
+
+   .. code-block:: bash
+
+      cookiecutter <path>
 
 Things for the ``Vivarium Developers`` to keep an eye on:
 
