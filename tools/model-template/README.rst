@@ -17,7 +17,7 @@ Create a new model repository from this template by running:
 
 .. code-block:: bash
 
-   cookiecutter gh:ihmeuw/vivarium-suite --directory tools/model-template
+   cookiecutter git@github.com:ihmeuw/vivarium-suite.git --directory tools/model-template
 
 Complete instructions for setting up a new model repository can be found
 `on the hub <https://hub.ihme.washington.edu/display/SSE/Creating+A+New+Model+Repository>`_.
