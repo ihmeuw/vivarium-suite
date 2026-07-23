@@ -3,18 +3,18 @@
   "owner": {
     "name": "IHME"
   },
-  "description": "Marketplace for the IHME Simulation Science Team ai-tools plugins: viv-public (generic developer workflows for any IHME team) and viv (SimSci/vivarium-specific workflows).",
+  "description": "Marketplace for the IHME Simulation Science Team ai-tools plugins: simsci (generic developer workflows for any IHME team) and simsci-internal (SimSci/vivarium-specific workflows).",
   "allowCrossMarketplaceDependenciesOn": ["claude-plugins-official"],
   "plugins": [
     {
-      "name": "viv-public",
+      "name": "simsci",
       "source": "./tools/ai-tools-public",
       "description": "Generic AI developer workflows for any IHME team, any repo: multi-agent code review, git rescue, commit splitting, type hinting, regression debugging, change propagation, workflow assessment, and a guided TDD loop."
     },
     {
-      "name": "viv",
+      "name": "simsci-internal",
       "source": "./tools/ai-tools",
-      "description": "SimSci/vivarium-specific workflows (model development, team conventions, vivarium references). Depends on viv-public — installing viv brings in both."
+      "description": "SimSci/vivarium-specific workflows (model development, team conventions, vivarium references). Depends on simsci — installing simsci-internal brings in both."
     }
   ]
 }

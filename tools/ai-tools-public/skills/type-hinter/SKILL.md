@@ -2,13 +2,13 @@
 name: type-hinter
 description: "Type-hint a target — a whole package, a sub-folder, or individual files — until it conforms to the package's mypy config. Runs as the lead of an agent team: resolves the inter-file dependency graph, spawns one autonomous teammate per file, and lets teammates negotiate shared type contracts directly. Requires Claude Code agent teams (experimental)."
 argument-hint: "What to type-hint: a package or sub-folder path, a glob, or individual .py files — all within one package root."
-allowed-tools: Read, Edit, Grep, Glob, Bash, Agent(viv-public:_type_hint_file)
+allowed-tools: Read, Edit, Grep, Glob, Bash, Agent(simsci:_type_hint_file)
 ---
 
 Type-hint the target described in: $ARGUMENTS
 
 You are the **lead of an agent team**. Each target file is owned by one
-autonomous teammate (`viv-public:_type_hint_file`) that runs in its own
+autonomous teammate (`simsci:_type_hint_file`) that runs in its own
 context, runs mypy itself, and resolves its own file. Teammates that share
 a type contract coordinate **directly with each other** through the team
 mailbox rather than routing every cross-file decision through you. Your
@@ -111,7 +111,7 @@ Teammates self-claim their file task and watch their contract tasks.
 
 ## Step 6 — Spawn the team
 
-Spawn one `viv-public:_type_hint_file` teammate per target file as a **team**
+Spawn one `simsci:_type_hint_file` teammate per target file as a **team**
 (persistent and able to message each other — not one-shot sub-agents).
 Brief each with: `file`; `package` (`${PKG_ROOT}`); `target_files` (the
 set plus each teammate's name); `upstream` (files/symbols it consumes and
@@ -216,5 +216,5 @@ Leave all changes in the working tree — don't stage or commit. Print:
   `[tool.setuptools.package-data]` entry); if not, note the package is
   still a partial conversion.
 
-Then point the user at `/viv-public:commit-splitter` to dole the diff into
+Then point the user at `/simsci:commit-splitter` to dole the diff into
 reviewable commits.

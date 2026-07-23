@@ -27,7 +27,7 @@ Refuse to proceed if the working tree is clean. If the user is mid-rebase, mid-m
 
 ### 2. Propose a grouping (subagent)
 
-Delegate the grouping to the `viv-public:_split_proposer` specialist agent. It is constrained to read-only operation on the working tree and returns a structured plan — commit groups (subject, rationale, files, dependencies), a PR partition, and any inseparable hunks. Keeping the file-by-file reading inside the subagent keeps the main context clean.
+Delegate the grouping to the `simsci:_split_proposer` specialist agent. It is constrained to read-only operation on the working tree and returns a structured plan — commit groups (subject, rationale, files, dependencies), a PR partition, and any inseparable hunks. Keeping the file-by-file reading inside the subagent keeps the main context clean.
 
 The skill does not need to repeat the agent's prompt — the agent file owns it. Invoke it with a short brief that names the repo and any constraints the user has already stated (e.g. "user wants two PRs", "stay under 300 lines per PR"). If no constraints are given, the agent defaults to a single PR with multiple commits unless scope forces otherwise.
 

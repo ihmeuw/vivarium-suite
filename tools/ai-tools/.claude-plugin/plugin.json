@@ -1,10 +1,10 @@
 {
-    "name": "viv",
-    "displayName": "Vivarium AI Tools",
-    "description": "Custom agent workflows for vivarium development.",
+    "name": "simsci-internal",
+    "displayName": "Simulation Science Internal AI Tools",
+    "description": "SimSci-internal agent workflows for vivarium development; depends on the simsci plugin for the generic tooling.",
     "publisher": "ihmeuw",
     "dependencies": [
-        "viv-public",
+        "simsci",
         { "name": "slack", "marketplace": "claude-plugins-official" },
         { "name": "github", "marketplace": "claude-plugins-official" }
     ]

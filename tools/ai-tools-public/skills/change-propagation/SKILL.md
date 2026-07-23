@@ -17,7 +17,7 @@ reference and the source's own identity (package name, per-package config
 values, paths, version) is rewritten, not necessarily copied verbatim.
 
 You are the **lead**. You resolve the reference and the target list, fan out
-one `viv-public:_propagate_target` worker per target, converge their
+one `simsci:_propagate_target` worker per target, converge their
 proposals into per-repo branches, gate everything on one explicit approval,
 and file the PRs.
 
@@ -49,7 +49,7 @@ a misread reference or target before any work fans out.
 
 ### 2. Fan out one worker per target
 
-Spawn one `viv-public:_propagate_target` worker per target, **in parallel**.
+Spawn one `simsci:_propagate_target` worker per target, **in parallel**.
 Brief each worker with: its single `target` (its repository and resolved
 path within it), the `reference_files` (path + content), the
 `source_package` note, the `intent`, the `check_command` when you know it,

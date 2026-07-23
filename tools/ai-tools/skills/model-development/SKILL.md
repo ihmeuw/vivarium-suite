@@ -11,10 +11,10 @@ argument-hint:
   "A MIC ticket key, a vivarium-research doc/section, or a description of the
   model iteration to build."
 allowed-tools:
-  Read, Grep, Glob, Bash, Edit, Write, Agent(viv:_model_implementer,
-  viv:_vv_writer, viv-public:_validator, viv-public:_review_maintainability,
-  viv-public:_review_dry, viv-public:_review_design, viv-public:_review_tests,
-  viv-public:_review_documentation)
+  Read, Grep, Glob, Bash, Edit, Write, Agent(simsci-internal:_model_implementer,
+  simsci-internal:_vv_writer, simsci:_validator, simsci:_review_maintainability,
+  simsci:_review_dry, simsci:_review_design, simsci:_review_tests,
+  simsci:_review_documentation)
 ---
 
 Run an end-to-end model-development loop for: $ARGUMENTS
@@ -25,14 +25,14 @@ touches, plus the quantitative expectations harvested from the research doc.
 From that single contract you drive a **staged build** ordered by the model's
 data-dependency chain (artifact → component → observer, skipping layers the
 change doesn't touch) and, **in parallel**, a verification author that is blind
-to the implementation. You fan out `viv-public:_validator` and run the shared
-`viv-public:_review-core` skill for review. Work the phases in order; keep the user in the
+to the implementation. You fan out `simsci:_validator` and run the shared
+`simsci:_review-core` skill for review. Work the phases in order; keep the user in the
 loop at the plan, artifact-build, and PR gates.
 
 **Scope.** You own the model-repo code for this iteration and its verification —
 nothing else. Building or relocating the artifact is a user-gated hand-off (pause
 and ask); a change to a core/framework repo (`vivarium`, `vivarium_public_health`)
-is out of scope — surface it and stop, deferring to `/viv-public:framework-development`.
+is out of scope — surface it and stop, deferring to `/simsci:framework-development`.
 
 ## Control flow
 
@@ -47,7 +47,7 @@ build  = _model_implementer per layer    # Build: artifact -> [user gate: build 
 verify = _vv_writer                   # Verify author: blind to the build — InteractiveContext checks + notebook
 
 # Verify by running the simulation:
-run viv-public:_validator (existing suite) + new checks + local simulate + notebook  ->  traces
+run simsci:_validator (existing suite) + new checks + local simulate + notebook  ->  traces
     artifact unavailable  ->  "unverified — sim checks not run"   # never a false PASS
 
 # Critic loop, up to 3 rounds:
@@ -92,7 +92,7 @@ now rather than discovering it at verify time.
   - **Prerequisites** — anything the build depends on that this workflow won't
     produce: **new or changed artifact data** (you build/place it at the artifact
     gate) and any **core/framework change** (`vivarium`, `vivarium_public_health`
-    — land it first via `/viv-public:framework-development` or by hand). Name them here
+    — land it first via `/simsci:framework-development` or by hand). Name them here
     so they are arranged up front, not discovered mid-build.
   - **Per-layer change list** — for each touched layer, the specific keys,
     pipelines, state-table columns, and observer outputs to add or change, by
@@ -166,7 +166,7 @@ A runnable env and (for artifact-key changes) a built artifact are preconditions
 — if either is missing, checks that cannot be executed must be surfaced to
 the user.
 
-1. Spawn `viv-public:_validator` with the **model repo root** (the directory containing the
+1. Spawn `simsci:_validator` with the **model repo root** (the directory containing the
    Makefile — a model repo is a standalone repo, not a monorepo `libs/<pkg>`
    path), the env, and targets (`make test-*`, `make lint`, `make mypy` if the
    repo ships `py.typed`) for the repo's existing suite. It returns a compact
@@ -205,7 +205,7 @@ surface them to the user — do not proceed to review or finalize.**
 
 ## Review
 
-Invoke the `viv-public:_review-core` skill with the integrated diff, the changed-file list,
+Invoke the `simsci:_review-core` skill with the integrated diff, the changed-file list,
 and a one-line description of the iteration. Carry its findings into the critic-loop
 triage.
 
@@ -227,7 +227,7 @@ triage.
    left unaddressed.
 5. **Gate — approve the PR.** Without approval, stop and leave the branch in
    place.
-6. On approval, use the `viv-public:commit-splitter` skill to organize the work for review,
+6. On approval, use the `simsci:commit-splitter` skill to organize the work for review,
    then use `team-conventions` to push and `gh pr create` with the repo's PR
    template; report the URL(s) and offer the `#vivarium_dev` flag. **A multi-layer
    iteration ships as stacked per-layer PRs in data-dependency order (artifact ->

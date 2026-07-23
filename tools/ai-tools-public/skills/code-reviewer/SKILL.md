@@ -2,15 +2,15 @@
 name: code-reviewer
 description: "Parallel multi-agent code review across maintainability, DRY, design, tests, documentation, and functional correctness."
 argument-hint: "A pull request to review, or a description of the changes to review."
-allowed-tools: Read, Grep, Glob, Bash, Agent(viv-public:_review_maintainability, viv-public:_review_dry, viv-public:_review_design, viv-public:_review_tests, viv-public:_review_documentation, viv-public:_review_scorer)
+allowed-tools: Read, Grep, Glob, Bash, Agent(simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 ---
 
 Run a parallel multi-agent code review of: $ARGUMENTS
 
 This command gathers the review target, then hands it to the internal
-`viv-public:_review-core` skill (`skills/_review-core/SKILL.md`) for the fan-out. That
-fan-out runs in this main-session context — `viv-public:_review-core` invoked inline from
-here spawns the specialists directly, kept one level deep by design. `viv-public:_review-core` is the
+`simsci:_review-core` skill (`skills/_review-core/SKILL.md`) for the fan-out. That
+fan-out runs in this main-session context — `simsci:_review-core` invoked inline from
+here spawns the specialists directly, kept one level deep by design. `simsci:_review-core` is the
 single definition of the review, so it can be reused inline by other
 main-session commands without duplicating the fan-out.
 
@@ -29,13 +29,13 @@ description.
 
 ## Step 2 — Run the review
 
-Invoke the `viv-public:_review-core` skill, handing it the changed-file list, the diff
+Invoke the `simsci:_review-core` skill, handing it the changed-file list, the diff
 (or the salient slice), and a one-line description of the change (the PR
 title/body is the `<subject>`). It fans out to the five `_review_*`
 specialists, runs the functional-correctness pass, independently scores every
 finding for confidence (dropping anything below 50), synthesizes the survivors —
 each annotated with its confidence score — and returns the structured review.
-Present that review to the user as-is — `viv-public:_review-core` owns the output format and
+Present that review to the user as-is — `simsci:_review-core` owns the output format and
 the review constraints.
 
 ## Step 3 — Offer post-review triage (if a skill covers it)

@@ -1,24 +1,29 @@
 **0.24.0 - 07/15/26**
 
- - Split the plugin in two (MIC-7220): the generic tooling moves to the new
-   ``viv-public`` plugin (``tools/ai-tools-public``), which ``viv`` now declares
-   as a dependency — installing ``viv`` still installs everything, but the
-   moved entry points change namespace. Migration table:
+ - Split the plugin in two and rename both halves (MIC-7220): the generic
+   tooling moves to the new ``simsci`` plugin (``tools/ai-tools-public``), and
+   this plugin — formerly ``viv`` — is now ``simsci-internal`` and declares
+   ``simsci`` as a dependency. Installing ``simsci-internal`` still installs
+   everything, but every entry point changes namespace. Migration table:
 
-   - ``/viv:code-reviewer`` → ``/viv-public:code-reviewer``
-   - ``/viv:git-rescue`` → ``/viv-public:git-rescue``
-   - ``/viv:type-hinter`` → ``/viv-public:type-hinter``
-   - ``/viv:model-regression-debugger`` → ``/viv-public:regression-debugger``
-   - ``/viv:framework-development`` → ``/viv-public:framework-development``
+   - ``/viv:code-reviewer`` → ``/simsci:code-reviewer``
+   - ``/viv:git-rescue`` → ``/simsci:git-rescue``
+   - ``/viv:type-hinter`` → ``/simsci:type-hinter``
+   - ``/viv:model-regression-debugger`` → ``/simsci:regression-debugger``
+   - ``/viv:framework-development`` → ``/simsci:framework-development``
    - ``commit-splitter``, ``change-propagation``, ``workflow-assessment``, and
      ``_review-core`` skills (and their sub-agents, plus the ``_review_*``,
      ``_split_proposer``, ``_type_hint_file``, ``_diff_analyzer``,
      ``_hypothesis_tester``, ``_trace_extractor``, ``_propagate_target``,
      ``_feature_implementer``, ``_test_writer``, and ``_validator`` agents) now
-     live in ``viv-public``
+     live in ``simsci``
+   - every skill remaining in this plugin changes prefix ``/viv:`` →
+     ``/simsci-internal:`` (e.g. ``/viv:model-development`` →
+     ``/simsci-internal:model-development``)
  - Moved components are neutralized for any-team use; their deferrals to team
    skills (ticket-triage, team-conventions, design-doc, environments) are now
-   optional seams that resolve automatically when ``viv`` is installed
+   optional seams that resolve automatically when ``simsci-internal`` is
+   installed
  - Drop the unused ``skill-creator`` dependency
  - The five ``commands/*.md`` convert to ``skills/`` (the current plugin layout)
 

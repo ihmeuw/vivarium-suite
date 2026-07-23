@@ -1,20 +1,20 @@
-=================
-Vivarium AI Tools
-=================
+===========================================================
+Simulation Science Internal AI Tools (``simsci-internal``)
+===========================================================
 
-Vivarium AI Tools (``viv``) is a Claude Code plugin providing SimSci- and
+Simulation Science Internal AI Tools (``simsci-internal``) is a Claude Code plugin providing SimSci- and
 vivarium-specific agent workflows. The plugin lives under ``tools/ai-tools/``
 in the ``vivarium-suite`` monorepo and is published through the
 ``vivarium-ai-tools`` marketplace whose catalog
 (``.claude-plugin/marketplace.json``) lives at the monorepo root.
 
-``viv`` declares the ``viv-public`` plugin (``tools/ai-tools-public/``) as a
-dependency: installing ``viv`` automatically installs and enables the generic
+``simsci-internal`` declares the ``simsci`` plugin (``tools/ai-tools-public/``) as a
+dependency: installing ``simsci-internal`` automatically installs and enables the generic
 workflows too — multi-agent code review, git rescue, commit splitting, type
 hinting, regression debugging, change propagation, workflow assessment, and the
-framework-development TDD loop all live in ``viv-public`` under the
-``/viv-public:`` namespace (see that plugin's README). ``viv`` adds the
-team-specific layer on top, and ``viv-public``'s optional seams (branch and PR
+framework-development TDD loop all live in ``simsci`` under the
+``/simsci:`` namespace (see that plugin's README). ``simsci-internal`` adds the
+team-specific layer on top, and ``simsci``'s optional seams (branch and PR
 conventions, ticket filing, environment setup) resolve automatically to the
 team skills below when both plugins are enabled.
 
@@ -22,7 +22,7 @@ It includes:
 
 **Model Development**
 
-- ``/viv:model-development <ticket, research doc, or iteration description>`` — an
+- ``/simsci-internal:model-development <ticket, research doc, or iteration description>`` — an
   end-to-end iteration of a vivarium model concept (a cause, risk, intervention,
   or observer) in an existing model repo, driven from its vivarium-research
   documentation. The main session owns the **iteration plan** — the contract
@@ -35,7 +35,7 @@ It includes:
   notebook built from the plan alone. It then **runs the simulation** to verify
   (the repo's existing suite, the new checks, a local ``simulate`` run, and the
   notebook) and applies the same multi-lens review as
-  ``/viv-public:framework-development``. The verification is an internal loop for
+  ``/simsci:framework-development``. The verification is an internal loop for
   engineering confidence — not formal V&V — so its **traces** (notebook plots and
   tables) are posted to the PR, while the artifacts themselves stay out of the
   repo unless you ask to keep them. Gates the artifact build and the PR on
@@ -66,7 +66,7 @@ It includes:
   plan comment, a new Jira ticket, or a Confluence design doc; ships a
   browser-based Mermaid diagramming companion
 - ``ticket-triage`` — turn code-review findings (e.g. from
-  ``/viv-public:code-reviewer``) that are out of scope for the current PR into
+  ``/simsci:code-reviewer``) that are out of scope for the current PR into
   Jira ticket recommendations, deduplicated against the MIC backlog via the
   ``_duplicate_finder`` sub-agent.
 - ``repo-maintenance`` — audit both plugins' AI plaintext (skills, agents,
@@ -82,12 +82,12 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives unde
 ``tools/ai-tools/``:
 
 - ``<repo-root>/.claude-plugin/marketplace.json``: marketplace catalog listing
-  this plugin (``"source": "./tools/ai-tools"``) and ``viv-public``
+  this plugin (``"source": "./tools/ai-tools"``) and ``simsci``
   (``"source": "./tools/ai-tools-public"``). Claude Code requires the
   marketplace catalog at the repo root for
   ``/plugin marketplace add ihmeuw/vivarium-suite`` to find it.
 - ``tools/ai-tools/.claude-plugin/plugin.json``: plugin manifest, including the
-  ``viv-public`` dependency.
+  ``simsci`` dependency.
 - ``tools/ai-tools/agents/``: specialist sub-agents spawned by the skills.
 - ``tools/ai-tools/skills/``: Claude Code skills (workflow entry points and
   model-loaded reference material).
@@ -104,9 +104,9 @@ From GitHub:
 .. code-block:: shell
 
    /plugin marketplace add ihmeuw/vivarium-suite
-   /plugin install viv@vivarium-ai-tools
+   /plugin install simsci-internal@vivarium-ai-tools
 
-Installing ``viv`` resolves its dependencies automatically: ``viv-public``
+Installing ``simsci-internal`` resolves its dependencies automatically: ``simsci``
 (same marketplace) plus the ``slack`` and ``github`` plugins from the official
 marketplace. One install, everything enabled.
 
@@ -117,24 +117,24 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
 .. code-block:: shell
 
    /plugin marketplace add /path/to/vivarium-suite
-   /plugin install viv@vivarium-ai-tools
+   /plugin install simsci-internal@vivarium-ai-tools
 
-Once installed, the team-specific entry point is ``/viv:model-development``;
-the generic entry points (``/viv-public:code-reviewer``,
-``/viv-public:framework-development``, ``/viv-public:git-rescue``, and friends)
-come from the ``viv-public`` dependency. Cross-plugin references are always
-namespaced: ``viv``'s workflows spawn ``viv-public``'s sub-agents as
-``viv-public:<agent>``, and bare agent names do not resolve across plugins.
+Once installed, the team-specific entry point is ``/simsci-internal:model-development``;
+the generic entry points (``/simsci:code-reviewer``,
+``/simsci:framework-development``, ``/simsci:git-rescue``, and friends)
+come from the ``simsci`` dependency. Cross-plugin references are always
+namespaced: ``simsci-internal``'s workflows spawn ``simsci``'s sub-agents as
+``simsci:<agent>``, and bare agent names do not resolve across plugins.
 
 Delegation mechanism and security model
 =======================================
 
 The fan-out architecture (main-session orchestration, the shared
 ``_review-core`` review skill, model tiering, and per-agent tool grants) is
-documented in the ``viv-public`` README — most of the sub-agents now live
-there. ``/viv:model-development`` reuses that machinery inline: it spawns
-``viv-public:_validator`` and the ``viv-public:_review_*`` agents and invokes
-the ``viv-public:_review-core`` skill for its review phase.
+documented in the ``simsci`` README — most of the sub-agents now live
+there. ``/simsci-internal:model-development`` reuses that machinery inline: it spawns
+``simsci:_validator`` and the ``simsci:_review_*`` agents and invokes
+the ``simsci:_review-core`` skill for its review phase.
 
 The agents that ship in *this* plugin:
 
@@ -152,7 +152,7 @@ The agents that ship in *this* plugin:
   dispatched once per layer and working directly on the feature branch (the
   stages are sequential, so no worktree isolation is needed). ``_vv_writer``
   writes **the verification checks and notebook**, blind to the implementation. Both
-  are spawned only by the ``/viv:model-development`` skill.
+  are spawned only by the ``/simsci-internal:model-development`` skill.
 
-The recommended deny rules and sandbox baseline in the ``viv-public`` README
+The recommended deny rules and sandbox baseline in the ``simsci`` README
 apply to this plugin unchanged.

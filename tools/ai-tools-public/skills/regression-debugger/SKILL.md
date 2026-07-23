@@ -2,7 +2,7 @@
 name: regression-debugger
 description: "Trace a regression across repositories to identify the behavioral change causing it."
 argument-hint: "Describe the regression symptom, repos/branches involved, and any existing hypotheses."
-allowed-tools: Read, Grep, Glob, Bash, Agent(viv-public:_diff_analyzer, viv-public:_hypothesis_tester)
+allowed-tools: Read, Grep, Glob, Bash, Agent(simsci:_diff_analyzer, simsci:_hypothesis_tester)
 ---
 
 Investigate a regression described by: $ARGUMENTS
@@ -33,7 +33,7 @@ relevant repository.
 ## Phase 3 — Analyze the Diffs (parallel fan-out)
 
 For each repository with established good/bad refs, invoke a
-`viv-public:_diff_analyzer` sub-agent **in parallel** (one Agent call per repo, all
+`simsci:_diff_analyzer` sub-agent **in parallel** (one Agent call per repo, all
 in a single message). For each, provide:
 
 - The repo path
@@ -55,7 +55,7 @@ the code to find where old and new behavior diverge:
 ## Phase 5 — Form and Test Hypotheses (parallel fan-out)
 
 From the diff analyses and data flow tracing, formulate specific
-hypotheses. Then invoke a `viv-public:_hypothesis_tester` sub-agent **in parallel**
+hypotheses. Then invoke a `simsci:_hypothesis_tester` sub-agent **in parallel**
 for each hypothesis (one Agent call per hypothesis, all in a single
 message). For each, provide:
 

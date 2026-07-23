@@ -26,8 +26,8 @@ These are not built or released by the monorepo's CI/release workflows.
 
 | Directory | Purpose |
 |---|---|
-| `tools/ai-tools-public/` | Claude Code plugin (`viv-public`): generic AI developer workflows for any IHME team (code review, git rescue, type hinting, regression debugging, guided TDD) |
-| `tools/ai-tools/` | Claude Code plugin (`viv`): SimSci/vivarium-specific agent workflows (model development, team conventions, vivarium references); depends on `viv-public` |
+| `tools/ai-tools-public/` | Claude Code plugin (`simsci`): generic AI developer workflows for any IHME team (code review, git rescue, type hinting, regression debugging, guided TDD) |
+| `tools/ai-tools/` | Claude Code plugin (`simsci-internal`): SimSci/vivarium-specific agent workflows (model development, team conventions, vivarium references); depends on `simsci` |
 
 ## Local development
 

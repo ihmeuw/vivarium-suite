@@ -2,15 +2,15 @@
 name: framework-development
 description: "Guided design→implement→verify→PR loop for a well-scoped feature."
 argument-hint: "A ticket key, design doc link, or feature description."
-allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(viv-public:_test_writer, viv-public:_feature_implementer, viv-public:_validator, viv-public:_review_maintainability, viv-public:_review_dry, viv-public:_review_design, viv-public:_review_tests, viv-public:_review_documentation, viv-public:_review_scorer)
+allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(simsci:_test_writer, simsci:_feature_implementer, simsci:_validator, simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 ---
 
 Run an end-to-end feature development loop for: $ARGUMENTS
 
 You (the main session) own the design and the stubs, then drive a **black-box
-TDD** build: `viv-public:_test_writer` and `viv-public:_feature_implementer` produce the tests and the
-implementation in isolation, and you fan out `viv-public:_validator` and run the shared
-`/viv-public:_review-core` skill for review (it fans out the five `viv-public:_review_*`
+TDD** build: `simsci:_test_writer` and `simsci:_feature_implementer` produce the tests and the
+implementation in isolation, and you fan out `simsci:_validator` and run the shared
+`/simsci:_review-core` skill for review (it fans out the five `simsci:_review_*`
 specialists, then confidence-scores and filters their findings). Work the
 phases in order; keep the user in the loop at the design and PR gates.
 
@@ -22,7 +22,7 @@ The phases below are the canonical detail; this is the skeleton:
 setup                                # Phase 0: package, env, feature branch
 design  = brainstorm with user       # Phase 1: incl. scope-tightening; user-gated
 stubs   = author contract            # Phase 2: source + body-less test stubs; commit baseline
-build impl_wt, test_wt               # Phase 3: viv-public:_feature_implementer || viv-public:_test_writer, isolated
+build impl_wt, test_wt               # Phase 3: simsci:_feature_implementer || simsci:_test_writer, isolated
 
 # Phase 4 — converge: two gates, each with its own independent budget
 
@@ -114,9 +114,9 @@ package/env, and the **absolute path of its own worktree** (the real path you
 just created — not a placeholder) with a "work only inside it" instruction —
 never the other's output.
 
-- `viv-public:_test_writer` (in ``<tests_path>``) fleshes out the test stub bodies;
+- `simsci:_test_writer` (in ``<tests_path>``) fleshes out the test stub bodies;
   escalates any missing case instead of inventing one.
-- `viv-public:_feature_implementer` (in ``<impl_path>``) fills in the source stub bodies;
+- `simsci:_feature_implementer` (in ``<impl_path>``) fills in the source stub bodies;
   the test stubs are read-only criteria it never fills, runs, or sees filled.
 
 Neither changes a public signature; if a stub looks wrong it reports back and
@@ -147,7 +147,7 @@ around review.
    checkout first, so the env imports the integrated code and not
    whichever worktree it was last installed from.
 
-2. **Gate 1 — validate.** Spawn `viv-public:_validator` with the package path, env, and
+2. **Gate 1 — validate.** Spawn `simsci:_validator` with the package path, env, and
    checks to run — the project's test, lint, and type-check commands (e.g. make
    targets or equivalents); it returns a compact PASS/FAIL report. A working env from Phase 0 (the package
    importable, the check commands runnable) is a precondition — if it can't be
@@ -158,18 +158,18 @@ around review.
    — a package-wide reformat sweeps unrelated files into the diff.
 
 3. **Gate 2 — review (only on green).** Once validation passes, run review. The
-   **first** time you reach green, invoke the `/viv-public:_review-core` skill
+   **first** time you reach green, invoke the `/simsci:_review-core` skill
    with the integrated diff, the changed-file list, and a one-line feature
    description — a full fan-out across the five
-   **review agents** (one `viv-public:_review_*` specialist per dimension: Design,
+   **review agents** (one `simsci:_review_*` specialist per dimension: Design,
    Maintainability, DRY, Tests, Documentation) plus the functional-correctness
-   pass in this main-session context, the same definition `/viv-public:code-reviewer`
-   uses. It then independently confidence-scores every finding (a `viv-public:_review_scorer`
+   pass in this main-session context, the same definition `/simsci:code-reviewer`
+   uses. It then independently confidence-scores every finding (a `simsci:_review_scorer`
    per finding) and drops those below 50, so it returns the surviving findings
    bucketed by review agent — each annotated with its score — alongside your own
    Functionality pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
    each already-fixed finding **back to the review agent that raised it** for a
-   resolved/not-resolved verdict. When no must-fix findings remain, run one final full `/viv-public:_review-core`
+   resolved/not-resolved verdict. When no must-fix findings remain, run one final full `/simsci:_review-core`
    pass as the convergence check — it catches any *new* qualitative issue a fix
    introduced, which per-finding routing can't. A clean final pass means
    **converged** → go to Phase 5. Otherwise triage and re-dispatch (below), then
@@ -179,10 +179,10 @@ around review.
 that owns it, in its existing worktree (the lineages stay separate, so the black
 box holds across rounds):
 
-- **Implementation bug** → `viv-public:_feature_implementer` in ``<impl_path>``, failure
+- **Implementation bug** → `simsci:_feature_implementer` in ``<impl_path>``, failure
   described in behavioral terms (input → expected output), never as test source.
 - **Test bug** (asserts beyond the criteria, *or* an existing test that encodes
-  now-superseded behavior the feature deliberately changes) → `viv-public:_test_writer` in
+  now-superseded behavior the feature deliberately changes) → `simsci:_test_writer` in
   ``<tests_path>``. Existing-test breakage is common: a feature that changes
   observable behavior will trip tests that pinned the old behavior.
 - **Spec gap** (legit behavior with no stub) → add the body-less stub to the
@@ -212,7 +212,7 @@ dropped.
    the user as follow-up ticket candidates. Skip if nothing is left unaddressed.
 4. **Ask the user to approve the PR.** Without approval, stop and leave the
    branch in place.
-5. On approval, use the `/viv-public:commit-splitter` skill to organize the work into clean,
+5. On approval, use the `/simsci:commit-splitter` skill to organize the work into clean,
    reviewable commits, then push the branch and open the PR — if an installed
    skill covers your team's push/PR conventions, invoke it and follow it;
    otherwise use the repo's PR template if one exists (a draft PR is a safe

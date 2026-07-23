@@ -15,7 +15,7 @@ line references; judging whether it was *correct* is the orchestrator's job.
 ## Input
 
 The orchestrator provides one transcript JSONL by **absolute path**; a **role
-hint** (e.g. "the `viv-public:_review_design` sub-agent"), usually from the sibling
+hint** (e.g. "the `simsci:_review_design` sub-agent"), usually from the sibling
 `.meta.json`; for a main transcript, the **`subagents/` directory** to
 cross-check dispatches against the `agent-*.meta.json` files present; and
 optionally a **focus**. Work only on what you were handed.

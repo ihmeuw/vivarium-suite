@@ -1,7 +1,7 @@
 ---
 name: _review-core
-description: "Internal building block invoked by /viv-public:code-reviewer (and /viv-public:framework-development's review phase): runs the multi-agent review fan-out + functional-correctness pass + per-finding confidence scoring + synthesis on a diff the caller has already gathered. Not a review entry point — to review a PR, use /viv-public:code-reviewer."
-allowed-tools: Read, Grep, Glob, Agent(viv-public:_review_maintainability, viv-public:_review_dry, viv-public:_review_design, viv-public:_review_tests, viv-public:_review_documentation, viv-public:_review_scorer)
+description: "Internal building block invoked by /simsci:code-reviewer (and /simsci:framework-development's review phase): runs the multi-agent review fan-out + functional-correctness pass + per-finding confidence scoring + synthesis on a diff the caller has already gathered. Not a review entry point — to review a PR, use /simsci:code-reviewer."
+allowed-tools: Read, Grep, Glob, Agent(simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 user-invocable: false
 ---
 
@@ -9,7 +9,7 @@ Run the shared multi-agent review of: $ARGUMENTS
 
 This is the **review core** — the single definition of the parallel fan-out, the
 functional-correctness pass, the per-finding confidence scoring, and the
-synthesis. It is invoked **inline** by `/viv-public:code-reviewer` (after it gathers PR
+synthesis. It is invoked **inline** by `/simsci:code-reviewer` (after it gathers PR
 context), and is designed to be reused the same way by other main-session
 commands (e.g. a development workflow's review phase). Because it runs inline in
 the caller's main-session context, its fan-out to the `_review_*` sub-agents
@@ -28,11 +28,11 @@ list, and the diff (or the salient slice). Do this regardless of size or
 content type — a docs-only change still goes through every review agent, and
 sub-agents correctly report "no findings" if there are none.
 
-- `viv-public:_review_maintainability` — readability, documentation, implicit assumptions, coupling
-- `viv-public:_review_dry` — duplicated logic, missed abstractions, repeated patterns
-- `viv-public:_review_design` — data structure choices, algorithmic efficiency, API surface
-- `viv-public:_review_tests` — test coverage, test quality, edge cases
-- `viv-public:_review_documentation` — docstrings, comments, README/changelog updates
+- `simsci:_review_maintainability` — readability, documentation, implicit assumptions, coupling
+- `simsci:_review_dry` — duplicated logic, missed abstractions, repeated patterns
+- `simsci:_review_design` — data structure choices, algorithmic efficiency, API surface
+- `simsci:_review_tests` — test coverage, test quality, edge cases
+- `simsci:_review_documentation` — docstrings, comments, README/changelog updates
 
 ## Step 2 — Functional-correctness pass (in this session)
 
@@ -56,7 +56,7 @@ a discrete item (including nits). Then have each one scored independently:
 
 1. Gather the relevant `CLAUDE.md` paths once with Glob/Read: the repo-root
    `CLAUDE.md` (if any) plus any `CLAUDE.md` in directories the change touched.
-2. In a single message, launch one `viv-public:_review_scorer` **per finding**, in
+2. In a single message, launch one `simsci:_review_scorer` **per finding**, in
    parallel. Hand each scorer: the one-line change description, the **single**
    finding (its `file:line`, the review agent that flagged it, the problem, and the
    proposed fix), the diff slice relevant to that finding, and the `CLAUDE.md`

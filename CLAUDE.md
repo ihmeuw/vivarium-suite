@@ -65,9 +65,9 @@ Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst
 `workflow_dispatch` and `release: published` paths exist for manual/recovery releases of a specific lib.
 
 The Claude Code plugins are *not* PyPI packages, so each has its own tag-and-release
-workflow: `tools/ai-tools` (the `viv` plugin) releases via
+workflow: `tools/ai-tools` (the `simsci-internal` plugin) releases via
 `.github/workflows/release-ai-tools.yml` (tag `vivarium-ai-tools-v<X.Y.Z>`), and
-`tools/ai-tools-public` (the `viv-public` plugin, the generic subset any IHME team can
+`tools/ai-tools-public` (the `simsci` plugin, the generic subset any IHME team can
 install) via `.github/workflows/release-ai-tools-public.yml` (tag
 `vivarium-ai-tools-public-v<X.Y.Z>`). Each fires when its plugin's `CHANGELOG.rst` is
 touched on `main` and parses the version from the same `**X.Y.Z - MM/DD/YY**` first line —

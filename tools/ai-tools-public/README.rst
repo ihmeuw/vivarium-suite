@@ -1,10 +1,10 @@
-==================================
-IHME Dev AI Tools (``viv-public``)
-==================================
+=============================================
+Simulation Science Dev AI Tools (``simsci``)
+=============================================
 
-``viv-public`` is a Claude Code plugin providing generic AI-assisted developer
-workflows, usable by any IHME team in any repository. It was extracted from the
-SimSci team's ``viv`` plugin (MIC-7220) and carries no SimSci- or
+``simsci`` is a Claude Code plugin from the IHME Simulation Science team
+providing generic AI-assisted developer workflows, usable by any IHME team in
+any repository. It carries no SimSci- or
 vivarium-specific process: every workflow runs standalone, and the places where
 a team process *could* plug in (branch conventions, ticket filing, environment
 setup) are optional seams — if an installed skill covers them, the workflow
@@ -18,7 +18,7 @@ It includes:
 
 **Code Reviewer**
 
-- ``/viv-public:code-reviewer <PR or description>`` — parallel multi-agent review
+- ``/simsci:code-reviewer <PR or description>`` — parallel multi-agent review
   that fans out to specialist sub-agents focused on:
 
   - Maintainability
@@ -33,17 +33,17 @@ It includes:
   dropped — so only verified issues reach the report, each shown with its score.
 
   After the review, if an installed skill covers turning leftover findings into
-  tickets, the command offers to hand off to it (the SimSci team's ``viv``
+  tickets, the command offers to hand off to it (the SimSci team's ``simsci-internal``
   plugin provides one).
 
 **Regression Debugger**
 
-- ``/viv-public:regression-debugger <symptom and context>`` — traces
+- ``/simsci:regression-debugger <symptom and context>`` — traces
   behavioral changes across repositories to find the cause of a regression.
 
 **Git Rescue**
 
-- ``/viv-public:git-rescue [optional description]``.
+- ``/simsci:git-rescue [optional description]``.
   Diagnoses and untangles messy git situations — stuck interactive
   rebases, stacked-branch conflicts after a squash-merge of the parent,
   divergent history, accidental merge commits, dropped commits. Always
@@ -54,17 +54,17 @@ It includes:
 
 **Type Hinter**
 
-- ``/viv-public:type-hinter <target>`` (a package, sub-folder, or ``.py``
+- ``/simsci:type-hinter <target>`` (a package, sub-folder, or ``.py``
   files under one package root). Runs as the **lead of an agent team**:
   resolves the inter-file dependency graph, spawns one teammate per file,
   verifies with the package's own mypy invocation, and adds ``py.typed``
   only if the package ends clean. **Requires agent teams**
   (``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1``, v2.1.32+; no fallback).
-  It **writes**, then hands the diff to ``/viv-public:commit-splitter``.
+  It **writes**, then hands the diff to ``/simsci:commit-splitter``.
 
 **Framework Development**
 
-- ``/viv-public:framework-development <ticket or feature description>`` — an
+- ``/simsci:framework-development <ticket or feature description>`` — an
   end-to-end design → implement → verify → PR loop on a single well-scoped
   feature. The main session owns the design and the interface stubs, then runs
   a **black-box TDD** build. It owns the contract: it writes
@@ -99,11 +99,11 @@ Loaded automatically when the context is relevant to the skill's description.
 Working alongside a team plugin
 ===============================
 
-``viv-public`` never hard-references team tooling. Where a team process could
+``simsci`` never hard-references team tooling. Where a team process could
 apply, its workflows check for an installed skill that covers it (branch and PR
 conventions, ticket filing, environment setup, domain reference docs) and
-follow that skill when present. The SimSci team's ``viv`` plugin declares
-``viv-public`` as a dependency — installing ``viv`` installs and enables both,
+follow that skill when present. The SimSci team's ``simsci-internal`` plugin declares
+``simsci`` as a dependency — installing ``simsci-internal`` installs and enables both,
 and the seams resolve to the team's skills automatically. Other teams can ship
 their own conventions skills and get the same effect, or install nothing extra
 and use the generic defaults.
@@ -115,7 +115,7 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives
 under ``tools/ai-tools-public/``:
 
 - ``<repo-root>/.claude-plugin/marketplace.json``: marketplace catalog listing
-  this plugin (``"source": "./tools/ai-tools-public"``) and the team's ``viv``
+  this plugin (``"source": "./tools/ai-tools-public"``) and the team's ``simsci-internal``
   plugin. Claude Code requires the marketplace catalog at the repo root for
   ``/plugin marketplace add ihmeuw/vivarium-suite`` to find it.
 - ``tools/ai-tools-public/.claude-plugin/plugin.json``: plugin manifest.
@@ -133,7 +133,7 @@ From GitHub:
 .. code-block:: shell
 
    /plugin marketplace add ihmeuw/vivarium-suite
-   /plugin install viv-public@vivarium-ai-tools
+   /plugin install simsci@vivarium-ai-tools
 
 For local development against a checked-out monorepo, point ``marketplace add``
 at the repo root (the directory containing ``.claude-plugin/``), not at
@@ -142,11 +142,11 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
 .. code-block:: shell
 
    /plugin marketplace add /path/to/vivarium-suite
-   /plugin install viv-public@vivarium-ai-tools
+   /plugin install simsci@vivarium-ai-tools
 
-Once installed, the entry points are ``/viv-public:code-reviewer``,
-``/viv-public:regression-debugger``, ``/viv-public:git-rescue``,
-``/viv-public:type-hinter``, and ``/viv-public:framework-development``, plus the
+Once installed, the entry points are ``/simsci:code-reviewer``,
+``/simsci:regression-debugger``, ``/simsci:git-rescue``,
+``/simsci:type-hinter``, and ``/simsci:framework-development``, plus the
 auto-triggering skills above.
 
 The plugin's only dependency is the ``github`` plugin from the official
@@ -159,20 +159,20 @@ Delegation mechanism
 
 The parallel fan-out runs at main-session level. That is what the workflow
 skills do: their ``allowed-tools: Agent(...)`` field grants the main session
-permission to spawn the listed ``viv-public:_review_*`` (or
-``viv-public:_diff_analyzer`` / ``viv-public:_hypothesis_tester``) sub-agents in
+permission to spawn the listed ``simsci:_review_*`` (or
+``simsci:_diff_analyzer`` / ``simsci:_hypothesis_tester``) sub-agents in
 parallel, and the skill body is itself the orchestration prompt. Sub-agents
-shipped by a plugin are namespaced at runtime — always ``viv-public:<agent>``,
+shipped by a plugin are namespaced at runtime — always ``simsci:<agent>``,
 never the bare name.
 
 The multi-agent review fan-out is defined once, in the internal ``_review-core``
 skill (``skills/_review-core/SKILL.md``, hidden from the ``/`` menu via
 ``user-invocable: false``), and invoked **inline** by
-``/viv-public:code-reviewer`` after it gathers PR context. A skill invoked from
+``/simsci:code-reviewer`` after it gathers PR context. A skill invoked from
 another skill runs inline in the same main session — not as a sub-agent — so
 ``_review-core`` can spawn the ``_review_*`` fan-out itself, keeping it one
 level deep. That is what lets the review be reused by other main-session
-workflows (``/viv-public:framework-development``'s review phase, and the ``viv``
+workflows (``/simsci:framework-development``'s review phase, and the ``simsci-internal``
 plugin's model-development loop) without duplicating the fan-out.
 
 ``_review-core`` runs two one-level fan-outs in sequence, tiered by model. The
@@ -211,17 +211,17 @@ Code:
   fill in source stub bodies during the black-box TDD build. They are
   deliberately **not** granted ``Bash`` — they never run the suite, ``git``, or
   shell commands, which confines their effect to file edits. Each runs inside
-  its own git worktree (the ``/viv-public:framework-development`` skill does the
+  its own git worktree (the ``/simsci:framework-development`` skill does the
   ``git worktree`` management), so neither tree contains the other's output; the
   "stay in your worktree" instruction in each brief discourages reaching across
   via an absolute path, since the worktree is not a hard read sandbox. Both are
-  spawned only by ``/viv-public:framework-development``.
+  spawned only by ``/simsci:framework-development``.
 - ``_validator`` declares ``Bash`` so it can run the package's test / lint /
   type-check commands and report a PASS/FAIL verdict. It is read-only with
   respect to source and tests — it never edits files — but running a test suite
   executes arbitrary project code, so this is a broader grant than the
   read-only git agents above. It is spawned by
-  ``/viv-public:framework-development`` (and by the ``viv`` plugin's
+  ``/simsci:framework-development`` (and by the ``simsci-internal`` plugin's
   model-development workflow when that plugin is installed).
 - ``_propagate_target`` (spawned by the ``change-propagation`` skill) also
   **writes** and runs the test suite: for a target in the local repository
@@ -235,11 +235,11 @@ Code:
 - ``_type_hint_file`` (the type-hinter's per-file teammate) is write-capable
   within its assigned file and runs the package's mypy invocation via
   ``Bash``.
-- The ``/viv-public:code-reviewer``, ``/viv-public:regression-debugger``,
-  and ``/viv-public:framework-development`` skill bodies (running in the main
+- The ``/simsci:code-reviewer``, ``/simsci:regression-debugger``,
+  and ``/simsci:framework-development`` skill bodies (running in the main
   session) gather PR/repo context through the GitHub MCP server (a plugin
   dependency), falling back to read-only git/``gh`` commands when the MCP is
-  unavailable; ``/viv-public:framework-development`` additionally writes files
+  unavailable; ``/simsci:framework-development`` additionally writes files
   and runs the project's check commands as it builds.
 
 For destructive or out-of-scope commands, Claude Code's default
