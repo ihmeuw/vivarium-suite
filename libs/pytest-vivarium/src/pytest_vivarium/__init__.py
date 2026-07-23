@@ -1,4 +1,10 @@
-"""Shared pytest configuration and fixtures for the vivarium ecosystem."""
+"""
+===============
+Pytest Vivarium
+===============
+
+Shared pytest configuration and fixtures for the vivarium ecosystem.
+"""
 from importlib.metadata import PackageNotFoundError, version
 
 try:

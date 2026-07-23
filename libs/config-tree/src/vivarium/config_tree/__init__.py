@@ -1,4 +1,10 @@
-"""Config Tree: a configuration structure supporting cascading layers."""
+"""
+====================
+Vivarium Config Tree
+====================
+
+A configuration structure supporting cascading layers.
+"""
 
 from importlib.metadata import PackageNotFoundError, version
 

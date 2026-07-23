@@ -1,3 +1,8 @@
+**0.1.1 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
 **0.1.0 - 07/23/26**
 
  - Initial release: pytest plugin extracted from vivarium-testing-utils,
