@@ -13,7 +13,9 @@ name: Downstream Check
 
 on:
   pull_request:
-    branches: [main]
+    # TEMP (revert to [main] before merging this PR): the feature branch is here only
+    # so the required check can be live-tested against a branch-scoped ruleset pre-PR.
+    branches: [main, albrja/ci/mic-5335/build-downstream]
     types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
