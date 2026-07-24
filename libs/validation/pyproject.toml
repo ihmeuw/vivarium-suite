@@ -74,6 +74,10 @@ ci_github = ["vivarium-validation[test,docs,lint]"]
 # also runs the validation feature's tests + mypy with real types.
 ci_jenkins = ["vivarium-validation[ci_github,cluster,validation]"]
 
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/validation"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.validation and its subpackages. Excluding vivarium

@@ -1,9 +1,10 @@
-"""Vivarium simulation engine.
+"""
+===============
+Vivarium Engine
+===============
 
 The simulation lifecycle, component model, and runtime for the vivarium
-microsimulation framework. This package is the core of the vivarium-suite
-monorepo; sibling libs (``vivarium.public_health``, ``vivarium.cluster_tools``,
-etc.) compose against the engine via the ``vivarium`` namespace package.
+microsimulation framework.
 
 Top-level re-exports for common API surface:
 

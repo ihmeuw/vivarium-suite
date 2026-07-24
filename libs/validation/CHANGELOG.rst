@@ -1,3 +1,8 @@
+**0.1.2 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
 **0.1.1 - 07/22/26**
 
 - Bugfix: reorganize tests into subdirs to fix a test suite collection error
