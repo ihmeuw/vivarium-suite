@@ -1,3 +1,0 @@
-name,name_additional,observed_proportion,observed_numerator,observed_denominator,target_lower_bound,target_upper_bound,bayes_factor,reject_null,bug_issue_distribution,no_bug_issue_distribution,index_info,confidence,lower_bound_bayes_factor,upper_bound_bayes_factor
-,,0.516,516,1000,0.5,0.5,0.04209477118907735,False,<scipy.stats._distn_infrastructure.rv_discrete_frozen object at 0x7397b6752950>,<scipy.stats._distn_infrastructure.rv_discrete_frozen object at 0x7397b6b167d0>,,Conclusive,1.911465398646763e+299,1.9114653986466784e+299
-,,1.0,1000,1000,1.0,1.0,0.01783901114584697,False,<scipy.stats._distn_infrastructure.rv_discrete_frozen object at 0x7397b6ba3910>,<scipy.stats._distn_infrastructure.rv_discrete_frozen object at 0x7397b6857310>,,Conclusive,inf,
