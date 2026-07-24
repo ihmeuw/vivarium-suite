@@ -104,7 +104,7 @@ handed to the ``ticket-triage`` skill (see Skills below), to compile and file no
   flow.
 - ``pytest`` — reference for the vivarium pytest setup: ``make test-*`` entry
   points, the ``slow`` / ``cluster`` / ``weekly`` markers from
-  ``vivarium_testing_utils``, and where baked-in coverage output lands.
+  ``pytest-vivarium``, and where baked-in coverage output lands.
 - ``framework-clis`` — reference for the vivarium-ecosystem console scripts
   (``simulate``, ``psimulate``, ``vipin``, per-repo ``make_artifacts``,
   ``update_gbd_round``) available in a standard model-repo env.

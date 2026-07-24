@@ -31,7 +31,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "pytest-vivarium",
 ]
 docs = [
     "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
@@ -46,6 +46,10 @@ dev = [
 ]
 ci_github = ["vivarium-config-tree[test,docs,lint]"]
 ci_jenkins = ["vivarium-config-tree[ci_github,cluster]"]
+
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/config-tree"
 
 [tool.setuptools.packages.find]
 where = ["src"]

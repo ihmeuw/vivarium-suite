@@ -286,15 +286,15 @@ class TestGetTransitiveUpstreams:
         self,
         make_monorepo: MonorepoFactory,
     ) -> None:
-        """A dep activated only via the resolved extra (e.g. testing-utils via [test]) is reachable."""
+        """A dep activated only via the resolved extra (e.g. fake-plugin via [test]) is reachable."""
         libs_dir = make_monorepo(
             {
-                "a": {"extras": {"ci_github": ["vivarium-testing-utils"]}},
-                "testing-utils": {"dist_name": "vivarium-testing-utils"},
+                "a": {"extras": {"ci_github": ["vivarium-fake-plugin"]}},
+                "fake-plugin": {"dist_name": "vivarium-fake-plugin"},
             }
         )
         libs = load_libs(libs_dir, extras=("ci_github",))
-        assert get_transitive_upstreams("a", libs) == {"testing-utils"}
+        assert get_transitive_upstreams("a", libs) == {"fake-plugin"}
 
     def test_excludes_target_itself(
         self,
@@ -548,6 +548,31 @@ class TestGetReleaseMatrix:
         matrix = get_release_matrix({"a": "1.0.0", "b": "2.0.0"}, libs)
         entry = next(e for e in matrix["include"] if e["library"] == "a")
         assert entry["wait_for"] == [{"dist": "vivarium-b", "version": "2.0.0"}]
+
+    def test_entry_carries_dist_name(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """Each entry carries its PyPI dist name (the release workflow's git tag
+        prefix), which need not be ``vivarium-<dir>`` - e.g. the ``pytest-vivarium``
+        plugin, whose dir is ``pytest-vivarium`` and dist is also ``pytest-vivarium``."""
+        libs_dir = make_monorepo(
+            {
+                "config-tree": {"version": "1.0.0"},
+                "pytest-vivarium": {
+                    "dist_name": "pytest-vivarium",
+                    "deps": ["vivarium-config-tree"],
+                    "version": "0.1.0",
+                },
+            }
+        )
+        libs = load_libs(libs_dir)
+        matrix = get_release_matrix(
+            {"config-tree": "1.0.0", "pytest-vivarium": "0.1.0"}, libs
+        )
+        entries = {e["library"]: e for e in matrix["include"]}
+        assert entries["config-tree"]["dist"] == "vivarium-config-tree"
+        assert entries["pytest-vivarium"]["dist"] == "pytest-vivarium"
 
     def test_wait_for_empty_for_independent_library(
         self,
@@ -885,6 +910,11 @@ class TestCLIBuildReleaseMatrix:
         out = json.loads(capsys.readouterr().out)
         libraries = [entry["library"] for entry in out["include"]]
         assert libraries.index("b") < libraries.index("a")
+        # The dist name (the release workflow's git-tag prefix) is carried through.
+        assert {e["library"]: e["dist"] for e in out["include"]} == {
+            "a": "vivarium-a",
+            "b": "vivarium-b",
+        }
 
     def test_empty_when_no_pairs(
         self,
@@ -964,7 +994,7 @@ class TestCLIBuildReleaseMatrix:
     ) -> None:
         """Release ordering uses runtime deps, so a test-extra cycle does not break it.
 
-        Mirrors config-tree <-> testing-utils: a depends on b only via a test extra
+        Mirrors config-tree <-> pytest-vivarium: a depends on b only via a test extra
         (in ci_github), while b depends on a at runtime. The ci_github graph cycles;
         the runtime graph (b -> a) is a DAG, so the matrix orders a before b.
         """
