@@ -1,9 +1,7 @@
 **4.3.0 - 07/24/26**
 
 - Support pandas 3 (MIC-6773): pin the NaN-dropping ``stack()`` behavior in the
-  vipin performance report with explicit ``dropna()`` (pandas 3 keeps NaN rows),
-  and run pandas >=2.1 test suites with copy-on-write and ``future.infer_string``
-  enabled
+  vipin performance report with explicit ``dropna()``
 
 **4.2.14 - 07/23/26**
 

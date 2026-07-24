@@ -121,8 +121,6 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
     idx = ["compound_scenario"] if do_compound else list(scenario_cols)
     cols = idx + ["measure", "value"]
 
-    # dropna() pins the pandas 2 stack behavior (pandas 3 keeps NaN rows, e.g.
-    # exec times missing for partially-recorded workers)
     if idx:
         temp = perf_df.set_index(idx).filter(like="exec_time_").stack().dropna().reset_index()
     else:
