@@ -39,7 +39,10 @@ def with_sim_verbosity(func: CLIFunction) -> CLIFunction:
         "-s",
         "sim_verbosity",
         count=True,
-        help="Increase per-simulation logging verbosity. Use -s for INFO and -ss for DEBUG.",
+        help=(
+            "Increase per-simulation logging verbosity. Worker logs include INFO and "
+            "above by default; -s adds DEBUG."
+        ),
     )(func)
     func = click.option(
         "--sim-verbosity",
@@ -47,7 +50,7 @@ def with_sim_verbosity(func: CLIFunction) -> CLIFunction:
         type=click.Choice(["0", "1", "2"]),
         default=None,
         hidden=True,
-        help="Deprecated. Use -s/-ss instead.",
+        help="Deprecated. Use -s instead.",
     )(func)
     return func
 
@@ -67,8 +70,7 @@ def resolve_sim_verbosity(sim_verbosity: int, sim_verbosity_deprecated: str | No
                 "the deprecated '--sim-verbosity' option. Use only '-s'/'-ss'."
             )
         warnings.warn(
-            "The '--sim-verbosity' option is deprecated; use '-s' (INFO) or '-ss' "
-            "(DEBUG) instead.",
+            "The '--sim-verbosity' option is deprecated; use '-s' instead.",
             FutureWarning,
             stacklevel=2,
         )
