@@ -1,3 +1,10 @@
+**4.3.0 - 07/24/26**
+
+- Split worker logs by severity: ERROR and above go to the stderr log (``.e``),
+  everything else to stdout (``.o``). Tooling that scraped ``.e`` for WARNINGs must read ``.o``.
+- ``psimulate -s`` now lowers the worker stdout log to DEBUG (previously inert); ``-ss`` equals ``-s``.
+- Report a failed worker task once, with a non-zero exit code, instead of a duplicated traceback.
+
 **4.2.14 - 07/23/26**
 
 - Streamline package __init__.py docstring
