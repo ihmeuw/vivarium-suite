@@ -7,8 +7,8 @@ from typing import cast
 import pytest
 from _pytest.config import Config
 
-from vivarium.testing_utils import pytest_plugin
-from vivarium.testing_utils.pytest_plugin import DEFAULT_MAX_WORKERS, _auto_num_workers
+from pytest_vivarium import plugin
+from pytest_vivarium.plugin import DEFAULT_MAX_WORKERS, _auto_num_workers
 
 pytest_plugins = ["pytester"]
 
@@ -38,8 +38,8 @@ def test_auto_num_workers_scales_and_floors(
     monkeypatch: pytest.MonkeyPatch, cpus: int, memory_gb: float | None, expected: int
 ) -> None:
     """The worker count targets DEFAULT_MAX_WORKERS and degrades to >=1."""
-    monkeypatch.setattr(pytest_plugin, "_usable_cpu_count", lambda: cpus)
-    monkeypatch.setattr(pytest_plugin, "_available_memory_gb", lambda: memory_gb)
+    monkeypatch.setattr(plugin, "_usable_cpu_count", lambda: cpus)
+    monkeypatch.setattr(plugin, "_available_memory_gb", lambda: memory_gb)
     assert _auto_num_workers() == expected
 
 
@@ -50,7 +50,7 @@ def test_auto_num_workers_resolves_on_real_system() -> None:
 
 def test_usable_cpu_count_uses_affinity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(os, "sched_getaffinity", lambda pid: {0, 1, 2}, raising=False)
-    assert pytest_plugin._usable_cpu_count() == 3
+    assert plugin._usable_cpu_count() == 3
 
 
 def test_usable_cpu_count_falls_back_when_affinity_missing(
@@ -58,7 +58,7 @@ def test_usable_cpu_count_falls_back_when_affinity_missing(
 ) -> None:
     monkeypatch.delattr(os, "sched_getaffinity", raising=False)
     monkeypatch.setattr(os, "cpu_count", lambda: 7)
-    assert pytest_plugin._usable_cpu_count() == 7
+    assert plugin._usable_cpu_count() == 7
 
 
 def test_usable_cpu_count_falls_back_when_affinity_errors(
@@ -69,13 +69,13 @@ def test_usable_cpu_count_falls_back_when_affinity_errors(
 
     monkeypatch.setattr(os, "sched_getaffinity", raise_oserror, raising=False)
     monkeypatch.setattr(os, "cpu_count", lambda: 7)
-    assert pytest_plugin._usable_cpu_count() == 7
+    assert plugin._usable_cpu_count() == 7
 
 
 def test_usable_cpu_count_floors_at_one(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delattr(os, "sched_getaffinity", raising=False)
     monkeypatch.setattr(os, "cpu_count", lambda: None)
-    assert pytest_plugin._usable_cpu_count() == 1
+    assert plugin._usable_cpu_count() == 1
 
 
 def test_node_available_memory_gb_parses_memavailable(
@@ -83,15 +83,15 @@ def test_node_available_memory_gb_parses_memavailable(
 ) -> None:
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemTotal:    16000000 kB\nMemAvailable:  8388608 kB\n")
-    monkeypatch.setattr(pytest_plugin, "_PROC_MEMINFO", meminfo)
-    assert pytest_plugin._node_available_memory_gb() == pytest.approx(8.0)
+    monkeypatch.setattr(plugin, "_PROC_MEMINFO", meminfo)
+    assert plugin._node_available_memory_gb() == pytest.approx(8.0)
 
 
 def test_node_available_memory_gb_none_when_file_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pytest_plugin, "_PROC_MEMINFO", tmp_path / "absent")
-    assert pytest_plugin._node_available_memory_gb() is None
+    monkeypatch.setattr(plugin, "_PROC_MEMINFO", tmp_path / "absent")
+    assert plugin._node_available_memory_gb() is None
 
 
 def test_node_available_memory_gb_none_when_no_memavailable_line(
@@ -99,8 +99,8 @@ def test_node_available_memory_gb_none_when_no_memavailable_line(
 ) -> None:
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemTotal: 16000000 kB\nMemFree: 1234 kB\n")
-    monkeypatch.setattr(pytest_plugin, "_PROC_MEMINFO", meminfo)
-    assert pytest_plugin._node_available_memory_gb() is None
+    monkeypatch.setattr(plugin, "_PROC_MEMINFO", meminfo)
+    assert plugin._node_available_memory_gb() is None
 
 
 def test_node_available_memory_gb_none_when_malformed(
@@ -108,8 +108,8 @@ def test_node_available_memory_gb_none_when_malformed(
 ) -> None:
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemAvailable: notanumber kB\n")
-    monkeypatch.setattr(pytest_plugin, "_PROC_MEMINFO", meminfo)
-    assert pytest_plugin._node_available_memory_gb() is None
+    monkeypatch.setattr(plugin, "_PROC_MEMINFO", meminfo)
+    assert plugin._node_available_memory_gb() is None
 
 
 @pytest.mark.parametrize(
@@ -124,11 +124,11 @@ def test_node_available_memory_gb_none_when_malformed(
 def test_read_cgroup_memory_limit(tmp_path: Path, content: str, expected: int | None) -> None:
     limit_file = tmp_path / "memory.max"
     limit_file.write_text(content)
-    assert pytest_plugin._read_cgroup_memory_limit(limit_file) == expected
+    assert plugin._read_cgroup_memory_limit(limit_file) == expected
 
 
 def test_read_cgroup_memory_limit_none_when_missing(tmp_path: Path) -> None:
-    assert pytest_plugin._read_cgroup_memory_limit(tmp_path / "absent") is None
+    assert plugin._read_cgroup_memory_limit(tmp_path / "absent") is None
 
 
 def test_cgroup_memory_limit_gb_reads_v2_limit(
@@ -140,9 +140,9 @@ def test_cgroup_memory_limit_gb_reads_v2_limit(
     (root / "slurm" / "job_1").mkdir(parents=True)
     (root / "slurm" / "job_1" / "memory.max").write_text(str(2 * 1024**3))
     (root / "memory.max").write_text("max")
-    monkeypatch.setattr(pytest_plugin, "_PROC_SELF_CGROUP", proc)
-    monkeypatch.setattr(pytest_plugin, "_CGROUP_V2_ROOT", root)
-    assert pytest_plugin._cgroup_memory_limit_gb() == pytest.approx(2.0)
+    monkeypatch.setattr(plugin, "_PROC_SELF_CGROUP", proc)
+    monkeypatch.setattr(plugin, "_CGROUP_V2_ROOT", root)
+    assert plugin._cgroup_memory_limit_gb() == pytest.approx(2.0)
 
 
 def test_cgroup_memory_limit_gb_none_when_unlimited(
@@ -153,16 +153,16 @@ def test_cgroup_memory_limit_gb_none_when_unlimited(
     root = tmp_path / "cgroup_fs"
     root.mkdir()
     (root / "memory.max").write_text("max")
-    monkeypatch.setattr(pytest_plugin, "_PROC_SELF_CGROUP", proc)
-    monkeypatch.setattr(pytest_plugin, "_CGROUP_V2_ROOT", root)
-    assert pytest_plugin._cgroup_memory_limit_gb() is None
+    monkeypatch.setattr(plugin, "_PROC_SELF_CGROUP", proc)
+    monkeypatch.setattr(plugin, "_CGROUP_V2_ROOT", root)
+    assert plugin._cgroup_memory_limit_gb() is None
 
 
 def test_cgroup_memory_limit_gb_none_when_proc_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pytest_plugin, "_PROC_SELF_CGROUP", tmp_path / "absent")
-    assert pytest_plugin._cgroup_memory_limit_gb() is None
+    monkeypatch.setattr(plugin, "_PROC_SELF_CGROUP", tmp_path / "absent")
+    assert plugin._cgroup_memory_limit_gb() is None
 
 
 @pytest.mark.parametrize(
@@ -181,21 +181,21 @@ def test_available_memory_gb_takes_min(
     cgroup_gb: float | None,
     expected: float | None,
 ) -> None:
-    monkeypatch.setattr(pytest_plugin, "_node_available_memory_gb", lambda: node_gb)
-    monkeypatch.setattr(pytest_plugin, "_cgroup_memory_limit_gb", lambda: cgroup_gb)
-    assert pytest_plugin._available_memory_gb() == expected
+    monkeypatch.setattr(plugin, "_node_available_memory_gb", lambda: node_gb)
+    monkeypatch.setattr(plugin, "_cgroup_memory_limit_gb", lambda: cgroup_gb)
+    assert plugin._available_memory_gb() == expected
 
 
 def test_report_header_silent_when_not_parallel(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(pytest_plugin, "_usable_cpu_count", lambda: 8)
-    monkeypatch.setattr(pytest_plugin, "_available_memory_gb", lambda: 32.0)
-    assert pytest_plugin.pytest_report_header(cast(Config, _FakeConfig(None))) == []
+    monkeypatch.setattr(plugin, "_usable_cpu_count", lambda: 8)
+    monkeypatch.setattr(plugin, "_available_memory_gb", lambda: 32.0)
+    assert plugin.pytest_report_header(cast(Config, _FakeConfig(None))) == []
 
 
 def test_report_header_reports_when_parallel(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(pytest_plugin, "_usable_cpu_count", lambda: 8)
-    monkeypatch.setattr(pytest_plugin, "_available_memory_gb", lambda: 32.0)
-    [header] = pytest_plugin.pytest_report_header(cast(Config, _FakeConfig("auto")))
+    monkeypatch.setattr(plugin, "_usable_cpu_count", lambda: 8)
+    monkeypatch.setattr(plugin, "_available_memory_gb", lambda: 32.0)
+    [header] = plugin.pytest_report_header(cast(Config, _FakeConfig("auto")))
     assert f"auto-workers: {DEFAULT_MAX_WORKERS}" in header
 
 

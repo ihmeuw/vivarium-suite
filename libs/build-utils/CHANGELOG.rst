@@ -1,3 +1,8 @@
+**4.4.2 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
 **4.4.1 - 07/21/26**
 
 - Remove the orphaned ``publishHTML`` CI step that logged a spurious "Specified

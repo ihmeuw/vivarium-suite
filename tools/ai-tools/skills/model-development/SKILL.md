@@ -146,7 +146,7 @@ Because the verification author is **blind to the implementation by design**, it
 does not wait for the build — dispatch `_vv_writer` **as soon as the
 plan is approved**, concurrently with the build. Hand it the iteration plan (the contract
 names and the quantitative expectations), pointers to the repo's existing test
-patterns (`conftest.py` fixtures, `FuzzyChecker` from `vivarium_testing_utils`,
+patterns (`conftest.py` fixtures, `FuzzyChecker` from `vivarium.fuzzy_checker`,
 the step/event mapping, `model_notebooks/`), and the target paths.
 
 `_vv_writer` produces two things from the plan alone, both **internal to this

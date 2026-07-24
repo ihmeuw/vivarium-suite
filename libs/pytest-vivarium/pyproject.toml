@@ -3,14 +3,15 @@ requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vivarium-testing-utils"
-description = "Project to store testing utilities for Vivarium software."
+name = "pytest-vivarium"
+description = "Shared pytest configuration and fixtures for Vivarium projects."
 readme = "README.rst"
 requires-python = ">=3.10"
 license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 classifiers = [
+    "Framework :: Pytest",
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
@@ -26,51 +27,50 @@ classifiers = [
     "Topic :: Education",
     "Topic :: Scientific/Engineering",
     "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Testing",
 ]
 dependencies = [
-    "vivarium-dependencies[numpy]",
+    # NOTE: Must import pytest as runtime dep in order to auto-load plugins
+    "vivarium-dependencies[pytest,numpy]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-config-tree",
-    "vivarium-fuzzy-checker",
-    "pytest-xdist",
-    "types-setuptools",
 ]
 
 [project.optional-dependencies]
 cluster = []
-test = ["vivarium-dependencies[pytest]"]
-docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
-interactive = ["vivarium-dependencies[interactive]"]
+test = []
+docs = ["vivarium-dependencies[sphinx,docutils]"]
+interactive = []
 lint = ["vivarium-dependencies[lint]"]
-dev = ["vivarium-testing-utils[test,docs,interactive,lint]"]
-ci_github = ["vivarium-testing-utils[test,docs,lint]"]
-ci_jenkins = ["vivarium-testing-utils[ci_github,cluster]"]
+dev = ["pytest-vivarium[test,docs,interactive,lint]"]
+ci_github = ["pytest-vivarium[test,docs,lint]"]
+ci_jenkins = ["pytest-vivarium[ci_github,cluster]"]
 
 [project.entry-points.pytest11]
-vivarium_testing_utils = "vivarium.testing_utils.pytest_plugin"
+pytest_vivarium = "pytest_vivarium.plugin"
+
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/pytest-vivarium"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# Only include vivarium.testing_utils and its subpackages. Excluding vivarium
-# itself means the wheel does not ship vivarium/__init__.py. The "namespace
-# owner" (vivarium-engine) ships the canonical vivarium/__init__.py. If we
-# shipped our own here, pip would overwrite the canonical one.
-include = ["vivarium.testing_utils", "vivarium.testing_utils.*"]
+include = ["pytest_vivarium", "pytest_vivarium.*"]
 
 [tool.setuptools.package-data]
 # Ship the py.typed marker (PEP 561) so mypy treats this package as typed when
-# users install it from PyPI and so mypy also finds the marker via the
-# editable install during in-repo type checks.
-"vivarium.testing_utils" = ["py.typed"]
+# users install it from PyPI and so mypy also finds the marker via the editable
+# install during in-repo type checks.
+"pytest_vivarium" = ["py.typed"]
 
 [tool.setuptools_scm]
-# Monorepo tagging convention: tags must be prefixed with "vivarium-testing-utils-v"
-# (e.g. vivarium-testing-utils-v0.5.4). tag_regex strips the prefix so setuptools_scm
-# sees a clean semver; git_describe_command filters to only this lib's tags so siblings'
-# releases don't pollute the version derivation.
+# Monorepo tagging convention: tags must be prefixed with "pytest-vivarium-v"
+# (e.g. pytest-vivarium-v0.1.0). tag_regex strips the prefix so setuptools_scm
+# sees a clean semver; git_describe_command filters to only this lib's tags so
+# siblings' releases don't pollute the version derivation.
 root = "../.."
-tag_regex = '^vivarium-testing-utils-v(?P<version>[^\+]+)$'
-git_describe_command = 'git describe --dirty --tags --long --match "vivarium-testing-utils-v*"'
+tag_regex = '^pytest-vivarium-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "pytest-vivarium-v*"'
 fallback_version = "0.0.0+no-git-tag"
 
 [tool.pytest.ini_options]
@@ -78,13 +78,11 @@ testpaths = ["tests"]
 
 [tool.black]
 line-length = 94
-exclude = '''.*examples.*'''
 
 [tool.isort]
 profile = "black"
 line_length = 94
 multi_line_output = 3
-skip_glob = ["*/examples/*", "**/examples/*"]
 
 [tool.mypy]
 # WARNING: settings here that aren't mypy_path / explicit_package_bases must be
@@ -102,7 +100,7 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [tool.coverage.run]
-source = ["vivarium.testing_utils"]
+source = ["pytest_vivarium"]
 
 [tool.coverage.report]
 show_missing = true

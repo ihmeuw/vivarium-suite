@@ -1,8 +1,13 @@
-**6.4.5 - 07/22/26**
+**6.4.6 - 07/24/26**
 
 - Allow ``ResultsStratifier`` (``age_bins``), ``LinearScaleUp`` (endpoint ``start``/``end`` exposures), and ``LBWSGRiskEffect`` (``age_bins``, ``relative_risk_interpolator``) to source their data via configuration ``data_sources`` instead of requiring an artifact
 - Make ``BasePopulation`` the canonical source of the ``age_bins`` definition (new ``population.age_bins`` config key), inherited by ``ResultsStratifier`` and ``LBWSGRiskEffect``
 - Document the ``cause_specific_mortality_rate`` config override that lets ``DiseaseModel`` run artifact-less
+
+**6.4.5 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
 
 **6.4.4 - 07/21/26**
 

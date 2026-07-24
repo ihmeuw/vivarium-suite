@@ -45,7 +45,7 @@ dependencies = [
 cluster = ["jobmon_installer_ihme"]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils>=0.3.4",
+    "pytest-vivarium",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]"]
 interactive = ["vivarium-dependencies[interactive]"]
@@ -63,6 +63,10 @@ ci_jenkins = ["vivarium-cluster-tools[ci_github,cluster]"]
 psimulate = "vivarium.cluster_tools.psimulate.cli:psimulate"
 dagger = "vivarium.cluster_tools.dagger.cli:dagger"
 vipin = "vivarium.cluster_tools.vipin.cli:vipin"
+
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/cluster-tools"
 
 [tool.setuptools.packages.find]
 where = ["src"]
