@@ -36,7 +36,7 @@ dependencies = [
 cluster = []
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "pytest-vivarium",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
@@ -44,6 +44,10 @@ lint = ["vivarium-dependencies[lint]"]
 dev = ["vivarium-fuzzy-checker[test,docs,interactive,lint]"]
 ci_github = ["vivarium-fuzzy-checker[test,docs,lint]"]
 ci_jenkins = ["vivarium-fuzzy-checker[ci_github,cluster]"]
+
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/fuzzy-checker"
 
 [tool.setuptools.packages.find]
 where = ["src"]

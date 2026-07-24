@@ -1,4 +1,4 @@
-**0.1.2 - 07/23/26**
+**0.1.3 - 07/24/26**
 
 - Support pandas 3 (MIC-6773): version-gate the NaN-preserving ``stack()`` kwargs
   (``dropna=`` was removed in pandas 3), pass ``observed=True`` when grouping plot
@@ -6,6 +6,11 @@
   pandas versions, and run pandas >=2.1 test suites with copy-on-write and
   ``future.infer_string`` enabled; suite verified green on pandas 1.5.3, 2.3.3,
   and 3.0.3
+
+**0.1.2 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
 
 **0.1.1 - 07/22/26**
 

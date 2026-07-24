@@ -1,4 +1,10 @@
-"""A programmatically accessible mapping of GBD entities."""
+"""
+====================
+Vivarium GBD Mapping
+====================
+
+A programmatically accessible mapping of GBD entities.
+"""
 
 from importlib.metadata import PackageNotFoundError, version
 
