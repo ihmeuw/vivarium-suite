@@ -14,6 +14,7 @@ from vivarium.cluster_tools.utilities import NUM_ROWS_PER_CENTRAL_LOG_FILE
 # Central log files are named ``log_summary_<NNNN>.csv``.
 LOG_FILE_PREFIX = "log_summary_"
 
+
 CENTRAL_LOG_SCHEMA = (
     "host",
     "job_number",

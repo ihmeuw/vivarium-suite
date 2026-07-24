@@ -31,9 +31,11 @@ def get_release_matrix(
     Returns
     -------
         A dictionary suitable for ``strategy.matrix`` in the release workflow:
-        ``{"include": [{"library": name, "version": version, "wait_for":
-        [{"dist": dist_name, "version": version}, ...]}, ...]}``. ``include``
-        is empty when ``release_versions`` is empty.
+        ``{"include": [{"library": name, "dist": dist_name, "version": version,
+        "wait_for": [{"dist": dist_name, "version": version}, ...]}, ...]}``.
+        ``library`` is the ``libs/`` directory name; ``dist`` is the PyPI
+        distribution name, which is also the git tag prefix. ``include`` is empty
+        when ``release_versions`` is empty.
 
     Raises
     ------
@@ -61,6 +63,7 @@ def get_release_matrix(
         include.append(
             {
                 "library": lib_name,
+                "dist": libs[lib_name].dist_name,
                 "version": release_versions[lib_name],
                 "wait_for": wait_for,
             }

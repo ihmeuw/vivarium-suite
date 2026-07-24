@@ -43,7 +43,7 @@ dependencies = [
 interactive = ["vivarium-dependencies[interactive]"]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils>=0.6.0",
+    "pytest-vivarium",
     "vivarium-fuzzy-checker",
 ]
 docs = [
@@ -60,6 +60,10 @@ ci_jenkins = ["vivarium-engine[ci_github,cluster]"]
 
 [project.scripts]
 simulate = "vivarium.engine.interface.cli:simulate"
+
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/engine"
 
 [tool.setuptools.packages.find]
 where = ["src"]

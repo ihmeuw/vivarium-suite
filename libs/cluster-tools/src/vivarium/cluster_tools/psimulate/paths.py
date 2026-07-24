@@ -21,6 +21,18 @@ CENTRAL_PERFORMANCE_LOGS_DIRECTORY = Path(
 )
 
 
+def build_perf_log_filename(
+    task_id: str, array_job_id: str = "", array_task_id: str = ""
+) -> str:
+    """Return the worker perf-log filename ``perf.[<array_job_id>_<array_task_id>.]<task_id>.log``.
+
+    The SLURM array id is inserted after ``perf.`` when both ids are set; otherwise this
+    is the legacy ``perf.<task_id>.log``.
+    """
+    prefix = f"{array_job_id}_{array_task_id}." if array_job_id and array_task_id else ""
+    return f"perf.{prefix}{task_id}.log"
+
+
 class InputPaths(NamedTuple):
     """Container class for input filepaths.
 

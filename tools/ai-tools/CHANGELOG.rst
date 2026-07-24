@@ -24,8 +24,11 @@
    skills (ticket-triage, team-conventions, design-doc, environments) are now
    optional seams that resolve automatically when ``simsci-internal`` is
    installed
- - Drop the unused ``skill-creator`` dependency
  - The five ``commands/*.md`` convert to ``skills/`` (the current plugin layout)
+ 
+**0.23.1 - 07/23/26**
+
+ - Fix references to the packages split out of ``vivarium-testing-utils``: the pytest plugin is now ``pytest-vivarium`` and ``FuzzyChecker`` lives in ``vivarium-fuzzy-checker``
 
 **0.23.0 - 07/06/26**
 

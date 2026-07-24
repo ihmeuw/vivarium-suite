@@ -6,18 +6,19 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 
 | Directory | PyPI name | Import path |
 |---|---|---|
-| `libs/core/` | `vivarium-core` | `import vivarium.core` |
-| `libs/public-health/` | `vivarium-public-health` | `import vivarium.public_health` |
-| `libs/config-tree/` | `vivarium-config-tree` | `import vivarium.config_tree` |
-| `libs/cluster-tools/` | `vivarium-cluster-tools` | `import vivarium.cluster_tools` |
-| `libs/testing-utils/` | `vivarium-testing-utils` | `import vivarium.testing_utils` |
-| `libs/helpers/` | `vivarium-helpers` | `import vivarium.helpers` |
-| `libs/gbd-mapping/` | `vivarium-gbd-mapping` | `import vivarium.gbd_mapping` |
-| `libs/risk-distributions/` | `vivarium-risk-distributions` | `import vivarium.risk_distributions` |
-| `libs/profiling/` | `vivarium-profiling` | `import vivarium.profiling` |
+| `libs/artifact/` | `vivarium-artifact` | `import vivarium.artifact` |
 | `libs/build-utils/` | `vivarium-build-utils` | `import vivarium.build_utils` |
+| `libs/cluster-tools/` | `vivarium-cluster-tools` | `import vivarium.cluster_tools` |
+| `libs/config-tree/` | `vivarium-config-tree` | `import vivarium.config_tree` |
 | `libs/dependencies/` | `vivarium-dependencies` | *(meta-package)* |
-| `libs/compat/` | `vivarium-compat` | *(import compatibility shim — temporary)* |
+| `libs/engine/` | `vivarium-engine` | `import vivarium.engine` |
+| `libs/fuzzy-checker/` | `vivarium-fuzzy-checker` | `import vivarium.fuzzy_checker` |
+| `libs/gbd-mapping/` | `vivarium-gbd-mapping` | `import vivarium.gbd_mapping` |
+| `libs/profiling/` | `vivarium-profiling` | `import vivarium.profiling` |
+| `libs/public-health/` | `vivarium-public-health` | `import vivarium.public_health` |
+| `libs/pytest-vivarium/` | `pytest-vivarium` | *(pytest plugin — auto-loaded)* |
+| `libs/risk-distributions/` | `vivarium-risk-distributions` | `import vivarium.risk_distributions` |
+| `libs/validation/` | `vivarium-validation` | `import vivarium.validation` |
 
 ## Tools
 
@@ -28,13 +29,14 @@ These are not built or released by the monorepo's CI/release workflows.
 |---|---|
 | `tools/ai-tools-public/` | Claude Code plugin (`simsci`): generic AI developer workflows for any IHME team (code review, git rescue, type hinting, regression debugging, guided TDD) |
 | `tools/ai-tools/` | Claude Code plugin (`simsci-internal`): SimSci/vivarium-specific agent workflows (model development, team conventions, vivarium references); depends on `simsci` |
+| `tools/model-template/` | Cookiecutter template for producing research model repositories |
 
 ## Local development
 
 Each package has its own development environment. From the package directory:
 
 ```bash
-cd libs/core
+cd libs/engine
 make build-env name=vivarium-dev
 conda activate vivarium-dev
 ```
@@ -42,9 +44,9 @@ conda activate vivarium-dev
 To install a package into an already-active environment:
 
 ```bash
-pip install -e "libs/core[dev]"
+pip install -e "libs/engine[dev]"
 # or with uv:
-uv pip install -e "libs/core[dev]"
+uv pip install -e "libs/engine[dev]"
 ```
 
 CI uses [uv](https://docs.astral.sh/uv/) as the package manager.

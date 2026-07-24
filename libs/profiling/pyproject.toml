@@ -46,7 +46,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "pytest-vivarium",
 ]
 cluster = ["vivarium-cluster-tools>=2.1.17"]
 docs = []
@@ -65,6 +65,10 @@ make_artifacts = "vivarium.profiling.tools.cli:make_artifacts"
 run_benchmark = "vivarium.profiling.tools.cli:run_benchmark"
 profile_sim = "vivarium.profiling.tools.cli:profile_sim"
 summarize = "vivarium.profiling.tools.cli:summarize"
+
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/profiling"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,3 +1,12 @@
+**4.2.14 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
+**4.2.13 - 07/22/26**
+
+- Include job id in performance log names
+
 **4.2.12 - 07/14/26**
 
 - Update stale references for monorepo libraries
