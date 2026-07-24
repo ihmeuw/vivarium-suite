@@ -44,6 +44,10 @@ ci_jenkins = ["vivarium-build-utils[ci_github,cluster]"]
 [project.scripts]
 update-readme = "vivarium.build_utils.readme:main"
 
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/build-utils"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.build_utils and its subpackages. Excluding vivarium

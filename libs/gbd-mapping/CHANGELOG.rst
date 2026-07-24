@@ -1,3 +1,8 @@
+**6.0.7 - 07/23/26**
+
+- Streamline package __init__.py docstrings
+- Add project.urls to pyproject.toml
+
 **6.0.6 - 07/14/26**
 
 - Update stale references for monorepo libraries

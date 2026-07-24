@@ -1,3 +1,8 @@
+**0.2.1 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
 **0.2.0 - 07/21/26**
 
 - Define classes in ``fuzzy_checker`` and ``data_structures`` modules instead of ``__init__``

@@ -1,0 +1,51 @@
+components:
+    vivarium_public_health:
+        population:
+            - BasePopulation()
+            - Mortality()
+        results:
+            - ResultsStratifier()
+            - DisabilityObserver()
+            - MortalityObserver()
+
+    # Causes an error if left empty. Uncomment when you have components. 
+    # {{cookiecutter.package_name}}.components:
+
+configuration:
+    input_data:
+        artifact_path: "/mnt/team/simulation_science/pub/models/{{ cookiecutter.package_name }}/artifacts/pakistan.hdf"
+        input_draw_number: 0
+    interpolation:
+        order: 0
+        extrapolate: True
+    randomness:
+        map_size: 1_000_000
+        key_columns: ['entrance_time', 'age']
+        random_seed: 0
+    time:
+        start:
+            year: 2025
+            month: 7
+            day: 2
+        end:
+            year: 2025
+            month: 7
+            day: 10
+        step_size: 1 # Days
+    population:
+        population_size: 100
+        initialization_age_min: 0
+        initialization_age_max: 100
+        untracking_age: 100
+
+    stratification:
+        default:
+            - 'age_group'
+            - 'sex'
+            - 'event_year'
+        # disability:
+        #     include:
+        #     exclude:
+        # mortality:
+        #     include:
+        #     exclude:
