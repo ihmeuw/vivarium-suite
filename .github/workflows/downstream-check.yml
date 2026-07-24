@@ -89,16 +89,41 @@ jobs:
     if: >-
       needs.detect.outputs.has-downstream == 'true' &&
       (contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.downstream-matrix) }}
-    uses: ./.github/workflows/_lib-test.yml
-    with:
-      library: ${{ matrix.library }}
-      python-version: ${{ matrix.python-version }}
-      changed-libs: ${{ needs.detect.outputs.releasing-libs }}
-      run-lint: false
-      run-docs: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install vivarium_build_utils
+        run: uv pip install --system -e libs/build-utils
+
+      - name: Install ${{ matrix.library }} against the releasing libraries
+        # CHANGED_LIBS installs the releasing lib(s) editably from in-tree source at
+        # their pending versions, so this dependent is tested against the
+        # about-to-be-released code. IHME_PYPI= disables the firewalled artifactory index.
+        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github CHANGED_LIBS="${{ needs.detect.outputs.releasing-libs }}" UV_FLAGS=--system IHME_PYPI=
+
+      - name: Verify releasing libraries resolved from source
+        run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ matrix.library }} --changed "${{ needs.detect.outputs.releasing-libs }}"
+
+      - name: Mypy ${{ matrix.library }}
+        run: cd libs/${{ matrix.library }} && make mypy-if-typed
+
+      - name: Test ${{ matrix.library }}
+        run: cd libs/${{ matrix.library }} && make test-all
 
   downstream-status:
     # The required status check on main. Auto-passes when there's nothing

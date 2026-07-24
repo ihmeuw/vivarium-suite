@@ -1,4 +1,4 @@
-**4.5.0 - TBD/TBD/2026**
+**4.5.0 - 07/24/26**
 
 - Add ``build-downstream-matrix`` powering a required Downstream Check that tests a releasing library's in-tree dependents before merge
 
