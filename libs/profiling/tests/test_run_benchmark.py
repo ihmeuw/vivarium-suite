@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 import pandas as pd
 import pytest
+
 from vivarium.profiling.tools.run_benchmark import RESULTS_SUMMARY_NAME, run_benchmark_loop
 
 RESULTS_SUMMARY_COLUMNS = [

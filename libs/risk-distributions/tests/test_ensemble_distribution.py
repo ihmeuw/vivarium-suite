@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from conftest import assert_equal
+
 from vivarium.risk_distributions.formatting import Parameter, Parameters
 from vivarium.risk_distributions.risk_distributions import EnsembleDistribution
 

@@ -3,6 +3,7 @@ from typing import List
 
 import pytest
 from click.testing import CliRunner
+
 from vivarium.profiling.tools.cli import profile_sim
 
 
