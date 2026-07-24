@@ -102,11 +102,11 @@ Working alongside a team plugin
 ``simsci`` never hard-references team tooling. Where a team process could
 apply, its workflows check for an installed skill that covers it (branch and PR
 conventions, ticket filing, environment setup, domain reference docs) and
-follow that skill when present. The SimSci team's ``simsci-internal`` plugin declares
-``simsci`` as a dependency — installing ``simsci-internal`` installs and enables both,
-and the seams resolve to the team's skills automatically. Other teams can ship
-their own conventions skills and get the same effect, or install nothing extra
-and use the generic defaults.
+follow that skill when present. A team plugin can declare ``simsci`` as a
+dependency — one install then brings both — and ship skills covering its
+conventions; the seams resolve to those skills automatically. Installing
+nothing extra works too: every workflow falls back to sensible generic
+behavior.
 
 Layout
 ======
@@ -153,6 +153,12 @@ The plugin's only dependency is the ``github`` plugin from the official
 marketplace (installed automatically), whose GitHub MCP server the workflows
 use to gather PR/repo context; they fall back to read-only ``git``/``gh``
 commands when the MCP is unavailable.
+
+.. note::
+   Everything below this point is reference material — the delegation
+   architecture and the security model — aimed at plugin authors and at
+   reviewers vetting the plugin before an install. Day-to-day use needs
+   nothing past this line.
 
 Delegation mechanism
 ====================
