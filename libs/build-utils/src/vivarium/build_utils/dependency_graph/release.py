@@ -52,10 +52,8 @@ def get_release_matrix(
 
     Returns
     -------
-        A dictionary suitable for ``strategy.matrix`` in the release workflow:
-        ``{"include": [{"library": name, "version": version, "wait_for":
-        [{"dist": dist_name, "version": version}, ...]}, ...]}``. ``include``
-        is empty when ``release_versions`` is empty.
+        A :class:`ReleaseMatrix`. ``include`` is ordered dependencies-first (see
+        :func:`sort_topologically`) and is empty when ``release_versions`` is empty.
 
     Raises
     ------

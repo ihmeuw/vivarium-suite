@@ -135,10 +135,17 @@ jobs:
     steps:
       - name: Report downstream status
         run: |
+          DETECT="${{ needs.detect.result }}"
           HAS="${{ needs.detect.outputs.has-downstream }}"
           RESULT="${{ needs.downstream.result }}"
           REQUESTED="${{ contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch' }}"
 
+          # Fail loudly on an infrastructure failure in detect: its empty outputs
+          # would otherwise read as "no dependents" and pass the required check blindly.
+          if [ "$DETECT" != "success" ]; then
+            echo "::error::detect job did not succeed (result: ${DETECT}); cannot determine downstream dependents."
+            exit 1
+          fi
           if [ "$REQUESTED" != "true" ]; then
             echo "::error::Add the 'run-downstream' label (or run the Downstream Check workflow manually) to run the downstream check before merging into main."
             exit 1
