@@ -22,6 +22,7 @@ from vivarium.engine.framework.utilities import collapse_nested_dict
 from vivarium.cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
 from vivarium.cluster_tools.psimulate.paths import build_perf_log_filename
+from vivarium.cluster_tools.psimulate.worker import PERF_LOG_MARKER
 from vivarium.cluster_tools.vipin.perf_counters import CounterSnapshot
 
 
@@ -65,9 +66,6 @@ def work_horse(
 
         return results
 
-    except Exception:
-        logger.exception("Unhandled exception in worker")
-        raise
     finally:
         logger.info(f"Exiting job: {job_parameters}")
 
@@ -147,6 +145,9 @@ def get_sim_from_backup(
 def initialize_new_sim(
     event: dict[str, float], job_parameters: JobParameters
 ) -> tuple[ParallelSimulationContext, dict[str, float]]:
+    # sim_verbosity is guaranteed present here: only run/restart/expand reach this
+    # work horse and all of them set it. task_runner.main defaults the key because
+    # it also serves load_test, which does not.
     sim = ParallelSimulationContext(
         job_parameters.model_specification,
         configuration=job_parameters.sim_config,
@@ -238,7 +239,7 @@ def do_sim_epilogue(
         serialize=True,
     )
 
-    logger.debug(
+    logger.bind(**{PERF_LOG_MARKER: True}).debug(
         json.dumps(
             {
                 "host": ENV_VARIABLES.HOSTNAME.value,

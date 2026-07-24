@@ -14,3 +14,7 @@ Work horses contain the actual execution logic:
 * ``vivarium_work_horse`` – runs a Vivarium simulation.
 * ``load_test_work_horse`` – runs synthetic load tests.
 """
+
+# Key bound into a log record's ``extra`` to mark it as belonging only in the
+# dedicated performance log file, so the worker's stdout sink can drop it.
+PERF_LOG_MARKER = "perf_log"
