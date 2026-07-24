@@ -346,8 +346,6 @@ def validate_parameters(
 
     # Validate completeness one categorical group at a time: on the full
     # multi-group table the duplicate-bin guard would trip on the repeated bins.
-    # observed=True (the pandas 3 default) skips empty groups from unobserved
-    # category combinations, which have no bins to completeness-check.
     groups = (
         [group for _, group in data.groupby(list(categorical_parameters), observed=True)]
         if categorical_parameters

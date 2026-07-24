@@ -670,16 +670,13 @@ class PopulationView:
                     "A component is corrupting the population table by modifying the dtype of "
                     f"the {update.name} column from {existing.dtype} to {update.dtype}."
                 )
-            # Compatible-but-unequal dtypes (str- vs object-backed strings,
-            # datetime64 unit differences): the existing column's dtype wins so
-            # the population table's dtypes stay stable over the simulation.
+            # The existing column's dtype wins so table dtypes stay stable
             update_values = update_values.astype(new_values.dtype)
 
         # Assumes the update index labels can be interpreted as an array position.
         new_values[update_index_positional] = update_values
         new_values = new_values.astype(update_values.dtype)
-        # The explicit dtype stops the constructor from re-inferring object
-        # arrays of strings as the str dtype under pandas 3.
+        # explicit dtype: the constructor re-infers object string arrays otherwise
         new_data: pd.Series[Any] = pd.Series(
             new_values, index=existing.index, name=existing.name, dtype=new_values.dtype
         )

@@ -535,8 +535,7 @@ def test_default_stratified_formatter_converts_object_to_categorical() -> None:
         ),
     )
 
-    # Before formatting: index levels and measure carry the version-default
-    # string dtype (object under pandas 2, str under pandas 3)
+    # Before formatting: index levels and measure are the default string dtype
     string_dtype = pd.Series(["x"]).dtype
     assert results.index.get_level_values("student_house").dtype == string_dtype
     assert results.index.get_level_values("power_level").dtype == string_dtype

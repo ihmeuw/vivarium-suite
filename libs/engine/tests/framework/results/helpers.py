@@ -321,12 +321,7 @@ def results_formatter(
 
 
 def sum_columns(df: pd.DataFrame) -> pd.Series[float]:
-    """Sum each aggregator column.
-
-    Stand-in for the builtin ``sum``, which pandas translated to
-    ``DataFrameGroupBy.sum`` before pandas 3 but now applies directly
-    (iterating column labels and raising a TypeError).
-    """
+    """Sum each aggregator column."""
     return df.sum()
 
 
@@ -336,7 +331,6 @@ def sorting_hat_vectorized(state_table: pd.DataFrame) -> pd.Series[str]:
 
 
 def sorting_hat_serial(simulant_row: pd.Series[str]) -> str:
-    # iloc: pandas 3 removed the positional fallback of Series[int]
     first_name = simulant_row.iloc[0]
     last_name = simulant_row.iloc[1]
     if first_name == "harry":

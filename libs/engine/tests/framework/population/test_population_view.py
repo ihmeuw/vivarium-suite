@@ -744,10 +744,8 @@ def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
         name=col,
     )
     existing = PIE_DF[col].copy()
-    # Change the type to object, mimicking a column without a natural null type
-    # that went object while the population is grown (see the FIXME above the
-    # implementation). Numeric-into-object stays representable on every pandas
-    # version, unlike the strict str dtype that is the default in pandas 3.
+    # object mimics a column without a natural null type that went object
+    # while the population is grown (see the FIXME above the implementation)
     existing = existing.astype(object)
 
     # Should work fine when we're adding simulants
@@ -773,9 +771,7 @@ def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
 @pytest.mark.parametrize(
     "update_values, existing_values, existing_dtype",
     [
-        # String columns infer as object under pandas 2 and str under pandas 3.
         (["a", "b", "c"], ["x", "y", "z"], np.dtype(object)),
-        # pandas 3 infers microseconds where pandas 2 inferred nanoseconds.
         (
             pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-03"]),
             pd.to_datetime(["2025-01-01", "2025-01-02", "2025-01-03"]),
