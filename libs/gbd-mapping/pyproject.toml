@@ -41,7 +41,7 @@ dependencies = [
 data = ["vivarium-gbd-access>=5.0.0, <6.0.0"]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "pytest-vivarium",
 ]
 docs = ["vivarium-dependencies[sphinx]"]
 interactive = ["vivarium-dependencies[interactive]"]
@@ -53,6 +53,10 @@ ci_jenkins = ["vivarium-gbd-mapping[ci_github,cluster]"]
 
 [project.scripts]
 build_mapping = "vivarium.gbd_mapping_generator.build_mapping:build_mapping"
+
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/gbd-mapping"
 
 [tool.setuptools.packages.find]
 where = ["src"]

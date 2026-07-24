@@ -1,12 +1,9 @@
-"""vivarium.public_health
+"""
+======================
+Vivarium Public Health
+======================
 
 Components for modeling diseases, risks, and interventions with vivarium.
-
-Part of the `vivarium-suite monorepo <https://github.com/ihmeuw/vivarium-suite>`_;
-the previously-standalone ``ihmeuw/vivarium_public_health`` GitHub repository
-has been archived. The import path changed from ``vivarium_public_health`` to
-``vivarium.public_health``; update your imports accordingly.
-
 """
 
 from importlib.metadata import PackageNotFoundError, version
