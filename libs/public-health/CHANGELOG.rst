@@ -1,3 +1,7 @@
+**6.4.5 - 07/24/26**
+
+- TEMP (do not merge): exercise the downstream release check; revert before opening the real PR
+
 **6.4.4 - 07/21/26**
 
 - Replace ``FuzzyChecker.fuzzy_assert_proportion()`` calls with ``FuzzyChecker.assert_proportion()``
