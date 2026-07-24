@@ -45,12 +45,21 @@ class ResultsStratifier(Component):
             results_stratifier:
                 data_sources:
                     age_bins:
-                        Source for age bin data. Default is the artifact key
-                        ``population.age_bins``. The data must be a DataFrame
-                        with ``age_start``, ``age_end``, and ``age_group_name``
-                        columns.
+                        Source for age bin data. Defaults to inheriting the
+                        :class:`~vivarium.public_health.population.base_population.BasePopulation`
+                        component's ``population.age_bins`` definition. The data
+                        must be a DataFrame with ``age_start``, ``age_end``, and
+                        ``age_group_name`` columns.
         """
-        return {self.name: {"data_sources": {"age_bins": "population.age_bins"}}}
+        return {
+            self.name: {
+                "data_sources": {
+                    "age_bins": lambda builder: self.get_data(
+                        builder, builder.configuration.population.age_bins
+                    )
+                }
+            }
+        }
 
     #####################
     # Lifecycle methods #
@@ -157,10 +166,10 @@ class ResultsStratifier(Component):
         """Get the age bins for stratifying by age.
 
         Resolve the ``age_bins`` data source via
-        :meth:`~vivarium.engine.component.Component.get_data` (the
-        ``population.age_bins`` artifact key by default, or a DataFrame
-        supplied through the configuration tree), then restrict the bins to
-        the simulation's age range and normalize the age-group names.
+        :meth:`~vivarium.engine.component.Component.get_data` (inheriting the
+        population component's ``population.age_bins`` definition by default, or
+        a DataFrame supplied through the configuration tree), then restrict the
+        bins to the simulation's age range and normalize the age-group names.
 
         Parameters
         ----------

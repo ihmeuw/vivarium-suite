@@ -93,8 +93,8 @@ def test_results_stratifier_register_stratifications(mocker):
     mocker.patch.object(builder, "results.register_stratification")
     builder.results.register_stratification = mocker.MagicMock()
     rs = ResultsStratifier()
-    # get_age_bins now routes through self.get_data on this data source; point it
-    # at the artifact key so the mocked builder.data.load is still exercised.
+    # Override the (inherit-from-population) default with the artifact key directly
+    # so the mocked builder.data.load is exercised without a population config.
     rs.configuration = ConfigTree({"data_sources": {"age_bins": "population.age_bins"}})
 
     builder.results.register_stratification.assert_not_called()

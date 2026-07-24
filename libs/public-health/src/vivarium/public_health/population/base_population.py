@@ -61,6 +61,11 @@ class BasePopulation(Component):
                 location:
                     Source for location data. Default is the
                     ``population.location`` artifact key.
+                age_bins:
+                    Canonical source for the age-bin definitions shared with
+                    components that bin or stratify by age (e.g. the results
+                    stratifier and the LBWSG risk effect). Default is the
+                    ``population.age_bins`` artifact key.
                 initialization_age_min: int
                     Minimum age for initial population generation. Default 0.
                 initialization_age_max: int
@@ -75,6 +80,7 @@ class BasePopulation(Component):
             "population": {
                 "population_structure": "population.structure",
                 "location": "population.location",
+                "age_bins": "population.age_bins",
                 "initialization_age_min": 0,
                 "initialization_age_max": 125,
                 "untracking_age": None,

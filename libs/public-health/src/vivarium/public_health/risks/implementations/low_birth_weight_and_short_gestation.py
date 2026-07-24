@@ -618,10 +618,11 @@ class LBWSGRiskEffect(RiskEffect):
             {risk_effect_name}:
                 data_sources:
                     age_bins:
-                        Source for age bin data. Default is the artifact key
-                        ``population.age_bins``. The data must be a DataFrame
-                        with ``age_start``, ``age_end``, and ``age_group_name``
-                        columns.
+                        Source for age bin data. Defaults to inheriting the
+                        :class:`~vivarium.public_health.population.base_population.BasePopulation`
+                        component's ``population.age_bins`` definition. The data
+                        must be a DataFrame with ``age_start``, ``age_end``, and
+                        ``age_group_name`` columns.
                     relative_risk_interpolator:
                         Source for the 2D RR interpolators. Default is the
                         artifact key ``{risk}.relative_risk_interpolator``. The
@@ -631,7 +632,9 @@ class LBWSGRiskEffect(RiskEffect):
                         ``year_end`` columns, which are dropped).
         """
         config = super().configuration_defaults
-        config[self.name]["data_sources"]["age_bins"] = "population.age_bins"
+        config[self.name]["data_sources"]["age_bins"] = lambda builder: self.get_data(
+            builder, builder.configuration.population.age_bins
+        )
         config[self.name]["data_sources"][
             "relative_risk_interpolator"
         ] = f"{self.causal_factor}.relative_risk_interpolator"

@@ -524,6 +524,11 @@ Configuration summary for BasePopulation
      - ``"population.location"``
      - Location string. Accepts a scalar string, callable,
        or data key.
+   * - ``population.age_bins``
+     - ``"population.age_bins"``
+     - Canonical age-bin definition shared with components that bin by age
+       (e.g. the results stratifier). Accepts a DataFrame, callable, or data
+       key.
    * - ``population.initialization_age_min``
      - 0
      - Minimum age (years) for the initial population.

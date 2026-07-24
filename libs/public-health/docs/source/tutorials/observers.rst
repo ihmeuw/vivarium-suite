@@ -72,8 +72,8 @@ Most observers aggregate pipeline values and register no input data of their
 own. The exception is :class:`~vivarium.public_health.results.ResultsStratifier`,
 which sources the age bins used for age-group stratification through a
 ``data_sources`` configuration pattern that lets you run without an artifact.
-Its ``age_bins`` key defaults to the artifact key ``population.age_bins`` but
-can be overridden with:
+Its ``age_bins`` key defaults to inheriting the population component's
+``population.age_bins`` definition, but can be overridden with:
 
 - **DataFrame** - use the DataFrame directly.
 - **Callable** - call the function at setup time to return such a DataFrame.
