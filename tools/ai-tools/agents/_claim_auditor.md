@@ -1,6 +1,6 @@
 ---
 name: _claim_auditor
-description: "Use when: auditing a single AI-plaintext unit (a skill, agent, a plugin README, or CLAUDE.md) for drift — extracting its load-bearing checkable claims and verifying each against its upstream source, returning structured findings. Spawned per-unit by the /simsci-internal:repo-maintenance skill."
+description: "Use when: auditing a single AI-plaintext unit (a skill, agent, plugin README, or CLAUDE.md) for drift — extracting its load-bearing checkable claims and verifying each against its upstream source, returning structured findings. Spawned per-unit by the /simsci-internal:repo-maintenance skill."
 tools:
   # Claude vocabulary (Copilot silently drops unknown tokens)
   - Read
