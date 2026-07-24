@@ -37,8 +37,8 @@ The lead's brief gives you:
   note on what in it is **source-specific** (its package name, a per-package
   config file, its paths, its CHANGELOG/version) versus the
   **generalizable** boilerplate you are meant to carry over.
-- **`check_command`** *(optional)*: the repo's canonical check command, when
-  the lead knows it.
+- **`check_command`** *(optional)*: the repo's canonical check command, if one
+  exists and the lead knows it.
 - **`target_basis`** *(optional)*: source material specific to **this** target
   that the lead has already gathered for you. When present, use it as the seed for
   your target's version; fall back to the shared `reference_files` when absent.
