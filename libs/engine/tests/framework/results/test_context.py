@@ -297,7 +297,7 @@ def test_register_observation_duplicate_name_raises() -> None:
 )
 def test_adding_observation_gather_results(
     aggregator_sources: list[str],
-    aggregator: Callable[..., int | float],
+    aggregator: Callable[..., int | float | pd.Series[float]],
     stratifications: list[str],
     event: Event,
     mocker: MockerFixture,
@@ -442,7 +442,7 @@ def test_concatenating_observation_gather_results(
 def test_gather_results_partial_stratifications_in_results(
     name: str,
     aggregator_sources: list[str],
-    aggregator: Callable[..., int | float],
+    aggregator: Callable[..., int | float | pd.Series[float]],
     stratifications: list[str],
     event: Event,
     mocker: MockerFixture,

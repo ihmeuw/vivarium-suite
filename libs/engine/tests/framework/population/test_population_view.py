@@ -4,6 +4,7 @@ import datetime
 import random
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
@@ -773,12 +774,12 @@ def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
     "update_values, existing_values, existing_dtype",
     [
         # String columns infer as object under pandas 2 and str under pandas 3.
-        (["a", "b", "c"], ["x", "y", "z"], object),
+        (["a", "b", "c"], ["x", "y", "z"], np.dtype(object)),
         # pandas 3 infers microseconds where pandas 2 inferred nanoseconds.
         (
             pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-03"]),
             pd.to_datetime(["2025-01-01", "2025-01-02", "2025-01-03"]),
-            "datetime64[us]",
+            np.dtype("datetime64[us]"),
         ),
     ],
     ids=["string_vs_object", "datetime_unit"],
@@ -786,7 +787,7 @@ def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
 def test__update_column_and_ensure_dtype_compatible_dtypes(
     update_values: list[str] | pd.DatetimeIndex,
     existing_values: list[str] | pd.DatetimeIndex,
-    existing_dtype: type | str,
+    existing_dtype: np.dtype[Any],
 ) -> None:
     """Compatible-but-unequal dtype updates keep the existing column's dtype."""
     update = pd.Series(update_values, name="col")
