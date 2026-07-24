@@ -28,6 +28,7 @@ These are not built or released by the monorepo's CI/release workflows.
 | Directory | Purpose |
 |---|---|
 | `tools/ai-tools/` | Claude Code plugin: custom agent workflows for vivarium development (code review, regression debugging) |
+| `tools/model-template/` | Cookiecutter template for producing research model repositories |
 
 ## Local development
 
