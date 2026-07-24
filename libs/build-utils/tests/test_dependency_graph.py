@@ -53,6 +53,10 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
       (e.g. to write a malformed version for the error path).
     - ``omit_name`` (bool, default ``False``): write a ``pyproject.toml`` with no
       ``[project].name`` line (for the unparseable-dist-name error path).
+    - ``python_versions`` (Sequence[str], default ``["3.11"]``): contents of
+      ``python_versions.json``.
+    - ``omit_python_versions`` (bool, default ``False``): write no
+      ``python_versions.json`` (for the missing-file error path).
 
     Returns the ``libs/`` Path.
     """
@@ -94,6 +98,12 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
                 version = cfg.get("version", "1.0.0")
                 first_line = f"**{version} - 06/24/26**"
             (pkg_dir / "CHANGELOG.rst").write_text(first_line + "\n\n- Initial.\n")
+
+            if not cfg.get("omit_python_versions", False):
+                python_versions = cfg.get("python_versions", ["3.11"])
+                (pkg_dir / "python_versions.json").write_text(
+                    json.dumps(python_versions) + "\n"
+                )
 
         return libs_dir
 
@@ -1112,12 +1122,12 @@ class TestCLIBuildReleaseMatrix:
 class TestCLIBuildDownstreamMatrix:
     """Tests for the ``build-downstream-matrix`` CLI subcommand."""
 
-    def test_emits_downstream_at_canonical_and_excludes_released(
+    def test_emits_downstream_and_excludes_released(
         self,
         make_monorepo: MonorepoFactory,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """The downstream lib is emitted at the canonical version; the released lib is excluded."""
+        """The downstream lib is emitted; the released lib is excluded."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
         rc = main_with(
             ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
@@ -1159,23 +1169,17 @@ class TestCLIBuildDownstreamMatrix:
         out = json.loads(capsys.readouterr().out)
         assert out == {"include": [{"library": "shared", "python-version": "3.11"}]}
 
-    def test_all_versions_expands_matrix(
+    def test_emits_one_entry_per_python_version(
         self,
         make_monorepo: MonorepoFactory,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """`--all-versions` emits one entry per version in the downstream's python_versions.json."""
-        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-        (libs_dir / "a" / "python_versions.json").write_text(json.dumps(["3.11", "3.12"]))
+        """Each downstream is emitted once per version in its python_versions.json."""
+        libs_dir = make_monorepo(
+            {"a": {"deps": ["vivarium-b"], "python_versions": ["3.11", "3.12"]}, "b": {}}
+        )
         rc = main_with(
-            [
-                "build-downstream-matrix",
-                "--released",
-                "b",
-                "--all-versions",
-                "--libs-dir",
-                str(libs_dir),
-            ]
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
         )
         assert rc == 0
         out = json.loads(capsys.readouterr().out)
@@ -1186,42 +1190,20 @@ class TestCLIBuildDownstreamMatrix:
             ]
         }
 
-    def test_python_version_override(
+    def test_errors_on_missing_python_versions(
         self,
         make_monorepo: MonorepoFactory,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """`--python-version` pins the version for every downstream entry."""
-        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-        rc = main_with(
-            [
-                "build-downstream-matrix",
-                "--released",
-                "b",
-                "--python-version",
-                "3.13",
-                "--libs-dir",
-                str(libs_dir),
-            ]
+        """A downstream lib with no python_versions.json fails the gate instead of being dropped."""
+        libs_dir = make_monorepo(
+            {"a": {"deps": ["vivarium-b"], "omit_python_versions": True}, "b": {}}
         )
-        assert rc == 0
-        out = json.loads(capsys.readouterr().out)
-        assert out == {"include": [{"library": "a", "python-version": "3.13"}]}
-
-    def test_canonical_falls_back_to_min_without_311(
-        self,
-        make_monorepo: MonorepoFactory,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        """When a downstream doesn't support 3.11, the canonical run uses its lowest version."""
-        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-        (libs_dir / "a" / "python_versions.json").write_text(json.dumps(["3.12", "3.13"]))
         rc = main_with(
             ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
-        out = json.loads(capsys.readouterr().out)
-        assert out == {"include": [{"library": "a", "python-version": "3.12"}]}
+        assert rc == 1
+        assert "python_versions.json not found" in capsys.readouterr().err
 
     def test_clean_exit_on_unknown_library(
         self,

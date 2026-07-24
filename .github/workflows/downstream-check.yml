@@ -29,6 +29,9 @@ jobs:
       releasing-libs: ${{ steps.detect.outputs.releasing-libs }}
       downstream-matrix: ${{ steps.detect.outputs.downstream-matrix }}
       has-downstream: ${{ steps.detect.outputs.has-downstream }}
+      # "Was the downstream check requested?" - the run-downstream label or a manual
+      # dispatch. Computed once here so the fan-out and the required-check agree.
+      requested: ${{ contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -46,9 +49,9 @@ jobs:
           pip install packaging
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_REF="${{ github.event.pull_request.base.ref }}"
-            HEAD_REF="${{ github.event.pull_request.head.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
             git fetch origin "$BASE_REF"
-            CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_REF}")
+            CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_SHA}")
           else
             git fetch origin main
             CHANGED=$(git diff --name-only "origin/main...HEAD")
@@ -86,9 +89,7 @@ jobs:
     # editably at their pending versions. Runs only when there ARE dependents AND
     # the run was requested (the label is present, or a manual dispatch).
     needs: detect
-    if: >-
-      needs.detect.outputs.has-downstream == 'true' &&
-      (contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch')
+    if: needs.detect.outputs.has-downstream == 'true' && needs.detect.outputs.requested == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -126,8 +127,9 @@ jobs:
         run: cd libs/${{ matrix.library }} && make test-all
 
   downstream-status:
-    # The required status check on main. Auto-passes when there's nothing
-    # downstream; otherwise green only once the check has actually run and passed.
+    # The required status check on main. Red until the check is requested (the
+    # run-downstream label or a manual dispatch); once requested it passes when the
+    # PR has no in-tree dependents or the downstream fan-out succeeded.
     name: downstream-status
     needs: [detect, downstream]
     if: always()
@@ -138,7 +140,7 @@ jobs:
           DETECT="${{ needs.detect.result }}"
           HAS="${{ needs.detect.outputs.has-downstream }}"
           RESULT="${{ needs.downstream.result }}"
-          REQUESTED="${{ contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch' }}"
+          REQUESTED="${{ needs.detect.outputs.requested }}"
 
           # Fail loudly on an infrastructure failure in detect: its empty outputs
           # would otherwise read as "no dependents" and pass the required check blindly.

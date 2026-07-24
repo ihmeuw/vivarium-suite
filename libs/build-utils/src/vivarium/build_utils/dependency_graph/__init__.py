@@ -1,7 +1,7 @@
 """In-tree dependency graph for the vivarium-suite monorepo.
 
 This package is the single source of truth for the dependency relationships
-between the packages under ``libs/``. It powers two cross-package CI flows that
+between the packages under ``libs/``. It powers three cross-package CI flows that
 let a single PR (or merge) span interdependent packages without an interim
 release:
 
@@ -21,6 +21,12 @@ release:
    dependencies-first, where each entry carries the in-batch upstreams it must
    wait for on PyPI before installing; independent packages release in parallel
    while dependents serialize along real dependency edges.
+
+3. **Downstream release check** (consumed by the Downstream Check workflow via the
+   ``build-downstream-matrix`` CLI subcommand). When a PR bumps a library's version,
+   :func:`get_transitive_downstreams` finds that library's in-tree dependents and
+   ``build-downstream-matrix`` emits a GitHub Actions matrix so each dependent is
+   tested against the pending version before the release can merge.
 
 Run as ``python -m vivarium.build_utils.dependency_graph <subcommand>``.
 

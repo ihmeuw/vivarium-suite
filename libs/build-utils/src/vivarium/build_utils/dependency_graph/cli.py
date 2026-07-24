@@ -16,10 +16,8 @@ from pathlib import Path
 from .editable import build_install_plan, get_editable_upstreams, run_install
 from .graph import get_transitive_downstreams, sort_topologically
 from .loading import load_libs
-from .models import DependencyConflictError, DependencyCycleError, Lib
+from .models import DependencyConflictError, DependencyCycleError
 from .release import get_release_matrix
-
-CANONICAL_PYTHON_VERSION = "3.11"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -37,12 +35,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         the dependency-ordered release matrix JSON to stdout. Used by the
         release workflow's detect job.
 
-    ``build-downstream-matrix --released "<names>"
-        [--python-version <ver> | --all-versions] [--libs-dir <path>]``
+    ``build-downstream-matrix --released "<names>" [--libs-dir <path>]``
         Print the GitHub Actions matrix JSON of the libraries downstream of the
         released ``<names>`` (their transitive dependents, excluding the released
-        set), one entry per library at its canonical Python version. Used by the
-        CI workflow's release-gate to test dependents against pending versions.
+        set), one entry per dependent per Python version in its
+        ``python_versions.json``. Used by the Downstream Check workflow to test
+        dependents against the releasing libs' pending versions.
 
     ``verify-editable <target> --changed "<names>" [--libs-dir <path>]``
         Recompute the editable upstreams selected of ``target`` and assert each
@@ -83,8 +81,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     # build-downstream-matrix
     downstream_parser = subparsers.add_parser("build-downstream-matrix")
     downstream_parser.add_argument("--released", default="")
-    downstream_parser.add_argument("--python-version", default=None)
-    downstream_parser.add_argument("--all-versions", action="store_true")
     downstream_parser.add_argument("--libs-dir", default=None)
 
     # verify-editable
@@ -221,29 +217,21 @@ def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
         print(f"unknown library: {error.args[0]}", file=sys.stderr)
         return 1
 
+    # Every dependent runs on its full python_versions.json matrix: the check runs
+    # once at merge, so there's no cost reason to sample a single canonical version.
     include: list[dict[str, str]] = []
     for name in sorted(downstream):
-        for python_version in _downstream_python_versions(libs[name], args):
+        versions = _read_python_versions(libs[name].path)
+        if not versions:
+            print(
+                f"::error::libs/{name}/python_versions.json not found or empty",
+                file=sys.stderr,
+            )
+            return 1
+        for python_version in versions:
             include.append({"library": name, "python-version": python_version})
     print(json.dumps({"include": include}))
     return 0
-
-
-def _downstream_python_versions(lib: Lib, args: argparse.Namespace) -> list[str]:
-    """Return the Python versions to test ``lib`` on for a downstream run.
-
-    One canonical version by default (the cost lever); the full
-    ``python_versions.json`` matrix under ``--all-versions``; or an explicit
-    ``--python-version``.
-    """
-    if args.python_version:
-        return [args.python_version]
-    versions = _read_python_versions(lib.path)
-    if args.all_versions:
-        return versions
-    if not versions or CANONICAL_PYTHON_VERSION in versions:
-        return [CANONICAL_PYTHON_VERSION]
-    return [min(versions, key=lambda v: tuple(int(part) for part in v.split(".")))]
 
 
 def _read_python_versions(lib_path: Path) -> list[str]:
