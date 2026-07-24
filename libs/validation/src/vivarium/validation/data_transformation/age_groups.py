@@ -659,11 +659,8 @@ def rebin_count_dataframe(
         # Name the column GBD_INDEX_NAMES.AGE_GROUP for re-stacking
         result_matrix_for_col.columns.name = INPUT_DATA_INDEX_NAMES.AGE_GROUP
 
-        # Stack the new age group columns into the index, preserving rows with NaN
-        # values for age groups with no source data. dropna= was removed in pandas 3
-        # and future_stack= (accepted-but-inert there) only exists from pandas 2.1,
-        # while the Jenkins validation env still runs pandas 1.5 — hence the gate.
-        # Collapse to a bare stack() once pandas <3 support ends.
+        # Stack the new age group columns into the index, preserving rows with
+        # NaN values for age groups with no source data
         stacked_series_for_col = result_matrix_for_col.stack(
             level=INPUT_DATA_INDEX_NAMES.AGE_GROUP, **_STACK_KWARGS
         )

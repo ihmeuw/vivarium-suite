@@ -2,10 +2,8 @@
 
 - Support pandas 3 (MIC-6773): version-gate the NaN-preserving ``stack()`` kwargs
   (``dropna=`` was removed in pandas 3), pass ``observed=True`` when grouping plot
-  data, make ``CategoricalRelativeRisk`` index level order deterministic across
-  pandas versions, and run pandas >=2.1 test suites with copy-on-write and
-  ``future.infer_string`` enabled; suite verified green on pandas 1.5.3, 2.3.3,
-  and 3.0.3
+  data, and make ``CategoricalRelativeRisk`` index level order deterministic
+  across pandas versions
 
 **0.1.2 - 07/23/26**
 

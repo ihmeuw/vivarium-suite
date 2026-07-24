@@ -454,9 +454,6 @@ class CategoricalRelativeRisk(RatioMeasure):
         risk_stratified_measure_data = risk_stratified_measure_data.rename(
             index=risk_category_mapping, level="parameter"
         ).rename_axis(index={"parameter": self.risk_stratification_column})
-        # Broadcasting with unequal index levels orders the result's levels
-        # differently across pandas versions; make the order deterministic:
-        # affected-measure levels first, then the risk levels.
         affected_levels = [
             name
             for name in affected_measure_data.index.names
