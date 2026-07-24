@@ -1,9 +1,8 @@
 **6.5.0 - 07/24/26**
 
 - Support pandas 3 (MIC-6773): pass ``include_groups=False`` at the remaining
-  ``groupby(...).apply`` sites, pin the NaN-dropping ``stack()`` behavior with
-  explicit ``dropna()`` (pandas 3 keeps NaN rows), and run pandas >=2.1 test
-  suites with copy-on-write and ``future.infer_string`` enabled
+  ``groupby(...).apply`` sites and pin the NaN-dropping ``stack()`` behavior
+  with explicit ``dropna()``
 
 **6.4.5 - 07/23/26**
 

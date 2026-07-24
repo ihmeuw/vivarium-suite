@@ -194,7 +194,6 @@ class DisabilityObserver(PublicHealthObserver):
             )
         # Get desired index names prior to stacking
         idx_names = list(results.index.names) + [COLUMNS.SUB_ENTITY]
-        # dropna() pins the pandas 2 stack behavior; pandas 3 keeps NaN rows
         results = pd.DataFrame(results.stack().dropna(), columns=[COLUMNS.VALUE])
         # Name the new index level
         results.index.set_names(idx_names, inplace=True)
