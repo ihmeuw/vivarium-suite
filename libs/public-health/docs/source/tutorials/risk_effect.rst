@@ -90,39 +90,39 @@ The table below lists every data key used by the risk effect components.
 .. list-table::
    :header-rows: 1
 
-   * - Key
+   * - Configuration key
+     - Default
      - Index columns
      - Value columns
      - Used by
-     - Configurable?
-   * - ``risk_factor.{name}.relative_risk``
+   * - ``risk_effect.{name}_on_{target}.data_sources.relative_risk``
+     - ``risk_factor.{name}.relative_risk``
      - age, sex, year, parameter, affected_entity, affected_measure
      - ``value`` (relative risk per category)
      - :class:`~vivarium.public_health.risks.effect.RiskEffect`,
        :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect`
-     - Yes - ``risk_effect.{name}_on_{target}.data_sources.relative_risk``
-   * - ``risk_factor.{name}.population_attributable_fraction``
+   * - ``risk_effect.{name}_on_{target}.data_sources.population_attributable_fraction``
+     - ``risk_factor.{name}.population_attributable_fraction``
      - age, sex, year, affected_entity, affected_measure
      - ``value`` (fraction)
      - :class:`~vivarium.public_health.risks.effect.RiskEffect`,
        :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect`
-     - Yes - ``risk_effect.{name}_on_{target}.data_sources.population_attributable_fraction``
-   * - ``risk_factor.{name}.tmred``
+   * - ``risk_effect.{name}_on_{target}.data_sources.tmred``
+     - ``risk_factor.{name}.tmred`` (single-row DataFrame)
      - (scalar record)
      - ``distribution``, ``min``, ``max``
      - :class:`~vivarium.public_health.risks.effect.RiskEffect` (continuous),
        :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect`
-     - Yes - ``risk_effect.{name}_on_{target}.data_sources.tmred`` (single-row DataFrame)
-   * - ``risk_factor.{name}.relative_risk_scalar``
+   * - ``risk_effect.{name}_on_{target}.data_sources.relative_risk_scalar``
+     - ``risk_factor.{name}.relative_risk_scalar``
      - (scalar)
      - ``value``
      - :class:`~vivarium.public_health.risks.effect.RiskEffect` (continuous)
-     - Yes - ``risk_effect.{name}_on_{target}.data_sources.relative_risk_scalar``
-   * - ``population.demographic_dimensions``
+   * - ``risk_effect.{name}_on_{target}.data_sources.demographic_dimensions``
+     - ``population.demographic_dimensions``
      - age, sex, year
      - (none)
      - :class:`~vivarium.public_health.risks.effect.RiskEffect` (scalar RR, dichotomous)
-     - Yes - ``risk_effect.{name}_on_{target}.data_sources.demographic_dimensions``
 
 
 Artifact data shapes

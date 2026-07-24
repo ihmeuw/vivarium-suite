@@ -20,66 +20,65 @@ supplied directly as a scalar, ``DataFrame``, or callable through the
 Data keys
 ---------
 
-The table below lists every data key used by the disease components. Keys marked
-**configurable** can be overridden in the ``data_sources`` section of the
-configuration; the artifact key shown is the default unless the row notes
-otherwise.
+Every key below is configurable, so the table leads with the ``data_sources``
+configuration key that overrides it; the ``Default`` column is the artifact key
+(or scalar) used when no override is supplied.
 
 .. list-table::
    :header-rows: 1
 
-   * - Key
+   * - Configuration key
+     - Default
      - Index columns
      - Value columns
      - Used by
-     - Configurable?
-   * - ``cause.{cause}.prevalence``
+   * - ``{state}.data_sources.prevalence``
+     - ``cause.{cause}.prevalence``
      - age, sex, year
      - ``value`` (fraction)
      - :class:`~vivarium.public_health.disease.state.DiseaseState`
-     - Yes - ``{state}.data_sources.prevalence``
-   * - ``cause.{cause}.birth_prevalence``
+   * - ``{state}.data_sources.birth_prevalence``
+     - ``0.0`` (neonatal models: ``cause.{cause}.birth_prevalence``)
      - age, sex, year
      - ``value`` (fraction)
      - :class:`~vivarium.public_health.disease.state.DiseaseState` (neonatal models)
-     - Yes - ``{state}.data_sources.birth_prevalence``
-   * - *(no artifact key; default* ``0.0`` *)*
+   * - ``{state}.data_sources.dwell_time``
+     - ``0.0``
      - age, sex, year (or scalar)
      - ``value`` (days)
      - :class:`~vivarium.public_health.disease.state.DiseaseState`
-     - Yes - ``{state}.data_sources.dwell_time``
-   * - ``cause.{cause}.disability_weight``
+   * - ``{state}.data_sources.disability_weight``
+     - ``cause.{cause}.disability_weight``
      - age, sex, year (or single row)
      - ``value`` (weight)
      - :class:`~vivarium.public_health.disease.state.DiseaseState`
-     - Yes - ``{state}.data_sources.disability_weight``
-   * - ``cause.{cause}.excess_mortality_rate``
+   * - ``{state}.data_sources.excess_mortality_rate``
+     - ``cause.{cause}.excess_mortality_rate``
      - age, sex, year
      - ``value`` (rate)
      - :class:`~vivarium.public_health.disease.state.DiseaseState`
-     - Yes - ``{state}.data_sources.excess_mortality_rate``
-   * - ``cause.{cause}.incidence_rate``
+   * - ``{transition}.data_sources.transition_rate``
+     - ``cause.{cause}.incidence_rate``
      - age, sex, year
      - ``value`` (rate)
      - :class:`~vivarium.public_health.disease.transition.RateTransition` (from
        susceptible state)
-     - Yes - ``{transition}.data_sources.transition_rate``
-   * - ``cause.{cause}.remission_rate``
+   * - ``{transition}.data_sources.transition_rate``
+     - ``cause.{cause}.remission_rate``
      - age, sex, year
      - ``value`` (rate)
      - :class:`~vivarium.public_health.disease.transition.RateTransition` (from
        infected state)
-     - Yes - ``{transition}.data_sources.transition_rate``
-   * - *(no artifact key; supplied directly)*
+   * - ``{transition}.data_sources.proportion``
+     - *(supplied directly; no artifact key)*
      - age, sex, year (or scalar)
      - ``value`` (proportion)
      - :class:`~vivarium.public_health.disease.transition.ProportionTransition`
-     - Yes - ``{transition}.data_sources.proportion``
-   * - ``cause.{cause}.cause_specific_mortality_rate``
+   * - ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
+     - ``cause.{cause}.cause_specific_mortality_rate``
      - age, sex, year
      - ``value`` (rate)
      - :class:`~vivarium.public_health.disease.model.DiseaseModel`
-     - Yes - ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
 
 ``birth_prevalence`` and ``dwell_time`` have no artifact key of their own: each
 defaults to the scalar ``0.0`` and is loaded from an artifact only when a key is

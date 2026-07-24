@@ -87,52 +87,52 @@ keys with a scalar, DataFrame, or callable (see `Data sources`_).
 Data keys
 ^^^^^^^^^
 
-The table below lists every data key used by the population components.
-All of them can be overridden through the configuration (see the
-**Configuration override** column below and `Data sources`_); the data key
-shown is simply the default.
+The table below lists every data key used by the population components. All of
+them can be overridden through the configuration, so the table leads with the
+**Configuration key** (see also `Data sources`_); the ``Default`` column is the
+artifact key used when no override is supplied.
 
 .. list-table::
    :header-rows: 1
 
-   * - Key
+   * - Configuration key
+     - Default
      - Index columns
      - Value columns
      - Used by
-     - Configuration override
-   * - ``population.structure``
+   * - ``population.population_structure``,
+       ``fertility.data_sources.population_structure``
+     - ``population.structure``
      - age, sex, year, location
      - ``value`` (population count)
      - :class:`~vivarium.public_health.population.base_population.BasePopulation`,
        :class:`~vivarium.public_health.population.base_population.ScaledPopulation`,
        :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
-     - ``population.population_structure``,
-       ``fertility.data_sources.population_structure``
    * - ``population.location``
+     - ``population.location``
      - *(scalar)*
      - A string (e.g. ``"Kenya"``)
      - :class:`~vivarium.public_health.population.base_population.BasePopulation`
-     - ``population.location``
-   * - ``cause.all_causes.cause_specific_mortality_rate``
+   * - ``mortality.data_sources.all_cause_mortality_rate``
+     - ``cause.all_causes.cause_specific_mortality_rate``
      - age, sex, year
      - ``value`` (rate)
      - :class:`~vivarium.public_health.population.mortality.Mortality`
-     - ``mortality.data_sources.all_cause_mortality_rate``
-   * - ``population.theoretical_minimum_risk_life_expectancy``
+   * - ``mortality.data_sources.life_expectancy``
+     - ``population.theoretical_minimum_risk_life_expectancy``
      - age
      - ``value`` (years of remaining life)
      - :class:`~vivarium.public_health.population.mortality.Mortality`
-     - ``mortality.data_sources.life_expectancy``
-   * - ``covariate.live_births_by_sex.estimate``
+   * - ``fertility.data_sources.live_births_by_sex``
+     - ``covariate.live_births_by_sex.estimate``
      - year, sex, ``parameter``
      - ``value``
      - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
-     - ``fertility.data_sources.live_births_by_sex``
-   * - ``covariate.age_specific_fertility_rate.estimate``
+   * - ``fertility_age_specific_rates.data_sources.age_specific_fertility_rate``
+     - ``covariate.age_specific_fertility_rate.estimate``
      - age, sex, year, ``parameter``
      - ``value``
      - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`
-     - ``fertility_age_specific_rates.data_sources.age_specific_fertility_rate``
 
 
 Data sources
@@ -510,7 +510,7 @@ Configuration summary for BasePopulation
 .. list-table::
    :header-rows: 1
 
-   * - Key
+   * - Configuration key
      - Default
      - Description
    * - ``population.population_size``

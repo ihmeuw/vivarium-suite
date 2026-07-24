@@ -91,30 +91,30 @@ The table below lists every data key used by the
 .. list-table::
    :header-rows: 1
 
-   * - Key
+   * - Configuration key
+     - Default
      - Index columns
      - Value columns
-     - Configurable?
-   * - ``risk_factor.{name}.distribution``
+   * - ``risk_factor.{name}.distribution_type``
+     - ``risk_factor.{name}.distribution``
      - *(scalar)*
      - A string (e.g., ``"dichotomous"``)
-     - Yes - ``risk_factor.{name}.distribution_type``
-   * - ``risk_factor.{name}.exposure``
+   * - ``risk_factor.{name}.data_sources.exposure``
+     - ``risk_factor.{name}.exposure``
      - age, sex, year, parameter
      - ``value`` (proportion per category)
-     - Yes - ``risk_factor.{name}.data_sources.exposure``
-   * - ``risk_factor.{name}.exposure_distribution_weights``
+   * - ``risk_factor.{name}.data_sources.ensemble_distribution_weights``
+     - ``risk_factor.{name}.exposure_distribution_weights``
      - age, sex, year, parameter
      - ``value`` (ensemble weight per distribution)
-     - Yes - ``risk_factor.{name}.data_sources.ensemble_distribution_weights``
-   * - ``risk_factor.{name}.exposure_standard_deviation``
+   * - ``risk_factor.{name}.data_sources.exposure_standard_deviation``
+     - ``risk_factor.{name}.exposure_standard_deviation``
      - age, sex, year
      - ``value`` (standard deviation)
-     - Yes - ``risk_factor.{name}.data_sources.exposure_standard_deviation``
-   * - ``risk_factor.{name}.categories``
+   * - ``risk_factor.{name}.data_sources.categories``
+     - ``risk_factor.{name}.categories``
      - *(mapping)*
      - category name to description
-     - Yes - ``risk_factor.{name}.data_sources.categories``
 
 The last three keys are only consulted for certain distribution types
 (``exposure_distribution_weights`` for ensemble distributions,
