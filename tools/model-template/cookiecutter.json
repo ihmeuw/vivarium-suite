@@ -1,0 +1,16 @@
+{
+    "package_name": "",
+    "current_year": "",
+    "package_description": "Vivarium simulation model for the {{cookiecutter.package_name}} project.",
+    "package_url": "https://github.com/ihmeuw/{{cookiecutter.package_name}}",
+    "ssh_url": "git@github.com:ihmeuw/{{cookiecutter.package_name}}.git",
+    "vivarium_engine_version": "",
+    "vivarium_public_health_version": "",
+    "vivarium_cluster_tools_version": "",
+    "vivarium_inputs_version": "",
+    "vivarium_gbd_mapping_version": "",
+    "vivarium_build_utils_version": "",
+    "__prompts__": {
+        "package_name": "package_name (lowercase, digits, and underscores only (no dashes!), e.g. my_new_model)"
+    }
+}

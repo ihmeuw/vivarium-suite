@@ -1,7 +1,12 @@
-**0.2.1 - 07/23/26**
+**0.2.2 - 07/24/26**
 
 - Run pandas >=2.1 test suites with copy-on-write and ``future.infer_string``
   enabled to exercise pandas 3 semantics ahead of the unpin (MIC-6773)
+
+**0.2.1 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
 
 **0.2.0 - 07/21/26**
 

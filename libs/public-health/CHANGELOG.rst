@@ -1,3 +1,8 @@
+**6.4.5 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
 **6.4.4 - 07/21/26**
 
 - Replace ``FuzzyChecker.fuzzy_assert_proportion()`` calls with ``FuzzyChecker.assert_proportion()``

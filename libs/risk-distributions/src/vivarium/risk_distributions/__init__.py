@@ -1,4 +1,10 @@
-"""Risk distributions for use with the ``vivarium`` simulation framework."""
+"""
+===========================
+Vivarium Risk Distributions
+===========================
+
+Risk distributions for use with the ``vivarium`` simulation framework.
+"""
 
 from __future__ import annotations
 
