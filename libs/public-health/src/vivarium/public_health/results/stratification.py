@@ -14,6 +14,8 @@ import pandas as pd
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 
+from vivarium.public_health.population.base_population import get_population_age_bins
+
 
 class ResultsStratifier(Component):
     """A component for registering common public health stratifications.
@@ -45,21 +47,14 @@ class ResultsStratifier(Component):
             results_stratifier:
                 data_sources:
                     age_bins:
-                        Source for age bin data. Defaults to inheriting the
+                        Source for age bin data. Defaults to the age bins
+                        defined by the simulation's
                         :class:`~vivarium.public_health.population.base_population.BasePopulation`
-                        component's ``population.age_bins`` definition. The data
-                        must be a DataFrame with ``age_start``, ``age_end``, and
-                        ``age_group_name`` columns.
+                        component. The data must be a DataFrame with
+                        ``age_start``, ``age_end``, and ``age_group_name``
+                        columns.
         """
-        return {
-            self.name: {
-                "data_sources": {
-                    "age_bins": lambda builder: self.get_data(
-                        builder, builder.configuration.population.age_bins
-                    )
-                }
-            }
-        }
+        return {self.name: {"data_sources": {"age_bins": get_population_age_bins}}}
 
     #####################
     # Lifecycle methods #
@@ -166,10 +161,10 @@ class ResultsStratifier(Component):
         """Get the age bins for stratifying by age.
 
         Resolve the ``age_bins`` data source via
-        :meth:`~vivarium.engine.component.Component.get_data` (inheriting the
-        population component's ``population.age_bins`` definition by default, or
-        a DataFrame supplied through the configuration tree), then restrict the
-        bins to the simulation's age range and normalize the age-group names.
+        :meth:`~vivarium.engine.component.Component.get_data` (the population
+        component's age bins by default, or a DataFrame supplied through the
+        configuration tree), then restrict the bins to the simulation's age
+        range and normalize the age-group names.
 
         Parameters
         ----------

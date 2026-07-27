@@ -527,8 +527,9 @@ Configuration summary for BasePopulation
    * - ``population.age_bins``
      - ``"population.age_bins"``
      - Canonical age-bin definition shared with components that bin by age
-       (e.g. the results stratifier). Accepts a DataFrame, callable, or data
-       key.
+       (e.g. the results stratifier), which reach it through
+       :func:`~vivarium.public_health.population.base_population.get_population_age_bins`.
+       Accepts a DataFrame, callable, or data key.
    * - ``population.initialization_age_min``
      - 0
      - Minimum age (years) for the initial population.

@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 from vivarium.config_tree import ConfigTree
 
+from vivarium.public_health.population import BasePopulation
 from vivarium.public_health.results.stratification import ResultsStratifier
 
 
@@ -175,6 +176,22 @@ def test_results_stratifier_get_age_bins(mocker):
     rs.configuration = ConfigTree({"data_sources": {"age_bins": "population.age_bins"}})
     age_bins = rs.get_age_bins(builder)
 
+    assert age_bins.equals(pd.DataFrame(AGE_BINS_EXPECTED_DICT))
+
+
+def test_results_stratifier_default_age_bins_source(mocker):
+    """The default age_bins source resolves through the population component."""
+    builder = _mock_age_bins_builder(mocker, initialization_age_min=0.0, untracking_age=5.0)
+    builder.data.load = fake_data_load_population_age_bins
+    builder.configuration.population.age_bins = "population.age_bins"
+    builder.components.get_components_by_type.return_value = [BasePopulation()]
+
+    rs = ResultsStratifier()
+    rs.configuration = ConfigTree(rs.configuration_defaults[rs.name])
+
+    age_bins = rs.get_age_bins(builder)
+
+    builder.components.get_components_by_type.assert_called_once_with(BasePopulation)
     assert age_bins.equals(pd.DataFrame(AGE_BINS_EXPECTED_DICT))
 
 
