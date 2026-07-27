@@ -8,6 +8,8 @@ exposure models and disease models.
 
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from typing import Any
 
@@ -92,18 +94,39 @@ class NonLogLinearRiskEffect(RiskEffect):
     2. Calculates the relative risk at TMREL by linearly interpolating over
        relative risk data defined in the configuration.
     3. Divides relative risk data from configuration by RR at TMREL
-       and clips to be greater than 1.
+       and clips to :attr:`MINIMUM_RELATIVE_RISK`.
     4. Builds a ``LookupTable`` that returns the exposure and RR of the left
        and right edges of the RR bin containing a simulant's exposure.
     5. Uses this ``LookupTable`` to modify the target pipeline by linearly
        interpolating a simulant's RR value and multiplying it by the intended
        target rate.
 
+    Subclasses are expected to adjust this behavior by overriding the small
+    hooks rather than the methods that call them:
+    :attr:`MINIMUM_RELATIVE_RISK` bounds the normalized RRs,
+    :meth:`get_lowest_bin_left_rr` chooses the RR extrapolated below the
+    lowest exposure threshold, and :meth:`get_tmrel` draws the TMREL.
+
     """
+
+    MINIMUM_RELATIVE_RISK: float | None = 1.0
+    """Lower bound applied to the TMREL-normalized relative risks. Set to
+    ``None`` for a risk that is protective over part of its exposure range and
+    so needs to keep relative risks below 1."""
 
     ##############
     # Properties #
     ##############
+
+    @property
+    def exposure_column_name(self) -> str:
+        """Name of the state table column this effect reads exposure from.
+
+        Mirrors :attr:`vivarium.public_health.risks.base_risk.Risk.exposure_column_name`;
+        the exposure is read from the state table rather than the exposure
+        pipeline because it is also a lookup key of the RR table.
+        """
+        return f"{self.causal_factor.name}_exposure_for_non_loglinear_riskeffect"
 
     @property
     def configuration_defaults(self) -> dict[str, Any]:
@@ -173,44 +196,77 @@ class NonLogLinearRiskEffect(RiskEffect):
         rr_data = self.load_relative_risk(builder)
         self.validate_rr_data(rr_data)
 
-        def define_rr_intervals(df: pd.DataFrame) -> pd.DataFrame:
-            """Create left/right exposure and RR interval columns."""
-            # create new row for right-most exposure bin (RR is same as max RR)
-            max_exposure_row = df.tail(1).copy()
-            max_exposure_row["parameter"] = np.inf
-            rr_data = pd.concat([df, max_exposure_row]).reset_index()
-
-            rr_data["left_exposure"] = [0] + rr_data["parameter"][:-1].tolist()
-            rr_data["left_rr"] = [rr_data["value"].min()] + rr_data["value"][:-1].tolist()
-            rr_data["right_exposure"] = rr_data["parameter"]
-            rr_data["right_rr"] = rr_data["value"]
-
-            return rr_data[
-                ["parameter", "left_exposure", "left_rr", "right_exposure", "right_rr"]
-            ]
-
-        # define exposure and rr interval columns
-        demographic_cols = [
-            col for col in rr_data.columns if col != "parameter" and col != "value"
-        ]
+        demographic_cols = self.get_demographic_columns(rr_data)
         rr_data = (
             rr_data.groupby(demographic_cols)
-            .apply(define_rr_intervals)
+            .apply(self.define_rr_intervals, include_groups=False)
             .reset_index(level=-1, drop=True)
             .reset_index()
         )
         rr_data = rr_data.drop("parameter", axis=1)
-        rr_data[
-            f"{self.causal_factor.name}_exposure_for_non_loglinear_riskeffect_start"
-        ] = rr_data["left_exposure"]
-        rr_data[
-            f"{self.causal_factor.name}_exposure_for_non_loglinear_riskeffect_end"
-        ] = rr_data["right_exposure"]
-        # build lookup table
+        rr_data[f"{self.exposure_column_name}_start"] = rr_data["left_exposure"]
+        rr_data[f"{self.exposure_column_name}_end"] = rr_data["right_exposure"]
+
         rr_value_cols = ["left_exposure", "left_rr", "right_exposure", "right_rr"]
         return self.build_lookup_table(
             builder, "relative_risk", data_source=rr_data, value_columns=rr_value_cols
         )
+
+    def define_rr_intervals(self, group: pd.DataFrame) -> pd.DataFrame:
+        """Build the exposure and RR interval columns for one demographic group.
+
+        Each row becomes the bin spanning from the previous exposure threshold
+        to its own, carrying the RR at both edges so
+        :meth:`get_relative_risk_source` can interpolate within the bin. A
+        final open-ended bin is appended above the highest threshold, holding
+        the RR flat.
+
+        Parameters
+        ----------
+        group
+            One demographic group's RR curve, with a ``parameter`` column of
+            ascending exposure thresholds and a ``value`` column of RRs.
+
+        Returns
+        -------
+            The group's bins, with ``left_exposure``, ``left_rr``,
+            ``right_exposure``, and ``right_rr`` columns.
+        """
+        # The right-most bin is unbounded above and holds the last RR.
+        max_exposure_row = group.tail(1).copy()
+        max_exposure_row["parameter"] = np.inf
+        rr_data = pd.concat([group, max_exposure_row]).reset_index()
+
+        rr_data["left_exposure"] = [0.0] + rr_data["parameter"].iloc[:-1].tolist()
+        rr_data["left_rr"] = [self.get_lowest_bin_left_rr(rr_data["value"])] + rr_data[
+            "value"
+        ].iloc[:-1].tolist()
+        rr_data["right_exposure"] = rr_data["parameter"]
+        rr_data["right_rr"] = rr_data["value"]
+
+        return rr_data[
+            ["parameter", "left_exposure", "left_rr", "right_exposure", "right_rr"]
+        ]
+
+    def get_lowest_bin_left_rr(self, rr_values: pd.Series[float]) -> float:
+        """Return the RR at the left edge of the lowest exposure bin.
+
+        That bin spans from zero up to the lowest exposure threshold, below the
+        range the RR curve is defined over, so its left RR is extrapolated
+        rather than read. The default is the smallest RR in the curve, which
+        suits a monotonically increasing curve; override for a curve whose
+        minimum sits elsewhere.
+
+        Parameters
+        ----------
+        rr_values
+            The group's RRs, ordered by ascending exposure.
+
+        Returns
+        -------
+            The RR to assign below the lowest exposure threshold.
+        """
+        return float(rr_values.min())
 
     def load_relative_risk(
         self,
@@ -247,30 +303,14 @@ class NonLogLinearRiskEffect(RiskEffect):
         if configuration is None:
             configuration = self.configuration
 
-        # get TMREL
-        tmred = self.get_tmred(builder, configuration)
-        if tmred["distribution"] == "uniform":
-            draw = builder.configuration.input_data.input_draw_number
-            rng = np.random.default_rng(builder.randomness.get_seed(self.name + str(draw)))
-            self.tmrel = rng.uniform(tmred["min"], tmred["max"])
-        elif tmred["distribution"] == "draws":  # currently only for iron deficiency
-            raise MissingDataError(
-                f"This data has draw-level TMRELs. You will need to contact the research team that models {self.causal_factor.name} to get this data."
-            )
-        else:
-            raise MissingDataError(
-                f"No TMRED found in gbd_mapping for risk {self.causal_factor.name}"
-            )
+        self.tmrel = self.get_tmrel(builder, configuration)
 
-        # calculate RR at TMREL
-        rr_source = configuration.data_sources.relative_risk
-        original_rrs = self.get_filtered_data(builder, rr_source)
-
+        original_rrs = self.get_filtered_data(
+            builder, configuration.data_sources.relative_risk
+        )
         self.validate_rr_data(original_rrs)
 
-        demographic_cols = [
-            col for col in original_rrs.columns if col != "parameter" and col != "value"
-        ]
+        demographic_cols = self.get_demographic_columns(original_rrs)
 
         def get_rr_at_tmrel(rr_data: pd.DataFrame) -> float:
             """Interpolate the relative risk at the TMREL."""
@@ -289,15 +329,55 @@ class NonLogLinearRiskEffect(RiskEffect):
 
         rrs_at_tmrel = (
             original_rrs.groupby(demographic_cols)
-            .apply(get_rr_at_tmrel)
+            .apply(get_rr_at_tmrel, include_groups=False)
             .rename("rr_at_tmrel")
         )
         rr_data = original_rrs.merge(rrs_at_tmrel.reset_index())
         rr_data["value"] = rr_data["value"] / rr_data["rr_at_tmrel"]
-        rr_data["value"] = np.clip(rr_data["value"], 1.0, np.inf)
+        if self.MINIMUM_RELATIVE_RISK is not None:
+            rr_data["value"] = np.clip(rr_data["value"], self.MINIMUM_RELATIVE_RISK, np.inf)
         rr_data = rr_data.drop("rr_at_tmrel", axis=1)
 
         return rr_data
+
+    def get_tmrel(self, builder: Builder, configuration: ConfigTree | None = None) -> float:
+        """Draw the Theoretical Minimum-Risk Exposure Level from the TMRED data.
+
+        Parameters
+        ----------
+        builder
+            Access point for utilizing framework interfaces during setup.
+        configuration
+            Optional configuration override. If ``None``, use
+            ``self.configuration``.
+
+        Returns
+        -------
+            The TMREL, drawn uniformly from the TMRED range.
+
+        Raises
+        ------
+        MissingDataError
+            If the TMRED data uses draw-level TMRELs or is not found.
+        """
+        tmred = self.get_tmred(builder, configuration)
+        if tmred["distribution"] == "uniform":
+            draw = builder.configuration.input_data.input_draw_number
+            rng = np.random.default_rng(builder.randomness.get_seed(self.name + str(draw)))
+            return float(rng.uniform(tmred["min"], tmred["max"]))
+        if tmred["distribution"] == "draws":  # currently only for iron deficiency
+            raise MissingDataError(
+                f"This data has draw-level TMRELs. You will need to contact the research team that models {self.causal_factor.name} to get this data."
+            )
+        raise MissingDataError(
+            f"No TMRED found in gbd_mapping for risk {self.causal_factor.name}"
+        )
+
+    @staticmethod
+    def get_demographic_columns(rr_data: pd.DataFrame) -> list[str]:
+        """Return the columns of ``rr_data`` that key the RR curve, i.e. all
+        columns other than ``parameter`` and ``value``."""
+        return [col for col in rr_data.columns if col not in ("parameter", "value")]
 
     def get_relative_risk_source(self, builder: Builder) -> Callable[[pd.Index], pd.Series]:
         """Build a callable that interpolates relative risk from exposure.
@@ -321,9 +401,7 @@ class NonLogLinearRiskEffect(RiskEffect):
             rr_intervals = self.relative_risk_table(index)
             # NOTE: We are calling the cached exposure pipeline here for performance
             # purposes (as opposed to the f{self.causal_factor.name}.exposure pipeline itself).
-            exposure = self.population_view.get(
-                index, f"{self.causal_factor.name}_exposure_for_non_loglinear_riskeffect"
-            )
+            exposure = self.population_view.get(index, self.exposure_column_name)
             x1, x2 = (
                 rr_intervals["left_exposure"].values,
                 rr_intervals["right_exposure"].values,
@@ -376,9 +454,7 @@ class NonLogLinearRiskEffect(RiskEffect):
 
         # and that these RR values are monotonically increasing within each demographic group
         # so that each simulant's exposure will assign them to either one bin or one RR value
-        demographic_cols = [
-            col for col in rr_data.columns if col != "parameter" and col != "value"
-        ]
+        demographic_cols = self.get_demographic_columns(rr_data)
 
         def values_are_monotonically_increasing(df: pd.DataFrame) -> bool:
             """Check if parameter values are monotonically increasing."""

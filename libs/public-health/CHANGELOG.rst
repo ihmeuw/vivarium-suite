@@ -1,3 +1,8 @@
+**6.5.0 - 07/26/26**
+
+- Add ``NonLogLinearRiskEffect`` subclassing hooks: ``MINIMUM_RELATIVE_RISK``, ``get_lowest_bin_left_rr()``, ``define_rr_intervals()``, ``get_tmrel()``, and ``exposure_column_name``
+- Pass ``include_groups=False`` to ``NonLogLinearRiskEffect``'s ``groupby.apply()`` calls, silencing a pandas ``FutureWarning``
+
 **6.4.5 - 07/23/26**
 
 - Streamline package __init__.py docstring
