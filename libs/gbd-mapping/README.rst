@@ -10,11 +10,10 @@ GBD Mapping
 
 Mapping of Global Burden of Disease (GBD) entities to their metadata.
 
-There are two packages offered in this distribution.  The first, the ``gbd_mapping_generator``
-is a set of scripts that define templates and data gathering code used to produce the second, the ``gbd_mapping``.
-The ``gbd_mapping_generator`` package will not function without access to the IHME cluster and some of our
-internally used data access libraries. Mapping updates are managed by an automated toolchain, so this shouldn't
-be an issue.
+The mapping modules are generated from GBD data by a separate, IHME-internal package,
+``vivarium-gbd-mapping-generator``, which requires access to the IHME cluster and some of our
+internally used data-access libraries. Mapping updates are managed by a maintainer toolchain, so
+this shouldn't be an issue for consumers of this package.
 
 The ``gbd_mapping`` is a programmatically accessible (and TAB-complete-able) set of mappings for GBD entities
 including:
@@ -42,21 +41,18 @@ or build it from source by cloning the monorepo and installing this package:
    pip install libs/gbd-mapping
 
 
-Development and Mapping Generation
-++++++++++++++++++++++++++++++++++
+Development
++++++++++++
 
-In order to generate or regenerate the mappings from data, you must have access to
-the Institute for Health Metrics and Evaluation cluster and internal PyPI server.
-Contact the vivarium developers at vivarium.dev@gmail.com or open an issue at
-https://github.com/ihmeuw/vivarium-suite for further instructions.
-
-Given proper permissions, you can set up this library in development mode with
+Set up this library in development mode with
 
 .. code-block:: bash
 
    git clone https://github.com/ihmeuw/vivarium-suite.git
    cd vivarium-suite
    pip install -e 'libs/gbd-mapping[dev]'
+
+To regenerate the mapping modules, see the ``vivarium-gbd-mapping-generator`` package.
 
 
 `Check out the docs! <https://vivarium-gbd-mapping.readthedocs.io/en/latest/>`_
