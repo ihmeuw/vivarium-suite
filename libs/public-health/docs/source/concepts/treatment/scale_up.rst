@@ -51,9 +51,14 @@ treatment name:
                 end: 0.9
 
 When the value ``"data"`` is used instead of a numeric value, the endpoint
-value is loaded from the artifact. Start values are loaded from
-``{treatment}.exposure`` and end values from
-``alternate_{treatment}.exposure``.
+value is resolved from the corresponding ``data_sources`` entry (a numeric
+``value`` is used directly and ignores the data source).
+
+``LinearScaleUp``'s endpoint data is configured through ``data_sources``. Each
+entry defaults to an artifact key but can be supplied as a scalar, ``DataFrame``,
+or callable so it can run without an artifact. See the
+:doc:`treatment tutorial </tutorials/treatment>` for the available data sources
+and examples.
 
 The scale-up modifier is only applied when the simulation is configured as
 an intervention scenario (i.e. ``intervention.scenario`` is not

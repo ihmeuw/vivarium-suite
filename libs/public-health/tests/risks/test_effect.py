@@ -645,6 +645,140 @@ def test_non_loglinear_effect_empty_rr_data(base_config, base_plugins):
         _setup_risk_effect_simulation(base_config, base_plugins, risk, effect, data)
 
 
+def _setup_non_loglinear_simulation(
+    base_config: ConfigTree,
+    base_plugins: ConfigTree,
+    effect: NonLogLinearRiskEffect,
+    rr_parameters: list[float],
+    rr_values: list[float],
+    tmrel: float,
+) -> pd.Series:
+    """Run a non-log-linear effect and return the resulting per-simulant rate.
+
+    The target rate is 1 and the PAF is 0, so the returned rate is the
+    relative risk each simulant's exposure resolves to.
+    """
+    risk = CustomExposureRisk("risk_factor.test_risk")
+    rr_data = pd.DataFrame(
+        {
+            "affected_entity": "test_cause",
+            "affected_measure": "incidence_rate",
+            "year_start": 1990,
+            "year_end": 1991,
+            "parameter": rr_parameters,
+            "value": rr_values,
+        },
+    )
+    data = {
+        f"{risk.name}.relative_risk": rr_data,
+        f"{risk.name}.tmred": {
+            "distribution": "uniform",
+            "min": tmrel,
+            "max": tmrel,
+            "inverted": False,
+        },
+        f"{risk.name}.population_attributable_fraction": 0,
+        "cause.test_cause.incidence_rate": 1,
+    }
+    base_config.update({"population": {"population_size": len(custom_exposure_values)}})
+    simulation = _setup_risk_effect_simulation(base_config, base_plugins, risk, effect, data)
+    return simulation._values.get_attribute("test_cause.incidence_rate")(
+        simulation.get_population_index(), mode="skip_post_processor"
+    )
+
+
+class UnboundedRiskEffect(NonLogLinearRiskEffect):
+    """A ``NonLogLinearRiskEffect`` whose RRs may fall below 1, as
+    ``HemoglobinRiskEffect`` needs."""
+
+    MINIMUM_RELATIVE_RISK = None
+
+
+@pytest.mark.parametrize("clips_relative_risk", [True, False])
+def test_minimum_relative_risk_bounds_normalized_rrs(
+    clips_relative_risk, base_config, base_plugins
+):
+    """``MINIMUM_RELATIVE_RISK`` is the only override needed to let RRs fall
+    below 1, as risks that are protective above the TMREL require."""
+    effect_class = NonLogLinearRiskEffect if clips_relative_risk else UnboundedRiskEffect
+    # A TMREL at the top of the curve normalizes every RR to <= 1, so the
+    # default clip flattens the whole curve to exactly 1.
+    rr_parameters, rr_values = [1, 2, 5], [2.0, 2.4, 4.0]
+
+    rate = _setup_non_loglinear_simulation(
+        base_config,
+        base_plugins,
+        effect_class("risk_factor.test_risk", "cause.test_cause.incidence_rate"),
+        rr_parameters=rr_parameters,
+        rr_values=rr_values,
+        tmrel=5,
+    )
+
+    if clips_relative_risk:
+        assert (rate == 1.0).all()
+    else:
+        # Exposures below the TMREL stay protective rather than being clipped.
+        assert (rate < 1.0).any()
+        below_tmrel = np.array(custom_exposure_values) < 5
+        assert np.isclose(
+            rate[below_tmrel],
+            np.interp(
+                np.array(custom_exposure_values)[below_tmrel],
+                rr_parameters,
+                np.array(rr_values) / 4.0,  # RRs get divided by RR at TMREL
+            ),
+        ).all()
+
+
+@pytest.mark.parametrize(
+    "lowest_bin_left_rr, expected_rr_at_lowest_exposure",
+    [
+        # The lowest bin spans [0, 1) and its right RR is 1.0, so a simulant at
+        # exposure 0.5 lands halfway between the chosen left RR and 1.0.
+        (None, 0.9166667),  # default: min of the curve (0.8333)
+        ("max", 1.3333333),  # as HemoglobinRiskEffect
+        ("first", 1.0),  # as NeonatalSepsisHemoglobinRiskEffect
+    ],
+)
+def test_get_lowest_bin_left_rr_hook(
+    lowest_bin_left_rr, expected_rr_at_lowest_exposure, base_config, base_plugins
+):
+    """``get_lowest_bin_left_rr`` is the only override needed to change how the
+    RR is extrapolated below the lowest exposure threshold."""
+
+    class Effect(NonLogLinearRiskEffect):
+        MINIMUM_RELATIVE_RISK = None  # isolate the hook from the RR clip
+
+        def get_lowest_bin_left_rr(self, rr_values: pd.Series) -> float:
+            if lowest_bin_left_rr == "max":
+                return float(rr_values.max())
+            if lowest_bin_left_rr == "first":
+                return float(rr_values.iloc[0])
+            return super().get_lowest_bin_left_rr(rr_values)
+
+    # A non-monotonic RR curve, so min/max/first are three distinct values.
+    # Normalized by RR at the TMREL of 1 (2.4), the curve is [1.0, 0.8333, 1.6667].
+    rate = _setup_non_loglinear_simulation(
+        base_config,
+        base_plugins,
+        Effect("risk_factor.test_risk", "cause.test_cause.incidence_rate"),
+        rr_parameters=[1, 2, 5],
+        rr_values=[2.4, 2.0, 4.0],
+        tmrel=1,
+    )
+
+    assert custom_exposure_values[0] == 0.5  # in the lowest bin
+    assert np.isclose(rate.iloc[0], expected_rr_at_lowest_exposure)
+
+
+def test_non_loglinear_exposure_column_name(base_config, base_plugins):
+    """The effect reads exposure from the same state table column the ``Risk``
+    writes it to."""
+    risk = Risk("risk_factor.test_risk")
+    effect = NonLogLinearRiskEffect(risk.name, "cause.test_cause.incidence_rate")
+    assert effect.exposure_column_name == risk.exposure_column_name
+
+
 def test_relative_risk_pipeline(dichotomous_risk, base_config, base_plugins):
     risk = dichotomous_risk[0]
     effect = RiskEffect(risk.name, "cause.test_cause.incidence_rate")
