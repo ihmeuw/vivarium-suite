@@ -1,6 +1,6 @@
 ---
 name: _type_hint_file
-description: "Use when type-hinting a single Python file to conform to its package's mypy config. Spawned by the /viv:type-hinter slash command as one autonomous teammate per target file; teammates coordinate cross-file type contracts directly with each other."
+description: "Use when type-hinting a single Python file to conform to its package's mypy config. Spawned by the /simsci:type-hinter slash command as one autonomous teammate per target file; teammates coordinate cross-file type contracts directly with each other."
 tools:
   - Read
   - Edit
@@ -24,7 +24,8 @@ file, contracts negotiated peer-to-peer.
 The lead's brief gives you:
 
 - **`file`**: absolute path to your target `.py` file.
-- **`package`**: absolute path to the package root (`libs/<pkg>/`).
+- **`package`**: absolute path to the package root — the directory
+  where the package's `pyproject.toml` / mypy config lives.
 - **`target_files`**: the full target set and the teammate name owning
   each — your address book for the mailbox.
 - **`upstream`**: the files you depend on, the specific shared symbols
@@ -35,8 +36,9 @@ The lead's brief gives you:
   consume. You own these symbols; if you change one's type, message the
   consumers **first** so they can adapt.
 - **`owned_symbols`**: the shared symbols you are the owner of.
-- **`baseline`**: a reminder that the whole-package `make mypy` baseline
-  and final gate are the lead's to run, not yours. You iterate with mypy
+- **`baseline`**: a reminder that the whole-package mypy run (however
+  the repo invokes it) — the baseline
+  and final gate — is the lead's to run, not yours. You iterate with mypy
   scoped to your own file (see step 3); the lead reconciles your file
   against the whole package at the end.
 
@@ -80,9 +82,9 @@ This is a bounded loop, not a one-shot pass. You own your iteration.
 
 ## Style
 
-Match the conventions in this monorepo's typed packages (`libs/artifact/`,
-`libs/engine/`, `libs/config-tree/`) — consult a file or two for a concrete
-example; don't read them wholesale:
+Match the conventions of already-typed code in this repo, if any exists —
+consult one or two already-typed files for a concrete example (don't
+read them wholesale); otherwise the rules below are the default:
 
 - **`from __future__ import annotations`**: add it whenever the file gains
   `if TYPE_CHECKING:` imports (see below) or an annotation references a
@@ -140,8 +142,7 @@ files. So:
 - **External-package issues belong in `pyproject.toml` overrides,**
   not in `# type: ignore[import-untyped]` sprinkled across the source
   file. Propose the snippet to the lead — `pyproject.toml` is shared
-  config that only the lead edits. The precedent is the `tables`
-  override in `libs/artifact/pyproject.toml`.
+  config that only the lead edits.
 - **Touch only your assigned file.** Cross-file fixes are made by the
   owning teammate after you message them — never reach into another
   file.
@@ -198,6 +199,6 @@ ignore_missing_imports = true
   whole-package verification.
 - Do NOT push, branch, or commit — the lead owns git.
 - Run mypy **scoped to your own file** (`mypy <your file>` from
-  `package`), not the whole-package `make mypy` — that's the lead's
-  baseline and final gate. Never run mypy against other packages. Fix
-  only your file's errors.
+  `package`), not the whole-package mypy run (however the repo invokes
+  it) — that's the lead's baseline and final gate. Never widen your
+  mypy run beyond your own file. Fix only your file's errors.

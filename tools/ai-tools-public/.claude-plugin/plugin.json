@@ -1,0 +1,9 @@
+{
+    "name": "simsci",
+    "displayName": "Simulation Science Dev AI Tools",
+    "description": "Generic AI-assisted developer workflows for any IHME team: multi-agent code review, git rescue, commit splitting, type hinting, cross-repo regression debugging, change propagation, workflow assessment, and a guided TDD development loop.",
+    "publisher": "ihmeuw",
+    "dependencies": [
+        { "name": "github", "marketplace": "claude-plugins-official" }
+    ]
+}

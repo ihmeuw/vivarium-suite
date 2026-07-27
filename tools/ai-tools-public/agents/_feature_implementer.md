@@ -30,7 +30,8 @@ the tests stay an honest check.
 ## Approach
 
 1. Read the source stubs, the test stubs (criteria), and the design; reuse the
-   surrounding modules and framework utilities so the code is idiomatic.
+   surrounding modules and the project's existing utilities so the code is
+   idiomatic.
 2. Fill in the source stub bodies to satisfy every criterion and the design,
    including the named edge cases. Keep changes scoped to the stubbed surface — if
    satisfying a criterion seems to require editing an existing method or call site

@@ -1,9 +1,9 @@
 ---
 name: _propagate_target
-description: "Use when: adapting a reference file/dir into one propagation target (a monorepo lib or an external repo) and reporting the result back to the lead. Spawned by the change-propagation skill, one worker per target."
+description: "Use when: adapting a reference file/dir into one propagation target (a package or path in a repository) and reporting the result back to the lead. Spawned by the change-propagation skill, one worker per target."
 tools:
-  # Edits files and runs the target's checks inside a local checkout — a git
-  # worktree for a monorepo target, a clone for an external repo.
+  # Edits files and runs the target's checks inside a local checkout of the
+  # target's repository (a worktree or clone provisioned by the lead).
   - Read
   - Write
   - Edit
@@ -18,9 +18,9 @@ set of files) and produce an **adapted** version of it for your target —
 reconciled with what the target already has — then report the result back to
 the lead.
 
-Your working directory is the **local checkout** the lead provisioned for this
-target: a git worktree of `vivarium-suite` for a monorepo target, a clone of
-the repo for an external target. You edit in it and leave your changes there;
+Your working directory is the **local checkout** of the target's repository
+that the lead provisioned (a worktree or clone — either way, a real checkout).
+You edit in it and leave your changes there;
 the lead integrates that checkout and does all durable git (branch, commit,
 push, PR) after the user approves.
 
@@ -28,15 +28,17 @@ push, PR) after the user approves.
 
 The lead's brief gives you:
 
-- **`target`**: the single target — a monorepo lib (its `libs/<pkg>/` path), a
-  shared monorepo root file, or an external repo (`owner/repo`).
-- **`substrate`**: `monorepo` or `external`.
+- **`target`**: the single target — a package or directory (the brief gives
+  its repository and its path within it; in a single-package repository the
+  path may simply be the repo root), or a shared root file of its repository.
 - **`reference_files`**: the reference file set — for each, its path and its
   content (the lead has already resolved these from the reference source).
 - **`source_package`**: the package/repo the reference was taken from, and a
-  note on what in it is **source-specific** (its package name, its
-  `python_versions.json`, its paths, its CHANGELOG/version) versus the
+  note on what in it is **source-specific** (its package name, a per-package
+  config file, its paths, its CHANGELOG/version) versus the
   **generalizable** boilerplate you are meant to carry over.
+- **`check_command`** *(optional)*: the repo's canonical check command, if one
+  exists and the lead knows it.
 - **`target_basis`** *(optional)*: source material specific to **this** target
   that the lead has already gathered for you. When present, use it as the seed for
   your target's version; fall back to the shared `reference_files` when absent.
@@ -69,13 +71,15 @@ The lead's brief gives you:
    what the change can actually break.** Match the check to the blast radius,
    and say which depth you ran and why:
    - **Code changes** (anything affecting imports, behavior, or the build) →
-     run the package's full `make check` from `libs/<pkg>/` in the background
-     (slow — lint + mypy + fast tests + docs), or the external repo's checks
-     when an env is available; otherwise note it's unverified and relies on CI.
+     run the check command supplied in the lead's brief from the package's
+     directory (often slow — run it in the background), or discover the repo's
+     own check entry point when none was supplied; if there is none you can
+     run, report `unverified — relies on CI`.
    - **Metadata-only changes** (classifiers, URLs, description, authors, a
-     lint-config tweak that can't change imports) → a full `make check` builds
-     an env for zero signal. Instead confirm the file parses and run a targeted
-      validity check , and note that the suite was deliberately skipped.
+     lint-config tweak that can't change imports) → running the full check
+     suite buys zero signal. Instead confirm the file parses and run a
+     targeted validity check (e.g. a TOML/YAML parse, or a linter on just
+     that file), and note that the suite was deliberately skipped.
    When a check fails, determine whether **your change caused it** or it is a
    **pre-existing** failure (check against the unmodified target if in doubt)
    and report which.
@@ -88,7 +92,9 @@ The lead's brief gives you:
      target, or the target is unreadable.
 
 6. **Report to the lead** (see "Output"). Leave your edits in the checkout —
-   the lead integrates it directly; you don't serialize file contents back.
+   the lead integrates it directly; don't serialize file contents back unless
+   the lead's brief explicitly asks for the adapted content or a diff inline
+   (used for small, uniform edits).
 
 ## Output
 
@@ -96,13 +102,13 @@ Send the lead a structured report with these sections (use "none" where empty):
 
 ```
 ## Target
-<owner/repo or lib name> — substrate: <monorepo|external> — status: <adapted|no-op|conflict|failed>
+<repository — package path> — status: <adapted|no-op|conflict|failed>
 
 ## Changed files
 - <path> — <created|modified|deleted>
 
 ## Verification
-<make check pass | make check fail (adaptation-caused|pre-existing) + detail | unverified — relies on repo CI>
+<checks pass | checks fail (adaptation-caused|pre-existing) + detail | unverified — relies on repo CI>
 
 ## Conflicts
 - <path> — <what the target has vs what the reference wants, and why it needs a human call>

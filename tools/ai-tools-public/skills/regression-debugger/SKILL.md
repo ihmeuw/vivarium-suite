@@ -1,10 +1,11 @@
 ---
-description: "Trace a simulation regression across vivarium repositories to identify the behavioral change causing it."
-argument-hint: "Describe the regression symptom, repos/branches involved, and any researcher hypotheses."
-allowed-tools: Read, Grep, Glob, Bash, Agent(_diff_analyzer, _hypothesis_tester)
+name: regression-debugger
+description: "Trace a regression across repositories to identify the behavioral change causing it."
+argument-hint: "Describe the regression symptom, repos/branches involved, and any existing hypotheses."
+allowed-tools: Read, Grep, Glob, Bash, Agent(simsci:_diff_analyzer, simsci:_hypothesis_tester)
 ---
 
-Investigate a simulation regression described by: $ARGUMENTS
+Investigate a regression described by: $ARGUMENTS
 
 The fan-out runs in this main-session context, with the slash command body
 itself acting as the orchestration prompt.
@@ -13,9 +14,9 @@ itself acting as the orchestration prompt.
 
 Gather from $ARGUMENTS (and ask the user for anything missing):
 
-- **Symptom**: What metric is wrong and in what direction? (e.g., "incidence too low", "mortality underestimated by 15%")
+- **Symptom**: What output or behavior is wrong, and in what direction? (e.g., "computed total too low", "aggregate metric off by 15%", "query returns empty results")
 - **Repos**: Which repositories are involved?
-- **Affected entities**: Which diseases, risks, or components are implicated?
+- **Affected entities**: Which components, modules, or features are implicated?
 - **Hypotheses**: Any suspicions about specific components?
 - **When it broke**: known good/bad refs, an approximate date, or unknown
 
@@ -27,12 +28,12 @@ relevant repository.
 - **Two branches/commits given**: use them directly.
 - **Approximate date**: `git log --after=... --before=... --oneline` to find candidate boundary commits.
 - **Unclear or large boundary**: use `git bisect` (with `git bisect run` if a quick test exists, manual otherwise).
-- **Multiple repos changed simultaneously**: narrow each repo independently, starting with the one most likely to contain the regression (model repo first, then dependencies).
+- **Multiple repos changed simultaneously**: narrow each repo independently, starting with the one most likely to contain the regression (application repo first, then library dependencies).
 
 ## Phase 3 — Analyze the Diffs (parallel fan-out)
 
 For each repository with established good/bad refs, invoke a
-`_diff_analyzer` sub-agent **in parallel** (one Agent call per repo, all
+`simsci:_diff_analyzer` sub-agent **in parallel** (one Agent call per repo, all
 in a single message). For each, provide:
 
 - The repo path
@@ -43,8 +44,8 @@ Wait for all diff analyses to complete before proceeding.
 
 ## Phase 4 — Trace the Data Flow (in this session)
 
-Starting from the affected output metric, trace backward through the
-code to find where old and new behavior diverge:
+Starting from the affected output or behavior, trace backward through
+the code to find where old and new behavior diverge:
 
 1. Find the code that produces the affected metric
 2. For each input or dependency, trace to its own source (data, other components, configuration)
@@ -54,7 +55,7 @@ code to find where old and new behavior diverge:
 ## Phase 5 — Form and Test Hypotheses (parallel fan-out)
 
 From the diff analyses and data flow tracing, formulate specific
-hypotheses. Then invoke a `_hypothesis_tester` sub-agent **in parallel**
+hypotheses. Then invoke a `simsci:_hypothesis_tester` sub-agent **in parallel**
 for each hypothesis (one Agent call per hypothesis, all in a single
 message). For each, provide:
 
@@ -77,13 +78,12 @@ Structure findings with these sections:
 
 ## Common Pitfalls
 
-When analyzing vivarium framework code, avoid these mistakes:
+When analyzing code built on a shared library or framework, always check:
 
-- **Do NOT suggest `sim.get_value()` for AttributePipelines.** AttributePipelines are read via `population_view.get(index, pipeline_name)`.
-- **Do NOT assume pipeline evaluation order from registration order.** The resource dependency system determines order, not the order of `register_*` calls.
-- **Do NOT assume column-position-based data matching.** RR lookup for categorical risks uses name-based MultiIndex joins, not positional indexing.
-- **Do check that subclass overrides match the base class signature.** A method that returned a value in VPH might return None in a subclass override if the subclass handles the data differently.
-- **Do check `pivot_categorical` and other data transformation utilities.** Their signatures and behavior may have changed.
+- **Subclass overrides against the base-class signature.** A method that returns a value in the upstream library may return None in a downstream override if the subclass handles the data differently.
+- **Shared data-transformation utilities.** Their signatures and behavior may have changed between refs.
+
+If an installed skill provides domain reference documentation or known regression pitfalls for the code under investigation, invoke it and fold its guidance into the diff-analysis and hypothesis phases.
 
 ## Constraints
 

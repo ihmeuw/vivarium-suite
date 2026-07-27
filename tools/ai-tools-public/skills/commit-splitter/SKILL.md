@@ -5,7 +5,7 @@ description: Split a bulk uncommitted diff into a sequence of small, reviewable 
 
 # Commit splitter
 
-Agents tend to produce large, internally-consistent diffs because verification loops require everything to work together. That's fine for correctness but bad for review. This skill takes such a diff and doles it out into reviewable commits, and when needed into multiple PR-sized branches, without losing the working state that already verified.
+Agents tend to produce large, internally-consistent diffs because verification loops require everything to work together. That's fine for correctness but bad for review. This skill takes such a diff and doles it out into reviewable commits, and when needed into multiple PR-sized branches, without losing the already-verified working state.
 
 ## When NOT to use
 
@@ -27,7 +27,7 @@ Refuse to proceed if the working tree is clean. If the user is mid-rebase, mid-m
 
 ### 2. Propose a grouping (subagent)
 
-Delegate the grouping to the `viv:_split_proposer` specialist agent. It has read-only access to the working tree and returns a structured plan — commit groups (subject, rationale, files, dependencies), a PR partition, and any inseparable hunks. Keeping the file-by-file reading inside the subagent keeps the main context clean.
+Delegate the grouping to the `simsci:_split_proposer` specialist agent. It is constrained to read-only operation on the working tree and returns a structured plan — commit groups (subject, rationale, files, dependencies), a PR partition, and any inseparable hunks. Keeping the file-by-file reading inside the subagent keeps the main context clean.
 
 The skill does not need to repeat the agent's prompt — the agent file owns it. Invoke it with a short brief that names the repo and any constraints the user has already stated (e.g. "user wants two PRs", "stay under 300 lines per PR"). If no constraints are given, the agent defaults to a single PR with multiple commits unless scope forces otherwise.
 
@@ -60,7 +60,7 @@ If a commit fails (lint hook, type check), stop and surface the failure. Do not 
 
 ### 5. Branch and PR (hand off)
 
-When the plan calls for multiple PRs, each PR needs its own branch. Defer branch naming, ticket linkage, PR body, and pinging Slack to `viv:team-conventions` — don't re-derive them here. Typical shape:
+When the plan calls for multiple PRs, each PR needs its own branch. Follow your team's branch-naming, ticket-linkage, and PR conventions — if an installed skill covers them (e.g. a team conventions skill), invoke it and follow it rather than re-deriving them here; otherwise infer them from recent branch names and merged PRs, or ask the user. Typical shape:
 
 - **One PR, many commits:** stay on the current branch; push and open a single PR.
 - **Multiple PRs:** for each group, create a branch off the appropriate base (usually `main`; sometimes the prior PR's branch if there's a hard dependency), cherry-pick the relevant commits onto it, push, and open the PR. Call out the dependency chain in each PR body so reviewers know the merge order.

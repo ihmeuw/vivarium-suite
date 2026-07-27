@@ -1,6 +1,6 @@
 ---
 name: _hypothesis_tester
-description: "Test a single hypothesis about the cause of a simulation regression by comparing old and new code."
+description: "Test a single hypothesis about the cause of a regression by comparing old and new code."
 tools:
   - Read
   - Grep
@@ -9,7 +9,7 @@ tools:
 user-invocable: false
 ---
 
-You are given a specific hypothesis about why a simulation regression occurred. Your job is to verify or refute it through code analysis.
+You are given a specific hypothesis about why a regression occurred. Your job is to verify or refute it through code analysis.
 
 ## Input
 
@@ -36,7 +36,7 @@ Return a structured verdict with these sections:
 - **Evidence**: Specific code references showing why
 - **Old Behavior**: What the old code did, with file:line references
 - **New Behavior**: What the new code does, with file:line references
-- **Impact**: If confirmed or inconclusive, how this change would manifest in simulation output
+- **Impact**: If confirmed or inconclusive, how this change would manifest in program output
 
 ## Constraints
 
