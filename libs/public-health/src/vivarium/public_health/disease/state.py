@@ -577,8 +577,7 @@ class DiseaseState(BaseDiseaseState, ExcessMortalityState):
                     birth_prevalence:
                         Source for birth prevalence data. Defaults to the
                         ``birth_prevalence`` constructor argument, or if not
-                        provided, loads from artifact at
-                        ``cause.{state_id}.birth_prevalence``.
+                        provided, ``0.0`` (no birth prevalence).
                     dwell_time:
                         Source for dwell time data (minimum time in state
                         before transition). Defaults to the ``dwell_time``

@@ -35,10 +35,10 @@ Default Stratifications
    * - ``age_group``
      - ``age``
      - Bins simulant ages into age-group name strings (e.g.
-       ``"early_neonatal"``, ``"1_to_4"``). Bins are derived from
-       ``population.age_bins`` in the artifact and filtered to the
-       configured ``initialization_age_min`` and ``untracking_age``
-       range.
+       ``"early_neonatal"``, ``"1_to_4"``). Bins come from the ``age_bins``
+       data source (by default inherited from the population component's
+       ``population.age_bins`` definition) and are filtered to the configured
+       ``initialization_age_min`` and ``untracking_age`` range.
    * - ``current_year``
      - ``current_time``
      - Maps each time step's clock time to a calendar-year string (e.g.
@@ -77,11 +77,16 @@ their ``include`` and ``exclude`` configuration keys (see
 Age Bins
 --------
 
-Age-group bins are loaded from the ``population.age_bins`` artifact key and
-trimmed to the simulation's configured age window
+Age-group bins come from the ``age_bins`` data source and are trimmed to the
+simulation's configured age window
 (``population.initialization_age_min`` through ``population.untracking_age``).
 Group names are normalized to lowercase with underscores (e.g.
 ``"Early Neonatal"`` becomes ``"early_neonatal"``).
+
+``ResultsStratifier``'s input data (its ``age_bins``) is configured through
+``data_sources`` and defaults to inheriting the population component's
+``population.age_bins`` definition. See the :doc:`observers tutorial
+</tutorials/observers>` for the available data sources and examples.
 
 The mapper uses :func:`pandas.cut` to assign each simulant's continuous age to
 the appropriate bin.
