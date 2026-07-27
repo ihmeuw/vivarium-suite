@@ -5,6 +5,7 @@ from vivarium.config_tree import ConfigurationError
 from vivarium.engine import InteractiveContext
 from vivarium.engine.testing_utilities import TestPopulation
 
+from tests.mock_artifact import MockArtifactManager
 from tests.risks.test_effect import _setup_risk_effect_simulation
 from tests.test_utilities import make_age_bins
 from vivarium.public_health.risks.implementations.low_birth_weight_and_short_gestation import (
@@ -279,6 +280,77 @@ def test_lbwsg_exposure_data_logging(exposure_key, base_config, mocker, caplog) 
                 components=[TestPopulation(), risk],
                 configuration=override_config,
             )
+
+
+def test_lbwsg_risk_effect_data_sources_from_config(
+    base_config, base_plugins, mock_rr_interpolators, mocker
+) -> None:
+    """age_bins, relative_risk, and relative_risk_interpolator can be supplied via config and withheld from the artifact."""
+    risk = LBWSGRisk()
+    lbwsg_effect = LBWSGRiskEffect("cause.test_cause.cause_specific_mortality_rate")
+
+    age_bins = make_age_bins()
+
+    # Withhold the effect's relative_risk and relative_risk_interpolator from the artifact.
+    data, rr_data = _build_lbwsg_artifact_data(risk, age_bins)
+    base_config.update(
+        {"population": {"initialization_age_start": 0.0, "initialization_age_max": 1.0}}
+    )
+    # Drive all three sources from config DataFrames instead of the artifact.
+    base_config.update(
+        {
+            lbwsg_effect.name: {
+                "data_sources": {
+                    "age_bins": age_bins,
+                    "relative_risk": rr_data,
+                    "relative_risk_interpolator": mock_rr_interpolators,
+                }
+            }
+        }
+    )
+    # Track every artifact load so we can prove population.age_bins is never read.
+    load_spy = mocker.spy(MockArtifactManager, "load")
+    sim = _setup_risk_effect_simulation(base_config, base_plugins, risk, lbwsg_effect, data)
+
+    # The effect's get_age_intervals is the only consumer of population.age_bins in this
+    # sim, so zero artifact loads of that key proves age_bins was sourced from config.
+    loaded_keys = [
+        arg for call in load_spy.call_args_list for arg in call.args if isinstance(arg, str)
+    ]
+    assert loaded_keys  # sanity: the spy captured artifact loads
+    assert "population.age_bins" not in loaded_keys
+
+    # The interpolator key was never written to the artifact, yet setup succeeded,
+    # so the effect must have sourced it from config rather than the artifact.
+    with pytest.raises(AssertionError):
+        sim._data.load(f"{risk.name}.relative_risk_interpolator")
+
+
+def _build_lbwsg_artifact_data(
+    risk: LBWSGRisk,
+    age_bins: pd.DataFrame,
+) -> tuple[dict[str, object], pd.DataFrame]:
+    """Build the artifact data dict (and rr_data) for the LBWSG config data-source test.
+
+    The relative_risk and relative_risk_interpolator keys are omitted so they
+    can be supplied via config instead.
+    """
+    categories = {
+        "cat81": "Neonatal preterm and LBWSG (estimation years) - [28, 30) wks, [2500, 3000) g",
+        "cat82": "Neonatal preterm and LBWSG (estimation years) - [28, 30) wks, [3000, 3500) g",
+    }
+    ages = age_bins.drop(columns="age_group_name")
+    rr_data = make_categorical_data(ages)
+    birth_exposure = make_categorical_data(ages)
+    exposure = birth_exposure.copy()
+
+    data: dict[str, object] = {
+        f"{risk.name}.birth_exposure": birth_exposure,
+        f"{risk.name}.exposure": exposure,
+        f"{risk.name}.population_attributable_fraction": 0,
+        f"{risk.name}.categories": categories,
+    }
+    return data, rr_data
 
 
 def make_categorical_data(data: pd.DataFrame) -> pd.DataFrame:

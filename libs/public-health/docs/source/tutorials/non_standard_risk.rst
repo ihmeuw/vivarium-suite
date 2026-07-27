@@ -29,6 +29,24 @@ use with these components.
    :local:
 
 
+Data sources
+------------
+
+The :class:`~vivarium.public_health.risks.base_risk.Risk` and
+:class:`~vivarium.public_health.risks.effect.RiskEffect` components support a
+``data_sources`` configuration pattern that lets you override individual data
+keys to run without an artifact. Each key defaults to an artifact key but can be
+overridden with:
+
+- **Scalar** (int or float) - broadcast a constant value to all simulants.
+- **DataFrame** - use the DataFrame directly.
+- **Callable** - call the function at setup time to produce the data.
+- **Artifact key** (string) - load a different key from the artifact.
+
+Exposure is configured via ``data_sources.exposure`` (see `Exposure Models`_)
+and the relative risk via ``data_sources.relative_risk`` (see `Effect Models`_).
+
+
 Exposure Models
 ---------------
 
@@ -36,13 +54,13 @@ We model exposure using the
 :class:`~vivarium.public_health.risks.base_risk.Risk` or component.
 Consider its configuration options:
 
-- ``"exposure"``: This option represents the exposure data source. It defaults
-  to the value ``"data"``.
-- ``"rebinned_exposure"``: This option tells the component if a categorical
-  exposure with more than two categories should be rebinned into
-  two categories. It defaults to an empty list, indicating that the
-  underlying exposure model should be used.
-- ``"category_thresholds"``: This option tells the component how to split
+- ``data_sources.exposure``: The exposure data source. Defaults to the artifact
+  key ``<type>.<name>.exposure``. Can be overridden with a scalar, a DataFrame,
+  a callable, or a different artifact key.
+- ``rebinned_exposed``: Tells the component if a categorical exposure with more
+  than two categories should be rebinned into two categories. It defaults to an
+  empty list, indicating that the underlying exposure model should be used.
+- ``category_thresholds``: This option tells the component how to split
   continuous exposure models into a categorical model. It defaults to an
   empty list, indicating that the underlying exposure model should be used.
 
@@ -50,7 +68,7 @@ The name input when the :class:`~vivarium.public_health.risks.base_risk.Risk`
 is created also has an impact on the behavior. Names are provided
 as ``<type>.<name>`` where ``type`` refers to the type of entity being
 modeled and ``name`` is the name of the entity.  Available types are
-``"risk_factor"``, ``"coverage_gap"``, and ``"alternative_risk_factor"``.
+``"risk_factor"`` and ``"alternative_risk_factor"``.
 Some configuration options are only available for certain entity types, as
 summarized in the table below.
 
@@ -61,16 +79,12 @@ summarized in the table below.
    :align: center
 
    * -
-     - **exposure**
-     - **rebinned_exposure**
+     - **data_sources.exposure**
+     - **rebinned_exposed**
      - **category_thresholds**
    * - **risk_factor**
      - |check_mark|
      - |check_mark|
-     - X
-   * - **coverage_gap**
-     - |check_mark|
-     - X
      - X
    * - **alternative_risk_factor**
      - X
@@ -86,8 +100,8 @@ them.
 ``risk_factor``
 +++++++++++++++
 
-For the ``risk_factor`` entity type, both the ``"exposure"`` and
-``"rebinned_exposure"`` configuration options are available to us. In the
+For the ``risk_factor`` entity type, both the ``data_sources.exposure`` and
+``rebinned_exposed`` configuration options are available to us. In the
 model specification, we can specify the component to use its defaults with
 
 .. code-block:: yaml
@@ -102,7 +116,7 @@ This will cause the risk component to look up any available exposure
 information in the :class:`~vivarium.artifact.artifact.Artifact`
 and use the data as presented.
 
-If we change the ``"exposure"`` option to the name of a covariate as
+If we set the ``data_sources.exposure`` option to a covariate key as
 
 .. code-block:: yaml
 
@@ -112,8 +126,9 @@ If we change the ``"exposure"`` option to the name of a covariate as
                - Risk("risk_factor.my_risk_factor")
 
    configuration:
-       my_risk_factor:
-           exposure: covariate.my_covariate
+       risk_factor.my_risk_factor:
+           data_sources:
+               exposure: covariate.my_covariate
 
 the component will look for the covariate estimate in the
 :class:`~vivarium.artifact.artifact.Artifact` rather than for
@@ -132,14 +147,15 @@ to directly set the proportion of people exposed.
                - Risk("risk_factor.my_risk_factor")
 
    configuration:
-       my_risk_factor:
-           exposure: 0.6
+       risk_factor.my_risk_factor:
+           data_sources:
+               exposure: 0.6
 
 If the underlying exposure distribution is polytomous (that is, it has
-multiple categories of exposure), we can use the ``"rebinned_exposure"`` option
+multiple categories of exposure), we can use the ``rebinned_exposed`` option
 to separate those categories into an "exposed" and "unexposed" category. The
 set of categories to rebin into the "exposed" group should be specified as
-a list of strings to the ``"rebinned_exposure"`` option.
+a list of strings to the ``rebinned_exposed`` option.
 
 .. code-block:: yaml
 
@@ -149,13 +165,13 @@ a list of strings to the ``"rebinned_exposure"`` option.
                - Risk("risk_factor.my_polytomous_risk_factor")
 
    configuration:
-       my_polytomous_risk_factor:
-           rebinned_exposure: ["cat1", "cat2", "cat3"]
+       risk_factor.my_polytomous_risk_factor:
+           rebinned_exposed: ["cat1", "cat2", "cat3"]
 
 This will reformat the exposure data to consider anyone in "cat1", "cat2", or
 "cat3" as exposed, and all other exposure categories as unexposed.
 
-Using the ``"rebinned_exposure"`` option will cause the relative risk
+Using the ``rebinned_exposed`` option will cause the relative risk
 for all :class:`~vivarium.public_health.risks.effect.RiskEffect`
 components to also be rebinned.
 
@@ -166,19 +182,6 @@ components to also be rebinned.
    categorical, it also has a "parameter" column with string values of
    "cat1", "cat2", etc.  The categories are presumed to be sorted by severity
    with "cat1" being the worst.
-
-
-``coverage_gap``
-++++++++++++++++
-
-A ``coverage_gap`` entity type is a way of phrasing the lack of coverage of
-an intervention as a risk factor.  The only think to keep in mind when
-using a coverage gap is what exposure means (1 - intervention coverage).
-Otherwise, the configuration options and caveats are the same as
-the ``risk_factor`` entity type.
-
-In practice, coverage gaps have a dichotomous distribution, so the
-``"rebinned_exposure"`` option does not come into play.
 
 
 ``alternative_risk_factor``
@@ -202,7 +205,7 @@ default values.
                - Risk("alternative_risk_factor.my_risk_factor")
 
    configuration:
-       my_risk_factor:
+       alternative_risk_factor.my_risk_factor:
            category_thresholds: [7, 8, 9]
 
 
@@ -238,26 +241,19 @@ component where the risk factors are parameterized by exposure levels.
 
 Let's look at its configuration options:
 
-- ``"relative_risk"``: Option for specifying a relative risk value directly.
-  If provided, no other configuration options may be specified.
-- ``"mean"``: Option for specifying that the relative risk should be drawn
-  from a normal distribution with this mean.  Must also provide a value for
-  ``"se"``. No other options may be specified.
-- ``"se"``: Option for specifying that the relative risk should be drawn
-  from a normal distribution with this standard error.  Must also provide a
-  value for ``"mean"``. No other options may be specified.
-- ``"log_mean"``: Option for specifying that the relative risk should be drawn
-  from a lognormal distribution with this mean.  Must also provide a value for
-  ``"log_se"`` and may provide a value for ``"tau_squared"``.  No other
-  options may be specified.
-- ``"log_se"``: Option for specifying that the relative risk should be drawn
-  from a lognormal distribution with this standard error.  Must also provide
-  a value for ``"log_mean"`` and may provide a value for ``"tau_squared"``.
-  No other options may be specified.
-- ``"tau_squared"``: Option for specifying a parameter representing
-  inter-study heterogeneity in a lognormal distribution. Can optionally be
-  supplied when specifying a relative risk to be drawn with a lognormal
-  distribution with ``"log_mean"`` and ``"log_se"``.
+- ``data_sources.relative_risk``: The relative risk for the exposed group.
+  Defaults to the artifact key ``<type>.<name>.relative_risk``. Can be
+  overridden with a scalar, a DataFrame, a different artifact key, or the name
+  of a ``scipy.stats`` distribution (e.g. ``"norm"``) to draw the relative risk
+  from that distribution.
+- ``data_source_parameters.relative_risk``: The parameters passed to the
+  ``scipy.stats`` distribution named in ``data_sources.relative_risk`` (e.g.
+  ``{loc: 2.0, scale: 0.5}`` for ``"norm"``). Ignored unless
+  ``data_sources.relative_risk`` is a distribution name.
+- ``data_sources.population_attributable_fraction``: The population
+  attributable fraction. Defaults to the artifact key
+  ``<type>.<name>.population_attributable_fraction``. Supply a scalar (e.g.
+  ``0``), a DataFrame, or a different artifact key to override.
 
 When a :class:`~vivarium.public_health.risks.effect.RiskEffect` is created, it
 takes two arguments: the name of the exposure model and the name of the
@@ -302,15 +298,15 @@ is specified as
 .. code-block:: yaml
 
    configuration:
-       effect_of_<exposure_entity_name>_on_<target_entity_name>:
-           <target_entity_measure>:
+       risk_effect.<risk_name>_on_<target>:
+           data_sources:
                ...options...
 
-where ``<exposure_entity_name>`` is the ``<name>`` provided to the associated
-:class:`~vivarium.public_health.risks.base_risk.Risk` component and the
-``<target_entity_name>`` is the name provided to the component used in
-the target, usually another :class:`~vivarium.public_health.risks.base_risk.Risk` or
-a disease model.
+where ``<risk_name>`` is the ``<name>`` provided to the associated
+:class:`~vivarium.public_health.risks.base_risk.Risk` component and
+``<target>`` is the full target string (``<type>.<name>.<measure>``) passed to
+the :class:`~vivarium.public_health.risks.effect.RiskEffect`, e.g.
+``risk_effect.my_risk_factor_on_cause.my_infectious_disease.incidence_rate``.
 
 Specifying a Relative Risk Value
 ++++++++++++++++++++++++++++++++
@@ -330,8 +326,8 @@ is to specify a single value for the relative risk.
                - RiskEffect('risk_factor.my_risk_factor', 'cause.my_infectious_disease.incidence_rate')
 
    configuration:
-       effect_of_my_risk_factor_on_my_infectious_disease:
-           incidence_rate:
+       risk_effect.my_risk_factor_on_cause.my_infectious_disease.incidence_rate:
+           data_sources:
                relative_risk: 20
 
 For this to work, the exposure modeled by the
@@ -344,38 +340,16 @@ using the provided exposure model, and so it does not need to be provided.
 Specifying a Relative Risk Distribution
 +++++++++++++++++++++++++++++++++++++++
 
-If you have some idea of the uncertainty in the relative risk, you can
-specify distribution parameters and have the relative risk value drawn
-from that distribution for each simulation.  There are two options for
-distributions to use.
+If you have some idea of the uncertainty in the relative risk, you can draw it
+from a distribution instead of fixing a single value. Set
+``data_sources.relative_risk`` to the name of any ``scipy.stats`` distribution
+and supply its parameters under ``data_source_parameters.relative_risk``. A
+single relative risk is drawn per simulation (the distribution's inverse CDF
+evaluated at a seeded random quantile), so the draw is reproducible for a given
+random seed.
 
-The first is to sample from a normal distribution.  You can do so by
-providing the following configuration options:
-
-.. code-block:: yaml
-
-   components:
-       vivarium.public_health:
-           disease:
-               - SIS('my_infectious_disease')
-           risks:
-               - Risk('risk_factor.my_risk_factor')
-               - RiskEffect('risk_factor.my_risk_factor', 'cause.my_infectious_disease.incidence_rate')
-
-   configuration:
-       effect_of_my_risk_factor_on_my_infectious_disease:
-           incidence_rate:
-               mean: 10
-               se: 3
-
-This will sample a new relative risk from a normal distribution with mean
-ten and standard error three in each simulation.  The distribution is clipped
-so that values below one are set at one.  Both the ``"mean"`` and ``"se"``
-options must be provided.  The ``"mean"`` should be greater than one and the
-``"se"`` greater than zero.
-
-A second option is to sample the relative risk from a lognormal distribution.
-This can be done with the following configuration options:
+For example, to draw from a normal distribution with mean two and standard
+deviation ``0.5``:
 
 .. code-block:: yaml
 
@@ -388,26 +362,18 @@ This can be done with the following configuration options:
                - RiskEffect('risk_factor.my_risk_factor', 'cause.my_infectious_disease.incidence_rate')
 
    configuration:
-       effect_of_my_risk_factor_on_my_infectious_disease:
-           incidence_rate:
-               log_mean: 10
-               log_se: 3
-               tau_squared: 0.5
+       risk_effect.my_risk_factor_on_cause.my_infectious_disease.incidence_rate:
+           data_sources:
+               relative_risk: "norm"
+           data_source_parameters:
+               relative_risk:
+                   loc: 2.0
+                   scale: 0.5
 
-This will produce a relative risk value:
-
-.. math::
-
-   \textrm{RR} &= \exp(\mu + \sigma X + Y) \\
-   X &\sim N(0, 1)\\
-   Y &\sim N(0, \tau^2)
-
-The ``"tau_squared"`` parameter is an adjustment for inter-study heterogeneity
-and is not required to use the lognormal distribution.
-
-Like the normal distribution, values below one will be clipped and set to one.
-All three parameters, the ``"log_mean"``, the ``"log_sd"`` and the
-``"tau_squared"``, should be greater than zero if provided.
+Any continuous ``scipy.stats`` distribution can be used (e.g. ``"norm"``,
+``"lognorm"``); the keys under ``data_source_parameters.relative_risk`` are
+passed straight to that distribution, so consult the ``scipy.stats``
+documentation for each distribution's parameterization.
 
 .. note::
 
