@@ -1,3 +1,8 @@
+**6.4.7 - 07/27/26**
+
+- Add ``NonLogLinearRiskEffect`` subclassing hooks: ``MINIMUM_RELATIVE_RISK``, ``get_lowest_bin_left_rr()``, ``define_rr_intervals()``, ``get_tmrel()``, and ``exposure_column_name``
+- Pass ``include_groups=False`` to ``NonLogLinearRiskEffect``'s ``groupby.apply()`` calls, silencing a pandas ``FutureWarning``
+
 **6.4.6 - 07/27/26**
 
 - Allow ``ResultsStratifier`` (``age_bins``), ``LinearScaleUp`` (endpoint ``start``/``end`` exposures), and ``LBWSGRiskEffect`` (``age_bins``, ``relative_risk_interpolator``) to source their data via configuration ``data_sources`` instead of requiring an artifact
