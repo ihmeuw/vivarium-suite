@@ -100,13 +100,6 @@ class NonLogLinearRiskEffect(RiskEffect):
     5. Uses this ``LookupTable`` to modify the target pipeline by linearly
        interpolating a simulant's RR value and multiplying it by the intended
        target rate.
-
-    Subclasses are expected to adjust this behavior by overriding the small
-    hooks rather than the methods that call them:
-    :attr:`MINIMUM_RELATIVE_RISK` bounds the normalized RRs,
-    :meth:`get_lowest_bin_left_rr` chooses the RR extrapolated below the
-    lowest exposure threshold, and :meth:`get_tmrel` draws the TMREL.
-
     """
 
     MINIMUM_RELATIVE_RISK: float | None = 1.0
