@@ -1,5 +1,8 @@
 import pandas as pd
+import pytest
+from vivarium.config_tree import ConfigTree
 
+from vivarium.public_health.population import BasePopulation
 from vivarium.public_health.results.stratification import ResultsStratifier
 
 
@@ -64,15 +67,21 @@ FAKE_POP_EVENT_TIME = {
 }
 
 
+def _mock_age_bins_builder(mocker, *, initialization_age_min, untracking_age):
+    """Build a mock builder carrying the population age range and simulation years."""
+    builder = mocker.Mock()
+    builder.configuration.population.initialization_age_min = initialization_age_min
+    builder.configuration.population.untracking_age = untracking_age
+    builder.configuration.time.start.year = 2022
+    builder.configuration.time.end.year = 2025
+    return builder
+
+
 def test_results_stratifier_register_stratifications(mocker):
     """Test that ResultsStratifier.register_stratifications registers expected stratifications
     and only the expected stratifications."""
-    builder = mocker.Mock()
+    builder = _mock_age_bins_builder(mocker, initialization_age_min=0.0, untracking_age=5.0)
     builder.data.load = fake_data_load_population_age_bins
-    builder.configuration.population.initialization_age_min = 0.0
-    builder.configuration.population.untracking_age = 5.0
-    builder.configuration.time.start.year = 2022
-    builder.configuration.time.end.year = 2025
     years_list = ["2022", "2023", "2024", "2025"]
     age_group_names_list = [
         "early_neonatal",
@@ -85,6 +94,9 @@ def test_results_stratifier_register_stratifications(mocker):
     mocker.patch.object(builder, "results.register_stratification")
     builder.results.register_stratification = mocker.MagicMock()
     rs = ResultsStratifier()
+    # Override the (inherit-from-population) default with the artifact key directly
+    # so the mocked builder.data.load is exercised without a population config.
+    rs.configuration = ConfigTree({"data_sources": {"age_bins": "population.age_bins"}})
 
     builder.results.register_stratification.assert_not_called()
 
@@ -157,14 +169,46 @@ def test_results_stratifier_map_year():
 
 def test_results_stratifier_get_age_bins(mocker):
     """Test that get_age_bins produces expected age_bins DataFrame."""
-    builder = mocker.Mock()
+    builder = _mock_age_bins_builder(mocker, initialization_age_min=0.0, untracking_age=5.0)
     builder.data.load = fake_data_load_population_age_bins
-    builder.configuration.population.initialization_age_min = 0.0
-    builder.configuration.population.untracking_age = 5.0
-    builder.configuration.time.start.year = 2022
-    builder.configuration.time.end.year = 2025
 
     rs = ResultsStratifier()
+    rs.configuration = ConfigTree({"data_sources": {"age_bins": "population.age_bins"}})
     age_bins = rs.get_age_bins(builder)
 
+    assert age_bins.equals(pd.DataFrame(AGE_BINS_EXPECTED_DICT))
+
+
+def test_results_stratifier_default_age_bins_source(mocker):
+    """The default age_bins source resolves through the population component."""
+    builder = _mock_age_bins_builder(mocker, initialization_age_min=0.0, untracking_age=5.0)
+    builder.data.load = fake_data_load_population_age_bins
+    builder.configuration.population.age_bins = "population.age_bins"
+    builder.components.get_components_by_type.return_value = [BasePopulation()]
+
+    rs = ResultsStratifier()
+    rs.configuration = ConfigTree(rs.configuration_defaults[rs.name])
+
+    age_bins = rs.get_age_bins(builder)
+
+    builder.components.get_components_by_type.assert_called_once_with(BasePopulation)
+    assert age_bins.equals(pd.DataFrame(AGE_BINS_EXPECTED_DICT))
+
+
+@pytest.mark.parametrize(
+    "age_bins_source",
+    [fake_data_load_population_age_bins(), fake_data_load_population_age_bins],
+    ids=["dataframe", "callable"],
+)
+def test_results_stratifier_get_age_bins_from_config(mocker, age_bins_source):
+    """A config-supplied DataFrame or callable is used as the age_bins source (no artifact load)."""
+    builder = _mock_age_bins_builder(mocker, initialization_age_min=0.0, untracking_age=5.0)
+    builder.data.load = mocker.Mock()
+
+    rs = ResultsStratifier()
+    rs.configuration = ConfigTree({"data_sources": {"age_bins": age_bins_source}})
+
+    age_bins = rs.get_age_bins(builder)
+
+    builder.data.load.assert_not_called()
     assert age_bins.equals(pd.DataFrame(AGE_BINS_EXPECTED_DICT))

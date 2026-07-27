@@ -28,6 +28,7 @@ from vivarium.public_health.causal_factor.utilities import (
     get_exposure_post_processor,
     pivot_categorical,
 )
+from vivarium.public_health.population.base_population import get_population_age_bins
 from vivarium.public_health.risks import Risk, RiskEffect
 from vivarium.public_health.utilities import EntityString, to_snake_case
 
@@ -607,6 +608,38 @@ class LBWSGRiskEffect(RiskEffect):
             self.get_relative_risk_column_name(age_group) for age_group in self.age_intervals
         ]
 
+    @property
+    def configuration_defaults(self) -> dict[str, Any]:
+        """Default configuration values for this component.
+
+        Extend the base
+        :class:`~vivarium.public_health.risks.effect.RiskEffect` data sources
+        with the two keys this effect loads directly::
+
+            {risk_effect_name}:
+                data_sources:
+                    age_bins:
+                        Source for age bin data. Defaults to the age bins
+                        defined by the simulation's
+                        :class:`~vivarium.public_health.population.base_population.BasePopulation`
+                        component. The data must be a DataFrame with
+                        ``age_start``, ``age_end``, and ``age_group_name``
+                        columns.
+                    relative_risk_interpolator:
+                        Source for the 2D RR interpolators. Default is the
+                        artifact key ``{risk}.relative_risk_interpolator``. The
+                        data must be a DataFrame with ``sex``, ``age_start``,
+                        and a ``value`` column holding the hex-encoded pickled
+                        interpolator (plus ``age_end``, ``year_start``, and
+                        ``year_end`` columns, which are dropped).
+        """
+        config = super().configuration_defaults
+        config[self.name]["data_sources"]["age_bins"] = get_population_age_bins
+        config[self.name]["data_sources"][
+            "relative_risk_interpolator"
+        ] = f"{self.causal_factor}.relative_risk_interpolator"
+        return config
+
     #####################
     # Lifecycle methods #
     #####################
@@ -691,8 +724,10 @@ class LBWSGRiskEffect(RiskEffect):
             A dictionary mapping snake-cased age group names to their
             corresponding age intervals.
         """
-        age_bins = builder.data.load("population.age_bins").set_index("age_start")
-        relative_risks = builder.data.load(f"{self.causal_factor}.relative_risk")
+        age_bins = self.get_data(builder, self.configuration.data_sources.age_bins).set_index(
+            "age_start"
+        )
+        relative_risks = self.get_data(builder, self.configuration.data_sources.relative_risk)
         exposed_age_group_starts = (
             relative_risks.groupby("age_start")["value"].any().reset_index()["age_start"]
         )
@@ -719,7 +754,7 @@ class LBWSGRiskEffect(RiskEffect):
         )
 
     def get_interpolator(self, builder: Builder) -> pd.Series:
-        """Load and deserialize 2D RR interpolators from the artifact.
+        """Load and deserialize 2D RR interpolators from the configured data source.
 
         Parameters
         ----------
@@ -737,7 +772,9 @@ class LBWSGRiskEffect(RiskEffect):
         }
 
         # get relative risk data for target
-        interpolators = builder.data.load(f"{self.causal_factor}.relative_risk_interpolator")
+        interpolators = self.get_data(
+            builder, self.configuration.data_sources.relative_risk_interpolator
+        )
         interpolators = (
             # isolate RRs for target and drop non-neonatal age groups since they have RR == 1.0
             interpolators[

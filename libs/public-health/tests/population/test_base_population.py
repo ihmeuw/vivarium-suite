@@ -891,3 +891,14 @@ def test_fertility_before_aging(base_config, base_plugins):
     assert np.all(step2_newborns["age"] > 0)
     assert np.all(step2_newborns["age"] >= step_size_years)
     assert np.all(step2_newborns["age"] < 2 * step_size_years)
+
+
+@pytest.mark.parametrize("num_population_components", [0, 2])
+def test_get_population_age_bins_requires_one_component(mocker, num_population_components):
+    builder = mocker.Mock()
+    builder.components.get_components_by_type.return_value = [
+        bp.BasePopulation() for _ in range(num_population_components)
+    ]
+
+    with pytest.raises(ValueError, match="BasePopulation"):
+        bp.get_population_age_bins(builder)

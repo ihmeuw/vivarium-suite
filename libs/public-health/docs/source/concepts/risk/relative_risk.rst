@@ -70,9 +70,12 @@ where:
 - :math:`\text{scale}` is a scalar (``{risk}.relative_risk_scalar``) that
   defines the exposure increment to which the per-unit RR corresponds.
 
-Both ``tmred`` (which yields the TMREL) and ``relative_risk_scalar`` default to
-their artifact keys but can be supplied through the effect's ``data_sources``
-configuration, like ``relative_risk``.
+A ``RiskEffect``'s input data (including ``relative_risk``, ``tmred``, and
+``relative_risk_scalar``) is configured through ``data_sources``. Each entry
+defaults to an artifact key but can be supplied as a scalar, ``DataFrame``, or
+callable so it can run without an artifact. See the
+:doc:`risk effect tutorial </tutorials/risk_effect>` for the available data
+sources and examples.
 
 The result is clipped to a minimum of 1, so the relative risk never falls
 below the baseline.
