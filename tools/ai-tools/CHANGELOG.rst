@@ -1,4 +1,4 @@
-**0.24.0 - 07/15/26**
+**0.24.0 - 07/27/26**
 
  - Split the plugin in two and rename both halves (MIC-7220): the generic
    tooling moves to the new ``simsci`` plugin (``tools/ai-tools-public``), and
