@@ -1,11 +1,6 @@
 **7.0.0 - 07/27/26**
 
-- **Breaking change.** Extract ``gbd_mapping_generator`` into a separate,
-  IHME-internal package (``vivarium-gbd-mapping-generator``). This removes the
-  ``build_mapping`` console script, the ``vivarium.gbd_mapping_generator``
-  subpackage, and the ``data`` extra (``vivarium-gbd-access``) from this
-  distribution, so the mapping now installs without the generator's heavy,
-  cluster-only dependencies. Regenerate mappings via the new generator package.
+- Remove ``gbd_mapping_generator`` submodule and related tests and documentation
 
 **6.0.7 - 07/23/26**
 
