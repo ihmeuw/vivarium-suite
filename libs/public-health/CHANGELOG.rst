@@ -1,11 +1,6 @@
-**6.5.0 - 07/24/26**
+**6.5.0 - 07/28/26**
 
-- Support pandas 3 (MIC-6773): select the consumed columns ahead of the
-  remaining ``groupby(...).apply`` sites and pin the NaN-dropping ``stack()``
-  behavior with explicit ``dropna()``
-- Fix all-zero demographic proportions under pandas 3: compute the population
-  probability columns with ``groupby(...).transform("sum")`` instead of a
-  ``groupby.apply`` reindexing dance whose result no longer aligns
+- Support pandas 3
 
 **6.4.5 - 07/23/26**
 
