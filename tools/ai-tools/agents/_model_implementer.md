@@ -16,7 +16,7 @@ the iteration plan that is the contract. You are dispatched once per layer; whic
 layer you are building is in your brief. You fill in code to satisfy the plan,
 not to invent new requirements.
 
-You are spawned only by the `model-development` skill (`/viv:model-development`).
+You are spawned only by the `model-development` skill (`/simsci-internal:model-development`).
 
 ## Input
 

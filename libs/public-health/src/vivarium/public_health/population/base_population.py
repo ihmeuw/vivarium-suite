@@ -61,6 +61,12 @@ class BasePopulation(Component):
                 location:
                     Source for location data. Default is the
                     ``population.location`` artifact key.
+                age_bins:
+                    Canonical source for the age-bin definitions shared with
+                    components that bin or stratify by age (e.g. the results
+                    stratifier and the LBWSG risk effect), which reach them
+                    through :func:`get_population_age_bins`. Default is the
+                    ``population.age_bins`` artifact key.
                 initialization_age_min: int
                     Minimum age for initial population generation. Default 0.
                 initialization_age_max: int
@@ -75,6 +81,7 @@ class BasePopulation(Component):
             "population": {
                 "population_structure": "population.structure",
                 "location": "population.location",
+                "age_bins": "population.age_bins",
                 "initialization_age_min": 0,
                 "initialization_age_max": 125,
                 "untracking_age": None,
@@ -185,6 +192,23 @@ class BasePopulation(Component):
                 "age_smoothing_age_bounds", initializes_crn_attributes=True
             ),
         }
+
+    def get_age_bins(self, builder: Builder) -> pd.DataFrame:
+        """Load the age bin definitions from the configured data source.
+
+        Parameters
+        ----------
+        builder
+            Access point for utilizing framework interfaces during setup.
+
+        Returns
+        -------
+            A :class:`pandas.DataFrame` with ``age_start``, ``age_end``, and
+            ``age_group_name`` columns.
+        """
+        # Read the key off the builder rather than self.config; consuming
+        # components may call this before this component's setup has run.
+        return self.get_data(builder, builder.configuration.population.age_bins)
 
     ########################
     # Event-driven methods #
@@ -576,6 +600,35 @@ class AgeOutSimulants(Component):
                 "is_aged_out",
                 lambda _: pd.Series(True, index=newly_aged_out, name="is_aged_out"),
             )
+
+
+def get_population_age_bins(builder: Builder) -> pd.DataFrame:
+    """Get the age bins defined by the simulation's population component.
+
+    Parameters
+    ----------
+    builder
+        Access point for utilizing framework interfaces during setup.
+
+    Returns
+    -------
+        A :class:`pandas.DataFrame` with ``age_start``, ``age_end``, and
+        ``age_group_name`` columns.
+
+    Raises
+    ------
+    ValueError
+        If the simulation does not contain exactly one
+        :class:`BasePopulation` component.
+    """
+    population_components = builder.components.get_components_by_type(BasePopulation)
+    if len(population_components) != 1:
+        raise ValueError(
+            "Age bins are defined by the simulation's BasePopulation component, but "
+            f"{len(population_components)} such components were found. Add a single "
+            "BasePopulation component or configure an explicit 'age_bins' data source."
+        )
+    return population_components[0].get_age_bins(builder)
 
 
 def generate_population(
