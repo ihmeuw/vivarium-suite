@@ -194,8 +194,8 @@ class NonLogLinearRiskEffect(RiskEffect):
             col for col in rr_data.columns if col != "parameter" and col != "value"
         ]
         rr_data = (
-            rr_data.groupby(demographic_cols)
-            .apply(define_rr_intervals, include_groups=False)
+            rr_data.groupby(demographic_cols)[["parameter", "value"]]
+            .apply(define_rr_intervals)
             .reset_index(level=-1, drop=True)
             .reset_index()
         )
@@ -288,8 +288,8 @@ class NonLogLinearRiskEffect(RiskEffect):
             return rr_at_tmrel
 
         rrs_at_tmrel = (
-            original_rrs.groupby(demographic_cols)
-            .apply(get_rr_at_tmrel, include_groups=False)
+            original_rrs.groupby(demographic_cols)[["parameter", "value"]]
+            .apply(get_rr_at_tmrel)
             .rename("rr_at_tmrel")
         )
         rr_data = original_rrs.merge(rrs_at_tmrel.reset_index())

@@ -1,8 +1,8 @@
 **6.5.0 - 07/24/26**
 
-- Support pandas 3 (MIC-6773): pass ``include_groups=False`` at the remaining
-  ``groupby(...).apply`` sites and pin the NaN-dropping ``stack()`` behavior
-  with explicit ``dropna()``
+- Support pandas 3 (MIC-6773): select the consumed columns ahead of the
+  remaining ``groupby(...).apply`` sites and pin the NaN-dropping ``stack()``
+  behavior with explicit ``dropna()``
 
 **6.4.5 - 07/23/26**
 
