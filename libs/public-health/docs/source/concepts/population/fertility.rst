@@ -15,6 +15,12 @@ fertility implementations that span a range of complexity and data requirements 
 
 Note that fertility components are optional — a model that does not need births simply omits them.
 
+A fertility component's input data is configured through ``data_sources`` --
+each entry defaults to an artifact key but can be supplied as a scalar,
+``DataFrame``, or callable so it can run without an artifact. See the
+:doc:`population tutorial </tutorials/population>` for the available data sources
+and examples.
+
 .. list-table::
    :widths: 30 20 50
    :header-rows: 1

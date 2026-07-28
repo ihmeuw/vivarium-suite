@@ -29,16 +29,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[pandas,numpy,click]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
-    "pyyaml",
 ]
 
 [project.optional-dependencies]
-# Data extra pulls vivarium-gbd-access, which requires IHME-internal cluster
-# access. Omitted from ci_github (GH runners can't reach the cluster) and
-# only invoked by maintainers running ``build_mapping``.
-data = ["vivarium-gbd-access>=5.0.0, <6.0.0"]
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
@@ -46,13 +40,10 @@ test = [
 docs = ["vivarium-dependencies[sphinx]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
-dev = ["vivarium-gbd-mapping[docs,interactive,test,data,lint]"]
+dev = ["vivarium-gbd-mapping[docs,interactive,test,lint]"]
 cluster = []
 ci_github = ["vivarium-gbd-mapping[test,docs,lint]"]
 ci_jenkins = ["vivarium-gbd-mapping[ci_github,cluster]"]
-
-[project.scripts]
-build_mapping = "vivarium.gbd_mapping_generator.build_mapping:build_mapping"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
@@ -60,9 +51,9 @@ Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/gbd-mapping"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# Enumerate the two top-level packages and their subpackages explicitly. A
-# loose glob like ``vivarium.gbd_mapping*`` would also match a hypothetical
-# sibling ``vivarium.gbd_mapping_helpers`` shipped by another lib.
+# Enumerate the gbd_mapping package and its subpackages explicitly. A loose glob
+# like ``vivarium.gbd_mapping*`` would also match a hypothetical sibling
+# ``vivarium.gbd_mapping_helpers`` shipped by another lib.
 #
 # Excluding ``vivarium`` itself means the wheel does not ship
 # ``vivarium/__init__.py``, which is owned by vivarium-engine; two
@@ -71,8 +62,6 @@ where = ["src"]
 include = [
     "vivarium.gbd_mapping",
     "vivarium.gbd_mapping.*",
-    "vivarium.gbd_mapping_generator",
-    "vivarium.gbd_mapping_generator.*",
 ]
 
 [tool.setuptools_scm]
@@ -93,8 +82,8 @@ fallback_version = "0.0.0+no-git-tag"
 
 [tool.black]
 line-length = 94
-# Skip the mapping module; most of it is a flat data dump produced by
-# vivarium.gbd_mapping_generator and should not be hand-formatted.
+# Skip the mapping module; most of it is an auto-generated flat data dump and
+# should not be hand-formatted.
 exclude = '''
 /(
    build

@@ -52,26 +52,3 @@ def test_public_api_reexports():
     )
     for name in expected:
         getattr(vivarium.gbd_mapping, name)
-
-
-def test_generator_subpackage_importable():
-    """Verify the build_mapping entry-point target resolves.
-
-    Catches typos in the [project.scripts] entry point declaration in
-    pyproject.toml or rename drift in the generator package.
-    """
-    from vivarium.gbd_mapping_generator.build_mapping import build_mapping
-
-    assert callable(build_mapping)
-
-
-def test_build_mapping_console_script_registered():
-    """Verify the build_mapping console script is wired up via entry_points.
-
-    Catches the case where the entry point is declared in pyproject.toml but
-    the installed distribution metadata doesn't reflect it (stale install).
-    """
-    from importlib.metadata import entry_points
-
-    scripts = entry_points(group="console_scripts")
-    assert "build_mapping" in scripts.names
