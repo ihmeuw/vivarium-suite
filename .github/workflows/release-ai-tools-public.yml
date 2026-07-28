@@ -1,0 +1,124 @@
+# Tag-and-release workflow for the `tools/ai-tools-public` Claude Code plugin
+# (viv-public). A twin of release-ai-tools.yml with the plugin path and tag
+# prefix swapped; see that file's header for why plugin releases are kept
+# separate from release.yml (PyPI trusted-publishing credential isolation).
+#
+# Version source: the first line of tools/ai-tools-public/CHANGELOG.rst,
+# formatted "**X.Y.Z - MM/DD/YY**" (2-digit year, Pacific date matching the
+# push day) - the same convention release.yml uses for the libs.
+
+name: Release AI Tools Public
+
+on:
+  push:
+    branches: [main]
+    paths: ['tools/ai-tools-public/CHANGELOG.rst']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 0.1.1)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Release vivarium-ai-tools-public
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          # On a manual dispatch use the supplied version; on a push to main
+          # parse it from the CHANGELOG head (same regex release.yml uses).
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION=$(head -1 tools/ai-tools-public/CHANGELOG.rst | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          fi
+
+          # Validate both the parsed and the dispatched value as strict X.Y.Z
+          # so a malformed input never flows into the tag name.
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Could not resolve a valid X.Y.Z version (got '${VERSION}')"
+            exit 1
+          fi
+
+          TAG="vivarium-ai-tools-public-v$VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          # A CHANGELOG edit that does not bump the version (e.g. fixing an
+          # older entry) leaves the head version's tag already present. Detect
+          # that up front - BEFORE the date check - so a no-op push short-
+          # circuits to success instead of failing the date validation on a
+          # stale head date. Requires fetch-depth: 0 above so all tags are local.
+          if git tag -l "$TAG" | grep -q .; then
+            echo "Tag $TAG already exists; nothing new to release."
+            echo "release_needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "release_needed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate CHANGELOG date
+        # Only on push, and only when actually cutting a new release: the
+        # CHANGELOG date must match the day the release is pushed (Pacific),
+        # matching IHME's release conventions. Skipped for workflow_dispatch
+        # (a recovery path that may re-release an older entry) and for a push
+        # that did not bump the version.
+        # (?!\d) prevents a partial match if a CHANGELOG still uses a 4-digit year.
+        # `|| true` keeps a malformed/missing date from aborting silently under
+        # `set -e`, so the comparison below reports it clearly.
+        if: github.event_name == 'push' && steps.version.outputs.release_needed == 'true'
+        run: |
+          CHANGELOG_DATE=$(head -1 tools/ai-tools-public/CHANGELOG.rst | grep -oP '\d{2}/\d{2}/\d{2}(?!\d)' || true)
+          TODAY=$(TZ='America/Los_Angeles' date +%m/%d/%y)
+          if [ "$CHANGELOG_DATE" != "$TODAY" ]; then
+            echo "CHANGELOG date ('$CHANGELOG_DATE') does not match today ('$TODAY')"
+            exit 1
+          fi
+
+      - name: Create and push tag
+        if: steps.version.outputs.release_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        # Runs whenever the prior steps succeeded. `release view || create` is
+        # idempotent: it no-ops when the release already exists (a no-bump push)
+        # and recovers a partial prior run where the tag was pushed but the
+        # release was never created.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          gh release view "$TAG" 2>/dev/null || gh release create "$TAG" \
+            --title "vivarium-ai-tools-public v${{ steps.version.outputs.version }}" \
+            --generate-notes
+
+      - name: Send failure notification
+        if: failure()
+        uses: dawidd6/action-send-mail@v2
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.NOTIFY_EMAIL }}
+          password: ${{ secrets.NOTIFY_PASSWORD }}
+          subject: ${{ github.job }} job of ${{ github.repository }} has ${{ job.status }}
+          body: ${{ github.job }} job in workflow ${{ github.workflow }} of ${{ github.repository }} has ${{ job.status }}
+          to: uw_ihme_simulationscience@uw.edu
+          from: Vivarium Notifications

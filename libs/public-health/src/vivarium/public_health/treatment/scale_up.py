@@ -26,8 +26,10 @@ class LinearScaleUp(Component):
     This component linearly interpolates an intervention's exposure parameter
     between a start value and an end value over a specified date range. Before
     the start date, the start value is used; after the end date, the end value
-    is used. Endpoint values can be sourced from artifact data or from scalar
-    parameters in the configuration.
+    is used. Each endpoint value can be a numeric configuration parameter, or
+    ``"data"`` to resolve from the corresponding ``data_sources`` entry: an
+    artifact key by default, or a DataFrame/scalar supplied through the
+    configuration to bypass the artifact.
 
     For example, for an intervention called ``treatment`` the configuration
     could look like this:
@@ -78,19 +80,48 @@ class LinearScaleUp(Component):
                         Default is ``"2020-12-31"``.
                 value:
                     start: str or float
-                        Value at the start of scale-up. Can be ``"data"``
-                        to load from artifact, or a numeric value.
-                        Default is ``"data"``.
+                        Value at the start of scale-up. A numeric value, or
+                        ``"data"`` to resolve from the corresponding
+                        ``data_sources`` entry (an artifact key by default, but
+                        overridable). Default is ``"data"``.
                     end: str or float
-                        Value at the end of scale-up. Can be ``"data"``
-                        to load from artifact, or a numeric value.
-                        Default is ``"data"``.
+                        Value at the end of scale-up. A numeric value, or
+                        ``"data"`` to resolve from the corresponding
+                        ``data_sources`` entry (an artifact key by default, but
+                        overridable). Default is ``"data"``.
 
         The scale-up linearly interpolates between start and end values
         over the specified date range. Outside this range, values are
         clamped to the nearest endpoint value.
+
+        In addition to ``date`` and ``value``, a ``data_sources`` block is
+        provided so the ``"data"`` endpoints can be sourced from the
+        configuration tree rather than requiring an artifact::
+
+            {treatment_name}_scale_up:
+                data_sources:
+                    start: str or DataFrame or float
+                        Source for the start-endpoint exposure. Default is the
+                        artifact key ``{treatment}.exposure``. Accepts a
+                        DataFrame or scalar to bypass the artifact.
+                    end: str or DataFrame or float
+                        Source for the end-endpoint exposure. Default is the
+                        artifact key ``alternate_{treatment}.exposure``.
+                        Accepts a DataFrame or scalar to bypass the artifact.
+
+        These sources are consulted only for an endpoint whose ``value`` is
+        ``"data"``; a numeric ``value`` is used directly and ignores the
+        corresponding data source.
         """
-        return {self.configuration_key: self.CONFIGURATION_DEFAULTS["treatment"]}
+        return {
+            self.configuration_key: {
+                **self.CONFIGURATION_DEFAULTS["treatment"],
+                "data_sources": {
+                    "start": f"{self.treatment}.exposure",
+                    "end": f"alternate_{self.treatment}.exposure",
+                },
+            }
+        }
 
     @property
     def configuration_key(self) -> str:
@@ -291,15 +322,34 @@ class LinearScaleUp(Component):
         -------
             A lookup table returning the value at the start or end of the
             scale-up period.
+
+        Raises
+        ------
+        ValueError
+            If ``endpoint_type`` is neither ``"start"`` nor ``"end"``.
+
+        Notes
+        -----
+        The endpoint data is resolved from the ``data_sources`` entry named
+        for ``endpoint_type`` via
+        :meth:`~vivarium.engine.component.Component.get_data`, so it comes from the
+        artifact by default (keys ``{treatment}.exposure`` /
+        ``alternate_{treatment}.exposure``) but can be overridden with a
+        configuration-supplied DataFrame or scalar to run without an artifact.
+        The resolved data is wrapped in a lookup table.
         """
-        if endpoint_type == "start":
-            endpoint_data = builder.data.load(f"{self.treatment}.exposure")
-        elif endpoint_type == "end":
-            endpoint_data = builder.data.load(f"alternate_{self.treatment}.exposure")
-        else:
+        if endpoint_type not in ("start", "end"):
             raise ValueError(
-                f'Invalid endpoint type {endpoint_type}. Allowed types are "start" and "end".'
+                f"Invalid endpoint type '{endpoint_type}'. "
+                "Allowed values are 'start' and 'end'."
             )
+        # This component registers its config under ``configuration_key`` (e.g.
+        # ``"sqlns_scale_up"``), not ``self.name``, so ``self.configuration`` is
+        # empty here; read the source from ``configuration_key`` instead.
+        endpoint_data = self.get_data(
+            builder,
+            builder.configuration[self.configuration_key].data_sources[endpoint_type],
+        )
         return self.build_lookup_table(builder, "endpoint", endpoint_data)
 
     def apply_scale_up(

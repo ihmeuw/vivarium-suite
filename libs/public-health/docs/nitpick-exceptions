@@ -48,6 +48,7 @@ py:class RandomnessStream
 py:meth __init__
 py:class Component
 py:attr lookup_tables
+py:attr vivarium.public_health.risks.base_risk.Risk.exposure_column_name
 
 # typing module - needed for Python 3.10 compatibility
 py:data typing.Union
