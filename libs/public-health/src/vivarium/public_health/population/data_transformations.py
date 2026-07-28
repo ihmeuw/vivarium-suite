@@ -68,31 +68,20 @@ def assign_demographic_proportions(
     if include_sex != "Both":
         population_data.loc[population_data.sex != include_sex, "value"] = 0.0
 
-    year_start_groups = population_data.groupby("year_start", as_index=False)
     population_data["P(sex, location, age| year)"] = (
-        year_start_groups[year_start_groups.obj.columns]
-        .apply(lambda sub_pop: sub_pop[["value"]] / sub_pop["value"].sum())
-        .reset_index(level=0)["value"]
-        .fillna(0.0)
-    )
+        population_data["value"]
+        / population_data.groupby("year_start")["value"].transform("sum")
+    ).fillna(0.0)
 
-    age_year_start_groups = population_data.groupby(["age", "year_start"], as_index=False)
     population_data["P(sex, location | age, year)"] = (
-        age_year_start_groups[age_year_start_groups.obj.columns]
-        .apply(lambda sub_pop: sub_pop[["value"]] / sub_pop["value"].sum())
-        .reset_index(level=0)["value"]
-        .fillna(0.0)
-    )
+        population_data["value"]
+        / population_data.groupby(["age", "year_start"])["value"].transform("sum")
+    ).fillna(0.0)
 
-    year_start_sex_location_groups = population_data.groupby(
-        ["year_start", "sex", "location"], as_index=False
-    )
     population_data["P(age | year, sex, location)"] = (
-        year_start_sex_location_groups[year_start_sex_location_groups.obj.columns]
-        .apply(lambda sub_pop: sub_pop[["value"]] / sub_pop["value"].sum())
-        .reset_index(level=0)["value"]
-        .fillna(0.0)
-    )
+        population_data["value"]
+        / population_data.groupby(["year_start", "sex", "location"])["value"].transform("sum")
+    ).fillna(0.0)
 
     return population_data.sort_values(_SORT_ORDER).reset_index(drop=True)
 
