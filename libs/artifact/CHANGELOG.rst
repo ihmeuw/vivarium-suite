@@ -1,4 +1,4 @@
-**1.1.0 - 07/24/26**
+**1.1.0 - 07/30/26**
 
 - Make the ``hdf`` module functions private
 
