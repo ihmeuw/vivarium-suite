@@ -362,7 +362,7 @@ def test_adding_observation_gather_results(
         assert result is not None
         assert all(
             math.isclose(actual_result, expected_result, rel_tol=0.0001)
-            for actual_result in result.values
+            for actual_result in result[VALUE_COLUMN]
         )
         i += 1
     assert i == 1
