@@ -198,7 +198,7 @@ def build_job_list(
         else:
             jobs.append(parameters)
 
-    np.random.default_rng().shuffle(jobs)  # type: ignore [arg-type]
+    np.random.default_rng().shuffle(jobs)
     return jobs, number_already_completed
 
 
