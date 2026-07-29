@@ -6,36 +6,27 @@ HDF Interface
 A convenience wrapper around the `tables <https://www.pytables.org>`_ and
 :mod:`pandas` HDF interfaces.
 
-Public Interface
-----------------
+Internal Interface
+------------------
 
-The public interface consists of 5 functions:
+These low-level helpers back :class:`~vivarium.artifact.artifact.Artifact` and
+are private to the package; use the ``Artifact`` class rather than calling them
+directly.
 
-.. list-table:: HDF Public Interface
-   :widths: 20 60
-   :header-rows: 1
-
-   * - Function
-     - Description
-   * - :func:`touch`
-     - Creates an HDF file, wiping an existing file if necessary.
-   * - :func:`write`
-     - Stores data at a key in an HDF file.
-   * - :func:`load`
-     - Loads (potentially filtered) data from a key in an HDF file.
-   * - :func:`remove`
-     - Clears data from a key in an HDF file.
-   * - :func:`get_keys`
-     - Gets all available HDF keys from an HDF file.
+- ``_touch`` - Creates an HDF file, wiping an existing file if necessary.
+- ``_write`` - Stores data at a key in an HDF file.
+- ``_load`` - Loads (potentially filtered) data from a key in an HDF file.
+- ``_remove`` - Clears data from a key in an HDF file.
+- ``_get_keys`` - Gets all available HDF keys from an HDF file.
 
 Contracts
 +++++++++
 
-- All functions in the public interface accept both :class:`pathlib.Path` and
-  normal Python :class:`str` objects for paths.
-- All functions in the public interface accept only :class:`str` objects
-  as representations of the keys in the hdf file.  The strings must be
-  formatted as ``"type.name.measure"`` or ``"type.measure"``.
+- All of these helpers accept both :class:`pathlib.Path` and normal Python
+  :class:`str` objects for paths.
+- All of these helpers accept only :class:`str` objects as representations of
+  the keys in the hdf file.  The strings must be formatted as
+  ``"type.name.measure"`` or ``"type.measure"``.
 
 """
 
@@ -53,11 +44,11 @@ from tables.nodes import filenode
 from vivarium.artifact.entity_key import EntityKey
 
 ####################
-# Public interface #
+# Internal helpers #
 ####################
 
 
-def touch(path: Path | str) -> None:
+def _touch(path: Path | str) -> None:
     """Creates an HDF file, wiping an existing file if necessary.
 
     If the given path is proper to create a HDF file, it creates a new
@@ -80,7 +71,7 @@ def touch(path: Path | str) -> None:
         pass
 
 
-def write(path: Path | str, entity_key: str, data: Any) -> None:
+def _write(path: Path | str, entity_key: str, data: Any) -> None:
     """Writes data to the HDF file at the given path to the given key.
 
     Parameters
@@ -114,7 +105,7 @@ def write(path: Path | str, entity_key: str, data: Any) -> None:
         _write_json_blob(hdf_path, entity_key, data)
 
 
-def load(
+def _load(
     path: Path | str,
     entity_key: str,
     filter_terms: list[str] | None,
@@ -174,7 +165,7 @@ def load(
     return data
 
 
-def remove(path: Path | str, entity_key: str) -> None:
+def _remove(path: Path | str, entity_key: str) -> None:
     """Removes a piece of data from an HDF file.
 
     Parameters
@@ -196,7 +187,7 @@ def remove(path: Path | str, entity_key: str) -> None:
         file.remove_node(entity_key.path, recursive=True)
 
 
-def get_keys(path: Path | str) -> list[str]:
+def _get_keys(path: Path | str) -> list[str]:
     """Gets key representation of all paths in an HDF file.
 
     Parameters
@@ -210,7 +201,7 @@ def get_keys(path: Path | str) -> list[str]:
     """
     path = _get_valid_hdf_path(path)
     with tables.open_file(str(path)) as file:
-        keys = _get_keys(file.root)
+        keys = _get_keys_from_node(file.root)
     return keys
 
 
@@ -273,7 +264,7 @@ def _write_json_blob(path: Path, entity_key: EntityKey, data: Any) -> None:
             fnode.write(bytes(json.dumps(data), "utf-8"))
 
 
-def _get_keys(root: tables.node.Node, prefix: str = "") -> list[str]:
+def _get_keys_from_node(root: tables.node.Node, prefix: str = "") -> list[str]:
     """Recursively formats the paths in an HDF file into a key format."""
     keys = []
     for child in root:
@@ -284,7 +275,7 @@ def _get_keys(root: tables.node.Node, prefix: str = "") -> list[str]:
             keys.append(prefix)
         else:
             new_prefix = f"{prefix}.{child_name}" if prefix else child_name
-            keys.extend(_get_keys(child, new_prefix))
+            keys.extend(_get_keys_from_node(child, new_prefix))
 
     # Clean up some weird meta groups that get written with dataframes.
     keys = [k for k in keys if ".meta." not in k]

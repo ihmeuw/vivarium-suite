@@ -58,7 +58,7 @@ def test_touch_no_file(mocker: MockerFixture) -> None:
     path = Path("not/an/existing/path.hdf")
     tables_mock = mocker.patch("vivarium.artifact.hdf.tables")
 
-    hdf.touch(path)
+    hdf._touch(path)
     tables_mock.open_file.assert_called_once_with(str(path), mode="w")
     tables_mock.reset_mock()
 
@@ -66,29 +66,29 @@ def test_touch_no_file(mocker: MockerFixture) -> None:
 def test_touch_exists_but_not_hdf_file_path(hdf_file_path: Path) -> None:
     dir_path = Path(hdf_file_path).parent
     with pytest.raises(ValueError):
-        hdf.touch(dir_path)
+        hdf._touch(dir_path)
     non_hdf_path = Path(hdf_file_path).parent / "test.txt"
     with pytest.raises(ValueError):
-        hdf.touch(non_hdf_path)
+        hdf._touch(non_hdf_path)
 
 
 def test_touch_existing_file(tmpdir: Path) -> None:
     path = f"{str(tmpdir)}/test.hdf"
 
-    hdf.touch(path)
-    hdf.write(path, hdf.EntityKey("test.key"), "data")
-    assert hdf.get_keys(path) == ["test.key"]
+    hdf._touch(path)
+    hdf._write(path, hdf.EntityKey("test.key"), "data")
+    assert hdf._get_keys(path) == ["test.key"]
 
     # should wipe out and make it again
-    hdf.touch(path)
-    assert hdf.get_keys(path) == []
+    hdf._touch(path)
+    assert hdf._get_keys(path) == []
 
 
 def test_write_df(hdf_file_path: Path, mock_key: EntityKey, mocker: MockerFixture) -> None:
     df_mock = mocker.patch("vivarium.artifact.hdf._write_pandas_data")
     data = pd.DataFrame(np.random.random((10, 3)), columns=["a", "b", "c"], index=range(10))
 
-    hdf.write(hdf_file_path, mock_key, data)
+    hdf._write(hdf_file_path, mock_key, data)
 
     df_mock.assert_called_once_with(hdf_file_path, mock_key, data)
 
@@ -97,13 +97,13 @@ def test_write_json(
     hdf_file_path: Path, mock_key: EntityKey, json_data: list[str], mocker: MockerFixture
 ) -> None:
     json_mock = mocker.patch("vivarium.artifact.hdf._write_json_blob")
-    hdf.write(hdf_file_path, mock_key, json_data)
+    hdf._write(hdf_file_path, mock_key, json_data)
     json_mock.assert_called_once_with(hdf_file_path, mock_key, json_data)
 
 
 def test_load(hdf_file_path: Path, hdf_key: str) -> None:
     key = hdf.EntityKey(hdf_key)
-    data = hdf.load(hdf_file_path, key, filter_terms=None, column_filters=None)
+    data = hdf._load(hdf_file_path, key, filter_terms=None, column_filters=None)
     if "restrictions" in key or "versions" in key:
         assert isinstance(data, dict)
     elif "metadata" in key:
@@ -114,7 +114,7 @@ def test_load(hdf_file_path: Path, hdf_key: str) -> None:
 
 def test_load_with_invalid_filters(hdf_file_path: Path, hdf_key: str) -> None:
     key = hdf.EntityKey(hdf_key)
-    data = hdf.load(hdf_file_path, key, filter_terms=["fake_filter==0"], column_filters=None)
+    data = hdf._load(hdf_file_path, key, filter_terms=["fake_filter==0"], column_filters=None)
     if "restrictions" in key or "versions" in key:
         assert isinstance(data, dict)
     elif "metadata" in key:
@@ -125,7 +125,7 @@ def test_load_with_invalid_filters(hdf_file_path: Path, hdf_key: str) -> None:
 
 def test_load_with_valid_filters(hdf_file_path: Path, hdf_key: str) -> None:
     key = hdf.EntityKey(hdf_key)
-    data = hdf.load(hdf_file_path, key, filter_terms=["year == 2006"], column_filters=None)
+    data = hdf._load(hdf_file_path, key, filter_terms=["year == 2006"], column_filters=None)
     if "restrictions" in key or "versions" in key:
         assert isinstance(data, dict)
     elif "metadata" in key:
@@ -142,7 +142,7 @@ def test_load_filter_empty_data_frame_index(hdf_file_path: Path) -> None:
     data = data.set_index(list(data.columns))
 
     hdf._write_pandas_data(hdf_file_path, key, data)
-    loaded_data = hdf.load(
+    loaded_data = hdf._load(
         hdf_file_path, key, filter_terms=["year == 4"], column_filters=None
     )
     loaded_data = loaded_data.reset_index()
@@ -151,13 +151,13 @@ def test_load_filter_empty_data_frame_index(hdf_file_path: Path) -> None:
 
 def test_remove(hdf_file_path: Path, hdf_key: str) -> None:
     key = hdf.EntityKey(hdf_key)
-    hdf.remove(hdf_file_path, key)
+    hdf._remove(hdf_file_path, key)
     with tables.open_file(str(hdf_file_path)) as file:
         assert key.path not in file
 
 
 def test_get_keys(hdf_file_path: Path, hdf_keys: list[str]) -> None:
-    assert sorted(hdf.get_keys(hdf_file_path)) == sorted(hdf_keys)
+    assert sorted(hdf._get_keys(hdf_file_path)) == sorted(hdf_keys)
 
 
 def test_write_json_blob(
@@ -199,7 +199,7 @@ def test_write_load_empty_data_frame_index(hdf_file_path: Path) -> None:
     data = data.set_index(list(data.columns))
 
     hdf._write_pandas_data(hdf_file_path, key, data)
-    loaded_data = hdf.load(hdf_file_path, key, filter_terms=None, column_filters=None)
+    loaded_data = hdf._load(hdf_file_path, key, filter_terms=None, column_filters=None)
     assert loaded_data.equals(data)
 
 
@@ -232,8 +232,8 @@ def test_write_data_frame(hdf_file_path: Path) -> None:
     pd.testing.assert_frame_equal(written_data, draw_0_data)
 
 
-def test_get_keys_private(hdf_file: File, hdf_keys: list[str]) -> None:
-    assert sorted(hdf._get_keys(hdf_file.root)) == sorted(hdf_keys)
+def test_get_keys_from_node(hdf_file: File, hdf_keys: list[str]) -> None:
+    assert sorted(hdf._get_keys_from_node(hdf_file.root)) == sorted(hdf_keys)
 
 
 def test_get_node_name(hdf_file: File, hdf_key: str) -> None:
