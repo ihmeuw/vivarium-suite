@@ -592,6 +592,10 @@ class PopulationView:
 
         return update
 
+    # TODO MIC-6808: once simulation environments are pandas>=3 only, replace this
+    #  predicate and the manual array surgery in _update_column_and_ensure_dtype
+    #  with a native setitem (existing.loc[update.index] = update), which enforces
+    #  the same policy (existing dtype wins; lossy or incompatible updates raise).
     @staticmethod
     def _dtypes_compatible(
         update_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
