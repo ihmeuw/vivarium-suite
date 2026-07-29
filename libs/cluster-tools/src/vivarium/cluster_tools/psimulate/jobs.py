@@ -198,7 +198,9 @@ def build_job_list(
         else:
             jobs.append(parameters)
 
-    np.random.default_rng().shuffle(jobs)
+    # Index through a permutation instead of Generator.shuffle: the shuffle
+    # overloads differ across numpy 2.x type-stub versions
+    jobs = [jobs[i] for i in np.random.default_rng().permutation(len(jobs))]
     return jobs, number_already_completed
 
 
