@@ -3,6 +3,8 @@ py:class np.number
 py:class np.object_
 py:class npt.NDArray
 py:class npt.NBitBase
+py:class NDArray
+py:class numpy._typing._array_like.GenericAlias
 # pandas
 py:class CategoricalDtype
 py:class pandas.core.indexes.base.Index

@@ -155,7 +155,6 @@ def test_stratification_init_raises(
             lambda df: pd.Series(np.nan, index=df.index),
             True,
             ValueError,
-            # repr the numpy scalar: its rendering changed in numpy 2
             f"Invalid values mapped to hogwarts_house: {{{np.float64(np.nan)!r}}}",
         ),
     ],
