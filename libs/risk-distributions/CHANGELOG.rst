@@ -1,4 +1,4 @@
-**3.1.9 - 07/24/26**
+**3.1.9 - 07/29/26**
 
 - Support pandas 3 (MIC-6773): cast ensemble weights and distribution call data
   to float before writing transformed values into them (pandas 3 removed silent
