@@ -1,3 +1,7 @@
+**6.5.0 - 07/29/26**
+
+- Support pandas 3
+
 **6.4.7 - 07/27/26**
 
 - Add ``NonLogLinearRiskEffect`` subclassing hooks: ``MINIMUM_RELATIVE_RISK``, ``get_lowest_bin_left_rr()``, ``define_rr_intervals()``, ``get_tmrel()``, and ``exposure_column_name``

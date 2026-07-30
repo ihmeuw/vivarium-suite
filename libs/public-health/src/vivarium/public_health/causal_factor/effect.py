@@ -550,7 +550,7 @@ class CausalFactorEffect(Component, ABC):
                 exposure.columns = index_columns
                 exposure = exposure.set_index(index_columns)
 
-                relative_risk = rr.stack().reset_index()
+                relative_risk = rr.stack().dropna().reset_index()
                 relative_risk.columns = index_columns + ["value"]
                 relative_risk = relative_risk.set_index(index_columns)
 
