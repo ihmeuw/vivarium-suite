@@ -1,4 +1,4 @@
-**5.6.0 - 07/24/26**
+**5.6.0 - 07/29/26**
 
 - Support pandas 3 (MIC-6773): treat str- vs object-backed string columns and
   datetime64 unit differences as compatible in the population-table dtype guard,
