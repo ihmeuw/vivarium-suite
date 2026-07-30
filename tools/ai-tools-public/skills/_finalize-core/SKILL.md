@@ -8,17 +8,11 @@ user-invocable: false
 Finalize and open a PR for the work handed over in: $ARGUMENTS
 
 This is the **finalize core** — the single definition of the back half every path
-shares: triaging the findings that were deliberately left alone, gating on the
-user's approval, shaping a reviewable history, opening the draft PR, and recording
-in the PR what was *not* addressed. It is invoked **inline** by
-`/simsci:pr-prep`, by `/simsci:framework-development`'s Phase 5, and by a
-model-development loop.
+shares, from leftover triage through to the draft PR.
 
-Run it **inline, never as a forked sub-agent**, for three independent reasons: it
-invokes `commit-splitter` (which spawns `simsci:_split_proposer`) and, where
-installed, a ticket-filing skill (which spawns its own dedup agent), and a
-sub-agent cannot spawn sub-agents; a forked agent cannot run the user gate this
-unit is built around; and its commits must land in the caller's own tree.
+Run it **inline, never as a forked sub-agent**: it spawns sub-agents through
+`commit-splitter` and the ticket-filing skill, it runs a user gate, and its commits
+must land in the caller's own tree.
 
 **Not this unit's job** — the caller owns these: producing the review, deciding
 which findings to address, applying the fixes, reaching a validation verdict, and
@@ -39,9 +33,8 @@ the team are deliberate acts the user takes — offer, never do them unasked.
 - The **dropped** set with reasons, if the caller distinguishes drops.
 - The **validation verdict**, and the ref the work started from. Carry the verdict
   into the PR body as given; do **not** adjudicate whether work in this state may
-  ship. That is the caller's policy and it already decided by arriving here — one
-  caller carries residual failures forward deliberately, another refuses to
-  finalize at all on exhaustion.
+  ship. Callers legitimately differ — one carries residual failures forward, another
+  refuses to finalize on exhaustion — and each already decided by arriving here.
 - **Hold-out paths**, if any — files that must be left uncommitted. Name them to
   `commit-splitter` as excluded, and report at the end that they are still
   uncommitted.
@@ -53,10 +46,9 @@ Ask for anything missing rather than inferring it.
 ## Step 1 — Summarize and read the branch
 
 State what was built or changed, the validation verdict, and anything carried out
-of the caller's loop unresolved — a residual check failure, a fix that could not be
-made green, a finding whose fix was blocked. This is the user's last look before
-the gate, so surface the residuals here rather than letting them appear for the
-first time in Step 6.
+of the caller's loop unresolved. This is the user's last look before the gate, so
+surface the residuals here rather than letting them appear for the first time in
+Step 6.
 
 Then establish the git facts, changing nothing: `git status --short`, the upstream,
 the base (`git merge-base HEAD origin/<default-branch>`), and
@@ -94,33 +86,24 @@ place, saying what would have happened.
 
 ## Step 4 — Shape a reviewable history
 
-Branch on what Step 1 found:
+If Step 1 found **uncommitted work**, invoke the `simsci:commit-splitter` skill and
+follow it, naming any hold-out paths as excluded and passing the partition rule in
+its brief.
 
-1. **Uncommitted work in the tree** — `commit-splitter`'s native case. Invoke the
-   `simsci:commit-splitter` skill and follow it, naming any hold-out paths as
-   excluded and passing the partition rule in its brief; it owns the grouping
-   proposal, its own confirmation gate, and its own backup ref. Commits already on
-   the branch stay untouched.
-2. **Committed, and the history already reads well** — commits are scoped and
-   their subjects describe the change. Nothing to do; say so and move on. A
-   coherent series is not improved by being rewritten, and `commit-splitter`
-   refuses a clean tree by design.
-3. **Committed, but the history does not read well** — one `WIP` blob, or
-   unrelated changes bundled together. Don't rewrite it on your own initiative.
-   Name the problem and offer, defaulting to the first:
+If the work is **already committed** — `commit-splitter` refuses a clean tree by
+design — judge the history. Commits that are scoped, with subjects describing the
+change, need nothing; say so and move on.
 
-   a. **Ship as-is**, noting the history in the PR body. A reviewer reads the whole
-      diff anyway, so messy-but-shippable history is a style cost, not a
-      correctness one.
-   b. **Reword the tip commit** with `git commit --amend`, if it is unpushed.
-   c. **Reflow**, only when explicitly asked: `git branch finalize-core-backup` at
-      HEAD first — `git reset --soft` keeps every change but discards the original
-      commit *messages*, so that ref is the only way back — then
-      `git reset --soft <base>`, which puts the whole change in the tree as an
-      uncommitted diff and is exactly `commit-splitter`'s input. Take branch 1 from
-      there. **Refuse (c) outright** if any commit is already on the remote
-      (unwinding it would need a force-push), if a rebase or merge is in progress,
-      or if HEAD is detached.
+Otherwise (the single `WIP` commit a caller may have allowed at intake, or
+unrelated changes bundled together), name the problem and **offer** to reflow it;
+declining is a valid answer, since a reviewer reads the whole diff either way. On
+a yes: `git branch finalize-core-backup` at HEAD first — `git reset --soft` keeps
+every change but discards the original commit *messages*, so that ref is the only
+way back — then `git reset --soft <base>`, which puts the whole change in the tree
+as an uncommitted diff and is exactly `commit-splitter`'s input. Continue from the
+paragraph above. **Refuse** if any commit is already pushed, if a rebase or merge
+is in progress, or if HEAD is detached; those go to `/simsci:git-rescue`. Never
+reflow unasked.
 
 Keep any backup ref until the user signs off in Step 6.
 
@@ -140,11 +123,11 @@ domain-specific to attach once the PR exists.
 
 ## Step 6 — Post what was not addressed, then report
 
-Every path posts this comment. It is the record that the gaps were decisions rather
-than oversights, and it is why this unit owns the step instead of leaving it to each
-caller. Post it on the PR with the GitHub MCP's issue-comment tool (a PR takes issue
-comments), falling back to `gh pr comment <number>`. Skip only when all three
-buckets below are genuinely empty.
+Every path posts this comment — it is the record that the gaps were decisions rather
+than oversights. Post it on the PR with the GitHub MCP's issue-comment tool (a PR
+takes issue comments), falling back to `gh pr comment <number>`. Skip only when all
+three buckets below are genuinely empty; a leftover that was ticketed still counts
+as not addressed.
 
 Include, omitting any empty section:
 
@@ -165,21 +148,7 @@ once the user confirms things look right, or hand them the command.
 
 ## Constraints
 
-- Don't adjudicate whether a red verdict may ship — carry it into the PR body and
-  the Step 6 comment where a reviewer will see it. Whether to stop is the caller's
-  policy, and the callers legitimately differ
-- Never open an empty PR — a clean tree with nothing ahead of the base means stop
-- Never mark a PR ready for review or post to a team channel unasked; the draft PR
-  is where this unit stops
-- Never `git reset --hard`, `git checkout -- .`, `git clean -f`, or force-push.
-  Step 4's reflow is `--soft` only, gated, and refused on pushed commits. A branch
-  needing real history surgery goes to `/simsci:git-rescue`, not here
-- Do not edit source here. This unit shapes history and files reports; the fixes
-  belonged to the caller
-- Do not re-review the diff or re-litigate a disposition — the buckets arrive
-  decided
-- A hold-out path stays uncommitted, and the final report says so
+- Never `git reset --hard`, `git checkout -- .`, `git clean -f`, or force-push. A
+  branch needing real history surgery goes to `/simsci:git-rescue`, not here
 - No silent omissions: every finding handed over as a leftover appears in Step 2's
   triage or Step 6's comment, or both, and never in neither
-- Post the Step 6 comment even when every leftover was ticketed — "not addressed"
-  covers work that was deferred, not just work that was dropped

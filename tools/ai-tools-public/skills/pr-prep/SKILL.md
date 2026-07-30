@@ -2,7 +2,7 @@
 name: pr-prep
 description: "Take a change you have already written from raw branch to a PR ready for review: multi-agent review, a per-finding disposition gate (fix now / ticket / drop), apply the approved fixes, re-validate, then organize the commits and open the draft PR. Use when the user says \"review this and open a PR\", \"prep this for review\", \"I'm done, ship it\", \"review my branch\", or \"code review\". For a feature not yet written use a development workflow instead; to split a diff you are not reviewing use commit-splitter; for branch, ticket, or PR mechanics alone use your team's conventions skill."
 argument-hint: "Optional: a description of the change. Omit to work from the current branch."
-allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(simsci:_validator, simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer, simsci:_split_proposer)
+allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(simsci:_validator, simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 ---
 
 Review the change on this branch and prepare it for review: $ARGUMENTS

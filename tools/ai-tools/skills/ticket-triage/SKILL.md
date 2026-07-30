@@ -19,7 +19,10 @@ recommendations, and file the ones the user approves.
 2. **Draw the scope line.** Ask the user which findings they are addressing in
    the current PR. Those are tagged *address now* and excluded from ticketing.
    If everything is being addressed, report there is nothing to triage and
-   stop. **If the caller already handed over a pre-scoped set** — stating explicitly that the user has already decided what is being addressed in this PR — take it as given and go straight to step 3. Asking again re-opens a decision the user already made.
+   stop. **If the caller handed over a pre-scoped set** — stating explicitly that
+   the user has already decided what is being addressed in this PR — take it as
+   given and go straight to step 3. Asking again re-opens a decision the user
+   already made.
 3. **Classify the rest.** Each remaining finding is either a *ticket
    candidate* or a *drop* (stylistic, speculative, or too trivial to be worth
    backlog space). Every drop gets a one-line reason. **No silent drops** —

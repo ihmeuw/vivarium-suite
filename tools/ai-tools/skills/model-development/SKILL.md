@@ -14,8 +14,7 @@ allowed-tools:
   Read, Grep, Glob, Bash, Edit, Write, Agent(simsci-internal:_model_implementer,
   simsci-internal:_vv_writer, simsci:_validator, simsci:_review_maintainability,
   simsci:_review_dry, simsci:_review_design, simsci:_review_tests,
-  simsci:_review_documentation, simsci:_review_scorer,
-  simsci-internal:_duplicate_finder, simsci:_split_proposer)
+  simsci:_review_documentation, simsci:_review_scorer)
 ---
 
 Run an end-to-end model-development loop for: $ARGUMENTS
