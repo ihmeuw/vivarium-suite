@@ -1,3 +1,7 @@
+**0.1.3 - 07/29/26**
+
+- Support pandas 3
+
 **0.1.2 - 07/23/26**
 
 - Streamline package __init__.py docstring
