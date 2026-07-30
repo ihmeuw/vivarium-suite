@@ -1,6 +1,6 @@
 ---
 name: _review-core
-description: "Internal building block invoked by /simsci:pr-prep (and /simsci:framework-development's review phase): runs the multi-agent review fan-out + functional-correctness pass + per-finding confidence scoring + synthesis on a diff the caller has already gathered. Not a review entry point — to review a change, use /simsci:pr-prep."
+description: "Internal building block invoked by /simsci:pr-prep (and /simsci:framework-development's review phase): runs the multi-agent review fan-out + functional-correctness pass + per-finding confidence scoring + synthesis on a diff the caller has already gathered. Not a review entry point."
 allowed-tools: Read, Grep, Glob, Agent(simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 user-invocable: false
 ---
@@ -9,8 +9,7 @@ Run the shared multi-agent review of: $ARGUMENTS
 
 This is the **review core** — the single definition of the parallel fan-out, the
 functional-correctness pass, the per-finding confidence scoring, and the
-synthesis. It is invoked **inline** by `/simsci:pr-prep` (after it gathers the
-context), and is designed to be reused the same way by other main-session
+synthesis. It is invoked **inline** by `/simsci:pr-prep` (after it gathers context), and is designed to be reused the same way by other main-session
 commands (e.g. a development workflow's review phase). Because it runs inline in
 the caller's main-session context, its fan-out to the `_review_*` sub-agents
 stays one level deep — so run this unit inline and **not** as a forked sub-agent.
