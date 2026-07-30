@@ -1,3 +1,28 @@
+**0.25.0 - 07/28/26**
+
+ - Track ``simsci``'s removal of ``/simsci:code-reviewer`` in favor of
+   ``/simsci:pr-prep`` (MIC-7282): ``ticket-triage``'s trigger and the README
+   references now point at the new entry point
+ - ``model-development``: delegate the finalize sequence to ``simsci``'s new shared
+   ``_finalize-core`` skill, keeping only the model-specific steps — the
+   don't-commit-verification-artifacts rule, the stacked per-layer PR ordering, and
+   posting the verification traces. This also fixes two bugs in that section: the
+   traces were posted before the PR existed, and it called for ``gh pr create``
+   where ``team-conventions`` §3 mandates the GitHub MCP with ``gh`` only as a
+   fallback
+ - ``model-development``: add three missing sub-agent grants that its own
+   delegations already needed — ``simsci:_review_scorer`` (``_review-core`` spawns
+   one per finding), ``simsci-internal:_duplicate_finder`` (``ticket-triage`` dedups
+   with it), and ``simsci:_split_proposer`` (``commit-splitter`` groups with it).
+   Each omission caused a permission prompt mid-workflow
+ - ``model-development``: settle the verification-artifact question before
+   delegating, and pass anything the user declined to keep as a **hold-out path** so
+   the commit grouping excludes it — previously ``_split_proposer`` would see an
+   untracked notebook and group it in
+ - ``ticket-triage``: when the caller has already drawn the scope line
+   (``/simsci:pr-prep``'s disposition gate, or ``_finalize-core`` handing over a
+   pre-scoped set), take it as given instead of asking the user to draw it again
+
 **0.24.0 - 07/27/26**
 
  - Split the plugin in two and rename both halves (MIC-7220): the generic

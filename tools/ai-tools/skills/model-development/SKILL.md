@@ -14,7 +14,8 @@ allowed-tools:
   Read, Grep, Glob, Bash, Edit, Write, Agent(simsci-internal:_model_implementer,
   simsci-internal:_vv_writer, simsci:_validator, simsci:_review_maintainability,
   simsci:_review_dry, simsci:_review_design, simsci:_review_tests,
-  simsci:_review_documentation)
+  simsci:_review_documentation, simsci:_review_scorer,
+  simsci-internal:_duplicate_finder, simsci:_split_proposer)
 ---
 
 Run an end-to-end model-development loop for: $ARGUMENTS
@@ -59,7 +60,7 @@ repeat while failures:
 
 review = review_core                  # Review: five-lens fan-out + correctness; findings -> critic loop
 
-finalize & PR                         # Finalize: post traces; artifacts uncommitted unless asked; user-gated PR(s), stacked per layer
+finalize & PR = finalize_core         # Finalize: artifacts held out; user-gated PR(s), stacked per layer; then post traces
 ```
 
 ## Setup
@@ -211,25 +212,30 @@ triage.
 
 ## Finalize and PR (gated)
 
-1. Summarize what was built, the verification results (including any
-   "unverified" status), and any residual issues from the critic loop.
-2. **Post the verification traces to the PR.** Attach the key plots, tables,
-   and output from the verification notebook — the record that the iteration
-   was checked against the research expectations.
-3. **Don't commit the verification artifacts by default.** They are an
+1. **Don't commit the verification artifacts by default.** They are an
    internal loop for engineering confidence, not formal V&V (a separate
    research task). Ask whether to keep any in the repo (e.g. an
    InteractiveContext check kept as a regression test); commit only on an
-   explicit yes.
-4. **Triage leftover findings.** For review findings deliberately not addressed
-   in this build, invoke the `ticket-triage` skill to classify them, dedup
-   against the backlog, and file approval-gated Jira tickets. Skip if nothing is
-   left unaddressed.
-5. **Gate — approve the PR.** Without approval, stop and leave the branch in
-   place.
-6. On approval, use the `simsci:commit-splitter` skill to organize the work for review,
-   then use `team-conventions` to push and `gh pr create` with the repo's PR
-   template; report the URL(s) and offer the `#vivarium_dev` flag. **A multi-layer
+   explicit yes. Settle this **before** step 3: whatever the user does not keep
+   becomes a **hold-out path** you hand to the finalize block, which excludes it
+   from the commit grouping and reports it as still uncommitted. Without that,
+   `simsci:_split_proposer` sees an untracked notebook and groups it in.
+2. **Decide the PR shape — this ordering is yours to impose.** A multi-layer
    iteration ships as stacked per-layer PRs in data-dependency order (artifact ->
    component -> observer), matching team practice; a single-layer change is one
-   PR.**
+   PR. Run step 3 once per layer PR, in that order.
+3. Invoke the `simsci:_finalize-core` skill and follow it. Hand it what was built,
+   the verification results (including any "unverified" status), the **leftover**
+   set — residual issues from the critic loop, each with why it was left — the
+   verification verdict, the ref the branch started from, the hold-out paths from
+   step 1, and the partition rule from step 2. The critic loop already settled
+   what is being addressed, so tell it the scope line is **already drawn**. It
+   owns the summary, the leftover triage (through `ticket-triage`), the PR
+   approval gate, the commit history (through `simsci:commit-splitter`), the draft
+   PR (through `team-conventions`), and the comment recording what was not
+   addressed — don't duplicate any of that here.
+4. **Post the verification traces to each PR.** Once the PR exists, attach the key
+   plots, tables, and output from the verification notebook — the record that the
+   iteration was checked against the research expectations. This is in addition to
+   the not-addressed comment `simsci:_finalize-core` posts, not a replacement for
+   it.
