@@ -84,6 +84,13 @@ surviving finding with its confidence score.
 found" filler. A clean change can be three lines. Spend words in proportion to
 severity: a correctness bug earns a sentence of rationale; a nit gets none.
 
+**Key every finding** as `<CODE><n>` — the section's fixed code plus a number
+sequential within that section, in listed order. Use exactly these codes and never
+invent one; callers carry the keys into commit subjects, ticket drafts, and PR
+comments, so they have to line up. **DES** Design, **MNT** Maintainability, **DRY**
+DRY, **TST** Tests, **DOC** Documentation, **FNC** Functionality, **NIT** Minor
+Nits. Single letters are not an option — Design, Documentation, and DRY collide.
+
 ```
 ## Review: <subject>
 
@@ -91,25 +98,25 @@ severity: a correctness bug earns a sentence of rationale; a nit gets none.
 <2-3 sentences on what the change does — skip entirely if the subject already says it>
 
 ### Design
-<numbered findings from _review_design>
+<findings from _review_design, keyed DES1, DES2, …>
 
 ### Maintainability
-<numbered findings from _review_maintainability>
+<findings from _review_maintainability, keyed MNT1, MNT2, …>
 
 ### DRY
-<numbered findings from _review_dry>
+<findings from _review_dry, keyed DRY1, DRY2, …>
 
 ### Tests
-<numbered findings from _review_tests>
+<findings from _review_tests, keyed TST1, TST2, …>
 
 ### Documentation
-<numbered findings from _review_documentation>
+<findings from _review_documentation, keyed DOC1, DOC2, …>
 
 ### Functionality
-<numbered findings from your own analysis>
+<findings from your own analysis, keyed FNC1, FNC2, …>
 
 ### Minor Nits
-<one line each: `file:line` — the fix *(confidence: NN)*. No rationale, no code block.>
+<one line each: `NIT<n>` — `file:line` — the fix *(confidence: NN)*. No rationale, no code block.>
 
 ### Overall
 <one or two sentences, only if there's a cross-cutting theme worth naming. Omit if the findings already speak for themselves.>
@@ -118,7 +125,8 @@ severity: a correctness bug earns a sentence of rationale; a nit gets none.
 ```
 
 Per-finding budget, scaled to severity:
-- **Substantive findings** (Design through Functionality): `file:line`, then the
+- **Substantive findings** (Design through Functionality): the key, then
+  `file:line`, then the
   problem and the fix in **≤2 sentences**, ending with `*(confidence: NN)*`. Add
   a "why it matters" clause only when the impact is non-obvious. Include a code
   snippet only when the fix isn't clear from a sentence — never to illustrate the

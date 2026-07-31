@@ -61,15 +61,17 @@ anything below 50, and returns the synthesized review. Present it as-is —
 
 ## Step 3 — Propose a disposition per finding
 
-Present every finding, nits included, in one table keyed by its section and number
-in the review:
+Present every finding, nits included, in one table. Use the key
+`simsci:_review-core` already assigned each one — never renumber and never invent a
+code, because these keys travel into the commit subjects, the ticket drafts, and the
+PR comment, and have to line up across all of them:
 
 ```
-| #  | Finding (file:line)                       | Conf | Do      | Why |
-|----|-------------------------------------------|------|---------|-----|
-| D1 | engine.py:112 — collapse the two branches |  82  | fix now | in scope, one file |
-| M3 | loader.py:40 — split the 90-line function |  88  | ticket  | pre-existing; bigger than this PR |
-| N1 | utils.py:9 — docstring typo               |  55  | drop    | stylistic; not worth backlog space |
+| Key  | Finding (file:line)                       | Conf | Do      | Why |
+|------|-------------------------------------------|------|---------|-----|
+| DES1 | engine.py:112 — collapse the two branches |  82  | fix now | in scope, one file |
+| MNT3 | loader.py:40 — split the 90-line function |  88  | ticket  | pre-existing; bigger than this PR |
+| NIT1 | utils.py:9 — docstring typo               |  55  | drop    | stylistic; not worth backlog space |
 ```
 
 The **why** is one line about *the bucket*, never a restatement of the finding:
@@ -95,7 +97,7 @@ so plainly and go to Step 6 rather than manufacturing work.
 
 Print the table, then proceed — this is a plan you report, not a decision you hand
 back. The table is the contract for Steps 4-6. If the user re-buckets a row
-(`M3 -> fix now`, `all nits -> drop`) or adds a finding you missed, honor it
+(`MNT3 -> fix now`, `all nits -> drop`) or adds a finding you missed, honor it
 **without arguing** — if you think a move is wrong, say so in one clause and comply
 in the same reply — then reprint the table and carry on from there.
 
@@ -108,7 +110,8 @@ precisely to keep it blind, and none of that applies here. What keeps it
 reviewable instead:
 
 1. **One finding at a time, one commit each**, in table order, subject
-   `review: <#> — <what changed>`. Never batch: the commit series *is* the audit
+   `review: <key> — <what changed>` (e.g. `review: DES1 — collapse the two
+   branches`). Never batch: the commit series *is* the audit
    trail, it localizes a later validation failure, and it turns a bad fix into a
    `git revert` rather than an unpicking job. It is scaffolding for this loop, not
    the shipping history — `simsci:_finalize-core` collapses it and regroups the diff
