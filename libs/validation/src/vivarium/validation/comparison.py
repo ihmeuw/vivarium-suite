@@ -6,8 +6,10 @@ import pandas as pd
 from loguru import logger
 
 # TargetIntervalConfig lives in vivarium-fuzzy-checker (it configures FuzzyChecker's
-# target intervals). Re-exported here so the historical
-# ``vivarium.validation.comparison`` import path keeps resolving.
+# target intervals). StratifiedTargetIntervalConfig below subclasses it and
+# FuzzyComparison types its target_interval_configuration with it, so this import is
+# structural, not just the re-export that keeps the historical
+# ``vivarium.validation.comparison`` path resolving.
 from vivarium.fuzzy_checker import FuzzyChecker, TargetIntervalConfig, TestResult
 
 from vivarium.validation.bundle import RatioMeasureDataBundle
