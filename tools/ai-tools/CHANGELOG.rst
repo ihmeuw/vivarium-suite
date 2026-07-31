@@ -1,7 +1,7 @@
 **0.25.0 - 07/28/26**
 
 - Track ``simsci``'s replacement of ``/simsci:code-reviewer`` with ``/simsci:pr-prep`` in
-``ticket-triage`` and the README
+  ``ticket-triage`` and the README
 - ``model-development``: delegate the finalize sequence to ``simsci``'s new shared ``_finalize-core``
   skill (keeping only the model-specific steps) and add the ``simsci:_review_scorer`` grant its
   review phase needs
