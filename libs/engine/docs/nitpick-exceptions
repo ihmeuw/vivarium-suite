@@ -7,6 +7,7 @@ py:class NDArray
 py:class numpy._typing._array_like.GenericAlias
 # pandas
 py:class CategoricalDtype
+py:class pandas.api.typing.DataFrameGroupBy
 py:class pandas.core.indexes.base.Index
 py:class pandas.core.indexes.multi.MultiIndex
 py:class pandas._libs.tslibs.timestamps.Timestamp
