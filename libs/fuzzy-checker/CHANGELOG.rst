@@ -3,6 +3,9 @@
 - **Breaking change.** ``TargetIntervalConfig`` no longer takes ``stratifications``;
   it now applies to every tested group and exposes an ``applies_to`` hook for
   subclasses to restrict that
+- **Breaking change.** ``TargetIntervalConfig`` is now keyword-only, so that
+  subclasses can add fields without the inherited ``relative_error`` claiming a
+  caller's first positional argument
 - **Breaking change.** Remove ``StratValue``, which only supported the removed
   ``stratifications`` field
 

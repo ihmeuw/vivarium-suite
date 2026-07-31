@@ -467,6 +467,12 @@ def test_stratified_target_interval_config_validates_relative_error(
         )
 
 
+def test_stratified_target_interval_config_is_keyword_only() -> None:
+    """Test that positional construction fails rather than binding in field order."""
+    with pytest.raises(TypeError, match="positional argument"):
+        StratifiedTargetIntervalConfig({"sex": "all"}, 0.1)  # type: ignore[call-arg, arg-type]
+
+
 @pytest.mark.parametrize(
     "stratifications, matches",
     [
