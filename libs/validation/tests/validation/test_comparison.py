@@ -390,7 +390,7 @@ def test_target_interval_configuration_setter(
     test_bundle: RatioMeasureDataBundle,
     reference_bundle: RatioMeasureDataBundle,
 ) -> None:
-    """Test that target_interval_configuration can be set with a TargetIntervalConfig."""
+    """Test that target_interval_configuration can be set with a target interval config."""
     comparison = FuzzyComparison(test_bundle, reference_bundle)
     config = StratifiedTargetIntervalConfig(
         relative_error=0.1, stratifications={"sex": "all"}
