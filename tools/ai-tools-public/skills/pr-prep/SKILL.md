@@ -1,6 +1,6 @@
 ---
 name: pr-prep
-description: "Take a change you have already written from raw branch to a PR ready for review: multi-agent review, a per-finding disposition gate (fix now / ticket / drop), apply the approved fixes, re-validate, then organize the commits and open the draft PR. Use when the user says \"review this and open a PR\", \"prep this for review\", \"I'm done, ship it\", \"review my branch\", or \"code review\". For a feature not yet written use a development workflow instead; to split a diff you are not reviewing use commit-splitter; for branch, ticket, or PR mechanics alone use your team's conventions skill."
+description: "Take a change you have already written from raw branch to a PR ready for review: multi-agent review, a per-finding disposition (fix now / ticket / drop), apply the fixes, re-validate, then organize the commits and open the draft PR. Use when the user says \"review this and open a PR\", \"prep this for review\", \"I'm done, ship it\", \"review my branch\", or \"code review\". For a feature not yet written use a development workflow instead; to split a diff you are not reviewing use commit-splitter; for branch, ticket, or PR mechanics alone use your team's conventions skill."
 argument-hint: "Optional: a description of the change. Omit to work from the current branch."
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(simsci:_validator, simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 ---
@@ -8,40 +8,19 @@ allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(simsci:_validator, sim
 Review the change on this branch and prepare it for review: $ARGUMENTS
 
 This is the one-off counterpart to a development workflow's converge-and-ship
-phases, for code that **already exists**. You review it, make the user decide
-what to act on, apply what they approved, confirm the tree is still green, and
-hand the finish to the `simsci:_finalize-core` skill. **Exactly two user gates:**
-the dispositions here, and the PR inside `simsci:_finalize-core`.
+phases, for code that **already exists**. You review it, propose a disposition for
+every finding, apply the fix-now set, confirm the tree is still green, and hand the
+finish to the `simsci:_finalize-core` skill. **Exactly one user gate:** the PR,
+inside `simsci:_finalize-core`. Every Jira write keeps its own approval, owned by
+the ticket-filing skill.
 
 It ends at a **draft PR** with the leftovers documented — not a merge, and not an
 announcement. Marking the PR ready and telling the team stay deliberate acts.
 
-## Step 1 — Gather the change and review it
+## Step 1 — Establish the baseline
 
-Work out what changed: the merge-base with the default branch, then
-`git --no-pager diff <base>...HEAD` plus `git --no-pager diff HEAD` for anything
-uncommitted, and `git log` for the branch's commit messages. If the branch already
-has an open PR, pull its title and body for context with your GitHub MCP server's
-pull-request tools — prefer the MCP over the `gh` CLI when both are available: it
-needs no shell access and works in sandboxed environments where `gh` cannot read
-its credentials.
-
-**If you cannot compute the diff, stop.** The merge-base lookup fails when
-`origin/<default-branch>` was never fetched, and the shell can be unavailable
-outright. Say which step failed and stop. Do **not** reconstruct the change from
-git internals, commit messages, or the current contents of the files and review
-that instead: a review of an inferred diff indicts code the change may never have
-touched, and every downstream step — the dispositions, the fixes, the PR — inherits
-that error while looking exactly like a real run.
-
-Then invoke the `simsci:_review-core` skill inline, handing it the changed-file
-list, the diff (or the salient slice), and a one-line description of the change as
-the `<subject>`. It fans out the five `simsci:_review_*` specialists, runs the
-functional-correctness pass, scores every finding for confidence and drops
-anything below 50, and returns the synthesized review. Present it as-is —
-`simsci:_review-core` owns the output format and the review constraints.
-
-## Step 2 — Establish the baseline
+These are cheap `git` checks and two of them are hard stops, so they come before
+the review — a fan-out spent on a mid-rebase repo is a fan-out thrown away.
 
 1. **Require a clean tree.** Record `git status` and `git rev-parse HEAD` — that
    ref is the revert point for everything below. If the tree is dirty, ask the
@@ -50,11 +29,35 @@ anything below 50, and returns the synthesized review. Present it as-is —
    the per-finding commits in Step 4 are the recovery story, and a fix is only
    isolated if it is the only thing in its commit. Stop if the repo is mid-rebase
    or mid-merge.
-2. **Find out whether the tree is already green.** Unless this session already saw
+2. **Fix the base.** Compute the merge-base with the default branch. **If you
+   cannot, stop** — the lookup fails when `origin/<default-branch>` was never
+   fetched, and the shell can be unavailable outright. Say which step failed and
+   stop. Do **not** reconstruct the change from git internals, commit messages, or
+   the current contents of the files and review that instead: a review of an
+   inferred diff indicts code the change may never have touched, and every
+   downstream step — the dispositions, the fixes, the PR — inherits that error
+   while looking exactly like a real run.
+3. **Find out whether the tree is already green.** Unless this session already saw
    the checks pass on this branch, dispatch `simsci:_validator` (inputs per Step 5)
-   in the same turn as the proposal below, so it costs no extra round trip.
+   in the same turn as the Step 3 proposal, so it costs no extra round trip.
    Pre-existing failures are not yours, but you can only say so if you looked
    first.
+
+## Step 2 — Gather the change and review it
+
+The tree is clean as of Step 1, so the change is exactly
+`git --no-pager diff <base>...HEAD`. Add `git log` for the branch's commit
+messages. If the branch already has an open PR, pull its title and body for
+context with your GitHub MCP server's pull-request tools — prefer the MCP over the
+`gh` CLI when both are available: it needs no shell access and works in sandboxed
+environments where `gh` cannot read its credentials.
+
+Then invoke the `simsci:_review-core` skill inline, handing it the changed-file
+list, the diff (or the salient slice), and a one-line description of the change as
+the `<subject>`. It fans out the five `simsci:_review_*` specialists, runs the
+functional-correctness pass, scores every finding for confidence and drops
+anything below 50, and returns the synthesized review. Present it as-is —
+`simsci:_review-core` owns the output format and the review constraints.
 
 ## Step 3 — Propose a disposition per finding
 
@@ -65,7 +68,7 @@ in the review:
 | #  | Finding (file:line)                       | Conf | Do      | Why |
 |----|-------------------------------------------|------|---------|-----|
 | D1 | engine.py:112 — collapse the two branches |  82  | fix now | in scope, one file |
-| M3 | loader.py:40 — split the 90-line function |  64  | ticket  | pre-existing; bigger than this PR |
+| M3 | loader.py:40 — split the 90-line function |  88  | ticket  | pre-existing; bigger than this PR |
 | N1 | utils.py:9 — docstring typo               |  55  | drop    | stylistic; not worth backlog space |
 ```
 
@@ -90,11 +93,11 @@ below 50, so everything you are bucketing is real.
 A run where nothing lands in **fix now** is a normal outcome, not a failure — say
 so plainly and go to Step 6 rather than manufacturing work.
 
-**Gate — approve the dispositions.** The user may accept the table, re-bucket any
-row (`M3 -> fix now`, `all nits -> drop`), add a finding you missed, or reject the
-plan. Honor a re-bucketing **without arguing** — if you think a move is wrong, say
-so in one clause and comply in the same reply. Reprint the final table: it is the
-contract for Steps 4-6. **Change no file before this gate.**
+Print the table, then proceed — this is a plan you report, not a decision you hand
+back. The table is the contract for Steps 4-6. If the user re-buckets a row
+(`M3 -> fix now`, `all nits -> drop`) or adds a finding you missed, honor it
+**without arguing** — if you think a move is wrong, say so in one clause and comply
+in the same reply — then reprint the table and carry on from there.
 
 ## Step 4 — Apply the fix-now set
 
@@ -108,9 +111,9 @@ reviewable instead:
    `review: <#> — <what changed>`. Never batch: the commit series *is* the audit
    trail, it localizes a later validation failure, and it turns a bad fix into a
    `git revert` rather than an unpicking job.
-2. **Stay inside the finding.** Change only what its approved row names — no
-   opportunistic refactor, rename, or reformat, and no file no approved row
-   mentions. Scope any lint auto-fix to the files you edited.
+2. **Stay inside the finding.** Change only what its row names — no opportunistic
+   refactor, rename, or reformat, and no file no row mentions. Scope any lint
+   auto-fix to the files you edited.
 3. **Escalate instead of expanding.** A fix that turns out to need a
    public-signature change, a new dependency, or a design decision is marked
    **blocked**, left unapplied, and moved to the ticket set. Say so.
@@ -129,7 +132,7 @@ the **checks**: the project's own test, lint, and type-check entry points. One
 `_validator` per affected package, all dispatched in one message. A runnable env is
 a precondition — a check that cannot run is a FAIL with the reason, never a PASS.
 
-On FAIL, attribute each failure against the Step 2 baseline:
+On FAIL, attribute each failure against the Step 1 baseline:
 
 - **Your fix is wrong** → correct it, or `git revert` its commit.
 - **The fix is right and an existing test pinned the old behavior** → changing an
@@ -150,25 +153,24 @@ Invoke the `simsci:_finalize-core` skill and follow it. Hand it the **addressed*
 set (finding → commit), the **leftover** set (including anything blocked in Step 4
 or reverted in Step 5, with why), the **dropped** set with reasons, the validation
 verdict, the pre-apply ref, and the fact that **the scope line is already drawn**
-by the Step 3 gate. Note that any fixes are already committed one per finding, so
-its history step has only the user's pre-existing commits to consider. It owns the
-triage, the PR gate, the commit history, the draft PR, and the not-addressed
-comment — duplicate none of it here. If it is unavailable, report the three sets
-and the verdict and stop, leaving the branch in place.
+by the Step 3 dispositions. Note that any fixes are already committed one per
+finding, so its history step has only the user's pre-existing commits to consider.
+It owns the triage, the PR gate, the commit history, the draft PR, and the
+not-addressed comment — duplicate none of it here. If it is unavailable, report
+the three sets and the verdict and stop, leaving the branch in place.
 
 ## Constraints
 
-- Review exactly once, at Step 1 — don't re-review after applying fixes; the
+- Review exactly once, at Step 2 — don't re-review after applying fixes; the
   budget in Step 5 is validation, not another review pass
 - Never review an inferred diff. If the real one can't be computed, stop and say
   so rather than degrading to a guess that reads like a result
-- No file change before the Step 3 gate, and nothing outside the approved set
-  after it
+- No file change before Step 3's table is printed, and nothing outside it after
 - No silent drops or promotions: every finding leaves this skill in exactly the
   bucket the printed table gave it
 - Never `git reset --hard`, `git checkout -- .`, or force-push — the pre-apply ref
   and the per-finding commits are the entire recovery story
 - The commit history and the PR are `simsci:_finalize-core`'s call; don't invoke a
   splitting skill from the apply phase
-- Don't re-litigate a finding in prose: propose **drop** and let the user overturn
-  it at the gate
+- Don't re-litigate a finding in prose: bucket it **drop** with its reason and let
+  the user overturn that if they disagree
