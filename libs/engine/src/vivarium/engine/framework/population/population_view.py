@@ -614,9 +614,9 @@ class PopulationView:
         # is_string_dtype does not recognize; unwrap before checking.
         update_dtype = getattr(update_dtype, "numpy_dtype", update_dtype)
         existing_dtype = getattr(existing_dtype, "numpy_dtype", existing_dtype)
-        if getattr(update_dtype, "kind", None) == "M" and (
-            getattr(existing_dtype, "kind", None) == "M"
-        ):
+        if pd.api.types.is_datetime64_any_dtype(
+            update_dtype
+        ) and pd.api.types.is_datetime64_any_dtype(existing_dtype):
             return True
         return pd.api.types.is_string_dtype(update_dtype) and pd.api.types.is_string_dtype(
             existing_dtype
