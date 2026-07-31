@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from vivarium.artifact import hdf
+from vivarium.artifact import _hdf
 
 
 class ArtifactException(Exception):
@@ -31,7 +31,7 @@ class Artifact:
 
     Holds the path to an HDF5 archive and provides keyed read / write / load /
     remove access, delegating to the private helpers in
-    :mod:`vivarium.artifact.hdf` (no file handle is kept open between calls).
+    ``vivarium.artifact._hdf`` (no file handle is kept open between calls).
     Loaded values are cached in memory for repeat access; call
     :meth:`clear_cache` to drop the cache.
 
@@ -77,9 +77,9 @@ class Artifact:
         """Creates the artifact HDF file and adds a node to track keys."""
         if not path.is_file():
             warnings.warn(f"No artifact found at {path}. Building new artifact.")
-            hdf._touch(path)
+            _hdf.touch(path)
 
-        keys = hdf._get_keys(path)
+        keys = _hdf.get_keys(path)
         if keys and "metadata.keyspace" not in keys:
             raise ArtifactException(
                 "Attempting to construct an Artifact from a malformed existing file. "
@@ -89,7 +89,7 @@ class Artifact:
                 "and a non-existent or empty hdf file."
             )
         if not keys:
-            hdf._write(path, "metadata.keyspace", ["metadata.keyspace"])
+            _hdf.write(path, "metadata.keyspace", ["metadata.keyspace"])
 
     def load(self, entity_key: str) -> Any:
         """Loads the data associated with provided entity_key.
@@ -113,7 +113,7 @@ class Artifact:
             raise ArtifactException(f"{entity_key} should be in {self.path}.")
 
         if entity_key not in self._cache:
-            data = hdf._load(
+            data = _hdf.load(
                 self._path, entity_key, self._filter_terms, self._draw_column_filter
             )
             # FIXME: Under what conditions do we get None here.
@@ -145,7 +145,7 @@ class Artifact:
         elif data is None:
             raise ArtifactException(f"Attempting to write to key {entity_key} with no data.")
         else:
-            hdf._write(self._path, entity_key, data)
+            _hdf.write(self._path, entity_key, data)
             self._keys.append(entity_key)
 
     def remove(self, entity_key: str) -> None:
@@ -169,7 +169,7 @@ class Artifact:
         self._keys.remove(entity_key)
         if entity_key in self._cache:
             self._cache.pop(entity_key)
-        hdf._remove(self._path, entity_key)
+        _hdf.remove(self._path, entity_key)
 
     def replace(self, entity_key: str, data: Any) -> None:
         """Replaces the artifact data at the provided key with the new data.
@@ -247,23 +247,23 @@ class Keys:
 
     def __init__(self, artifact_path: Path):
         self._path = artifact_path
-        self._keys = [str(k) for k in hdf._load(self._path, "metadata.keyspace", None, None)]
+        self._keys = [str(k) for k in _hdf.load(self._path, "metadata.keyspace", None, None)]
 
     def append(self, new_key: str) -> None:
         """Whenever the artifact gets a new key and new data, append is called to
         remove the old keyspace and to write the updated keyspace"""
 
         self._keys.append(new_key)
-        hdf._remove(self._path, self.keyspace_node)
-        hdf._write(self._path, self.keyspace_node, self._keys)
+        _hdf.remove(self._path, self.keyspace_node)
+        _hdf.write(self._path, self.keyspace_node, self._keys)
 
     def remove(self, removing_key: str) -> None:
         """Whenever the artifact removes a key and data, remove is called to
         remove the key from keyspace and write the updated keyspace."""
 
         self._keys.remove(removing_key)
-        hdf._remove(self._path, self.keyspace_node)
-        hdf._write(self._path, self.keyspace_node, self._keys)
+        _hdf.remove(self._path, self.keyspace_node)
+        _hdf.write(self._path, self.keyspace_node, self._keys)
 
     def to_list(self) -> list[str]:
         """A list of all the entity keys in the associated artifact."""

@@ -6,4 +6,3 @@ API Reference
 
    artifact
    entity_key
-   hdf

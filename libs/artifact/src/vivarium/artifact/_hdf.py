@@ -6,18 +6,15 @@ HDF Interface
 A convenience wrapper around the `tables <https://www.pytables.org>`_ and
 :mod:`pandas` HDF interfaces.
 
-Internal Interface
-------------------
+This module is private to the package. These low-level helpers back
+:class:`~vivarium.artifact.artifact.Artifact`; use the ``Artifact`` class rather
+than calling them directly.
 
-These low-level helpers back :class:`~vivarium.artifact.artifact.Artifact` and
-are private to the package; use the ``Artifact`` class rather than calling them
-directly.
-
-- ``_touch`` - Creates an HDF file, wiping an existing file if necessary.
-- ``_write`` - Stores data at a key in an HDF file.
-- ``_load`` - Loads (potentially filtered) data from a key in an HDF file.
-- ``_remove`` - Clears data from a key in an HDF file.
-- ``_get_keys`` - Gets all available HDF keys from an HDF file.
+- ``touch`` - Creates an HDF file, wiping an existing file if necessary.
+- ``write`` - Stores data at a key in an HDF file.
+- ``load`` - Loads (potentially filtered) data from a key in an HDF file.
+- ``remove`` - Clears data from a key in an HDF file.
+- ``get_keys`` - Gets all available HDF keys from an HDF file.
 
 Contracts
 +++++++++
@@ -43,12 +40,12 @@ from tables.nodes import filenode
 
 from vivarium.artifact.entity_key import EntityKey
 
-####################
-# Internal helpers #
-####################
+#############
+# Interface #
+#############
 
 
-def _touch(path: Path | str) -> None:
+def touch(path: Path | str) -> None:
     """Creates an HDF file, wiping an existing file if necessary.
 
     If the given path is proper to create a HDF file, it creates a new
@@ -71,7 +68,7 @@ def _touch(path: Path | str) -> None:
         pass
 
 
-def _write(path: Path | str, entity_key: str, data: Any) -> None:
+def write(path: Path | str, entity_key: str, data: Any) -> None:
     """Writes data to the HDF file at the given path to the given key.
 
     Parameters
@@ -105,7 +102,7 @@ def _write(path: Path | str, entity_key: str, data: Any) -> None:
         _write_json_blob(hdf_path, entity_key, data)
 
 
-def _load(
+def load(
     path: Path | str,
     entity_key: str,
     filter_terms: list[str] | None,
@@ -165,7 +162,7 @@ def _load(
     return data
 
 
-def _remove(path: Path | str, entity_key: str) -> None:
+def remove(path: Path | str, entity_key: str) -> None:
     """Removes a piece of data from an HDF file.
 
     Parameters
@@ -187,7 +184,7 @@ def _remove(path: Path | str, entity_key: str) -> None:
         file.remove_node(entity_key.path, recursive=True)
 
 
-def _get_keys(path: Path | str) -> list[str]:
+def get_keys(path: Path | str) -> list[str]:
     """Gets key representation of all paths in an HDF file.
 
     Parameters
@@ -205,9 +202,9 @@ def _get_keys(path: Path | str) -> list[str]:
     return keys
 
 
-#####################
-# Private utilities #
-#####################
+#############
+# Utilities #
+#############
 
 
 def _get_valid_hdf_path(path: Path | str) -> Path:
