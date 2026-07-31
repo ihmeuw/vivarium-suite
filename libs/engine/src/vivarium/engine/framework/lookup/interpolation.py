@@ -347,7 +347,7 @@ def validate_parameters(
     # Validate completeness one categorical group at a time: on the full
     # multi-group table the duplicate-bin guard would trip on the repeated bins.
     groups = (
-        [group for _, group in data.groupby(list(categorical_parameters))]
+        [group for _, group in data.groupby(list(categorical_parameters), observed=True)]
         if categorical_parameters
         else [data]
     )

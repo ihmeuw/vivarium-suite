@@ -23,6 +23,7 @@ from tests.framework.results.helpers import (
     NAME_COLUMNS,
     sorting_hat_serial,
     sorting_hat_vectorized,
+    sum_columns,
     verify_stratification_added,
 )
 from vivarium.engine.component import DEFAULT_EVENT_PRIORITY
@@ -279,10 +280,10 @@ def test_register_observation_duplicate_name_raises() -> None:
     "aggregator_sources, aggregator, stratifications",
     [
         ([], len, ["house", "familiar"]),
-        (["power_level"], sum, ["house", "familiar"]),
+        (["power_level"], sum_columns, ["house", "familiar"]),
         ([], _aggregate_state_person_time, ["house", "familiar"]),
         ([], len, ["house"]),
-        (["power_level"], sum, ["house"]),
+        (["power_level"], sum_columns, ["house"]),
         ([], _aggregate_state_person_time, ["house"]),
     ],
     ids=[
@@ -296,7 +297,7 @@ def test_register_observation_duplicate_name_raises() -> None:
 )
 def test_adding_observation_gather_results(
     aggregator_sources: list[str],
-    aggregator: Callable[..., int | float],
+    aggregator: Callable[..., int | float | pd.Series[float]],
     stratifications: list[str],
     event: Event,
     mocker: MockerFixture,
@@ -343,7 +344,7 @@ def test_adding_observation_gather_results(
     )
 
     groups = population.groupby(stratifications)
-    if aggregator == sum:
+    if aggregator == sum_columns:
         power_level_sums = groups[aggregator_sources].sum().squeeze()
         assert len(power_level_sums.unique()) == 1
         expected_result = power_level_sums.iat[0]
@@ -413,7 +414,7 @@ def test_concatenating_observation_gather_results(
     "name, aggregator_sources, aggregator, stratifications",
     [
         ("wizard_count", [], len, ["house", "familiar"]),
-        ("power_level_total", ["power_level"], sum, ["house", "familiar"]),
+        ("power_level_total", ["power_level"], sum_columns, ["house", "familiar"]),
         (
             "wizard_time",
             [],
@@ -421,7 +422,7 @@ def test_concatenating_observation_gather_results(
             ["house", "familiar"],
         ),
         ("wizard_count", [], len, ["familiar"]),
-        ("power_level_total", ["power_level"], sum, ["familiar"]),
+        ("power_level_total", ["power_level"], sum_columns, ["familiar"]),
         (
             "wizard_time",
             [],
@@ -441,7 +442,7 @@ def test_concatenating_observation_gather_results(
 def test_gather_results_partial_stratifications_in_results(
     name: str,
     aggregator_sources: list[str],
-    aggregator: Callable[..., int | float],
+    aggregator: Callable[..., int | float | pd.Series[float]],
     stratifications: list[str],
     event: Event,
     mocker: MockerFixture,

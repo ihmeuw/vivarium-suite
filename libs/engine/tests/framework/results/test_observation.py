@@ -13,6 +13,7 @@ from tests.framework.results.helpers import (
     HOUSE_CATEGORIES,
     POWER_LEVEL_GROUP_LABELS,
     STUDENT_HOUSES,
+    sum_columns,
 )
 from vivarium.engine.framework.results import VALUE_COLUMN
 from vivarium.engine.framework.results.context import ResultsContext
@@ -76,9 +77,9 @@ def test_is_stratified(observation_type: type[Observation], is_stratified: bool)
         ((), ["power_level"], len),
         ((), [], len),
         # Multiple-column dataframe return
-        (("familiar",), ["power_level"], sum),
-        (("familiar", "house"), ["power_level"], sum),
-        ((), ["power_level"], sum),
+        (("familiar",), ["power_level"], sum_columns),
+        (("familiar", "house"), ["power_level"], sum_columns),
+        ((), ["power_level"], sum_columns),
     ],
 )
 def test_stratified_observation__aggregate(

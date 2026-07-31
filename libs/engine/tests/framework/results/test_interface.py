@@ -535,10 +535,11 @@ def test_default_stratified_formatter_converts_object_to_categorical() -> None:
         ),
     )
 
-    # Before formatting: index levels are object, measure is object
-    assert results.index.get_level_values("student_house").dtype == "object"
-    assert results.index.get_level_values("power_level").dtype == "object"
-    assert results["measure"].dtype == "object"
+    # Before formatting: index levels and measure are the default string dtype
+    string_dtype = pd.Series(["x"]).dtype
+    assert results.index.get_level_values("student_house").dtype == string_dtype
+    assert results.index.get_level_values("power_level").dtype == string_dtype
+    assert results["measure"].dtype == string_dtype
     assert results["value"].dtype == float
     assert results["count"].dtype == int
 

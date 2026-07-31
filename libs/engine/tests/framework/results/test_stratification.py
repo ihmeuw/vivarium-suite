@@ -134,7 +134,7 @@ def test_stratification_init_raises(
             sorting_hat_vectorized,
             True,
             KeyError,
-            "None of [Index(['middle_initial'], dtype='object')] are in the [columns]",
+            f"None of [{pd.Index(['middle_initial'])!r}] are in the [columns]",
         ),
         (
             NAME_COLUMNS,
