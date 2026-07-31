@@ -1,4 +1,4 @@
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Literal
 from unittest import mock
@@ -8,7 +8,7 @@ import pytest
 from pandas.testing import assert_frame_equal
 from pytest_check import check
 from pytest_mock import MockFixture
-from vivarium.fuzzy_checker import TestResult
+from vivarium.fuzzy_checker import FuzzyChecker, TestResult
 from vivarium_inputs import interface
 
 from vivarium.validation.bundle import RatioMeasureDataBundle
@@ -454,3 +454,14 @@ def test_stratified_target_interval_config_applies_to(
         relative_error=0.1, stratifications=stratifications
     )
     assert config.applies_to(index_info) is expected
+
+
+@pytest.mark.parametrize("relative_error", [-0.1, 0.0, 1.1])
+def test_stratified_target_interval_config_validates_relative_error(
+    relative_error: float,
+) -> None:
+    """Test that the subclass still enforces the base class's relative_error bound."""
+    with pytest.raises(ValueError, match="relative_error must be between"):
+        StratifiedTargetIntervalConfig(
+            relative_error=relative_error, stratifications={"sex": "all"}
+        )
