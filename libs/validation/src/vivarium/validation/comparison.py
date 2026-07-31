@@ -25,9 +25,6 @@ class StratifiedTargetIntervalConfig(TargetIntervalConfig):
 
     Parameters
     ----------
-    relative_error
-        The relative error to apply to the target proportion, creating an interval
-        of (target * (1 - relative_error), target * (1 + relative_error)).
     stratifications
         A mapping of stratification names to filter values.
         - "all": match groups where this stratification is NOT present
