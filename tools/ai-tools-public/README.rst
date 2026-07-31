@@ -18,8 +18,8 @@ It includes:
 
 **PR Prep**
 
-- ``/simsci:pr-prep [description]`` — takes a change you have already written
-  from a raw branch to a PR ready for review. It opens with a parallel
+- ``/simsci:pr-prep <PR or description>`` — takes a change you have already written
+  from a raw branch or PR to a PR ready for review. It opens with a parallel
   multi-agent review that fans out to specialist sub-agents focused on:
 
   - Maintainability
@@ -33,14 +33,12 @@ It includes:
   per-finding ``_review_scorer`` Haiku sub-agent, and findings below 50 are
   dropped — so only verified issues reach the report, each shown with its score.
 
-  It then proposes a **disposition per finding** — fix now / ticket / drop, each
-  with a one-line why — at a single editable approval gate, applies only the
-  approved "fix now" set as **one commit per finding**, and re-validates with the
-  ``_validator`` sub-agent. A fix that cannot be made green is reverted and
-  becomes a ticket rather than a red PR. The finish — leftover triage, the PR
-  gate, the commit history, the draft PR, and a comment recording what went
-  unaddressed — belongs to the internal ``_finalize-core`` skill, which
-  ``/simsci:framework-development`` shares.
+  It then proposes a **disposition per finding** (fix now / ticket / drop, each
+  with a one-line why), applies only the approved "fix now" set as **one commit per
+  finding**, and re-validates with the ``_validator`` sub-agent. A fix that cannot
+  be made green is reverted and becomes a ticket rather than a red PR. The finish —
+  leftover triage, the PR gate, the commit history, the draft PR, and a comment recording
+  what went unaddressed — belongs to the internal ``_finalize-core`` skill.
 
   It requires a clean working tree, so each fix is its own revertible commit, and
   it stops at a **draft** PR: marking the PR ready and announcing it are separate

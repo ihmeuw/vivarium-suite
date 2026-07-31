@@ -21,9 +21,10 @@ caller-specific and deliberately absent: posting domain artifacts to the PR, and
 any stacked-PR ordering rule. Work only from the handoff in `$ARGUMENTS`; do not
 review code, edit source, or re-litigate a disposition here.
 
-**Where this stops.** A **draft** PR that exists, has a reviewable history behind
-it, and carries the not-addressed comment. Marking it ready for review and telling
-the team are deliberate acts the user takes — offer, never do them unasked.
+**Where this stops.** A PR that exists, has a reviewable history behind it, and
+carries the not-addressed comment. A PR you open is a **draft**; a PR that was
+already open keeps whatever state it had. Moving a draft to ready for review and
+telling the team are deliberate acts the user takes — offer, never do them unasked.
 
 ## What the caller hands you
 
@@ -107,16 +108,23 @@ reflow unasked.
 
 Keep any backup ref until the user signs off in Step 6.
 
-## Step 5 — Push and open the draft PR
+## Step 5 — Push and open the PR
 
-Push the branch, then open the PR. If an installed skill covers your team's push/PR
-conventions, invoke it and follow it rather than re-deriving them here; otherwise
-fill the repo's PR template from the actual diff if one exists — a **draft** PR is
-the safe default. Put Step 1's summary and the validation verdict, residuals
-included, in the body. Prefer the GitHub MCP's pull-request tools over the `gh` CLI
-when both are available: the MCP needs no shell access and works in sandboxed
-environments where `gh` cannot read its credentials. **If the branch already has an
-open PR, push to it and update its body** rather than opening a second one.
+Push the branch, then land the PR. **If the branch already has an open PR, push to
+it and update its body** rather than opening a second one — and leave its
+draft-or-ready state exactly as you found it. Never demote a PR that is already
+ready for review: that drops the review request and, on teams that signal readiness
+by taking a PR out of draft, retracts the signal.
+
+Opening a new one: if an installed skill covers your team's push/PR conventions,
+invoke it and follow it rather than re-deriving them here; otherwise fill the repo's
+PR template from the actual diff if one exists. A **draft** is the safe default for
+a PR you open.
+
+Either way, put Step 1's summary and the validation verdict, residuals included, in
+the body. Prefer the GitHub MCP's pull-request tools over the `gh` CLI when both are
+available: the MCP needs no shell access and works in sandboxed environments where
+`gh` cannot read its credentials.
 
 Note the PR number — Step 6 needs it, and so does a caller with something
 domain-specific to attach once the PR exists.
@@ -141,8 +149,9 @@ Write it for a reviewer arriving cold. Don't restate the change, don't repeat th
 PR body, and don't soften a leftover into sounding done.
 
 Then report: the PR number and URL, the commits as they landed, any tickets filed,
-and any hold-out paths still uncommitted. **Offer** to mark the PR ready for review
-and announce it per your team's convention — if an installed skill covers that,
+and any hold-out paths still uncommitted. If the PR is still a draft, **offer** to
+mark it ready for review and announce it per your team's convention — if an
+installed skill covers that,
 invoke it and follow it, but only on an explicit yes. Delete a Step 4 backup ref
 once the user confirms things look right, or hand them the command.
 
