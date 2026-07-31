@@ -1,10 +1,6 @@
-**5.6.0 - 07/29/26**
+**5.6.0 - 07/31/26**
 
-- Support pandas 3 (MIC-6773): treat str- vs object-backed string columns and
-  datetime64 unit differences as compatible in the population-table dtype guard,
-  with the existing column's dtype winning; pass ``observed=True`` when grouping
-  interpolation-validation data; make test aggregators and dtype assertions
-  pandas-version-agnostic
+- Support pandas 3
 
 **5.5.3 - 07/23/26**
 
