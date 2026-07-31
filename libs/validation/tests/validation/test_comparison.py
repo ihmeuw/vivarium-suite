@@ -465,3 +465,65 @@ def test_stratified_target_interval_config_validates_relative_error(
         StratifiedTargetIntervalConfig(
             relative_error=relative_error, stratifications={"sex": "all"}
         )
+
+
+@pytest.mark.parametrize(
+    "stratifications, matches",
+    [
+        ({"sex": "Male"}, lambda info: info.get("sex") == "Male"),
+        ({"sex": "specific"}, lambda info: "sex" in info),
+        ({"sex": "all"}, lambda info: "sex" not in info),
+        (
+            {"sex": "specific", "age": "Early Neonatal"},
+            lambda info: "sex" in info and info.get("age") == "Early Neonatal",
+        ),
+    ],
+    ids=["value", "specific", "all", "combined"],
+)
+def test_stratified_target_interval_config_applied_by_fuzzy_checker(
+    stratifications: dict[str, StratValue],
+    matches: Callable[[dict[str, StratValue]], bool],
+) -> None:
+    """Test that FuzzyChecker widens the target only for groups the config matches."""
+    target_value = 0.1
+    relative_error = 0.1
+    index = pd.MultiIndex.from_tuples(
+        [
+            ("Male", "Early Neonatal", 2024),
+            ("Male", "Late Neonatal", 2024),
+            ("Female", "Early Neonatal", 2024),
+            ("Female", "Late Neonatal", 2024),
+        ],
+        names=["sex", "age", "year"],
+    )
+    numerator = pd.DataFrame({"value": [10_000] * 4}, index=index)
+    denominator = pd.DataFrame({"value": [100_000] * 4}, index=index)
+    target = pd.DataFrame({"value": [target_value] * 4}, index=index)
+
+    fuzzy_checker = FuzzyChecker()
+    fuzzy_checker.test_proportion_vectorized(
+        name="stratified_target_interval",
+        observed_numerator=numerator,
+        observed_denominator=denominator,
+        target_proportion=target,
+        target_interval_config=StratifiedTargetIntervalConfig(
+            relative_error=relative_error, stratifications=stratifications
+        ),
+    )
+
+    assert fuzzy_checker.proportion_test_diagnostics
+    widened = 0
+    for result in fuzzy_checker.proportion_test_diagnostics:
+        if matches(result.index_info or {}):
+            assert result.target_lower_bound == pytest.approx(
+                target_value * (1 - relative_error)
+            )
+            assert result.target_upper_bound == pytest.approx(
+                target_value * (1 + relative_error)
+            )
+            widened += 1
+        else:
+            assert result.target_lower_bound == target_value
+            assert result.target_upper_bound == target_value
+    # Guard against the filter matching nothing and the assertions vacuously passing
+    assert widened
