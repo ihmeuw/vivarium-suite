@@ -36,6 +36,10 @@ telling the team are deliberate acts the user takes — offer, never do them una
   into the PR body as given; do **not** adjudicate whether work in this state may
   ship. Callers legitimately differ — one carries residual failures forward, another
   refuses to finalize on exhaustion — and each already decided by arriving here.
+- The **apply ref**, if the caller committed fixes of its own during this run —
+  HEAD as it stood before the first of them. Everything after it is the caller's
+  scaffolding and gets regrouped in Step 4; everything at or before it is the
+  user's history and is never touched. Omitted means the caller added no commits.
 - **Hold-out paths**, if any — files that must be left uncommitted. Name them to
   `commit-splitter` as excluded, and report at the end that they are still
   uncommitted.
@@ -87,24 +91,32 @@ place, saying what would have happened.
 
 ## Step 4 — Shape a reviewable history
 
-If Step 1 found **uncommitted work**, invoke the `simsci:commit-splitter` skill and
-follow it, naming any hold-out paths as excluded and passing the partition rule in
-its brief.
+**Never rewrite a commit the user made before this run**, whatever its subject says.
+A `WIP` or `first cut` message is not an invitation to reflow. The boundary is the
+caller's **apply ref**, never a commit message.
 
-If the work is **already committed** — `commit-splitter` refuses a clean tree by
-design — judge the history. Commits that are scoped, with subjects describing the
-change, need nothing; say so and move on.
+Do these in order — they compose, and only the second one groups anything.
 
-Otherwise (the single `WIP` commit a caller may have allowed at intake, or
-unrelated changes bundled together), name the problem and **offer** to reflow it;
-declining is a valid answer, since a reviewer reads the whole diff either way. On
-a yes: `git branch finalize-core-backup` at HEAD first — `git reset --soft` keeps
-every change but discards the original commit *messages*, so that ref is the only
-way back — then `git reset --soft <base>`, which puts the whole change in the tree
-as an uncommitted diff and is exactly `commit-splitter`'s input. Continue from the
-paragraph above. **Refuse** if any commit is already pushed, if a rebase or merge
-is in progress, or if HEAD is detached; those go to `/simsci:git-rescue`. Never
-reflow unasked.
+1. **Collapse the caller's own commits**, if it reported an apply ref with commits
+   after it. That series is fix scaffolding — one commit per finding so a bad fix
+   stayed revertible mid-loop — not history worth shipping. `git branch
+   finalize-core-backup` at HEAD, then `git reset --soft <apply-ref>`. Everything at
+   or before the ref is untouched, and `--soft` leaves the working tree alone, so
+   those fixes land in the tree *alongside* anything already uncommitted rather than
+   needing a second pass. A fix applied and later reverted nets out to nothing,
+   which is the point.
+2. **Group whatever is now uncommitted** — the collapsed fixes, work the caller
+   never committed, or both — by invoking the `simsci:commit-splitter` skill
+   **exactly once**, naming any hold-out paths as excluded and passing the partition
+   rule in its brief. Skip if the tree is clean.
+
+If step 1 had no apply ref and step 2 found a clean tree, the history is the user's.
+Say so and move on.
+
+Because commits at or before the apply ref are never touched, nothing already
+pushed is unwound and the Step 5 push stays a fast-forward. Still **refuse** step 1
+if a commit *after* the apply ref has somehow been pushed, if a rebase or merge is
+in progress, or if HEAD is detached; those go to `/simsci:git-rescue`.
 
 Keep any backup ref until the user signs off in Step 6.
 

@@ -110,7 +110,9 @@ reviewable instead:
 1. **One finding at a time, one commit each**, in table order, subject
    `review: <#> — <what changed>`. Never batch: the commit series *is* the audit
    trail, it localizes a later validation failure, and it turns a bad fix into a
-   `git revert` rather than an unpicking job.
+   `git revert` rather than an unpicking job. It is scaffolding for this loop, not
+   the shipping history — `simsci:_finalize-core` collapses it and regroups the diff
+   anyway, so optimize it for recoverability here, not for how it reads.
 2. **Stay inside the finding.** No opportunistic refactor, rename, or reformat,
    and nothing no row called for. The `file:line` in a row is an anchor, not the
    edit boundary — a DRY or design finding can take a few files to actually fix.
@@ -156,8 +158,10 @@ Invoke the `simsci:_finalize-core` skill and follow it. Hand it the **addressed*
 set (finding → commit), the **leftover** set (including anything blocked in Step 4
 or reverted in Step 5, with why), the **dropped** set with reasons, the validation
 verdict, the pre-apply ref, and the fact that **the scope line is already drawn**
-by the Step 3 dispositions. Note that any fixes are already committed one per
-finding, so its history step has only the user's pre-existing commits to consider.
+by the Step 3 dispositions. The pre-apply ref is also the **apply ref** its history
+step needs: the per-finding commits above it are scaffolding for Steps 4-5, not
+shipping history, so it collapses them and regroups the result through
+`commit-splitter`. Commits from before this run are not its business.
 It owns the triage, the PR gate, the commit history, the draft PR, and the
 not-addressed comment — duplicate none of it here. If it is unavailable, report
 the three sets and the verdict and stop, leaving the branch in place.
