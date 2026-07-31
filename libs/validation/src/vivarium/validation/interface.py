@@ -487,10 +487,9 @@ class ValidationContext:
         ref_source
             The source of the reference data (e.g., 'sim', 'artifact', 'custom').
         stratifications
-            A mapping of stratification names to filter values.
-            - "all": match groups where this stratification is NOT present
-            - "specific": match groups where this stratification IS present
-            - A specific value: match only where that stratification has this value
+            A mapping of stratification names to filter values. See
+            :class:`~vivarium.validation.comparison.StratifiedTargetIntervalConfig`
+            for the match semantics.
         relative_error
             The relative error to apply, creating an interval of
             (target * (1 - relative_error), target * (1 + relative_error)).
