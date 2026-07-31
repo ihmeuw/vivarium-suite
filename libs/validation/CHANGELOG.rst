@@ -3,7 +3,10 @@
 - **Breaking change.** ``TargetIntervalConfig`` no longer accepts
   ``stratifications``. It is still importable from ``vivarium.validation.comparison``,
   but callers that filter by stratification must switch to the new
-  ``StratifiedTargetIntervalConfig``, which subclasses it and owns that filtering
+  ``StratifiedTargetIntervalConfig``, which subclasses it and owns that filtering.
+  Note that dataclass inheritance puts the inherited ``relative_error`` first, so
+  positional construction order is the reverse of the old class's; construct it
+  with keyword arguments
 - Define ``StratValue`` here instead of re-exporting it from ``vivarium-fuzzy-checker``
 
 **0.1.2 - 07/23/26**
