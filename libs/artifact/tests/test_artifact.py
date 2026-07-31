@@ -57,7 +57,7 @@ def keys_mock() -> list[str]:
 
 @pytest.fixture()
 def hdf_mock(mocker: pytest_mock.MockFixture, keys_mock: list[str]) -> MagicMock:
-    mock = mocker.patch("vivarium.artifact.artifact.hdf")
+    mock = mocker.patch("vivarium.artifact.artifact._hdf")
 
     def mock_load(_: Any, key: str, __: Any, ___: Any) -> list[str] | str | None:
         if key in keys_mock:

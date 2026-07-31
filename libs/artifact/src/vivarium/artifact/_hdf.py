@@ -6,36 +6,24 @@ HDF Interface
 A convenience wrapper around the `tables <https://www.pytables.org>`_ and
 :mod:`pandas` HDF interfaces.
 
-Public Interface
-----------------
+This module is private to the package. These low-level helpers back
+:class:`~vivarium.artifact.artifact.Artifact`; use the ``Artifact`` class rather
+than calling them directly.
 
-The public interface consists of 5 functions:
-
-.. list-table:: HDF Public Interface
-   :widths: 20 60
-   :header-rows: 1
-
-   * - Function
-     - Description
-   * - :func:`touch`
-     - Creates an HDF file, wiping an existing file if necessary.
-   * - :func:`write`
-     - Stores data at a key in an HDF file.
-   * - :func:`load`
-     - Loads (potentially filtered) data from a key in an HDF file.
-   * - :func:`remove`
-     - Clears data from a key in an HDF file.
-   * - :func:`get_keys`
-     - Gets all available HDF keys from an HDF file.
+- ``touch`` - Creates an HDF file, wiping an existing file if necessary.
+- ``write`` - Stores data at a key in an HDF file.
+- ``load`` - Loads (potentially filtered) data from a key in an HDF file.
+- ``remove`` - Clears data from a key in an HDF file.
+- ``get_keys`` - Gets all available HDF keys from an HDF file.
 
 Contracts
 +++++++++
 
-- All functions in the public interface accept both :class:`pathlib.Path` and
-  normal Python :class:`str` objects for paths.
-- All functions in the public interface accept only :class:`str` objects
-  as representations of the keys in the hdf file.  The strings must be
-  formatted as ``"type.name.measure"`` or ``"type.measure"``.
+- All of these helpers accept both :class:`pathlib.Path` and normal Python
+  :class:`str` objects for paths.
+- All of these helpers accept only :class:`str` objects as representations of
+  the keys in the hdf file.  The strings must be formatted as
+  ``"type.name.measure"`` or ``"type.measure"``.
 
 """
 
@@ -52,9 +40,9 @@ from tables.nodes import filenode
 
 from vivarium.artifact.entity_key import EntityKey
 
-####################
-# Public interface #
-####################
+#############
+# Interface #
+#############
 
 
 def touch(path: Path | str) -> None:
@@ -210,13 +198,13 @@ def get_keys(path: Path | str) -> list[str]:
     """
     path = _get_valid_hdf_path(path)
     with tables.open_file(str(path)) as file:
-        keys = _get_keys(file.root)
+        keys = _get_keys_from_node(file.root)
     return keys
 
 
-#####################
-# Private utilities #
-#####################
+#############
+# Utilities #
+#############
 
 
 def _get_valid_hdf_path(path: Path | str) -> Path:
@@ -273,7 +261,7 @@ def _write_json_blob(path: Path, entity_key: EntityKey, data: Any) -> None:
             fnode.write(bytes(json.dumps(data), "utf-8"))
 
 
-def _get_keys(root: tables.node.Node, prefix: str = "") -> list[str]:
+def _get_keys_from_node(root: tables.node.Node, prefix: str = "") -> list[str]:
     """Recursively formats the paths in an HDF file into a key format."""
     keys = []
     for child in root:
@@ -284,7 +272,7 @@ def _get_keys(root: tables.node.Node, prefix: str = "") -> list[str]:
             keys.append(prefix)
         else:
             new_prefix = f"{prefix}.{child_name}" if prefix else child_name
-            keys.extend(_get_keys(child, new_prefix))
+            keys.extend(_get_keys_from_node(child, new_prefix))
 
     # Clean up some weird meta groups that get written with dataframes.
     keys = [k for k in keys if ".meta." not in k]
