@@ -1,3 +1,11 @@
+**0.3.0 - 07/31/26**
+
+- **Breaking change.** ``TargetIntervalConfig`` no longer takes ``stratifications``;
+  it now applies to every tested group and exposes an ``applies_to`` hook for
+  subclasses to restrict that
+- **Breaking change.** Remove ``StratValue``, which only supported the removed
+  ``stratifications`` field
+
 **0.2.1 - 07/23/26**
 
 - Streamline package __init__.py docstring

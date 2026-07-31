@@ -21,8 +21,8 @@ from vivarium.validation.bundle import RatioMeasureDataBundle
 from vivarium.validation.comparison import (
     Comparison,
     FuzzyComparison,
+    StratifiedTargetIntervalConfig,
     StratValue,
-    TargetIntervalConfig,
 )
 from vivarium.validation.constants import DAYS_PER_YEAR
 from vivarium.validation.data_loader import DataLoader, DataSource
@@ -501,8 +501,8 @@ class ValidationContext:
                 f"target_interval_configuration is only supported for FuzzyComparison, "
                 f"got {type(comparison).__name__}"
             )
-        comparison.target_interval_configuration = TargetIntervalConfig(
-            stratifications=stratifications, relative_error=relative_error
+        comparison.target_interval_configuration = StratifiedTargetIntervalConfig(
+            relative_error=relative_error, stratifications=stratifications
         )
 
     def generate_comparisons(self):  # type: ignore[no-untyped-def]

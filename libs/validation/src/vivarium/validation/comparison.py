@@ -1,19 +1,58 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Collection, Literal
 
 import pandas as pd
 from loguru import logger
 
-# StratValue and TargetIntervalConfig now live in vivarium-fuzzy-checker (they
-# configure FuzzyChecker's target intervals). Re-exported here so the historical
+# TargetIntervalConfig lives in vivarium-fuzzy-checker (it configures FuzzyChecker's
+# target intervals). Re-exported here so the historical
 # ``vivarium.validation.comparison`` import path keeps resolving.
-from vivarium.fuzzy_checker import FuzzyChecker, StratValue, TargetIntervalConfig, TestResult
+from vivarium.fuzzy_checker import FuzzyChecker, TargetIntervalConfig, TestResult
 
 from vivarium.validation.bundle import RatioMeasureDataBundle
 from vivarium.validation.constants import DRAW_INDEX, DataSource
 from vivarium.validation.data_transformation.calculations import stratify
 from vivarium.validation.data_transformation.measures import Measure
 from vivarium.validation.visualization import dataframe_utils
+
+StratValue = str | int | float
+
+
+@dataclass
+class StratifiedTargetIntervalConfig(TargetIntervalConfig):
+    """A target interval that applies only to particular stratification subsets.
+
+    Parameters
+    ----------
+    relative_error
+        The relative error to apply to the target proportion, creating an interval
+        of (target * (1 - relative_error), target * (1 + relative_error)).
+    stratifications
+        A mapping of stratification names to filter values.
+        - "all": match groups where this stratification is NOT present
+        - "specific": match groups where this stratification IS present (any value)
+        - A specific value: match groups where this stratification
+          is present with that exact value
+        - If multiple stratifications are specified, all conditions must be met for a match.
+          Same behavior as an AND filter across the stratifications.
+    """
+
+    stratifications: dict[str, StratValue]
+
+    def applies_to(self, index_info: dict[str, Any]) -> bool:
+        """Return whether every stratification filter matches the described group."""
+        index_names = set(index_info)
+        for strat_name, filter_value in self.stratifications.items():
+            if filter_value == "all" and strat_name in index_names:
+                return False
+            if filter_value == "specific" and strat_name not in index_names:
+                return False
+            if filter_value not in ("all", "specific") and (
+                strat_name not in index_names or index_info[strat_name] != filter_value
+            ):
+                return False
+        return True
 
 
 class Comparison(ABC):

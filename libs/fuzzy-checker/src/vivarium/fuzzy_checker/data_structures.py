@@ -6,30 +6,21 @@ from typing import Any
 
 from scipy.stats._distn_infrastructure import rv_discrete_frozen
 
-StratValue = str | int | float
-
 
 @dataclass
 class TargetIntervalConfig:
-    """Configuration for applying a relative error interval to target proportions
-    for specific stratification subsets.
+    """Configuration for applying a relative error interval to target proportions.
+
+    Applies to every tested group. Subclasses can restrict which groups it
+    applies to by overriding :meth:`applies_to`.
 
     Parameters
     ----------
-    stratifications
-        A mapping of stratification names to filter values.
-        - "all": match groups where this stratification is NOT present
-        - "specific": match groups where this stratification IS present (any value)
-        - A specific value: match groups where this stratification
-          is present with that exact value
-        - If multiple stratifications are specified, all conditions must be met for a match.
-          Same behavior as an AND filter across the stratifications.
     relative_error
         The relative error to apply to the target proportion, creating an interval
         of (target * (1 - relative_error), target * (1 + relative_error)).
     """
 
-    stratifications: dict[str, StratValue]
     relative_error: float
 
     def __post_init__(self) -> None:
@@ -38,6 +29,17 @@ class TargetIntervalConfig:
                 f"relative_error must be between 0 (exclusive) and 1 (inclusive), "
                 f"got {self.relative_error}"
             )
+
+    def applies_to(self, index_info: dict[str, Any]) -> bool:
+        """Return whether the interval should be applied to the described group.
+
+        Parameters
+        ----------
+        index_info
+            A mapping of index names to their values for the group under test.
+            Empty for the population-level test.
+        """
+        return True
 
 
 @dataclass

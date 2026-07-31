@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -314,14 +314,20 @@ class TestFuzzyCheckerTestProportionVectorized:
         assert len(fuzzy_checker.proportion_test_diagnostics) == 21
 
 
+class SexOnlyTargetIntervalConfig(TargetIntervalConfig):
+    """A config that only applies to groups stratified by sex."""
+
+    def applies_to(self, index_info: dict[str, Any]) -> bool:
+        return "sex" in index_info
+
+
 class TestApplyTargetIntervalConfig:
     """Tests for FuzzyChecker._apply_target_interval_config."""
 
-    def test_apply_target_interval_config_match(self) -> None:
-        """When the filter matches, _apply_target_interval_config should return a tuple."""
+    def test_apply_target_interval_config_applies(self) -> None:
+        """When the config applies, _apply_target_interval_config should return a tuple."""
         fuzzy_checker = FuzzyChecker()
-        config = TargetIntervalConfig(stratifications={"sex": "all"}, relative_error=0.1)
-        # index_names does NOT contain "sex", so "all" filter matches
+        config = TargetIntervalConfig(relative_error=0.1)
         result = fuzzy_checker._apply_target_interval_config(
             target_val=0.5,
             index_info={"age": "Early Neonatal", "year": 2024},
@@ -330,15 +336,13 @@ class TestApplyTargetIntervalConfig:
         assert isinstance(result, tuple)
         assert result == (0.45, 0.55)
 
-    def test_apply_target_interval_config_no_match(self) -> None:
-        """When the filter does not match, _apply_target_interval_config should return the
-        original float."""
+    def test_apply_target_interval_config_does_not_apply(self) -> None:
+        """When the config does not apply, the original float should be returned."""
         fuzzy_checker = FuzzyChecker()
-        config = TargetIntervalConfig(stratifications={"sex": "all"}, relative_error=0.1)
-        # index_info CONTAINS "sex", so "all" filter does NOT match
+        config = SexOnlyTargetIntervalConfig(relative_error=0.1)
         result = fuzzy_checker._apply_target_interval_config(
             target_val=0.5,
-            index_info={"sex": "Male", "age": "Early Neonatal", "year": 2024},
+            index_info={"age": "Early Neonatal", "year": 2024},
             config=config,
         )
         assert isinstance(result, float)
@@ -349,7 +353,7 @@ class TestApplyTargetIntervalConfig:
     ) -> None:
         """When the interval exceeds [0, 1], values should be clipped and a warning logged."""
         fuzzy_checker = FuzzyChecker()
-        config = TargetIntervalConfig(stratifications={"sex": "all"}, relative_error=0.5)
+        config = TargetIntervalConfig(relative_error=0.5)
         # target_val=0.9, relative_error=0.5 -> upper = 0.9 * 1.5 = 1.35, should clip to 1.0
         result = fuzzy_checker._apply_target_interval_config(
             target_val=0.9,
@@ -370,6 +374,11 @@ class TestApplyTargetIntervalConfig:
         )
         assert isinstance(result, float)
         assert result == 0.5
+
+    @pytest.mark.parametrize("relative_error", [-0.1, 0.0, 1.1])
+    def test_relative_error_must_be_in_unit_interval(self, relative_error: float) -> None:
+        with pytest.raises(ValueError, match="relative_error must be between"):
+            TargetIntervalConfig(relative_error=relative_error)
 
 
 class TestTargetIntervalVectorized:
@@ -430,47 +439,43 @@ class TestTargetIntervalVectorized:
         ):
             assert r1.reject_null == r2.reject_null
 
-    def test_target_interval_all_filter(self, demographic_index: pd.MultiIndex) -> None:
-        """With {"sex": "all"}, interval should apply to groups WITHOUT sex stratification."""
+    def test_target_interval_applies_to_every_group(
+        self, demographic_index: pd.MultiIndex
+    ) -> None:
+        """A base config applies the interval to every group, including the overall test."""
         target_val = 0.1
         numerator = pd.DataFrame({"value": [10_000] * 8}, index=demographic_index)
         denominator = pd.DataFrame({"value": [100_000] * 8}, index=demographic_index)
         target = pd.DataFrame({"value": [target_val] * 8}, index=demographic_index)
-        config = TargetIntervalConfig(stratifications={"sex": "all"}, relative_error=0.1)
+        config = TargetIntervalConfig(relative_error=0.1)
 
         fuzzy_checker = FuzzyChecker()
         fuzzy_checker.test_proportion_vectorized(
-            name="all_filter",
+            name="base_config",
             observed_numerator=numerator,
             observed_denominator=denominator,
             target_proportion=target,
             target_interval_config=config,
         )
 
-        # Check that results for groups WITHOUT "sex" had interval targets applied.
-        # Groups without sex: ("age", "year"), ("age",), ("year",) and overall
+        assert fuzzy_checker.proportion_test_diagnostics
         for result in fuzzy_checker.proportion_test_diagnostics:
-            strat_names = set(result.index_info.keys()) if result.index_info else set()
-            if "sex" not in strat_names:
-                # This group should have had an interval applied
-                assert result.target_lower_bound == pytest.approx(0.09)
-                assert result.target_upper_bound == pytest.approx(0.11)
-            else:
-                # Groups with "sex" should have exact target (no interval)
-                assert result.target_lower_bound == target_val
-                assert result.target_upper_bound == target_val
+            assert result.target_lower_bound == pytest.approx(0.09)
+            assert result.target_upper_bound == pytest.approx(0.11)
 
-    def test_target_interval_specific_filter(self, demographic_index: pd.MultiIndex) -> None:
-        """With {"sex": "specific"}, interval should apply to groups WITH sex stratification."""
+    def test_target_interval_subclass_restricts_groups(
+        self, demographic_index: pd.MultiIndex
+    ) -> None:
+        """A subclass's applies_to hook governs which groups get an interval target."""
         target_val = 0.1
         numerator = pd.DataFrame({"value": [10_000] * 8}, index=demographic_index)
         denominator = pd.DataFrame({"value": [100_000] * 8}, index=demographic_index)
         target = pd.DataFrame({"value": [target_val] * 8}, index=demographic_index)
-        config = TargetIntervalConfig(stratifications={"sex": "specific"}, relative_error=0.1)
+        config = SexOnlyTargetIntervalConfig(relative_error=0.1)
 
         fuzzy_checker = FuzzyChecker()
         fuzzy_checker.test_proportion_vectorized(
-            name="specific_filter",
+            name="sex_only",
             observed_numerator=numerator,
             observed_denominator=denominator,
             target_proportion=target,
@@ -480,75 +485,8 @@ class TestTargetIntervalVectorized:
         for result in fuzzy_checker.proportion_test_diagnostics:
             strat_names = set(result.index_info.keys()) if result.index_info else set()
             if "sex" in strat_names:
-                # Groups WITH sex should have interval applied
                 assert result.target_lower_bound == pytest.approx(0.09)
                 assert result.target_upper_bound == pytest.approx(0.11)
             else:
-                # Groups WITHOUT sex should have exact target
                 assert result.target_lower_bound == target_val
                 assert result.target_upper_bound == target_val
-
-    def test_target_interval_value_filter(self, demographic_index: pd.MultiIndex) -> None:
-        """With {"sex": "Male"}, interval should apply only where sex=Male."""
-        target_val = 0.1
-        numerator = pd.DataFrame({"value": [10_000] * 8}, index=demographic_index)
-        denominator = pd.DataFrame({"value": [100_000] * 8}, index=demographic_index)
-        target = pd.DataFrame({"value": [target_val] * 8}, index=demographic_index)
-        config = TargetIntervalConfig(stratifications={"sex": "Male"}, relative_error=0.1)
-
-        fuzzy_checker = FuzzyChecker()
-        fuzzy_checker.test_proportion_vectorized(
-            name="value_filter",
-            observed_numerator=numerator,
-            observed_denominator=denominator,
-            target_proportion=target,
-            target_interval_config=config,
-        )
-
-        for result in fuzzy_checker.proportion_test_diagnostics:
-            if result.index_info is not None and "sex" in result.index_info:
-                if result.index_info["sex"] == "Male":
-                    # Male groups should have interval applied
-                    assert result.target_lower_bound == pytest.approx(0.09)
-                    assert result.target_upper_bound == pytest.approx(0.11)
-                else:
-                    # Female groups should have exact target
-                    assert result.target_lower_bound == target_val
-                    assert result.target_upper_bound == target_val
-
-    def test_target_interval_combined_filter(self, demographic_index: pd.MultiIndex) -> None:
-        """With {"sex": "specific", "age": "Early Neonatal"}, interval should apply only
-        to groups where sex IS a stratification AND age has value "Early Neonatal"."""
-        target_val = 0.1
-        numerator = pd.DataFrame({"value": [10_000] * 8}, index=demographic_index)
-        denominator = pd.DataFrame({"value": [100_000] * 8}, index=demographic_index)
-        target = pd.DataFrame({"value": [target_val] * 8}, index=demographic_index)
-        config = TargetIntervalConfig(
-            stratifications={"sex": "specific", "age": "Early Neonatal"},
-            relative_error=0.1,
-        )
-
-        fuzzy_checker = FuzzyChecker()
-        fuzzy_checker.test_proportion_vectorized(
-            name="combined_filter",
-            observed_numerator=numerator,
-            observed_denominator=denominator,
-            target_proportion=target,
-            target_interval_config=config,
-        )
-
-        for result in fuzzy_checker.proportion_test_diagnostics:
-            if result.index_info is not None:
-                has_sex = "sex" in result.index_info
-                has_age_en = (
-                    "age" in result.index_info
-                    and result.index_info["age"] == "Early Neonatal"
-                )
-                if has_sex and has_age_en:
-                    # Both conditions met — interval should be applied
-                    assert result.target_lower_bound == pytest.approx(0.09)
-                    assert result.target_upper_bound == pytest.approx(0.11)
-                else:
-                    # At least one condition not met — exact target
-                    assert result.target_lower_bound == target_val
-                    assert result.target_upper_bound == target_val
