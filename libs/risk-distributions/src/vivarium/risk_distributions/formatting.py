@@ -216,4 +216,4 @@ def format_call_data(
         call_data = pd.Series(call_data, copy=True)
         parameters = parameters.reindex(call_data.index, method="nearest")
 
-    return call_data, parameters
+    return call_data.astype(float), parameters

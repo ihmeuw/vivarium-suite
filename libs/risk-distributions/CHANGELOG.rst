@@ -1,3 +1,9 @@
+**3.1.9 - 07/29/26**
+
+- Support pandas 3 (MIC-6773): cast ensemble weights and distribution call data
+  to float before writing transformed values into them (pandas 3 removed silent
+  integer upcasting on setitem)
+
 **3.1.8 - 07/23/26**
 
 - Streamline package __init__.py docstring
