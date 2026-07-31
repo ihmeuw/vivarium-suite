@@ -111,9 +111,12 @@ reviewable instead:
    `review: <#> — <what changed>`. Never batch: the commit series *is* the audit
    trail, it localizes a later validation failure, and it turns a bad fix into a
    `git revert` rather than an unpicking job.
-2. **Stay inside the finding.** Change only what its row names — no opportunistic
-   refactor, rename, or reformat, and no file no row mentions. Scope any lint
-   auto-fix to the files you edited.
+2. **Stay inside the finding.** No opportunistic refactor, rename, or reformat,
+   and nothing no row called for. The `file:line` in a row is an anchor, not the
+   edit boundary — a DRY or design finding can take a few files to actually fix.
+   What bounds you is the footprint that put it in **fix now**: a few files, no
+   public-signature change, no new dependency. Scope any lint auto-fix to the
+   files you edited.
 3. **Escalate instead of expanding.** A fix that turns out to need a
    public-signature change, a new dependency, or a design decision is marked
    **blocked**, left unapplied, and moved to the ticket set. Say so.

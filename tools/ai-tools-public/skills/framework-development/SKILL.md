@@ -211,9 +211,11 @@ dropped.
 2. Invoke the `simsci:_finalize-core` skill and follow it. Hand it what was built
    and the test results; the **leftover** set — residual validation failures and
    review findings carried out of the Phase 4 loop, each with why it was left;
-   the validation verdict; and the ref the branch started from. The Phase 4 loop
-   already settled what is being addressed, so tell it the scope line is
-   **already drawn**. It owns the summary, the leftover triage, the PR approval
+   the validation verdict; the ref the branch started from; and the feature
+   description for the PR body. This build ships as a **single PR** — say so, so it
+   does not ask. The Phase 4 loop already settled what is being addressed, so tell
+   it the scope line is **already drawn**. It owns the summary, the leftover
+   triage, the PR approval
    gate, the commit history, the draft PR, and the comment recording what was not
    addressed — don't duplicate any of that here. If it is unavailable, report the
    build summary and the leftovers and stop, leaving the branch in place.

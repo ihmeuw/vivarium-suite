@@ -9,7 +9,8 @@ Run the shared multi-agent review of: $ARGUMENTS
 
 This is the **review core** — the single definition of the parallel fan-out, the
 functional-correctness pass, the per-finding confidence scoring, and the
-synthesis. It is invoked **inline** by `/simsci:pr-prep` (after it gathers context), and is designed to be reused the same way by other main-session
+synthesis. It is invoked **inline** by `/simsci:pr-prep` (after it gathers
+context), and is designed to be reused the same way by other main-session
 commands (e.g. a development workflow's review phase). Because it runs inline in
 the caller's main-session context, its fan-out to the `_review_*` sub-agents
 stays one level deep — so run this unit inline and **not** as a forked sub-agent.

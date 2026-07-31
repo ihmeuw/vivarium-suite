@@ -18,9 +18,11 @@ It includes:
 
 **PR Prep**
 
-- ``/simsci:pr-prep <PR or description>`` — takes a change you have already written
-  from a raw branch or PR to a PR ready for review. It opens with a parallel
-  multi-agent review that fans out to specialist sub-agents focused on:
+- ``/simsci:pr-prep <description>`` — takes a change you have already written on
+  the current branch through to a PR ready for review, opening a new PR or
+  updating the branch's existing one; the argument is optional context, not a PR
+  reference. It opens with a parallel multi-agent review that fans out to
+  specialist sub-agents focused on:
 
   - Maintainability
   - DRY
@@ -34,15 +36,19 @@ It includes:
   dropped — so only verified issues reach the report, each shown with its score.
 
   It then proposes a **disposition per finding** (fix now / ticket / drop, each
-  with a one-line why), applies only the approved "fix now" set as **one commit per
-  finding**, and re-validates with the ``_validator`` sub-agent. A fix that cannot
-  be made green is reverted and becomes a ticket rather than a red PR. The finish —
-  leftover triage, the PR gate, the commit history, the draft PR, and a comment recording
-  what went unaddressed — belongs to the internal ``_finalize-core`` skill.
+  with a one-line why), bucketing by scope and using the confidence score only to
+  break ties. The table is a reported plan, not a gate — you can re-bucket any row.
+  It applies the fix-now set as **one commit per finding** and re-validates with
+  the ``_validator`` sub-agent. A fix that cannot be made green is reverted and
+  becomes a ticket rather than a red PR. The finish — leftover triage, the PR gate,
+  the commit history, the PR, and a comment recording what went unaddressed —
+  belongs to the internal ``_finalize-core`` skill.
 
-  It requires a clean working tree, so each fix is its own revertible commit, and
-  it stops at a **draft** PR: marking the PR ready and announcing it are separate
-  deliberate acts it only offers.
+  It requires a clean working tree, so each fix is its own revertible commit
+  (a bare ``WIP`` commit is enough to satisfy that, since ``_finalize-core`` offers
+  to reflow the history into reviewable commits at the end). A PR it opens is a
+  **draft**; one that is already open keeps whatever state it had. Marking a draft
+  ready and announcing it are separate deliberate acts it only offers.
 
 **Regression Debugger**
 
@@ -205,10 +211,12 @@ What is deliberately **not** shared is the step between review and finish — ac
 on the findings. ``/simsci:framework-development`` re-dispatches each finding to the
 sub-agent that wrote the code, in its own worktree, across up to three budgeted
 rounds, because its implementer is blind and its first pass is expected to be
-wrong. ``/simsci:pr-prep`` gates on a user-approved disposition table and edits in
-the main session, because the code already exists and was written by someone who
-could see all of it. Same purpose, different mechanism, gate structure, and budget;
-an abstraction spanning both would be a shell with two disjoint bodies.
+wrong. ``/simsci:pr-prep`` buckets the findings by scope and edits in the main
+session, because the code already exists and was written by someone who could see
+all of it and because a review of a pre-existing branch surfaces real findings
+about code the change never touched, which the framework-development loop never
+encounters. Same purpose, different mechanism and budget; an abstraction spanning
+both would be a shell with two disjoint bodies.
 
 ``_review-core`` runs two one-level fan-outs in sequence, tiered by model. The
 five review agents run on **Sonnet**; once they return, ``_review-core`` collects
@@ -281,13 +289,16 @@ Code:
   session** — there is no worktree sandbox, because the code, the tests, and the
   review all already exist and the fixes are small targeted edits rather than a
   blind build. Its containment is procedural, and worth knowing before you install
-  it: nothing is edited before an explicit per-finding approval gate; it requires a
-  clean working tree, records the pre-apply commit, and lands **one commit per
-  finding**, so any single fix is revertible; it edits only files an approved
-  finding names; and pushing and opening the PR happen only after a second approval
-  gate inside ``_finalize-core``, which stops at a draft PR and never marks it
-  ready or announces it unasked. It spawns ``_validator``, which executes the
-  project's test suite (see that agent above).
+  it: nothing is edited before the per-finding disposition table is printed, so the
+  full plan is on screen first; it requires a clean working tree, records the
+  pre-apply commit, and lands **one commit per finding**, so any single fix is
+  revertible; each fix stays within the bounded footprint that put its finding in
+  the fix-now bucket, and one that outgrows it is escalated to a ticket rather than
+  expanded, with the real diffstat printed at the end; and pushing and opening the
+  PR happen only after the run's one approval gate, inside ``_finalize-core``,
+  which stops at a draft PR — leaving an already-open PR's state untouched — and
+  never marks one ready or announces it unasked. It spawns ``_validator``, which
+  executes the project's test suite (see that agent above).
 
 For destructive or out-of-scope commands, Claude Code's default
 permission system prompts you before execution, so a prompt-injected
