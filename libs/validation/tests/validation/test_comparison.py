@@ -467,6 +467,12 @@ def test_stratified_config_inherits_relative_error_validation(
         )
 
 
+def test_stratified_config_is_keyword_only() -> None:
+    """Test that positional construction fails rather than binding in field order."""
+    with pytest.raises(TypeError, match="positional argument"):
+        StratifiedTargetIntervalConfig({"sex": "all"}, 0.1)  # type: ignore[call-arg, arg-type]
+
+
 def test_verify_applies_stratified_target_interval(
     test_bundle: RatioMeasureDataBundle,
     reference_bundle: RatioMeasureDataBundle,

@@ -380,6 +380,11 @@ class TestApplyTargetIntervalConfig:
         with pytest.raises(ValueError, match="relative_error must be between"):
             TargetIntervalConfig(relative_error=relative_error)
 
+    def test_config_is_keyword_only(self) -> None:
+        """Positional construction must fail cleanly so subclass fields stay unambiguous."""
+        with pytest.raises(TypeError, match="positional argument"):
+            TargetIntervalConfig(0.1)  # type: ignore[call-arg]
+
 
 class TestTargetIntervalVectorized:
     """Tests for target interval config integration with test_proportion_vectorized."""

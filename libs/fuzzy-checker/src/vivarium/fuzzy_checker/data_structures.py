@@ -7,7 +7,9 @@ from typing import Any
 from scipy.stats._distn_infrastructure import rv_discrete_frozen
 
 
-@dataclass
+# Keyword-only so that subclasses can add fields without the inherited
+# relative_error silently claiming a caller's first positional argument.
+@dataclass(kw_only=True)
 class TargetIntervalConfig:
     """Configuration for applying a relative error interval to target proportions.
 

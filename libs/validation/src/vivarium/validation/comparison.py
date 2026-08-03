@@ -15,7 +15,7 @@ from vivarium.validation.visualization import dataframe_utils
 StratValue = str | int | float
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StratifiedTargetIntervalConfig(TargetIntervalConfig):
     """A target interval that applies only to particular stratification subsets.
 
