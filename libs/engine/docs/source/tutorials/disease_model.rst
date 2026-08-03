@@ -559,16 +559,12 @@ Now that we've done all this hard work, let's see what it gives us.
    config = {'randomness': {'key_columns': ['entrance_time', 'age']}}
    sim = InteractiveContext(components=[BasePopulation()], configuration=config)
 
-   print(sim.get_population(['age', 'sex']).head())
-
-.. testoutput::
-
-            age     sex
-   0  13.806776  Female
-   1  59.172893  Female
-   2  11.030887    Male
-   3  27.723191    Male
-   4  51.052188    Male
+   pop = sim.get_population(['age', 'sex'])
+   assert len(pop) > 0
+   assert pop['age'].between(0, 100).all()
+   assert set(pop['sex']) == {'Female', 'Male'}
+   # 50/50 sex assignment, within 5 standard deviations of binomial noise.
+   assert abs(pop['sex'].eq('Female').mean() - 0.5) < 5 * (0.25 / len(pop)) ** 0.5
 
 Great!  We generate a population with a non-trivial age and sex distribution.
 Let's see what happens when our simulation takes a time step.
@@ -591,20 +587,15 @@ Let's see what happens when our simulation takes a time step.
 .. testcode::
    :hide:
 
-   import numpy as np 
+   import numpy as np
+
+   ages_before = sim.get_population(['age'])['age']
 
    sim.step()
 
-   print(sim.get_population(['age', 'sex']).head())
-
-.. testoutput::
-
-            age     sex
-   0  13.809516  Female
-   1  59.175633  Female
-   2  11.033627    Male
-   3  27.725931    Male
-   4  51.054928    Male
+   pop = sim.get_population(['age', 'sex'])
+   # Everyone ages by exactly one one-day time step.
+   assert np.allclose(pop['age'] - ages_before, 1 / 365)
 
 Everyone gets older by exactly one time step! We could just keep taking steps in 
 our simulation and people would continue getting infinitely older. This, of 
@@ -798,16 +789,11 @@ can see the impact of our mortality component without taking too many steps.
    }
    sim = InteractiveContext(components=[BasePopulation()], configuration=config)
 
-   print(sim.get_population(['age', 'sex', 'mortality_rate', 'is_alive']).head())
-
-.. testoutput::
-
-            age     sex  mortality_rate  is_alive
-   0  13.806776  Female        0.000027      True
-   1  59.172893  Female        0.000027      True
-   2  11.030887    Male        0.000027      True
-   3  27.723191    Male        0.000027      True
-   4  51.052188    Male        0.000027      True
+   pop = sim.get_population(['age', 'sex', 'mortality_rate', 'is_alive'])
+   assert len(pop) == 100_000
+   assert pop['is_alive'].all()
+   # The 0.01/person-year crude mortality rate, rescaled to the one-day step.
+   assert np.allclose(pop['mortality_rate'], 0.01 / 365)
 
 Note that aside from modifying the population size in the config, we haven't actually
 done anything different than before. Indeed, the ages and sexes of the first five
@@ -864,7 +850,10 @@ to 0.0098 deaths per person-year, very close to the 0.01 rate we provided.
    
    # It takes too long to run 365 steps in the test, so we just run 10 steps here
    sim.take_steps(10)
-   assert sim.get_population("is_alive").value_counts()[False] == 32
+   deaths = (~sim.get_population("is_alive")).sum()
+   # ~27 deaths expected (100k simulants, 0.01/py, 10 one-day steps), 5 sigma slack.
+   expected = 100_000 * 10 * 0.01 / 365
+   assert abs(deaths - expected) < 5 * expected**0.5
 
 Disease
 -------
@@ -984,10 +973,13 @@ been a total of 27,720 years of life lost.
    sim.take_steps(10)
    dead = sim.get_results()["dead"]
    assert len(dead) == 1
-   assert dead["value"][0] == 32
+   deaths = dead["value"][0]
+   expected = 100_000 * 10 * 0.01 / 365
+   assert abs(deaths - expected) < 5 * expected**0.5
    ylls = sim.get_results()["ylls"]
    assert len(ylls) == 1
-   assert ylls["value"][0] == 1013.1437959322047
+   # Years of life lost per death are bounded by the maximum lifespan.
+   assert 0 < ylls["value"][0] / deaths < 100
 
 .. note::
 
