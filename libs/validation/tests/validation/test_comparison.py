@@ -390,15 +390,15 @@ def test_target_interval_configuration_setter(
     test_bundle: RatioMeasureDataBundle,
     reference_bundle: RatioMeasureDataBundle,
 ) -> None:
-    """Test that target_interval_configuration can be set with a TargetIntervalConfig."""
+    """Test that target_interval_configuration can be set with a StratifiedTargetIntervalConfig."""
     comparison = FuzzyComparison(test_bundle, reference_bundle)
     config = StratifiedTargetIntervalConfig(
         relative_error=0.1, stratifications={"sex": "all"}
     )
     comparison.target_interval_configuration = config
     assert comparison.target_interval_configuration is config
-    assert config.stratifications == {"sex": "all"}
-    assert config.relative_error == 0.1
+    assert comparison.target_interval_configuration.stratifications == {"sex": "all"}
+    assert comparison.target_interval_configuration.relative_error == 0.1
 
     # Test overwrite with a new config
     new_config = StratifiedTargetIntervalConfig(
@@ -406,7 +406,7 @@ def test_target_interval_configuration_setter(
     )
     comparison.target_interval_configuration = new_config
     assert comparison.target_interval_configuration is new_config
-    assert new_config.stratifications == {"age": "specific"}
+    assert comparison.target_interval_configuration.stratifications == {"age": "specific"}
 
     # Test setting back to None
     comparison.target_interval_configuration = None
@@ -508,21 +508,24 @@ def test_verify_applies_stratified_target_interval(
     # so the interval is not clipped
     comparison.verify(step_size=None)
 
+    # A group the config matches gets an interval target, (t * 0.9, t * 1.1), so its
+    # bounds differ; a group it does not match keeps the exact target it started with,
+    # so its bounds are equal. Count both to be sure each case actually occurred.
+    with_interval = without_interval = 0
     stratified_results = comparison.proportion_test_results["stratified"]
     assert isinstance(stratified_results, dict)
-    widened = exact = 0
     for results in stratified_results.values():
         for result in results.values():
             if applies(result.index_info or {}):
                 assert result.target_lower_bound == pytest.approx(
                     result.target_upper_bound * 0.9 / 1.1
                 )
-                widened += 1
+                with_interval += 1
             else:
                 assert result.target_lower_bound == result.target_upper_bound
-                exact += 1
-    # A filter matching every group or none would satisfy one arm vacuously
-    assert widened and exact
+                without_interval += 1
+    # A filter matching every group or none would satisfy one branch vacuously
+    assert with_interval and without_interval
 
     # The population-level test is described to the filter with no index values
     overall_result = comparison.proportion_test_results["overall"]

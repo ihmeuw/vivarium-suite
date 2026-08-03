@@ -31,8 +31,6 @@ dependencies = [
     "vivarium-dependencies[numpy,pandas,loguru,pyyaml]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-config-tree",
-    # 0.3.0 is where TargetIntervalConfig grew the `applies_to` hook that
-    # StratifiedTargetIntervalConfig overrides.
     "vivarium-fuzzy-checker>=0.3.0",
 ]
 

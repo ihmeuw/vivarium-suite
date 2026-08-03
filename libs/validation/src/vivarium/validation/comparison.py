@@ -49,12 +49,15 @@ class StratifiedTargetIntervalConfig(TargetIntervalConfig):
         index_names = set(index_info)
         for strat_name, filter_value in self.stratifications.items():
             if filter_value == "all" and strat_name in index_names:
+                # "all" means the stratification must NOT be present
                 return False
             if filter_value == "specific" and strat_name not in index_names:
+                # "specific" means the stratification must be present
                 return False
             if filter_value not in ("all", "specific") and (
                 strat_name not in index_names or index_info[strat_name] != filter_value
             ):
+                # A specific value: stratification must be present with this exact value
                 return False
         return True
 
