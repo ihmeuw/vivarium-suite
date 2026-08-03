@@ -2,7 +2,10 @@
 
 - **Breaking change.** ``TargetIntervalConfig`` no longer takes ``stratifications``;
   it now applies to every tested group and exposes an ``applies_to`` hook for
-  subclasses to restrict that
+  subclasses to restrict that. To keep the old filtering, subclass it and override
+  ``applies_to`` (see ``vivarium-validation``'s ``StratifiedTargetIntervalConfig``);
+  dropping the ``stratifications`` argument without doing so silently widens the
+  interval to every group
 - **Breaking change.** Remove ``StratValue``, which only supported the removed
   ``stratifications`` field
 

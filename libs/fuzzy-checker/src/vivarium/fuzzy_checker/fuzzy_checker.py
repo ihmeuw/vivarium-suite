@@ -455,8 +455,8 @@ class FuzzyChecker:
             combined_data["weighted_target"].sum() / combined_data["denominator"].sum()
         )
 
-        # The population-level test has no index values, so it is described to the
-        # config with an empty index_info
+        # The population-level test has no index values, so applies_to is called
+        # with an empty index_info
         overall_target: float | tuple[float, float] = self._apply_target_interval_config(
             target_val=weighted_target,
             index_info={},

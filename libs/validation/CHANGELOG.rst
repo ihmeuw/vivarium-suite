@@ -1,9 +1,10 @@
 **0.2.0 - 07/31/26**
 
-- **Breaking change.** Replace ``TargetIntervalConfig`` with
-  ``StratifiedTargetIntervalConfig``, which subclasses the now-simplified
-  ``vivarium.fuzzy_checker.TargetIntervalConfig`` and owns the ``stratifications``
-  filtering
+- **Breaking change.** ``set_target_interval`` now builds a
+  ``StratifiedTargetIntervalConfig``, a subclass of the now-simplified
+  ``vivarium.fuzzy_checker.TargetIntervalConfig`` that owns the ``stratifications``
+  filtering. The base class is still re-exported from ``vivarium.validation.comparison``
+  and still accepted wherever a target interval config is set
 - Define ``StratValue`` here instead of re-exporting it from ``vivarium-fuzzy-checker``
 
 **0.1.2 - 07/23/26**

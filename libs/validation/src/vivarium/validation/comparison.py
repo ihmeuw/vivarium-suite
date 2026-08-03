@@ -4,10 +4,6 @@ from typing import Any, Collection, Literal
 
 import pandas as pd
 from loguru import logger
-
-# TargetIntervalConfig lives in vivarium-fuzzy-checker (it configures FuzzyChecker's
-# target intervals). Re-exported here so the historical
-# ``vivarium.validation.comparison`` import path keeps resolving.
 from vivarium.fuzzy_checker import FuzzyChecker, TargetIntervalConfig, TestResult
 
 from vivarium.validation.bundle import RatioMeasureDataBundle
@@ -41,7 +37,15 @@ class StratifiedTargetIntervalConfig(TargetIntervalConfig):
     stratifications: dict[str, StratValue]
 
     def applies_to(self, index_info: dict[str, Any]) -> bool:
-        """Return whether every stratification filter matches the described group."""
+        """Return whether every stratification filter matches the described group.
+
+        Parameters
+        ----------
+        index_info
+            A mapping of index names to their values for the group under test.
+            Empty for the population-level test, which therefore matches an
+            "all" filter and fails a "specific" one.
+        """
         index_names = set(index_info)
         for strat_name, filter_value in self.stratifications.items():
             if filter_value == "all" and strat_name in index_names:

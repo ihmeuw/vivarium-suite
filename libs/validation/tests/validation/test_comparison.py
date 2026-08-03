@@ -454,3 +454,46 @@ def test_stratified_target_interval_config_applies_to(
         relative_error=0.1, stratifications=stratifications
     )
     assert config.applies_to(index_info) is expected
+
+
+@pytest.mark.parametrize("relative_error", [-0.1, 0.0, 1.1])
+def test_stratified_config_inherits_relative_error_validation(
+    relative_error: float,
+) -> None:
+    """Test that the relative_error validation inherited from the base class still fires."""
+    with pytest.raises(ValueError, match="relative_error must be between"):
+        StratifiedTargetIntervalConfig(
+            relative_error=relative_error, stratifications={"sex": "all"}
+        )
+
+
+def test_verify_applies_stratified_target_interval(
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+) -> None:
+    """Test that verify threads a StratifiedTargetIntervalConfig through to the bounds."""
+    comparison = FuzzyComparison(test_bundle, reference_bundle)
+    comparison.target_interval_configuration = StratifiedTargetIntervalConfig(
+        relative_error=0.1, stratifications={"sex": "all"}
+    )
+    # step_size=None leaves the reference data unscaled, keeping targets inside [0, 1]
+    # so the interval is not clipped
+    comparison.verify(step_size=None)
+
+    stratified_results = comparison.proportion_test_results["stratified"]
+    assert isinstance(stratified_results, dict)
+    for strat_key, results in stratified_results.items():
+        for result in results.values():
+            if "sex" in strat_key:
+                assert result.target_lower_bound == result.target_upper_bound
+            else:
+                assert result.target_lower_bound == pytest.approx(
+                    result.target_upper_bound * 0.9 / 1.1
+                )
+
+    # The population-level test has no index values, so the "all" filter matches it
+    overall_result = comparison.proportion_test_results["overall"]
+    assert isinstance(overall_result, TestResult)
+    assert overall_result.target_lower_bound == pytest.approx(
+        overall_result.target_upper_bound * 0.9 / 1.1
+    )
