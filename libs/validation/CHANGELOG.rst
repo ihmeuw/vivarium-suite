@@ -1,14 +1,8 @@
-**0.2.0 - 07/31/26**
+**0.2.0 - 08/04/26**
 
-- **Breaking change.** ``set_target_interval`` now builds a
-  ``StratifiedTargetIntervalConfig``, a subclass of the now-simplified
-  ``vivarium.fuzzy_checker.TargetIntervalConfig`` that owns the ``stratifications``
-  filtering. The base class is still re-exported from ``vivarium.validation.comparison``
-  and still accepted wherever a target interval config is set
-- ``StratifiedTargetIntervalConfig`` is keyword-only. Dataclass inheritance would
-  otherwise make ``stratifications`` a leading positional parameter, ahead of the
-  inherited ``relative_error`` and so the reverse of the old combined class's order;
-  rejecting positional construction turns a silent mis-binding into a clear error
+- **Breaking change.** ``set_target_interval`` now builds a ``StratifiedTargetIntervalConfig``,
+  a subclass ``vivarium.fuzzy_checker.TargetIntervalConfig`` that owns the ``stratifications``
+  filtering
 - Define ``StratValue`` here instead of re-exporting it from ``vivarium-fuzzy-checker``
 
 **0.1.2 - 07/23/26**
