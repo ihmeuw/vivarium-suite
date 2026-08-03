@@ -463,7 +463,7 @@ class TestTargetIntervalVectorized:
             target_interval_config=config,
         )
 
-        assert fuzzy_checker.proportion_test_diagnostics
+        assert fuzzy_checker.proportion_test_diagnostics != []
         for result in fuzzy_checker.proportion_test_diagnostics:
             assert result.target_lower_bound == pytest.approx(0.09)
             assert result.target_upper_bound == pytest.approx(0.11)
@@ -487,6 +487,7 @@ class TestTargetIntervalVectorized:
             target_interval_config=config,
         )
 
+        assert fuzzy_checker.proportion_test_diagnostics != []
         for result in fuzzy_checker.proportion_test_diagnostics:
             strat_names = set(result.index_info.keys()) if result.index_info else set()
             if "sex" in strat_names:

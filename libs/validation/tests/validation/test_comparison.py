@@ -1,4 +1,4 @@
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Literal
 from unittest import mock
@@ -473,14 +473,36 @@ def test_stratified_config_is_keyword_only() -> None:
         StratifiedTargetIntervalConfig({"sex": "all"}, 0.1)  # type: ignore[call-arg, arg-type]
 
 
+@pytest.mark.parametrize(
+    "stratifications, applies",
+    [
+        ({"sex": "all"}, lambda info: "sex" not in info),
+        ({"sex": "specific"}, lambda info: "sex" in info),
+        ({"sex": "male"}, lambda info: info.get("sex") == "male"),
+        # "year" rather than "age" because the fixture has two years but only one
+        # age, so this exercises rejection on a differing value, not just absence
+        (
+            {"sex": "specific", "year": "2020"},
+            lambda info: "sex" in info and info.get("year") == "2020",
+        ),
+    ],
+    ids=["all", "specific", "value", "combined"],
+)
 def test_verify_applies_stratified_target_interval(
     test_bundle: RatioMeasureDataBundle,
     reference_bundle: RatioMeasureDataBundle,
+    stratifications: dict[str, StratValue],
+    applies: Callable[[dict[str, StratValue]], bool],
 ) -> None:
-    """Test that verify threads a StratifiedTargetIntervalConfig through to the bounds."""
+    """Test that verify threads a StratifiedTargetIntervalConfig through to the bounds.
+
+    ``applies`` restates each filter independently of
+    :meth:`~vivarium.validation.comparison.StratifiedTargetIntervalConfig.applies_to`,
+    so a wrong filter cannot satisfy these assertions by agreeing with itself.
+    """
     comparison = FuzzyComparison(test_bundle, reference_bundle)
     comparison.target_interval_configuration = StratifiedTargetIntervalConfig(
-        relative_error=0.1, stratifications={"sex": "all"}
+        relative_error=0.1, stratifications=stratifications
     )
     # step_size=None leaves the reference data unscaled, keeping targets inside [0, 1]
     # so the interval is not clipped
@@ -488,18 +510,26 @@ def test_verify_applies_stratified_target_interval(
 
     stratified_results = comparison.proportion_test_results["stratified"]
     assert isinstance(stratified_results, dict)
-    for strat_key, results in stratified_results.items():
+    widened = exact = 0
+    for results in stratified_results.values():
         for result in results.values():
-            if "sex" in strat_key:
-                assert result.target_lower_bound == result.target_upper_bound
-            else:
+            if applies(result.index_info or {}):
                 assert result.target_lower_bound == pytest.approx(
                     result.target_upper_bound * 0.9 / 1.1
                 )
+                widened += 1
+            else:
+                assert result.target_lower_bound == result.target_upper_bound
+                exact += 1
+    # A filter matching every group or none would satisfy one arm vacuously
+    assert widened and exact
 
-    # The population-level test has no index values, so the "all" filter matches it
+    # The population-level test is described to the filter with no index values
     overall_result = comparison.proportion_test_results["overall"]
     assert isinstance(overall_result, TestResult)
-    assert overall_result.target_lower_bound == pytest.approx(
-        overall_result.target_upper_bound * 0.9 / 1.1
-    )
+    if applies({}):
+        assert overall_result.target_lower_bound == pytest.approx(
+            overall_result.target_upper_bound * 0.9 / 1.1
+        )
+    else:
+        assert overall_result.target_lower_bound == overall_result.target_upper_bound
