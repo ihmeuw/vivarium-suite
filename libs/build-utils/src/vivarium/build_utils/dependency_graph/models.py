@@ -24,6 +24,10 @@ class DependencyCycleError(Exception):
     """The in-tree dependency graph contains a cycle and cannot be ordered."""
 
 
+class MissingPythonVersionsError(Exception):
+    """A library has no ``python_versions.json``, so its CI matrix cannot be built."""
+
+
 @dataclass(frozen=True)
 class Lib:
     """A single independently-released library under ``libs/``.

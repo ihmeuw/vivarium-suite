@@ -29,21 +29,28 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install dependency-graph requirements
+        # The dependency_graph CLI is run from in-tree source (see below), so its
+        # own runtime dependency has to be installed by hand.
+        run: pip install packaging
+
       - name: Validate dependency graph is acyclic
         # Full-graph pre-merge guard: fails the PR if libs/*/pyproject runtime deps
         # form a cycle (the release workflow orders the graph too, but only post-merge).
-        run: |
-          pip install packaging
-          PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph check-acyclic
+        run: PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph check-acyclic
 
       - name: Detect changed packages
         id: detect
+        # The classification itself (which libs a diff touches, and the matrix to
+        # build) lives in the dependency_graph CLI so it can be unit tested; run
+        # from in-tree source so a PR editing those rules is tested under them.
         run: |
+          CHANGED_FILES="${RUNNER_TEMP}/changed-files.txt"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_REF="${{ github.event.pull_request.base.ref }}"
             HEAD_REF="${{ github.event.pull_request.head.sha }}"
             git fetch origin "$BASE_REF"
-            CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_REF}")
+            git diff --name-only "origin/${BASE_REF}...${HEAD_REF}" > "$CHANGED_FILES"
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
             BASE="${{ github.event.before }}"
             HEAD="${{ github.event.after }}"
@@ -51,64 +58,24 @@ jobs:
             if [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
               BASE=$(git rev-list --max-parents=0 HEAD)
             fi
-            CHANGED=$(git diff --name-only "$BASE" "$HEAD")
+            git diff --name-only "$BASE" "$HEAD" > "$CHANGED_FILES"
           else
             git fetch origin main
-            CHANGED=$(git diff --name-only "origin/main...HEAD")
+            git diff --name-only "origin/main...HEAD" > "$CHANGED_FILES"
           fi
           echo "Changed files:"
-          echo "$CHANGED"
+          cat "$CHANGED_FILES"
 
-          ALL_LIBS=$(find libs -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | sort)
+          CLASSIFIED=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+            classify-changes --changed-files-file "$CHANGED_FILES")
+          echo "Classification:"
+          jq . <<< "$CLASSIFIED"
 
-          if [ -z "$ALL_LIBS" ]; then
-            echo "Warning: no package directories found under libs/"
-          fi
-
-          # Determine which packages have source changes in this PR
-          SOURCE_CHANGED=()
-          for lib in $ALL_LIBS; do
-            if echo "$CHANGED" | grep -q "^libs/${lib}/"; then
-              SOURCE_CHANGED+=("$lib")
-            fi
-          done
-          # Output the list of changed libraries to the GitHub Actions output for use in subsequent jobs
-          echo "changed-libs=${SOURCE_CHANGED[*]}" >> $GITHUB_OUTPUT
-          # Human-readable output
-          echo "Source-changed libraries: ${SOURCE_CHANGED[*]:-(none)}"
-
-          # Build set: the source-changed libs, or every lib when a shared
-          # root/workflow file changes (those affect all packages).
-          if echo "$CHANGED" | grep -qE "^(pyproject\.toml|Makefile)$|^\.github/workflows/"; then
-            echo "Root-level changes detected - testing all packages"
-            BUILD_LIBS=($ALL_LIBS)
-          else
-            BUILD_LIBS=("${SOURCE_CHANGED[@]}")
-          fi
-
-          if [ ${#BUILD_LIBS[@]} -eq 0 ]; then
-            echo "No package changes detected"
-            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "has-changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "Building matrix for: ${BUILD_LIBS[*]}"
-            MATRIX_INCLUDE="["
-            FIRST=true
-            for lib in "${BUILD_LIBS[@]}"; do
-              if [ ! -f "libs/${lib}/python_versions.json" ]; then
-                echo "::error::libs/${lib}/python_versions.json not found"
-                exit 1
-              fi
-              VERSIONS=$(python3 -c "import json; [print(v) for v in json.load(open('libs/${lib}/python_versions.json'))]")
-              for py in $VERSIONS; do
-                [ "$FIRST" = true ] && FIRST=false || MATRIX_INCLUDE+=","
-                MATRIX_INCLUDE+="{\"library\":\"${lib}\",\"python-version\":\"${py}\"}"
-              done
-            done
-            MATRIX_INCLUDE+="]"
-            echo "matrix={\"include\":${MATRIX_INCLUDE}}" >> $GITHUB_OUTPUT
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-          fi
+          # changed-libs are the libs to resolve editably from in-tree source; the
+          # matrix is what to build, which widens to every lib on a shared-path change.
+          echo "changed-libs=$(jq -r '.["source-changed"] | join(" ")' <<< "$CLASSIFIED")" >> $GITHUB_OUTPUT
+          echo "matrix=$(jq -c '.matrix' <<< "$CLASSIFIED")" >> $GITHUB_OUTPUT
+          echo "has-changes=$(jq -r '.["has-changes"]' <<< "$CLASSIFIED")" >> $GITHUB_OUTPUT
 
   build-and-test:
     name: ${{ matrix.library }} (Python ${{ matrix.python-version }})

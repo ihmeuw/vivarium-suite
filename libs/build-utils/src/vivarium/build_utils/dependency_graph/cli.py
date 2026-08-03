@@ -1,7 +1,8 @@
 """Command-line interface for ``vivarium.build_utils.dependency_graph``.
 
-Exposes the install-editable, build-release-matrix, verify-editable, and check-acyclic
-subcommands consumed by ``make install`` and the CI/release workflows.
+Exposes the install-editable, classify-changes, build-release-matrix,
+verify-editable, and check-acyclic subcommands consumed by ``make install`` and
+the CI/release workflows.
 """
 
 from __future__ import annotations
@@ -13,10 +14,11 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from .changes import build_python_matrix, classify_changed_libs
 from .editable import build_install_plan, get_editable_upstreams, run_install
 from .graph import sort_topologically
 from .loading import load_libs
-from .models import DependencyConflictError, DependencyCycleError
+from .models import DependencyConflictError, DependencyCycleError, MissingPythonVersionsError
 from .release import get_release_matrix
 
 
@@ -29,6 +31,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         --ihme-pypi <url> --uv-flags <flags> [--libs-dir <path>]``
         Determine the editable upstreams of ``target`` and run the combined editable
         install. Used by ``make install`` when ``CHANGED_LIBS`` is set.
+
+    ``classify-changes --changed-files-file <file> [--libs-dir <path>]``
+        Read repository-relative changed paths (one per line) from
+        ``--changed-files-file`` and print the JSON classification of which
+        libraries the diff touched, plus the GitHub Actions matrix to build. Used by
+        the CI and Downstream Check workflows' detect jobs.
 
     ``build-release-matrix --versions <file> [--libs-dir <path>]``
         Read ``"<name> <version>"`` lines from the ``--versions`` file and print
@@ -66,6 +74,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     install_parser.add_argument("--uv-flags", default="")
     install_parser.add_argument("--libs-dir", default=None)
 
+    # classify-changes
+    classify_parser = subparsers.add_parser("classify-changes")
+    classify_parser.add_argument("--changed-files-file", required=True)
+    classify_parser.add_argument("--libs-dir", default=None)
+
     # build-release-matrix
     matrix_parser = subparsers.add_parser("build-release-matrix")
     matrix_parser.add_argument("--versions", required=True)
@@ -89,6 +102,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_verify_editable(args)
     if args.command == "check-acyclic":
         return _run_check_acyclic(args)
+    if args.command == "classify-changes":
+        return _run_classify_changes(args)
     return _run_build_release_matrix(args)
 
 
@@ -187,6 +202,34 @@ def _run_build_release_matrix(args: argparse.Namespace) -> int:
         print(f"unknown library: {error.args[0]}", file=sys.stderr)
         return 1
     print(json.dumps(matrix))
+    return 0
+
+
+def _run_classify_changes(args: argparse.Namespace) -> int:
+    """Handle the ``classify-changes`` subcommand."""
+    libs_dir = _discover_libs_dir(args.libs_dir)
+    changed_files = Path(args.changed_files_file).read_text().splitlines()
+    libs = load_libs(libs_dir)
+    changed = classify_changed_libs(changed_files, libs)
+    try:
+        matrix = build_python_matrix(changed.build, libs)
+    except MissingPythonVersionsError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 1
+
+    # Keys are hyphenated to match the GitHub Actions step outputs they populate.
+    print(
+        json.dumps(
+            {
+                "source-changed": changed.source_changed,
+                "releasing": changed.releasing,
+                "build": changed.build,
+                "shared-changed": changed.shared_changed,
+                "matrix": matrix,
+                "has-changes": bool(matrix["include"]),
+            }
+        )
+    )
     return 0
 
 
