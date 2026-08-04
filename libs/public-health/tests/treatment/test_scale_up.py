@@ -78,9 +78,6 @@ def test_linear_scale_up_endpoints_build_distinct_lookup_tables(
     endpoints_are_scalar: bool,
 ) -> None:
     """Build both endpoints, for each mix of numeric and data endpoints.
-
-    Both endpoint tables were once named ``"endpoint"``, so they registered the
-    same framework resource and setup raised a ``ResourceError`` (MIC-7305).
     """
     scale_up = LinearScaleUp("treatment.sqlns")
     base_config.update(
