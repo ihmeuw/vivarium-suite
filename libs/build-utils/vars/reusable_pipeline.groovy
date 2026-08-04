@@ -8,8 +8,10 @@ def call(Map config = [:]){
   stagger_scheduled_builds: Whether to stagger the scheduled builds.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e', 'all']
   requires_slurm: Whether the child tasks require the slurm scheduler.
-  deployable: Whether the package can be deployed by Jenkins.
-  skip_doc_build: Only skips the doc build.
+  deployable: Whether the package can be deployed by Jenkins. Gates both the
+            package deploy (release tag + Artifactory upload) and the doc deploy.
+  skip_doc_build: Skips the doc build on a full build, and the doc deploy on every path.
+            NOTE: the docs-only fast path builds and doctests docs regardless.
   run_mypy: DEPRECATED and ignored. mypy now runs automatically whenever a
             py.typed marker exists under the package's src/ (matching `make check`
             and GH Actions).
@@ -18,6 +20,19 @@ def call(Map config = [:]){
   github_credentials_id: Jenkins credential ID to use during the deploy stage when pushing
             the release tag (only consulted when `deployable: true`). Empty/omitted falls
             back to the credential configured on the Multibranch Pipeline's branch source.
+
+  Documentation publishing
+  ------------------------
+  Docs reach the shared docs server (DOCS_ROOT_PATH, see build_stages.deployDocs)
+  only for `deployable: true` repos, on main-branch builds - both on a release
+  build and on a docs-only change, so a doc fix goes live without waiting for the
+  next release. The docs-only path keys off isChangeOnlyMatching('^docs/'), which
+  anchors at the repo root, so in practice it fires only for standalone repos: a
+  monorepo lib's docs live at libs/<lib>/docs/ and never match that pattern.
+
+  Repos that publish to Read the Docs instead deliberately do not pass
+  `deployable`, so this path never runs for them. That covers every monorepo lib
+  that ships docs, each of which owns a libs/<lib>/.readthedocs.yaml.
   */
 
   // Handle config arguments
@@ -264,6 +279,22 @@ def call(Map config = [:]){
                         buildStages.installPackage("docs", useCache)
                         buildStages.buildDocs()
                         buildStages.testDocs()
+
+                        // Docs also publish from the release block below; this fast path returns
+                        // straight to cleanup, so without publishing here a docs-only merge to
+                        // main would build the docs and then throw them
+                        // away. Deliberately not gated on a changelog bump or on
+                        // has_deployable_change(): a doc fix carries no version bump. No
+                        // !IS_CRON check is needed either, since skipForDocOnly implies
+                        // canSkipFullBuild, which already requires !isCron. See the deploy-docs
+                        // target in base.mk for what publishing does to the docs tree.
+                        if (is_deployable &&
+                          !skip_doc_build &&
+                          !params.SKIP_DEPLOY &&
+                          (env.BRANCH == "main") &&
+                          (PYTHON_VERSION == PYTHON_DEPLOY_VERSION)) {
+                          buildStages.deployDocs()
+                        }
                       } else {
                         buildStages.runDebugInfo(skipEval)
                         buildStages.buildEnvironment()
