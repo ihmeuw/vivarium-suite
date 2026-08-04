@@ -366,8 +366,11 @@ demographics (your exact values will vary with the random draws):
     ).all()
     assert pop["entrance_time"].nunique() == 1
     assert set(pop["sex"]) == {"Female", "Male"}
-    # 50/50 sex assignment, within 5 standard deviations of binomial noise.
-    assert abs(pop["sex"].eq("Female").mean() - 0.5) < 5 * (0.25 / len(pop)) ** 0.5
+    from vivarium.fuzzy_checker import FuzzyChecker
+
+    FuzzyChecker().assert_proportion(
+        int(pop["sex"].eq("Female").sum()), len(pop), 0.5, name="tutorial_sex_split"
+    )
     # Propensities are uniform on [0, 1].
     propensity = pop["child_wasting_propensity"]
     assert propensity.between(0, 1).all()
