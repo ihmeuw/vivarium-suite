@@ -1,6 +1,6 @@
 **6.4.8 - 08/04/26**
 
-- Bugfix: name ``LinearScaleUp``'s endpoint lookup tables after their endpoint (``start``/``end``) so both endpoints no longer register the same resource and raise a ``ResourceError`` at setup
+- Bugfix: name ``LinearScaleUp``'s endpoint lookup tables after their endpoint (``start``/``end``)
 
 **6.4.7 - 07/27/26**
 
