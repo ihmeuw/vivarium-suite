@@ -1,3 +1,7 @@
+**6.4.8 - 08/04/26**
+
+- Bugfix: name ``LinearScaleUp``'s endpoint lookup tables after their endpoint (``start``/``end``) so both endpoints no longer register the same resource and raise a ``ResourceError`` at setup
+
 **6.4.7 - 07/27/26**
 
 - Add ``NonLogLinearRiskEffect`` subclassing hooks: ``MINIMUM_RELATIVE_RISK``, ``get_lowest_bin_left_rr()``, ``define_rr_intervals()``, ``get_tmrel()``, and ``exposure_column_name``
