@@ -1,8 +1,8 @@
 """Command-line interface for ``vivarium.build_utils.dependency_graph``.
 
 Exposes the install-editable, classify-changes, build-release-matrix,
-verify-editable, and check-acyclic subcommands consumed by ``make install`` and
-the CI/release workflows.
+build-downstream-matrix, verify-editable, and check-acyclic subcommands consumed by
+``make install`` and the CI/release workflows.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .changes import build_python_matrix, classify_changed_libs
 from .editable import build_install_plan, get_editable_upstreams, run_install
-from .graph import sort_topologically
+from .graph import get_transitive_downstreams, sort_topologically
 from .loading import load_libs
 from .models import DependencyConflictError, DependencyCycleError, MissingPythonVersionsError
 from .release import get_release_matrix
@@ -42,6 +42,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         Read ``"<name> <version>"`` lines from the ``--versions`` file and print
         the dependency-ordered release matrix JSON to stdout. Used by the
         release workflow's detect job.
+
+    ``build-downstream-matrix --released "<names>" [--libs-dir <path>]``
+        Print the GitHub Actions matrix JSON of the libraries downstream of the
+        released ``<names>`` (their transitive dependents, excluding the released
+        set), one entry per dependent per Python version in its
+        ``python_versions.json``. Used by the Downstream Check workflow to test
+        dependents against the releasing libs' pending versions.
 
     ``verify-editable <target> --changed "<names>" [--libs-dir <path>]``
         Recompute the editable upstreams selected of ``target`` and assert each
@@ -84,6 +91,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     matrix_parser.add_argument("--versions", required=True)
     matrix_parser.add_argument("--libs-dir", default=None)
 
+    # build-downstream-matrix
+    downstream_parser = subparsers.add_parser("build-downstream-matrix")
+    downstream_parser.add_argument("--released", default="")
+    downstream_parser.add_argument("--libs-dir", default=None)
+
     # verify-editable
     verify_parser = subparsers.add_parser("verify-editable")
     verify_parser.add_argument("target")
@@ -102,6 +114,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_verify_editable(args)
     if args.command == "check-acyclic":
         return _run_check_acyclic(args)
+    if args.command == "build-downstream-matrix":
+        return _run_build_downstream_matrix(args)
     if args.command == "classify-changes":
         return _run_classify_changes(args)
     return _run_build_release_matrix(args)
@@ -200,6 +214,28 @@ def _run_build_release_matrix(args: argparse.Namespace) -> int:
         return 1
     except KeyError as error:
         print(f"unknown library: {error.args[0]}", file=sys.stderr)
+        return 1
+    print(json.dumps(matrix))
+    return 0
+
+
+def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
+    """Handle the ``build-downstream-matrix`` subcommand."""
+    libs_dir = _discover_libs_dir(args.libs_dir)
+    # Default (ci_github) extras: a release can break a dependent through a
+    # test-dep edge too, and downstream reachability tolerates the cycles those add.
+    libs = load_libs(libs_dir)
+    released = args.released.split()
+    try:
+        downstream = get_transitive_downstreams(released, libs)
+        # Every dependent runs on its full python_versions.json matrix: the check runs
+        # once at merge, so there's no cost reason to sample a single canonical version.
+        matrix = build_python_matrix(downstream, libs)
+    except KeyError as error:
+        print(f"unknown library: {error.args[0]}", file=sys.stderr)
+        return 1
+    except MissingPythonVersionsError as error:
+        print(f"::error::{error}", file=sys.stderr)
         return 1
     print(json.dumps(matrix))
     return 0

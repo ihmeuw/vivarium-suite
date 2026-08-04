@@ -22,10 +22,16 @@ release:
    wait for on PyPI before installing; independent packages release in parallel
    while dependents serialize along real dependency edges.
 
-3. **Change detection** (consumed by the CI workflow via the
+3. **Downstream release check** (consumed by the Downstream Check workflow via the
+   ``build-downstream-matrix`` CLI subcommand). When a PR bumps a library's version,
+   :func:`get_transitive_downstreams` finds that library's in-tree dependents and
+   ``build-downstream-matrix`` emits a GitHub Actions matrix so each dependent is
+   tested against the pending version before the release can merge.
+
+4. **Change detection** (consumed by the CI and Downstream Check workflows via the
    ``classify-changes`` CLI subcommand). Given the changed paths in a diff,
    :func:`classify_changed_libs` reports which libraries have source changes (the
-   set to resolve editably in flow 1) and which are bumping a version, and
+   set to resolve editably in flows 1 and 3) and which are bumping a version, and
    :func:`build_python_matrix` fans the libraries to check out over their supported
    Python versions.
 
@@ -48,7 +54,7 @@ from .changes import (
 )
 from .cli import _discover_libs_dir, main
 from .editable import build_install_plan, get_editable_upstreams, run_install
-from .graph import get_transitive_upstreams, sort_topologically
+from .graph import get_transitive_downstreams, get_transitive_upstreams, sort_topologically
 from .loading import load_libs
 from .models import (
     DEFAULT_EXTRAS,

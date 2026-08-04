@@ -22,6 +22,7 @@ from vivarium.build_utils.dependency_graph import (
     classify_changed_libs,
     get_editable_upstreams,
     get_release_matrix,
+    get_transitive_downstreams,
     get_transitive_upstreams,
     load_libs,
     sort_topologically,
@@ -322,6 +323,103 @@ class TestGetTransitiveUpstreams:
         )
         libs = load_libs(libs_dir)
         assert "a" not in get_transitive_upstreams("a", libs)
+
+
+class TestGetTransitiveDownstreams:
+    """Tests for ``get_transitive_downstreams``."""
+
+    def test_includes_direct_and_transitive_dependents(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """Dependents are followed transitively (releasing c reaches b and a in a -> b -> c)."""
+        libs_dir = make_monorepo(
+            {
+                "a": {"deps": ["vivarium-b"]},
+                "b": {"deps": ["vivarium-c"]},
+                "c": {},
+            }
+        )
+        libs = load_libs(libs_dir)
+        assert get_transitive_downstreams(["c"], libs) == {"a", "b"}
+
+    def test_excludes_the_released_set(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """Libraries in the released set are never in their own downstream set."""
+        libs_dir = make_monorepo(
+            {
+                "a": {"deps": ["vivarium-b"]},
+                "b": {"deps": ["vivarium-c"]},
+                "c": {},
+            }
+        )
+        libs = load_libs(libs_dir)
+        # Releasing b and c together: a is downstream, but b and c are excluded.
+        assert get_transitive_downstreams(["b", "c"], libs) == {"a"}
+
+    def test_unions_dependents_across_multiple_targets(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """A shared dependent of several released libs appears once in the union."""
+        libs_dir = make_monorepo(
+            {
+                "shared": {"deps": ["vivarium-x", "vivarium-y"]},
+                "x": {},
+                "y": {},
+            }
+        )
+        libs = load_libs(libs_dir)
+        assert get_transitive_downstreams(["x", "y"], libs) == {"shared"}
+
+    def test_leaf_release_has_no_downstreams(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """A library nothing depends on yields an empty downstream set."""
+        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+        libs = load_libs(libs_dir)
+        assert get_transitive_downstreams(["a"], libs) == set()
+
+    def test_includes_test_dep_dependents_under_ci_github(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """A dependent that uses the released lib only as a test dep is still downstream."""
+        libs_dir = make_monorepo(
+            {
+                "a": {"extras": {"ci_github": ["vivarium-testing-utils"]}},
+                "testing-utils": {"dist_name": "vivarium-testing-utils"},
+            }
+        )
+        libs = load_libs(libs_dir, extras=("ci_github",))
+        assert get_transitive_downstreams(["testing-utils"], libs) == {"a"}
+
+    def test_tolerates_cycles(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """Reachability terminates on a cyclic graph (unlike topological ordering)."""
+        libs_dir = make_monorepo(
+            {
+                "a": {"deps": ["vivarium-b"]},
+                "b": {"deps": ["vivarium-a"]},
+            }
+        )
+        libs = load_libs(libs_dir)
+        assert get_transitive_downstreams(["a"], libs) == {"b"}
+
+    def test_raises_keyerror_for_unknown_target(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """An unknown released library name raises KeyError."""
+        libs_dir = make_monorepo({"a": {}})
+        libs = load_libs(libs_dir)
+        with pytest.raises(KeyError):
+            get_transitive_downstreams(["ghost"], libs)
 
 
 class TestGetEditableUpstreams:
@@ -1193,6 +1291,106 @@ class TestCLIBuildReleaseMatrix:
         pairs.write_text("ghost 1.0.0\n")  # non-monorepo library!
         rc = main_with(
             ["build-release-matrix", "--versions", str(pairs), "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 1
+        assert "unknown library" in capsys.readouterr().err
+
+
+class TestCLIBuildDownstreamMatrix:
+    """Tests for the ``build-downstream-matrix`` CLI subcommand."""
+
+    def test_emits_downstream_and_excludes_released(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The downstream lib is emitted; the released lib is excluded."""
+        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {"include": [{"library": "a", "python-version": "3.11"}]}
+
+    def test_empty_for_leaf_release(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Releasing a library nothing depends on yields an empty include."""
+        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "a", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 0
+        assert json.loads(capsys.readouterr().out) == {"include": []}
+
+    def test_shared_dependent_appears_once(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Releasing two libs a shared dependent uses lists that dependent once."""
+        libs_dir = make_monorepo(
+            {
+                "shared": {"deps": ["vivarium-x", "vivarium-y"]},
+                "x": {},
+                "y": {},
+            }
+        )
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "x y", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {"include": [{"library": "shared", "python-version": "3.11"}]}
+
+    def test_emits_one_entry_per_python_version(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Each downstream is emitted once per version in its python_versions.json."""
+        libs_dir = make_monorepo(
+            {"a": {"deps": ["vivarium-b"], "python_versions": ["3.11", "3.12"]}, "b": {}}
+        )
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {
+            "include": [
+                {"library": "a", "python-version": "3.11"},
+                {"library": "a", "python-version": "3.12"},
+            ]
+        }
+
+    def test_errors_on_missing_python_versions(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A downstream lib with no python_versions.json fails the gate instead of being dropped."""
+        libs_dir = make_monorepo(
+            {"a": {"deps": ["vivarium-b"], "omit_python_versions": True}, "b": {}}
+        )
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 1
+        assert "python_versions.json not found" in capsys.readouterr().err
+
+    def test_clean_exit_on_unknown_library(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """An unknown released library name exits non-zero with a clear message."""
+        libs_dir = make_monorepo({"build-utils": {}, "a": {}})
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "ghost", "--libs-dir", str(libs_dir)]
         )
         assert rc == 1
         assert "unknown library" in capsys.readouterr().err
