@@ -850,8 +850,13 @@ class TestClassifyChangedLibs:
 
     @pytest.mark.parametrize(
         "path",
-        ["pyproject.toml", "Makefile", ".github/workflows/ci.yml"],
-        ids=["root-pyproject", "root-makefile", "workflow"],
+        [
+            "pyproject.toml",
+            "Makefile",
+            ".github/workflows/ci.yml",
+            ".github/actions/lib-ci/action.yml",
+        ],
+        ids=["root-pyproject", "root-makefile", "workflow", "shared-action"],
     )
     def test_shared_path_builds_every_lib(
         self, make_monorepo: MonorepoFactory, path: str

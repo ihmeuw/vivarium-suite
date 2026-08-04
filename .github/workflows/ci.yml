@@ -87,62 +87,19 @@ jobs:
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
     steps:
       - name: Checkout code
+        # Must precede the local action: `uses: ./...` resolves from the workspace.
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Check ${{ matrix.library }}
+        uses: ./.github/actions/lib-ci
         with:
+          library: ${{ matrix.library }}
           python-version: ${{ matrix.python-version }}
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install vivarium_build_utils
-        # Install editably from in-tree checkout (not PyPI) to capture changes in this PR
-        run: uv pip install --system -e libs/build-utils
-
-      - name: Install ${{ matrix.library }}
-        # UV_FLAGS=--system installs into the runner's system Python (no venv).
-        # IHME_PYPI= disables the artifactory extra-index, since IHME's
-        # artifactory is firewalled and unreachable from GH-hosted runners.
-        # Libs that depend on artifactory-only packages won't fully install in
-        # this environment by design - those are tested via Jenkins.
-        # CHANGED_LIBS lists the libraries whose source changed in this PR.
-        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github CHANGED_LIBS="${{ needs.detect-changes.outputs.changed-libs }}" UV_FLAGS=--system IHME_PYPI=
-
-      - name: Verify changed libraries resolved from source
-        # Positive check that each library we intended to resolve in-tree (changed
-        # + reachable + version-compatible) is actually an editable install.
-        run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ matrix.library }} --changed "${{ needs.detect-changes.outputs.changed-libs }}"
-
-      - name: Lint ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make lint
-
-      - name: Mypy ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make mypy-if-typed
-
-      - name: Test ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make test-all
-
-      - name: Build docs for ${{ matrix.library }}
-        run: |
-          # 3.11 is the minimum version all packages support; use it as the canonical docs build
-          if [ "${{ matrix.python-version }}" = "3.11" ]; then
-            cd libs/${{ matrix.library }} && make build-docs
-          else
-            echo "Skipping docs build (only runs on 3.11)"
-          fi
-
-      - name: Test docs for ${{ matrix.library }}
-        run: |
-          # Run doctests on the same canonical 3.11 build as the docs build above
-          if [ "${{ matrix.python-version }}" = "3.11" ]; then
-            cd libs/${{ matrix.library }} && make test-docs
-          else
-            echo "Skipping doctests (only runs on 3.11)"
-          fi
+          # The libraries whose source changed in this PR, so this build resolves them
+          # from in-tree source and tests the PR's code rather than what's on PyPI.
+          changed-libs: ${{ needs.detect-changes.outputs.changed-libs }}
 
   ci-status:
     name: CI Status

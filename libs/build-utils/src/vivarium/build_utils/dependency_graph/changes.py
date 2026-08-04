@@ -13,7 +13,11 @@ from .models import Lib, MissingPythonVersionsError
 
 # Paths outside any ``libs/<lib>/`` that affect every package. A change to one of
 # these builds the whole matrix rather than nothing, since no single library owns it.
-SHARED_PATH_PATTERN = re.compile(r"^(pyproject\.toml|Makefile)$|^\.github/workflows/")
+# ``.github/actions/`` counts for the same reason ``.github/workflows/`` does: it holds
+# the shared CI recipe every per-library job runs.
+SHARED_PATH_PATTERN = re.compile(
+    r"^(pyproject\.toml|Makefile)$|^\.github/(workflows|actions)/"
+)
 
 MatrixEntry = TypedDict("MatrixEntry", {"library": str, "python-version": str})
 

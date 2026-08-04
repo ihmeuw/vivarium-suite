@@ -1,0 +1,82 @@
+# Shared per-library CI recipe.
+#
+# Single source of truth for "install one library, with the in-tree siblings it should
+# not resolve from PyPI installed editably, then run its checks". Used by ci.yml's
+# build matrix and downstream-check.yml's release gate so both run the same steps.
+#
+# A composite action rather than a reusable workflow: its steps are inlined into the
+# calling job, so the matrix fan-out, job names, and check names all stay with the
+# callers. `checkout` is deliberately absent - a local `uses: ./...` only resolves once
+# the workspace exists, so each caller must check out before calling this.
+name: Lib CI
+description: Install one library against its editable in-tree siblings and run its checks.
+
+inputs:
+  library:
+    description: 'Library directory under libs/ to check.'
+    required: true
+  python-version:
+    description: 'Python version to check on.'
+    required: true
+  changed-libs:
+    description: >-
+      Space-separated in-tree libraries to resolve editably from source at their
+      pending versions instead of from PyPI. Callers decide what qualifies: the
+      libraries a PR changed, or the libraries a PR is releasing.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v4
+
+    - name: Install vivarium_build_utils
+      # Install editably from in-tree checkout (not PyPI) to capture changes in this PR
+      run: uv pip install --system -e libs/build-utils
+      shell: bash
+
+    - name: Install ${{ inputs.library }}
+      # UV_FLAGS=--system installs into the runner's system Python (no venv).
+      # IHME_PYPI= disables the artifactory extra-index, since IHME's
+      # artifactory is firewalled and unreachable from GH-hosted runners.
+      # Libs that depend on artifactory-only packages won't fully install in
+      # this environment by design - those are tested via Jenkins.
+      run: cd libs/${{ inputs.library }} && make install ENV_REQS=ci_github CHANGED_LIBS="${{ inputs.changed-libs }}" UV_FLAGS=--system IHME_PYPI=
+      shell: bash
+
+    - name: Verify changed libraries resolved from source
+      # Positive check that each library we intended to resolve in-tree (changed
+      # + reachable + version-compatible) is actually an editable install.
+      run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ inputs.library }} --changed "${{ inputs.changed-libs }}"
+      shell: bash
+
+    - name: Lint ${{ inputs.library }}
+      run: cd libs/${{ inputs.library }} && make lint
+      shell: bash
+
+    - name: Mypy ${{ inputs.library }}
+      run: cd libs/${{ inputs.library }} && make mypy-if-typed
+      shell: bash
+
+    - name: Test ${{ inputs.library }}
+      run: cd libs/${{ inputs.library }} && make test-all
+      shell: bash
+
+    - name: Build docs for ${{ inputs.library }}
+      # 3.11 is the minimum version all packages support; use it as the canonical docs build
+      if: ${{ inputs.python-version == '3.11' }}
+      run: cd libs/${{ inputs.library }} && make build-docs
+      shell: bash
+
+    - name: Test docs for ${{ inputs.library }}
+      # Run doctests on the same canonical 3.11 build as the docs build above
+      if: ${{ inputs.python-version == '3.11' }}
+      run: cd libs/${{ inputs.library }} && make test-docs
+      shell: bash
