@@ -1,3 +1,10 @@
+**4.5.0 - 08/04/26**
+
+- Publish docs on docs-only merges to main, not only on release builds
+- Copy dotfiles such as Sphinx's ``.buildinfo`` when deploying docs
+- Add tests for the ``deploy-docs`` target
+- Document which repos publish docs to Read the Docs and which to the shared docs server
+
 **4.4.2 - 07/23/26**
 
 - Streamline package __init__.py docstring
