@@ -71,7 +71,6 @@ standalone repo would, with one new argument::
 
   reusable_pipeline(
       test_types: ['unit', 'integration'],
-      deployable: true,
       env_reqs: 'ci_jenkins',  // pyproject.toml extra to install
   )
 
@@ -107,6 +106,36 @@ Fetching from internal Artifactory
 (``make install IHME_PYPI=``) in environments that can't reach IHME's network
 (e.g. GitHub Actions runners). ``make deploy-package-artifactory`` requires a
 non-empty ``IHME_PYPI`` and is Jenkins/internal-only.
+
+Documentation publishing
+------------------------
+
+Two different mechanisms publish docs, and a repo that ships docs uses exactly one
+of them.
+
+- **Read the Docs** -- the mechanism for every monorepo lib that ships docs. Each
+  such lib owns a ``libs/<lib>/.readthedocs.yaml`` and its own RTD project, and
+  GitHub Actions builds and doctests the docs on any PR that touches the lib.
+  These libs deliberately do **not** pass ``deployable``, so the Jenkins
+  doc-deploy path below never runs for them.
+- **The shared docs server** -- ``make deploy-docs`` copies the built tree to
+  ``<DOCS_ROOT_PATH>/<PACKAGE_NAME>/<PACKAGE_VERSION>`` and repoints a
+  ``current`` symlink at it. This runs only for ``deployable: true`` repos, on
+  main-branch builds -- in practice, the standalone repos outside this monorepo.
+
+Docs publish both on a release build and on a docs-only change, so a doc fix goes
+live without waiting for the next release. Note the docs-only path keys off a
+repo-root ``^docs/`` match, so it fires only for standalone repos -- a monorepo
+lib's docs live at ``libs/<lib>/docs/`` and never match.
+
+A docs-only republish carries no version bump, so it copies over the
+already-published version directory and ``current`` ends up back on the same
+version. The copy is additive rather than a mirror, so a page dropped from the docs
+stays published until the next version bump gets a fresh directory.
+
+``skip_doc_build: true`` suppresses this deploy on every path, but suppresses the
+doc *build* only on a full build -- the docs-only path builds and doctests
+regardless.
 
 Cross-library PRs
 -----------------
