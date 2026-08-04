@@ -252,11 +252,28 @@ deploy-package-artifactory: # Deploy the package to Artifactory
 	pip install twine
 	twine upload --repository-url ${IHME_PYPI} -u ${PYPI_ARTIFACTORY_CREDENTIALS_USR} -p ${PYPI_ARTIFACTORY_CREDENTIALS_PSW} dist/*
 
+# Non-obvious properties of this recipe:
+#   - The whole tree is copied, dotfiles included; a bare `html/*` glob silently
+#     omits Sphinx's .buildinfo.
+#   - The copy is additive, never a mirror: a page deleted from the docs stays
+#     published until that version directory is removed by hand.
+#   - `current` is rewritten every run. Re-publishing a docs-only change leaves it
+#     on the same version only because PACKAGE_VERSION tracks the CHANGELOG head,
+#     which such a change doesn't move - so re-running for an OLDER version would
+#     repoint `current` backwards.
+#   - PACKAGE_VERSION and the built tree are guarded because both are derived
+#     rather than passed, and an unguarded empty value publishes silently: an
+#     empty version collapses every path below to the package root, and an empty
+#     tree repoints `current` at nothing, taking the live docs offline.
+#   - `chmod -R` assumes the publishing account owns what it republishes, which
+#     holds while one service account per repo does the publishing.
 .PHONY: deploy-docs
 deploy-docs: # Deploy documentation to shared server
 	@[ "${DOCS_ROOT_PATH}" ] && echo "" > /dev/null || ( echo "DOCS_ROOT_PATH is not set"; exit 1 )
+	@[ "${PACKAGE_VERSION}" ] && echo "" > /dev/null || ( echo "PACKAGE_VERSION is empty; no X.Y.Z found in CHANGELOG.rst"; exit 1 )
+	@[ -n "$$(find ./docs/build/html -type f -print -quit 2>/dev/null)" ] && echo "" > /dev/null || ( echo "./docs/build/html is empty or missing; run 'make build-docs' first"; exit 1 )
 	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
-	cp -R ./docs/build/html/* ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
+	cp -R ./docs/build/html/. ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
 	chmod -R 0775 ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
 	cd ${DOCS_ROOT_PATH}/${PACKAGE_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
 
