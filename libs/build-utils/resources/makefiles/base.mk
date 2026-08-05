@@ -5,37 +5,35 @@ UTILS_DIR := $(dir $(abspath $(dir $(abspath $(dir $(lastword $(MAKEFILE_LIST)))
 # Source files to format, lint, and type check.
 LOCATIONS=src tests
 
-# Unless overridden, build conda environment using the package name.
-SAFE_NAME = $(shell python -c "from pkg_resources import safe_name; print(safe_name(\"$(PACKAGE_NAME)\"))")
+# Each repo's Makefile sets PACKAGE_NAME to $(notdir $(CURDIR)), which is a
+# *checkout directory* name and not a package identity: under Jenkins it is the
+# job-derived workspace name, e.g. "Private_vivarium_gbd_access_main@2" (MIC-7275).
+# Prefer PACKAGE_DIR below where the directory is what's meant, and
+# DIST_NAME_FROM_PROJECT where the package is. PACKAGE_NAME survives only as the
+# default conda environment label.
+PACKAGE_DIR := $(notdir $(CURDIR))
 
-# DIST_NAME is the PyPI distribution name read from pyproject.toml's `[project].name`
+# The PyPI distribution name, read from pyproject.toml's `[project].name`
 # (e.g. "vivarium-cluster-tools" for libs/cluster-tools/). Parsed with sed/grep
 # rather than tomllib so this works on Python <3.11 too.
 DIST_NAME_FROM_PROJECT := $(shell sed -n '/^\[project\]/,/^\[/p' pyproject.toml 2>/dev/null | grep -E '^name *=' | head -1 | sed -E 's/^name *= *"([^"]+)".*$$/\1/')
 # If we're inside libs/<pkg>/ (i.e. the monorepo), the package's [project] block
 # exists, and DIST_NAME_FROM_PROJECT came up empty, fail the build.
 ifeq ($(DIST_NAME_FROM_PROJECT),)
-ifneq ($(findstring /libs/$(PACKAGE_NAME),$(CURDIR)),)
+ifneq ($(findstring /libs/$(PACKAGE_DIR),$(CURDIR)),)
 ifneq ($(shell grep -E '^\[project\]' pyproject.toml 2>/dev/null),)
-$(error DIST_NAME parse failed: pyproject.toml has a [project] block but no `name = "..."` line in the canonical double-quoted form. Check for single quotes, multi-line values, or `dynamic = ["name"]` and adjust either the pyproject or this base.mk regex.)
+$(error DIST_NAME_FROM_PROJECT parse failed: pyproject.toml has a [project] block but no `name = "..."` line in the canonical double-quoted form. Check for single quotes, multi-line values, or `dynamic = ["name"]` and adjust either the pyproject or this base.mk regex.)
 endif
 endif
 endif
-# FIXME [MIC-7237]: eventually remove the fallback to PACKAGE_NAME once all repos have [project] blocks with valid names
-# Fall back to PACKAGE_NAME for legacy repos that don't declare `[project]` in pyproject.toml.
-DIST_NAME ?= $(if $(DIST_NAME_FROM_PROJECT),$(DIST_NAME_FROM_PROJECT),$(PACKAGE_NAME))
 
 # Directory published under DOCS_ROOT_PATH by `deploy-docs`, and so part of a
-# user-facing URL. Deliberately the distribution name and not PACKAGE_NAME
-# ($(notdir $(CURDIR))): repos built at their root get a Jenkins workspace
-# directory named after the job, e.g. "Private_vivarium_gbd_access_main@2", which
-# published docs to an unreachable URL (MIC-7275). Note this is
-# DIST_NAME_FROM_PROJECT rather than DIST_NAME, whose PACKAGE_NAME fallback would
-# reintroduce exactly that bug; a package with no `[project].name` must fail
-# instead.
+# user-facing URL - hence the distribution name rather than the checkout directory,
+# which under Jenkins published docs to an unreachable URL (MIC-7275). A package
+# with no `[project].name` must fail rather than fall back to a directory name.
 DOCS_NAME ?= $(DIST_NAME_FROM_PROJECT)
 
-# Build the editable_mode=compat config-settings flag only when DIST_NAME was parsed from [project].
+# Build the editable_mode=compat config-settings flag only when the distribution name was parsed from [project].
 # NOTE: editable_mode=compat: produces a classic .pth-based editable install
 #   (sys.path entry pointing at src/) instead of the PEP 660 default
 #   (sys.meta_path finder). The PEP 660 mode breaks mypy's discovery of
