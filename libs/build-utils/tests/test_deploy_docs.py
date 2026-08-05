@@ -2,9 +2,9 @@
 
 ``deploy-docs`` publishes into a shared, web-served directory, so the directory
 name it derives is part of a user-facing URL. It previously used
-``PACKAGE_NAME`` (``$(notdir $(CURDIR))``), which under Jenkins is the
-job-derived *workspace* name rather than the repo name - publishing standalone
-repos' docs to an unreachable URL (MIC-7275).
+``PACKAGE_NAME`` (``$(notdir $(CURDIR))``), which for a repo built at its root is
+the Jenkins job-derived *workspace* name rather than the package - publishing
+docs to an unreachable URL (MIC-7275).
 """
 
 import subprocess
@@ -19,7 +19,7 @@ BASE_MK = Path(get_makefiles_path()) / "base.mk"
 # A realistic Jenkins workspace directory name: folder prefix, branch, and the
 # "@2" suffix Jenkins appends for a concurrent workspace.
 JENKINS_WORKSPACE_NAME = "Private_vivarium_gbd_access_main@2"
-REPO_NAME = "vivarium_gbd_access"
+DIST_NAME = "vivarium_gbd_access"
 
 
 def _make(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -41,47 +41,38 @@ def _docs_name(cwd: Path, package_name: str) -> str:
     return values[0]
 
 
-def _init_repo(repo: Path, remote_url: str) -> None:
-    repo.mkdir(parents=True)
-    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(
-        ["git", "remote", "add", "origin", remote_url],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
-    (repo / "CHANGELOG.rst").write_text("**1.2.3 - 08/05/26**\n")
+def _write_package(directory: Path, dist_name: str | None) -> None:
+    directory.mkdir(parents=True)
+    project = f'[project]\nname = "{dist_name}"\n' if dist_name else "[project]\n"
+    (directory / "pyproject.toml").write_text(project)
+    (directory / "CHANGELOG.rst").write_text("**1.2.3 - 08/05/26**\n")
 
 
 class TestDocsName:
-    @pytest.mark.parametrize(
-        "remote_url",
-        [
-            f"https://github.com/ihmeuw/{REPO_NAME}.git",
-            f"git@github.com:ihmeuw/{REPO_NAME}.git",
-            f"https://github.com/ihmeuw/{REPO_NAME}",
-        ],
-    )
-    def test_uses_git_remote_at_repo_root(self, tmp_path: Path, remote_url: str) -> None:
-        # The checkout directory is named after the Jenkins job, so PACKAGE_NAME
-        # is unusable here and the remote is the only reliable source.
+    def test_uses_dist_name_not_workspace_dir(self, tmp_path: Path) -> None:
+        # The checkout directory is named after the Jenkins job, so PACKAGE_NAME is
+        # unusable here and the distribution name is the only reliable source.
         repo = tmp_path / JENKINS_WORKSPACE_NAME
-        _init_repo(repo, remote_url)
-        assert _docs_name(repo, JENKINS_WORKSPACE_NAME) == REPO_NAME
+        _write_package(repo, DIST_NAME)
+        assert _docs_name(repo, JENKINS_WORKSPACE_NAME) == DIST_NAME
 
-    def test_uses_package_dir_in_monorepo(self, tmp_path: Path) -> None:
-        # Monorepo libs run make from libs/<pkg>/, where the directory name *is*
-        # the package name, so it must win over the repo-level remote.
+    def test_uses_dist_name_in_monorepo(self, tmp_path: Path) -> None:
         package_dir = tmp_path / "libs" / "engine"
-        _init_repo(package_dir, "https://github.com/ihmeuw/vivarium-suite.git")
-        assert _docs_name(package_dir, "engine") == "engine"
+        _write_package(package_dir, "vivarium-engine")
+        assert _docs_name(package_dir, "engine") == "vivarium-engine"
+
+    def test_is_empty_without_project_name(self, tmp_path: Path) -> None:
+        # Must not silently fall back to PACKAGE_NAME the way DIST_NAME does.
+        repo = tmp_path / JENKINS_WORKSPACE_NAME
+        _write_package(repo, None)
+        assert _docs_name(repo, JENKINS_WORKSPACE_NAME) == ""
 
 
 class TestDeployDocs:
     @pytest.fixture
     def repo(self, tmp_path: Path) -> Path:
         repo = tmp_path / JENKINS_WORKSPACE_NAME
-        _init_repo(repo, f"https://github.com/ihmeuw/{REPO_NAME}.git")
+        _write_package(repo, DIST_NAME)
         html = repo / "docs" / "build" / "html"
         html.mkdir(parents=True)
         (html / "index.html").write_text("<html>docs</html>")
@@ -93,7 +84,7 @@ class TestDeployDocs:
         docs_root = tmp_path / "docs_root"
         result = _make(repo, "deploy-docs", f"DOCS_ROOT_PATH={docs_root}")
         assert result.returncode == 0, result.stderr
-        published = docs_root / REPO_NAME
+        published = docs_root / DIST_NAME
         assert (published / "1.2.3" / "index.html").read_text() == "<html>docs</html>"
         assert (published / "current").is_symlink()
         assert (published / "current").readlink() == Path("1.2.3")

@@ -8,10 +8,6 @@ LOCATIONS=src tests
 # Unless overridden, build conda environment using the package name.
 SAFE_NAME = $(shell python -c "from pkg_resources import safe_name; print(safe_name(\"$(PACKAGE_NAME)\"))")
 
-# Non-empty when make is running from a monorepo package directory (libs/<pkg>/)
-# rather than from a repo root.
-IS_MONOREPO_PACKAGE := $(findstring /libs/$(PACKAGE_NAME),$(CURDIR))
-
 # DIST_NAME is the PyPI distribution name read from pyproject.toml's `[project].name`
 # (e.g. "vivarium-cluster-tools" for libs/cluster-tools/). Parsed with sed/grep
 # rather than tomllib so this works on Python <3.11 too.
@@ -19,7 +15,7 @@ DIST_NAME_FROM_PROJECT := $(shell sed -n '/^\[project\]/,/^\[/p' pyproject.toml 
 # If we're inside libs/<pkg>/ (i.e. the monorepo), the package's [project] block
 # exists, and DIST_NAME_FROM_PROJECT came up empty, fail the build.
 ifeq ($(DIST_NAME_FROM_PROJECT),)
-ifneq ($(IS_MONOREPO_PACKAGE),)
+ifneq ($(findstring /libs/$(PACKAGE_NAME),$(CURDIR)),)
 ifneq ($(shell grep -E '^\[project\]' pyproject.toml 2>/dev/null),)
 $(error DIST_NAME parse failed: pyproject.toml has a [project] block but no `name = "..."` line in the canonical double-quoted form. Check for single quotes, multi-line values, or `dynamic = ["name"]` and adjust either the pyproject or this base.mk regex.)
 endif
@@ -29,17 +25,15 @@ endif
 # Fall back to PACKAGE_NAME for legacy repos that don't declare `[project]` in pyproject.toml.
 DIST_NAME ?= $(if $(DIST_NAME_FROM_PROJECT),$(DIST_NAME_FROM_PROJECT),$(PACKAGE_NAME))
 
-# Directory published under DOCS_ROOT_PATH by `deploy-docs`.
-#
-# PACKAGE_NAME is $(notdir $(CURDIR)), which names the package only when make runs
-# from the package directory. Monorepo libs do (libs/<pkg>/); standalone repos build
-# at the workspace root, which Jenkins names after the job rather than the repo -
-# yielding e.g. "Private_vivarium_gbd_access_main@2" and an unreachable docs URL
-# (MIC-7275). Fall back to the git remote there, which is checkout-independent.
-GIT_REMOTE_URL := $(shell git config --get remote.origin.url 2>/dev/null)
-# $(notdir) covers both the https and git@host:org/repo forms; $(basename) drops ".git".
-GIT_REPO_NAME := $(basename $(notdir $(GIT_REMOTE_URL)))
-DOCS_NAME ?= $(if $(IS_MONOREPO_PACKAGE),$(PACKAGE_NAME),$(GIT_REPO_NAME))
+# Directory published under DOCS_ROOT_PATH by `deploy-docs`, and so part of a
+# user-facing URL. Deliberately the distribution name and not PACKAGE_NAME
+# ($(notdir $(CURDIR))): repos built at their root get a Jenkins workspace
+# directory named after the job, e.g. "Private_vivarium_gbd_access_main@2", which
+# published docs to an unreachable URL (MIC-7275). Note this is
+# DIST_NAME_FROM_PROJECT rather than DIST_NAME, whose PACKAGE_NAME fallback would
+# reintroduce exactly that bug; a package with no `[project].name` must fail
+# instead.
+DOCS_NAME ?= $(DIST_NAME_FROM_PROJECT)
 
 # Build the editable_mode=compat config-settings flag only when DIST_NAME was parsed from [project].
 # NOTE: editable_mode=compat: produces a classic .pth-based editable install
@@ -272,7 +266,7 @@ deploy-package-artifactory: # Deploy the package to Artifactory
 .PHONY: deploy-docs
 deploy-docs: # Deploy documentation to shared server
 	@[ "${DOCS_ROOT_PATH}" ] && echo "" > /dev/null || ( echo "DOCS_ROOT_PATH is not set"; exit 1 )
-	@[ "${DOCS_NAME}" ] && echo "" > /dev/null || ( echo "DOCS_NAME is empty; pass it explicitly or check that this repo has an 'origin' git remote"; exit 1 )
+	@[ "${DOCS_NAME}" ] && echo "" > /dev/null || ( echo "DOCS_NAME is empty; add a [project] name to pyproject.toml or pass DOCS_NAME explicitly"; exit 1 )
 	@case "${DOCS_NAME}" in *[@/]*) echo "DOCS_NAME '${DOCS_NAME}' looks like a Jenkins workspace name rather than a package name; refusing to publish"; exit 1 ;; esac
 	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
 	cp -R ./docs/build/html/* ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}

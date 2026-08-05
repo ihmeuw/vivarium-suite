@@ -1,8 +1,8 @@
 **4.4.3 - 08/05/26**
 
-- Derive the ``deploy-docs`` publish directory from the git remote instead of the
-  checkout directory name, so standalone repos no longer publish docs under their
-  Jenkins workspace name (MIC-7275)
+- Publish docs under the distribution name from ``[project].name`` instead of the
+  checkout directory name, so repos built at their root no longer publish docs
+  under their Jenkins workspace name (MIC-7275)
 - Refuse to publish docs when the resolved directory name is empty or looks like a
   Jenkins workspace name
 
