@@ -77,8 +77,7 @@ def test_linear_scale_up_endpoints_build_distinct_lookup_tables(
     data_sources: dict[str, Any],
     endpoints_are_scalar: bool,
 ) -> None:
-    """Build both endpoints, for each mix of numeric and data endpoints.
-    """
+    """Build both endpoints, for each mix of numeric and data endpoints."""
     scale_up = LinearScaleUp("treatment.sqlns")
     base_config.update(
         {
