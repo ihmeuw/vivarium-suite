@@ -1,4 +1,4 @@
-**4.5.0 - 07/31/26**
+**4.5.0 - 08/05/26**
 
 - Add workflow for testing a release's downstream dependents on pull requests
 - Add ``classify-changes`` so the CI and Downstream Check workflows share one

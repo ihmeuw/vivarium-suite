@@ -900,50 +900,40 @@ class TestRunInstall:
 class TestClassifyChangedLibs:
     """Tests for ``classify_changed_libs``."""
 
-    def test_source_change_selects_only_that_lib(
-        self, make_monorepo: MonorepoFactory
-    ) -> None:
+    def test_source_change_selects_only_that_lib(self) -> None:
         """A file under libs/<lib>/ marks that lib source-changed and no other."""
-        libs = load_libs(make_monorepo({"a": {}, "b": {}}))
-        changed = classify_changed_libs(["libs/a/src/vivarium/a/foo.py"], libs)
+        changed = classify_changed_libs(["libs/a/src/vivarium/a/foo.py"], ["a", "b"])
         assert changed.source_changed == ("a",)
-        assert changed.build == ("a",)
-        assert changed.releasing == ()
+        assert changed.to_build == ("a",)
+        assert changed.pending_release == ()
         assert not changed.shared_changed
 
-    def test_changelog_change_is_source_changed_and_releasing(
-        self, make_monorepo: MonorepoFactory
-    ) -> None:
+    def test_changelog_change_is_source_changed_and_pending_release(self) -> None:
         """A CHANGELOG bump counts as both a source change and a pending release."""
-        libs = load_libs(make_monorepo({"a": {}, "b": {}}))
-        changed = classify_changed_libs(["libs/a/CHANGELOG.rst"], libs)
+        changed = classify_changed_libs(["libs/a/CHANGELOG.rst"], ["a", "b"])
         assert changed.source_changed == ("a",)
-        assert changed.releasing == ("a",)
+        assert changed.pending_release == ("a",)
 
-    def test_nested_changelog_is_not_releasing(self, make_monorepo: MonorepoFactory) -> None:
+    def test_nested_changelog_is_not_pending_release(self) -> None:
         """Match release.yml's single-level ``libs/*/CHANGELOG.rst`` trigger exactly."""
-        libs = load_libs(make_monorepo({"a": {}}))
-        changed = classify_changed_libs(["libs/a/docs/CHANGELOG.rst"], libs)
+        changed = classify_changed_libs(["libs/a/docs/CHANGELOG.rst"], ["a"])
         assert changed.source_changed == ("a",)
-        assert changed.releasing == ()
+        assert changed.pending_release == ()
 
-    def test_multiple_libs_reported_sorted(self, make_monorepo: MonorepoFactory) -> None:
+    def test_multiple_libs_reported_sorted(self) -> None:
         """Several changed libs are reported in sorted order regardless of diff order."""
-        libs = load_libs(make_monorepo({"a": {}, "b": {}, "c": {}}))
-        changed = classify_changed_libs(["libs/c/x.py", "libs/a/y.py"], libs)
+        changed = classify_changed_libs(["libs/c/x.py", "libs/a/y.py"], ["a", "b", "c"])
         assert changed.source_changed == ("a", "c")
 
-    def test_empty_diff_selects_nothing(self, make_monorepo: MonorepoFactory) -> None:
+    def test_empty_diff_selects_nothing(self) -> None:
         """An empty diff yields empty results rather than every lib."""
-        libs = load_libs(make_monorepo({"a": {}, "b": {}}))
-        changed = classify_changed_libs([], libs)
+        changed = classify_changed_libs([], ["a", "b"])
         assert changed.source_changed == ()
-        assert changed.build == ()
+        assert changed.to_build == ()
 
-    def test_blank_lines_ignored(self, make_monorepo: MonorepoFactory) -> None:
+    def test_blank_lines_ignored(self) -> None:
         """Blank entries from a raw git diff dump are skipped, not treated as paths."""
-        libs = load_libs(make_monorepo({"a": {}}))
-        changed = classify_changed_libs(["", "  ", "libs/a/x.py", ""], libs)
+        changed = classify_changed_libs(["", "  ", "libs/a/x.py", ""], ["a"])
         assert changed.source_changed == ("a",)
 
     @pytest.mark.parametrize(
@@ -952,42 +942,68 @@ class TestClassifyChangedLibs:
             "pyproject.toml",
             "Makefile",
             ".github/workflows/ci.yml",
-            ".github/actions/lib-ci/action.yml",
+            ".github/actions/check-lib/action.yml",
         ],
         ids=["root-pyproject", "root-makefile", "workflow", "shared-action"],
     )
-    def test_shared_path_builds_every_lib(
-        self, make_monorepo: MonorepoFactory, path: str
-    ) -> None:
+    def test_shared_path_builds_every_lib(self, path: str) -> None:
         """A shared path affects all packages, so every lib is built."""
-        libs = load_libs(make_monorepo({"a": {}, "b": {}}))
-        changed = classify_changed_libs([path], libs)
+        changed = classify_changed_libs([path], ["a", "b"])
         assert changed.shared_changed
-        assert changed.build == ("a", "b")
+        assert changed.to_build == ("a", "b")
         # The shared path belongs to no lib, so nothing is resolved editably.
         assert changed.source_changed == ()
 
     @pytest.mark.parametrize(
         "path",
-        ["libs/a/pyproject.toml", "README.md", ".github/labeler.yml"],
-        ids=["lib-pyproject", "root-readme", "non-workflow-github"],
+        [
+            "libs/a/pyproject.toml",
+            "README.md",
+            "CLAUDE.md",
+            "LICENSE",
+            "Jenkinsfile",
+            ".github/labeler.yml",
+            ".github/CODEOWNERS",
+            "tools/ai-tools/skills/foo/SKILL.md",
+            ".claude-plugin/marketplace.json",
+        ],
+        ids=[
+            "lib-pyproject",
+            "root-readme",
+            "root-claude-md",
+            "license",
+            "root-jenkinsfile",
+            "labeler",
+            "codeowners",
+            "plugin-source",
+            "plugin-marketplace",
+        ],
     )
-    def test_non_shared_paths_do_not_build_every_lib(
-        self, make_monorepo: MonorepoFactory, path: str
-    ) -> None:
-        """Paths resembling but not matching a shared path don't trigger a full build."""
-        libs = load_libs(make_monorepo({"a": {}, "b": {}}))
-        changed = classify_changed_libs([path], libs)
+    def test_build_irrelevant_paths_do_not_build_every_lib(self, path: str) -> None:
+        """Paths that cannot affect a build don't trigger the full matrix."""
+        changed = classify_changed_libs([path], ["a", "b"])
         assert not changed.shared_changed
-        assert changed.build != ("a", "b")
+        assert changed.to_build != ("a", "b")
 
-    def test_shared_path_preserves_source_changed(
-        self, make_monorepo: MonorepoFactory
-    ) -> None:
+    @pytest.mark.parametrize(
+        "path",
+        ["constraints.txt", ".python-version", ".github/actions/new-thing/action.yml"],
+        ids=["new-root-file", "new-dotfile", "new-shared-action"],
+    )
+    def test_unrecognized_path_outside_libs_builds_every_lib(self, path: str) -> None:
+        """Default to a full build: an unlisted shared path must not silently build nothing.
+
+        The deny-list is the point of ``is_shared_path`` - a new file nobody has
+        classified over-builds rather than leaving every package untested.
+        """
+        changed = classify_changed_libs([path], ["a", "b"])
+        assert changed.shared_changed
+        assert changed.to_build == ("a", "b")
+
+    def test_shared_path_preserves_source_changed(self) -> None:
         """A shared path widens what is built without widening what installs editably."""
-        libs = load_libs(make_monorepo({"a": {}, "b": {}}))
-        changed = classify_changed_libs(["Makefile", "libs/a/x.py"], libs)
-        assert changed.build == ("a", "b")
+        changed = classify_changed_libs(["Makefile", "libs/a/x.py"], ["a", "b"])
+        assert changed.to_build == ("a", "b")
         assert changed.source_changed == ("a",)
 
 
@@ -1407,7 +1423,7 @@ class TestCLIClassifyChanges:
         return main_with(
             [
                 "classify-changes",
-                "--changed-files-file",
+                "--changed-files",
                 str(changed_file),
                 "--libs-dir",
                 str(libs_dir),
@@ -1427,8 +1443,8 @@ class TestCLIClassifyChanges:
         out = json.loads(capsys.readouterr().out)
         assert out == {
             "source-changed": ["a"],
-            "releasing": ["a"],
-            "build": ["a"],
+            "pending-release": ["a"],
+            "to-build": ["a"],
             "shared-changed": False,
             "matrix": {"include": [{"library": "a", "python-version": "3.11"}]},
             "has-changes": True,
@@ -1481,7 +1497,7 @@ class TestCLIClassifyChanges:
         assert rc == 1
         assert "python_versions.json not found" in capsys.readouterr().err
 
-    def test_errors_on_missing_changed_files_file(
+    def test_errors_on_missing_changed_files(
         self, tmp_path: Path, make_monorepo: MonorepoFactory
     ) -> None:
         """An absent diff file raises rather than reading as an empty diff."""
@@ -1490,7 +1506,7 @@ class TestCLIClassifyChanges:
             main_with(
                 [
                     "classify-changes",
-                    "--changed-files-file",
+                    "--changed-files",
                     str(tmp_path / "absent.txt"),
                     "--libs-dir",
                     str(libs_dir),

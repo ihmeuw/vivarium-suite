@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
 
 from packaging.specifiers import SpecifierSet
 
@@ -79,3 +80,105 @@ class InstallPlan:
 
     argv: Sequence[str]
     env: Mapping[str, str]
+
+
+@dataclass(frozen=True)
+class ChangedLibs:
+    """The libraries a diff touched, partitioned by what CI does about each.
+
+    Attributes
+    ----------
+    source_changed
+        Libraries with at least one changed file under ``libs/<name>/``. These are
+        the libraries to resolve editably from in-tree source when installing any
+        library under test, since their pending versions do not exist on PyPI.
+    pending_release
+        Libraries whose ``CHANGELOG.rst`` changed, i.e. those the diff is bumping
+        toward a release. Always a subset of ``source_changed``.
+    to_build
+        Libraries whose full check suite CI should run: ``source_changed``, or every
+        library when the diff touches a shared path (see ``shared_changed``).
+    shared_changed
+        Whether the diff touched a shared path - one outside ``libs/`` that no
+        single library owns, so every library must be rebuilt. See
+        ``is_shared_path`` in :mod:`changes`.
+    """
+
+    source_changed: tuple[str, ...]
+    pending_release: tuple[str, ...]
+    to_build: tuple[str, ...]
+    shared_changed: bool
+
+
+# The GitHub Actions ``strategy.matrix`` payloads. Both are matrix objects, so both
+# wrap an ``include`` list of per-job entries; a shared generic base would need
+# PEP 646 generic TypedDicts (3.11+) and this package supports 3.10.
+#
+# ``PythonMatrixEntry`` needs the functional TypedDict form because ``python-version``
+# is the key GitHub Actions expects and a hyphen is not a valid attribute name. Its
+# ``library`` is the ``libs/`` directory name and ``python-version`` is one entry from
+# that library's ``python_versions.json``.
+PythonMatrixEntry = TypedDict("PythonMatrixEntry", {"library": str, "python-version": str})
+
+
+class PythonMatrix(TypedDict):
+    """The GitHub Actions ``strategy.matrix`` object for a per-library job.
+
+    Attributes
+    ----------
+    include
+        One entry per library per Python version that library should be checked on.
+    """
+
+    include: list[PythonMatrixEntry]
+
+
+class WaitForEntry(TypedDict):
+    """A single in-batch upstream a release must wait for on PyPI.
+
+    Attributes
+    ----------
+    dist
+        The upstream's PyPI distribution name, i.e. what to poll for.
+    version
+        The version being released, i.e. what to poll until it appears.
+    """
+
+    dist: str
+    version: str
+
+
+class ReleaseMatrixEntry(TypedDict):
+    """One library's entry in the release matrix.
+
+    Attributes
+    ----------
+    library
+        The ``libs/`` directory name.
+    dist
+        The PyPI distribution name, which is also the git tag prefix.
+    version
+        The version being released.
+    wait_for
+        The in-batch upstreams this release must wait for on PyPI before it can
+        install. Upstreams outside the batch are already released, so they are
+        omitted rather than waited on.
+    """
+
+    library: str
+    dist: str
+    version: str
+    wait_for: list[WaitForEntry]
+
+
+class ReleaseMatrix(TypedDict):
+    """The GitHub Actions ``strategy.matrix`` object for the release workflow.
+
+    Attributes
+    ----------
+    include
+        One entry per library being released, ordered dependencies-first by
+        :func:`get_release_matrix` so dependents serialize behind their upstreams.
+    """
+
+    include: list[ReleaseMatrixEntry]

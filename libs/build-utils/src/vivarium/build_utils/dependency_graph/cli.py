@@ -18,7 +18,12 @@ from .changes import build_python_matrix, classify_changed_libs
 from .editable import build_install_plan, get_editable_upstreams, run_install
 from .graph import get_transitive_downstreams, sort_topologically
 from .loading import load_libs
-from .models import DependencyConflictError, DependencyCycleError, MissingPythonVersionsError
+from .models import (
+    DEFAULT_EXTRAS,
+    DependencyConflictError,
+    DependencyCycleError,
+    MissingPythonVersionsError,
+)
 from .release import get_release_matrix
 
 
@@ -32,9 +37,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         Determine the editable upstreams of ``target`` and run the combined editable
         install. Used by ``make install`` when ``CHANGED_LIBS`` is set.
 
-    ``classify-changes --changed-files-file <file> [--libs-dir <path>]``
+    ``classify-changes --changed-files <file> [--libs-dir <path>]``
         Read repository-relative changed paths (one per line) from
-        ``--changed-files-file`` and print the JSON classification of which
+        ``--changed-files`` and print the JSON classification of which
         libraries the diff touched, plus the GitHub Actions matrix to build. Used by
         the CI and Downstream Check workflows' detect jobs.
 
@@ -83,7 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # classify-changes
     classify_parser = subparsers.add_parser("classify-changes")
-    classify_parser.add_argument("--changed-files-file", required=True)
+    classify_parser.add_argument("--changed-files", required=True)
     classify_parser.add_argument("--libs-dir", default=None)
 
     # build-release-matrix
@@ -222,9 +227,10 @@ def _run_build_release_matrix(args: argparse.Namespace) -> int:
 def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
     """Handle the ``build-downstream-matrix`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
-    # Default (ci_github) extras: a release can break a dependent through a
-    # test-dep edge too, and downstream reachability tolerates the cycles those add.
-    libs = load_libs(libs_dir)
+    # Resolve the graph over the default (ci_github) extras rather than runtime deps
+    # only: a release can break a dependent through a test-dep edge too, and the
+    # reachability walk below tolerates the cycles those extras introduce.
+    libs = load_libs(libs_dir, extras=DEFAULT_EXTRAS)
     released = args.released.split()
     try:
         downstream = get_transitive_downstreams(released, libs)
@@ -244,11 +250,13 @@ def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
 def _run_classify_changes(args: argparse.Namespace) -> int:
     """Handle the ``classify-changes`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
-    changed_files = Path(args.changed_files_file).read_text().splitlines()
+    changed_files = Path(args.changed_files).read_text().splitlines()
     libs = load_libs(libs_dir)
-    changed = classify_changed_libs(changed_files, libs)
+    changed = classify_changed_libs(changed_files, libs.keys())
     try:
-        matrix = build_python_matrix(changed.build, libs)
+        # Unlike classification, the matrix needs each lib's path to read its
+        # python_versions.json, so this takes the parsed libraries.
+        matrix = build_python_matrix(changed.to_build, libs)
     except MissingPythonVersionsError as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
@@ -258,8 +266,8 @@ def _run_classify_changes(args: argparse.Namespace) -> int:
         json.dumps(
             {
                 "source-changed": changed.source_changed,
-                "releasing": changed.releasing,
-                "build": changed.build,
+                "pending-release": changed.pending_release,
+                "to-build": changed.to_build,
                 "shared-changed": changed.shared_changed,
                 "matrix": matrix,
                 "has-changes": bool(matrix["include"]),

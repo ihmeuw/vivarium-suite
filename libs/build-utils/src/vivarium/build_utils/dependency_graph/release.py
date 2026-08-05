@@ -3,32 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TypedDict
 
 from .graph import get_transitive_upstreams, sort_topologically
-from .models import Lib
-
-
-class WaitForEntry(TypedDict):
-    """A single in-batch upstream a release must wait for on PyPI."""
-
-    dist: str
-    version: str
-
-
-class ReleaseEntry(TypedDict):
-    """One library's entry in the release matrix."""
-
-    library: str
-    dist: str
-    version: str
-    wait_for: list[WaitForEntry]
-
-
-class ReleaseMatrix(TypedDict):
-    """The GitHub Actions ``strategy.matrix`` object for the release workflow."""
-
-    include: list[ReleaseEntry]
+from .models import Lib, ReleaseMatrix, ReleaseMatrixEntry, WaitForEntry
 
 
 def get_release_matrix(
@@ -53,10 +30,8 @@ def get_release_matrix(
 
     Returns
     -------
-        A :class:`ReleaseMatrix`. ``include`` is ordered dependencies-first (see
-        :func:`sort_topologically`) and is empty when ``release_versions`` is empty.
-        Each entry's ``library`` is the ``libs/`` directory name and ``dist`` is the
-        PyPI distribution name, which is also the git tag prefix.
+        A :class:`ReleaseMatrix`, ordered dependencies-first (see
+        :func:`sort_topologically`) and empty when ``release_versions`` is empty.
 
     Raises
     ------
@@ -72,7 +47,7 @@ def get_release_matrix(
     batch = set(release_versions)
     ordered_lib_names = sort_topologically(list(release_versions), libs)
 
-    include: list[ReleaseEntry] = []
+    include: list[ReleaseMatrixEntry] = []
     for lib_name in ordered_lib_names:
         upstreams = sort_topologically(
             sorted(get_transitive_upstreams(lib_name, libs) & batch), libs

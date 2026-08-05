@@ -66,16 +66,17 @@ jobs:
           echo "Changed files:"
           cat "$CHANGED_FILES"
 
-          CLASSIFIED=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
-            classify-changes --changed-files-file "$CHANGED_FILES")
+          CLASSIFIED_CHANGES=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+            classify-changes --changed-files "$CHANGED_FILES")
           echo "Classification:"
-          jq . <<< "$CLASSIFIED"
+          jq . <<< "$CLASSIFIED_CHANGES"
 
           # changed-libs are the libs to resolve editably from in-tree source; the
-          # matrix is what to build, which widens to every lib on a shared-path change.
-          echo "changed-libs=$(jq -r '.["source-changed"] | join(" ")' <<< "$CLASSIFIED")" >> $GITHUB_OUTPUT
-          echo "matrix=$(jq -c '.matrix' <<< "$CLASSIFIED")" >> $GITHUB_OUTPUT
-          echo "has-changes=$(jq -r '.["has-changes"]' <<< "$CLASSIFIED")" >> $GITHUB_OUTPUT
+          # matrix is what to build, which widens to every lib on a shared-path change;
+          # has-changes gates the build job: an empty matrix would fail it, not skip it.
+          echo "changed-libs=$(jq -r '.["source-changed"] | join(" ")' <<< "$CLASSIFIED_CHANGES")" >> $GITHUB_OUTPUT
+          echo "matrix=$(jq -c '.matrix' <<< "$CLASSIFIED_CHANGES")" >> $GITHUB_OUTPUT
+          echo "has-changes=$(jq -r '.["has-changes"]' <<< "$CLASSIFIED_CHANGES")" >> $GITHUB_OUTPUT
 
   build-and-test:
     name: ${{ matrix.library }} (Python ${{ matrix.python-version }})
@@ -93,7 +94,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check ${{ matrix.library }}
-        uses: ./.github/actions/lib-ci
+        uses: ./.github/actions/check-lib
         with:
           library: ${{ matrix.library }}
           python-version: ${{ matrix.python-version }}

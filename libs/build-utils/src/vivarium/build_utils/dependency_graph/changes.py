@@ -5,59 +5,58 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
 
-from .models import Lib, MissingPythonVersionsError
-
-# Paths outside any ``libs/<lib>/`` that affect every package. A change to one of
-# these builds the whole matrix rather than nothing, since no single library owns it.
-# ``.github/actions/`` counts for the same reason ``.github/workflows/`` does: it holds
-# the shared CI recipe every per-library job runs.
-SHARED_PATH_PATTERN = re.compile(
-    r"^(pyproject\.toml|Makefile)$|^\.github/(workflows|actions)/"
+from .models import (
+    ChangedLibs,
+    Lib,
+    MissingPythonVersionsError,
+    PythonMatrix,
+    PythonMatrixEntry,
 )
 
-MatrixEntry = TypedDict("MatrixEntry", {"library": str, "python-version": str})
+# Paths outside ``libs/`` that provably cannot affect any package's build. Everything
+# else outside ``libs/`` is treated as shared and rebuilds every package, so a shared
+# file nobody thought to list over-builds (wasteful, obvious) instead of under-building
+# (untested, silent). This is deliberately a deny-list: an allow-list of shared paths
+# goes stale the moment someone adds one, and CI then quietly tests nothing.
+#
+# The root ``Jenkinsfile`` is exempt because it drives Jenkins, not the GitHub Actions
+# matrix this feeds. ``tools/`` holds the Claude Code plugins, which ship separately.
+BUILD_IRRELEVANT_PATTERN = re.compile(
+    r"^(README\.md|CLAUDE\.md|CONTRIBUTING\.rst|CODE_OF_CONDUCT\.rst|LICENSE"
+    r"|Jenkinsfile|\.gitignore|\.gitattributes|\.readthedocs\.yaml)$"
+    r"|^tools/|^\.claude-plugin/"
+    r"|^\.github/(CODEOWNERS|labeler\.yml|pull_request_template\.md)$"
+)
 
 
-class PythonMatrix(TypedDict):
-    """The GitHub Actions ``strategy.matrix`` object for a per-library job."""
+def is_shared_path(path: str) -> bool:
+    """Return whether a changed path affects every package's build.
 
-    include: list[MatrixEntry]
+    A path is shared when it lies outside ``libs/`` - so no single package owns it -
+    and is not one of the paths known to be irrelevant to a build (see
+    :data:`BUILD_IRRELEVANT_PATTERN`).
 
-
-@dataclass(frozen=True)
-class ChangedLibs:
-    """The libraries a diff touched, partitioned by what CI does about each.
-
-    Attributes
+    Parameters
     ----------
-    source_changed
-        Libraries with at least one changed file under ``libs/<name>/``. These are
-        the libraries to resolve editably from in-tree source when installing any
-        library under test, since their pending versions do not exist on PyPI.
-    releasing
-        Libraries whose ``CHANGELOG.rst`` changed, i.e. those the diff is bumping
-        toward a release. Always a subset of ``source_changed``.
-    build
-        Libraries whose full check suite CI should run: ``source_changed``, or every
-        library when the diff touches a shared path (see ``shared_changed``).
-    shared_changed
-        Whether the diff touched a path matching :data:`SHARED_PATH_PATTERN`.
-    """
+    path
+        A repository-relative changed path.
 
-    source_changed: tuple[str, ...]
-    releasing: tuple[str, ...]
-    build: tuple[str, ...]
-    shared_changed: bool
+    Returns
+    -------
+        Whether a change to ``path`` requires rebuilding every package.
+    """
+    return not path.startswith("libs/") and not BUILD_IRRELEVANT_PATTERN.search(path)
 
 
 def classify_changed_libs(
-    changed_files: Iterable[str], libs: Mapping[str, Lib]
+    changed_files: Iterable[str], lib_names: Iterable[str]
 ) -> ChangedLibs:
-    """Partition ``libs`` by what ``changed_files`` touched in each.
+    """Partition ``lib_names`` by what ``changed_files`` touched in each.
+
+    Classification is purely path matching, so this needs only the library names -
+    not the parsed dependency graph.
 
     Parameters
     ----------
@@ -65,27 +64,31 @@ def classify_changed_libs(
         Repository-relative paths from the diff under test, one per item. Blank
         entries are ignored so a raw ``git diff --name-only`` dump can be passed
         through unfiltered.
-    libs
-        The full set of parsed libraries.
+    lib_names
+        Every library directory name under ``libs/``.
 
     Returns
     -------
         A :class:`ChangedLibs`. Every name list is sorted, and names are ``libs/``
         directory names.
     """
-    paths = [path.strip() for path in changed_files if path.strip()]
-    all_names = tuple(sorted(libs))
+    changed_file_paths = [path.strip() for path in changed_files if path.strip()]
+    all_names = tuple(sorted(lib_names))
 
     source_changed = tuple(
-        name for name in all_names if any(p.startswith(f"libs/{name}/") for p in paths)
+        name
+        for name in all_names
+        if any(path.startswith(f"libs/{name}/") for path in changed_file_paths)
     )
-    releasing = tuple(name for name in all_names if f"libs/{name}/CHANGELOG.rst" in paths)
-    shared_changed = any(SHARED_PATH_PATTERN.search(path) for path in paths)
+    pending_release = tuple(
+        name for name in all_names if f"libs/{name}/CHANGELOG.rst" in changed_file_paths
+    )
+    shared_changed = any(is_shared_path(path) for path in changed_file_paths)
 
     return ChangedLibs(
         source_changed=source_changed,
-        releasing=releasing,
-        build=all_names if shared_changed else source_changed,
+        pending_release=pending_release,
+        to_build=all_names if shared_changed else source_changed,
         shared_changed=shared_changed,
     )
 
@@ -115,10 +118,8 @@ def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> Python
         If a library's ``python_versions.json`` is absent or empty. This fails the
         build rather than silently dropping the library from the matrix.
     """
-    include: list[MatrixEntry] = []
+    include: list[PythonMatrixEntry] = []
     for name in sorted(names):
-        if name not in libs:
-            raise KeyError(name)
         versions = _read_python_versions(libs[name].path)
         if not versions:
             raise MissingPythonVersionsError(
