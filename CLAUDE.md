@@ -51,25 +51,29 @@ Before any externally-facing action (pushing, opening a PR, tagging a release), 
 - Every package needs a `python_versions.json` (a JSON array of strings like `["3.10", "3.11"]`). CI fans out the test matrix from this file.
 - A `py.typed` marker file in `src/` gates whether CI runs `mypy` on the package.
 - Each package keeps its own `CHANGELOG.rst`, `Jenkinsfile`, `pyproject.toml`, and `Makefile`.
-- `setuptools_scm` is configured per-package with a `tag_regex` of `vivarium-<pkg>-v<X.Y.Z>` and `root = "../.."` so it resolves against the monorepo git history.
+- `setuptools_scm` is configured per-package with a `tag_regex` of `<dist>-v<X.Y.Z>` (where `<dist>` is the package's `[project].name`) and `root = "../.."` so it resolves against the monorepo git history. `<dist>` is `vivarium-<pkg>` for every package except `pytest-vivarium`, whose tag prefix is `pytest-vivarium-`.
 
 ## Release model
 
 Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst` is touched on `main`. The workflow:
 
 1. Parses the version from the first CHANGELOG line - format is `**X.Y.Z - MM/DD/YY**` (2-digit year, Pacific date matching the push day).
-2. Creates and pushes a `vivarium-<pkg>-v<X.Y.Z>` tag.
-3. Runs `make validate-tag` with `TAG_PREFIX=vivarium-<pkg>-` so the validator strips the per-lib prefix before semver parsing and scopes its "previous tag" lookup to that lib only.
+2. Creates and pushes a `<dist>-v<X.Y.Z>` tag, where `<dist>` is the package's `[project].name` (`vivarium-<pkg>` for all libs except `pytest-vivarium`). The tag prefix is derived from `pyproject.toml`, not assumed to be `vivarium-<pkg>`.
+3. Runs `make validate-tag` with `TAG_PREFIX=<dist>-` so the validator strips the per-lib prefix before semver parsing and scopes its "previous tag" lookup to that lib only.
 4. Builds and publishes to PyPI, then creates a GitHub Release.
 
 `workflow_dispatch` and `release: published` paths exist for manual/recovery releases of a specific lib.
 
-The `tools/ai-tools` Claude Code plugin is *not* a PyPI package, so it has its own
-`.github/workflows/release-ai-tools.yml`. It fires when `tools/ai-tools/CHANGELOG.rst` is
-touched on `main`, parses the version from the same `**X.Y.Z - MM/DD/YY**` first line, and
-creates+pushes a `vivarium-ai-tools-v<X.Y.Z>` tag plus a GitHub Release - no build, test, or
-PyPI publish. It is kept separate from `release.yml` so the plugin release never touches that
-workflow's PyPI trusted-publishing credential path (its `id-token: write` permission).
+The Claude Code plugins are *not* PyPI packages, so each has its own tag-and-release
+workflow: `tools/ai-tools` (the `simsci-internal` plugin) releases via
+`.github/workflows/release-ai-tools.yml` (tag `vivarium-ai-tools-v<X.Y.Z>`), and
+`tools/ai-tools-public` (the `simsci` plugin, the generic subset any IHME team can
+install) via `.github/workflows/release-ai-tools-public.yml` (tag
+`vivarium-ai-tools-public-v<X.Y.Z>`). Each fires when its plugin's `CHANGELOG.rst` is
+touched on `main` and parses the version from the same `**X.Y.Z - MM/DD/YY**` first line —
+no build, test, or PyPI publish. They are kept separate from `release.yml` so plugin
+releases never touch that workflow's PyPI trusted-publishing credential path (its
+`id-token: write` permission).
 
 ## Note on packaging
 

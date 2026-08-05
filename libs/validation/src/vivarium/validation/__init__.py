@@ -1,3 +1,12 @@
+"""
+===================
+Vivarium Validation
+===================
+
+Tooling for automated verification and validation (V&V) of Vivarium
+simulations, including data loading, measure comparison, and reporting.
+"""
+
 from importlib.metadata import PackageNotFoundError, version
 
 try:

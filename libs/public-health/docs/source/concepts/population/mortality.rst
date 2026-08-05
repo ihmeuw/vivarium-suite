@@ -18,6 +18,12 @@ participates in the ``time_step`` :ref:`event <event_concept>` to determine
 which simulants die, record their cause of death, and calculate
 :term:`years of life lost <Years of Life Lost>`.
 
+``Mortality``'s input data is configured through ``data_sources``. Each entry
+defaults to an artifact key but can be supplied as a scalar, ``DataFrame``, or
+callable so it can run without an artifact. See the
+:doc:`population tutorial </tutorials/population>` for the available data sources
+and examples.
+
 The component manages three :ref:`state table <population_concept>` attributes:
 
 - ``is_alive`` — whether the simulant is still living

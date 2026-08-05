@@ -13,9 +13,7 @@ name: Downstream Check
 
 on:
   pull_request:
-    # TEMP (revert to [main] before merging this PR): the feature branch is here only
-    # so the required check can be live-tested against a branch-scoped ruleset pre-PR.
-    branches: [main, albrja/ci/mic-5335/build-downstream]
+    branches: [main]
     types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
@@ -28,12 +26,12 @@ jobs:
     name: Detect downstream libraries
     runs-on: ubuntu-latest
     outputs:
-      releasing-libs: ${{ steps.detect.outputs.releasing-libs }}
+      pending-release-libs: ${{ steps.detect.outputs.pending-release-libs }}
       downstream-matrix: ${{ steps.detect.outputs.downstream-matrix }}
       has-downstream: ${{ steps.detect.outputs.has-downstream }}
       # "Was the downstream check requested?" - the run-downstream label or a manual
       # dispatch. Computed once here so the fan-out and the required-check agree.
-      requested: ${{ contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch' }}
+      is-requested: ${{ contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,84 +47,61 @@ jobs:
         id: detect
         run: |
           pip install packaging
+          CHANGED_FILES="${RUNNER_TEMP}/changed-files.txt"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_REF="${{ github.event.pull_request.base.ref }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
             git fetch origin "$BASE_REF"
-            CHANGED=$(git diff --name-only "origin/${BASE_REF}...${HEAD_SHA}")
+            git diff --name-only "origin/${BASE_REF}...${HEAD_SHA}" > "$CHANGED_FILES"
           else
             git fetch origin main
-            CHANGED=$(git diff --name-only "origin/main...HEAD")
+            git diff --name-only "origin/main...HEAD" > "$CHANGED_FILES"
           fi
 
-          ALL_LIBS=$(find libs -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | sort)
+          # A lib is pending release when its CHANGELOG.rst changed in this PR.
+          CLASSIFIED_CHANGES=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+            classify-changes --changed-files "$CHANGED_FILES")
+          PENDING_RELEASE_LIBS=$(jq -r '.["pending-release"] | join(" ")' <<< "$CLASSIFIED_CHANGES")
+          echo "pending-release-libs=${PENDING_RELEASE_LIBS}" >> $GITHUB_OUTPUT
+          echo "Pending release libraries: ${PENDING_RELEASE_LIBS:-(none)}"
 
-          # A "releasing" lib is one whose CHANGELOG.rst changed in this PR.
-          RELEASING=()
-          for lib in $ALL_LIBS; do
-            if echo "$CHANGED" | grep -q "^libs/${lib}/CHANGELOG\.rst$"; then
-              RELEASING+=("$lib")
-            fi
-          done
-          echo "releasing-libs=${RELEASING[*]}" >> $GITHUB_OUTPUT
-          echo "Releasing libraries: ${RELEASING[*]:-(none)}"
-
-          if [ ${#RELEASING[@]} -eq 0 ]; then
-            echo "downstream-matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "has-downstream=false" >> $GITHUB_OUTPUT
-          else
-            DOWNSTREAM=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph build-downstream-matrix --released "${RELEASING[*]}")
-            echo "Downstream matrix: ${DOWNSTREAM}"
-            echo "downstream-matrix=${DOWNSTREAM}" >> $GITHUB_OUTPUT
-            COUNT=$(echo "$DOWNSTREAM" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['include']))")
-            if [ "$COUNT" -eq 0 ]; then
-              echo "has-downstream=false" >> $GITHUB_OUTPUT
-            else
-              echo "has-downstream=true" >> $GITHUB_OUTPUT
-            fi
-          fi
+          # An empty --released yields an empty include, so no short-circuit is needed.
+          # has-downstream gates the fan-out job: an empty matrix would fail it, not skip it.
+          DOWNSTREAM_MATRIX=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+            build-downstream-matrix --released "$PENDING_RELEASE_LIBS")
+          echo "Downstream matrix: ${DOWNSTREAM_MATRIX}"
+          echo "downstream-matrix=${DOWNSTREAM_MATRIX}" >> $GITHUB_OUTPUT
+          echo "has-downstream=$(jq -r '.include | length > 0' <<< "$DOWNSTREAM_MATRIX")" >> $GITHUB_OUTPUT
 
   downstream:
     # The fan-out: run each dependent's tests against the releasing libs installed
     # editably at their pending versions. Runs only when there ARE dependents AND
     # the run was requested (the label is present, or a manual dispatch).
     needs: detect
-    if: needs.detect.outputs.has-downstream == 'true' && needs.detect.outputs.requested == 'true'
+    if: needs.detect.outputs.has-downstream == 'true' && needs.detect.outputs.is-requested == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.downstream-matrix) }}
     steps:
       - name: Checkout code
+        # Must precede the local action: `uses: ./...` resolves from the workspace.
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Check ${{ matrix.library }} against the releasing libraries
+        uses: ./.github/actions/check-lib
         with:
+          library: ${{ matrix.library }}
           python-version: ${{ matrix.python-version }}
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install vivarium_build_utils
-        run: uv pip install --system -e libs/build-utils
-
-      - name: Install ${{ matrix.library }} against the releasing libraries
-        # CHANGED_LIBS installs the releasing lib(s) editably from in-tree source at
-        # their pending versions, so this dependent is tested against the
-        # about-to-be-released code. IHME_PYPI= disables the firewalled artifactory index.
-        run: cd libs/${{ matrix.library }} && make install ENV_REQS=ci_github CHANGED_LIBS="${{ needs.detect.outputs.releasing-libs }}" UV_FLAGS=--system IHME_PYPI=
-
-      - name: Verify releasing libraries resolved from source
-        run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ matrix.library }} --changed "${{ needs.detect.outputs.releasing-libs }}"
-
-      - name: Mypy ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make mypy-if-typed
-
-      - name: Test ${{ matrix.library }}
-        run: cd libs/${{ matrix.library }} && make test-all
+          # The releasing lib(s), resolved editably from in-tree source at their
+          # *pending* versions, so this dependent is checked against the
+          # about-to-be-released code. The shared recipe's docs steps matter here:
+          # a release can break a dependent through its docs, since cross-references
+          # resolve into the upstream package under warnings-as-errors and doctests
+          # execute against the newly installed version.
+          changed-libs: ${{ needs.detect.outputs.pending-release-libs }}
 
   downstream-status:
     # The required status check on main. Red until the check is requested (the
@@ -139,28 +114,28 @@ jobs:
     steps:
       - name: Report downstream status
         run: |
-          DETECT="${{ needs.detect.result }}"
-          HAS="${{ needs.detect.outputs.has-downstream }}"
-          RESULT="${{ needs.downstream.result }}"
-          REQUESTED="${{ needs.detect.outputs.requested }}"
+          DETECT_RESULT="${{ needs.detect.result }}"
+          HAS_DOWNSTREAM="${{ needs.detect.outputs.has-downstream }}"
+          DOWNSTREAM_RESULT="${{ needs.downstream.result }}"
+          IS_REQUESTED="${{ needs.detect.outputs.is-requested }}"
 
           # Fail loudly on an infrastructure failure in detect: its empty outputs
           # would otherwise read as "no dependents" and pass the required check blindly.
-          if [ "$DETECT" != "success" ]; then
-            echo "::error::detect job did not succeed (result: ${DETECT}); cannot determine downstream dependents."
+          if [ "$DETECT_RESULT" != "success" ]; then
+            echo "::error::detect job did not succeed (result: ${DETECT_RESULT}); cannot determine downstream dependents."
             exit 1
           fi
-          if [ "$REQUESTED" != "true" ]; then
+          if [ "$IS_REQUESTED" != "true" ]; then
             echo "::error::Add the 'run-downstream' label (or run the Downstream Check workflow manually) to run the downstream check before merging into main."
             exit 1
           fi
-          if [ "$HAS" != "true" ]; then
+          if [ "$HAS_DOWNSTREAM" != "true" ]; then
             echo "Downstream check ran: this PR has no in-tree dependents to test."
             exit 0
           fi
-          if [ "$RESULT" = "success" ]; then
+          if [ "$DOWNSTREAM_RESULT" = "success" ]; then
             echo "Downstream check passed."
             exit 0
           fi
-          echo "::error::Downstream check did not pass (downstream job: ${RESULT})."
+          echo "::error::Downstream check did not pass (downstream job: ${DOWNSTREAM_RESULT})."
           exit 1

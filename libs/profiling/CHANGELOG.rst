@@ -1,3 +1,8 @@
+**0.5.4 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
 **0.5.3 - 07/16/26**
 
 - Stop xfailing two tests

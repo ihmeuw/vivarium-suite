@@ -20,7 +20,7 @@ never see the implementation, the verification tests the model's intended
 behavior, not whatever the code happens to do. This is an engineering-confidence
 loop, not formal V&V — your artifacts are not committed unless the user asks.
 
-You are spawned only by the `model-development` skill (`/viv:model-development`).
+You are spawned only by the `model-development` skill (`/simsci-internal:model-development`).
 
 ## Input
 
@@ -29,7 +29,7 @@ You are spawned only by the `model-development` skill (`/viv:model-development`)
   **quantitative expectations** from the research doc (exposure distributions,
   relative risks, rates, coverage). These are what you assert against.
 - **Existing test patterns** — pointers to the repo's `conftest.py` fixtures, the
-  `FuzzyChecker` from `vivarium_testing_utils`, the step/event mapping, and the
+  `FuzzyChecker` from `vivarium.fuzzy_checker`, the step/event mapping, and the
   `model_notebooks/` convention. Match them; do not invent a parallel harness.
 - **Package / env** and the **target paths** for the checks and notebook.
 

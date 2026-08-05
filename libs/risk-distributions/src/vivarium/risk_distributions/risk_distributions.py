@@ -702,7 +702,7 @@ class EnsembleDistribution:
         expected_columns = list(cls._distribution_map.keys())
 
         weights = cls.fill_missing_weights(weights, expected_columns)
-        weights = format_data(weights, expected_columns, "weights")
+        weights = format_data(weights, expected_columns, "weights").astype(float)
 
         params: dict[str, pd.DataFrame] = {}
         for name, dist in cls._distribution_map.items():

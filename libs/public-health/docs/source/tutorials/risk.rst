@@ -91,18 +91,36 @@ The table below lists every data key used by the
 .. list-table::
    :header-rows: 1
 
-   * - Key
+   * - Configuration key
+     - Default
      - Index columns
      - Value columns
-     - Configurable?
-   * - ``risk_factor.{name}.distribution``
+   * - ``risk_factor.{name}.distribution_type``
+     - ``risk_factor.{name}.distribution``
      - *(scalar)*
      - A string (e.g., ``"dichotomous"``)
-     - Yes - ``risk_factor.{name}.distribution_type``
-   * - ``risk_factor.{name}.exposure``
+   * - ``risk_factor.{name}.data_sources.exposure``
+     - ``risk_factor.{name}.exposure``
      - age, sex, year, parameter
      - ``value`` (proportion per category)
-     - Yes - ``risk_factor.{name}.data_sources.exposure``
+   * - ``risk_factor.{name}.data_sources.ensemble_distribution_weights``
+     - ``risk_factor.{name}.exposure_distribution_weights``
+     - age, sex, year, parameter
+     - ``value`` (ensemble weight per distribution)
+   * - ``risk_factor.{name}.data_sources.exposure_standard_deviation``
+     - ``risk_factor.{name}.exposure_standard_deviation``
+     - age, sex, year
+     - ``value`` (standard deviation)
+   * - ``risk_factor.{name}.data_sources.categories``
+     - ``risk_factor.{name}.categories``
+     - *(mapping)*
+     - category name to description
+
+The last three keys are only consulted for certain distribution types
+(``exposure_distribution_weights`` for ensemble distributions,
+``exposure_standard_deviation`` for continuous distributions, and ``categories``
+for categorical distributions); a dichotomous risk uses only ``distribution``
+and ``exposure``.
 
 
 Artifact data shapes
@@ -134,7 +152,7 @@ Data sources
 ^^^^^^^^^^^^
 
 Risk components support a ``data_sources`` configuration pattern that lets
-you override individual data keys without rebuilding the artifact. You can
+you override individual data keys to run without an artifact. You can
 override any key with:
 
 - **Scalar** (int or float) - broadcast a constant value to all simulants.
@@ -266,7 +284,9 @@ Configuration Summary
      - Artifact data required
    * - ``Risk``
      - ``risk_factor.{name}.distribution_type``,
-       ``risk_factor.{name}.data_sources.exposure``
+       ``risk_factor.{name}.data_sources.exposure``,
+       ``risk_factor.{name}.rebinned_exposed``,
+       ``risk_factor.{name}.category_thresholds``
      - ``risk_factor.{name}.distribution``,
        ``risk_factor.{name}.exposure``
 
@@ -275,7 +295,7 @@ Configuration Summary
    For how exposure modifies disease rates via relative risks and PAF, see
    the :doc:`risk_effect` tutorial.
 
-   For more advanced use cases - including polytomous risks, coverage gaps,
-   alternative risk factors, and parameterized effect distributions - see
-   the :doc:`non_standard_risk` tutorial.
+   For more advanced use cases (including polytomous risks, alternative risk
+   factors, and parameterized effect distributions) see the
+   :doc:`non_standard_risk` tutorial.
 

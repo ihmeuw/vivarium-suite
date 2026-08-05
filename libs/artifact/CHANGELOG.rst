@@ -1,3 +1,12 @@
+**1.0.9 - 07/31/26**
+
+- Make the ``hdf`` module private
+
+**1.0.8 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
+
 **1.0.7 - 07/14/26**
 
 - Update stale references for monorepo libraries

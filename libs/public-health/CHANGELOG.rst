@@ -1,6 +1,22 @@
-**6.4.5 - 07/24/26**
+**6.4.8 - 08/05/26**
 
 - TEMP (do not merge): exercise the downstream release check; revert before opening the real PR
+
+**6.4.7 - 07/27/26**
+
+- Add ``NonLogLinearRiskEffect`` subclassing hooks: ``MINIMUM_RELATIVE_RISK``, ``get_lowest_bin_left_rr()``, ``define_rr_intervals()``, ``get_tmrel()``, and ``exposure_column_name``
+- Pass ``include_groups=False`` to ``NonLogLinearRiskEffect``'s ``groupby.apply()`` calls, silencing a pandas ``FutureWarning``
+
+**6.4.6 - 07/27/26**
+
+- Allow ``ResultsStratifier`` (``age_bins``), ``LinearScaleUp`` (endpoint ``start``/``end`` exposures), and ``LBWSGRiskEffect`` (``age_bins``, ``relative_risk_interpolator``) to source their data via configuration ``data_sources`` instead of requiring an artifact
+- Make ``BasePopulation`` the canonical source of the ``age_bins`` definition (new ``population.age_bins`` config key), reached by ``ResultsStratifier`` and ``LBWSGRiskEffect`` through the new ``get_population_age_bins`` helper
+- Document the ``cause_specific_mortality_rate`` config override that lets ``DiseaseModel`` run artifact-less
+
+**6.4.5 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
 
 **6.4.4 - 07/21/26**
 

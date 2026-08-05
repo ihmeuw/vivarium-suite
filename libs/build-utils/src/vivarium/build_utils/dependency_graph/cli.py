@@ -1,7 +1,8 @@
 """Command-line interface for ``vivarium.build_utils.dependency_graph``.
 
-Exposes the install-editable, build-release-matrix, verify-editable, and check-acyclic
-subcommands consumed by ``make install`` and the CI/release workflows.
+Exposes the install-editable, classify-changes, build-release-matrix,
+build-downstream-matrix, verify-editable, and check-acyclic subcommands consumed by
+``make install`` and the CI/release workflows.
 """
 
 from __future__ import annotations
@@ -13,10 +14,16 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from .changes import build_python_matrix, classify_changed_libs
 from .editable import build_install_plan, get_editable_upstreams, run_install
 from .graph import get_transitive_downstreams, sort_topologically
 from .loading import load_libs
-from .models import DependencyConflictError, DependencyCycleError
+from .models import (
+    DEFAULT_EXTRAS,
+    DependencyConflictError,
+    DependencyCycleError,
+    MissingPythonVersionsError,
+)
 from .release import get_release_matrix
 
 
@@ -29,6 +36,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         --ihme-pypi <url> --uv-flags <flags> [--libs-dir <path>]``
         Determine the editable upstreams of ``target`` and run the combined editable
         install. Used by ``make install`` when ``CHANGED_LIBS`` is set.
+
+    ``classify-changes --changed-files <file> [--libs-dir <path>]``
+        Read repository-relative changed paths (one per line) from
+        ``--changed-files`` and print the JSON classification of which
+        libraries the diff touched, plus the GitHub Actions matrix to build. Used by
+        the CI and Downstream Check workflows' detect jobs.
 
     ``build-release-matrix --versions <file> [--libs-dir <path>]``
         Read ``"<name> <version>"`` lines from the ``--versions`` file and print
@@ -73,6 +86,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     install_parser.add_argument("--uv-flags", default="")
     install_parser.add_argument("--libs-dir", default=None)
 
+    # classify-changes
+    classify_parser = subparsers.add_parser("classify-changes")
+    classify_parser.add_argument("--changed-files", required=True)
+    classify_parser.add_argument("--libs-dir", default=None)
+
     # build-release-matrix
     matrix_parser = subparsers.add_parser("build-release-matrix")
     matrix_parser.add_argument("--versions", required=True)
@@ -103,6 +121,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_check_acyclic(args)
     if args.command == "build-downstream-matrix":
         return _run_build_downstream_matrix(args)
+    if args.command == "classify-changes":
+        return _run_classify_changes(args)
     return _run_build_release_matrix(args)
 
 
@@ -158,7 +178,7 @@ def _run_check_acyclic(args: argparse.Namespace) -> int:
     """Handle the ``check-acyclic`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
     # Runtime deps only: the ``ci_github`` extra pulls in test dependencies that
-    # legitimately cycle (e.g. config-tree's tests use testing-utils, which
+    # legitimately cycle (e.g. config-tree's tests use pytest-vivarium, which
     # depends on config-tree at runtime). Only a *runtime* dependency cycle is a
     # real problem, and that graph is the one release ordering must be acyclic over.
     libs = load_libs(libs_dir, extras=())
@@ -189,7 +209,7 @@ def _run_build_release_matrix(args: argparse.Namespace) -> int:
     # dependent's install can't resolve until its runtime upstreams are on PyPI;
     # its test deps just need to already be published). The ci_github extra adds
     # test-dep edges that legitimately cycle (e.g. config-tree's tests use
-    # testing-utils, which depends on config-tree at runtime), and a topological
+    # pytest-vivarium, which depends on config-tree at runtime), and a topological
     # sort can't be defined over a cyclic graph.
     libs = load_libs(libs_dir, extras=())
     try:
@@ -207,39 +227,54 @@ def _run_build_release_matrix(args: argparse.Namespace) -> int:
 def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
     """Handle the ``build-downstream-matrix`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
-    # Default (ci_github) extras: a release can break a dependent through a
-    # test-dep edge too, and downstream reachability tolerates the cycles those add.
-    libs = load_libs(libs_dir)
+    # Resolve the graph over the default (ci_github) extras rather than runtime deps
+    # only: a release can break a dependent through a test-dep edge too, and the
+    # reachability walk below tolerates the cycles those extras introduce.
+    libs = load_libs(libs_dir, extras=DEFAULT_EXTRAS)
     released = args.released.split()
     try:
         downstream = get_transitive_downstreams(released, libs)
+        # Every dependent runs on its full python_versions.json matrix: the check runs
+        # once at merge, so there's no cost reason to sample a single canonical version.
+        matrix = build_python_matrix(downstream, libs)
     except KeyError as error:
         print(f"unknown library: {error.args[0]}", file=sys.stderr)
         return 1
-
-    # Every dependent runs on its full python_versions.json matrix: the check runs
-    # once at merge, so there's no cost reason to sample a single canonical version.
-    include: list[dict[str, str]] = []
-    for name in sorted(downstream):
-        versions = _read_python_versions(libs[name].path)
-        if not versions:
-            print(
-                f"::error::libs/{name}/python_versions.json not found or empty",
-                file=sys.stderr,
-            )
-            return 1
-        for python_version in versions:
-            include.append({"library": name, "python-version": python_version})
-    print(json.dumps({"include": include}))
+    except MissingPythonVersionsError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 1
+    print(json.dumps(matrix))
     return 0
 
 
-def _read_python_versions(lib_path: Path) -> list[str]:
-    """Read a library's ``python_versions.json`` (empty list if absent)."""
-    versions_file = lib_path / "python_versions.json"
-    if not versions_file.exists():
-        return []
-    return list(json.loads(versions_file.read_text()))
+def _run_classify_changes(args: argparse.Namespace) -> int:
+    """Handle the ``classify-changes`` subcommand."""
+    libs_dir = _discover_libs_dir(args.libs_dir)
+    changed_files = Path(args.changed_files).read_text().splitlines()
+    libs = load_libs(libs_dir)
+    changed = classify_changed_libs(changed_files, libs.keys())
+    try:
+        # Unlike classification, the matrix needs each lib's path to read its
+        # python_versions.json, so this takes the parsed libraries.
+        matrix = build_python_matrix(changed.to_build, libs)
+    except MissingPythonVersionsError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 1
+
+    # Keys are hyphenated to match the GitHub Actions step outputs they populate.
+    print(
+        json.dumps(
+            {
+                "source-changed": changed.source_changed,
+                "pending-release": changed.pending_release,
+                "to-build": changed.to_build,
+                "shared-changed": changed.shared_changed,
+                "matrix": matrix,
+                "has-changes": bool(matrix["include"]),
+            }
+        )
+    )
+    return 0
 
 
 def _discover_libs_dir(libs_path: str | None) -> Path:

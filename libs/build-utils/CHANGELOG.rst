@@ -1,6 +1,13 @@
-**4.5.0 - 07/24/26**
+**4.5.0 - 08/05/26**
 
-- Add ``build-downstream-matrix`` powering a required Downstream Check that tests a releasing library's in-tree dependents before merge
+- Add workflow for testing a release's downstream dependents on pull requests
+- Add ``classify-changes`` so the CI and Downstream Check workflows share one
+  tested implementation of which libraries a diff touches and what matrix to build
+
+**4.4.2 - 07/23/26**
+
+- Streamline package __init__.py docstring
+- Add project.urls to pyproject.toml
 
 **4.4.1 - 07/21/26**
 

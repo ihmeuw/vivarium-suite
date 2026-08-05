@@ -1,10 +1,9 @@
 """
 ======================
-vivarium.cluster_tools
+Vivarium Cluster Tools
 ======================
 
 Tools for working with :mod:`vivarium.engine` on compute clusters.
-
 """
 from importlib.metadata import PackageNotFoundError, version
 
