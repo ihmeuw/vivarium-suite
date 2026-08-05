@@ -1,3 +1,9 @@
+**4.5.0 - 08/05/26**
+
+- Add workflow for testing a release's downstream dependents on pull requests
+- Add ``classify-changes`` so the CI and Downstream Check workflows share one
+  tested implementation of which libraries a diff touches and what matrix to build
+
 **4.4.2 - 07/23/26**
 
 - Streamline package __init__.py docstring

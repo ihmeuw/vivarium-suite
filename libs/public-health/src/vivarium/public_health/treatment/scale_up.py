@@ -232,7 +232,7 @@ class LinearScaleUp(Component):
                 endpoint = self.get_endpoint_value_from_data(builder, endpoint_type)
             else:
                 endpoint = self.build_lookup_table(
-                    builder, "endpoint", scale_up_config[endpoint_type]
+                    builder, endpoint_type, scale_up_config[endpoint_type]
                 )
             return endpoint
 
@@ -350,7 +350,7 @@ class LinearScaleUp(Component):
             builder,
             builder.configuration[self.configuration_key].data_sources[endpoint_type],
         )
-        return self.build_lookup_table(builder, "endpoint", endpoint_data)
+        return self.build_lookup_table(builder, endpoint_type, endpoint_data)
 
     def apply_scale_up(
         self, idx: pd.Index, target: pd.Series, scale_up_progress: float
