@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from .graph import get_transitive_upstreams, sort_topologically
-from .models import Lib
+from .models import Lib, ReleaseMatrix, ReleaseMatrixEntry, WaitForEntry
 
 
 def get_release_matrix(
     release_versions: Mapping[str, str], libs: Mapping[str, Lib]
-) -> dict[str, object]:
+) -> ReleaseMatrix:
     """Build the dependency-ordered GitHub Actions release matrix.
 
     Given the libraries to release and their versions, returns a matrix object
@@ -30,12 +30,8 @@ def get_release_matrix(
 
     Returns
     -------
-        A dictionary suitable for ``strategy.matrix`` in the release workflow:
-        ``{"include": [{"library": name, "dist": dist_name, "version": version,
-        "wait_for": [{"dist": dist_name, "version": version}, ...]}, ...]}``.
-        ``library`` is the ``libs/`` directory name; ``dist`` is the PyPI
-        distribution name, which is also the git tag prefix. ``include`` is empty
-        when ``release_versions`` is empty.
+        A :class:`ReleaseMatrix`, ordered dependencies-first (see
+        :func:`sort_topologically`) and empty when ``release_versions`` is empty.
 
     Raises
     ------
@@ -51,12 +47,12 @@ def get_release_matrix(
     batch = set(release_versions)
     ordered_lib_names = sort_topologically(list(release_versions), libs)
 
-    include: list[dict[str, object]] = []
+    include: list[ReleaseMatrixEntry] = []
     for lib_name in ordered_lib_names:
         upstreams = sort_topologically(
             sorted(get_transitive_upstreams(lib_name, libs) & batch), libs
         )
-        wait_for = [
+        wait_for: list[WaitForEntry] = [
             {"dist": libs[upstream].dist_name, "version": release_versions[upstream]}
             for upstream in upstreams
         ]
