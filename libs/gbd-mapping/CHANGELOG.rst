@@ -1,3 +1,7 @@
+**7.0.0 - 07/27/26**
+
+- Remove ``gbd_mapping_generator`` submodule and related tests and documentation
+
 **6.0.7 - 07/23/26**
 
 - Streamline package __init__.py docstrings

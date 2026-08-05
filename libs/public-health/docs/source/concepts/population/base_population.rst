@@ -43,10 +43,16 @@ when the simulant leaves the simulation.
 Demographic Sampling
 ++++++++++++++++++++
 
-The initializer loads population structure data from the configured data source
-(by default from the ``population.structure`` artifact key) and computes
-conditional sampling distributions with
+The initializer computes conditional sampling distributions from the
+population structure data with
 :func:`~vivarium.public_health.population.data_transformations.assign_demographic_proportions`.
+
+``BasePopulation``'s input data is configured through ``data_sources``. Each
+entry defaults to an artifact key but can be supplied as a scalar, ``DataFrame``,
+or callable so it can run without an artifact. See the
+:doc:`population tutorial </tutorials/population>` for the available data sources
+and examples.
+
 Three probability views are produced:
 
 .. list-table::

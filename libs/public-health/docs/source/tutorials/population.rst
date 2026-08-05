@@ -54,8 +54,8 @@ simulation begins:
 Common Setup
 ------------
 
-Population components load their data through the ``data_sources``
-configuration pattern (see `Data sources`_). The `Expected Data Layout`_
+Population components load their data through the configuration tree (see
+`Data sources`_). The `Expected Data Layout`_
 section shows the key names and column layouts for every data key so that
 you know exactly what format your data should have.
 
@@ -87,66 +87,76 @@ keys with a scalar, DataFrame, or callable (see `Data sources`_).
 Data keys
 ^^^^^^^^^
 
-The table below lists every data key used by the population components.
-All of them can be overridden in the ``data_sources`` section of the
-configuration (see `Data sources`_); the data key shown is simply the
-default.
+The table below lists every data key used by the population components. All of
+them can be overridden through the configuration, so the table leads with the
+**Configuration key** (see also `Data sources`_); the ``Default`` column is the
+artifact key used when no override is supplied.
 
 .. list-table::
    :header-rows: 1
 
-   * - Key
+   * - Configuration key
+     - Default
      - Index columns
      - Value columns
      - Used by
-     - Configuration override
-   * - ``population.structure``
+   * - ``population.population_structure``,
+       ``fertility.data_sources.population_structure``
+     - ``population.structure``
      - age, sex, year, location
      - ``value`` (population count)
      - :class:`~vivarium.public_health.population.base_population.BasePopulation`,
-       :class:`~vivarium.public_health.population.base_population.ScaledPopulation`
-     - ``population.population_structure``
+       :class:`~vivarium.public_health.population.base_population.ScaledPopulation`,
+       :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
    * - ``population.location``
+     - ``population.location``
      - *(scalar)*
      - A string (e.g. ``"Kenya"``)
      - :class:`~vivarium.public_health.population.base_population.BasePopulation`
-     - ``population.location``
-   * - ``cause.all_causes.cause_specific_mortality_rate``
+   * - ``mortality.data_sources.all_cause_mortality_rate``
+     - ``cause.all_causes.cause_specific_mortality_rate``
      - age, sex, year
      - ``value`` (rate)
      - :class:`~vivarium.public_health.population.mortality.Mortality`
-     - ``mortality.data_sources.all_cause_mortality_rate``
-   * - ``population.theoretical_minimum_risk_life_expectancy``
+   * - ``mortality.data_sources.life_expectancy``
+     - ``population.theoretical_minimum_risk_life_expectancy``
      - age
      - ``value`` (years of remaining life)
      - :class:`~vivarium.public_health.population.mortality.Mortality`
-     - ``mortality.data_sources.life_expectancy``
-   * - ``covariate.live_births_by_sex.estimate``
+   * - ``fertility.data_sources.live_births_by_sex``
+     - ``covariate.live_births_by_sex.estimate``
      - year, sex, ``parameter``
      - ``value``
      - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityCrudeBirthRate`
-     - ``fertility.data_sources.live_births_by_sex``
-   * - ``covariate.age_specific_fertility_rate.estimate``
+   * - ``fertility_age_specific_rates.data_sources.age_specific_fertility_rate``
+     - ``covariate.age_specific_fertility_rate.estimate``
      - age, sex, year, ``parameter``
      - ``value``
      - :class:`~vivarium.public_health.population.add_new_birth_cohorts.FertilityAgeSpecificRates`
-     - ``fertility_age_specific_rates.data_sources.age_specific_fertility_rate``
 
 
 Data sources
 ^^^^^^^^^^^^
 
-Some components support a ``data_sources`` configuration pattern that lets
-you override individual data keys. This is especially useful during
-development or for simple tutorial examples like the ones in this page.
-Components that support it declare their data needs in
-``configuration_defaults``; by default each key points to the
-corresponding data key string. You can override any of them with:
+Population components support a ``data_sources`` configuration pattern that lets
+you override individual data keys to run without an artifact. Each key defaults
+to an artifact key but can be overridden with:
 
 - **Scalar** (int or float) - broadcast a constant value to all simulants.
 - **DataFrame** - use the DataFrame directly.
 - **Callable** - call the function at setup time to produce the data.
-- **Data key** (string) - load a different key from the data plugin.
+- **Artifact key** (string) - load a different key from the artifact.
+
+.. note::
+
+   :class:`~vivarium.public_health.population.mortality.Mortality` and the
+   fertility components nest these sources under a ``data_sources`` block (e.g.
+   ``mortality.data_sources.all_cause_mortality_rate``).
+   :class:`~vivarium.public_health.population.base_population.BasePopulation` and
+   :class:`~vivarium.public_health.population.base_population.ScaledPopulation`
+   are the exception: their ``population_structure``, ``location``, and
+   ``scaling_factor`` sources are set as direct keys under ``population`` (e.g.
+   ``population.population_structure``), not inside a ``data_sources`` block.
 
 For example, :class:`~vivarium.public_health.population.mortality.Mortality` declares
 three configurable data sources:
@@ -247,8 +257,8 @@ Overriding the default data
 
 By default, every data source loads from the artifact (configured via
 ``BASE_PLUGINS`` in these examples). You can bypass the artifact and supply
-data directly through ``data_sources`` - pass a DataFrame, callable, or
-literal string:
+``BasePopulation``'s data directly under the ``population`` configuration key
+(pass a DataFrame, callable, or literal string):
 
 .. testcode::
 
@@ -265,10 +275,8 @@ literal string:
        {
            "population": {
                "population_size": 5_000,
-               "data_sources": {
-                   "population_structure": pop_data,
-                   "location": "Kenya",
-               },
+               "population_structure": pop_data,
+               "location": "Kenya",
            },
            "mortality": {"data_sources": {"all_cause_mortality_rate": 0}},
        },
@@ -502,20 +510,26 @@ Configuration summary for BasePopulation
 .. list-table::
    :header-rows: 1
 
-   * - Key
+   * - Configuration key
      - Default
      - Description
    * - ``population.population_size``
      - 10000
      - Number of simulants to create.
    * - ``population.population_structure``
-     - internal method (loads ``population.structure``)
+     - ``"population.structure"``
      - Population structure data. Accepts a DataFrame, callable,
        or data key.
    * - ``population.location``
-     - internal method (loads ``population.location``)
+     - ``"population.location"``
      - Location string. Accepts a scalar string, callable,
        or data key.
+   * - ``population.age_bins``
+     - ``"population.age_bins"``
+     - Canonical age-bin definition shared with components that bin by age
+       (e.g. the results stratifier), which reach it through
+       :func:`~vivarium.public_health.population.base_population.get_population_age_bins`.
+       Accepts a DataFrame, callable, or data key.
    * - ``population.initialization_age_min``
      - 0
      - Minimum age (years) for the initial population.
@@ -541,6 +555,10 @@ Configuration summary for BasePopulation
      - internal method
      - CSMR for unmodeled causes. Accepts a scalar, DataFrame, callable,
        or data key.
+   * - ``mortality.unmodeled_causes``
+     - ``[]``
+     - Cause names whose CSMR is combined into the unmodeled-cause
+       pipeline so modeled risks can modify it.
 
 
 ScaledPopulation
@@ -733,10 +751,8 @@ Both data sources can be supplied via configuration:
                "population_size": 10_000,
                "initialization_age_min": 0,
                "initialization_age_max": 125,
-               "data_sources": {
-                   "population_structure": population_structure(),
-                   "location": "Kenya",
-               },
+               "population_structure": population_structure(),
+               "location": "Kenya",
            },
            "time": {"step_size": 10},
            "mortality": {"data_sources": {"all_cause_mortality_rate": 0}},
@@ -872,9 +888,9 @@ Fertility configuration summary
      - ``covariate.live_births_by_sex.estimate``,
        ``population.structure`` (defaults)
      - Requires ``initialization_age_min == 0``. Supports
-       ``data_sources`` overrides (DataFrame, callable, data key).
+       ``data_sources`` overrides (DataFrame, callable, or data key).
    * - ``FertilityAgeSpecificRates``
      - ``fertility_age_specific_rates.data_sources.age_specific_fertility_rate``
      - ``covariate.age_specific_fertility_rate.estimate`` (default)
-     - Supports ``data_sources`` overrides (scalar, DataFrame, callable).
-       Tracks parent-child relationships.
+     - Supports ``data_sources`` overrides (scalar, DataFrame, callable, or
+       data key). Tracks parent-child relationships.

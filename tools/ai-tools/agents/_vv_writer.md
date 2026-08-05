@@ -20,7 +20,7 @@ never see the implementation, the verification tests the model's intended
 behavior, not whatever the code happens to do. This is an engineering-confidence
 loop, not formal V&V — your artifacts are not committed unless the user asks.
 
-You are spawned only by the `model-development` skill (`/viv:model-development`).
+You are spawned only by the `model-development` skill (`/simsci-internal:model-development`).
 
 ## Input
 

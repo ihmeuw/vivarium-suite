@@ -108,11 +108,12 @@ Disease components support a ``data_sources`` configuration pattern that lets
 you supply each measure as a:
 
 - **Scalar** (int or float) - broadcast a constant value to all simulants.
+- **DataFrame** - use the DataFrame directly.
 - **Callable** - call the function at setup time to produce the data.
 - **Data key** (string) - load the measure from the artifact at that key.
 
 By default each measure loads from the artifact at the data key shown below.
-Supplying a scalar instead - as every example in this tutorial does - lets the
+Supplying a scalar instead (as every example in this tutorial does) lets the
 model run without an artifact. The pre-built factories take no data arguments,
 so with a factory every measure is set through the configuration. When building
 states and transitions directly you may instead pass them as constructor
@@ -138,8 +139,12 @@ For the full list of data keys and the column layout each one expects, see
      - ``prevalence=`` or ``{state}.data_sources.prevalence``
    * - birth_prevalence
      - :class:`~vivarium.public_health.disease.state.DiseaseState` (neonatal models)
-     - ``cause.{cause}.birth_prevalence``
+     - ``0.0`` (no artifact key; defaults to zero unless overridden)
      - ``birth_prevalence=`` or ``{state}.data_sources.birth_prevalence``
+   * - dwell_time
+     - :class:`~vivarium.public_health.disease.state.DiseaseState`
+     - ``0.0`` (no artifact key; defaults to zero unless overridden)
+     - ``dwell_time=`` or ``{state}.data_sources.dwell_time``
    * - disability_weight
      - :class:`~vivarium.public_health.disease.state.DiseaseState`
      - ``cause.{cause}.disability_weight``
@@ -160,11 +165,24 @@ For the full list of data keys and the column layout each one expects, see
      - ``cause.{cause}.remission_rate``
      - ``add_rate_transition(transition_rate=...)`` or the transition's
        (auto-generated) ``data_sources.transition_rate``
+   * - proportion
+     - :class:`~vivarium.public_health.disease.transition.ProportionTransition`
+     - none (no artifact key; supplied directly)
+     - ``add_proportion_transition(proportion=...)`` or the transition's
+       (auto-generated) ``data_sources.proportion``
    * - cause_specific_mortality_rate
      - :class:`~vivarium.public_health.disease.model.DiseaseModel`
      - ``cause.{cause}.cause_specific_mortality_rate``
      - ``cause_specific_mortality_rate=`` or
        ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
+
+Any measure can be supplied as a scalar, ``DataFrame``, callable, or artifact
+key (string) through its ``data_sources`` override (or the constructor argument
+shown above); the
+**Default data key** column only lists what each measure resolves to when
+nothing is supplied. Most default to an artifact key, but ``birth_prevalence``
+(and ``dwell_time``) have no artifact key and default to the scalar ``0.0``, so
+a model that does not set them gets zero rather than an artifact load.
 
 For example, :class:`~vivarium.public_health.disease.state.DiseaseState`
 declares five configurable data sources:
@@ -223,8 +241,8 @@ Default configuration
    expressed in YAML.
 
 The default loads from the artifact at
-``cause.{cause}.cause_specific_mortality_rate``. Supply a scalar, callable, or
-data key instead - through the configuration (as the factory examples below
+``cause.{cause}.cause_specific_mortality_rate``. Supply a scalar, ``DataFrame``,
+callable, or data key instead, through the configuration (as the factory examples below
 do) or, when constructing a :class:`~vivarium.public_health.disease.model.DiseaseModel`
 directly, via its ``cause_specific_mortality_rate`` argument (as the
 from-scratch examples do).
@@ -1350,13 +1368,15 @@ Configuration Summary
      - Default data key(s) (used if not supplied directly)
    * - ``DiseaseModel``
      - ``cause_specific_mortality_rate=`` (constructor) or
-       ``1{cause}.data_sources.cause_specific_mortality_rate``
+       ``disease_model.{cause}.data_sources.cause_specific_mortality_rate``
      - ``cause.{cause}.cause_specific_mortality_rate``
    * - ``DiseaseState``
      - ``prevalence=``, ``birth_prevalence=``, ``dwell_time=``,
        ``disability_weight=``, ``excess_mortality_rate=`` (constructor)
        or the matching ``disease_state.{state_id}.data_sources.{measure}``
-     - Keys matching the pattern ``cause.{state_id}.{measure}``
+     - ``cause.{state_id}.{measure}`` for ``prevalence``,
+       ``disability_weight``, and ``excess_mortality_rate``;
+       ``birth_prevalence`` and ``dwell_time`` default to ``0.0``
    * - ``RateTransition``
      - ``transition_rate=`` via ``add_rate_transition``;
        ``{transition}.rate_conversion_type``
