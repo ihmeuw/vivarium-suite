@@ -13,7 +13,11 @@ name: Downstream Check
 
 on:
   pull_request:
-    branches: [main]
+    # TEMP (do not merge): the second entry exists only so this throwaway branch can
+    # live-test the gate. `branches` filters on the PR's *base*, and workflow_dispatch
+    # is unavailable until this file is on the default branch, so a PR into main is
+    # otherwise the only way to run it. Production is `[main]` alone.
+    branches: [main, 'albrja/ci/mic-5335/build-downstream']
     types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
