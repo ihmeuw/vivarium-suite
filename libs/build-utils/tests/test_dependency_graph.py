@@ -16,9 +16,13 @@ from vivarium.build_utils.dependency_graph import (
     DependencyCycleError,
     InstallPlan,
     Lib,
+    MissingPythonVersionsError,
     build_install_plan,
+    build_python_matrix,
+    classify_changed_libs,
     get_editable_upstreams,
     get_release_matrix,
+    get_transitive_downstreams,
     get_transitive_upstreams,
     load_libs,
     sort_topologically,
@@ -52,6 +56,10 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
       (e.g. to write a malformed version for the error path).
     - ``omit_name`` (bool, default ``False``): write a ``pyproject.toml`` with no
       ``[project].name`` line (for the unparseable-dist-name error path).
+    - ``python_versions`` (Sequence[str], default ``["3.11"]``): contents of
+      ``python_versions.json``.
+    - ``omit_python_versions`` (bool, default ``False``): write no
+      ``python_versions.json`` (for the missing-file error path).
 
     Returns the ``libs/`` Path.
     """
@@ -93,6 +101,12 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
                 version = cfg.get("version", "1.0.0")
                 first_line = f"**{version} - 06/24/26**"
             (pkg_dir / "CHANGELOG.rst").write_text(first_line + "\n\n- Initial.\n")
+
+            if not cfg.get("omit_python_versions", False):
+                python_versions = cfg.get("python_versions", ["3.11"])
+                (pkg_dir / "python_versions.json").write_text(
+                    json.dumps(python_versions) + "\n"
+                )
 
         return libs_dir
 
@@ -309,6 +323,103 @@ class TestGetTransitiveUpstreams:
         )
         libs = load_libs(libs_dir)
         assert "a" not in get_transitive_upstreams("a", libs)
+
+
+class TestGetTransitiveDownstreams:
+    """Tests for ``get_transitive_downstreams``."""
+
+    def test_includes_direct_and_transitive_dependents(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """Dependents are followed transitively (releasing c reaches b and a in a -> b -> c)."""
+        libs_dir = make_monorepo(
+            {
+                "a": {"deps": ["vivarium-b"]},
+                "b": {"deps": ["vivarium-c"]},
+                "c": {},
+            }
+        )
+        libs = load_libs(libs_dir)
+        assert get_transitive_downstreams(["c"], libs) == {"a", "b"}
+
+    def test_excludes_the_released_set(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """Libraries in the released set are never in their own downstream set."""
+        libs_dir = make_monorepo(
+            {
+                "a": {"deps": ["vivarium-b"]},
+                "b": {"deps": ["vivarium-c"]},
+                "c": {},
+            }
+        )
+        libs = load_libs(libs_dir)
+        # Releasing b and c together: a is downstream, but b and c are excluded.
+        assert get_transitive_downstreams(["b", "c"], libs) == {"a"}
+
+    def test_unions_dependents_across_multiple_targets(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """A shared dependent of several released libs appears once in the union."""
+        libs_dir = make_monorepo(
+            {
+                "shared": {"deps": ["vivarium-x", "vivarium-y"]},
+                "x": {},
+                "y": {},
+            }
+        )
+        libs = load_libs(libs_dir)
+        assert get_transitive_downstreams(["x", "y"], libs) == {"shared"}
+
+    def test_leaf_release_has_no_downstreams(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """A library nothing depends on yields an empty downstream set."""
+        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+        libs = load_libs(libs_dir)
+        assert get_transitive_downstreams(["a"], libs) == set()
+
+    def test_includes_test_dep_dependents_under_ci_github(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """A dependent that uses the released lib only as a test dep is still downstream."""
+        libs_dir = make_monorepo(
+            {
+                "a": {"extras": {"ci_github": ["vivarium-testing-utils"]}},
+                "testing-utils": {"dist_name": "vivarium-testing-utils"},
+            }
+        )
+        libs = load_libs(libs_dir, extras=("ci_github",))
+        assert get_transitive_downstreams(["testing-utils"], libs) == {"a"}
+
+    def test_tolerates_cycles(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """Reachability terminates on a cyclic graph (unlike topological ordering)."""
+        libs_dir = make_monorepo(
+            {
+                "a": {"deps": ["vivarium-b"]},
+                "b": {"deps": ["vivarium-a"]},
+            }
+        )
+        libs = load_libs(libs_dir)
+        assert get_transitive_downstreams(["a"], libs) == {"b"}
+
+    def test_raises_keyerror_for_unknown_target(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """An unknown released library name raises KeyError."""
+        libs_dir = make_monorepo({"a": {}})
+        libs = load_libs(libs_dir)
+        with pytest.raises(KeyError):
+            get_transitive_downstreams(["ghost"], libs)
 
 
 class TestGetEditableUpstreams:
@@ -786,6 +897,166 @@ class TestRunInstall:
         assert env["SETUPTOOLS_SCM_PRETEND_VERSION_FOR_VIVARIUM_A"] == "1.0.0"
 
 
+class TestClassifyChangedLibs:
+    """Tests for ``classify_changed_libs``."""
+
+    def test_source_change_selects_only_that_lib(self) -> None:
+        """A file under libs/<lib>/ marks that lib source-changed and no other."""
+        changed = classify_changed_libs(["libs/a/src/vivarium/a/foo.py"], ["a", "b"])
+        assert changed.source_changed == ("a",)
+        assert changed.to_build == ("a",)
+        assert changed.pending_release == ()
+        assert not changed.shared_changed
+
+    def test_changelog_change_is_source_changed_and_pending_release(self) -> None:
+        """A CHANGELOG bump counts as both a source change and a pending release."""
+        changed = classify_changed_libs(["libs/a/CHANGELOG.rst"], ["a", "b"])
+        assert changed.source_changed == ("a",)
+        assert changed.pending_release == ("a",)
+
+    def test_nested_changelog_is_not_pending_release(self) -> None:
+        """Match release.yml's single-level ``libs/*/CHANGELOG.rst`` trigger exactly."""
+        changed = classify_changed_libs(["libs/a/docs/CHANGELOG.rst"], ["a"])
+        assert changed.source_changed == ("a",)
+        assert changed.pending_release == ()
+
+    def test_multiple_libs_reported_sorted(self) -> None:
+        """Several changed libs are reported in sorted order regardless of diff order."""
+        changed = classify_changed_libs(["libs/c/x.py", "libs/a/y.py"], ["a", "b", "c"])
+        assert changed.source_changed == ("a", "c")
+
+    def test_empty_diff_selects_nothing(self) -> None:
+        """An empty diff yields empty results rather than every lib."""
+        changed = classify_changed_libs([], ["a", "b"])
+        assert changed.source_changed == ()
+        assert changed.to_build == ()
+
+    def test_blank_lines_ignored(self) -> None:
+        """Blank entries from a raw git diff dump are skipped, not treated as paths."""
+        changed = classify_changed_libs(["", "  ", "libs/a/x.py", ""], ["a"])
+        assert changed.source_changed == ("a",)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "pyproject.toml",
+            "Makefile",
+            ".github/workflows/ci.yml",
+            ".github/actions/check-lib/action.yml",
+        ],
+        ids=["root-pyproject", "root-makefile", "workflow", "shared-action"],
+    )
+    def test_shared_path_builds_every_lib(self, path: str) -> None:
+        """A shared path affects all packages, so every lib is built."""
+        changed = classify_changed_libs([path], ["a", "b"])
+        assert changed.shared_changed
+        assert changed.to_build == ("a", "b")
+        # The shared path belongs to no lib, so nothing is resolved editably.
+        assert changed.source_changed == ()
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "libs/a/pyproject.toml",
+            "README.md",
+            "CLAUDE.md",
+            "LICENSE",
+            "Jenkinsfile",
+            ".github/labeler.yml",
+            ".github/CODEOWNERS",
+            "tools/ai-tools/skills/foo/SKILL.md",
+            ".claude-plugin/marketplace.json",
+        ],
+        ids=[
+            "lib-pyproject",
+            "root-readme",
+            "root-claude-md",
+            "license",
+            "root-jenkinsfile",
+            "labeler",
+            "codeowners",
+            "plugin-source",
+            "plugin-marketplace",
+        ],
+    )
+    def test_build_irrelevant_paths_do_not_build_every_lib(self, path: str) -> None:
+        """Paths that cannot affect a build don't trigger the full matrix."""
+        changed = classify_changed_libs([path], ["a", "b"])
+        assert not changed.shared_changed
+        assert changed.to_build != ("a", "b")
+
+    @pytest.mark.parametrize(
+        "path",
+        ["constraints.txt", ".python-version", ".github/actions/new-thing/action.yml"],
+        ids=["new-root-file", "new-dotfile", "new-shared-action"],
+    )
+    def test_unrecognized_path_outside_libs_builds_every_lib(self, path: str) -> None:
+        """Default to a full build: an unlisted shared path must not silently build nothing.
+
+        The deny-list is the point of ``is_shared_path`` - a new file nobody has
+        classified over-builds rather than leaving every package untested.
+        """
+        changed = classify_changed_libs([path], ["a", "b"])
+        assert changed.shared_changed
+        assert changed.to_build == ("a", "b")
+
+    def test_shared_path_preserves_source_changed(self) -> None:
+        """A shared path widens what is built without widening what installs editably."""
+        changed = classify_changed_libs(["Makefile", "libs/a/x.py"], ["a", "b"])
+        assert changed.to_build == ("a", "b")
+        assert changed.source_changed == ("a",)
+
+
+class TestBuildPythonMatrix:
+    """Tests for ``build_python_matrix``."""
+
+    def test_one_entry_per_python_version(self, make_monorepo: MonorepoFactory) -> None:
+        """Each lib is emitted once per version in its python_versions.json."""
+        libs = load_libs(make_monorepo({"a": {"python_versions": ["3.11", "3.12"]}}))
+        assert build_python_matrix(["a"], libs) == {
+            "include": [
+                {"library": "a", "python-version": "3.11"},
+                {"library": "a", "python-version": "3.12"},
+            ]
+        }
+
+    def test_per_lib_versions_are_independent(self, make_monorepo: MonorepoFactory) -> None:
+        """Libs fan out over their own declared versions, not a shared set."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {"python_versions": ["3.10"]},
+                    "b": {"python_versions": ["3.11", "3.12"]},
+                }
+            )
+        )
+        matrix = build_python_matrix(["b", "a"], libs)
+        assert matrix == {
+            "include": [
+                {"library": "a", "python-version": "3.10"},
+                {"library": "b", "python-version": "3.11"},
+                {"library": "b", "python-version": "3.12"},
+            ]
+        }
+
+    def test_empty_names_yields_empty_include(self, make_monorepo: MonorepoFactory) -> None:
+        """No libs yields an empty include for the caller to detect."""
+        libs = load_libs(make_monorepo({"a": {}}))
+        assert build_python_matrix([], libs) == {"include": []}
+
+    def test_raises_on_missing_python_versions(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib with no python_versions.json fails loudly instead of being dropped."""
+        libs = load_libs(make_monorepo({"a": {"omit_python_versions": True}}))
+        with pytest.raises(MissingPythonVersionsError, match="python_versions.json"):
+            build_python_matrix(["a"], libs)
+
+    def test_raises_on_unknown_library(self, make_monorepo: MonorepoFactory) -> None:
+        """An unknown lib name raises rather than being silently skipped."""
+        libs = load_libs(make_monorepo({"a": {}}))
+        with pytest.raises(KeyError):
+            build_python_matrix(["ghost"], libs)
+
+
 class TestCLIInstallEditable:
     """Tests for the ``install-editable`` CLI subcommand."""
 
@@ -1039,6 +1310,208 @@ class TestCLIBuildReleaseMatrix:
         )
         assert rc == 1
         assert "unknown library" in capsys.readouterr().err
+
+
+class TestCLIBuildDownstreamMatrix:
+    """Tests for the ``build-downstream-matrix`` CLI subcommand."""
+
+    def test_emits_downstream_and_excludes_released(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The downstream lib is emitted; the released lib is excluded."""
+        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {"include": [{"library": "a", "python-version": "3.11"}]}
+
+    def test_empty_for_leaf_release(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Releasing a library nothing depends on yields an empty include."""
+        libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "a", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 0
+        assert json.loads(capsys.readouterr().out) == {"include": []}
+
+    def test_shared_dependent_appears_once(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Releasing two libs a shared dependent uses lists that dependent once."""
+        libs_dir = make_monorepo(
+            {
+                "shared": {"deps": ["vivarium-x", "vivarium-y"]},
+                "x": {},
+                "y": {},
+            }
+        )
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "x y", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {"include": [{"library": "shared", "python-version": "3.11"}]}
+
+    def test_emits_one_entry_per_python_version(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Each downstream is emitted once per version in its python_versions.json."""
+        libs_dir = make_monorepo(
+            {"a": {"deps": ["vivarium-b"], "python_versions": ["3.11", "3.12"]}, "b": {}}
+        )
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {
+            "include": [
+                {"library": "a", "python-version": "3.11"},
+                {"library": "a", "python-version": "3.12"},
+            ]
+        }
+
+    def test_errors_on_missing_python_versions(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A downstream lib with no python_versions.json fails the gate instead of being dropped."""
+        libs_dir = make_monorepo(
+            {"a": {"deps": ["vivarium-b"], "omit_python_versions": True}, "b": {}}
+        )
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 1
+        assert "python_versions.json not found" in capsys.readouterr().err
+
+    def test_clean_exit_on_unknown_library(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """An unknown released library name exits non-zero with a clear message."""
+        libs_dir = make_monorepo({"build-utils": {}, "a": {}})
+        rc = main_with(
+            ["build-downstream-matrix", "--released", "ghost", "--libs-dir", str(libs_dir)]
+        )
+        assert rc == 1
+        assert "unknown library" in capsys.readouterr().err
+
+
+class TestCLIClassifyChanges:
+    """Tests for the ``classify-changes`` CLI subcommand."""
+
+    @staticmethod
+    def _classify(tmp_path: Path, libs_dir: Path, changed_files: Sequence[str]) -> int:
+        """Write ``changed_files`` to a diff file and run ``classify-changes`` over it."""
+        changed_file = tmp_path / "changed-files.txt"
+        changed_file.write_text("\n".join(changed_files) + "\n")
+        return main_with(
+            [
+                "classify-changes",
+                "--changed-files",
+                str(changed_file),
+                "--libs-dir",
+                str(libs_dir),
+            ]
+        )
+
+    def test_emits_every_output_the_workflows_read(
+        self,
+        tmp_path: Path,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The JSON carries each key the detect jobs pipe into $GITHUB_OUTPUT."""
+        libs_dir = make_monorepo({"a": {}, "b": {}})
+        rc = self._classify(tmp_path, libs_dir, ["libs/a/CHANGELOG.rst"])
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {
+            "source-changed": ["a"],
+            "pending-release": ["a"],
+            "to-build": ["a"],
+            "shared-changed": False,
+            "matrix": {"include": [{"library": "a", "python-version": "3.11"}]},
+            "has-changes": True,
+        }
+
+    def test_no_changes_reports_has_changes_false(
+        self,
+        tmp_path: Path,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A diff touching no lib reports has-changes false with an empty matrix."""
+        libs_dir = make_monorepo({"a": {}, "b": {}})
+        rc = self._classify(tmp_path, libs_dir, ["README.md"])
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["has-changes"] is False
+        assert out["matrix"] == {"include": []}
+
+    def test_shared_path_builds_all_libs_at_all_versions(
+        self,
+        tmp_path: Path,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A workflow change fans every lib out over its own python versions."""
+        libs_dir = make_monorepo(
+            {"a": {"python_versions": ["3.11", "3.12"]}, "b": {"python_versions": ["3.11"]}}
+        )
+        rc = self._classify(tmp_path, libs_dir, [".github/workflows/ci.yml"])
+        assert rc == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["matrix"]["include"] == [
+            {"library": "a", "python-version": "3.11"},
+            {"library": "a", "python-version": "3.12"},
+            {"library": "b", "python-version": "3.11"},
+        ]
+        # Nothing installs editably: the shared path belongs to no lib.
+        assert out["source-changed"] == []
+
+    def test_errors_on_missing_python_versions(
+        self,
+        tmp_path: Path,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A changed lib with no python_versions.json fails CI instead of being dropped."""
+        libs_dir = make_monorepo({"a": {"omit_python_versions": True}})
+        rc = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
+        assert rc == 1
+        assert "python_versions.json not found" in capsys.readouterr().err
+
+    def test_errors_on_missing_changed_files(
+        self, tmp_path: Path, make_monorepo: MonorepoFactory
+    ) -> None:
+        """An absent diff file raises rather than reading as an empty diff."""
+        libs_dir = make_monorepo({"a": {}})
+        with pytest.raises(FileNotFoundError):
+            main_with(
+                [
+                    "classify-changes",
+                    "--changed-files",
+                    str(tmp_path / "absent.txt"),
+                    "--libs-dir",
+                    str(libs_dir),
+                ]
+            )
 
 
 class TestCLIVerifyEditable:

@@ -1,3 +1,7 @@
+**1.0.9 - 07/31/26**
+
+- Make the ``hdf`` module private
+
 **1.0.8 - 07/23/26**
 
 - Streamline package __init__.py docstring

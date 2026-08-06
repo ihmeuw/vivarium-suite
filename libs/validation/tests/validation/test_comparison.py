@@ -1,4 +1,4 @@
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Literal
 from unittest import mock
@@ -12,7 +12,11 @@ from vivarium.fuzzy_checker import TestResult
 from vivarium_inputs import interface
 
 from vivarium.validation.bundle import RatioMeasureDataBundle
-from vivarium.validation.comparison import FuzzyComparison, TargetIntervalConfig
+from vivarium.validation.comparison import (
+    FuzzyComparison,
+    StratifiedTargetIntervalConfig,
+    StratValue,
+)
 from vivarium.validation.constants import (
     DAYS_PER_YEAR,
     DRAW_INDEX,
@@ -386,16 +390,20 @@ def test_target_interval_configuration_setter(
     test_bundle: RatioMeasureDataBundle,
     reference_bundle: RatioMeasureDataBundle,
 ) -> None:
-    """Test that target_interval_configuration can be set with a TargetIntervalConfig."""
+    """Test that target_interval_configuration can be set with a StratifiedTargetIntervalConfig."""
     comparison = FuzzyComparison(test_bundle, reference_bundle)
-    config = TargetIntervalConfig(stratifications={"sex": "all"}, relative_error=0.1)
+    config = StratifiedTargetIntervalConfig(
+        relative_error=0.1, stratifications={"sex": "all"}
+    )
     comparison.target_interval_configuration = config
     assert comparison.target_interval_configuration is config
     assert comparison.target_interval_configuration.stratifications == {"sex": "all"}
     assert comparison.target_interval_configuration.relative_error == 0.1
 
     # Test overwrite with a new config
-    new_config = TargetIntervalConfig(stratifications={"age": "specific"}, relative_error=0.2)
+    new_config = StratifiedTargetIntervalConfig(
+        relative_error=0.2, stratifications={"age": "specific"}
+    )
     comparison.target_interval_configuration = new_config
     assert comparison.target_interval_configuration is new_config
     assert comparison.target_interval_configuration.stratifications == {"age": "specific"}
@@ -403,3 +411,128 @@ def test_target_interval_configuration_setter(
     # Test setting back to None
     comparison.target_interval_configuration = None
     assert comparison.target_interval_configuration is None
+
+
+@pytest.mark.parametrize(
+    "stratifications, index_info, expected",
+    [
+        # "all" matches only groups where the stratification is absent
+        ({"sex": "all"}, {"age": "Early Neonatal", "year": 2024}, True),
+        ({"sex": "all"}, {"sex": "Male", "age": "Early Neonatal"}, False),
+        ({"sex": "all"}, {}, True),
+        # "specific" matches only groups where the stratification is present
+        ({"sex": "specific"}, {"sex": "Male"}, True),
+        ({"sex": "specific"}, {"age": "Early Neonatal"}, False),
+        ({"sex": "specific"}, {}, False),
+        # An explicit value matches only that value
+        ({"sex": "Male"}, {"sex": "Male", "age": "Early Neonatal"}, True),
+        ({"sex": "Male"}, {"sex": "Female", "age": "Early Neonatal"}, False),
+        ({"sex": "Male"}, {"age": "Early Neonatal"}, False),
+        # Multiple filters are ANDed together
+        (
+            {"sex": "specific", "age": "Early Neonatal"},
+            {"sex": "Male", "age": "Early Neonatal"},
+            True,
+        ),
+        (
+            {"sex": "specific", "age": "Early Neonatal"},
+            {"sex": "Male", "age": "Late Neonatal"},
+            False,
+        ),
+        ({"sex": "specific", "age": "Early Neonatal"}, {"age": "Early Neonatal"}, False),
+        # No filters applies to everything, as the base class does
+        ({}, {"sex": "Male"}, True),
+    ],
+)
+def test_stratified_target_interval_config_applies_to(
+    stratifications: dict[str, StratValue],
+    index_info: dict[str, StratValue],
+    expected: bool,
+) -> None:
+    """Test which groups a StratifiedTargetIntervalConfig applies to."""
+    config = StratifiedTargetIntervalConfig(
+        relative_error=0.1, stratifications=stratifications
+    )
+    assert config.applies_to(index_info) is expected
+
+
+@pytest.mark.parametrize("relative_error", [-0.1, 0.0, 1.1])
+def test_stratified_config_inherits_relative_error_validation(
+    relative_error: float,
+) -> None:
+    """Test that the relative_error validation inherited from the base class still fires."""
+    with pytest.raises(ValueError, match="relative_error must be between"):
+        StratifiedTargetIntervalConfig(
+            relative_error=relative_error, stratifications={"sex": "all"}
+        )
+
+
+def test_stratified_config_is_keyword_only() -> None:
+    """Test that positional construction fails rather than binding in field order."""
+    with pytest.raises(TypeError, match="positional argument"):
+        StratifiedTargetIntervalConfig({"sex": "all"}, 0.1)  # type: ignore[call-arg, arg-type]
+
+
+@pytest.mark.parametrize(
+    "stratifications, applies",
+    [
+        ({"sex": "all"}, lambda info: "sex" not in info),
+        ({"sex": "specific"}, lambda info: "sex" in info),
+        ({"sex": "male"}, lambda info: info.get("sex") == "male"),
+        # "year" rather than "age" because the fixture has two years but only one
+        # age, so this exercises rejection on a differing value, not just absence
+        (
+            {"sex": "specific", "year": "2020"},
+            lambda info: "sex" in info and info.get("year") == "2020",
+        ),
+    ],
+    ids=["all", "specific", "value", "combined"],
+)
+def test_verify_applies_stratified_target_interval(
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+    stratifications: dict[str, StratValue],
+    applies: Callable[[dict[str, StratValue]], bool],
+) -> None:
+    """Test that verify threads a StratifiedTargetIntervalConfig through to the bounds.
+
+    ``applies`` restates each filter independently of
+    :meth:`~vivarium.validation.comparison.StratifiedTargetIntervalConfig.applies_to`,
+    so a wrong filter cannot satisfy these assertions by agreeing with itself.
+    """
+    comparison = FuzzyComparison(test_bundle, reference_bundle)
+    comparison.target_interval_configuration = StratifiedTargetIntervalConfig(
+        relative_error=0.1, stratifications=stratifications
+    )
+    # step_size=None leaves the reference data unscaled, keeping targets inside [0, 1]
+    # so the interval is not clipped
+    comparison.verify(step_size=None)
+
+    # A group the config matches gets an interval target, (t * 0.9, t * 1.1), so its
+    # bounds differ; a group it does not match keeps the exact target it started with,
+    # so its bounds are equal. Count both to be sure each case actually occurred.
+    with_interval = without_interval = 0
+    stratified_results = comparison.proportion_test_results["stratified"]
+    assert isinstance(stratified_results, dict)
+    for results in stratified_results.values():
+        for result in results.values():
+            if applies(result.index_info or {}):
+                assert result.target_lower_bound == pytest.approx(
+                    result.target_upper_bound * 0.9 / 1.1
+                )
+                with_interval += 1
+            else:
+                assert result.target_lower_bound == result.target_upper_bound
+                without_interval += 1
+    # A filter matching every group or none would satisfy one branch vacuously
+    assert with_interval and without_interval
+
+    # The population-level test is described to the filter with no index values
+    overall_result = comparison.proportion_test_results["overall"]
+    assert isinstance(overall_result, TestResult)
+    if applies({}):
+        assert overall_result.target_lower_bound == pytest.approx(
+            overall_result.target_upper_bound * 0.9 / 1.1
+        )
+    else:
+        assert overall_result.target_lower_bound == overall_result.target_upper_bound

@@ -1,8 +1,9 @@
 """Smoke tests for the ``vivarium-artifact`` distribution."""
 
 import vivarium.artifact
+from vivarium.artifact import _hdf as hdf_module
 from vivarium.artifact import artifact as artifact_module
-from vivarium.artifact import hdf as hdf_module
+from vivarium.artifact import entity_key as entity_key_module
 
 
 def test_version_resolves_to_installed_distribution() -> None:
@@ -27,12 +28,12 @@ def test_public_api_reexports_resolve_to_source_symbols() -> None:
     """
     assert vivarium.artifact.Artifact is artifact_module.Artifact
     assert vivarium.artifact.ArtifactException is artifact_module.ArtifactException
-    assert vivarium.artifact.EntityKey is hdf_module.EntityKey
+    assert vivarium.artifact.EntityKey is entity_key_module.EntityKey
 
 
 def test_submodules_importable() -> None:
-    """Verify ``vivarium.artifact.artifact`` and ``vivarium.artifact.hdf``
-    resolve, including the cross-module ``from vivarium.artifact import hdf``
+    """Verify ``vivarium.artifact.artifact`` and ``vivarium.artifact._hdf``
+    resolve, including the cross-module ``from vivarium.artifact import _hdf``
     rewrite done during the extract.
     """
-    assert artifact_module.hdf is hdf_module
+    assert artifact_module._hdf is hdf_module
