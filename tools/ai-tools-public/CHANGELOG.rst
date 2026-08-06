@@ -1,4 +1,4 @@
-**0.2.0 - 07/28/26**
+**0.2.0 - 08/07/26**
 
 - **Breaking:** Remove ``/simsci:code-reviewer``. There is no longer a review-only entry point.
 - Implement new ``/simsci:pr-prep`` skill which carries a change you have already written

@@ -1,15 +1,10 @@
-**0.25.0 - 07/28/26**
+**0.25.0 - 08/07/26**
 
-- Track ``simsci``'s replacement of ``/simsci:code-reviewer`` with ``/simsci:pr-prep`` in
-  ``ticket-triage`` and the README
-- ``model-development``: delegate the finalize sequence to ``simsci``'s new shared ``_finalize-core``
-  skill (keeping only the model-specific steps) and add the ``simsci:_review_scorer`` grant its
-  review phase needs
-- ``model-development``: fix verification traces being posted before the PR existed, and
-  ``gh pr create`` being used where ``team-conventions`` §3 mandates the GitHub MCP
-- ``model-development``: pass verification artifacts the user declined to keep as hold-out
-  paths so the commit grouping excludes them
-- ``ticket-triage``: accept a pre-scoped set from the caller instead of asking the user to draw the scope line again
+- Replace references to ``/simsci:code-reviewer`` with ``/simsci:pr-prep``
+- ``model-development``: delegate the finalize sequence to ``simsci``'s new shared
+  ``_finalize-core`` skill, keeping only the model-specific steps
+- Bugfix (``model-development``): post the verification traces after the PR exists, not before
+- Bugfix (``model-development``): open the PR with the GitHub MCP, not ``gh pr create``
 
 **0.24.0 - 07/27/26**
 
