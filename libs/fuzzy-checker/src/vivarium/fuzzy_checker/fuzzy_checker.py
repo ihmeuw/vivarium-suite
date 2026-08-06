@@ -274,51 +274,29 @@ class FuzzyChecker:
         target_val
             The original target proportion value.
         index_info
-            A mapping of stratification names to their values for the current row.
+            A mapping of index names to their values for the current row.
         config
-            Optional configuration for applying a relative error to specific groups based on their index values.
+            Optional configuration for applying a relative error to the target.
 
         Returns
         -------
-            The original target_val if no config or no match, or a
-            (lower_bound, upper_bound) tuple if the config matches.
+            The original target_val if there is no config or it does not apply to
+            this group, or a (lower_bound, upper_bound) tuple if it does.
 
         """
-        if config is None:
+        if config is None or not config.applies_to(index_info):
             return target_val
 
-        update_target = True
-        index_names = set(index_info.keys())
-        for strat_name, filter_value in config.stratifications.items():
-            if filter_value == "all" and strat_name in index_names:
-                # "all" means the stratification must NOT be present
-                update_target = False
-                break
-            elif filter_value == "specific" and strat_name not in index_names:
-                # "specific" means the stratification must be present
-                update_target = False
-                break
-            elif filter_value not in ("all", "specific") and (
-                strat_name not in index_names or index_info.get(strat_name) != filter_value
-            ):
-                # A specific value: stratification must be present with this exact value
-                update_target = False
-                break
-
-        if update_target:
-            # All conditions matched — apply the relative error interval
-            lower = target_val * (1 - config.relative_error)
-            upper = target_val * (1 + config.relative_error)
-            clipped_lower = max(0.0, lower)
-            clipped_upper = min(1.0, upper)
-            if clipped_lower != lower or clipped_upper != upper:
-                logger.warning(
-                    f"Target interval clipped to [{clipped_lower}, {clipped_upper}] "
-                    f"(original: [{lower}, {upper}]) due to target_interval_configuration."
-                )
-            return (clipped_lower, clipped_upper)
-        else:
-            return target_val
+        lower = target_val * (1 - config.relative_error)
+        upper = target_val * (1 + config.relative_error)
+        clipped_lower = max(0.0, lower)
+        clipped_upper = min(1.0, upper)
+        if clipped_lower != lower or clipped_upper != upper:
+            logger.warning(
+                f"Target interval clipped to [{clipped_lower}, {clipped_upper}] "
+                f"(original: [{lower}, {upper}]) due to target_interval_configuration."
+            )
+        return (clipped_lower, clipped_upper)
 
     def _test_all_groups(
         self,
@@ -344,7 +322,7 @@ class FuzzyChecker:
         fail_bayes_factor_cutoff
             The Bayes factor cutoff for rejecting the null hypothesis.
         target_interval_config
-            Optional configuration for applying a relative error to specific groups based on their index values.
+            Optional configuration for applying a relative error to the target proportions.
         """
         for idx, row in data.iterrows():
             numerator_val = row["numerator"]
@@ -417,7 +395,7 @@ class FuzzyChecker:
         fail_bayes_factor_cutoff
             The Bayes factor above which a hypothesis test is considered to favor a bug/issue.
         target_interval_config
-            Optional configuration for applying a relative error to specific groups based on their index values.
+            Optional configuration for applying a relative error to the target proportions.
 
         """
 
@@ -477,7 +455,8 @@ class FuzzyChecker:
             combined_data["weighted_target"].sum() / combined_data["denominator"].sum()
         )
 
-        # Apply target interval config to overall test - this would require "all" for all stratifications
+        # The population-level test has no index values, so applies_to is called
+        # with an empty index_info
         overall_target: float | tuple[float, float] = self._apply_target_interval_config(
             target_val=weighted_target,
             index_info={},
