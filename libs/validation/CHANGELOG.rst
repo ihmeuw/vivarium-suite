@@ -1,4 +1,4 @@
-**0.2.0 - 08/04/26**
+**0.2.0 - 08/06/26**
 
 - **Breaking change.** ``set_target_interval`` now builds a ``StratifiedTargetIntervalConfig``,
   a subclass ``vivarium.fuzzy_checker.TargetIntervalConfig`` that owns the ``stratifications``

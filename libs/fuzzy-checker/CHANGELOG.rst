@@ -1,4 +1,4 @@
-**0.3.0 - 08/04/26**
+**0.3.0 - 08/06/26**
 
 **Breaking changes**
 - ``TargetIntervalConfig`` no longer takes ``stratifications``; it now applies to every
