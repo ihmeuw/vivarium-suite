@@ -16,10 +16,13 @@ catalog (``.claude-plugin/marketplace.json``) lives at the monorepo root.
 
 It includes:
 
-**Code Reviewer**
+**PR Prep**
 
-- ``/simsci:code-reviewer <PR or description>`` — parallel multi-agent review
-  that fans out to specialist sub-agents focused on:
+- ``/simsci:pr-prep <description>`` — takes a change you have already written on
+  the current branch through to a PR ready for review, opening a new PR or
+  updating the branch's existing one; the argument is optional context, not a PR
+  reference. It opens with a parallel multi-agent review that fans out to
+  specialist sub-agents focused on:
 
   - Maintainability
   - DRY
@@ -32,9 +35,20 @@ It includes:
   per-finding ``_review_scorer`` Haiku sub-agent, and findings below 50 are
   dropped — so only verified issues reach the report, each shown with its score.
 
-  After the review, if an installed skill covers turning leftover findings into
-  tickets, the command offers to hand off to it (the SimSci team's ``simsci-internal``
-  plugin provides one).
+  It then proposes a **disposition per finding** (fix now / ticket / drop, each
+  with a one-line why), bucketing by scope and using the confidence score only to
+  break ties. The table is a reported plan, not a gate — you can re-bucket any row.
+  It applies the fix-now set as **one commit per finding** and re-validates with
+  the ``_validator`` sub-agent. A fix that cannot be made green is reverted and
+  becomes a ticket rather than a red PR. The finish — leftover triage, the PR gate,
+  the commit history, the PR, and a comment recording what went unaddressed —
+  belongs to the internal ``_finalize-core`` skill.
+
+  It requires a clean working tree, so each fix is its own revertible commit
+  (a bare ``WIP`` commit is enough to satisfy that, since ``_finalize-core`` offers
+  to reflow the history into reviewable commits at the end). A PR it opens is a
+  **draft**; one that is already open keeps whatever state it had. Marking a draft
+  ready and announcing it are separate deliberate acts it only offers.
 
 **Regression Debugger**
 
@@ -78,7 +92,8 @@ It includes:
   then integrates the two lineages and fans out a ``_validator`` for the
   test/lint/type suite and runs the shared ``_review-core`` skill for review,
   iterating while preserving the black box. It always creates the feature branch
-  up front and gates PR creation on explicit user approval.
+  up front, and hands the finish to the shared ``_finalize-core`` skill, which
+  gates PR creation on explicit user approval.
 
 **Auto-triggering skills**
 
@@ -144,7 +159,7 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
    /plugin marketplace add /path/to/vivarium-suite
    /plugin install simsci@vivarium-ai-tools
 
-Once installed, the entry points are ``/simsci:code-reviewer``,
+Once installed, the entry points are ``/simsci:pr-prep``,
 ``/simsci:regression-debugger``, ``/simsci:git-rescue``,
 ``/simsci:type-hinter``, and ``/simsci:framework-development``, plus the
 auto-triggering skills above.
@@ -174,12 +189,34 @@ never the bare name.
 The multi-agent review fan-out is defined once, in the internal ``_review-core``
 skill (``skills/_review-core/SKILL.md``, hidden from the ``/`` menu via
 ``user-invocable: false``), and invoked **inline** by
-``/simsci:code-reviewer`` after it gathers PR context. A skill invoked from
+``/simsci:pr-prep`` after it gathers the change. A skill invoked from
 another skill runs inline in the same main session — not as a sub-agent — so
 ``_review-core`` can spawn the ``_review_*`` fan-out itself, keeping it one
 level deep. That is what lets the review be reused by other main-session
 workflows (``/simsci:framework-development``'s review phase, and the ``simsci-internal``
 plugin's model-development loop) without duplicating the fan-out.
+
+The finish is defined once the same way, in the internal ``_finalize-core`` skill
+(also ``user-invocable: false``, also invoked inline): leftover-finding triage, the
+PR approval gate, a reviewable commit history, the draft PR, and the comment
+recording what was *not* addressed. Three paths share it — ``/simsci:pr-prep``,
+``/simsci:framework-development``'s Phase 5, and the ``simsci-internal`` plugin's
+model-development loop — so the steps that are easy to drop when improvising, like
+the backlog dedup and the not-addressed comment, are structural rather than
+per-caller. Each caller keeps only what is genuinely its own: worktree teardown for
+framework-development, verification-trace posting and stacked per-layer PR ordering
+for model-development.
+
+What is deliberately **not** shared is the step between review and finish — acting
+on the findings. ``/simsci:framework-development`` re-dispatches each finding to the
+sub-agent that wrote the code, in its own worktree, across up to three budgeted
+rounds, because its implementer is blind and its first pass is expected to be
+wrong. ``/simsci:pr-prep`` buckets the findings by scope and edits in the main
+session, because the code already exists and was written by someone who could see
+all of it and because a review of a pre-existing branch surfaces real findings
+about code the change never touched, which the framework-development loop never
+encounters. Same purpose, different mechanism and budget; an abstraction spanning
+both would be a shell with two disjoint bodies.
 
 ``_review-core`` runs two one-level fan-outs in sequence, tiered by model. The
 five review agents run on **Sonnet**; once they return, ``_review-core`` collects
@@ -241,12 +278,27 @@ Code:
 - ``_type_hint_file`` (the type-hinter's per-file teammate) is write-capable
   within its assigned file and runs the package's mypy invocation via
   ``Bash``.
-- The ``/simsci:code-reviewer``, ``/simsci:regression-debugger``,
+- The ``/simsci:pr-prep``, ``/simsci:regression-debugger``,
   and ``/simsci:framework-development`` skill bodies (running in the main
   session) gather PR/repo context through the GitHub MCP server (a plugin
   dependency), falling back to read-only git/``gh`` commands when the MCP is
-  unavailable; ``/simsci:framework-development`` additionally writes files
-  and runs the project's check commands as it builds.
+  unavailable; ``/simsci:framework-development`` and ``/simsci:pr-prep``
+  additionally write files and run the project's check commands.
+- ``/simsci:pr-prep`` is the plugin's **write-capable review follow-through**, and
+  unlike the framework-development build it edits **directly in the main
+  session** — there is no worktree sandbox, because the code, the tests, and the
+  review all already exist and the fixes are small targeted edits rather than a
+  blind build. Its containment is procedural, and worth knowing before you install
+  it: nothing is edited before the per-finding disposition table is printed, so the
+  full plan is on screen first; it requires a clean working tree, records the
+  pre-apply commit, and lands **one commit per finding**, so any single fix is
+  revertible; each fix stays within the bounded footprint that put its finding in
+  the fix-now bucket, and one that outgrows it is escalated to a ticket rather than
+  expanded, with the real diffstat printed at the end; and pushing and opening the
+  PR happen only after the run's one approval gate, inside ``_finalize-core``,
+  which stops at a draft PR — leaving an already-open PR's state untouched — and
+  never marks one ready or announces it unasked. It spawns ``_validator``, which
+  executes the project's test suite (see that agent above).
 
 For destructive or out-of-scope commands, Claude Code's default
 permission system prompts you before execution, so a prompt-injected

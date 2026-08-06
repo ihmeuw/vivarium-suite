@@ -10,7 +10,7 @@ in the ``vivarium-suite`` monorepo and is published through the
 
 ``simsci-internal`` declares the ``simsci`` plugin (``tools/ai-tools-public/``) as a
 dependency: installing ``simsci-internal`` automatically installs and enables the generic
-workflows too — multi-agent code review, git rescue, commit splitting, type
+workflows too — the review-to-PR ``pr-prep`` loop, git rescue, commit splitting, type
 hinting, regression debugging, change propagation, workflow assessment, and the
 framework-development TDD loop all live in ``simsci`` under the
 ``/simsci:`` namespace (see that plugin's README). ``simsci-internal`` adds the
@@ -66,9 +66,13 @@ It includes:
   plan comment, a new Jira ticket, or a Confluence design doc; ships a
   browser-based Mermaid diagramming companion
 - ``ticket-triage`` — turn code-review findings (e.g. from
-  ``/simsci:code-reviewer``) that are out of scope for the current PR into
+  ``/simsci:pr-prep``) that are out of scope for the current PR into
   Jira ticket recommendations, deduplicated against the MIC backlog via the
-  ``_duplicate_finder`` sub-agent.
+  ``_duplicate_finder`` sub-agent. It is also the skill ``simsci``'s
+  ``_finalize-core`` seam resolves to, so every path that opens a PR —
+  ``/simsci:pr-prep``, ``/simsci:framework-development``, and
+  ``model-development`` — routes its leftover findings here. When the caller has
+  already drawn the scope line, it takes that as given rather than re-asking.
 - ``repo-maintenance`` — audit both plugins' AI plaintext (skills, agents,
   READMEs, root ``CLAUDE.md``) for drift against upstream sources via
   per-unit ``_claim_auditor`` sub-agents; fixes are gated on user approval.
@@ -120,7 +124,7 @@ at the repo root (the directory containing ``.claude-plugin/``), not at
    /plugin install simsci-internal@vivarium-ai-tools
 
 Once installed, the team-specific entry point is ``/simsci-internal:model-development``;
-the generic entry points (``/simsci:code-reviewer``,
+the generic entry points (``/simsci:pr-prep``,
 ``/simsci:framework-development``, ``/simsci:git-rescue``, and friends)
 come from the ``simsci`` dependency. Cross-plugin references are always
 namespaced: ``simsci-internal``'s workflows spawn ``simsci``'s sub-agents as
@@ -133,8 +137,11 @@ The fan-out architecture (main-session orchestration, the shared
 ``_review-core`` review skill, model tiering, and per-agent tool grants) is
 documented in the ``simsci`` README — most of the sub-agents now live
 there. ``/simsci-internal:model-development`` reuses that machinery inline: it spawns
-``simsci:_validator`` and the ``simsci:_review_*`` agents and invokes
-the ``simsci:_review-core`` skill for its review phase.
+``simsci:_validator`` and the ``simsci:_review_*`` agents, invokes
+the ``simsci:_review-core`` skill for its review phase, and hands its finish to the
+``simsci:_finalize-core`` skill — which routes leftover findings back into this
+plugin's ``ticket-triage`` and the PR itself through ``team-conventions``, since
+``simsci``'s seams resolve here when both plugins are enabled.
 
 The agents that ship in *this* plugin:
 

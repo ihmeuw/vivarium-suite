@@ -33,7 +33,7 @@ The user describes the session, not its id. Resolve it from cheap metadata —
 The definition is the contract — the workflow's slash-command or skill file,
 wherever it is defined: the project's or user's `.claude/commands/<name>.md` /
 `.claude/skills/<name>/SKILL.md`, or, for a namespaced workflow like
-`/simsci:code-reviewer`, the `commands/`/`skills/` tree of the installed
+`/simsci:pr-prep`, the `commands/`/`skills/` tree of the installed
 plugin (resolve the plugin from the `plugin:name` prefix in the
 `<command-name>` tag). Distill only what it *mandates*:
 
