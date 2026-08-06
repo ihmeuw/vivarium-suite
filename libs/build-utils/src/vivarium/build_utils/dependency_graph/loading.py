@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import re
+import sys
 from collections.abc import Mapping, Sequence
 from functools import reduce
 from pathlib import Path
 
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
-from packaging.utils import canonicalize_name
+from packaging.utils import NormalizedName, canonicalize_name
 
-try:
+if sys.version_info >= (3, 11):
     import tomllib
-except ModuleNotFoundError:  # Python < 3.11
-    import tomli as tomllib  # type: ignore[no-redef]
+else:  # Python < 3.11
+    import tomli as tomllib
 
 from .models import DEFAULT_EXTRAS, Lib
 
@@ -120,7 +121,7 @@ def _resolve_upstreams(
     pyproject: Mapping[str, object],
     own_dist: str,
     extras: Sequence[str],
-    monorepo_dists: Mapping[str, str],
+    monorepo_dists: Mapping[NormalizedName, str],
 ) -> dict[str, list[SpecifierSet]]:
     """Resolve in-tree upstream specifiers over runtime deps plus ``extras``.
 
