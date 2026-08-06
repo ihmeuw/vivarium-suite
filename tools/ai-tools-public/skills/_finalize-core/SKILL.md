@@ -10,17 +10,6 @@ Finalize and open a PR for the work handed over in: $ARGUMENTS
 This is the **finalize core** — the single definition of the back half every path
 shares, from leftover triage through to the draft PR.
 
-Run it **inline, never as a forked sub-agent**: it spawns sub-agents through
-`commit-splitter` and the ticket-filing skill, it runs a user gate, and its commits
-must land in the caller's own tree.
-
-**Not this unit's job** — the caller owns these: producing the review, deciding
-which findings to address, applying the fixes, reaching a validation verdict, and
-tearing down any worktrees or scratch state *before* handing over. Also
-caller-specific and deliberately absent: posting domain artifacts to the PR, and
-any stacked-PR ordering rule. Work only from the handoff in `$ARGUMENTS`; do not
-review code, edit source, or re-litigate a disposition here.
-
 **Where this stops.** A PR that exists, has a reviewable history behind it, and
 carries the not-addressed comment. A PR you open is a **draft**; a PR that was
 already open keeps whatever state it had. Moving a draft to ready for review and
@@ -36,7 +25,7 @@ telling the team are deliberate acts the user takes — offer, never do them una
   into the PR body as given; do **not** adjudicate whether work in this state may
   ship. Callers legitimately differ — one carries residual failures forward, another
   refuses to finalize on exhaustion — and each already decided by arriving here.
-- The **apply ref**, if the caller committed fixes of its own during this run —
+- The **pre-apply ref**, if the caller committed fixes of its own during this run —
   HEAD as it stood before the first of them. Everything after it is the caller's
   scaffolding and gets regrouped in Step 4; everything at or before it is the
   user's history and is never touched. Omitted means the caller added no commits.
@@ -91,34 +80,21 @@ place, saying what would have happened.
 
 ## Step 4 — Shape a reviewable history
 
-**Never rewrite a commit the user made before this run**, whatever its subject says.
-A `WIP` or `first cut` message is not an invitation to reflow. The boundary is the
-caller's **apply ref**, never a commit message.
+**Never rewrite a commit the user made before this run**, whatever its subject
+says. The boundary is the caller's **pre-apply ref**, not a commit message.
 
-Do these in order — they compose, and only the second one groups anything.
+If the caller reported a pre-apply ref, collapse everything above it: `git branch
+finalize-core-backup` at HEAD, then `git reset --soft <pre-apply-ref>`. That
+series is per-finding fix scaffolding, not shipping history. `--soft` leaves the
+working tree alone, so the collapsed fixes join anything already uncommitted.
 
-1. **Collapse the caller's own commits**, if it reported an apply ref with commits
-   after it. That series is fix scaffolding — one commit per finding so a bad fix
-   stayed revertible mid-loop — not history worth shipping. `git branch
-   finalize-core-backup` at HEAD, then `git reset --soft <apply-ref>`. Everything at
-   or before the ref is untouched, and `--soft` leaves the working tree alone, so
-   those fixes land in the tree *alongside* anything already uncommitted rather than
-   needing a second pass. A fix applied and later reverted nets out to nothing,
-   which is the point.
-2. **Group whatever is now uncommitted** — the collapsed fixes, work the caller
-   never committed, or both — by invoking the `simsci:commit-splitter` skill
-   **exactly once**, naming any hold-out paths as excluded and passing the partition
-   rule in its brief. Skip if the tree is clean.
+Then invoke `simsci:commit-splitter` **once** over whatever is uncommitted, naming
+hold-out paths as excluded and passing the partition rule. Clean tree and no
+pre-apply ref means the history is the user's — say so and move on.
 
-If step 1 had no apply ref and step 2 found a clean tree, the history is the user's.
-Say so and move on.
-
-Because commits at or before the apply ref are never touched, nothing already
-pushed is unwound and the Step 5 push stays a fast-forward. Still **refuse** step 1
-if a commit *after* the apply ref has somehow been pushed, if a rebase or merge is
-in progress, or if HEAD is detached; those go to `/simsci:git-rescue`.
-
-Keep any backup ref until the user signs off in Step 6.
+**Refuse the collapse** if a commit above the pre-apply ref is already pushed, if a
+rebase or merge is in progress, or if HEAD is detached; those go to
+`/simsci:git-rescue`. Keep the backup ref until the user signs off in Step 6.
 
 ## Step 5 — Push and open the PR
 
@@ -169,7 +145,14 @@ once the user confirms things look right, or hand them the command.
 
 ## Constraints
 
-- Never `git reset --hard`, `git checkout -- .`, `git clean -f`, or force-push. A
-  branch needing real history surgery goes to `/simsci:git-rescue`, not here
+- Never `git reset --hard`, `git checkout -- .`, `git clean -f`, or force-push.
+  Step 4's collapse is `--soft` and only over commits made during this run, so it
+  never needs a force push. Further, rebasing a stale branch is not this unit's
+  job — being behind the base is a fine state for a PR — and real history surgery
+  goes to `/simsci:git-rescue`
 - No silent omissions: every finding handed over as a leftover appears in Step 2's
   triage or Step 6's comment, or both, and never in neither
+- Work only from the handoff in `$ARGUMENTS` — don't re-review the diff or
+  re-litigate a disposition; the buckets arrive decided
+- Do not edit source here. This unit shapes history and files reports; the fixes
+  belonged to the caller

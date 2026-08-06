@@ -11,9 +11,7 @@ This is the **review core** — the single definition of the parallel fan-out, t
 functional-correctness pass, the per-finding confidence scoring, and the
 synthesis. It is invoked **inline** by `/simsci:pr-prep` (after it gathers
 context), and is designed to be reused the same way by other main-session
-commands (e.g. a development workflow's review phase). Because it runs inline in
-the caller's main-session context, its fan-out to the `_review_*` sub-agents
-stays one level deep — so run this unit inline and **not** as a forked sub-agent.
+commands (e.g. a development workflow's review phase).
 
 **Not this unit's job** — the caller owns these: gathering the review target
 (PR/diff context), and any follow-up action on the findings (e.g. filing
