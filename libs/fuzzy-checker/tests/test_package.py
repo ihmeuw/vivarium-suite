@@ -24,5 +24,3 @@ def test_public_api_exports() -> None:
     """
     for name in ("FuzzyChecker", "TestResult", "TargetIntervalConfig"):
         assert inspect.isclass(getattr(vivarium.fuzzy_checker, name))
-    # StratValue is a ``str | int | float`` type alias, not a class.
-    assert vivarium.fuzzy_checker.StratValue is not None

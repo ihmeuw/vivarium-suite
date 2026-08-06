@@ -1,3 +1,12 @@
+**0.3.0 - 08/06/26**
+
+**Breaking changes**
+- ``TargetIntervalConfig`` no longer takes ``stratifications``; it now applies to every
+  tested group and exposes an ``applies_to`` hook for subclasses to restrict that
+- ``TargetIntervalConfig`` is now keyword-only, so that subclasses can add fields
+  without the inherited ``relative_error`` claiming a caller's first positional argument
+- Remove ``StratValue`` (which only supported the removed ``stratifications`` field)
+
 **0.2.1 - 07/23/26**
 
 - Streamline package __init__.py docstring
