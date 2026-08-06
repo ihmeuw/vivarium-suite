@@ -1,4 +1,4 @@
-**0.25.0 - 08/07/26**
+**0.25.0 - 08/06/26**
 
 - Replace references to ``/simsci:code-reviewer`` with ``/simsci:pr-prep``
 - ``model-development``: delegate the finalize sequence to ``simsci``'s new shared
