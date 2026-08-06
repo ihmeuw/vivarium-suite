@@ -162,10 +162,13 @@ around review.
    integrated diff, the changed-file list, and a one-line feature description; it
    returns the surviving findings. On a **later** green round, do not re-run the
    entire `/simsci:_review-core` skill: re-dispatch each already-fixed finding **back
-   to the review agent that raised it** for a resolved/not-resolved verdict. When
-   no must-fix findings remain, run one final full `/simsci:_review-core` pass as
-   the convergence check — it catches any *new* qualitative issue a fix introduced,
-   which per-finding routing can't. A clean final pass means **converged** → go to
+   to the review agent that raised it** for a resolved/not-resolved verdict. A
+   **must-fix** finding is one inside this feature's own footprint and bounded
+   (no public-signature change and no new dependency); anything larger is a
+   leftover for Phase 5, not a reason to keep looping. When no must-fix findings
+   remain, run one final full `/simsci:_review-core` pass as the convergence
+   check — it catches any *new* qualitative issue a fix introduced, which
+   per-finding routing can't. A clean final pass means **converged** → go to
    Phase 5. Otherwise triage and re-dispatch (below), then start the next round.
 
 **Triage and re-dispatch** each validation failure / review finding to the agent
