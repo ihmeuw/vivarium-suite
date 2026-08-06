@@ -223,16 +223,12 @@ triage.
    iteration ships as stacked per-layer PRs in data-dependency order (artifact ->
    component -> observer), matching team practice; a single-layer change is one
    PR. Run step 3 once per layer PR, in that order.
-3. Invoke the `simsci:_finalize-core` skill and follow it. Hand it what was built,
-   the verification results (including any "unverified" status), the **leftover**
-   set — residual issues from the critic loop, each with why it was left — the
-   verification verdict, the ref the branch started from, the hold-out paths from
-   step 1, and the partition rule from step 2. The critic loop already settled
-   what is being addressed, so tell it the scope line is **already drawn**. It
-   owns the summary, the leftover triage (through `ticket-triage`), the PR
-   approval gate, the commit history (through `simsci:commit-splitter`), the draft
-   PR (through `team-conventions`), and the comment recording what was not
-   addressed — don't duplicate any of that here.
+3. Invoke the `simsci:_finalize-core` skill and follow it. Four things it can't
+   work out on its own: the critic loop already settled what is being addressed,
+   so the **scope line is already drawn**; its residual issues are the **leftover**
+   set; the hold-out paths from step 1 stay uncommitted; and the partition rule
+   from step 2 governs. Carry any "unverified" status through as the verification
+   verdict.
 4. **Post the verification traces to each PR.** Once the PR exists, attach the key
    plots, tables, and output from the verification notebook — the record that the
    iteration was checked against the research expectations. This is in addition to

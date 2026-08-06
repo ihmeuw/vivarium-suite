@@ -199,11 +199,9 @@ dropped.
    untidiness: unless the repo ignores ``.claude/worktrees/``, they show as
    untracked content and the finalize block's commit grouping will sweep them
    into the PR.
-2. Invoke the `simsci:_finalize-core` skill and follow it. Hand it what was built
-   and the test results; the **leftover** set — residual validation failures and
-   review findings carried out of the Phase 4 loop, each with why it was left;
-   the validation verdict; the ref the branch started from; and the feature
-   description for the PR body. This build ships as a **single PR** — say so, so it
-   does not ask. The Phase 4 loop already settled what is being addressed, so tell
-   it the scope line is **already drawn**. If it is unavailable, report the build
-   summary and the leftovers and stop, leaving the branch in place.
+2. Invoke the `simsci:_finalize-core` skill and follow it. Three things it can't
+   work out on its own: the Phase 4 loop already settled what is being addressed,
+   so the **scope line is already drawn**; the residual validation failures and
+   review findings carried out of that loop are the **leftover** set; and this
+   build ships as a **single PR**. If it is unavailable, report the build summary
+   and the leftovers and stop, leaving the branch in place.

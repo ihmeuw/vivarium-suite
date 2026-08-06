@@ -153,17 +153,13 @@ evidence, re-validate, and carry on with the rest green — a fix that cannot go
 green becomes a ticket, not a red PR. If the tree still will not go green after
 reverting every fix you applied, **stop before Step 6** and surface it.
 
-## Step 6 — Hand off to `simsci:_finalize-core`
+## Step 6 — Finalize
 
-Invoke the `simsci:_finalize-core` skill and follow it. Hand it the **addressed**
-set (finding → commit), the **leftover** set (including anything blocked in Step 4
-or reverted in Step 5, with why), the **dropped** set with reasons, the validation
-verdict, the **pre-apply ref**, and the fact that **the scope line is already
-drawn** by the Step 3 dispositions. The per-finding commits above that ref are
-scaffolding for Steps 4-5, not shipping history, so it collapses them and regroups
-the result through `commit-splitter`. Commits from before this run are not its
-business. If it is unavailable, report the three sets and the verdict and stop,
-leaving the branch in place.
+Invoke the `simsci:_finalize-core` skill and follow it. Two things it can't work out
+on its own: **the scope line is already drawn** by the Step 3 dispositions, and the
+Step 1 ref is its **pre-apply ref** — anything blocked in Step 4 or reverted in
+Step 5 belongs in the leftover set. If it is unavailable, report the three buckets
+and the validation verdict and stop, leaving the branch in place.
 
 ## Constraints
 

@@ -5,7 +5,7 @@ allowed-tools: Read, Grep, Glob, Bash, Agent(simsci:_split_proposer)
 user-invocable: false
 ---
 
-Finalize and open a PR for the work handed over in: $ARGUMENTS
+Finalize and open a PR for the work this session just completed: $ARGUMENTS
 
 This is the **finalize core** — the single definition of the back half every path
 shares, from leftover triage through to the draft PR.
@@ -15,27 +15,14 @@ carries the not-addressed comment. A PR you open is a **draft**; a PR that was
 already open keeps whatever state it had. Moving a draft to ready for review and
 telling the team are deliberate acts the user takes — offer, never do them unasked.
 
-## What the caller hands you
+## Before you start
 
-- The **addressed** set — what was fixed, and where it landed.
-- The **leftover** set — findings deliberately not addressed, each with why — and
-  whether the scope line is **already drawn** (see Step 2).
-- The **dropped** set with reasons, if the caller distinguishes drops.
-- The **validation verdict**, and the ref the work started from. Carry the verdict
-  into the PR body as given; do **not** adjudicate whether work in this state may
-  ship. Callers legitimately differ — one carries residual failures forward, another
-  refuses to finalize on exhaustion — and each already decided by arriving here.
-- The **pre-apply ref**, if the caller committed fixes of its own during this run —
-  HEAD as it stood before the first of them. Everything after it is the caller's
-  scaffolding and gets regrouped in Step 4; everything at or before it is the
-  user's history and is never touched. Omitted means the caller added no commits.
-- **Hold-out paths**, if any — files that must be left uncommitted. Name them to
-  `commit-splitter` as excluded, and report at the end that they are still
-  uncommitted.
-- The ticket key or feature description the PR body needs, and any PR partition
-  rule (one PR, or a stack in a stated order).
-
-Ask for anything missing rather than inferring it.
+The work that led here should have settled: what was built, the validation verdict,
+which findings are **not** being addressed and why, whether that set is final, and
+the ticket key or feature description for the PR body. Two things are only true of
+some runs — **hold-out paths** that must stay uncommitted, and a PR partition rule
+if this ships as a stack rather than one PR. Ask for anything missing rather than
+inferring it.
 
 ## Step 1 — Summarize and read the branch
 
@@ -81,9 +68,11 @@ place, saying what would have happened.
 ## Step 4 — Shape a reviewable history
 
 **Never rewrite a commit the user made before this run**, whatever its subject
-says. The boundary is the caller's **pre-apply ref**, not a commit message.
+says. The boundary is the **pre-apply ref** — HEAD as it stood before this run
+committed its first fix — not a commit message. If this run didn't commit any
+fixes, there's no pre-apply ref and nothing to collapse.
 
-If the caller reported a pre-apply ref, collapse everything above it: `git branch
+If there is a pre-apply ref, collapse everything above it: `git branch
 finalize-core-backup` at HEAD, then `git reset --soft <pre-apply-ref>`. That
 series is per-finding fix scaffolding, not shipping history. `--soft` leaves the
 working tree alone, so the collapsed fixes join anything already uncommitted.
@@ -152,7 +141,10 @@ once the user confirms things look right, or hand them the command.
   goes to `/simsci:git-rescue`
 - No silent omissions: every finding handed over as a leftover appears in Step 2's
   triage or Step 6's comment, or both, and never in neither
-- Work only from the handoff in `$ARGUMENTS` — don't re-review the diff or
-  re-litigate a disposition; the buckets arrive decided
+- Don't re-review the diff or re-litigate a disposition; the buckets arrive decided
+- Don't adjudicate whether work in this state may ship — carry the validation
+  verdict into the PR body as given. Callers legitimately differ, one carrying
+  residual failures forward where another refuses to finalize at all, and each
+  already decided by arriving here
 - Do not edit source here. This unit shapes history and files reports; the fixes
   belonged to the caller

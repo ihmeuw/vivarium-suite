@@ -13,10 +13,8 @@ synthesis. It is invoked **inline** by `/simsci:pr-prep` (after it gathers
 context), and is designed to be reused the same way by other main-session
 commands (e.g. a development workflow's review phase).
 
-**Not this unit's job** — the caller owns these: gathering the review target
-(PR/diff context), and any follow-up action on the findings (e.g. filing
-tickets). Work only from the review target handed to you in `$ARGUMENTS`; do not
-fetch a PR or run git/gh here.
+Review only what you were given — don't fetch a PR or run git/gh to widen the
+target.
 
 ## Step 1 — Fan out to specialist sub-agents in parallel
 
