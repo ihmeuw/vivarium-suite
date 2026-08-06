@@ -52,12 +52,10 @@ context with your GitHub MCP server's pull-request tools — prefer the MCP over
 `gh` CLI when both are available: it needs no shell access and works in sandboxed
 environments where `gh` cannot read its credentials.
 
-Then invoke the `simsci:_review-core` skill inline, handing it the changed-file
-list, the diff (or the salient slice), and a one-line description of the change as
-the `<subject>`. It fans out the five `simsci:_review_*` specialists, runs the
-functional-correctness pass, scores every finding for confidence and drops
-anything below 50, and returns the synthesized review. Present it as-is —
-`simsci:_review-core` owns the output format and the review constraints.
+Then invoke the `simsci:_review-core` skill, handing it the changed-file list, the
+diff (or the salient slice), and a one-line description of the change as the
+`<subject>`. Present the review it returns as-is — it owns the output format and
+the review constraints.
 
 ## Step 3 — Propose a disposition per finding
 
@@ -164,10 +162,8 @@ verdict, the **pre-apply ref**, and the fact that **the scope line is already
 drawn** by the Step 3 dispositions. The per-finding commits above that ref are
 scaffolding for Steps 4-5, not shipping history, so it collapses them and regroups
 the result through `commit-splitter`. Commits from before this run are not its
-business.
-It owns the triage, the PR gate, the commit history, the draft PR, and the
-not-addressed comment — duplicate none of it here. If it is unavailable, report
-the three sets and the verdict and stop, leaving the branch in place.
+business. If it is unavailable, report the three sets and the verdict and stop,
+leaving the branch in place.
 
 ## Constraints
 

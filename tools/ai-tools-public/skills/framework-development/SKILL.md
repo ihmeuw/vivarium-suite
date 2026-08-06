@@ -10,10 +10,9 @@ Run an end-to-end feature development loop for: $ARGUMENTS
 You (the main session) own the design and the stubs, then drive a **black-box
 TDD** build: `simsci:_test_writer` and `simsci:_feature_implementer` produce the tests and the
 implementation in isolation, and you fan out `simsci:_validator` and run the shared
-`/simsci:_review-core` skill for review (it fans out the five `simsci:_review_*`
-specialists, then confidence-scores and filters their findings), and hand the
-finish to the shared `simsci:_finalize-core` skill. Work the
-phases in order; keep the user in the loop at the design and PR gates.
+`/simsci:_review-core` skill for review, then hand the finish to the shared
+`simsci:_finalize-core` skill. Work the phases in order; keep the user in the loop
+at the design and PR gates.
 
 ## Control flow
 
@@ -159,22 +158,15 @@ around review.
    — a package-wide reformat sweeps unrelated files into the diff.
 
 3. **Gate 2 — review (only on green).** Once validation passes, run review. The
-   **first** time you reach green, invoke the `/simsci:_review-core` skill
-   with the integrated diff, the changed-file list, and a one-line feature
-   description — a full fan-out across the five
-   **review agents** (one `simsci:_review_*` specialist per dimension: Design,
-   Maintainability, DRY, Tests, Documentation) plus the functional-correctness
-   pass in this main-session context, the same definition `/simsci:pr-prep`
-   uses. It then independently confidence-scores every finding (a `simsci:_review_scorer`
-   per finding) and drops those below 50, so it returns the surviving findings
-   bucketed by review agent — each annotated with its score — alongside your own
-   Functionality pass. On a **later** green round, don't re-run the whole fan-out: re-dispatch
-   each already-fixed finding **back to the review agent that raised it** for a
-   resolved/not-resolved verdict. When no must-fix findings remain, run one final full `/simsci:_review-core`
-   pass as the convergence check — it catches any *new* qualitative issue a fix
-   introduced, which per-finding routing can't. A clean final pass means
-   **converged** → go to Phase 5. Otherwise triage and re-dispatch (below), then
-   start the next round.
+   **first** time you reach green, invoke the `/simsci:_review-core` skill with the
+   integrated diff, the changed-file list, and a one-line feature description; it
+   returns the surviving findings. On a **later** green round, do not re-run the
+   entire `/simsci:_review-core` skill: re-dispatch each already-fixed finding **back
+   to the review agent that raised it** for a resolved/not-resolved verdict. When
+   no must-fix findings remain, run one final full `/simsci:_review-core` pass as
+   the convergence check — it catches any *new* qualitative issue a fix introduced,
+   which per-finding routing can't. A clean final pass means **converged** → go to
+   Phase 5. Otherwise triage and re-dispatch (below), then start the next round.
 
 **Triage and re-dispatch** each validation failure / review finding to the agent
 that owns it, in its existing worktree (the lineages stay separate, so the black
@@ -203,19 +195,15 @@ dropped.
 ## Phase 5 — Finalize and PR (gated)
 
 1. Tear down the build worktrees and sub-branches (``git worktree remove``;
-   tolerate a read-only ``.git`` in a sandbox). Do this **first** — the shared
-   finalize block reads ``git status`` and the branch log, so stray worktree state
-   must be gone before you delegate. This is the only step here that is yours: the
-   worktrees are this workflow's own construction, so nothing else knows to clean
-   them up.
+   tolerate a read-only ``.git`` in a sandbox). Leaving them costs more than
+   untidiness: unless the repo ignores ``.claude/worktrees/``, they show as
+   untracked content and the finalize block's commit grouping will sweep them
+   into the PR.
 2. Invoke the `simsci:_finalize-core` skill and follow it. Hand it what was built
    and the test results; the **leftover** set — residual validation failures and
    review findings carried out of the Phase 4 loop, each with why it was left;
    the validation verdict; the ref the branch started from; and the feature
    description for the PR body. This build ships as a **single PR** — say so, so it
    does not ask. The Phase 4 loop already settled what is being addressed, so tell
-   it the scope line is **already drawn**. It owns the summary, the leftover
-   triage, the PR approval
-   gate, the commit history, the draft PR, and the comment recording what was not
-   addressed — don't duplicate any of that here. If it is unavailable, report the
-   build summary and the leftovers and stop, leaving the branch in place.
+   it the scope line is **already drawn**. If it is unavailable, report the build
+   summary and the leftovers and stop, leaving the branch in place.
