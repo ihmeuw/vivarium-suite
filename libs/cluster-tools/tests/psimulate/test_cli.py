@@ -732,8 +732,8 @@ class TestSimVerbosity:
             },
         )
 
-    @pytest.mark.parametrize("args, expected", [([], 0), (["-s"], 1), (["-ss"], 2)])
-    def test_count_reaches_extra_args(
+    @pytest.mark.parametrize("args, expected", [([], 0), (["-s"], 1), (["-ss"], 1)])
+    def test_flag_reaches_extra_args(
         self,
         tmp_path: Path,
         model_spec: Path,
