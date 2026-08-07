@@ -1,6 +1,10 @@
-**6.5.0 - 07/29/26**
+**6.5.0 - 08/06/26**
 
 - Support pandas 3
+
+**6.4.8 - 08/05/26**
+
+- Bugfix: name ``LinearScaleUp``'s endpoint lookup tables after their endpoint (``start``/``end``)
 
 **6.4.7 - 07/27/26**
 

@@ -1,4 +1,4 @@
-**4.3.0 - 07/29/26**
+**4.3.0 - 08/06/26**
 
 - Support pandas 3 (MIC-6773): pin the NaN-dropping ``stack()`` behavior in the
   vipin performance report with explicit ``dropna()``

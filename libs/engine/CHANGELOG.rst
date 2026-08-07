@@ -1,4 +1,4 @@
-**5.6.0 - 07/31/26**
+**5.6.0 - 08/06/26**
 
 - Support pandas 3
 - Ignore numpy underflow errors in simulations
