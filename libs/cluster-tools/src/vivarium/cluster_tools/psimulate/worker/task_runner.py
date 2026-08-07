@@ -153,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     except Exception:
         # Report rather than re-raise; a propagated exception would be printed a
-        # second time. See the module docstring.
+        # second time.
         logger.exception(f"Task {task_id} failed running command '{command}'")
         return 1
 

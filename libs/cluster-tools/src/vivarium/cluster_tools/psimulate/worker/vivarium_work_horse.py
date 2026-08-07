@@ -145,9 +145,6 @@ def get_sim_from_backup(
 def initialize_new_sim(
     event: dict[str, float], job_parameters: JobParameters
 ) -> tuple[ParallelSimulationContext, dict[str, float]]:
-    # sim_verbosity is guaranteed present here: only run/restart/expand reach this
-    # work horse and all of them set it. task_runner.main defaults the key because
-    # it also serves load_test, which does not.
     sim = ParallelSimulationContext(
         job_parameters.model_specification,
         configuration=job_parameters.sim_config,
@@ -239,6 +236,8 @@ def do_sim_epilogue(
         serialize=True,
     )
 
+    # Don't send this to the worker's stdout because it will be written to the
+    # performance logs.
     logger.bind(**{PERF_LOG_MARKER: True}).debug(
         json.dumps(
             {

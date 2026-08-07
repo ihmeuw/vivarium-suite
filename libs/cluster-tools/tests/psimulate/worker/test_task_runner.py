@@ -291,31 +291,18 @@ class TestMainFailureReporting:
         capfd: pytest.CaptureFixture[str],
         _restore_loguru: None,
     ) -> None:
-        """The failing work horse's traceback appears once on stderr — not once
-        from the work horse and again from an unhandled re-raise."""
-        _run_main_with_patched_work_horses(
-            dirs, job_params, work_horse_side_effect=_failing_work_horse
-        )
-
-        _, err = capfd.readouterr()
-        # Jobmon POSTs only the last 10,000 characters of stderr as the error
-        # description, so a second copy costs half that budget.
-        assert err.count(_TRACEBACK_HEADER) == 1
-        assert err.count(f"RuntimeError: {_FAILURE_MESSAGE}") == 1
-
-    def test_failure_traceback_does_not_reach_stdout(
-        self,
-        dirs: dict[str, Path],
-        job_params: JobParameters,
-        capfd: pytest.CaptureFixture[str],
-        _restore_loguru: None,
-    ) -> None:
-        """Failure reporting respects the stream split: nothing lands on stdout."""
+        """The failing work horse's traceback appears once, on stderr only — not
+        once from the work horse and again from an unhandled re-raise, and not on
+        stdout, which the stream split reserves for everything below ERROR."""
         _run_main_with_patched_work_horses(
             dirs, job_params, work_horse_side_effect=_failing_work_horse
         )
 
         out, err = capfd.readouterr()
+        # Jobmon POSTs only the last 10,000 characters of stderr as the error
+        # description, so a second copy costs half that budget.
+        assert err.count(_TRACEBACK_HEADER) == 1
+        assert err.count(f"RuntimeError: {_FAILURE_MESSAGE}") == 1
         _assert_only_on(out, err, _TRACEBACK_HEADER, "stderr")
         _assert_only_on(out, err, _FAILURE_MESSAGE, "stderr")
 
