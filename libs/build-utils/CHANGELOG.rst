@@ -2,14 +2,7 @@
 
 - Publish docs under the distribution name from ``[project].name`` instead of the
   checkout directory name, so repos built at their root no longer publish docs
-  under their Jenkins workspace name (MIC-7275)
-- Refuse to publish docs when the resolved directory name is empty or looks like a
-  Jenkins workspace name
-- Derive ``PACKAGE_DIR`` within ``base.mk`` and use it for the monorepo check and the
-  default conda environment name, so nothing here depends on the repo-supplied
-  ``PACKAGE_NAME``
-- Remove the unused ``DIST_NAME`` and ``SAFE_NAME`` variables, retiring the
-  ``PACKAGE_NAME`` identity fallback (MIC-7237)
+  under their Jenkins workspace name. remove unused variables
 
 **4.4.2 - 07/23/26**
 

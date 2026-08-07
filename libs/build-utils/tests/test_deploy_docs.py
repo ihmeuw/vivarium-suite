@@ -1,10 +1,7 @@
 """Tests for the ``deploy-docs`` target in ``resources/makefiles/base.mk``.
 
 ``deploy-docs`` publishes into a shared, web-served directory, so the directory
-name it derives is part of a user-facing URL. It previously used
-``PACKAGE_NAME`` (``$(notdir $(CURDIR))``), which for a repo built at its root is
-the Jenkins job-derived *workspace* name rather than the package - publishing
-docs to an unreachable URL (MIC-7275).
+name it derives is part of a user-facing URL.
 """
 
 import subprocess
@@ -16,7 +13,7 @@ from vivarium.build_utils.resources import get_makefiles_path
 
 BASE_MK = Path(get_makefiles_path()) / "base.mk"
 
-# A realistic Jenkins workspace directory name: folder prefix, branch, and the
+# Regression check on a realistic Jenkins workspace directory name: folder prefix, branch, and the
 # "@2" suffix Jenkins appends for a concurrent workspace.
 JENKINS_WORKSPACE_NAME = "Private_vivarium_gbd_access_main@2"
 DIST_NAME = "vivarium_gbd_access"

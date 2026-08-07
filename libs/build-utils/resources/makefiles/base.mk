@@ -7,8 +7,7 @@ LOCATIONS=src tests
 
 # The checkout directory name. Repos also set PACKAGE_NAME to $(notdir $(CURDIR))
 # for their own `build-env` target, but nothing here reads it: it is a *directory*
-# name and not a package identity - under Jenkins it is the job-derived workspace
-# name, e.g. "Private_vivarium_gbd_access_main@2" (MIC-7275). Use PACKAGE_DIR where
+# name and not a package identity. Use PACKAGE_DIR where
 # the directory is what's meant and DIST_NAME_FROM_PROJECT where the package is.
 PACKAGE_DIR := $(notdir $(CURDIR))
 
@@ -26,10 +25,9 @@ endif
 endif
 endif
 
-# Directory published under DOCS_ROOT_PATH by `deploy-docs`, and so part of a
-# user-facing URL - hence the distribution name rather than the checkout directory,
-# which under Jenkins published docs to an unreachable URL (MIC-7275). A package
-# with no `[project].name` must fail rather than fall back to a directory name.
+# Directory published under DOCS_ROOT_PATH by `deploy-docs`, 
+# the distribution name rather than the checkout directory.
+# A package with no `[project].name` must fail rather than fall back to a directory name.
 DOCS_NAME ?= $(DIST_NAME_FROM_PROJECT)
 
 # Build the editable_mode=compat config-settings flag only when the distribution name was parsed from [project].
