@@ -122,9 +122,9 @@ def print_stat_report(perf_df: pd.DataFrame, scenario_cols: list[str]) -> None:
     cols = idx + ["measure", "value"]
 
     if idx:
-        temp = perf_df.set_index(idx).filter(like="exec_time_").stack().reset_index()
+        temp = perf_df.set_index(idx).filter(like="exec_time_").stack().dropna().reset_index()
     else:
-        temp = perf_df.filter(like="exec_time_").stack().reset_index()
+        temp = perf_df.filter(like="exec_time_").stack().dropna().reset_index()
         temp = temp.drop(columns=["level_0"], errors="ignore")
 
     temp.columns = cols

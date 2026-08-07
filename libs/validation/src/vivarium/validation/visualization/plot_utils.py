@@ -129,7 +129,9 @@ def _line_plot(
         figures = []
 
         # Create individual figures for each condition
-        for grouped_idx, grouped_df in combined_data.groupby(level=unconditioned):
+        for grouped_idx, grouped_df in combined_data.groupby(
+            level=unconditioned, observed=True
+        ):
             if not isinstance(grouped_idx, tuple):
                 grouped_idx = (grouped_idx,)
             fig = plt.figure(figsize=(10, 6))

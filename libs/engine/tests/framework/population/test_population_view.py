@@ -4,6 +4,7 @@ import datetime
 import random
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
@@ -743,8 +744,9 @@ def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
         name=col,
     )
     existing = PIE_DF[col].copy()
-    # change the type
-    existing = existing.astype(str)
+    # object mimics a column without a natural null type that went object
+    # while the population is grown (see the FIXME above the implementation)
+    existing = existing.astype(object)
 
     # Should work fine when we're adding simulants
     new_values = PopulationView._update_column_and_ensure_dtype(
@@ -755,6 +757,54 @@ def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
     assert new_values.loc[update_index].equals(update)
 
     # And be bad news otherwise.
+    with pytest.raises(
+        PopulationError,
+        match="A component is corrupting the population table by modifying the dtype",
+    ):
+        PopulationView._update_column_and_ensure_dtype(
+            update,
+            existing,
+            adding_simulants=False,
+        )
+
+
+@pytest.mark.parametrize(
+    "update_values, existing_values, existing_dtype",
+    [
+        (["a", "b", "c"], ["x", "y", "z"], np.dtype(object)),
+        (
+            pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-03"]),
+            pd.to_datetime(["2025-01-01", "2025-01-02", "2025-01-03"]),
+            np.dtype("datetime64[us]"),
+        ),
+    ],
+    ids=["string_vs_object", "datetime_unit"],
+)
+def test__update_column_and_ensure_dtype_compatible_dtypes(
+    update_values: list[str] | pd.DatetimeIndex,
+    existing_values: list[str] | pd.DatetimeIndex,
+    existing_dtype: np.dtype[Any],
+) -> None:
+    """Compatible-but-unequal dtype updates keep the existing column's dtype."""
+    update = pd.Series(update_values, name="col")
+    existing = pd.Series(existing_values, name="col").astype(existing_dtype)
+    if update.dtype == existing.dtype:
+        pytest.skip("dtypes coincide on this pandas version; nothing to check")
+
+    new_values = PopulationView._update_column_and_ensure_dtype(
+        update,
+        existing,
+        adding_simulants=False,
+    )
+    assert new_values.dtype == existing.dtype
+    assert new_values.equals(update.astype(existing.dtype))
+
+
+def test__update_column_and_ensure_dtype_incompatible_still_raises() -> None:
+    """Genuinely incompatible dtype updates still raise a PopulationError."""
+    update = pd.Series([1, 2, 3], name="col")
+    existing = pd.Series(["x", "y", "z"], name="col")
+
     with pytest.raises(
         PopulationError,
         match="A component is corrupting the population table by modifying the dtype",
