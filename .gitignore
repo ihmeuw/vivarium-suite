@@ -221,4 +221,4 @@ __marimo__/
 .claude/worktrees/
 
 # FuzzyChecker diagnostics csv
-**/tests/proportion_test_diagnostics.csv
+**/tests/proportion_test_diagnostics*.csv

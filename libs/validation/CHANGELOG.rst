@@ -1,3 +1,14 @@
+**0.2.1 - 08/06/26**
+
+- Support pandas 3
+
+**0.2.0 - 08/06/26**
+
+- **Breaking change.** ``set_target_interval`` now builds a ``StratifiedTargetIntervalConfig``,
+  a subclass ``vivarium.fuzzy_checker.TargetIntervalConfig`` that owns the ``stratifications``
+  filtering
+- Define ``StratValue`` here instead of re-exporting it from ``vivarium-fuzzy-checker``
+
 **0.1.2 - 07/23/26**
 
 - Streamline package __init__.py docstring

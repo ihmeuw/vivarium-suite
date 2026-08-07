@@ -319,6 +319,31 @@ This gives you a ``pandas.DataFrame`` representing your starting population.
 You can use it to check all sorts of characteristics about individuals or
 the population as a whole.
 
+For example, summary statistics give you a quick look at the population's
+demographics (your exact values will vary with the random draws):
+
+.. code-block:: python
+
+    pop = sim.get_population(["age", "sex"])
+    print(pop.age.describe())
+    print(pop.sex.value_counts())
+
+::
+
+    count    100000.000000
+    mean          2.490328
+    std           1.441763
+    min           0.000011
+    25%           1.242100
+    50%           2.487453
+    75%           3.730555
+    max           4.999957
+    Name: age, dtype: float64
+    sex
+    Female    50135
+    Male      49865
+    Name: count, dtype: int64
+
 .. testcode::
     :hide:
 
@@ -332,48 +357,25 @@ the population as a whole.
             "child_wasting_propensity",
         ]
     )
-    pop = pop.reindex(sorted(pop.columns), axis=1)
-    print(pop.age.describe())
-    print(pop.is_alive.value_counts())
-    print(pop.child_wasting_propensity.describe())
-    print(pop.lower_respiratory_infections.value_counts())
-    print(pop.entrance_time.value_counts())
-    print(pop.sex.value_counts())
+    assert len(pop) == 100_000
+    assert pop["age"].between(0, 5).all()
+    assert pop["is_alive"].all()
+    assert (
+        pop["lower_respiratory_infections"]
+        == "susceptible_to_lower_respiratory_infections"
+    ).all()
+    assert pop["entrance_time"].nunique() == 1
+    assert set(pop["sex"]) == {"Female", "Male"}
+    from vivarium.fuzzy_checker import FuzzyChecker
 
-
-.. testoutput::
-
-    count    100000.000000
-    mean          2.490328
-    std           1.441763
-    min           0.000011
-    25%           1.242100
-    50%           2.487453
-    75%           3.730555
-    max           4.999957
-    Name: age, dtype: float64
-    is_alive
-    True    100000
-    Name: count, dtype: int64
-    count    1.000000e+05
-    mean     5.007716e-01
-    std      2.885722e-01
-    min      5.485898e-07
-    25%      2.504689e-01
-    50%      5.000226e-01
-    75%      7.516029e-01
-    max      9.999966e-01
-    Name: child_wasting_propensity, dtype: float64
-    lower_respiratory_infections
-    susceptible_to_lower_respiratory_infections    100000
-    Name: count, dtype: int64
-    entrance_time
-    2021-12-31 12:00:00    100000
-    Name: count, dtype: int64
-    sex
-    Female    50011
-    Male      49989
-    Name: count, dtype: int64
+    FuzzyChecker().assert_proportion(
+        int(pop["sex"].eq("Female").sum()), len(pop), 0.5, name="tutorial_sex_split"
+    )
+    # Propensities are uniform on [0, 1].
+    propensity = pop["child_wasting_propensity"]
+    assert propensity.between(0, 1).all()
+    assert abs(propensity.mean() - 0.5) < 5 * (1 / 12 / len(pop)) ** 0.5
+    assert abs(propensity.std() - (1 / 12) ** 0.5) < 0.005
 
 
 Understanding the Simulation Data

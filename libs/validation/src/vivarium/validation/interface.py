@@ -21,8 +21,8 @@ from vivarium.validation.bundle import RatioMeasureDataBundle
 from vivarium.validation.comparison import (
     Comparison,
     FuzzyComparison,
+    StratifiedTargetIntervalConfig,
     StratValue,
-    TargetIntervalConfig,
 )
 from vivarium.validation.constants import DAYS_PER_YEAR
 from vivarium.validation.data_loader import DataLoader, DataSource
@@ -487,10 +487,9 @@ class ValidationContext:
         ref_source
             The source of the reference data (e.g., 'sim', 'artifact', 'custom').
         stratifications
-            A mapping of stratification names to filter values.
-            - "all": match groups where this stratification is NOT present
-            - "specific": match groups where this stratification IS present
-            - A specific value: match only where that stratification has this value
+            A mapping of stratification names to filter values. See
+            :class:`~vivarium.validation.comparison.StratifiedTargetIntervalConfig`
+            for the filter semantics.
         relative_error
             The relative error to apply, creating an interval of
             (target * (1 - relative_error), target * (1 + relative_error)).
@@ -501,8 +500,8 @@ class ValidationContext:
                 f"target_interval_configuration is only supported for FuzzyComparison, "
                 f"got {type(comparison).__name__}"
             )
-        comparison.target_interval_configuration = TargetIntervalConfig(
-            stratifications=stratifications, relative_error=relative_error
+        comparison.target_interval_configuration = StratifiedTargetIntervalConfig(
+            relative_error=relative_error, stratifications=stratifications
         )
 
     def generate_comparisons(self):  # type: ignore[no-untyped-def]

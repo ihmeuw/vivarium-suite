@@ -1,3 +1,8 @@
+**5.6.0 - 08/06/26**
+
+- Support pandas 3
+- Ignore numpy underflow errors in simulations
+
 **5.5.3 - 07/23/26**
 
 - Streamline package __init__.py docstring

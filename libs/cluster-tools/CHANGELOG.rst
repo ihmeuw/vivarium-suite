@@ -1,3 +1,8 @@
+**4.3.0 - 08/06/26**
+
+- Support pandas 3 (MIC-6773): pin the NaN-dropping ``stack()`` behavior in the
+  vipin performance report with explicit ``dropna()``
+
 **4.2.14 - 07/23/26**
 
 - Streamline package __init__.py docstring
