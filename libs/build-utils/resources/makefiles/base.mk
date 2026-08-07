@@ -5,12 +5,11 @@ UTILS_DIR := $(dir $(abspath $(dir $(abspath $(dir $(lastword $(MAKEFILE_LIST)))
 # Source files to format, lint, and type check.
 LOCATIONS=src tests
 
-# Each repo's Makefile sets PACKAGE_NAME to $(notdir $(CURDIR)), which is a
-# *checkout directory* name and not a package identity: under Jenkins it is the
-# job-derived workspace name, e.g. "Private_vivarium_gbd_access_main@2" (MIC-7275).
-# Prefer PACKAGE_DIR below where the directory is what's meant, and
-# DIST_NAME_FROM_PROJECT where the package is. PACKAGE_NAME survives only as the
-# default conda environment label.
+# The checkout directory name. Repos also set PACKAGE_NAME to $(notdir $(CURDIR))
+# for their own `build-env` target, but nothing here reads it: it is a *directory*
+# name and not a package identity - under Jenkins it is the job-derived workspace
+# name, e.g. "Private_vivarium_gbd_access_main@2" (MIC-7275). Use PACKAGE_DIR where
+# the directory is what's meant and DIST_NAME_FROM_PROJECT where the package is.
 PACKAGE_DIR := $(notdir $(CURDIR))
 
 # The PyPI distribution name, read from pyproject.toml's `[project].name`
@@ -68,7 +67,7 @@ EXTRA_INDEX_FLAGS = $(if $(IHME_PYPI),--extra-index-url ${IHME_PYPI}simple/ --in
 _PY_VERSIONS_FILE := $(wildcard python_versions.json)
 PYTHON_VERSION ?= $(if $(_PY_VERSIONS_FILE),$(shell python -c \
         "import json; print(json.load(open('python_versions.json'))[-1])"),3.12)
-CONDA_ENV_NAME ?= ${PACKAGE_NAME}_py${PYTHON_VERSION}
+CONDA_ENV_NAME ?= ${PACKAGE_DIR}_py${PYTHON_VERSION}
 CONDA_ENV_CREATION_FLAG = $(if $(CONDA_ENV_PATH),-p ${CONDA_ENV_PATH},-n ${CONDA_ENV_NAME})
 
 .PHONY: help
@@ -140,7 +139,7 @@ debug: # Print debug information
 	@echo "PYTHON_VERSION:                   ${PYTHON_VERSION}"
 	@echo "IHME_PYPI:                        ${IHME_PYPI}"
 	@echo "LOCATIONS:                        ${LOCATIONS}"
-	@echo "PACKAGE_NAME:                     ${PACKAGE_NAME}"
+	@echo "PACKAGE_DIR:                      ${PACKAGE_DIR}"
 	@echo "PACKAGE_VERSION:                  ${PACKAGE_VERSION}"
 	@echo "DOCS_NAME:                        ${DOCS_NAME}"
 	@echo "PYPI_ARTIFACTORY_CREDENTIALS_USR: ${PYPI_ARTIFACTORY_CREDENTIALS_USR} "
@@ -154,7 +153,7 @@ debug: # Print debug information
 
 .PHONY: create-env
 create-env: # Create a new conda environment
-# env name: {PACKAGE_NAME}_py{PYTHON_VERSION}.
+# env name: {PACKAGE_DIR}_py{PYTHON_VERSION}.
 	conda create ${CONDA_ENV_CREATION_FLAG} python=${PYTHON_VERSION} --yes
 	@echo
 	@echo "Environment created ($(CONDA_ENV_NAME))"

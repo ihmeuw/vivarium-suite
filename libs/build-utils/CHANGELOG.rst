@@ -5,8 +5,9 @@
   under their Jenkins workspace name (MIC-7275)
 - Refuse to publish docs when the resolved directory name is empty or looks like a
   Jenkins workspace name
-- Derive ``PACKAGE_DIR`` within ``base.mk`` for directory checks rather than trusting
-  the repo-supplied ``PACKAGE_NAME``, which a repo may set to anything
+- Derive ``PACKAGE_DIR`` within ``base.mk`` and use it for the monorepo check and the
+  default conda environment name, so nothing here depends on the repo-supplied
+  ``PACKAGE_NAME``
 - Remove the unused ``DIST_NAME`` and ``SAFE_NAME`` variables, retiring the
   ``PACKAGE_NAME`` identity fallback (MIC-7237)
 
