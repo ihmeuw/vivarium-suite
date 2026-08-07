@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import pandas.api.types as pdt
 
@@ -254,7 +255,7 @@ class IndexMap:
         out = m % 1 * self.TEN_DIGIT_MODULUS // 1
         return out.astype("int64")
 
-    def __getitem__(self, index: pd.Index[int]) -> np.ndarray[int, Any]:
+    def __getitem__(self, index: pd.Index[int]) -> npt.NDArray[np.int64]:
         if self._use_crn:
             if self._map is None:
                 raise RandomnessError("IndexMap is empty")

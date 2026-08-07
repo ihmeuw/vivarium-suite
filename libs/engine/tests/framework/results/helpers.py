@@ -320,14 +320,19 @@ def results_formatter(
     return results[other_cols + [VALUE_COLUMN]].sort_index().reset_index()
 
 
+def sum_columns(df: pd.DataFrame) -> pd.Series[float]:
+    """Sum each aggregator column."""
+    return df.sum()
+
+
 def sorting_hat_vectorized(state_table: pd.DataFrame) -> pd.Series[str]:
     sorted_series = state_table.apply(sorting_hat_serial, axis=1)
     return sorted_series
 
 
 def sorting_hat_serial(simulant_row: pd.Series[str]) -> str:
-    first_name = simulant_row[0]
-    last_name = simulant_row[1]
+    first_name = simulant_row.iloc[0]
+    last_name = simulant_row.iloc[1]
     if first_name == "harry":
         return "gryffindor"
     if first_name == "luna":

@@ -134,7 +134,7 @@ def test_stratification_init_raises(
             sorting_hat_vectorized,
             True,
             KeyError,
-            "None of [Index(['middle_initial'], dtype='object')] are in the [columns]",
+            f"None of [{pd.Index(['middle_initial'])!r}] are in the [columns]",
         ),
         (
             NAME_COLUMNS,
@@ -155,7 +155,7 @@ def test_stratification_init_raises(
             lambda df: pd.Series(np.nan, index=df.index),
             True,
             ValueError,
-            f"Invalid values mapped to hogwarts_house: {{{np.nan}}}",
+            f"Invalid values mapped to hogwarts_house: {{{np.float64(np.nan)!r}}}",
         ),
     ],
     ids=[

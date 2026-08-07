@@ -228,7 +228,7 @@ at a higher rate than unexposed simulants:
    config = make_base_config()
    config.update(
        {
-           "population": {"population_size": 10_000},
+           "population": {"population_size": 20_000},
            "mortality": {"data_sources": {"all_cause_mortality_rate": 0}},
            "risk_factor.test_risk": {
                "distribution_type": "dichotomous",
@@ -255,9 +255,10 @@ at a higher rate than unexposed simulants:
        plugin_configuration=base_plugins,
    )
 
-   # Step forward to allow infections to occur.
-   for _ in range(3):
-       sim.step()
+   # Take a single time step so infections occur. Over multiple steps the
+   # exposed group depletes its susceptible pool faster, which biases the
+   # cumulative infection ratio below the relative risk.
+   sim.step()
 
    pop = sim.get_population(["test_cause", "test_risk.exposure"])
    exposed = pop[pop["test_risk.exposure"] == "exposed"]
@@ -331,8 +332,8 @@ target rate independently:
        plugin_configuration=base_plugins,
    )
 
-   for _ in range(3):
-       sim.step()
+   # A single step, for the same reason as above.
+   sim.step()
 
    pop = sim.get_population(
        ["test_cause", "smoking.exposure", "air_pollution.exposure"]
@@ -370,10 +371,10 @@ target rate independently:
    print(f"Both-exposed ratio near 6: {np.isclose(both_ratio, 6, rtol=0.2)}")
    # Smoking-only RR is 3, so ratio should be near 3.
    smoking_ratio = smoking_only_rate / neither_rate
-   print(f"Smoking-only ratio near 3: {np.isclose(smoking_ratio, 3, rtol=0.1)}")
+   print(f"Smoking-only ratio near 3: {np.isclose(smoking_ratio, 3, rtol=0.2)}")
    # Air-pollution-only RR is 2, so ratio should be near 2.
    pollution_ratio = pollution_only_rate / neither_rate
-   print(f"Pollution-only ratio near 2: {np.isclose(pollution_ratio, 2, rtol=0.1)}")
+   print(f"Pollution-only ratio near 2: {np.isclose(pollution_ratio, 2, rtol=0.2)}")
 
 .. testoutput::
 

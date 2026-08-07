@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from typing import SupportsFloat as Numeric
 from typing import TypeGuard, Union
 
@@ -11,7 +11,7 @@ import pandas as pd
 if TYPE_CHECKING:
     from vivarium.engine.framework.engine import Builder
 
-NumericArray = npt.NDArray[np.number[npt.NBitBase]]
+NumericArray = npt.NDArray[np.number[Any]]
 
 Time = pd.Timestamp | datetime
 Timedelta = pd.Timedelta | timedelta

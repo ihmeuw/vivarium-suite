@@ -1,3 +1,7 @@
+**0.2.1 - 08/06/26**
+
+- Support pandas 3
+
 **0.2.0 - 08/06/26**
 
 - **Breaking change.** ``set_target_interval`` now builds a ``StratifiedTargetIntervalConfig``,

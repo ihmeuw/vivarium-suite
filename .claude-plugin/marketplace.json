@@ -9,7 +9,7 @@
     {
       "name": "simsci",
       "source": "./tools/ai-tools-public",
-      "description": "Generic AI developer workflows for any IHME team, any repo: multi-agent code review, git rescue, commit splitting, type hinting, regression debugging, change propagation, workflow assessment, and a guided TDD loop."
+      "description": "Generic AI developer workflows for any IHME team, any repo: multi-agent code review and review-to-PR prep, git rescue, commit splitting, type hinting, regression debugging, change propagation, workflow assessment, and a guided TDD loop."
     },
     {
       "name": "simsci-internal",

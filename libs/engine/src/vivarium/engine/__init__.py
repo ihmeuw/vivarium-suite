@@ -23,7 +23,7 @@ except PackageNotFoundError:
 
 import numpy
 
-numpy.seterr(all="raise")
+numpy.seterr(all="raise", under="ignore")
 
 from vivarium.engine.component import Component
 from vivarium.engine.framework.configuration import build_model_specification

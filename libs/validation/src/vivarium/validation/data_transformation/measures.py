@@ -454,7 +454,18 @@ class CategoricalRelativeRisk(RatioMeasure):
         risk_stratified_measure_data = risk_stratified_measure_data.rename(
             index=risk_category_mapping, level="parameter"
         ).rename_axis(index={"parameter": self.risk_stratification_column})
-        return risk_stratified_measure_data
+        # place deterministic ordering on index levels
+        affected_levels = [
+            name
+            for name in affected_measure_data.index.names
+            if name in risk_stratified_measure_data.index.names
+        ]
+        risk_levels = [
+            name
+            for name in risk_stratified_measure_data.index.names
+            if name not in affected_levels
+        ]
+        return risk_stratified_measure_data.reorder_levels(affected_levels + risk_levels)
 
     @utils.check_io(
         numerator_data=SimOutputData,
