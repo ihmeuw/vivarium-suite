@@ -74,8 +74,5 @@ def work_horse(job_parameters: JobParameters) -> pd.DataFrame:
         raise ValueError(f"Test runner for {test_type} is not callable: {test_runner}")
     try:
         return test_runner(job_parameters)
-    except Exception:
-        logger.exception("Unhandled exception in worker")
-        raise
     finally:
         logger.info(f"Exiting job: {job_parameters}")

@@ -9,32 +9,33 @@ from vivarium.cluster_tools.core import cli_tools
 DEPRECATION_DATE_SIM_VERBOSITY = datetime.date(2026, 12, 4)
 
 
-def test_resolve_sim_verbosity_uses_count_by_default() -> None:
-    assert cli_tools.resolve_sim_verbosity(2, None) == 2
+def test_resolve_sim_verbosity_uses_flag_by_default() -> None:
+    assert cli_tools.resolve_sim_verbosity(True, None) == 1
 
 
 def test_resolve_sim_verbosity_deprecated_value_warns() -> None:
     with pytest.warns(FutureWarning):
-        assert cli_tools.resolve_sim_verbosity(0, "2") == 2
+        assert cli_tools.resolve_sim_verbosity(False, "2") == 2
 
 
 def test_resolve_sim_verbosity_conflict_raises() -> None:
     with pytest.raises(click.UsageError):
-        cli_tools.resolve_sim_verbosity(2, "1")
+        cli_tools.resolve_sim_verbosity(True, "1")
 
 
 @pytest.mark.parametrize(
     "args, expected",
     [
-        ([], 0),
-        (["-s"], 1),
-        (["-ss"], 2),
+        ([], False),
+        (["-s"], True),
+        # Repeating the flag is accepted and means the same thing.
+        (["-ss"], True),
     ],
 )
-def test_sim_verbosity_is_a_count(args: list[str], expected: int) -> None:
+def test_sim_verbosity_is_a_flag(args: list[str], expected: bool) -> None:
     @click.command()
     @cli_tools.with_sim_verbosity
-    def dummy(sim_verbosity: int, sim_verbosity_deprecated: str | None) -> None:
+    def dummy(sim_verbosity: bool, sim_verbosity_deprecated: str | None) -> None:
         click.echo(str(sim_verbosity))
 
     result = CliRunner().invoke(dummy, args)
