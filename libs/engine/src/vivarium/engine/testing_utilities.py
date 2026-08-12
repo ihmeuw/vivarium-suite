@@ -75,7 +75,8 @@ class NonCRNTestPopulation(Component):
             delta = event.step_size / pd.Timedelta(days=365)
             self.population_view.update(
                 "age",
-                lambda age: age.loc[living_index] + delta,
+                lambda age: age + delta,
+                index=living_index,
             )
 
 

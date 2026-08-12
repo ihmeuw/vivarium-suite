@@ -43,7 +43,9 @@ class DeathsObserver(Observer):
         """Update the previous deaths column to the current deaths."""
         previous_alive = self.population_view.get(event.index, "is_alive")
         previous_alive.name = "previous_alive"
-        self.population_view.update("previous_alive", lambda _: previous_alive)
+        self.population_view.update(
+            "previous_alive", lambda _: previous_alive, index=event.index
+        )
 
 
 class YllsObserver(Observer):
