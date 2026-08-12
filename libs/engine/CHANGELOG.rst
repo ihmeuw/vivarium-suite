@@ -1,3 +1,10 @@
+**5.7.0 - 08/12/26**
+
+- Add an ``index`` parameter to ``PopulationView.update()`` to scope an update to a
+  subset of simulants
+- Write a scoped ``PopulationView.update()`` directly to the given rows instead of
+  rebuilding the full column, avoiding an unneeded full-population read
+
 **5.6.0 - 08/06/26**
 
 - Support pandas 3
