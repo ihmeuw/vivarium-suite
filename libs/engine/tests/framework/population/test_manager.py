@@ -6,7 +6,13 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 
-from tests.framework.population.conftest import CUBE_COL_NAMES, PIE_COL_NAMES, PIE_RECORDS
+from tests.framework.population.conftest import (
+    CUBE_COL_NAMES,
+    PIE_COL_NAMES,
+    PIE_RECORDS,
+    CubeComponent,
+    PieComponent,
+)
 from tests.framework.population.helpers import (
     assert_squeezing_multi_level_multi_outer,
     assert_squeezing_multi_level_single_outer_multi_inner,
@@ -537,3 +543,137 @@ def test_register_tracked_query(mocker: MockerFixture) -> None:
     mgr.register_tracked_query("foo == 'bar'")
     mgr.logger.warning.assert_called_once()  # type: ignore[attr-defined]
     assert mgr.tracked_queries == ["foo == 'bar'", "cat != dog"]
+
+
+###########################
+# PopulationManager.update #
+###########################
+
+
+def test_update_full_index_replaces_columns(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """An update covering the whole population replaces those columns."""
+    original = pies_and_cubes_pop_mgr.private_columns.copy()
+    update = pd.DataFrame({"pi": original["pi"] * 2, "cube": original["cube"] + 1})
+    assert update.index.equals(original.index)
+
+    pies_and_cubes_pop_mgr.update(update)
+
+    updated = pies_and_cubes_pop_mgr.private_columns
+    pd.testing.assert_frame_equal(updated[["pi", "cube"]], update)
+    pd.testing.assert_frame_equal(
+        updated[["pie", "cube_string"]], original[["pie", "cube_string"]]
+    )
+
+
+def test_update_partial_index_writes_only_those_rows(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """An update covering some simulants leaves every other row untouched."""
+    original = pies_and_cubes_pop_mgr.private_columns.copy()
+    index: pd.Index[int] = original.index[::2]
+    omitted = original.index.difference(index)
+    update = pd.DataFrame({"pi": original.loc[index, "pi"] * 2})
+
+    pies_and_cubes_pop_mgr.update(update)
+
+    updated = pies_and_cubes_pop_mgr.private_columns
+    pd.testing.assert_series_equal(updated.loc[index, "pi"], original.loc[index, "pi"] * 2)
+    pd.testing.assert_series_equal(updated.loc[omitted, "pi"], original.loc[omitted, "pi"])
+    pd.testing.assert_frame_equal(updated.drop(columns=["pi"]), original.drop(columns=["pi"]))
+
+
+def test_update_partial_index_does_not_null_omitted_rows(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """A partial update introduces no nulls in the rows it omits."""
+    original = pies_and_cubes_pop_mgr.private_columns.copy()
+    assert not original.isna().to_numpy().any()
+    index: pd.Index[int] = original.index[:3]
+    omitted = original.index.difference(index)
+    update = pd.DataFrame({"pie": "banana_cream", "pi": 0.0}, index=index)
+
+    pies_and_cubes_pop_mgr.update(update)
+
+    updated = pies_and_cubes_pop_mgr.private_columns
+    assert not updated.loc[omitted, PIE_COL_NAMES].isna().to_numpy().any()
+    assert not updated.isna().to_numpy().any()
+
+
+@pytest.mark.parametrize("column", ["pie", "pi", "cube", "cube_string"])
+def test_update_partial_index_preserves_dtype(
+    pies_and_cubes_pop_mgr: PopulationManager, column: str
+) -> None:
+    """A partial update leaves the written column's dtype unchanged."""
+    original = pies_and_cubes_pop_mgr.private_columns.copy()
+    index: pd.Index[int] = original.index[::3]
+    # Relabelling the reversed rows changes most values without changing dtype.
+    update = original.loc[index[::-1], [column]].set_axis(index, axis="index")
+    expected = original[column].copy()
+    expected.loc[index] = update[column]
+
+    pies_and_cubes_pop_mgr.update(update)
+
+    updated = pies_and_cubes_pop_mgr.private_columns
+    assert updated[column].dtype == original[column].dtype
+    pd.testing.assert_series_equal(updated[column], expected)
+
+
+def test_update_partial_index_empty_is_noop(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """An update with an empty index changes nothing."""
+    original = pies_and_cubes_pop_mgr.private_columns.copy()
+    update = original.loc[original.index[:0], PIE_COL_NAMES]
+
+    pies_and_cubes_pop_mgr.update(update)
+
+    pd.testing.assert_frame_equal(pies_and_cubes_pop_mgr.private_columns, original)
+
+
+def test_update_partial_index_unordered(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """A partial update whose index is not in population order writes the right rows."""
+    original = pies_and_cubes_pop_mgr.private_columns.copy()
+    index = pd.Index([7, 2, 19, 5])
+    omitted = original.index.difference(index)
+    # Each row gets a distinct value, so writing them in population order would
+    # land the wrong value on every simulant.
+    update = pd.DataFrame(
+        {"pi": [-1.0, -2.0, -3.0, -4.0], "cube": [-1, -2, -3, -4]}, index=index
+    )
+
+    pies_and_cubes_pop_mgr.update(update)
+
+    updated = pies_and_cubes_pop_mgr.private_columns
+    pd.testing.assert_frame_equal(updated.loc[index, ["pi", "cube"]], update)
+    pd.testing.assert_frame_equal(
+        updated.loc[omitted, ["pi", "cube"]], original.loc[omitted, ["pi", "cube"]]
+    )
+
+
+##########################################
+# PopulationManager.get_private_column_dtypes #
+##########################################
+
+
+def test_get_private_column_dtypes(pies_and_cubes_pop_mgr: PopulationManager) -> None:
+    """Returns the dtype of each private column created by the component."""
+    private_columns = pies_and_cubes_pop_mgr.private_columns
+
+    dtypes = pies_and_cubes_pop_mgr.get_private_column_dtypes(PieComponent())
+
+    pd.testing.assert_series_equal(dtypes, private_columns[PIE_COL_NAMES].dtypes)
+
+
+def test_get_private_column_dtypes_excludes_other_components(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """Returns only the requesting component's columns, not another's."""
+    pie_dtypes = pies_and_cubes_pop_mgr.get_private_column_dtypes(PieComponent())
+    cube_dtypes = pies_and_cubes_pop_mgr.get_private_column_dtypes(CubeComponent())
+
+    assert list(pie_dtypes.index) == PIE_COL_NAMES
+    assert list(cube_dtypes.index) == CUBE_COL_NAMES
