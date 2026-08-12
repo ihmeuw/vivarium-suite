@@ -1,4 +1,4 @@
-**4.5.1 - 08/07/26**
+**4.5.1 - 08/12/26**
 
 - Publish docs under the distribution name from ``[project].name`` instead of the
   checkout directory name, so repos built at their root no longer publish docs
