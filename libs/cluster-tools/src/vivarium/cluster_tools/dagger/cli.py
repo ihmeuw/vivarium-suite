@@ -28,7 +28,8 @@ def dagger() -> None:
     """A command line utility for running multi-step Jobmon workflows.
 
     Workflows are defined by a YAML configuration file that lists each
-    step's command, compute resources, and conda environment. Use the
+    step's command, compute resources, and environment (a conda env or a
+    venv, given by name or prefix path). Use the
     ``run`` sub-command to launch a fresh workflow, or ``restart`` to resume
     a previously started workflow from its output directory.
     """

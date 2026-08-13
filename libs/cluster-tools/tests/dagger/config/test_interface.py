@@ -275,6 +275,7 @@ def test_step_env_falls_back_to_conda_default_env(
 ) -> None:
     """When ``environment`` is omitted, env_prefix resolves from the runner's
     active ``CONDA_DEFAULT_ENV``."""
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     monkeypatch.setenv("CONDA_DEFAULT_ENV", "runner_env")
     get_bash_step_tasks(
         name="cmd",
@@ -339,11 +340,17 @@ class TestResolveStepEnvPrefix:
 
     @pytest.fixture(autouse=True)
     def patch_resolve_env_prefix(self, mocker: MockerFixture) -> None:
-        """Stub out the conda lookup so tests exercise only the fallback chain."""
+        """Stub out the env lookup so tests exercise only the fallback chain."""
         mocker.patch(
             "vivarium.cluster_tools.dagger.config.utilities.resolve_env_prefix",
             side_effect=lambda env: f"/envs/{env}",
         )
+
+    @pytest.fixture(autouse=True)
+    def clear_env_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Isolate the fallback chain from the host's active env."""
+        monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+        monkeypatch.delenv("CONDA_DEFAULT_ENV", raising=False)
 
     def test_step_environment_used_when_set(self) -> None:
         assert resolve_step_env_prefix(name="s", environment="step_env") == "/envs/step_env"
@@ -352,13 +359,27 @@ class TestResolveStepEnvPrefix:
         monkeypatch.setenv("CONDA_DEFAULT_ENV", "conda_env")
         assert resolve_step_env_prefix(name="s", environment=None) == "/envs/conda_env"
 
+    def test_virtual_env_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("VIRTUAL_ENV", "/repo/.venv/my_venv")
+        assert (
+            resolve_step_env_prefix(name="s", environment=None) == "/envs//repo/.venv/my_venv"
+        )
+
+    def test_virtual_env_wins_over_conda_default_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CONDA_DEFAULT_ENV", "conda_env")
+        monkeypatch.setenv("VIRTUAL_ENV", "/repo/.venv/my_venv")
+        assert (
+            resolve_step_env_prefix(name="s", environment=None) == "/envs//repo/.venv/my_venv"
+        )
+
     def test_rejects_base_environment(self) -> None:
-        with pytest.raises(ValueError, match="non-base conda environment is required"):
+        with pytest.raises(ValueError, match="non-base environment is required"):
             resolve_step_env_prefix(name="s", environment="base")
 
-    def test_raises_when_nothing_resolves(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("CONDA_DEFAULT_ENV", raising=False)
-        with pytest.raises(ValueError, match="non-base conda environment is required"):
+    def test_raises_when_nothing_resolves(self) -> None:
+        with pytest.raises(ValueError, match="non-base environment is required"):
             resolve_step_env_prefix(name="s", environment=None)
 
 

@@ -1,3 +1,9 @@
+**4.5.0 - 08/13/26**
+
+- Resolve dagger step environments that are venvs (e.g. shared-env venv overlays), not just conda envs: by name under ``.venv/``, by prefix path, or from an active ``VIRTUAL_ENV``
+- Include a venv's base environment ``bin`` on worker task ``PATH`` so console scripts installed only in the base env (e.g. ``psimulate``) resolve
+- Workflows started under an earlier version cannot be resumed after upgrading (the Jobmon command templates changed)
+
 **4.4.0 - 08/07/26**
 
 - Split worker logs by severity: ERROR and above go to the stderr log (``.e``),
