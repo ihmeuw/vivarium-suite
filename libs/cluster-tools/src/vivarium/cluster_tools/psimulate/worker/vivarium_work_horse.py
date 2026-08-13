@@ -22,6 +22,7 @@ from vivarium.engine.framework.utilities import collapse_nested_dict
 from vivarium.cluster_tools.psimulate.environment import ENV_VARIABLES
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
 from vivarium.cluster_tools.psimulate.paths import build_perf_log_filename
+from vivarium.cluster_tools.psimulate.worker import PERF_LOG_MARKER
 from vivarium.cluster_tools.vipin.perf_counters import CounterSnapshot
 
 
@@ -65,9 +66,6 @@ def work_horse(
 
         return results
 
-    except Exception:
-        logger.exception("Unhandled exception in worker")
-        raise
     finally:
         logger.info(f"Exiting job: {job_parameters}")
 
@@ -238,7 +236,9 @@ def do_sim_epilogue(
         serialize=True,
     )
 
-    logger.debug(
+    # Don't send this to the worker's stdout because it will be written to the
+    # performance logs.
+    logger.bind(**{PERF_LOG_MARKER: True}).debug(
         json.dumps(
             {
                 "host": ENV_VARIABLES.HOSTNAME.value,

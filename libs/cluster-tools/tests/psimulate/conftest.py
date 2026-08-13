@@ -1,5 +1,7 @@
 """Shared fixtures for the psimulate test suite."""
 
+import io
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,19 @@ def make_job_parameters(**overrides: Any) -> JobParameters:
     }
     defaults.update(overrides)
     return JobParameters(**defaults)
+
+
+@pytest.fixture()
+def captured_logs() -> Generator[io.StringIO, None, None]:
+    """Capture every loguru record emitted during the test.
+
+    An owned sink rather than the ambient ones, so what is asserted on does not
+    depend on how the process happens to have configured logging.
+    """
+    buffer = io.StringIO()
+    handler_id = logger.add(buffer, level="TRACE")
+    yield buffer
+    logger.remove(handler_id)
 
 
 @pytest.fixture()

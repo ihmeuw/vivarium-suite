@@ -38,8 +38,11 @@ def with_sim_verbosity(func: CLIFunction) -> CLIFunction:
     func = click.option(
         "-s",
         "sim_verbosity",
-        count=True,
-        help="Increase per-simulation logging verbosity. Use -s for INFO and -ss for DEBUG.",
+        is_flag=True,
+        help=(
+            "Log per-simulation DEBUG records to the worker stdout log. Without it, "
+            "worker logs include INFO and above."
+        ),
     )(func)
     func = click.option(
         "--sim-verbosity",
@@ -47,33 +50,32 @@ def with_sim_verbosity(func: CLIFunction) -> CLIFunction:
         type=click.Choice(["0", "1", "2"]),
         default=None,
         hidden=True,
-        help="Deprecated. Use -s/-ss instead.",
+        help="Deprecated. Use -s instead.",
     )(func)
     return func
 
 
-def resolve_sim_verbosity(sim_verbosity: int, sim_verbosity_deprecated: str | None) -> int:
-    """Resolve per-simulation verbosity from the new ``-s`` count and the
+def resolve_sim_verbosity(sim_verbosity: bool, sim_verbosity_deprecated: str | None) -> int:
+    """Resolve per-simulation verbosity from the new ``-s`` flag and the
     deprecated ``--sim-verbosity`` value option.
 
-    Returns the resolved verbosity count and emits a deprecation warning if the
+    Returns the resolved verbosity level and emits a deprecation warning if the
     old value form was used. Raises a click.UsageError if verbosity is supplied
-    both as ``-s``/``-ss`` and via the deprecated ``--sim-verbosity`` option.
+    both as ``-s`` and via the deprecated ``--sim-verbosity`` option.
     """
     if sim_verbosity_deprecated is not None:
-        if sim_verbosity > 0:
+        if sim_verbosity:
             raise click.UsageError(
-                "Per-simulation verbosity was provided both as '-s'/'-ss' and via "
-                "the deprecated '--sim-verbosity' option. Use only '-s'/'-ss'."
+                "Per-simulation verbosity was provided both as '-s' and via "
+                "the deprecated '--sim-verbosity' option. Use only '-s'."
             )
         warnings.warn(
-            "The '--sim-verbosity' option is deprecated; use '-s' (INFO) or '-ss' "
-            "(DEBUG) instead.",
+            "The '--sim-verbosity' option is deprecated; use '-s' instead.",
             FutureWarning,
             stacklevel=2,
         )
         return int(sim_verbosity_deprecated)
-    return sim_verbosity
+    return int(sim_verbosity)
 
 
 def with_slack_channel(func: CLIFunction) -> CLIFunction:

@@ -46,9 +46,10 @@ output directory with the ``-o`` flag and which project you'd like to run on wit
           | only warnings and errors are logged; pass **-v** to also log
           | informational messages and **-vv** to additionally log debug messages.
     *   - | **-s**
-        - | Increase the logging verbosity of each individual simulation, on the
-          | same scale as **-v** (**-s** for info, **-ss** for debug). Defaults to
-          | logging only warnings and errors.
+        - | Increase the logging verbosity of each individual simulation. By
+          | default informational messages and above are logged; pass **-s** to
+          | additionally log debug messages. Each task writes its errors to its
+          | stderr log and everything else to its stdout log.
     *   - | **-\-backup-freq**
         - | The frequency with which to save a backup of the simulation state to disk.
     *   - | **-\-max-workers** or **-w**

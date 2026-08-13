@@ -1,3 +1,13 @@
+**4.4.0 - 08/07/26**
+
+- Split worker logs by severity: ERROR and above go to the stderr log (``.e``),
+  everything else to stdout (``.o``). Tooling that scraped ``.e`` for WARNINGs must read ``.o``.
+- The performance-log record goes to neither worker log; it keeps its own dedicated
+  file, which ``vipin`` consumes.
+- ``psimulate -s`` now lowers the worker stdout log to DEBUG (previously inert), and
+  is a flag rather than a count; ``-ss`` means the same as ``-s``.
+- Report a failed worker task once, with a non-zero exit code, instead of a duplicated traceback.
+
 **4.3.0 - 08/06/26**
 
 - Support pandas 3 (MIC-6773): pin the NaN-dropping ``stack()`` behavior in the

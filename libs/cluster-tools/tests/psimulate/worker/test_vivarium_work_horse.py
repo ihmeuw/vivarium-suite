@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 from time import time
 from typing import cast
@@ -5,6 +6,7 @@ from typing import cast
 import dill
 import pandas as pd
 import pytest
+from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
@@ -13,7 +15,10 @@ from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
     get_backup,
     get_sim_from_backup,
     remove_backups,
+    work_horse,
 )
+
+_MODULE = "vivarium.cluster_tools.psimulate.worker.vivarium_work_horse"
 
 
 @pytest.mark.parametrize(
@@ -120,6 +125,25 @@ def test_remove_backups(tmp_path: Path) -> None:
     # remove the file
     remove_backups(tmp_path / "job_id.pkl")
     assert not (tmp_path / "job_id.pkl").exists()
+
+
+def test_work_horse_does_not_report_its_own_failure(
+    mocker: MockerFixture, captured_logs: io.StringIO
+) -> None:
+    """A failing simulation propagates out of the work horse unreported, leaving
+    ``main()`` as the single place a task failure is logged."""
+    job_parameters = make_job_parameters()
+    mocker.patch(f"{_MODULE}.ENV_VARIABLES")
+    mocker.patch(f"{_MODULE}.get_backup", return_value=None)
+    mocker.patch(f"{_MODULE}.initialize_new_sim", side_effect=RuntimeError("sim-boom"))
+
+    with pytest.raises(RuntimeError, match="sim-boom"):
+        work_horse(job_parameters)
+
+    # Non-empty because the work horse still logs its start and exit; an empty
+    # buffer would make the assertion below pass for the wrong reason.
+    assert captured_logs.getvalue() != ""
+    assert "Unhandled exception in worker" not in captured_logs.getvalue()
 
 
 def test_get_sim_from_backup() -> None:
