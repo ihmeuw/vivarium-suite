@@ -5,27 +5,32 @@ UTILS_DIR := $(dir $(abspath $(dir $(abspath $(dir $(lastword $(MAKEFILE_LIST)))
 # Source files to format, lint, and type check.
 LOCATIONS=src tests
 
-# Unless overridden, build conda environment using the package name.
-SAFE_NAME = $(shell python -c "from pkg_resources import safe_name; print(safe_name(\"$(PACKAGE_NAME)\"))")
+# The checkout directory name. Repos also set PACKAGE_NAME to $(notdir $(CURDIR))
+# for their own `build-env` target, but nothing here reads it: it is a *directory*
+# name and not a package identity. Use PACKAGE_DIR where
+# the directory is what's meant and DIST_NAME_FROM_PROJECT where the package is.
+PACKAGE_DIR := $(notdir $(CURDIR))
 
-# DIST_NAME is the PyPI distribution name read from pyproject.toml's `[project].name`
+# The PyPI distribution name, read from pyproject.toml's `[project].name`
 # (e.g. "vivarium-cluster-tools" for libs/cluster-tools/). Parsed with sed/grep
 # rather than tomllib so this works on Python <3.11 too.
 DIST_NAME_FROM_PROJECT := $(shell sed -n '/^\[project\]/,/^\[/p' pyproject.toml 2>/dev/null | grep -E '^name *=' | head -1 | sed -E 's/^name *= *"([^"]+)".*$$/\1/')
 # If we're inside libs/<pkg>/ (i.e. the monorepo), the package's [project] block
 # exists, and DIST_NAME_FROM_PROJECT came up empty, fail the build.
 ifeq ($(DIST_NAME_FROM_PROJECT),)
-ifneq ($(findstring /libs/$(PACKAGE_NAME),$(CURDIR)),)
+ifneq ($(findstring /libs/$(PACKAGE_DIR),$(CURDIR)),)
 ifneq ($(shell grep -E '^\[project\]' pyproject.toml 2>/dev/null),)
-$(error DIST_NAME parse failed: pyproject.toml has a [project] block but no `name = "..."` line in the canonical double-quoted form. Check for single quotes, multi-line values, or `dynamic = ["name"]` and adjust either the pyproject or this base.mk regex.)
+$(error DIST_NAME_FROM_PROJECT parse failed: pyproject.toml has a [project] block but no `name = "..."` line in the canonical double-quoted form. Check for single quotes, multi-line values, or `dynamic = ["name"]` and adjust either the pyproject or this base.mk regex.)
 endif
 endif
 endif
-# FIXME [MIC-7237]: eventually remove the fallback to PACKAGE_NAME once all repos have [project] blocks with valid names
-# Fall back to PACKAGE_NAME for legacy repos that don't declare `[project]` in pyproject.toml.
-DIST_NAME ?= $(if $(DIST_NAME_FROM_PROJECT),$(DIST_NAME_FROM_PROJECT),$(PACKAGE_NAME))
 
-# Build the editable_mode=compat config-settings flag only when DIST_NAME was parsed from [project].
+# Directory published under DOCS_ROOT_PATH by `deploy-docs`, 
+# the distribution name rather than the checkout directory.
+# A package with no `[project].name` must fail rather than fall back to a directory name.
+DOCS_NAME ?= $(DIST_NAME_FROM_PROJECT)
+
+# Build the editable_mode=compat config-settings flag only when the distribution name was parsed from [project].
 # NOTE: editable_mode=compat: produces a classic .pth-based editable install
 #   (sys.path entry pointing at src/) instead of the PEP 660 default
 #   (sys.meta_path finder). The PEP 660 mode breaks mypy's discovery of
@@ -60,7 +65,7 @@ EXTRA_INDEX_FLAGS = $(if $(IHME_PYPI),--extra-index-url ${IHME_PYPI}simple/ --in
 _PY_VERSIONS_FILE := $(wildcard python_versions.json)
 PYTHON_VERSION ?= $(if $(_PY_VERSIONS_FILE),$(shell python -c \
         "import json; print(json.load(open('python_versions.json'))[-1])"),3.12)
-CONDA_ENV_NAME ?= ${PACKAGE_NAME}_py${PYTHON_VERSION}
+CONDA_ENV_NAME ?= ${PACKAGE_DIR}_py${PYTHON_VERSION}
 CONDA_ENV_CREATION_FLAG = $(if $(CONDA_ENV_PATH),-p ${CONDA_ENV_PATH},-n ${CONDA_ENV_NAME})
 
 .PHONY: help
@@ -132,8 +137,9 @@ debug: # Print debug information
 	@echo "PYTHON_VERSION:                   ${PYTHON_VERSION}"
 	@echo "IHME_PYPI:                        ${IHME_PYPI}"
 	@echo "LOCATIONS:                        ${LOCATIONS}"
-	@echo "PACKAGE_NAME:                     ${PACKAGE_NAME}"
+	@echo "PACKAGE_DIR:                      ${PACKAGE_DIR}"
 	@echo "PACKAGE_VERSION:                  ${PACKAGE_VERSION}"
+	@echo "DOCS_NAME:                        ${DOCS_NAME}"
 	@echo "PYPI_ARTIFACTORY_CREDENTIALS_USR: ${PYPI_ARTIFACTORY_CREDENTIALS_USR} "
 	@echo
 	@echo "vivarium_build_utils version:     $(shell python -c "import importlib.metadata; print(importlib.metadata.version('vivarium_build_utils'))" 2>/dev/null || echo "unknown")"
@@ -145,7 +151,7 @@ debug: # Print debug information
 
 .PHONY: create-env
 create-env: # Create a new conda environment
-# env name: {PACKAGE_NAME}_py{PYTHON_VERSION}.
+# env name: {PACKAGE_DIR}_py{PYTHON_VERSION}.
 	conda create ${CONDA_ENV_CREATION_FLAG} python=${PYTHON_VERSION} --yes
 	@echo
 	@echo "Environment created ($(CONDA_ENV_NAME))"
@@ -255,10 +261,12 @@ deploy-package-artifactory: # Deploy the package to Artifactory
 .PHONY: deploy-docs
 deploy-docs: # Deploy documentation to shared server
 	@[ "${DOCS_ROOT_PATH}" ] && echo "" > /dev/null || ( echo "DOCS_ROOT_PATH is not set"; exit 1 )
-	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
-	cp -R ./docs/build/html/* ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
-	chmod -R 0775 ${DOCS_ROOT_PATH}/${PACKAGE_NAME}/${PACKAGE_VERSION}
-	cd ${DOCS_ROOT_PATH}/${PACKAGE_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
+	@[ "${DOCS_NAME}" ] && echo "" > /dev/null || ( echo "DOCS_NAME is empty; add a [project] name to pyproject.toml or pass DOCS_NAME explicitly"; exit 1 )
+	@case "${DOCS_NAME}" in *[@/]*) echo "DOCS_NAME '${DOCS_NAME}' looks like a Jenkins workspace name rather than a package name; refusing to publish"; exit 1 ;; esac
+	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
+	cp -R ./docs/build/html/* ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
+	chmod -R 0775 ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
+	cd ${DOCS_ROOT_PATH}/${DOCS_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
 
 .PHONY: clean
 clean: # Clean build artifacts and temporary files
