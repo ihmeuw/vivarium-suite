@@ -77,7 +77,7 @@ Show the user the comment body and the target ticket key. On explicit approval, 
 
 Invoke the `team-conventions` skill to format the skill. The team-conventions structure is the spine — *keep the ticket description short and descriptive* per that template. You may optionally append a "Notes" section *inside the description* for extra detail that doesn't fit the main template; only use this if actually necessary.
 
-The `TL;DR` section is the user's to write, not yours. A finished design walk is not permission to summarize it there — leave it blank unless the user dictates the exact text.
+The `TL;DR` section is the user's to write, not yours. A finished design walk is not permission to summarize it there — leave the `_TODO (human)...` line from `team-conventions` §2 untouched unless the user dictates the exact text.
 
 Show the user the full ticket payload (summary, description, type, labels, project). On explicit approval, create the ticket.
 
