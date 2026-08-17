@@ -9,6 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytest.importorskip("jobmon")
+
 from vivarium.cluster_tools.core.jobmon import env as env_module
 from vivarium.cluster_tools.core.jobmon.env import resolve_env_bin_path, resolve_env_prefix
 
@@ -18,6 +20,14 @@ def clear_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Isolate tests from the host machine's active conda env / venv."""
     for var in ("CONDA_DEFAULT_ENV", "CONDA_PREFIX", "CONDA_EXE", "VIRTUAL_ENV"):
         monkeypatch.delenv(var, raising=False)
+
+
+@pytest.fixture()
+def warning(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Capture ambiguity warnings emitted by the env module."""
+    mock = MagicMock()
+    monkeypatch.setattr(env_module.logger, "warning", mock)
+    return mock
 
 
 def _make_env_prefix(prefix: Path, base_bin_dir: str | None = None) -> Path:
@@ -42,7 +52,7 @@ def _patch_conda_env_list(monkeypatch: pytest.MonkeyPatch, envs: list[str]) -> N
 
 
 class TestResolveEnvPrefix:
-    """Verify each lookup mechanism and their order in ``resolve_env_prefix``."""
+    """Verify each lookup mechanism and their precedence in ``resolve_env_prefix``."""
 
     def test_active_conda_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("CONDA_DEFAULT_ENV", "my_env")
@@ -63,20 +73,6 @@ class TestResolveEnvPrefix:
         venv = _make_env_prefix(tmp_path / ".venv" / "my_model_simulation")
         monkeypatch.chdir(tmp_path)
         assert resolve_env_prefix("my_model_simulation") == str(venv.resolve())
-
-    def test_conda_env_list_wins_over_local_venv_with_warning(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """On a name collision the conda env wins (backward compatible), but
-        the silent shadowing of the local venv is called out."""
-        _make_env_prefix(tmp_path / ".venv" / "my_env")
-        monkeypatch.chdir(tmp_path)
-        _patch_conda_env_list(monkeypatch, ["/opt/conda/envs/my_env"])
-        warning = MagicMock()
-        monkeypatch.setattr(env_module.logger, "warning", warning)
-        assert resolve_env_prefix("my_env") == "/opt/conda/envs/my_env"
-        warning.assert_called_once()
-        assert "matches both" in warning.call_args.args[0]
 
     def test_local_venv_found_without_conda_installed(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -100,6 +96,64 @@ class TestResolveEnvPrefix:
         monkeypatch.chdir(tmp_path)
         with pytest.raises(RuntimeError, match="Could not resolve environment 'ghost'"):
             resolve_env_prefix("ghost")
+
+    def test_prefixes_are_normalized(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """The same env named through a symlink resolves to one canonical
+        prefix - Jobmon task hashes depend on the string being stable."""
+        venv = _make_env_prefix(tmp_path / "real" / "my_env")
+        alias = tmp_path / "alias"
+        alias.symlink_to(tmp_path / "real")
+        monkeypatch.setenv("VIRTUAL_ENV", str(alias / "my_env"))
+        assert resolve_env_prefix("my_env") == str(venv.resolve())
+
+
+class TestResolveEnvPrefixAmbiguity:
+    """A name matching several environments picks by precedence and warns."""
+
+    def test_conda_env_list_wins_over_local_venv(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, warning: MagicMock
+    ) -> None:
+        _make_env_prefix(tmp_path / ".venv" / "my_env")
+        monkeypatch.chdir(tmp_path)
+        _patch_conda_env_list(monkeypatch, ["/opt/conda/envs/my_env"])
+        assert resolve_env_prefix("my_env") == "/opt/conda/envs/my_env"
+        warning.assert_called_once()
+        assert "ambiguous" in warning.call_args.args[0]
+
+    def test_active_conda_env_wins_over_local_venv(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, warning: MagicMock
+    ) -> None:
+        _make_env_prefix(tmp_path / ".venv" / "my_env")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CONDA_DEFAULT_ENV", "my_env")
+        monkeypatch.setenv("CONDA_PREFIX", "/opt/conda/envs/my_env")
+        assert resolve_env_prefix("my_env") == "/opt/conda/envs/my_env"
+        warning.assert_called_once()
+        assert "ambiguous" in warning.call_args.args[0]
+
+    def test_active_venv_wins_over_conda_env_list(
+        self, monkeypatch: pytest.MonkeyPatch, warning: MagicMock
+    ) -> None:
+        """A deliberately sourced venv beats a same-named conda env from the
+        registry, and the shadowing is called out."""
+        monkeypatch.setenv("VIRTUAL_ENV", "/repo/.venv/my_env")
+        _patch_conda_env_list(monkeypatch, ["/opt/conda/envs/my_env"])
+        assert resolve_env_prefix("my_env") == "/repo/.venv/my_env"
+        warning.assert_called_once()
+        assert "ambiguous" in warning.call_args.args[0]
+
+    def test_active_venv_that_is_the_local_venv_does_not_warn(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, warning: MagicMock
+    ) -> None:
+        """The common case - the sourced venv IS ``.venv/<name>`` under cwd -
+        matches twice but is one environment, so no ambiguity warning."""
+        venv = _make_env_prefix(tmp_path / ".venv" / "my_env")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("VIRTUAL_ENV", str(venv))
+        assert resolve_env_prefix("my_env") == str(venv.resolve())
+        warning.assert_not_called()
 
 
 class TestResolveEnvBinPath:

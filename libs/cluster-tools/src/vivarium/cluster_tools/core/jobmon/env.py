@@ -29,15 +29,25 @@ def resolve_env_prefix(env: str) -> str:
     """Resolve an environment name or path to its absolute filesystem prefix.
 
     *env* may name a conda env or a venv, or be a path to either's prefix
-    directory. Lookup order:
+    directory. A path (*env* contains a path separator or starts with
+    ``~``) is validated and returned directly; this can never mistake a
+    name for a path, since conda forbids separators in env names and a
+    venv name is a single directory name. A name is matched against, in
+    order of precedence:
 
-    1. A path (*env* contains a path separator or starts with ``~``) is
-       validated and returned directly.
-    2. The active conda env (``CONDA_DEFAULT_ENV`` -> ``CONDA_PREFIX``).
-    3. The active venv (``VIRTUAL_ENV``), matched by directory name.
-    4. ``conda env list --json`` via ``CONDA_EXE``, matched by env name.
-    5. ``.venv/<env>`` under the current working directory, where
+    1. the active conda env (``CONDA_DEFAULT_ENV`` -> ``CONDA_PREFIX``);
+    2. the active venv (``VIRTUAL_ENV``), matched by directory name;
+    3. ``conda env list --json`` via ``CONDA_EXE``, matched by env name
+       (skipped when ``CONDA_EXE`` is unset);
+    4. ``.venv/<env>`` under the current working directory, where
        ``make build-shared-env`` creates its venv overlays.
+
+    When the name matches more than one distinct environment, the
+    highest-precedence match wins and a warning names every match.
+    Returned prefixes are fully resolved (symlinks followed) so that the
+    same environment always yields the same prefix string - Jobmon task
+    hashes depend on it, and an unstable spelling would defeat
+    ``dagger restart``.
 
     Raises
     ------
@@ -54,31 +64,25 @@ def resolve_env_prefix(env: str) -> str:
             )
         return str(prefix)
 
-    if env == os.environ.get("CONDA_DEFAULT_ENV"):
-        return os.environ["CONDA_PREFIX"]
-
-    active_venv = os.environ.get("VIRTUAL_ENV")
-    if active_venv is not None and Path(active_venv).name == env:
-        return active_venv
-
-    conda_prefix = _find_conda_env(env)
-    local_venv = Path.cwd() / VENV_DIR_NAME / env
-    if conda_prefix is not None:
-        if _is_env_prefix(local_venv):
-            logger.warning(
-                f"Environment name {env!r} matches both a conda env ({conda_prefix}) "
-                f"and a local venv ({local_venv}); using the conda env. Pass the "
-                "venv's path as the environment to use the venv instead."
-            )
-        return conda_prefix
-    if _is_env_prefix(local_venv):
-        return str(local_venv.resolve())
-
-    raise RuntimeError(
-        f"Could not resolve environment {env!r} to a filesystem prefix: "
-        "it is not the active conda env or venv, was not found by "
-        f"`conda env list`, and there is no venv at {local_venv}."
-    )
+    candidates = _find_env_candidates(env)
+    if not candidates:
+        raise RuntimeError(
+            f"Could not resolve environment {env!r} to a filesystem prefix: "
+            "it is not the active conda env or venv, was not found by "
+            f"`conda env list`, and there is no venv at "
+            f"{Path.cwd() / VENV_DIR_NAME / env}."
+        )
+    winner_label, winner_prefix = next(iter(candidates.items()))
+    if len(set(candidates.values())) > 1:
+        listing = "; ".join(
+            f"the {label} at {prefix}" for label, prefix in candidates.items()
+        )
+        logger.warning(
+            f"Environment name {env!r} is ambiguous: it matches {listing}. "
+            f"Using the {winner_label}. Pass a path as the environment to "
+            "select a specific one."
+        )
+    return winner_prefix
 
 
 def resolve_env_bin_path(env_prefix: str) -> str:
@@ -96,6 +100,31 @@ def resolve_env_bin_path(env_prefix: str) -> str:
     if base_bin_dir is not None:
         bin_dirs.append(base_bin_dir)
     return ":".join(bin_dirs)
+
+
+def _find_env_candidates(env: str) -> dict[str, str]:
+    """Gather resolved prefixes matching *env* by name, keyed by source, in precedence order."""
+    candidates: dict[str, str] = {}
+    if env == os.environ.get("CONDA_DEFAULT_ENV"):
+        candidates["active conda env"] = _normalize(os.environ["CONDA_PREFIX"])
+    active_venv = os.environ.get("VIRTUAL_ENV")
+    if active_venv is not None and Path(active_venv).name == env:
+        candidates["active venv"] = _normalize(active_venv)
+    # The active conda env is definitionally in `conda env list`; skip the
+    # subprocess when it already matched.
+    if "active conda env" not in candidates:
+        conda_prefix = _find_conda_env(env)
+        if conda_prefix is not None:
+            candidates["conda env"] = _normalize(conda_prefix)
+    local_venv = Path.cwd() / VENV_DIR_NAME / env
+    if _is_env_prefix(local_venv):
+        candidates["local venv"] = _normalize(str(local_venv))
+    return candidates
+
+
+def _normalize(prefix: str) -> str:
+    """Fully resolve a prefix so the same env always yields one spelling."""
+    return str(Path(prefix).resolve())
 
 
 def _is_env_prefix(prefix: Path) -> bool:
