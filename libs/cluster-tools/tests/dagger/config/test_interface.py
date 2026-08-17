@@ -359,13 +359,6 @@ class TestResolveStepEnvPrefix:
         monkeypatch.setenv("CONDA_DEFAULT_ENV", "conda_env")
         assert resolve_step_env_prefix(name="s", environment=None) == "/envs/conda_env"
 
-    def test_virtual_env_fallback(
-        self, monkeypatch: pytest.MonkeyPatch, resolve_mock: MagicMock
-    ) -> None:
-        monkeypatch.setenv("VIRTUAL_ENV", "/repo/.venv/my_venv")
-        resolve_step_env_prefix(name="s", environment=None)
-        resolve_mock.assert_called_once_with("/repo/.venv/my_venv")
-
     def test_virtual_env_wins_over_conda_default_env(
         self, monkeypatch: pytest.MonkeyPatch, resolve_mock: MagicMock
     ) -> None:

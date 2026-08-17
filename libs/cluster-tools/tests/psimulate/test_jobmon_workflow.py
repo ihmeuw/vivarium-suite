@@ -208,41 +208,6 @@ class TestBuildWorkflow:
 class TestGetTaskListEnvPrefix:
     """Verify the ``PATH`` prepend built from ``env_prefix``."""
 
-    def _command_template(
-        self,
-        mock_tool_cls: MagicMock,
-        output_paths: OutputPaths,
-        native_spec: MagicMock,
-        jobs: list[JobParameters],
-        env_prefix: str,
-    ) -> str:
-        get_task_list(
-            tool=mock_tool_cls.return_value,
-            command="run",
-            job_parameters_list=jobs,
-            metadata_dir=output_paths.metadata_dir,
-            results_dir=output_paths.results_dir,
-            worker_logging_root=output_paths.worker_logging_root,
-            native_specification=native_spec,
-            env_prefix=env_prefix,
-        )
-        kwargs = mock_tool_cls.return_value.get_task_template.call_args.kwargs
-        template: str = kwargs["command_template"]
-        return template
-
-    def test_conda_env_prefix_prepends_bin(
-        self,
-        mock_tool_cls: MagicMock,
-        mock_write_metadata: MagicMock,
-        output_paths: OutputPaths,
-        native_spec: MagicMock,
-        two_jobs: list[JobParameters],
-    ) -> None:
-        template = self._command_template(
-            mock_tool_cls, output_paths, native_spec, two_jobs, "/opt/conda/envs/my_env"
-        )
-        assert template.startswith("PATH=/opt/conda/envs/my_env/bin:$PATH ")
-
     def test_venv_env_prefix_includes_base_env_bin(
         self,
         mock_tool_cls: MagicMock,
@@ -252,15 +217,28 @@ class TestGetTaskListEnvPrefix:
         two_jobs: list[JobParameters],
         tmp_path: Path,
     ) -> None:
-        """A venv overlay's base env bin follows the venv's own bin so
-        console scripts installed only in the base env still resolve."""
+        """The command template is wired through ``resolve_env_bin_path``:
+        a venv overlay's base env bin follows the venv's own bin so console
+        scripts installed only in the base env still resolve. (A conda
+        prefix could not pin this wiring - its bin path is indistinguishable
+        from a plain ``<prefix>/bin`` append.)"""
         venv = tmp_path / "venv"
         (venv / "bin").mkdir(parents=True)
         (venv / "pyvenv.cfg").write_text("home = /shared_envs/my_env_current/bin\n")
-        template = self._command_template(
-            mock_tool_cls, output_paths, native_spec, two_jobs, str(venv)
+        get_task_list(
+            tool=mock_tool_cls.return_value,
+            command="run",
+            job_parameters_list=two_jobs,
+            metadata_dir=output_paths.metadata_dir,
+            results_dir=output_paths.results_dir,
+            worker_logging_root=output_paths.worker_logging_root,
+            native_specification=native_spec,
+            env_prefix=str(venv),
         )
-        assert template.startswith(f"PATH={venv}/bin:/shared_envs/my_env_current/bin:$PATH ")
+        kwargs = mock_tool_cls.return_value.get_task_template.call_args.kwargs
+        assert kwargs["command_template"].startswith(
+            f"PATH={venv}/bin:/shared_envs/my_env_current/bin:$PATH "
+        )
 
 
 class TestGetTaskListBackupAwareRetryScaling:

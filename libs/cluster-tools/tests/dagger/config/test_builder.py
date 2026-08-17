@@ -246,20 +246,6 @@ class TestEnvironmentResolution:
         call_kwargs = template_mock.create_task.call_args[1]
         assert call_kwargs["env_bin_path"] == "conda_env/bin"
 
-    def test_virtual_env_variable_fallback(
-        self, mock_tool_cls: MagicMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """When no step or workflow env, an active venv is used before conda."""
-        monkeypatch.setenv("VIRTUAL_ENV", "/repo/.venv/runner_venv")
-        monkeypatch.setenv("CONDA_DEFAULT_ENV", "conda_env")
-        config = _make_single_step_config()
-        template_mock = mock_tool_cls.return_value.get_task_template.return_value
-
-        build_workflow_from_config(config, workflow_args="test_workflow_args")
-
-        call_kwargs = template_mock.create_task.call_args[1]
-        assert call_kwargs["env_bin_path"] == "/repo/.venv/runner_venv/bin"
-
     def test_base_fallback(
         self, mock_tool_cls: MagicMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:

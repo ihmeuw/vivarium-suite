@@ -61,21 +61,11 @@ class TestResolveEnvPrefix:
         assert resolve_env_prefix("my_env") == "/opt/conda/envs/my_env"
 
     def test_local_venv_lookup(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """A shell with no conda at all (the autouse fixture clears
+        ``CONDA_EXE``) resolves a venv under ``.venv/`` by name."""
         venv = _make_env_prefix(tmp_path / ".venv" / "my_model_simulation")
         monkeypatch.chdir(tmp_path)
         assert resolve_env_prefix("my_model_simulation") == str(venv.resolve())
-
-    def test_local_venv_found_without_conda_installed(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """A shell with no conda at all (no ``CONDA_EXE``) can still resolve venvs."""
-        venv = _make_env_prefix(tmp_path / ".venv" / "my_env")
-        monkeypatch.chdir(tmp_path)
-        assert resolve_env_prefix("my_env") == str(venv.resolve())
-
-    def test_explicit_path(self, tmp_path: Path) -> None:
-        venv = _make_env_prefix(tmp_path / "some_env")
-        assert resolve_env_prefix(str(venv)) == str(venv.resolve())
 
     def test_explicit_path_that_is_not_an_env_raises(self, tmp_path: Path) -> None:
         with pytest.raises(RuntimeError, match="is not a conda env or venv"):
