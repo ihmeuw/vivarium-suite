@@ -1,3 +1,7 @@
+**0.26.0 - 08/17/26**
+
+- Add a TL;DR section to every created Jira ticket
+
 **0.25.0 - 08/06/26**
 
 - Replace references to ``/simsci:code-reviewer`` with ``/simsci:pr-prep``
