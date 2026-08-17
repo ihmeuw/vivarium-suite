@@ -29,26 +29,13 @@ def resolve_env_prefix(env: str) -> str:
     """Resolve an environment name or path to its absolute filesystem prefix.
 
     *env* may name a conda env or a venv, or be a path to either's prefix
-    directory. A path (*env* contains a path separator or starts with
-    ``~``) is validated and returned directly; this can never mistake a
-    name for a path, since conda forbids separators in env names and a
-    venv name is a single directory name. A name is matched against, in
-    order of precedence:
+    directory. A name is matched to a venv first (under ``.venv/<env>`` in
+    current working directory), and then a conda env via ``conda env list --json``.
 
-    1. ``.venv/<env>`` under the current working directory, where
-       ``make build-shared-env`` creates its venv overlays;
-    2. ``conda env list --json`` via ``CONDA_EXE``, matched by env name
-       (skipped when ``CONDA_EXE`` is unset).
-
-    Resolution deliberately ignores which environment is *active*, so a
-    named env means the same thing in any shell; callers fall back to the
-    runner's active environment only when no name is configured at all.
     When the name matches more than one distinct environment, the
     highest-precedence match wins and a warning names every match.
     Returned prefixes are fully resolved (symlinks followed) so that the
-    same environment always yields the same prefix string - Jobmon task
-    hashes depend on it, and an unstable spelling would defeat
-    ``dagger restart``.
+    same environment always yields the same prefix string.
 
     Raises
     ------
