@@ -63,6 +63,9 @@ recommendations, and file the ones the user approves.
 - **Nothing is written without approval.** Every `create_issue` and
   `add_comment` call is preceded by the exact payload on screen and an
   explicit user yes.
+- **Never fill in the TL;DR on your own.** It is the user's to write. Either
+  use *exactly* their own words or leave the section empty and tell them it
+  is waiting on them.
 - **Dedup is advisory.** A match is shown next to the draft; it never
   silently suppresses a recommendation — the user decides.
 - **No silent drops.** Anything excluded from ticketing appears in the drop

@@ -43,6 +43,12 @@ That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optio
 
 Format the draft in **Jira wiki markup** — not Markdown, not RST.
 
+You draft every section on that page except one: **the `TL;DR` is written by a human,
+never by you.** Leave it empty for the user to fill in, or use their exact words if
+they dictate them - never your own summary, however obvious it seems from the body you
+just drafted. Say that it is still blank when you show the draft and when you report
+the created key.
+
 Once the user approves the draft, create the ticket via the Jira MCP:
 
 ```
