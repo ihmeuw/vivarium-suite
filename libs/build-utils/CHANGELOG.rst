@@ -1,3 +1,9 @@
+**4.5.1 - 08/12/26**
+
+- Publish docs under the distribution name from ``[project].name`` instead of the
+  checkout directory name, so repos built at their root no longer publish docs
+  under their Jenkins workspace name. remove unused variables
+  
 **4.5.0 - 08/05/26**
 
 - Add workflow for testing a release's downstream dependents on pull requests
