@@ -281,37 +281,6 @@ class PopulationManager(Manager):
             private_columns = private_columns.squeeze(axis=1)
         return private_columns.loc[index] if index is not None else private_columns
 
-    def get_private_column_dtypes(self, component: Component | Manager) -> pd.Series[Any]:
-        """Gets the dtypes of the private columns created by a given component.
-
-        Reading dtypes touches only column metadata, so this is the cheap way to
-        learn a column's dtype when the values themselves aren't needed.
-
-        Parameters
-        ----------
-        component
-            The component whose private column dtypes are to be retrieved.
-
-        Returns
-        -------
-            The dtype of each private column created by the specified component,
-            indexed by column name.
-
-        Raises
-        ------
-        PopulationError
-            If called during initial population creation, when no columns exist yet.
-        """
-        if self.creating_initial_population:
-            raise PopulationError(
-                "Cannot get private column dtypes during initial population "
-                "creation when no columns yet exist."
-            )
-        columns = self.get_private_column_names(component.name)
-        # Subsetting the frame before reading `.dtypes` would copy the column values.
-        dtypes: pd.Series[Any] = self.private_columns.dtypes[columns]
-        return dtypes
-
     def get_population_index(self) -> pd.Index[int]:
         """Gets the index of the current population."""
         return self.private_columns.index
@@ -830,9 +799,7 @@ class PopulationManager(Manager):
 
         An update whose index exactly matches the population index, in the same
         order, replaces the given columns wholesale. Any other update is written
-        in place, leaving every row it omits untouched — such an update must not
-        be assigned by column, since that aligns on index and would null out the
-        omitted rows.
+        in place, leaving every row it omits untouched.
 
         Parameters
         ----------
@@ -842,6 +809,11 @@ class PopulationManager(Manager):
             created.
         """
         if update.index.equals(self.private_columns.index):
+            # Assigning by column replaces the whole column, so the update's dtype
+            # wins. That makes this the only write that can change a column's dtype.
             self.private_columns[update.columns] = update
         else:
+            # Assigning by column here would align on index and set every row the
+            # update omits to null, so write into only the rows it covers. Writing
+            # into existing rows keeps the column's current dtype.
             self.private_columns.loc[update.index, update.columns] = update

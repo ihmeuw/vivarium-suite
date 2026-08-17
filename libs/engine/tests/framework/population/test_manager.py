@@ -6,13 +6,7 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 
-from tests.framework.population.conftest import (
-    CUBE_COL_NAMES,
-    PIE_COL_NAMES,
-    PIE_RECORDS,
-    CubeComponent,
-    PieComponent,
-)
+from tests.framework.population.conftest import CUBE_COL_NAMES, PIE_COL_NAMES, PIE_RECORDS
 from tests.framework.population.helpers import (
     assert_squeezing_multi_level_multi_outer,
     assert_squeezing_multi_level_single_outer_multi_inner,
@@ -652,28 +646,3 @@ def test_update_partial_index_unordered(
     pd.testing.assert_frame_equal(
         updated.loc[omitted, ["pi", "cube"]], original.loc[omitted, ["pi", "cube"]]
     )
-
-
-##########################################
-# PopulationManager.get_private_column_dtypes #
-##########################################
-
-
-def test_get_private_column_dtypes(pies_and_cubes_pop_mgr: PopulationManager) -> None:
-    """Returns the dtype of each private column created by the component."""
-    private_columns = pies_and_cubes_pop_mgr.private_columns
-
-    dtypes = pies_and_cubes_pop_mgr.get_private_column_dtypes(PieComponent())
-
-    pd.testing.assert_series_equal(dtypes, private_columns[PIE_COL_NAMES].dtypes)
-
-
-def test_get_private_column_dtypes_excludes_other_components(
-    pies_and_cubes_pop_mgr: PopulationManager,
-) -> None:
-    """Returns only the requesting component's columns, not another's."""
-    pie_dtypes = pies_and_cubes_pop_mgr.get_private_column_dtypes(PieComponent())
-    cube_dtypes = pies_and_cubes_pop_mgr.get_private_column_dtypes(CubeComponent())
-
-    assert list(pie_dtypes.index) == PIE_COL_NAMES
-    assert list(cube_dtypes.index) == CUBE_COL_NAMES
