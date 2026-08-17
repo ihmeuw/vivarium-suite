@@ -35,8 +35,8 @@ def resolve_env_prefix(env: str) -> str:
     venv name is a single directory name. A name is matched against, in
     order of precedence:
 
-    1. the active conda env (``CONDA_DEFAULT_ENV`` -> ``CONDA_PREFIX``);
-    2. the active venv (``VIRTUAL_ENV``), matched by directory name;
+    1. the active venv (``VIRTUAL_ENV``), matched by directory name;
+    2. the active conda env (``CONDA_DEFAULT_ENV`` -> ``CONDA_PREFIX``);
     3. ``.venv/<env>`` under the current working directory, where
        ``make build-shared-env`` creates its venv overlays;
     4. ``conda env list --json`` via ``CONDA_EXE``, matched by env name
@@ -105,11 +105,11 @@ def resolve_env_bin_path(env_prefix: str) -> str:
 def _find_env_candidates(env: str) -> dict[str, str]:
     """Gather resolved prefixes matching *env* by name, keyed by source, in precedence order."""
     candidates: dict[str, str] = {}
-    if env == os.environ.get("CONDA_DEFAULT_ENV"):
-        candidates["active conda env"] = _normalize(os.environ["CONDA_PREFIX"])
     active_venv = os.environ.get("VIRTUAL_ENV")
     if active_venv is not None and Path(active_venv).name == env:
         candidates["active venv"] = _normalize(active_venv)
+    if env == os.environ.get("CONDA_DEFAULT_ENV"):
+        candidates["active conda env"] = _normalize(os.environ["CONDA_PREFIX"])
     local_venv = Path.cwd() / VENV_DIR_NAME / env
     if _is_env_prefix(local_venv):
         candidates["local venv"] = _normalize(str(local_venv))

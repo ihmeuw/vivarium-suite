@@ -136,6 +136,16 @@ class TestResolveEnvPrefixAmbiguity:
         warning.assert_called_once()
         assert "ambiguous" in warning.call_args.args[0]
 
+    def test_active_venv_wins_over_active_conda_env(
+        self, monkeypatch: pytest.MonkeyPatch, warning: MagicMock
+    ) -> None:
+        monkeypatch.setenv("VIRTUAL_ENV", "/repo/.venv/my_env")
+        monkeypatch.setenv("CONDA_DEFAULT_ENV", "my_env")
+        monkeypatch.setenv("CONDA_PREFIX", "/opt/conda/envs/my_env")
+        assert resolve_env_prefix("my_env") == "/repo/.venv/my_env"
+        warning.assert_called_once()
+        assert "ambiguous" in warning.call_args.args[0]
+
     def test_active_venv_wins_over_conda_env_list(
         self, monkeypatch: pytest.MonkeyPatch, warning: MagicMock
     ) -> None:
