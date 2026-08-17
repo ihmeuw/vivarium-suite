@@ -107,16 +107,11 @@ def _find_env_candidates(env: str) -> dict[str, str]:
     candidates: dict[str, str] = {}
     local_venv = Path.cwd() / VENV_DIR_NAME / env
     if _is_env_prefix(local_venv):
-        candidates["local venv"] = _normalize(str(local_venv))
+        candidates["local venv"] = str(local_venv.resolve())
     conda_prefix = _find_conda_env(env)
     if conda_prefix is not None:
-        candidates["conda env"] = _normalize(conda_prefix)
+        candidates["conda env"] = str(conda_prefix.resolve())
     return candidates
-
-
-def _normalize(prefix: str) -> str:
-    """Fully resolve a prefix so the same env always yields one spelling."""
-    return str(Path(prefix).resolve())
 
 
 def _is_env_prefix(prefix: Path) -> bool:
@@ -124,7 +119,7 @@ def _is_env_prefix(prefix: Path) -> bool:
     return (prefix / "bin" / "python").exists()
 
 
-def _find_conda_env(env: str) -> str | None:
+def _find_conda_env(env: str) -> Path | None:
     """Look up *env* in ``conda env list``; None when absent or conda is unavailable."""
     conda_exe = os.environ.get("CONDA_EXE")
     if conda_exe is None:
@@ -136,7 +131,7 @@ def _find_conda_env(env: str) -> str | None:
         text=True,
     )
     return next(
-        (str(path) for path in json.loads(result.stdout)["envs"] if Path(path).name == env),
+        (Path(path) for path in json.loads(result.stdout)["envs"] if Path(path).name == env),
         None,
     )
 
