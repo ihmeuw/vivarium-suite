@@ -37,10 +37,10 @@ def resolve_env_prefix(env: str) -> str:
 
     1. the active conda env (``CONDA_DEFAULT_ENV`` -> ``CONDA_PREFIX``);
     2. the active venv (``VIRTUAL_ENV``), matched by directory name;
-    3. ``conda env list --json`` via ``CONDA_EXE``, matched by env name
-       (skipped when ``CONDA_EXE`` is unset);
-    4. ``.venv/<env>`` under the current working directory, where
-       ``make build-shared-env`` creates its venv overlays.
+    3. ``.venv/<env>`` under the current working directory, where
+       ``make build-shared-env`` creates its venv overlays;
+    4. ``conda env list --json`` via ``CONDA_EXE``, matched by env name
+       (skipped when ``CONDA_EXE`` is unset).
 
     When the name matches more than one distinct environment, the
     highest-precedence match wins and a warning names every match.
@@ -110,15 +110,15 @@ def _find_env_candidates(env: str) -> dict[str, str]:
     active_venv = os.environ.get("VIRTUAL_ENV")
     if active_venv is not None and Path(active_venv).name == env:
         candidates["active venv"] = _normalize(active_venv)
+    local_venv = Path.cwd() / VENV_DIR_NAME / env
+    if _is_env_prefix(local_venv):
+        candidates["local venv"] = _normalize(str(local_venv))
     # The active conda env is definitionally in `conda env list`; skip the
     # subprocess when it already matched.
     if "active conda env" not in candidates:
         conda_prefix = _find_conda_env(env)
         if conda_prefix is not None:
             candidates["conda env"] = _normalize(conda_prefix)
-    local_venv = Path.cwd() / VENV_DIR_NAME / env
-    if _is_env_prefix(local_venv):
-        candidates["local venv"] = _normalize(str(local_venv))
     return candidates
 
 

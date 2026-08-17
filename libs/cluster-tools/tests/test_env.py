@@ -112,13 +112,16 @@ class TestResolveEnvPrefix:
 class TestResolveEnvPrefixAmbiguity:
     """A name matching several environments picks by precedence and warns."""
 
-    def test_conda_env_list_wins_over_local_venv(
+    def test_local_venv_wins_over_conda_env_list(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, warning: MagicMock
     ) -> None:
-        _make_env_prefix(tmp_path / ".venv" / "my_env")
+        """The local overlay is preferred over a same-named conda env - the
+        default names from ``make build-env`` and ``make build-shared-env``
+        collide, and the overlay is the recommended setup."""
+        venv = _make_env_prefix(tmp_path / ".venv" / "my_env")
         monkeypatch.chdir(tmp_path)
         _patch_conda_env_list(monkeypatch, ["/opt/conda/envs/my_env"])
-        assert resolve_env_prefix("my_env") == "/opt/conda/envs/my_env"
+        assert resolve_env_prefix("my_env") == str(venv.resolve())
         warning.assert_called_once()
         assert "ambiguous" in warning.call_args.args[0]
 
