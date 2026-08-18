@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal, NoReturn, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 import pandas as pd
@@ -27,7 +27,6 @@ from vivarium.engine.framework.population.exceptions import PopulationError
 if TYPE_CHECKING:
     from vivarium.engine.component import Component
     from vivarium.engine.framework.population.manager import PopulationManager
-    from vivarium.engine.types import ScalarValue
 
 
 class PopulationView:
@@ -372,21 +371,15 @@ class PopulationView:
             self._manager.update(data_df[new_columns])
         elif not data_df.empty:
             update_columns = list(set(data_df.columns).intersection(existing.columns))
-            updated_cols_list = []
-            for column in update_columns:
-                column_update = self._update_column_and_ensure_dtype(
-                    data_df[column],
-                    existing[column],
-                    adding_simulants=True,
-                )
-                updated_cols_list.append(column_update)
-            self._manager.update(pd.concat(updated_cols_list, axis=1))
+            self._write_rebuilt_columns(
+                data_df[update_columns], existing, adding_simulants=True
+            )
 
     @overload
     def update(
         self,
         columns: str,
-        modifier: Callable[[pd.Series[Any]], pd.Series[Any] | ScalarValue | str],
+        modifier: Callable[[pd.Series[Any]], pd.Series[Any]],
         index: pd.Index[int] | None = None,
     ) -> None:
         ...
@@ -395,7 +388,7 @@ class PopulationView:
     def update(
         self,
         columns: list[str],
-        modifier: Callable[[pd.DataFrame], pd.DataFrame | ScalarValue | str],
+        modifier: Callable[[pd.DataFrame], pd.DataFrame],
         index: pd.Index[int] | None = None,
     ) -> None:
         ...
@@ -403,7 +396,7 @@ class PopulationView:
     def update(
         self,
         columns: str | list[str],
-        modifier: Callable[..., pd.Series[Any] | pd.DataFrame | ScalarValue | str],
+        modifier: Callable[..., pd.Series[Any] | pd.DataFrame],
         index: pd.Index[int] | None = None,
     ) -> None:
         """Update private columns by applying a modifier to the current data.
@@ -417,7 +410,7 @@ class PopulationView:
 
         Passing an ``index`` restricts the update to those simulants: the
         modifier sees only their rows and all other rows are left untouched.
-        This avoids exposing the full population to a modifier that only
+        This avoids reading the whole population for a modifier that only
         needs a subset of it.
 
         Parameters
@@ -458,12 +451,7 @@ class PopulationView:
                     "population."
                 )
 
-        if isinstance(columns, str):
-            squeeze = True
-            column_list = [columns]
-        else:
-            squeeze = False
-            column_list = list(columns)
+        column_list = [columns] if isinstance(columns, str) else list(columns)
 
         current_data = self._manager.get_private_columns(
             self._component, index=index, columns=columns
@@ -474,48 +462,27 @@ class PopulationView:
         if result_df.empty:
             return
 
-        # There are two ways to write the result. Writing the rows in place touches only
-        # the simulants the result covers, but it cannot change a column's dtype.
-        # Rebuilding replaces the column wholesale, which costs a full-length read and
-        # write but is the only write that can set a dtype. Which one applies comes down
-        # to whether a dtype has to change, so there are three cases:
-        if index is None:
-            # 1. A full-index update. The result already spans every simulant, so there
-            #    are no rows to spare, and the modifier is free to have changed a dtype.
-            #    Rebuild.
-            self._write_rebuilt_columns(result_df, current_data, squeeze)
-            return
+        adding_simulants = self._manager.adding_simulants
+        existing = pd.DataFrame(current_data)
 
-        existing_dtypes = pd.DataFrame(current_data).dtypes
-        if not self._manager.adding_simulants:
-            # 2. A partial-index update while the population is not growing. The existing
-            #    dtype always wins here, so casting the result to it (which raises on an
-            #    incompatible dtype) makes the in-place write correct by construction.
-            self._manager.update(self._cast_to_existing_dtypes(result_df, existing_dtypes))
-            return
-
-        # 3. A partial-index update while the population is growing. This is the one case
-        #    where a dtype may legitimately have to change: growing the population
-        #    NaN-pads the existing columns, changing the dtype of any with no natural
-        #    null value ('bool' becomes 'object' and 'int' becomes 'float') until their
-        #    initializers run.
-        dtypes_unchanged = all(
-            result_df[column].dtype == existing_dtypes[column]
-            for column in result_df.columns
+        update_frame = pd.concat(
+            [
+                self._ensure_update_dtype(
+                    result_df[column], existing[column], adding_simulants
+                )
+                for column in result_df.columns
+            ],
+            axis=1,
         )
-        if dtypes_unchanged:
-            # 3a. Nothing to restore, which is the usual case: padding only changes the
-            #     dtype of a 'bool' or 'int' column, and even those are back to their
-            #     own dtype once their initializer has run. Write the rows in place.
-            self._manager.update(result_df)
-        else:
-            # 3b. A dtype has to change, which only rebuilding can do. That needs the
-            #     columns in full, which the partial read above did not fetch.
-            self._write_rebuilt_columns(
-                result_df,
-                self._manager.get_private_columns(self._component, columns=columns),
-                squeeze,
-            )
+
+        if update_frame.dtypes.equals(existing.dtypes[update_frame.columns]):
+            self._manager.update(update_frame)
+        else:  # we need to update dtypes and hence rewrite entire columns
+            if index is not None:
+                existing = pd.DataFrame(
+                    self._manager.get_private_columns(self._component, columns=columns)
+                )
+            self._write_rebuilt_columns(update_frame, existing, adding_simulants)
 
     def __repr__(self) -> str:
         name = self._component.name if self._component else "None"
@@ -656,8 +623,6 @@ class PopulationView:
     #  predicate and the manual array surgery in _update_column_and_ensure_dtype
     #  with a native setitem (existing.loc[update.index] = update), which enforces
     #  the same policy (existing dtype wins; lossy or incompatible updates raise).
-    #  _cast_to_existing_dtypes already applies that policy without array surgery
-    #  for partial-index updates, so the two should collapse into one routine then.
     @staticmethod
     def _dtypes_compatible(
         update_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
@@ -685,79 +650,72 @@ class PopulationView:
         )
 
     @staticmethod
-    def _cast_to_existing_dtypes(
-        update: pd.DataFrame,
-        existing_dtypes: pd.Series[Any],
-    ) -> pd.DataFrame:
-        """Cast each updated column to the dtype of the column it will be written to.
+    def _ensure_update_dtype(
+        update: pd.Series[Any],
+        existing: pd.Series[Any],
+        adding_simulants: bool,
+    ) -> pd.Series[Any]:
+        """Returns the update in a dtype the existing column can hold.
+
+        The existing column's dtype wins, so an update that arrives in a different
+        but compatible dtype is cast to it and one that cannot be represented at all
+        raises.
 
         Parameters
         ----------
         update
-            The new values for one or more private columns.
-        existing_dtypes
-            The dtypes of the existing private columns, indexed by column name.
+            The new column values.
+        existing
+            The current values of the column being updated.
+        adding_simulants
+            Whether new simulants are currently being initialized.
 
         Returns
         -------
-            The update with each column cast to its existing column's dtype.
+            The update, cast to the existing column's dtype if it needed casting.
 
         Raises
         ------
         PopulationError
-            If an updated column's dtype cannot represent the same data as the
-            existing column's.
-        """
-        cast_columns: dict[str, pd.Series[Any]] = {}
-        for column in update.columns:
-            existing_dtype = existing_dtypes[column]
-            update_dtype = update[column].dtype
-            if update_dtype == existing_dtype:
-                continue
-            if not PopulationView._dtypes_compatible(update_dtype, existing_dtype):
-                PopulationView._raise_dtype_corruption(column, existing_dtype, update_dtype)
-            # The existing column's dtype wins so table dtypes stay stable
-            cast_columns[column] = update[column].astype(existing_dtype)
-        return update.assign(**cast_columns) if cast_columns else update
+            If the update's dtype cannot represent the same data as the column's.
 
-    @staticmethod
-    def _raise_dtype_corruption(
-        column: str,
-        existing_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
-        update_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
-    ) -> NoReturn:
-        """Report a component changing a private column's dtype."""
-        raise PopulationError(
-            "A component is corrupting the population table by modifying the dtype of "
-            f"the {column} column from {existing_dtype} to {update_dtype}."
-        )
+        Notes
+        -----
+        Dtype enforcement is suspended while simulants are being added, because
+        extending the index changes the dtype of columns that have no natural
+        null value ('bool' becomes 'object' and 'int' becomes 'float') until
+        their initializers run. Those initializers restore the declared dtype,
+        which reads as a change against the padded one sitting there.
+        """
+        if update.dtype == existing.dtype or adding_simulants:
+            return update
+        if not PopulationView._dtypes_compatible(update.dtype, existing.dtype):
+            raise PopulationError(
+                "A component is corrupting the population table by modifying the dtype of "
+                f"the {update.name} column from {existing.dtype} to {update.dtype}."
+            )
+        return update.astype(existing.dtype)
 
     def _write_rebuilt_columns(
         self,
         update: pd.DataFrame,
-        existing: pd.Series[Any] | pd.DataFrame,
-        squeeze: bool,
+        existing: pd.DataFrame,
+        adding_simulants: bool,
     ) -> None:
-        """Rebuild each updated column over the full population and write it back.
-
-        This merges the update into the existing values and replaces the whole
-        column, which makes it the only write that can change a column's dtype.
+        """Rebuilds each updated column over the full index and writes it.
 
         Parameters
         ----------
         update
-            The new values for one or more private columns.
+            The new values for each column being updated.
         existing
-            The current values of those columns for every simulant.
-        squeeze
-            Whether ``existing`` is a single column that was read as a Series.
+            The current values of those columns, for every simulant.
+        adding_simulants
+            Whether new simulants are currently being initialized.
         """
-        existing_frame = pd.DataFrame(existing) if squeeze else existing
         rebuilt = [
             self._update_column_and_ensure_dtype(
-                update[column],
-                existing_frame[column],
-                adding_simulants=self._manager.adding_simulants,
+                update[column], existing[column], adding_simulants
             )
             for column in update.columns
         ]
@@ -774,7 +732,8 @@ class PopulationView:
         This method updates any existing private column values with their corresponding
         new values from the update; existing values not in the update are preserved.
         It also ensures that the resulting column has a dtype consistent with the
-        original column (unless new simulants are being added).
+        original column (unless new simulants are being added), by way of
+        :meth:`_ensure_update_dtype`.
 
         Parameters
         ----------
@@ -784,14 +743,6 @@ class PopulationView:
             The existing column values for all simulants.
         adding_simulants
             Whether new simulants are currently being initialized.
-
-        Notes
-        -----
-        Dtype enforcement is suspended while simulants are being added, because
-        extending the index changes the dtype of columns that have no natural
-        null value ('bool' becomes 'object' and 'int' becomes 'float') until
-        their initializers run. Both this method and
-        :meth:`_cast_to_existing_dtypes` honor that exemption.
 
         Returns
         -------
@@ -809,22 +760,11 @@ class PopulationView:
         #  to do all these sequential operations on a single underlying dataframe during
         #  the creation of new simulants besides the fact that it's the existing
         #  implementation.
-        update_values = update.array.copy()
+        update_values = PopulationView._ensure_update_dtype(
+            update, existing, adding_simulants
+        ).array
         new_values = existing.array.copy()
         update_index_positional = existing.index.get_indexer(update.index)  # type: ignore [no-untyped-call]
-
-        unmatched_dtypes = new_values.dtype != update_values.dtype
-        if unmatched_dtypes and not adding_simulants:
-            # Mismatches also arise while the population is being grown, because
-            # extending the index changes the dtype of columns that don't have a
-            # natural null value ('bool' becomes 'object' and 'int' becomes
-            # 'float'). That is what the adding_simulants exemption is for.
-            if not PopulationView._dtypes_compatible(update_values.dtype, new_values.dtype):
-                PopulationView._raise_dtype_corruption(
-                    str(update.name), existing.dtype, update.dtype
-                )
-            # The existing column's dtype wins so table dtypes stay stable
-            update_values = update_values.astype(new_values.dtype)
 
         # Assumes the update index labels can be interpreted as an array position.
         new_values[update_index_positional] = update_values

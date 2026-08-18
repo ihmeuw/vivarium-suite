@@ -820,40 +820,11 @@ def test__update_column_and_ensure_dtype_incompatible_still_raises() -> None:
         )
 
 
-def test__cast_to_existing_dtypes_leaves_matching_dtype_untouched() -> None:
-    """A column whose dtype already matches is returned unchanged."""
-    update = pd.DataFrame({"cube": pd.Series([1, 2, 3], dtype="int64")})
-    dtypes = update.dtypes
-
-    result = PopulationView._cast_to_existing_dtypes(update, dtypes)
-
-    pd.testing.assert_frame_equal(result, update)
-
-
-def test__cast_to_existing_dtypes_casts_only_mismatched_columns() -> None:
-    """Only the columns whose dtype differs are cast."""
-    update = pd.DataFrame(
-        {
-            "cube": pd.Series([1, 2, 3], dtype="int64"),
-            "cube_string": pd.Series(["1", "2", "3"], dtype="string"),
-        }
-    )
-    dtypes = pd.Series({"cube": np.dtype("int64"), "cube_string": np.dtype("object")})
-
-    result = PopulationView._cast_to_existing_dtypes(update, dtypes)
-
-    assert result["cube"].dtype == np.dtype("int64")
-    assert result["cube_string"].dtype == np.dtype("object")
-    assert list(result["cube_string"]) == ["1", "2", "3"]
-
-
-def test__cast_to_existing_dtypes_incompatible_raises() -> None:
-    """An update whose dtype cannot represent the column's data raises."""
-    update = pd.DataFrame({"cube": pd.Series([1.5, 2.5], dtype="float64")})
-    dtypes = pd.Series({"cube": np.dtype("int64")})
-
-    with pytest.raises(PopulationError, match="corrupting the population table"):
-        PopulationView._cast_to_existing_dtypes(update, dtypes)
+#################################
+# PopulationView.update helpers #
+##################################################
+# PopulationView._build_query #
+##################################################
 
 
 @pytest.mark.parametrize("include_untracked", [None, False, True])
@@ -1287,17 +1258,17 @@ def test_population_view_update_index_modifier_returns_subset_of_index(
     )
 
 
-def test_population_view_update_index_scalar_broadcasts_over_index(
+def test_population_view_update_index_broadcast_covers_only_index(
     pies_and_cubes_pop_mgr: PopulationManager,
 ) -> None:
-    """A modifier returning a scalar broadcasts across the passed index only."""
+    """A modifier broadcasting one value over its input covers the passed index only."""
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
     pies_and_cubes_pop_mgr.creating_initial_population = False
     pies_and_cubes_pop_mgr.adding_simulants = False
     index = PIE_DF.index[::2]
     rest = PIE_DF.index.difference(index)
 
-    pv.update("pi", lambda _: 99.0, index=index)
+    pv.update("pi", lambda pi: pd.Series(99.0, index=pi.index), index=index)
 
     pop = pies_and_cubes_pop_mgr._private_columns
     assert pop is not None
@@ -1455,20 +1426,15 @@ def test_population_view_update_index_while_adding_simulants_changed_dtype(
     pies_and_cubes_pop_mgr.adding_simulants = True
     index = CUBE_DF.index[::2]
 
-    # An in-place write cannot change a column's dtype, so this has to fall back to
-    # rebuilding the column. Assert that produces exactly what the unscoped path
-    # produces rather than restating that path's quirks, which are pre-existing.
+    # An in-place write cannot change a column's dtype, so this rebuilds the column
+    # and replaces it, which is the only write that can.
     pv.update("cube", lambda cube: cube.astype(float) + 0.5, index=index)
-    scoped = pies_and_cubes_pop_mgr._private_columns
-    assert scoped is not None
-    scoped_cube = scoped["cube"].copy()
 
-    pies_and_cubes_pop_mgr._private_columns = pd.concat([PIE_DF, CUBE_DF], axis=1)
-    pv.update("cube", lambda cube: cube.loc[index].astype(float) + 0.5)
-
-    unscoped = pies_and_cubes_pop_mgr._private_columns
-    assert unscoped is not None
-    pd.testing.assert_series_equal(scoped_cube, unscoped["cube"])
+    pop = pies_and_cubes_pop_mgr._private_columns
+    assert pop is not None
+    assert pop["cube"].dtype == np.dtype("float64")
+    pd.testing.assert_series_equal(pop["cube"], CUBE_DF["cube"].astype(float))
+    pd.testing.assert_frame_equal(pop[PIE_COL_NAMES], PIE_DF)
 
 
 ##########################################

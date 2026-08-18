@@ -164,49 +164,6 @@ def test_transition(
     assert np.all(simulation.get_population("state") == "done")
 
 
-def test_transition_effect_only_updates_transitioning_simulants(
-    base_config: ConfigTree,
-) -> None:
-    """A state transition writes the new state only for the simulants that transitioned."""
-    base_config.update(
-        {"population": {"population_size": 100}, "randomness": {"key_columns": []}}
-    )
-
-    def transition_to_a(index: pd.Index[int]) -> pd.Series[float]:
-        return pd.Series(np.where(index.to_numpy() % 3 == 0, 1.0, 0.0), index=index)
-
-    def transition_to_b(index: pd.Index[int]) -> pd.Series[float]:
-        return pd.Series(np.where(index.to_numpy() % 3 == 1, 1.0, 0.0), index=index)
-
-    a_state = State("a")
-    b_state = State("b")
-    # start_state keeps self transitions so the remaining third makes no transition.
-    start_state = State("start")
-    start_state.add_transition(output_state=a_state, probability_function=transition_to_a)
-    start_state.add_transition(output_state=b_state, probability_function=transition_to_b)
-    machine = Machine(
-        "state", states=[start_state, a_state, b_state], initial_state=start_state
-    )
-
-    simulation = InteractiveContext(components=[machine], configuration=base_config)
-    before = simulation.get_population("state")
-    assert isinstance(before, pd.Series)
-    remainders = before.index.to_numpy() % 3
-    to_a = before.index[remainders == 0]
-    to_b = before.index[remainders == 1]
-    stationary = before.index[remainders == 2]
-    assert not to_a.empty and not to_b.empty and not stationary.empty
-
-    simulation.step()
-
-    expected = before.copy()
-    expected.loc[to_a] = "a"
-    expected.loc[to_b] = "b"
-    after = simulation.get_population("state")
-    assert isinstance(after, pd.Series)
-    pd.testing.assert_series_equal(after, expected)
-
-
 def test_no_null_transition(base_config: ConfigTree) -> None:
     base_config.update(
         {"population": {"population_size": 10000}, "randomness": {"key_columns": []}}

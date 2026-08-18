@@ -795,11 +795,7 @@ class PopulationManager(Manager):
         return df
 
     def update(self, update: pd.DataFrame) -> None:
-        """Write updated values into the private data.
-
-        An update whose index exactly matches the population index, in the same
-        order, replaces the given columns wholesale. Any other update is written
-        in place, leaving every row it omits untouched.
+        """Update the private population data for the simulants in update's index.
 
         Parameters
         ----------
@@ -809,11 +805,10 @@ class PopulationManager(Manager):
             created.
         """
         if update.index.equals(self.private_columns.index):
-            # Assigning by column replaces the whole column, so the update's dtype
-            # wins. That makes this the only write that can change a column's dtype.
+            # Only assigning by column can set a column's dtype, which creating a
+            # column and restoring one that growing the population demoted both need.
             self.private_columns[update.columns] = update
         else:
-            # Assigning by column here would align on index and set every row the
-            # update omits to null, so write into only the rows it covers. Writing
-            # into existing rows keeps the column's current dtype.
+            # Only writing into rows can leave the rows it omits alone; assigning by
+            # column would align on index and null them.
             self.private_columns.loc[update.index, update.columns] = update

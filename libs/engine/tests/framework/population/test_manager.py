@@ -539,9 +539,9 @@ def test_register_tracked_query(mocker: MockerFixture) -> None:
     assert mgr.tracked_queries == ["foo == 'bar'", "cat != dog"]
 
 
-###########################
+############################
 # PopulationManager.update #
-###########################
+############################
 
 
 def test_update_full_index_replaces_columns(

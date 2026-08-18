@@ -99,6 +99,6 @@ class Movement(Component):
 
             return pop
 
-        self.population_view.update(["x", "y", "vx", "vy"], _apply_physics, index=event.index)
+        self.population_view.update(["x", "y", "vx", "vy"], _apply_physics)
 
     # docs-end: on_time_step
