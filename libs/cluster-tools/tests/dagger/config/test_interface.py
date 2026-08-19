@@ -339,7 +339,7 @@ class TestResolveStepEnvPrefix:
     """Verify the fallback and validation in ``resolve_step_env_prefix``."""
 
     @pytest.fixture(autouse=True)
-    def resolve_mock(self, mocker: MockerFixture) -> MagicMock:
+    def mock_resolve_env_prefix(self, mocker: MockerFixture) -> MagicMock:
         """Stub out the env lookup so tests exercise only the fallback chain."""
         return mocker.patch(
             "vivarium.cluster_tools.dagger.config.utilities.resolve_env_prefix",
@@ -360,12 +360,12 @@ class TestResolveStepEnvPrefix:
         assert resolve_step_env_prefix(name="s", environment=None) == "/envs/conda_env"
 
     def test_virtual_env_wins_over_conda_default_env(
-        self, monkeypatch: pytest.MonkeyPatch, resolve_mock: MagicMock
+        self, monkeypatch: pytest.MonkeyPatch, mock_resolve_env_prefix: MagicMock
     ) -> None:
         monkeypatch.setenv("CONDA_DEFAULT_ENV", "conda_env")
         monkeypatch.setenv("VIRTUAL_ENV", "/repo/.venv/my_venv")
         resolve_step_env_prefix(name="s", environment=None)
-        resolve_mock.assert_called_once_with("/repo/.venv/my_venv")
+        mock_resolve_env_prefix.assert_called_once_with("/repo/.venv/my_venv")
 
     def test_rejects_base_environment(self) -> None:
         with pytest.raises(ValueError, match="non-base environment is required"):

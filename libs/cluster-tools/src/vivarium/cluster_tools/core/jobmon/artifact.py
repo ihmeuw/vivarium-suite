@@ -78,6 +78,7 @@ def build_artifacts_in_parallel(
     if not build_commands:
         raise ValueError("build_commands is empty; there are no location artifacts to build.")
 
+    env_bin_path = resolve_env_bin_path(env_prefix)
     tool = client.make_tool()
     template = client.make_task_template(
         tool,
@@ -88,7 +89,6 @@ def build_artifacts_in_parallel(
         op_args=[],
     )
     compute_resources = native_specification.to_jobmon_spec(worker_logging_root)
-    env_bin_path = resolve_env_bin_path(env_prefix)
     tasks = [
         client.create_task(
             template,

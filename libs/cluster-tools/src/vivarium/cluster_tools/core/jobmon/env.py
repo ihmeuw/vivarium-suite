@@ -83,7 +83,7 @@ def resolve_env_bin_path(env_prefix: str) -> str:
     the overlay's patched activate script builds.
     """
     bin_dirs = [f"{env_prefix}/bin"]
-    base_bin_dir = _venv_base_bin_dir(Path(env_prefix))
+    base_bin_dir = _get_venv_base_bin_dir(Path(env_prefix))
     if base_bin_dir is not None:
         bin_dirs.append(base_bin_dir)
     return ":".join(bin_dirs)
@@ -123,8 +123,18 @@ def _find_conda_env(env: str) -> Path | None:
     )
 
 
-def _venv_base_bin_dir(env_prefix: Path) -> str | None:
-    """Read the base interpreter's bin dir from a venv's ``pyvenv.cfg``, if any."""
+def _get_venv_base_bin_dir(env_prefix: Path) -> str | None:
+    """Read the base interpreter's bin dir from a venv's ``pyvenv.cfg``, if any.
+
+    A venv's ``pyvenv.cfg`` looks like::
+
+        home = /path/to/base_env/bin
+        include-system-site-packages = true
+        version = 3.13.13
+
+    where ``home`` is the bin directory of the interpreter the venv was
+    created from.
+    """
     pyvenv_cfg = env_prefix / "pyvenv.cfg"
     if not pyvenv_cfg.is_file():
         return None
