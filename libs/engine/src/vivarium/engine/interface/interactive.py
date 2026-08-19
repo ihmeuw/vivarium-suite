@@ -47,19 +47,11 @@ class InteractiveContext(SimulationContext):
         setup
             Whether to set the simulation up on construction.
         logging_verbosity
-            Keyword-only; passing it positionally raises a ``TypeError``.
-            How verbose logging should be. Defaults to 0 rather than
-            inheriting 1, because stepping logs the simulation time at info
-            level and would otherwise bury the researcher's own output. See
+            How verbose logging should be (see
             :func:`~vivarium.engine.framework.logging.utilities.get_log_level`
-            for the verbosity-to-level mapping. At the default, anything
-            :meth:`~vivarium.engine.framework.engine.SimulationContext.report`
-            logs is suppressed too; use ``get_results`` or raise the verbosity
-            to see it. Only takes effect if this is the first context to
-            configure logging in the process; because
-            :class:`~vivarium.engine.framework.engine.SimulationContext`
-            defaults to 1, a process that builds both gets whichever level the
-            first one asked for.
+            for the mapping): 0 logs warnings and errors (default), 1 adds info
+            messages, and 2 or more adds debug messages. The first context
+            instantiated sets the logging level for all contexts.
         kwargs
             Keyword arguments passed through to
             :class:`~vivarium.engine.framework.engine.SimulationContext`.

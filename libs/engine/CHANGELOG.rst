@@ -1,9 +1,6 @@
-**5.6.1 - 08/19/26**
+**5.6.1 - 08/20/26**
 
-- Quiet ``InteractiveContext`` logging by default: it now uses
-  ``logging_verbosity=0`` (warnings and errors) rather than inheriting
-  ``SimulationContext``'s 1 (info). Pass ``logging_verbosity=1`` to restore the
-  per-time-step messages
+- Expose ``logging_verbosity`` argument to ``InteractiveContext`` (with default of 0)
 
 **5.6.0 - 08/06/26**
 
