@@ -315,7 +315,6 @@ reading from the artifact:
 
    ...
    States: ['diarrheal_diseases', 'susceptible_to_diarrheal_diseases']
-   ...
    Transitions occurred: True
 
 .. note::
@@ -456,7 +455,6 @@ All measures are set through the configuration:
 
    ...
    All susceptible: True
-   ...
    Infections occurred: True
 
 
@@ -769,7 +767,6 @@ afterward:
 
    ...
    Born with condition: True
-   ...
    No new cases: True
 
 
@@ -839,7 +836,6 @@ via an incidence rate.
 
    ...
    Initially infected: True
-   ...
    New cases arose: True
 
 
@@ -987,9 +983,7 @@ constructor:
 
    ...
    All in acute: True
-   ...
    Still in acute: True
-   ...
    All in chronic: True
 
 
