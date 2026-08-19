@@ -109,6 +109,20 @@ def test_interactive_context_honors_explicit_verbosity(
 def test_simulation_context_default_verbosity_is_unchanged(
     requested_verbosity: list[int],
 ) -> None:
-    """Non-interactive runs still log info messages, including the per-step time."""
+    """Non-interactive runs still request info-level logging."""
     SimulationContext()
     assert requested_verbosity == [1]
+
+
+@pytest.mark.parametrize("verbosity, expect_emitted", [(0, False), (1, True), (2, True)])
+def test_info_emission_follows_verbosity(verbosity: int, expect_emitted: bool) -> None:
+    """A sink at verbosity 0 must suppress info, which is where the per-step time logs."""
+    sink = io.StringIO()
+    sink_id = add_logging_sink(
+        sink, verbosity=verbosity, long_format=False, colorize=False, serialize=False
+    )
+    try:
+        logger.info("stand-in for the per-step time")
+    finally:
+        logger.remove(sink_id)
+    assert ("stand-in for the per-step time" in sink.getvalue()) is expect_emitted
