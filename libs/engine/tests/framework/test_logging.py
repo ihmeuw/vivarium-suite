@@ -6,8 +6,12 @@ import pytest
 from click.testing import CliRunner
 from loguru import logger
 
+from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.framework.logging import add_logging_sink, get_log_level
+from vivarium.engine.framework.logging import manager as logging_manager
+from vivarium.engine.framework.logging.manager import LoggingManager
 from vivarium.engine.interface.cli_tools import verbose_option
+from vivarium.engine.interface.interactive import InteractiveContext
 
 
 @pytest.mark.parametrize(
@@ -68,3 +72,43 @@ def test_log_format_includes_elapsed() -> None:
         logger.remove(sink_id)
     # The shared format includes an elapsed-time column (H:MM:SS.ffffff).
     assert re.search(r"\| \d+:\d{2}:\d{2}\.\d+ \|", sink.getvalue())
+
+
+@pytest.fixture
+def requested_verbosity(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Record the verbosity each constructed context asks to configure.
+
+    Terminal logging is configured at most once per process, so a second context
+    would otherwise be a no-op and the requested verbosity unobservable.
+    """
+    recorded: list[int] = []
+
+    def record(verbosity: int, long_format: bool) -> None:
+        recorded.append(verbosity)
+
+    monkeypatch.setattr(logging_manager, "configure_logging_to_terminal", record)
+    monkeypatch.setattr(
+        LoggingManager, "_terminal_logging_not_configured", staticmethod(lambda: True)
+    )
+    return recorded
+
+
+def test_interactive_context_is_quiet_by_default(requested_verbosity: list[int]) -> None:
+    InteractiveContext(setup=False)
+    assert requested_verbosity == [0]
+
+
+@pytest.mark.parametrize("verbosity", [0, 1, 2])
+def test_interactive_context_honors_explicit_verbosity(
+    requested_verbosity: list[int], verbosity: int
+) -> None:
+    InteractiveContext(setup=False, logging_verbosity=verbosity)
+    assert requested_verbosity == [verbosity]
+
+
+def test_simulation_context_default_verbosity_is_unchanged(
+    requested_verbosity: list[int],
+) -> None:
+    """Non-interactive runs still log info messages, including the per-step time."""
+    SimulationContext()
+    assert requested_verbosity == [1]

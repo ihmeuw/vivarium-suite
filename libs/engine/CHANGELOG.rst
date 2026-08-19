@@ -1,3 +1,7 @@
+**5.6.1 - 08/20/26**
+
+- Expose ``logging_verbosity`` argument to ``InteractiveContext`` (with default of 0)
+
 **5.6.0 - 08/06/26**
 
 - Support pandas 3

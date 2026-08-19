@@ -30,7 +30,31 @@ from vivarium.engine.types import ClockStepSize, ClockTime
 class InteractiveContext(SimulationContext):
     """A simulation context with helper methods for running simulations interactively."""
 
-    def __init__(self, *args: Any, setup: bool = True, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        setup: bool = True,
+        logging_verbosity: int = 0,
+        **kwargs: Any,
+    ) -> None:
+        """Create an interactive simulation context.
+
+        Parameters
+        ----------
+        args
+            Positional arguments passed through to
+            :class:`~vivarium.engine.framework.engine.SimulationContext`.
+        setup
+            Whether to set the simulation up on construction.
+        logging_verbosity
+            How much to log: 0 logs warnings and errors (default), 1 adds info
+            messages, and 2 or more adds debug messages. Only takes effect if
+            this is the first context to configure logging in the process.
+        kwargs
+            Keyword arguments passed through to
+            :class:`~vivarium.engine.framework.engine.SimulationContext`.
+        """
+        kwargs["logging_verbosity"] = logging_verbosity
         super().__init__(*args, **kwargs)
 
         if setup:
