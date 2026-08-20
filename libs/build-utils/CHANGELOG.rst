@@ -1,3 +1,12 @@
+**4.5.2 - 08/20/26**
+
+- Resolve the branch under test from the multibranch job (``CHANGE_BRANCH`` /
+  ``BRANCH_NAME``) instead of the git plugin's ``GIT_BRANCH``, which could resolve to
+  the pinned vivarium_build_utils library revision now that the library is loaded out
+  of the repository the jobs build
+- Gate deploys, pip-cache skipping, and ``#simsci-ci-status`` notifications on a new
+  ``IS_DEFAULT_BRANCH`` rather than on the trailing path segment of the branch name
+
 **4.5.1 - 08/12/26**
 
 - Publish docs under the distribution name from ``[project].name`` instead of the

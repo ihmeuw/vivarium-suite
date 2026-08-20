@@ -59,6 +59,23 @@ def call(Map config = [:]){
   def run_weekly
   conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
 
+  // The branch being built. This is resolved from the multibranch job itself rather than
+  // from the git plugin's GIT_BRANCH: vivarium_build_utils is loaded as a shared library
+  // out of the same repository these jobs build, so a run carries a BuildData action for
+  // the library checkout alongside the one for its own SCM, and GIT_BRANCH can resolve to
+  // the library's pinned revision instead of the branch under test (MIC-7427). On a PR job
+  // BRANCH_NAME is "PR-<n>", so prefer CHANGE_BRANCH, which holds the source branch.
+  branch_name = env.CHANGE_BRANCH ?: env.BRANCH_NAME
+  if (!branch_name) {
+    error(
+      "Could not resolve the branch being built: neither CHANGE_BRANCH nor BRANCH_NAME " +
+      "is set. reusable_pipeline() expects to run in a Multibranch Pipeline job."
+    )
+  }
+  // Deploying, cache-skipping, and #simsci-ci-status notifications are for builds of the
+  // default branch itself - never a PR, and never a branch that merely ends in "/main".
+  is_default_branch = !env.CHANGE_BRANCH && branch_name == "main"
+
   echo "Configuration constants:"
   echo "  scheduled_branches: ${scheduled_branches}"
   echo "  stagger_scheduled_builds: ${stagger_scheduled_builds}"
@@ -88,8 +105,9 @@ def call(Map config = [:]){
         // defaults for conda and pip are a local scratch directory /svc-simsci for improved speed.
         // In the past, we used the cluster filesystem which is much slower.
         shared_path="/svc-simsci"
-        // Get the branch being built and strip everything but the text after the last "/"
-        BRANCH = sh(script: "echo ${GIT_BRANCH} | rev | cut -d '/' -f1 | rev", returnStdout: true).trim()
+        // The branch being built, stripped of everything up to the last "/"
+        BRANCH = "${branch_name.tokenize('/').last()}"
+        IS_DEFAULT_BRANCH = "${is_default_branch}"
         TIMESTAMP = sh(script: 'date', returnStdout: true)
         // Specify the path to the .condarc file via environment variable.
         // This file configures the shared conda package cache.
@@ -174,7 +192,7 @@ def call(Map config = [:]){
         steps {
           script {
             // Use the name of the branch in the build name
-            currentBuild.displayName = "#${BUILD_NUMBER} ${GIT_BRANCH}"
+            currentBuild.displayName = "#${BUILD_NUMBER} ${branch_name}"
             env.PACKAGE_SUBDIR = get_package_subdir()
             python_versions = get_python_versions(WORKSPACE, GIT_URL, env.PACKAGE_SUBDIR)
             // Derive the deploy/docs version as the last entry in the list
@@ -251,7 +269,7 @@ def call(Map config = [:]){
                       ]
 
                       // Use pip cache only for push/PR
-                      boolean useCache = !env.IS_CRON.toBoolean() && env.BRANCH != "main"
+                      boolean useCache = !env.IS_CRON.toBoolean() && !env.IS_DEFAULT_BRANCH.toBoolean()
 
                       if (skipForChangelogOnly) {
                         echo "This is a changelog-only change since last build and previous build passed. Skipping entire build."
@@ -283,7 +301,7 @@ def call(Map config = [:]){
                             if (is_deployable &&
                               !env.IS_CRON.toBoolean() &&
                               !params.SKIP_DEPLOY &&
-                              (env.BRANCH == "main") &&
+                              env.IS_DEFAULT_BRANCH.toBoolean() &&
                               has_deployable_change()) {
                               if (!has_changelog_update()) {
                                 error "Deploy failed: Changelog does not contain a proper version update."
@@ -332,7 +350,7 @@ def call(Map config = [:]){
           if (params.SLACK_TO) {
             channelName = params.SLACK_TO
             slackID = "channel"
-          } else if (env.BRANCH == "main" || scheduled_branches.contains(env.BRANCH_NAME)) {
+          } else if (env.IS_DEFAULT_BRANCH.toBoolean() || scheduled_branches.contains(env.BRANCH_NAME)) {
             channelName = "simsci-ci-status"
             slackID = "channel"
           } else {
@@ -358,7 +376,7 @@ def call(Map config = [:]){
         }
       }
       failure {
-        echo "This build triggered by ${developerID} failed on ${GIT_BRANCH}. Sending a failure message to Slack."
+        echo "This build triggered by ${developerID} failed on ${branch_name}. Sending a failure message to Slack."
         slackSend channel: "#${channelName}",
                   message: slackMessage,
                   teamDomain: "ihme",
