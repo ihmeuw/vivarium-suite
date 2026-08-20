@@ -17,7 +17,7 @@ StratValue = str | int | float
 # Person-time accrues as ``people * step_size`` each step, so dividing it back out is
 # exact up to accumulated floating point error -- orders of magnitude below the ~0.5
 # drift a step size that does not match the simulation's would produce.
-PERSON_STEP_ROUNDING_TOLERANCE = 1e-3
+_PERSON_STEP_ROUNDING_TOLERANCE = 1e-3
 
 
 @dataclass(kw_only=True)
@@ -325,7 +325,17 @@ class FuzzyComparison(Comparison):
         step_size: float | None,
         stratifications: Collection[str] | Literal["all"] = "all",
     ) -> None:
-        """Verify test and reference data are statistically indistinguishable according to the fuzzy checker."""
+        """Verify test and reference data are statistically indistinguishable according to the fuzzy checker.
+
+        Raises
+        ------
+        ValueError
+            If step_size is None and the measure is measured in person-time, which
+            cannot be converted to a count of opportunities without it.
+        NotImplementedError
+            If the test data is not from a simulation, or the reference data is not
+            from an artifact or GBD.
+        """
 
         if self.test_bundle.source != DataSource.SIM:
             raise NotImplementedError("Verification is only implemented for SIM test data.")
@@ -419,7 +429,7 @@ class FuzzyComparison(Comparison):
         rounded = person_steps.round()
 
         drift = float((person_steps - rounded).abs().max().max())
-        if drift > PERSON_STEP_ROUNDING_TOLERANCE:
+        if drift > _PERSON_STEP_ROUNDING_TOLERANCE:
             logger.warning(
                 f"Person-time is not a whole number of person-steps at a step size of "
                 f"{step_size} years; the largest value is off by {drift:g} steps. This "
@@ -437,7 +447,13 @@ class FuzzyComparison(Comparison):
         ``vivarium.engine.framework.utilities.rate_to_probability`` performs. It is
         spelled out here rather than imported so that vivarium-validation does not take
         a runtime dependency on vivarium-engine. A model configured for the exponential
-        conversion is not yet handled; see MIC-7424.
+        conversion is not yet handled.
+
+        A rate above ``1 / step_size`` cannot be expressed as a per-step probability.
+        Clamping it to 1 is worse than useless: the no-bug distribution then has zero
+        mass anywhere but ``n``, so the Bayes factor is infinite and the group reports a
+        decisive failure. Such a rate is left out of domain so that the fuzzy checker
+        raises on the resulting nan instead.
 
         Parameters
         ----------
@@ -448,22 +464,9 @@ class FuzzyComparison(Comparison):
 
         Returns
         -------
-            The per-time-step probability, clipped to at most 1.
+            The per-time-step probability.
         """
-        probability = data * step_size
-
-        # A proportion test needs p <= 1, and _fit_beta_distribution_to_uncertainty_interval
-        # asserts its bounds lie strictly inside (0, 1).
-        if bool((probability > 1.0).to_numpy().any()):
-            logger.warning(
-                f"Converting an annual rate to a step probability at a step size of "
-                f"{step_size} years gave a probability above 1, which has been clipped. "
-                "The reference rate is too high to be represented as a per-step "
-                "probability, so those groups cannot be meaningfully tested."
-            )
-            probability = probability.clip(upper=1.0)
-
-        return probability
+        return data * step_size
 
     def align_datasets(
         self,

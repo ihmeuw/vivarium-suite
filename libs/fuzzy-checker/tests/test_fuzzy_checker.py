@@ -155,7 +155,7 @@ def test_nan__calculate_bayes_factor(
     numerator: int, denominator: float, target_proportion: float
 ) -> None:
     """Test that a nan Bayes factor raises rather than reading as a passing test."""
-    with pytest.raises(ValueError, match="is nan, so this test did not evaluate"):
+    with pytest.raises(ValueError, match="did not evaluate"):
         FuzzyChecker().test_proportion(
             observed_numerator=numerator,
             # A float denominator violates the annotated contract on purpose; that is

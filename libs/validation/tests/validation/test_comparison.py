@@ -5,6 +5,7 @@ from unittest import mock
 
 import pandas as pd
 import pytest
+from _pytest.logging import LogCaptureFixture
 from pandas.testing import assert_frame_equal
 from pytest_check import check
 from pytest_mock import MockFixture
@@ -469,6 +470,34 @@ def test_verify_scales_only_rate_targets(
         result.target_lower_bound for result in _finest_results(comparison).values()
     )
     assert actual == pytest.approx(expected)
+
+
+def test_rate_to_step_probability_leaves_an_impossible_rate_out_of_domain() -> None:
+    """Test that a rate too high to be a per-step probability is not clamped to 1.
+
+    Clamping reported the group as a decisive failure, because a target of exactly 1
+    leaves the no-bug distribution with mass only at the denominator. Out of domain, the
+    fuzzy checker raises on the resulting nan instead.
+    """
+    impossible = pd.DataFrame({"value": [20.0]})
+    probability = FuzzyComparison._rate_to_step_probability(impossible, 28 / DAYS_PER_YEAR)
+    assert probability["value"].iloc[0] > 1.0
+
+
+@pytest.mark.parametrize(
+    "step_size, warns",
+    [
+        pytest.param(0.1, False, id="whole_number_of_steps_is_quiet"),
+        pytest.param(28 / DAYS_PER_YEAR, True, id="mismatched_step_size_warns"),
+    ],
+)
+def test_person_time_to_person_steps_warns_on_drift(
+    step_size: float, warns: bool, caplog: LogCaptureFixture
+) -> None:
+    """Test that person-time which is not a whole number of person-steps is reported."""
+    person_years = pd.DataFrame({"value": [100.0]})
+    FuzzyComparison._person_time_to_person_steps(person_years, step_size)
+    assert ("is not a whole number of person-steps" in caplog.text) == warns
 
 
 def test_target_interval_configuration_default_none(

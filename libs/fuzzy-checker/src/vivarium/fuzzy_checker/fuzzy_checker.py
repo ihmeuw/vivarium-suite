@@ -180,6 +180,9 @@ class FuzzyChecker:
         ------
         ValueError
             If the test does not evaluate to a usable Bayes factor.
+        AssertionError
+            If there are more events than opportunities, or the target bounds are
+            inverted.
         """
         if isinstance(target_proportion, tuple):
             target_lower_bound, target_upper_bound = target_proportion
