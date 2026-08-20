@@ -124,8 +124,11 @@ not be empty.
        CLI override: ``--output-directory/-o``. See :ref:`dagger-output-layout`.
    * - ``default_environment``
      - no
-     - Conda environment used for any step that does not set its own
-       ``environment``. CLI override: ``--default-environment/-e``.
+     - Environment used for any step that does not set its own
+       ``environment``: a conda env name, a venv name under ``.venv/`` in the
+       runner's working directory, or a path to either's prefix. When neither
+       is set, falls back to the runner's active venv or conda env.
+       CLI override: ``--default-environment/-e``.
    * - ``max_attempts``
      - no
      - Maximum Jobmon attempts per task before it is marked failed. Defaults to
@@ -155,7 +158,9 @@ Every step, regardless of type, accepts:
      - Compute resources for the step's tasks (see below).
    * - ``environment``
      - no
-     - Conda environment for this step. Overrides ``default_environment``.
+     - Environment for this step: a conda env name, a venv name under
+       ``.venv/``, or a path to either's prefix. Overrides
+       ``default_environment``.
 
 The ``resources`` block:
 

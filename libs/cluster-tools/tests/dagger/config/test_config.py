@@ -497,12 +497,12 @@ class TestBashStep:
                 "stdout": "/tmp/results",
                 "stderr": "/tmp/results",
             },
-            env_prefix="/path/to/envs/my_env",
+            env_bin_path="/path/to/envs/my_env/bin",
             command=_REPLAY_WRAPPER_PREFIX + "echo hello world" + _REPLAY_WRAPPER_SUFFIX,
         )
 
-    def test_build_command_task_includes_env_prefix_in_node_args(self) -> None:
-        """env_prefix must be a node_arg so two steps with the same command
+    def test_build_command_task_includes_env_bin_path_in_node_args(self) -> None:
+        """env_bin_path must be a node_arg so two steps with the same command
         but different envs produce distinct Jobmon task hashes."""
         _utilities = "vivarium.cluster_tools.dagger.config.utilities"
         mock_tool = MagicMock()
@@ -517,8 +517,8 @@ class TestBashStep:
             )
 
         template_kwargs = mock_tool.get_task_template.call_args.kwargs
-        assert "env_prefix" in template_kwargs["node_args"]
-        assert "env_prefix" not in template_kwargs["op_args"]
+        assert "env_bin_path" in template_kwargs["node_args"]
+        assert "env_bin_path" not in template_kwargs["op_args"]
 
 
 class TestSimulationStep:

@@ -18,6 +18,7 @@ from loguru import logger
 
 from vivarium.cluster_tools.core.cluster.interface import NativeSpecification
 from vivarium.cluster_tools.core.jobmon import client
+from vivarium.cluster_tools.core.jobmon.env import resolve_env_bin_path
 from vivarium.cluster_tools.psimulate import TASK_RUNNER_MODULE
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
 from vivarium.cluster_tools.psimulate.paths import OutputPaths
@@ -66,10 +67,11 @@ def get_task_list(
     max_attempts
         Maximum number of attempts Jobmon will make for each task.
     env_prefix
-        Optional absolute path to the conda env's prefix. When provided,
-        the worker command is wrapped with ``PATH=<env_prefix>/bin:$PATH``
-        so the env's ``python`` is found without depending on ``conda``
-        being available on the worker.
+        Optional absolute path to the conda env's or venv's prefix. When
+        provided, the env's bin directories are prepended to ``PATH`` (for
+        a venv, the base environment's ``bin`` as well) so the env's
+        ``python`` is found without depending on ``conda`` being available
+        on the worker.
     template_name
         Name to register the Jobmon ``TaskTemplate`` under. Must be unique
         per Tool/Workflow; callers that build multiple simulation step
@@ -87,7 +89,7 @@ def get_task_list(
         "--command {command}"
     )
     if env_prefix is not None:
-        worker_command = f"PATH={env_prefix}/bin:$PATH {worker_command}"
+        worker_command = f"PATH={resolve_env_bin_path(env_prefix)}:$PATH {worker_command}"
 
     task_template = client.make_task_template(
         tool,
