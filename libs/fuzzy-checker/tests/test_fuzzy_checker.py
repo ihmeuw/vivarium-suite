@@ -144,6 +144,27 @@ def test__calculate_bayes_factor(step: int) -> None:
         previous_bayes_factor = bayes_factor
 
 
+@pytest.mark.parametrize(
+    "numerator, denominator, target_proportion",
+    [
+        pytest.param(3, 100.5, 0.1, id="non_integral_denominator"),
+        pytest.param(10, 100, 1.56, id="target_proportion_above_one"),
+    ],
+)
+def test_nan__calculate_bayes_factor(
+    numerator: int, denominator: float, target_proportion: float
+) -> None:
+    """Test that a nan Bayes factor raises rather than reading as a passing test."""
+    with pytest.raises(ValueError, match="is nan, so this test did not evaluate"):
+        FuzzyChecker().test_proportion(
+            observed_numerator=numerator,
+            # A float denominator violates the annotated contract on purpose; that is
+            # the condition under test.
+            observed_denominator=denominator,  # type: ignore[arg-type]
+            target_proportion=target_proportion,
+        )
+
+
 def test_zero_division__calculate_bayes_factor() -> None:
     # This is just testing that we will hit a zero division error or floating point error
     # and handle it correctly.

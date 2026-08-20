@@ -174,7 +174,13 @@ class FuzzyChecker:
         fail_bayes_factor_cutoff: float = 100.0,
         inconclusive_bayes_factor_cutoff: float = 0.1,
     ) -> TestResult:
-        """Convert a dictionary representation of a test result to a TestResult object."""
+        """Run the hypothesis test for one observed proportion and return its result.
+
+        Raises
+        ------
+        ValueError
+            If the test does not evaluate to a usable Bayes factor.
+        """
         if isinstance(target_proportion, tuple):
             target_lower_bound, target_upper_bound = target_proportion
         else:
@@ -515,7 +521,13 @@ class FuzzyChecker:
         bug_distribution: rv_discrete_frozen,
         no_bug_distribution: rv_discrete_frozen,
     ) -> float:
-        """Return the ratio of the bug to no-bug marginal likelihoods at the numerator."""
+        """Return the ratio of the bug to no-bug marginal likelihoods at the numerator.
+
+        Raises
+        ------
+        ValueError
+            If the Bayes factor is nan, meaning the test did not evaluate.
+        """
         # We can be dealing with some _extremely_ unlikely events here, so we have to set numpy to not error
         # if we generate a probability too small to be stored in a floating point number(!), which is known
         # as "underflow"
@@ -524,9 +536,24 @@ class FuzzyChecker:
             no_bug_marginal_likelihood = float(no_bug_distribution.pmf(numerator))
 
         try:
-            return bug_marginal_likelihood / no_bug_marginal_likelihood
+            bayes_factor = bug_marginal_likelihood / no_bug_marginal_likelihood
         except (ZeroDivisionError, FloatingPointError):
             return float("inf")
+
+        # Every comparison against a nan is False, so a nan reaching the caller would
+        # leave reject_null False and confidence "Conclusive" -- a test that never ran
+        # reported as a confident pass. A nan means "did not evaluate", never "passed".
+        if np.isnan(bayes_factor):
+            raise ValueError(
+                f"Bayes factor at numerator {numerator} is nan, so this test did not "
+                f"evaluate. The bug/issue distribution gave a marginal likelihood of "
+                f"{bug_marginal_likelihood} and the no-bug/issue distribution "
+                f"{no_bug_marginal_likelihood}; a nan from either usually means a "
+                "distribution was built with out-of-domain parameters, such as a "
+                "target proportion outside [0, 1]."
+            )
+
+        return bayes_factor
 
     @cache
     def _fit_beta_distribution_to_uncertainty_interval(

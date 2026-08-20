@@ -9,10 +9,15 @@ from vivarium.fuzzy_checker import FuzzyChecker, TargetIntervalConfig, TestResul
 from vivarium.validation.bundle import RatioMeasureDataBundle
 from vivarium.validation.constants import DRAW_INDEX, DataSource
 from vivarium.validation.data_transformation.calculations import stratify
-from vivarium.validation.data_transformation.measures import Measure
+from vivarium.validation.data_transformation.measures import RatioMeasure
 from vivarium.validation.visualization import dataframe_utils
 
 StratValue = str | int | float
+
+# Person-time accrues as ``people * step_size`` each step, so dividing it back out is
+# exact up to accumulated floating point error -- orders of magnitude below the ~0.5
+# drift a step size that does not match the simulation's would produce.
+PERSON_STEP_ROUNDING_TOLERANCE = 1e-3
 
 
 @dataclass(kw_only=True)
@@ -194,7 +199,7 @@ class FuzzyComparison(Comparison):
         self.reference_bundle = reference_bundle
         if self.test_bundle.measure != self.reference_bundle.measure:
             raise ValueError("Test and reference measures must be the same.")
-        self.measure: Measure = self.test_bundle.measure
+        self.measure: RatioMeasure = self.test_bundle.measure
         self.proportion_test_results: dict[
             str, TestResult | dict[tuple[str, ...], dict[str, TestResult]]
         ] = {
@@ -349,16 +354,38 @@ class FuzzyComparison(Comparison):
             key: stratify(data, stratify_cols)
             for key, data in self.reference_bundle.datasets.items()
         }
-        # Scale rates to the step size of the simulation
-        if step_size is None or "population" in self.measure.measure_key:
-            target = ref_datasets["data"]
+        numerator = test_datasets["numerator_data"]
+        denominator = test_datasets["denominator_data"]
+        target = ref_datasets["data"]
+
+        # The fuzzy checker tests a proportion of discrete opportunities, so the
+        # observed counts and the target have to agree on what one opportunity is.
+        # We use the person-step: person-time becomes a count of person-steps, and an
+        # annual rate becomes the probability of an event in one step. Both sides then
+        # scale by step_size, leaving the expected number of events unchanged.
+        if step_size is None:
+            if (
+                self.measure.numerator.is_person_time
+                or self.measure.denominator.is_person_time
+            ):
+                raise ValueError(
+                    f"Cannot verify '{self.measure.measure_key}' without a step size. It "
+                    "is measured in person-time, which has no meaning as a count of "
+                    "opportunities until it is divided by the simulation's time step. "
+                    "Set 'time.step_size' in the model specification."
+                )
         else:
-            target = ref_datasets["data"] / step_size
+            if self.measure.numerator.is_person_time:
+                numerator = self._person_time_to_person_steps(numerator, step_size)
+            if self.measure.denominator.is_person_time:
+                denominator = self._person_time_to_person_steps(denominator, step_size)
+            if self.measure.reference_is_rate:
+                target = self._rate_to_step_probability(target, step_size)
 
         fuzzy_checker.test_proportion_vectorized(
             name=self.measure.measure_key,
-            observed_numerator=test_datasets["numerator_data"],
-            observed_denominator=test_datasets["denominator_data"],
+            observed_numerator=numerator,
+            observed_denominator=denominator,
             target_proportion=target,
             target_interval_config=self.target_interval_configuration,
         )
@@ -372,6 +399,71 @@ class FuzzyComparison(Comparison):
                     if strat_key not in stratified:
                         stratified[strat_key] = {}
                     stratified[strat_key][result.name_additional] = result
+
+    @staticmethod
+    def _person_time_to_person_steps(data: pd.DataFrame, step_size: float) -> pd.DataFrame:
+        """Convert person-time in years to a whole number of person-steps.
+
+        Parameters
+        ----------
+        data
+            Person-time in years.
+        step_size
+            The simulation's time step, as a fraction of a year.
+
+        Returns
+        -------
+            The equivalent count of person-steps.
+        """
+        person_steps = data / step_size
+        rounded = person_steps.round()
+
+        drift = float((person_steps - rounded).abs().max().max())
+        if drift > PERSON_STEP_ROUNDING_TOLERANCE:
+            logger.warning(
+                f"Person-time is not a whole number of person-steps at a step size of "
+                f"{step_size} years; the largest value is off by {drift:g} steps. This "
+                "usually means the step size does not match the one the simulation ran "
+                "with, which would bias every target this comparison tests."
+            )
+
+        return rounded
+
+    @staticmethod
+    def _rate_to_step_probability(data: pd.DataFrame, step_size: float) -> pd.DataFrame:
+        """Convert an annual rate to the probability of an event in one time step.
+
+        This is the linear conversion that
+        ``vivarium.engine.framework.utilities.rate_to_probability`` performs. It is
+        spelled out here rather than imported so that vivarium-validation does not take
+        a runtime dependency on vivarium-engine. A model configured for the exponential
+        conversion is not yet handled; see MIC-7424.
+
+        Parameters
+        ----------
+        data
+            An annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year.
+
+        Returns
+        -------
+            The per-time-step probability, clipped to at most 1.
+        """
+        probability = data * step_size
+
+        # A proportion test needs p <= 1, and _fit_beta_distribution_to_uncertainty_interval
+        # asserts its bounds lie strictly inside (0, 1).
+        if bool((probability > 1.0).to_numpy().any()):
+            logger.warning(
+                f"Converting an annual rate to a step probability at a step size of "
+                f"{step_size} years gave a probability above 1, which has been clipped. "
+                "The reference rate is too high to be represented as a per-step "
+                "probability, so those groups cannot be meaningfully tested."
+            )
+            probability = probability.clip(upper=1.0)
+
+        return probability
 
     def align_datasets(
         self,

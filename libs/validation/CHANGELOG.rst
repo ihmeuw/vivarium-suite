@@ -1,3 +1,18 @@
+**0.3.0 - 08/20/26**
+
+**Breaking changes**
+- Require ``vivarium-fuzzy-checker>=0.4.0``, which now raises on a nan Bayes factor
+  instead of reporting the test as a confident pass
+
+- Convert person-time to a whole number of person-steps and annual rates to a
+  per-time-step probability before fuzzy checking, rather than dividing the target by
+  the step size, which inflated it by a factor of 1/step_size
+- Scale only rate measures' targets by the step size, which fixes ``prevalence``, and
+  defer to the affected measure for ``relative_risk``, whose reference is a rate exactly
+  when the affected measure's data is
+- Set ``measure`` on ``RiskStatePersonTime`` so risk exposure data is recognized as
+  person-time
+
 **0.2.1 - 08/06/26**
 
 - Support pandas 3

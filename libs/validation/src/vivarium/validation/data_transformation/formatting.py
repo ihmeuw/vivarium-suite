@@ -23,6 +23,16 @@ class SimDataFormatter:
         self.filter_value = filter_value
         self.name = f"{self.filter_value}_{self.measure}"
 
+    @property
+    def is_person_time(self) -> bool:
+        """Whether this formatter yields person-time in years rather than a count.
+
+        Person-time is continuous, so it has to be converted to a whole number of
+        person-steps before it can serve as a numerator or denominator in a
+        proportion test.
+        """
+        return self.measure == "person_time"
+
     def format_dataset(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """Clean up unused columns, and filter for the state."""
         dataset = calculations.marginalize(dataset, self.unused_columns)
@@ -112,6 +122,7 @@ class RiskStatePersonTime(SimDataFormatter):
 
     def __init__(self, entity: str, sum_all: bool = False) -> None:
         self.entity = entity
+        self.measure = "person_time"
         self.raw_dataset_name = f"person_time_{self.entity}"
         self.sum_all = sum_all
         self.name = "person_time"

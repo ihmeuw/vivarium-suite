@@ -1,3 +1,9 @@
+**0.4.0 - 08/20/26**
+
+**Breaking changes**
+- Raise ``ValueError`` when a Bayes factor evaluates to nan, instead of reporting the
+  test as a confident pass
+
 **0.3.0 - 08/06/26**
 
 **Breaking changes**

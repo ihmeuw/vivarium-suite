@@ -51,6 +51,18 @@ class Measure(ABC):
         """Return a formatted title for the measure."""
         return _format_title(self.measure_key)
 
+    @property
+    def reference_is_rate(self) -> bool:
+        """Whether the reference data is an annual rate rather than a proportion.
+
+        A rate has to be converted to the probability of an event in one time step
+        before it can be compared against an observed proportion; a proportion is
+        already independent of the step size. Every measure in this package is named
+        for what it holds, so the suffix decides it; a measure whose name does not
+        follow that pattern should override this.
+        """
+        return self.measure.endswith("_rate")
+
     def __str__(self) -> str:
         return self.measure_key
 
@@ -424,6 +436,16 @@ class CategoricalRelativeRisk(RatioMeasure):
     def rate_aggregation_weights(self) -> RateAggregationWeights:
         """Returns rate aggregated weights."""
         return self.affected_measure.rate_aggregation_weights
+
+    @property
+    def reference_is_rate(self) -> bool:
+        """Defer to the affected measure, whose data the reference is a multiple of.
+
+        A relative risk is unitless, so ``relative_risks * affected_measure_data`` is a
+        rate exactly when the affected measure's data is. The measure name is
+        "relative_risk", so the inherited name-based default cannot see this.
+        """
+        return self.affected_measure.reference_is_rate
 
     @utils.check_io(
         relative_risks=SingleNumericColumn,

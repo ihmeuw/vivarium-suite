@@ -1,6 +1,6 @@
 from collections.abc import Callable, Collection
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 from unittest import mock
 
 import pandas as pd
@@ -375,6 +375,100 @@ def test_comparison_verify(
         result.reject_null for result in stratified_results[("year", "sex", "age")].values()
     )
     assert not overall_result.reject_null
+
+
+def _finest_results(comparison: FuzzyComparison) -> dict[str, TestResult]:
+    """Return the results for the most granular stratification."""
+    stratified = comparison.proportion_test_results["stratified"]
+    assert isinstance(stratified, dict)
+    return stratified[("year", "sex", "age")]
+
+
+def _declare(
+    comparison: FuzzyComparison,
+    *,
+    denominator_is_person_time: bool = False,
+    reference_is_rate: bool = False,
+) -> None:
+    """Set what the comparison's mock measure declares about its data.
+
+    ``is_person_time`` and ``reference_is_rate`` are read-only properties on the real
+    classes, so the annotations reject assignment even though the mock accepts it.
+    """
+    measure = cast(Any, comparison.measure)
+    measure.denominator.is_person_time = denominator_is_person_time
+    measure.reference_is_rate = reference_is_rate
+
+
+@pytest.mark.parametrize("step_size_days", [1, 7, 28])
+def test_verify_preserves_expected_events(
+    step_size_days: int,
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+) -> None:
+    """Test that converting to person-steps leaves the expected event count alone."""
+    step_size = step_size_days / DAYS_PER_YEAR
+
+    # A measure that declares neither side converts is the unscaled baseline.
+    baseline = FuzzyComparison(test_bundle, reference_bundle)
+    baseline.verify(step_size=step_size)
+    expected_events = {
+        key: result.observed_denominator * result.target_lower_bound
+        for key, result in _finest_results(baseline).items()
+    }
+
+    converted = FuzzyComparison(test_bundle, reference_bundle)
+    _declare(converted, denominator_is_person_time=True, reference_is_rate=True)
+    converted.verify(step_size=step_size)
+
+    for key, result in _finest_results(converted).items():
+        # The denominator is rounded to a whole number of person-steps, so the
+        # invariant holds to within that rounding rather than exactly.
+        assert result.observed_denominator * result.target_lower_bound == pytest.approx(
+            expected_events[key], rel=1e-3
+        )
+
+
+def test_verify_requires_step_size_only_for_person_time(
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+) -> None:
+    """Test that only a person-time measure demands a step size."""
+    counts = FuzzyComparison(test_bundle, reference_bundle)
+    counts.verify(step_size=None)
+    assert counts.proportion_test_results["overall"]
+
+    person_time = FuzzyComparison(test_bundle, reference_bundle)
+    _declare(person_time, denominator_is_person_time=True)
+    with pytest.raises(ValueError, match="without a step size"):
+        person_time.verify(step_size=None)
+
+
+@pytest.mark.parametrize(
+    "reference_is_rate, scaled",
+    [
+        pytest.param(True, True, id="rate_target_is_scaled"),
+        pytest.param(False, False, id="proportion_target_is_not_scaled"),
+    ],
+)
+def test_verify_scales_only_rate_targets(
+    reference_is_rate: bool,
+    scaled: bool,
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+    reference_data: pd.DataFrame,
+) -> None:
+    """Test that the step size converts a rate target and leaves a proportion alone."""
+    step_size = 28 / DAYS_PER_YEAR
+    comparison = FuzzyComparison(test_bundle, reference_bundle)
+    _declare(comparison, reference_is_rate=reference_is_rate)
+    comparison.verify(step_size=step_size)
+
+    expected = sorted(reference_data["value"] * (step_size if scaled else 1.0))
+    actual = sorted(
+        result.target_lower_bound for result in _finest_results(comparison).values()
+    )
+    assert actual == pytest.approx(expected)
 
 
 def test_target_interval_configuration_default_none(
