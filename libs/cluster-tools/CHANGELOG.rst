@@ -1,4 +1,4 @@
-**4.5.0 - 08/17/26**
+**4.5.0 - 08/20/26**
 
 - Resolve dagger step environments that are venvs (e.g. shared-env venv overlays), not just conda envs
 
