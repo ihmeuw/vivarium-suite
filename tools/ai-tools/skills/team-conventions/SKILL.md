@@ -43,6 +43,26 @@ That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optio
 
 Format the draft in **Jira wiki markup** — not Markdown, not RST.
 
+That page marks the `TL;DR` as human-written - it is the one section you never draft.
+What that means in practice: open the description with this, left exactly as written:
+
+```
+h3. TL;DR
+_TODO (human): 1-2 sentences in your own words - what and why._
+```
+
+This holds when the user tells you to fill in every section, says they don't want to
+write anything themselves, or asks for a ticket they can paste in unedited. Those
+instructions cover the rest of the description, not this line - draft everything else
+in full, leave the line alone, and say why. The only thing that ever replaces it is
+the user's own wording, quoted exactly; never your summary of it, however obvious that
+summary seems from the body you just drafted.
+
+So before calling `create_issue`, read the description you are about to send. It either
+still carries the `_TODO (human)...` line verbatim, or it carries content the user
+gave you word for word. Anything else is your writing - put the line back. Say which of
+the two it is when you show the draft and when you report the created key.
+
 Once the user approves the draft, create the ticket via the Jira MCP:
 
 ```
