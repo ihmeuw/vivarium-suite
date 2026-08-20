@@ -59,11 +59,9 @@ def resolve_env_prefix(env: str) -> str:
             f"there is no venv at {Path.cwd() / VENV_DIR_NAME / env} and it "
             "was not found by `conda env list`."
         )
-    winner_label, winner_prefix = next(iter(candidates.items()))
-    if len(set(candidates.values())) > 1:
-        listing = "; ".join(
-            f"the {label} at {prefix}" for label, prefix in candidates.items()
-        )
+    winner_label, winner_prefix = candidates[0]
+    if len({prefix for _, prefix in candidates}) > 1:
+        listing = "; ".join(f"the {label} at {prefix}" for label, prefix in candidates)
         logger.warning(
             f"Environment name {env!r} is ambiguous: it matches {listing}. "
             f"Using the {winner_label}. Pass a path as the environment to "
@@ -89,15 +87,15 @@ def resolve_env_bin_path(env_prefix: str) -> str:
     return ":".join(bin_dirs)
 
 
-def _find_env_candidates(env: str) -> dict[str, str]:
-    """Gather resolved prefixes matching *env* by name, keyed by source, in precedence order."""
-    candidates: dict[str, str] = {}
+def _find_env_candidates(env: str) -> list[tuple[str, str]]:
+    """Gather resolved prefixes matching *env* by name, as (source, prefix) pairs in precedence order."""
+    candidates: list[tuple[str, str]] = []
     local_venv = Path.cwd() / VENV_DIR_NAME / env
     if _is_env_prefix(local_venv):
-        candidates["local venv"] = str(local_venv.resolve())
+        candidates.append(("local venv", str(local_venv.resolve())))
     conda_prefix = _find_conda_env(env)
     if conda_prefix is not None:
-        candidates["conda env"] = str(conda_prefix.resolve())
+        candidates.append(("conda env", str(conda_prefix.resolve())))
     return candidates
 
 
