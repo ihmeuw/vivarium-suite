@@ -96,6 +96,7 @@ class InteractiveContext(SimulationContext):
             model_specification=model_specification,
             components=components,
             configuration=configuration,
+        self._warned_no_results = False
             plugin_configuration=plugin_configuration,
             sim_name=sim_name,
             logging_verbosity=logging_verbosity,
@@ -121,7 +122,8 @@ class InteractiveContext(SimulationContext):
         caller, so say which one this is.
         """
         results = super().get_results()
-        if not results and not self._include_observers:
+        if not results and not self._include_observers and not self._warned_no_results:
+            self._warned_no_results = True
             self._logger.warning(
                 "No results to return. Observers are excluded from an"
                 " InteractiveContext by default; pass include_observers=True to"
