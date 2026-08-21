@@ -64,6 +64,11 @@ Common Setup
    base_plugins = BASE_PLUGINS
    config = make_base_config()
 
+Note that every example below passes ``include_observers=True``. An
+:class:`~vivarium.engine.interface.interactive.InteractiveContext` leaves observers
+out by default so that stepping through a simulation does not spend time gathering
+results.
+
 
 Data sources
 ------------

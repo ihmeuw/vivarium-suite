@@ -37,7 +37,12 @@ if TYPE_CHECKING:
 
 
 class InteractiveContext(SimulationContext):
-    """A simulation context with helper methods for running simulations interactively."""
+    """A simulation context with helper methods for running simulations interactively.
+
+    Leaves out the observers a model specification declares, so an interactive run
+    does not spend time gathering results nobody reads. Pass
+    ``include_observers=True`` to keep them.
+    """
 
     def __init__(
         self,
@@ -91,12 +96,12 @@ class InteractiveContext(SimulationContext):
         # NOTE: Must assign before super().__init__() because it calls add_components()
         # which is overridden below and reads this.
         self._include_observers = include_observers
+        self._warned_no_results = False
 
         super().__init__(
             model_specification=model_specification,
             components=components,
             configuration=configuration,
-        self._warned_no_results = False
             plugin_configuration=plugin_configuration,
             sim_name=sim_name,
             logging_verbosity=logging_verbosity,
@@ -113,6 +118,7 @@ class InteractiveContext(SimulationContext):
         visible once the manager flattens them.
         """
         exclude_types = () if self._include_observers else (Observer,)
+        # Cannot go through super()'s add_components because that signature takes no exclusions
         self._component_manager.add_components(component_list, exclude_types)
 
     def get_results(self) -> dict[str, pd.DataFrame]:

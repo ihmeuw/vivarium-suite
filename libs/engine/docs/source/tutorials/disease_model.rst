@@ -919,7 +919,9 @@ can distinguish which simulants died specifically during the previous time step.
 
 In an interactive setting, we can access these observations via the 
 ``sim.get_results()`` command. This will return a dictionary of all  
-observations up to this point in the simulation.
+observations up to this point in the simulation. Note that an
+:class:`~vivarium.engine.interface.interactive.InteractiveContext` leaves observers out by default, so
+the examples below pass ``include_observers=True`` to collect results at all.
 
 .. code-block:: python
 
