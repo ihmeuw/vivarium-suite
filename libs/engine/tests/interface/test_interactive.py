@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import inspect
+import io
 from collections.abc import Callable
 
 import pandas as pd
 import pytest
+from loguru import logger
 from pytest_mock import MockerFixture
 
 from tests.framework.population.helpers import (
@@ -475,6 +477,29 @@ class TestObserverExclusion:
         assert self._observers(sim) == []
         # The holder itself is kept, and keeps its own reference to the observer.
         assert "observer_holder" in registered
+
+    def test_empty_results_say_why(self) -> None:
+        """Empty results and a simulation where nothing happened look alike."""
+        sim = InteractiveContext(components=[MockComponentA()])
+        sink = io.StringIO()
+        sink_id = logger.add(sink, format="{message}", level="WARNING")
+        try:
+            assert sim.get_results() == {}
+        finally:
+            logger.remove(sink_id)
+
+        assert "include_observers=True" in sink.getvalue()
+
+    def test_no_warning_when_observers_were_requested(self) -> None:
+        sim = InteractiveContext(components=[MockComponentA()], include_observers=True)
+        sink = io.StringIO()
+        sink_id = logger.add(sink, format="{message}", level="WARNING")
+        try:
+            sim.get_results()
+        finally:
+            logger.remove(sink_id)
+
+        assert "include_observers=True" not in sink.getvalue()
 
     def test_leave_no_configuration_behind(self) -> None:
         kept = InteractiveContext(

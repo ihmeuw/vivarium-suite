@@ -114,6 +114,21 @@ class InteractiveContext(SimulationContext):
         exclude_types = () if self._include_observers else (Observer,)
         self._component_manager.add_components(component_list, exclude_types)
 
+    def get_results(self) -> dict[str, pd.DataFrame]:
+        """Get the formatted results, warning if observers were excluded.
+
+        Empty results and a simulation where nothing happened look the same to a
+        caller, so say which one this is.
+        """
+        results = super().get_results()
+        if not results and not self._include_observers:
+            self._logger.warning(
+                "No results to return. Observers are excluded from an"
+                " InteractiveContext by default; pass include_observers=True to"
+                " keep them."
+            )
+        return results
+
     @property
     def current_time(self) -> ClockTime:
         """Returns the current simulation time."""

@@ -2,6 +2,7 @@
 
 - Exclude observers from ``InteractiveContext`` by default
 - Let ``ComponentManager.add_components`` exclude component types
+- Warn when interactive results are empty because observers were excluded
 
 **5.6.1 - 08/21/26**
 
