@@ -1,3 +1,9 @@
+**5.7.0 - 08/25/26**
+
+- Skip results gathering in ``InteractiveContext`` by default
+- Add ``ResultsManager.gathering_enabled`` to gate the per-step gathering listeners
+- Warn once when interactive results are empty because gathering is off
+
 **5.6.1 - 08/24/26**
 
 - Declare ``InteractiveContext``'s full constructor signature and default ``logging_verbosity`` to 0

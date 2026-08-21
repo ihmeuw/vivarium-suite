@@ -47,6 +47,7 @@ class InteractiveContext(SimulationContext):
         sim_name: str | None = None,
         logging_verbosity: int = 0,
         *,
+        gather_results: bool = False,
         setup: bool = True,
     ) -> None:
         """Create an interactive simulation context.
@@ -78,6 +79,11 @@ class InteractiveContext(SimulationContext):
             logs INFO-level messages, and 2+ logs DEBUG-level messages.
             Note that only the first context built in a process configures logging
             and subsequent contexts will inherit that configuration.
+        gather_results
+            Whether to gather results as the simulation runs. A value of False
+            (the default) leaves the results system's per-step listeners
+            unregistered, so ``get_results`` has nothing to return. Observers
+            are still registered.
         setup
             Whether to set the simulation up on construction. A value of True
             (the default) freezes the configuration; pass False to change
@@ -92,8 +98,25 @@ class InteractiveContext(SimulationContext):
             logging_verbosity=logging_verbosity,
         )
 
+        self._results.set_gathering_enabled(gather_results)
+        self._warned_no_results = False
+
         if setup:
             self.setup()
+
+    def get_results(self) -> dict[str, pd.DataFrame]:
+        """Get the formatted results, warning if none were gathered."""
+        if not self._results.gathering_enabled:
+            if not self._warned_no_results:
+                self._warned_no_results = True
+                self._logger.warning(
+                    "No results to return. An InteractiveContext does not gather"
+                    " results by default; pass gather_results=True to collect them."
+                )
+            # Return and empty dict instead of zeros since zeros are a valid result
+            # and would be misleading.
+            return {}
+        return super().get_results()
 
     @property
     def current_time(self) -> ClockTime:

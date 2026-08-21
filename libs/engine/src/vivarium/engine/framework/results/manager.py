@@ -49,10 +49,25 @@ class ResultsManager(Manager):
         self._raw_results: defaultdict[str, pd.DataFrame] = defaultdict()
         self._results_context = ResultsContext()
         self._name = "results_manager"
+        self._gathering_enabled = True
 
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def gathering_enabled(self) -> bool:
+        """Whether results are gathered as the simulation runs."""
+        return self._gathering_enabled
+
+    def set_gathering_enabled(self, enabled: bool) -> None:
+        """Turn per-step results gathering on or off.
+
+        Constrained to initialization during setup, because the listeners this
+        controls are registered in :meth:`setup` and never afterwards, so a
+        later call could not take effect.
+        """
+        self._gathering_enabled = enabled
 
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Gets the measure-specific formatted results in a dictionary.
@@ -80,25 +95,32 @@ class ResultsManager(Manager):
 
         builder.event.register_listener(lifecycle_states.POST_SETUP, self.on_post_setup)
 
-        # Register at every priority level so that observations fire in the
-        # correct priority order relative to other components' listeners.
-        for priority in range(NUM_EVENT_PRIORITIES):
-            builder.event.register_listener(
-                lifecycle_states.TIME_STEP_PREPARE,
-                self.on_time_step_prepare,
-                priority=priority,
-            )
-            builder.event.register_listener(
-                lifecycle_states.TIME_STEP, self.on_time_step, priority=priority
-            )
-            builder.event.register_listener(
-                lifecycle_states.TIME_STEP_CLEANUP,
-                self.on_time_step_cleanup,
-                priority=priority,
-            )
-            builder.event.register_listener(
-                lifecycle_states.COLLECT_METRICS, self.on_collect_metrics, priority=priority
-            )
+        builder.lifecycle.add_constraint(
+            self.set_gathering_enabled, allow_during=[lifecycle_states.INITIALIZATION]
+        )
+
+        if self.gathering_enabled:
+            # Register at every priority level so that observations fire in the
+            # correct priority order relative to other components' listeners.
+            for priority in range(NUM_EVENT_PRIORITIES):
+                builder.event.register_listener(
+                    lifecycle_states.TIME_STEP_PREPARE,
+                    self.on_time_step_prepare,
+                    priority=priority,
+                )
+                builder.event.register_listener(
+                    lifecycle_states.TIME_STEP, self.on_time_step, priority=priority
+                )
+                builder.event.register_listener(
+                    lifecycle_states.TIME_STEP_CLEANUP,
+                    self.on_time_step_cleanup,
+                    priority=priority,
+                )
+                builder.event.register_listener(
+                    lifecycle_states.COLLECT_METRICS,
+                    self.on_collect_metrics,
+                    priority=priority,
+                )
 
         self.set_default_stratifications(builder)
 
