@@ -84,12 +84,12 @@ class InteractiveContext(SimulationContext):
             configuration before setting up.
         """
         super().__init__(
-            model_specification,
-            components,
-            configuration,
-            plugin_configuration,
-            sim_name,
-            logging_verbosity,
+            model_specification=model_specification,
+            components=components,
+            configuration=configuration,
+            plugin_configuration=plugin_configuration,
+            sim_name=sim_name,
+            logging_verbosity=logging_verbosity,
         )
 
         if setup:

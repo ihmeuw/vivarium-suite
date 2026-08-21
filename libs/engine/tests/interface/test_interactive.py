@@ -375,6 +375,10 @@ def test_init_signature_agrees_with_simulation_context() -> None:
     ``InteractiveContext`` spells out ``SimulationContext``'s parameters instead of
     passing ``*args``/``**kwargs`` through, so a new parent parameter would otherwise
     be silently dropped.
+
+    Covers signature shape only: names, order, annotations, defaults, and kinds.
+    The forwarding call is covered by ``test_positional_arguments_map_to_parameters``;
+    the duplicated docstring prose is not covered at all.
     """
     parent = inspect.signature(SimulationContext.__init__).parameters
     child = inspect.signature(InteractiveContext.__init__).parameters
@@ -384,8 +388,44 @@ def test_init_signature_agrees_with_simulation_context() -> None:
 
     for name in inherited:
         assert child[name].annotation == parent[name].annotation, name
+        # Kind parity is what lets callers pass these positionally to
+        # InteractiveContext, as test_positional_arguments_map_to_parameters does.
+        assert child[name].kind == parent[name].kind, name
         if name == "logging_verbosity":
             # Deliberately quieter than the parent; see the class docstring.
             assert child[name].default == 0 and parent[name].default == 1
         else:
             assert child[name].default == parent[name].default, name
+
+
+def test_positional_arguments_map_to_parameters() -> None:
+    """Exercise the call the signature guard never makes.
+
+    ``configuration`` and ``plugin_configuration`` share a type, so transposing them
+    would type-check and pass the signature guard. Verbosity stays 0 here: logging is
+    configured in ``__init__``, first-writer-wins per process, so a higher value
+    would leak to every later test.
+    """
+    sim = InteractiveContext(
+        None,
+        None,
+        {"population": {"population_size": 123}},
+        None,
+        "positional_arguments",
+        0,
+        setup=False,
+    )
+
+    assert sim.name == "positional_arguments"
+    assert sim.configuration.population.population_size == 123
+
+
+def test_setup_is_keyword_only() -> None:
+    """``setup`` is not one of the parent's parameters, so it must not take that slot."""
+    setup = inspect.signature(InteractiveContext.__init__).parameters["setup"]
+    assert setup.kind is inspect.Parameter.KEYWORD_ONLY
+
+    with pytest.raises(TypeError):
+        # Deliberately invalid: mypy catches this statically, and the ignore lets
+        # us also pin the runtime behaviour.
+        InteractiveContext(None, None, None, None, None, 0, False)  # type: ignore[call-arg]
