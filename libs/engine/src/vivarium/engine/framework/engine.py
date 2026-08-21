@@ -115,6 +115,36 @@ class SimulationContext:
         sim_name: str | None = None,
         logging_verbosity: int = 1,
     ) -> None:
+        """Create a simulation context.
+
+        Parameters
+        ----------
+        model_specification
+            Path to a model specification yaml, or an already-parsed ``ConfigTree``.
+            A path must exist, end in ``.yaml`` or ``.yml``, and use only the
+            top-level keys ``plugins``, ``components``, and ``configuration``.
+            A value of None will build the simulation from the other arguments alone.
+        components
+            Components to include in this simulation. A list is appended to the
+            components the specification declares while a dict or ``ConfigTree``
+            overrides the specification's ``components`` block. A value of None
+            will use the specification's components without change.
+        configuration
+            Values overriding the specification's ``configuration`` block. A value
+            of None will use the specification's configuration without change.
+        plugin_configuration
+            Managers overriding the specification's ``plugins`` block. A value of
+            None will use the specification's plugin configuration without change.
+        sim_name
+            Name for this context, used to label its log records. Must be unique
+            within the process. A value of None names the context ``simulation_<n>``
+            by how many have been created so far.
+        logging_verbosity
+            How much to log. A value of 0 logs warnings and errors, 1 (the default)
+            logs INFO-level messages, and 2+ logs DEBUG-level messages.
+            Note that only the first context built in a process configures logging
+            and subsequent contexts will inherit that configuration.
+        """
         self._name = self._get_context_name(sim_name)
 
         # Bootstrap phase: Parse arguments, make private managers

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 
 import pandas as pd
@@ -21,7 +22,7 @@ from tests.helpers import (
     SingleColumnCreator,
 )
 from vivarium.engine import InteractiveContext
-from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.values import Pipeline
 
 
@@ -366,3 +367,25 @@ class TestGetPopulationNestedAttributes:
         """Assert max depth reached *expected* and counter has reset to 0."""
         assert max_depth[0] == expected
         assert sim._population.pipeline_evaluation_depth == 0
+
+
+def test_init_signature_agrees_with_simulation_context() -> None:
+    """Guard the parent's parameters, which are re-declared here rather than forwarded.
+
+    ``InteractiveContext`` spells out ``SimulationContext``'s parameters instead of
+    passing ``*args``/``**kwargs`` through, so a new parent parameter would otherwise
+    be silently dropped.
+    """
+    parent = inspect.signature(SimulationContext.__init__).parameters
+    child = inspect.signature(InteractiveContext.__init__).parameters
+
+    inherited = [name for name in parent if name != "self"]
+    assert [name for name in child if name not in ("self", "setup")] == inherited
+
+    for name in inherited:
+        assert child[name].annotation == parent[name].annotation, name
+        if name == "logging_verbosity":
+            # Deliberately quieter than the parent; see the class docstring.
+            assert child[name].default == 0 and parent[name].default == 1
+        else:
+            assert child[name].default == parent[name].default, name

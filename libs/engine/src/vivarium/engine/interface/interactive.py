@@ -14,17 +14,25 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 """
 from __future__ import annotations
 
-from collections.abc import Callable
 from math import ceil
-from typing import Any, overload
+from typing import TYPE_CHECKING, overload
 
 import pandas as pd
 
 from vivarium.engine.framework.engine import SimulationContext
-from vivarium.engine.framework.event import Event
-from vivarium.engine.framework.values import Pipeline
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
-from vivarium.engine.types import ClockStepSize, ClockTime
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+    from typing import Any
+
+    from vivarium.config_tree.main import ConfigTree
+
+    from vivarium.engine import Component
+    from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.values import Pipeline
+    from vivarium.engine.types import ClockStepSize, ClockTime
 
 
 class InteractiveContext(SimulationContext):
@@ -32,34 +40,57 @@ class InteractiveContext(SimulationContext):
 
     def __init__(
         self,
-        *args: Any,
-        setup: bool = True,
+        model_specification: str | Path | ConfigTree | None = None,
+        components: list[Component] | dict[str, Any] | ConfigTree | None = None,
+        configuration: dict[str, Any] | ConfigTree | None = None,
+        plugin_configuration: dict[str, Any] | ConfigTree | None = None,
+        sim_name: str | None = None,
         logging_verbosity: int = 0,
-        **kwargs: Any,
+        *,
+        setup: bool = True,
     ) -> None:
         """Create an interactive simulation context.
 
         Parameters
         ----------
-        args
-            Positional arguments passed through to
-            :class:`~vivarium.engine.framework.engine.SimulationContext`.
-        setup
-            Whether to set the simulation up on construction.
+        model_specification
+            Path to a model specification yaml, or an already-parsed ``ConfigTree``.
+            A path must exist, end in ``.yaml`` or ``.yml``, and use only the
+            top-level keys ``plugins``, ``components``, and ``configuration``.
+            A value of None will build the simulation from the other arguments alone.
+        components
+            Components to include in this simulation. A list is appended to the
+            components the specification declares while a dict or ``ConfigTree``
+            overrides the specification's ``components`` block. A value of None
+            will use the specification's components without change.
+        configuration
+            Values overriding the specification's ``configuration`` block. A value
+            of None will use the specification's configuration without change.
+        plugin_configuration
+            Managers overriding the specification's ``plugins`` block. A value of
+            None will use the specification's plugin configuration without change.
+        sim_name
+            Name for this context, used to label its log records. Must be unique
+            within the process. A value of None names the context ``simulation_<n>``
+            by how many have been created so far.
         logging_verbosity
-            How verbose logging should be (see
-            :func:`~vivarium.engine.framework.logging.utilities.get_log_level`
-            for the mapping): 0 logs warnings and errors (default), 1 adds info
-            messages, and 2 or more adds debug messages. The first context
-            instantiated sets the logging level for all contexts.
-        kwargs
-            Keyword arguments passed through to
-            :class:`~vivarium.engine.framework.engine.SimulationContext`.
+            How much to log. A value of 0 (the default) logs warnings and errors, 1
+            logs INFO-level messages, and 2+ logs DEBUG-level messages.
+            Note that only the first context built in a process configures logging
+            and subsequent contexts will inherit that configuration.
+        setup
+            Whether to set the simulation up on construction. A value of True
+            (the default) freezes the configuration; pass False to change
+            configuration before setting up.
         """
-        # Set through kwargs rather than as an explicit keyword argument: *args can
-        # fill this slot positionally, which makes mypy report multiple values for it.
-        kwargs["logging_verbosity"] = logging_verbosity
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            model_specification,
+            components,
+            configuration,
+            plugin_configuration,
+            sim_name,
+            logging_verbosity,
+        )
 
         if setup:
             self.setup()
