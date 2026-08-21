@@ -89,19 +89,19 @@ def create_task(
     *,
     name: str,
     compute_resources: dict[str, Any],
-    env_prefix: str,
+    env_bin_path: str,
     command: str,
 ) -> Task:
     """Create a single Jobmon ``Task`` for the workflow-command-step template.
 
-    The ``env_prefix`` and ``command`` kwargs match the template's
+    The ``env_bin_path`` and ``command`` kwargs match the template's
     ``node_args``; see :func:`make_task_template` and the call site in
     :func:`~vivarium.cluster_tools.dagger.config.utilities.get_single_command_task`.
     """
     return template.create_task(
         name=name,
         compute_resources=compute_resources,
-        env_prefix=env_prefix,
+        env_bin_path=env_bin_path,
         command=command,
     )
 

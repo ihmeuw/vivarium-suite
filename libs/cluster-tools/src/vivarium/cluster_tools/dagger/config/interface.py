@@ -119,8 +119,9 @@ def get_bash_step_tasks(
     tool
         Jobmon Tool used to register task templates and create tasks.
     environment
-        Optional conda environment name to use for this step. If unset,
-        falls back to the runner's active ``CONDA_DEFAULT_ENV``.
+        Optional environment to use for this step: a conda env name, a venv
+        name under ``.venv/``, or a path to either's prefix. If unset, falls
+        back to the runner's active venv or conda env.
 
     Returns
     -------
@@ -182,8 +183,9 @@ def get_simulation_step_tasks(
     tool
         Jobmon Tool used to register task templates and create tasks.
     environment
-        Optional conda environment name to use for this step. If unset,
-        falls back to the runner's active ``CONDA_DEFAULT_ENV``.
+        Optional environment to use for this step: a conda env name, a venv
+        name under ``.venv/``, or a path to either's prefix. If unset, falls
+        back to the runner's active venv or conda env.
     artifact_path
         Optional path to a data artifact file. Both relative and absolute
         paths are accepted.
@@ -277,8 +279,9 @@ def get_pytest_step_tasks(
     tool
         Jobmon Tool used to register task templates and create tasks.
     environment
-        Optional conda environment name to use for this step. If unset,
-        falls back to the runner's active ``CONDA_DEFAULT_ENV``.
+        Optional environment to use for this step: a conda env name, a venv
+        name under ``.venv/``, or a path to either's prefix. If unset, falls
+        back to the runner's active venv or conda env.
     path
         Test path(s) — a single file/directory or a list of them — passed
         to pytest as positional arguments. Both relative and absolute
@@ -359,8 +362,9 @@ def get_python_step_tasks(
     tool
         Jobmon Tool used to register task templates and create tasks.
     environment
-        Optional conda environment name to use for this step. If unset,
-        falls back to the runner's active ``CONDA_DEFAULT_ENV``.
+        Optional environment to use for this step: a conda env name, a venv
+        name under ``.venv/``, or a path to either's prefix. If unset, falls
+        back to the runner's active venv or conda env.
     positional_args
         Optional list of scalar values appended in order as positional
         CLI arguments. Defaults to none (empty).
@@ -444,8 +448,9 @@ def get_notebook_step_tasks(
     tool
         Jobmon Tool used to register task templates and create tasks.
     environment
-        Optional conda environment name to use for this step. If unset,
-        falls back to the runner's active ``CONDA_DEFAULT_ENV``.
+        Optional environment to use for this step: a conda env name, a venv
+        name under ``.venv/``, or a path to either's prefix. If unset, falls
+        back to the runner's active venv or conda env.
     parameters
         Optional dict of scalar values injected as notebook parameters.
     cwd
