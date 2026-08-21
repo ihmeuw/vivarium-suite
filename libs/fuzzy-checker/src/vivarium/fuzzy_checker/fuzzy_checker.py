@@ -21,6 +21,12 @@ from vivarium.fuzzy_checker.data_structures import (
     TestResult,
 )
 
+# The weight, in pseudo-observations, of the bug/issue hypothesis's mean prior in
+# test_mean: mu | sigma^2 ~ N(mu0, sigma^2 / lambda0) with lambda0 this value, so
+# the alternative's mean is deliberately almost data-free. The historic default
+# interval of +/-62 data scales encoded exactly this weight at alpha_prior=2.
+_BUG_MEAN_PSEUDO_OBSERVATIONS = 0.001
+
 
 class FuzzyChecker:
     """
@@ -751,8 +757,10 @@ class FuzzyChecker:
             ruling out a bug/issue. Causes a warning.
         bug_issue_distribution_mean_uncertainty_interval
             What the mean might be if there is a bug/issue. Defaults to a very
-            wide interval centered on the target: 62 observed standard deviations
-            to either side.
+            wide interval centered on the target, sized so the bug hypothesis's
+            mean prior carries a weight of ``_BUG_MEAN_PSEUDO_OBSERVATIONS``
+            (0.001) observations -- about 62 observed standard deviations to
+            either side at the default priors.
         alpha_prior
             The alpha parameter of the inverse-gamma prior on the variance of the
             continuous values. Defaults to 2, which is weakly informative.
@@ -866,11 +874,18 @@ class FuzzyChecker:
 
         if bug_issue_distribution_mean_uncertainty_interval is None:
             # Center the bug hypothesis on the target so that targets at or below
-            # zero remain in-domain; 62 observed SDs keeps it as weakly informative
-            # as the original target-scaled default was at sigma ~ |target mean|.
+            # zero remain in-domain. The width encodes the prior weight directly:
+            # this interval round-trips through
+            # _compute_parameters_for_marginal_mu_interval to
+            # lambda0 = _BUG_MEAN_PSEUDO_OBSERVATIONS for any alpha and beta
+            # (it is ~62 observed SDs at the defaults).
+            degrees_freedom = 2.0 * alpha_prior
+            half_width = scipy.stats.t.ppf(0.975, df=degrees_freedom) * float(
+                np.sqrt(beta_prior / (alpha_prior * _BUG_MEAN_PSEUDO_OBSERVATIONS))
+            )
             bug_issue_distribution_mean_uncertainty_interval = (
-                target_midpoint - 62.0 * observed_std,
-                target_midpoint + 62.0 * observed_std,
+                target_midpoint - half_width,
+                target_midpoint + half_width,
             )
 
         bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
