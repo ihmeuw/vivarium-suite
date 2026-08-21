@@ -750,15 +750,17 @@ class FuzzyChecker:
             The Bayes factor above which the test is considered inconclusive, not
             ruling out a bug/issue. Causes a warning.
         bug_issue_distribution_mean_uncertainty_interval
-            What the mean might be if there is a bug/issue. Uses a very wide
-            interval by default.
+            What the mean might be if there is a bug/issue. Defaults to a very
+            wide interval centered on the target: 62 observed standard deviations
+            to either side.
         alpha_prior
             The alpha parameter of the inverse-gamma prior on the variance of the
             continuous values. Defaults to 2, which is weakly informative.
         beta_prior
             The beta parameter of the inverse-gamma prior on the variance.
-            Defaults to ``(alpha_prior - 1) * data_scale**2`` where data_scale is
-            the target mean (if a point) or the midpoint of the target interval.
+            Defaults to ``(alpha_prior - 1) * observed_variance``, an
+            empirical-Bayes choice that keeps the test's power independent of how
+            the data's spread compares to its mean.
         name
             The name of the assertion, for use in messages and diagnostics.
         name_additional
@@ -848,19 +850,27 @@ class FuzzyChecker:
             and observed_second_moment is not None
         )
 
-        data_scale = (target_lower_bound + target_upper_bound) / 2
+        target_midpoint = (target_lower_bound + target_upper_bound) / 2
+        observed_mean = observed_first_moment / observed_zeroth_moment
+        observed_variance = (
+            observed_second_moment / observed_zeroth_moment - observed_mean**2
+        )
+        observed_std = float(np.sqrt(observed_variance))
+
         if beta_prior is None:
-            # A weakly informative prior for the variance, using the target mean as
-            # a priori information about the expected scale of the data.
-            # https://chatgpt.com/share/68b768f5-214c-8005-8d4c-1b12c6c4f2d0
-            beta_prior = (alpha_prior - 1) * data_scale**2
+            # Scale the variance prior by the observed spread of the data, not the
+            # target mean: a prior that assumes sigma ~ |target mean| swamps the
+            # evidence whenever the data's spread is much smaller than its mean,
+            # silently costing the test its power against real bias.
+            beta_prior = (alpha_prior - 1) * observed_variance
 
         if bug_issue_distribution_mean_uncertainty_interval is None:
-            # With the default alpha and beta priors, this recovers the default
-            # lambda prior suggested in the link above.
+            # Center the bug hypothesis on the target so that targets at or below
+            # zero remain in-domain; 62 observed SDs keeps it as weakly informative
+            # as the original target-scaled default was at sigma ~ |target mean|.
             bug_issue_distribution_mean_uncertainty_interval = (
-                -62.0 * data_scale,
-                62.0 * data_scale,
+                target_midpoint - 62.0 * observed_std,
+                target_midpoint + 62.0 * observed_std,
             )
 
         bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
@@ -886,11 +896,6 @@ class FuzzyChecker:
                 np.exp(bug_issue_log_likelihood - no_bug_issue_log_likelihood)
             )
 
-        observed_mean = observed_first_moment / observed_zeroth_moment
-        observed_variance = (
-            observed_second_moment / observed_zeroth_moment - observed_mean**2
-        )
-        observed_std = float(np.sqrt(observed_variance))
         reject_null = bayes_factor > fail_bayes_factor_cutoff
 
         return MeanTestResult(
