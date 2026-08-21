@@ -783,41 +783,24 @@ def test_read_of_uninitialized_private_column_yields_null() -> None:
         assert read["recorded_second"].isna().all()
 
 
-@pytest.mark.parametrize("target", ["staged", "committed", "spanning"])
-def test_update_routes_write_to_the_frame_holding_its_simulants(target: str) -> None:
-    """A write lands in the staged frame or the population per its index."""
-    committed_target = [0, 1]
-    targets: dict[str, pd.Index[int]] = {
-        "staged": NEW_INDEX,
-        "committed": pd.Index(committed_target),
-        "spanning": pd.Index([*committed_target, *NEW_INDEX]),
-    }
+def test_update_writes_to_the_staged_frame_during_a_creation_pass() -> None:
+    """A write while simulants are being added lands on the staged frame alone."""
 
     def write_sentinel(manager: PopulationManager, pop_data: SimulantData) -> None:
-        # Only the mid-simulation pass has a population to write to alongside the
-        # staged frame.
-        if manager.creating_initial_population:
-            return
-        manager.update(pd.DataFrame({"recorded": SENTINEL}, index=targets[target]))
+        manager.update(pd.DataFrame({"recorded": SENTINEL}, index=pop_data.index))
 
     sim = _grow(StagingRecorder(on_initialized=write_sentinel))
+    committed = _column(sim, "recorded")
 
     sim.step()
 
     recorded = _column(sim, "recorded")
-    written = targets[target]
-    assert (recorded.loc[written] == SENTINEL).all()
-    untouched = recorded.index.difference(written)
-    pd.testing.assert_series_equal(
-        recorded.loc[untouched],
-        _staged_values(untouched),
-        check_index_type=False,
-    )
+    assert (recorded.loc[NEW_INDEX] == SENTINEL).all()
+    pd.testing.assert_series_equal(recorded.loc[committed.index], committed)
 
 
-def test_initialize_may_target_an_already_committed_simulant() -> None:
-    """An initializer can still write to a simulant already in the population."""
-    committed_target = 0
+def test_initialize_rejects_an_already_committed_simulant() -> None:
+    """initialize() writes new simulants only; naming an existing one is an error."""
 
     class WideningInitializer(Component):
         def setup(self, builder: Builder) -> None:
@@ -827,23 +810,40 @@ def test_initialize_may_target_an_already_committed_simulant() -> None:
             )
 
         def initialize_widened(self, pop_data: SimulantData) -> None:
-            if self.population_manager.creating_initial_population:
-                values = pd.Series(list(pop_data.index), index=pop_data.index, name="widened")
-            else:
-                index = pd.Index([committed_target, *pop_data.index])
-                values = pd.Series(SENTINEL, index=index, name="widened")
-            self.population_view.initialize(values)
+            index = pop_data.index
+            if not self.population_manager.creating_initial_population:
+                index = pd.Index([0, *pop_data.index])
+            self.population_view.initialize(pd.Series(1, index=index, name="widened"))
 
     sim = _grow(WideningInitializer())
-    before = _column(sim, "widened")
 
-    sim.step()
+    with pytest.raises(PopulationError, match="no matching index in the existing table"):
+        sim.step()
 
-    after = _column(sim, "widened")
-    assert after.loc[committed_target] == SENTINEL
-    assert (after.loc[NEW_INDEX] == SENTINEL).all()
-    untouched = before.index.drop(committed_target)
-    pd.testing.assert_series_equal(after.loc[untouched], before.loc[untouched])
+
+def test_update_is_refused_while_simulants_are_being_added() -> None:
+    """update() is for existing state; new simulants go through initialize()."""
+
+    class UpdatingInitializer(Component):
+        def setup(self, builder: Builder) -> None:
+            builder.population.register_initializer(
+                initializer=self.initialize_updated, columns=["updated"]
+            )
+
+        def initialize_updated(self, pop_data: SimulantData) -> None:
+            self.population_view.initialize(
+                pd.Series(1, index=pop_data.index, name="updated")
+            )
+            self.population_view.update("updated", lambda s: s + 1)
+
+    with pytest.raises(
+        PopulationError, match="cannot be called while simulants are being added"
+    ):
+        InteractiveContext(
+            components=[UpdatingInitializer()],
+            configuration={"population": {"population_size": INITIAL_POP_SIZE}},
+            setup=True,
+        )
 
 
 def test_failed_mid_sim_addition_discards_the_staged_frame() -> None:

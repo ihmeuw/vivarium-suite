@@ -342,10 +342,9 @@ class PopulationView:
         -----
         The data is written straight into the frame staging the new simulants, so
         each column arrives with the dtype this initializer produced and the write
-        costs the size of the data rather than the size of the population. Data
-        targeting a simulant already in the population is the exception: that write
-        goes to the population itself and rebuilds the column over every simulant,
-        just as :meth:`update` does.
+        costs the size of the data rather than the size of the population. The
+        simulants already in the population are never read or rewritten; an index
+        naming one of them is rejected.
         """
         if self._component is None:
             raise PopulationError(
@@ -358,9 +357,9 @@ class PopulationView:
             )
 
         data_df = self._coerce_init_data(data, self.private_columns)
-        population_index = self._manager.get_population_index()
+        staged_index = self._manager.get_staged_index()
 
-        unknown_simulants = len(data_df.index.difference(population_index))
+        unknown_simulants = len(data_df.index.difference(staged_index))
         if unknown_simulants:
             raise PopulationError(
                 "Population updates must have an index that is a subset of the current "
@@ -369,7 +368,7 @@ class PopulationView:
             )
 
         if self._manager.creating_initial_population:
-            missing_pops = len(population_index.difference(data_df.index))
+            missing_pops = len(staged_index.difference(data_df.index))
             if missing_pops:
                 raise PopulationError(
                     "Components must initialize all simulants during population "
@@ -432,6 +431,11 @@ class PopulationView:
         if self._component is None:
             raise PopulationError(
                 "This PopulationView is read-only, so it doesn't have access to update()."
+            )
+        if self._manager.adding_simulants:
+            raise PopulationError(
+                "update() cannot be called while simulants are being added. "
+                "Use initialize() to set the initial values of new simulants."
             )
 
         if isinstance(columns, str):

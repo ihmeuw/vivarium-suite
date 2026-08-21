@@ -345,6 +345,12 @@ class PopulationManager(Manager):
             frame = frame.loc[index]
         return frame if columns is None else frame.reindex(columns=columns)
 
+    def get_staged_index(self) -> pd.Index[int]:
+        """Gets the index of the simulants currently being initialized."""
+        if self._staged_columns is None:
+            raise PopulationError("No simulants are being added.")
+        return self._staged_columns.index
+
     def get_population_index(self) -> pd.Index[int]:
         """Gets the index of the current population, including simulants being added."""
         if self._private_columns is None:
@@ -899,43 +905,23 @@ class PopulationManager(Manager):
         return df
 
     def update(self, update: pd.DataFrame) -> None:
-        """Write ``update`` into whichever frame holds each of its simulants.
+        """Write ``update`` into the frame holding its simulants.
 
         Parameters
         ----------
         update
-            The new values, indexed by the simulants to write. Writes to simulants
-            being staged land in the staged frame and writes to simulants already
-            in the population land there; an update spanning both is split.
+            The new values, indexed by the simulants to write. Writes land in the
+            frame staging new simulants while simulants are being added, and in the
+            population otherwise; the two are never written together.
 
         Notes
         -----
-        Each column is assigned in its own right so that a column the target frame
-        does not have yet is created with the update's dtype rather than the frame's.
-        A column the frame does have keeps the values of any rows the update omits.
+        Assigning a whole column at a time is what lets a column the frame does not
+        have yet be created with the update's own dtype rather than the frame's.
         """
         if self._private_columns is None:
             raise PopulationError("Population has not been initialized.")
-
-        writes: list[tuple[pd.DataFrame, pd.DataFrame]]
-        if self._staged_columns is None:
-            writes = [(self._private_columns, update)]
-        else:
-            is_staged = update.index.isin(self._staged_columns.index)
-            writes = [
-                (self._staged_columns, update[is_staged]),
-                (self._private_columns, update[~is_staged]),
-            ]
-
-        for frame, frame_update in writes:
-            # A rowless update assigned into a frame with rows would null out the
-            # whole column; assigned into a frame without rows it only declares it.
-            if not len(frame_update) and len(frame):
-                continue
-            for column in frame_update.columns:
-                values = frame_update[column]
-                if column in frame.columns and len(values) != len(frame):
-                    # Rows the update omits keep the value they already have.
-                    untouched = frame[column].drop(values.index)
-                    values = pd.concat([values, untouched]).reindex(frame.index)
-                frame[column] = values
+        frame = (
+            self._private_columns if self._staged_columns is None else self._staged_columns
+        )
+        frame[update.columns] = update
