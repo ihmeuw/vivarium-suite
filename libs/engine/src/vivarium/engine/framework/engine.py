@@ -120,7 +120,7 @@ class SimulationContext:
         Parameters
         ----------
         model_specification
-            Path to a model specification yaml, or an already-parsed ``ConfigTree``.
+            Path to a model specification yaml, or a ``ConfigTree``.
             A path must exist, end in ``.yaml`` or ``.yml``, and use only the
             top-level keys ``plugins``, ``components``, and ``configuration``.
             A value of None will build the simulation from the other arguments alone.
