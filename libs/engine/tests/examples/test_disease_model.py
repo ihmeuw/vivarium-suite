@@ -28,7 +28,7 @@ def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) ->
         }
     )
 
-    simulation = InteractiveContext(config)
+    simulation = InteractiveContext(config, include_observers=True)
 
     all_attributes = simulation.get_attribute_names()
     pop = simulation.get_population(all_attributes)

@@ -182,7 +182,11 @@ class ComponentManager(Manager):
             self.apply_configuration_defaults(manager)
             self._managers.add(manager)
 
-    def add_components(self, components: Sequence[Component]) -> None:
+    def add_components(
+        self,
+        components: Sequence[Component],
+        exclude_types: tuple[type[Component], ...] = (),
+    ) -> None:
         """Register new components with the component manager.
 
         Components are configured and setup after managers.
@@ -191,10 +195,18 @@ class ComponentManager(Manager):
         ----------
         components
             Instantiated components to register.
+        exclude_types
+            Component types to leave out of the simulation. Applied after
+            subcomponents are flattened, so an excluded type is dropped however
+            deeply it is nested. A component holding an excluded subcomponent
+            keeps its own reference to it; the subcomponent is simply never
+            registered, set up, or configured. Defaults to excluding nothing.
         """
-        for c in self._flatten_subcomponents(list(components)):
-            self.apply_configuration_defaults(c)
-            self._components.add(c)
+        for component in self._flatten_subcomponents(list(components)):
+            if exclude_types and isinstance(component, exclude_types):
+                continue
+            self.apply_configuration_defaults(component)
+            self._components.add(component)
 
     def get_components_by_type(self, component_type: type[C] | Sequence[type[C]]) -> list[C]:
         """Get all components that are an instance of ``component_type``.

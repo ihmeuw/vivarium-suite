@@ -15,13 +15,14 @@ from tests.framework.population.helpers import (
 from tests.helpers import (
     AttributePipelineCreator,
     ColumnCreator,
+    MockComponentA,
     MultiLevelMultiColumnCreator,
     MultiLevelSingleColumnCreator,
     NestedAttributeCreator,
     NestedLookupCaller,
     SingleColumnCreator,
 )
-from vivarium.engine import InteractiveContext
+from vivarium.engine import Component, InteractiveContext, Observer
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.values import Pipeline
 
@@ -384,7 +385,8 @@ def test_init_signature_agrees_with_simulation_context() -> None:
     child = inspect.signature(InteractiveContext.__init__).parameters
 
     inherited = [name for name in parent if name != "self"]
-    assert [name for name in child if name not in ("self", "setup")] == inherited
+    child_only = ("self", "include_observers", "setup")
+    assert [name for name in child if name not in child_only] == inherited
 
     for name in inherited:
         assert child[name].annotation == parent[name].annotation, name
@@ -429,3 +431,57 @@ def test_setup_is_keyword_only() -> None:
         # Deliberately invalid: mypy catches this statically, and the ignore lets
         # us also pin the runtime behaviour.
         InteractiveContext(None, None, None, None, None, 0, False)  # type: ignore[call-arg]
+
+
+class ObserverHolder(Component):
+    """A non-observer that declares an observer as a subcomponent."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._sub_components = [MockComponentA(name="nested_observer")]
+
+
+class TestObserverExclusion:
+    """InteractiveContext leaves observers out unless it asks for them.
+
+    Exclusion happens by type inside ``ComponentManager.add_components``, after
+    subcomponents are flattened and before configuration defaults are applied.
+    That ordering is what makes it proof against nesting and what keeps an
+    excluded observer's stratification keys out of the configuration.
+    """
+
+    @staticmethod
+    def _observers(sim: InteractiveContext) -> list[str]:
+        return [c.name for c in sim._component_manager._components if isinstance(c, Observer)]
+
+    #########
+    # Tests #
+    #########
+
+    def test_excluded_by_default(self) -> None:
+        sim = InteractiveContext(components=[MockComponentA()], setup=False)
+        assert self._observers(sim) == []
+
+    def test_kept_when_requested(self) -> None:
+        sim = InteractiveContext(
+            components=[MockComponentA()], include_observers=True, setup=False
+        )
+        assert self._observers(sim) == ["mock_component_a"]
+
+    def test_nested_are_excluded(self) -> None:
+        sim = InteractiveContext(components=[ObserverHolder()], setup=False)
+        registered = [c.name for c in sim._component_manager._components]
+
+        assert self._observers(sim) == []
+        # The holder itself is kept, and keeps its own reference to the observer.
+        assert "observer_holder" in registered
+
+    def test_leave_no_configuration_behind(self) -> None:
+        kept = InteractiveContext(
+            components=[MockComponentA()], include_observers=True, setup=False
+        )
+        excluded = InteractiveContext(components=[MockComponentA()], setup=False)
+        key = MockComponentA().get_configuration_name()
+
+        assert key in kept.configuration.stratification
+        assert key not in excluded.configuration.stratification

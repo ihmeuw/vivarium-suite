@@ -1,3 +1,8 @@
+**5.7.0 - 08/21/26**
+
+- Exclude observers from ``InteractiveContext`` by default
+- Let ``ComponentManager.add_components`` exclude component types
+
 **5.6.1 - 08/21/26**
 
 - Declare ``InteractiveContext``'s full constructor signature and default ``logging_verbosity`` to 0

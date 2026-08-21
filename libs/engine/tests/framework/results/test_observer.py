@@ -75,6 +75,7 @@ def test_observer_get_configuration(
     sim = InteractiveContext(
         base_config,
         components=[observer],
+        include_observers=True,
     )
     sim_observer_config = sim.configuration["stratification"][
         observer.get_configuration_name()
@@ -95,4 +96,5 @@ def test_duplicated_observer_error(base_config: ConfigTree) -> None:
         InteractiveContext(
             base_config,
             components=[observer1, observer2],
+            include_observers=True,
         )

@@ -145,6 +145,7 @@ observations for a disease model:
        ],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    sim.step()
    results = sim.get_results()
@@ -212,6 +213,7 @@ non-zero ``excess_mortality_rate``.
        ],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    for _ in range(5):
        sim.step()
@@ -269,6 +271,7 @@ It requires at least one disease state with a non-zero
        ],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    for _ in range(3):
        sim.step()
@@ -314,6 +317,7 @@ one observation:
        ],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    for _ in range(3):
        sim.step()
@@ -371,6 +375,7 @@ an empty list raises a configuration error.
        ],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    sim.step()
    sim.step()
@@ -421,6 +426,7 @@ females aged 20 or older:
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    sim.step()
 
@@ -460,6 +466,7 @@ latter leaves the first step empty:
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
 
    sim.step()  # 1990-08-01 - not recorded
@@ -504,6 +511,7 @@ simulation - each time-step is capped at 100.
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    sim.step()
    sim.step()
@@ -566,6 +574,7 @@ shows the same simulants recurring each step:
        components=[BasePopulation(), SimulantID(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    sim.step()
    sim.step()
@@ -624,6 +633,7 @@ the four stratifications registered by ``ResultsStratifier`` (``age_group``,
        ],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    sim.step()
 
@@ -671,6 +681,7 @@ ones per observer with ``stratification.<observer_name>.exclude``:
        ],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    sim.step()
 
@@ -738,6 +749,7 @@ name in the observer's ``include`` list:
        ],
        configuration=config,
        plugin_configuration=base_plugins,
+       include_observers=True,
    )
    sim.step()
 

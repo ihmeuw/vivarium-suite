@@ -174,16 +174,6 @@ configuration by simply printing it.
     stratification:
         default:
             component_configs: []
-        deaths:
-            exclude:
-                component_configs: []
-            include:
-                component_configs: []
-        ylls:
-            exclude:
-                component_configs: []
-            include:
-                component_configs: []
     disease_state.susceptible_to_lower_respiratory_infections:
         data_sources:
             initialization_weights:

@@ -942,7 +942,8 @@ observations up to this point in the simulation.
          DeathsObserver(),
          YllsObserver(),
       ],
-      configuration=config
+      configuration=config,
+      include_observers=True,
    )
    sim.take_steps(365)  # Run for one year with one day time steps
 
@@ -971,7 +972,8 @@ been a total of 27,720 years of life lost.
          DeathsObserver(),
          YllsObserver(),
       ],
-      configuration=config
+      configuration=config,
+      include_observers=True,
    )
 
    # It takes too long to run 365 steps in the test, so we just run 10 steps here

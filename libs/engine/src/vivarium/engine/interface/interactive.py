@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, overload
 import pandas as pd
 
 from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.results.observer import Observer
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
 
 if TYPE_CHECKING:
@@ -47,6 +48,7 @@ class InteractiveContext(SimulationContext):
         sim_name: str | None = None,
         logging_verbosity: int = 0,
         *,
+        include_observers: bool = False,
         setup: bool = True,
     ) -> None:
         """Create an interactive simulation context.
@@ -78,11 +80,18 @@ class InteractiveContext(SimulationContext):
             logs INFO-level messages, and 2+ logs DEBUG-level messages.
             Note that only the first context built in a process configures logging
             and subsequent contexts will inherit that configuration.
+        include_observers
+            Whether to include the observers the specification declares. A value
+            of False (the default) leaves them out and does not gather results.
         setup
             Whether to set the simulation up on construction. A value of True
             (the default) freezes the configuration; pass False to change
             configuration before setting up.
         """
+        # NOTE: Must assign before super().__init__() because it calls add_components()
+        # which is overridden below and reads this.
+        self._include_observers = include_observers
+
         super().__init__(
             model_specification=model_specification,
             components=components,
@@ -94,6 +103,16 @@ class InteractiveContext(SimulationContext):
 
         if setup:
             self.setup()
+
+    def add_components(self, component_list: list[Component]) -> None:
+        """Add components, dropping observers unless they were asked for.
+
+        Excluding by type here rather than filtering ``component_list`` catches an
+        observer declared as another component's subcomponent, which is only
+        visible once the manager flattens them.
+        """
+        exclude_types = () if self._include_observers else (Observer,)
+        self._component_manager.add_components(component_list, exclude_types)
 
     @property
     def current_time(self) -> ClockTime:
