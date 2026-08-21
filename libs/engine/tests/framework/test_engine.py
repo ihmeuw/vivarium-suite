@@ -561,6 +561,15 @@ def test_private_columns_get_registered() -> None:
     len(sim.get_population(sim.get_attribute_names()).columns) > 3
 
 
+def test_simulation_context_registers_observers(
+    SimulationContext: type[SimulationContext_],
+) -> None:
+    """Only InteractiveContext excludes them; the non-interactive default must not."""
+    sim = SimulationContext(components=[MockComponentA(name="an_observer")])
+
+    assert "an_observer" in [c.name for c in sim._component_manager._components]
+
+
 ####################
 # HELPER FUNCTIONS #
 ####################

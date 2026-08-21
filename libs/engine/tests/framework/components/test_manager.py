@@ -348,3 +348,26 @@ def test_setting_current_component() -> None:
 
     assert component1.component == component1
     assert component2.component == component2
+
+
+def test_component_manager_add_components_excludes_nothing_by_default() -> None:
+    cm = ComponentManager()
+    cm._configuration = build_simulation_configuration()
+    cm.add_components([MockComponentA(name="an_observer"), MockGenericComponent("plain")])
+
+    assert {c.name for c in cm._components} == {"an_observer", "plain"}
+
+
+def test_component_manager_add_components_excludes_types() -> None:
+    """``exclude_types`` drops every named type, however deeply nested, and nothing else."""
+    holder = MockGenericComponent("holder")
+    holder._sub_components = [MockComponentA(name="nested_a")]
+
+    cm = ComponentManager()
+    cm._configuration = build_simulation_configuration()
+    cm.add_components(
+        [holder, MockGenericComponent("kept"), MockComponentB(name="top_level_b")],
+        exclude_types=(MockComponentA, MockComponentB),
+    )
+
+    assert [c.name for c in cm._components] == ["holder", "kept"]
