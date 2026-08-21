@@ -460,7 +460,12 @@ class PopulationManager(Manager):
                         index, population_configuration, self.clock(), self.step_size()
                     )
                 )
-            self._private_columns = pd.concat([self._private_columns, self._staged_columns])
+            # Copy the staged frame before appending it. Its columns are views into
+            # whatever each initializer handed over, and concatenating from those
+            # costs far more than consolidating a few thousand rows first.
+            self._private_columns = pd.concat(
+                [self._private_columns, self._staged_columns.copy()]
+            )
         except BaseException:
             # Leaving the empty frame behind would report the population as
             # initialized-but-empty rather than uninitialized.
