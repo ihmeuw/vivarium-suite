@@ -377,8 +377,6 @@ def test_init_signature_agrees_with_simulation_context() -> None:
     be silently dropped.
 
     Covers signature shape only: names, order, annotations, defaults, and kinds.
-    The forwarding call is covered by ``test_positional_arguments_map_to_parameters``;
-    the duplicated docstring prose is not covered at all.
     """
     parent = inspect.signature(SimulationContext.__init__).parameters
     child = inspect.signature(InteractiveContext.__init__).parameters

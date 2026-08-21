@@ -125,10 +125,10 @@ class SimulationContext:
             top-level keys ``plugins``, ``components``, and ``configuration``.
             A value of None will build the simulation from the other arguments alone.
         components
-            Components to include in this simulation. A list is appended to the
-            components the specification declares while a dict or ``ConfigTree``
-            overrides the specification's ``components`` block. A value of None
-            will use the specification's components without change.
+            Components to include in addition to the specification's. A dict or
+            ``ConfigTree`` merges into the specification's ``components`` block
+            instead, replacing the keys it names. A value of None will use the
+            specification's components without change.
         configuration
             Values overriding the specification's ``configuration`` block. A value
             of None will use the specification's configuration without change.
