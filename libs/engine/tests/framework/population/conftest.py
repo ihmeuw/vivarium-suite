@@ -108,6 +108,46 @@ class TypedColumnCreator(Component):
         )
 
 
+class CrossFrameReader(Component):
+    """Read committed and staged simulants together through the public view API.
+
+    ``StagingRecorder`` reaches for the manager's read seam directly, which leaves the
+    ``get`` -> ``get_population`` -> ``__get_attributes`` chain that real components go
+    through unexercised during a creation pass. This drives that chain instead.
+    """
+
+    def __init__(
+        self,
+        attribute: str,
+        requires: list[str] | None = None,
+        include_untracked: bool | None = None,
+    ) -> None:
+        super().__init__()
+        self.attribute = attribute
+        self.requires = requires if requires is not None else []
+        self.include_untracked = include_untracked
+        self.reads: list[pd.Series[Any]] = []
+
+    def setup(self, builder: Builder) -> None:
+        self.population_manager: PopulationManager = builder.population._manager
+        builder.population.register_initializer(
+            initializer=self.read_across_frames,
+            columns=["cross_frame"],
+            required_resources=self.requires,
+        )
+
+    def read_across_frames(self, pop_data: SimulantData) -> None:
+        spanning = self.population_manager.get_population_index()
+        self.reads.append(
+            self.population_view.get(
+                spanning, self.attribute, include_untracked=self.include_untracked
+            ).copy()
+        )
+        self.population_view.initialize(
+            pd.Series(1, index=pop_data.index, name="cross_frame")
+        )
+
+
 class StagingObservation(NamedTuple):
     """What a ``StagingRecorder`` saw from inside a single creation pass."""
 

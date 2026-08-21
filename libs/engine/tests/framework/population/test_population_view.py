@@ -1160,6 +1160,10 @@ def _stage(
     creating_initial_population: bool = False,
 ) -> None:
     """Put the manager mid-creation-pass with ``index`` staged."""
+    if creating_initial_population:
+        # Nothing is committed until the initial population is, and the fixture's
+        # committed rows would otherwise share an index with the staged ones.
+        manager._private_columns = pd.DataFrame(manager._private_columns).iloc[:0]
     manager._staged_columns = pd.DataFrame(index=index)
     manager.creating_initial_population = creating_initial_population
     manager.adding_simulants = True

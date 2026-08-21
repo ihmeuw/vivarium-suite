@@ -1,3 +1,8 @@
+**5.7.0 - 08/21/26**
+
+- Stage new simulants in a separate frame and append them to the population once
+- Preserve existing simulants' values when an initializer's dtype differs from the column's
+
 **5.6.0 - 08/06/26**
 
 - Support pandas 3

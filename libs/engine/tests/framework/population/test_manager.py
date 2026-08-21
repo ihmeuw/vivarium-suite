@@ -11,6 +11,7 @@ from tests.framework.population.conftest import (
     CUBE_COL_NAMES,
     PIE_COL_NAMES,
     PIE_RECORDS,
+    CrossFrameReader,
     SimulantAdder,
     StagingRecorder,
     TypedColumnCreator,
@@ -595,6 +596,35 @@ class FloatThenIntCreator(OneTypedColumnCreator):
         )
 
 
+class FailingInitializer(Component):
+    """Stage a column and then raise, on one chosen creation pass.
+
+    Which pass fails is selectable because a mid-simulation failure has to let the
+    initial population be built first, while a first-pass failure must not.
+    """
+
+    ERROR_MESSAGE = "initializer failed on purpose"
+
+    def __init__(self, fail_on_pass: int = 2) -> None:
+        super().__init__()
+        self.fail_on_pass = fail_on_pass
+        self._passes = 0
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_initializer(
+            initializer=self.initialize_doomed, columns=["doomed"]
+        )
+
+    def initialize_doomed(self, pop_data: SimulantData) -> None:
+        self._passes += 1
+        # Stage values before raising so the failed pass has a partial frame to discard.
+        self.population_view.initialize(
+            pd.Series(list(pop_data.index), index=pop_data.index, name="doomed")
+        )
+        if self._passes == self.fail_on_pass:
+            raise ValueError(self.ERROR_MESSAGE)
+
+
 def _grow(*components: Component) -> InteractiveContext:
     """Build a simulation that adds ``ADDED_SIMULANTS`` simulants on its first step."""
     return InteractiveContext(
@@ -616,6 +646,11 @@ def _column(sim: InteractiveContext, column: str) -> pd.Series[Any]:
     values = sim._population.get_population([column], squeeze=True)
     assert isinstance(values, pd.Series)
     return values
+
+
+def _staged_values(index: pd.Index[int], column: str = "recorded") -> pd.Series[Any]:
+    """Build the values a ``StagingRecorder`` writes for ``index``."""
+    return pd.Series([i * 10 for i in index], index=index, name=column)
 
 
 def test_create_simulants_appends_staged_simulants_once() -> None:
@@ -723,7 +758,7 @@ def test_initializer_reads_column_created_earlier_in_the_same_pass() -> None:
     assert observation.read is not None
     pd.testing.assert_series_equal(
         observation.read["recorded_first"],
-        pd.Series([i * 10 for i in NEW_INDEX], index=NEW_INDEX, name="recorded_first"),
+        _staged_values(NEW_INDEX, "recorded_first"),
         check_index_type=False,
     )
 
@@ -775,7 +810,7 @@ def test_update_routes_write_to_the_frame_holding_its_simulants(target: str) -> 
     untouched = recorded.index.difference(written)
     pd.testing.assert_series_equal(
         recorded.loc[untouched],
-        pd.Series([i * 10 for i in untouched], index=untouched, name="recorded"),
+        _staged_values(untouched),
         check_index_type=False,
     )
 
@@ -811,6 +846,40 @@ def test_initialize_may_target_an_already_committed_simulant() -> None:
     pd.testing.assert_series_equal(after.loc[untouched], before.loc[untouched])
 
 
+def test_failed_mid_sim_addition_discards_the_staged_frame() -> None:
+    """A raising initializer leaves the population exactly as the pass found it."""
+    sim = _grow(ColumnCreator(), FailingInitializer())
+    before = _population(sim)
+
+    with pytest.raises(ValueError, match=FailingInitializer.ERROR_MESSAGE):
+        sim.step()
+
+    manager = sim._population
+    assert manager._staged_columns is None
+    assert not manager.adding_simulants
+    assert not manager.creating_initial_population
+    pd.testing.assert_frame_equal(_population(sim), before)
+
+
+def test_failed_initial_population_creation_leaves_manager_uninitialized() -> None:
+    """A first-pass failure commits nothing, so the population is still absent."""
+    sim = InteractiveContext(
+        components=[ColumnCreator(), FailingInitializer(fail_on_pass=1)],
+        configuration={"population": {"population_size": INITIAL_POP_SIZE}},
+        setup=False,
+    )
+
+    with pytest.raises(ValueError, match=FailingInitializer.ERROR_MESSAGE):
+        sim.setup()
+
+    manager = sim._population
+    assert manager._staged_columns is None
+    assert not manager.adding_simulants
+    assert not manager.creating_initial_population
+    with pytest.raises(PopulationError, match="Population has not been initialized."):
+        manager.private_columns
+
+
 def test_mid_sim_addition_matches_state_of_an_equally_sized_initial_population() -> None:
     """End-to-end: growing to N simulants yields the same state as starting with N."""
     grown = InteractiveContext(
@@ -831,3 +900,140 @@ def test_mid_sim_addition_matches_state_of_an_equally_sized_initial_population()
     )
 
     pd.testing.assert_frame_equal(_population(grown), _population(started_large))
+
+
+def test_initializer_reads_across_frames_through_the_population_view() -> None:
+    """A view read spanning committed and staged simulants serves both correctly."""
+    staged_first = StagingRecorder(name="first_recorder", column="recorded_first")
+    reader = CrossFrameReader(attribute="recorded_first", requires=["recorded_first"])
+    sim = _grow(staged_first, reader)
+    committed = _column(sim, "recorded_first")
+    reader.reads.clear()
+
+    sim.step()
+
+    (read,) = reader.reads
+    assert read.index.equals(pd.RangeIndex(0, INITIAL_POP_SIZE + ADDED_SIMULANTS))
+    pd.testing.assert_series_equal(
+        read.loc[committed.index], committed, check_index_type=False
+    )
+    pd.testing.assert_series_equal(
+        read.loc[NEW_INDEX], _staged_values(NEW_INDEX, "recorded_first")
+    )
+
+
+class TrackedQueryRegistrar(Component):
+    """Register a tracked query during setup, as a tracking component would."""
+
+    def __init__(self, query: str) -> None:
+        super().__init__()
+        self.query = query
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_tracked_query(self.query)
+
+
+# Excludes one committed simulant and one staged one, so a query applied to only
+# half the population would show up as an unfiltered row on the other side.
+TRACKED_QUERY = "recorded != 20 and recorded != 70"
+
+
+def test_tracked_query_is_suppressed_for_reads_during_initial_creation() -> None:
+    """The initial creation pass reads every new simulant, tracked query or not."""
+    reader = CrossFrameReader(attribute="recorded", requires=["recorded"])
+    sim = _grow(TrackedQueryRegistrar(TRACKED_QUERY), StagingRecorder(), reader)
+    assert sim._population.tracked_queries == [TRACKED_QUERY]
+
+    (read,) = reader.reads
+    pd.testing.assert_series_equal(
+        read, _staged_values(pd.RangeIndex(0, INITIAL_POP_SIZE)), check_index_type=False
+    )
+
+
+def test_tracked_query_filters_a_creation_pass_read_across_both_frames() -> None:
+    """A read that asks for the tracked query has it applied to both frames."""
+    reader = CrossFrameReader(
+        attribute="recorded", requires=["recorded"], include_untracked=False
+    )
+    sim = _grow(TrackedQueryRegistrar(TRACKED_QUERY), StagingRecorder(), reader)
+
+    sim.step()
+
+    pd.testing.assert_series_equal(
+        reader.reads[-1],
+        _staged_values(pd.Index([0, 1, 3, 4, 5, 6, 8, 9])),
+        check_index_type=False,
+    )
+
+
+def test_mid_sim_addition_of_zero_simulants_changes_nothing() -> None:
+    """Creating zero simulants leaves the population exactly as it was."""
+    sim = InteractiveContext(
+        components=[ColumnCreator(), TypedColumnCreator(), SimulantAdder(count=0)],
+        configuration={"population": {"population_size": INITIAL_POP_SIZE}},
+        setup=True,
+    )
+    before = _population(sim)
+
+    sim.step()
+
+    after = _population(sim)
+    pd.testing.assert_frame_equal(after, before)
+    assert after.index.equals(pd.RangeIndex(0, INITIAL_POP_SIZE))
+    assert not after.isna().to_numpy().any()
+    assert sim._population._staged_columns is None
+
+
+def test_initial_population_of_zero_simulants_is_coherent() -> None:
+    """A zero-size initial population is an empty state table, not a broken one."""
+    typed = TypedColumnCreator()
+    sim = InteractiveContext(
+        components=[ColumnCreator(), typed],
+        configuration={"population": {"population_size": 0}},
+        setup=True,
+    )
+    populated = InteractiveContext(
+        components=[ColumnCreator(), TypedColumnCreator()],
+        configuration={"population": {"population_size": INITIAL_POP_SIZE}},
+        setup=True,
+    )
+
+    empty = _population(sim)
+    full = _population(populated)
+    assert empty.index.equals(pd.RangeIndex(0, 0))
+    assert set(empty.columns) == set(full.columns)
+    # Only the columns whose initializer returns a scalar keep their dtype here. One
+    # building its values by comprehension yields an empty list for an empty index,
+    # which pandas types as float64 whatever the values would have been.
+    typed_columns = typed.columns_created
+    pd.testing.assert_series_equal(empty[typed_columns].dtypes, full[typed_columns].dtypes)
+    assert sim._population._staged_columns is None
+
+
+def test_repeated_mid_sim_additions_keep_the_population_coherent() -> None:
+    """Successive additions each extend the population without damaging it."""
+    counts = [2, 3, 4]
+    sim = InteractiveContext(
+        components=[
+            ColumnCreator(),
+            TypedColumnCreator(),
+            *[
+                SimulantAdder(count=count, on_step=step)
+                for step, count in enumerate(counts, start=1)
+            ],
+        ],
+        configuration={"population": {"population_size": INITIAL_POP_SIZE}},
+        setup=True,
+    )
+    dtypes = _population(sim).dtypes
+    expected_size = INITIAL_POP_SIZE
+
+    for count in counts:
+        sim.step()
+
+        expected_size += count
+        pop = _population(sim)
+        assert pop.index.equals(pd.RangeIndex(0, expected_size))
+        assert not pop.isna().to_numpy().any()
+        assert pop.dtypes.equals(dtypes)
+        assert sim._population._staged_columns is None

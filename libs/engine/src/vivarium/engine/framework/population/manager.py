@@ -76,7 +76,7 @@ class PopulationManager(Manager):
         this dataframe will exist and all simulants will be represented by its index.
 
         While simulants are being added, the population spans two frames and this
-        property materializes their concatenation. Prefer :meth:`_read_frame` on any
+        property materializes their concatenation. Prefer ``_read_frame`` on any
         path that knows which simulants it wants; it serves the read from a single
         frame whenever the requested index sits in one.
         """
@@ -425,7 +425,8 @@ class PopulationManager(Manager):
         columns at all. Each initializer adds its columns to that frame, so every
         column arrives with the dtype its initializer produced rather than a dtype
         demoted by null padding. The staged frame is appended to the population once
-        every initializer has run.
+        every initializer has run. If an initializer raises, the staged frame is
+        discarded and the population is left exactly as it was before the call.
 
         Raises
         ------
@@ -436,6 +437,7 @@ class PopulationManager(Manager):
         population_configuration = (
             population_configuration if population_configuration else {}
         )
+        population_was_uninitialized = self._private_columns is None
         if self._private_columns is None:
             self.creating_initial_population = True
             self._private_columns = pd.DataFrame()
@@ -445,15 +447,24 @@ class PopulationManager(Manager):
         self._staged_columns = pd.DataFrame(index=index)
 
         self.adding_simulants = True
-        for initializer in self.resources.get_population_initializers():
-            initializer(
-                SimulantData(index, population_configuration, self.clock(), self.step_size())
-            )
-        self.creating_initial_population = False
-        self.adding_simulants = False
-
-        self._private_columns = pd.concat([self._private_columns, self._staged_columns])
-        self._staged_columns = None
+        try:
+            for initializer in self.resources.get_population_initializers():
+                initializer(
+                    SimulantData(
+                        index, population_configuration, self.clock(), self.step_size()
+                    )
+                )
+            self._private_columns = pd.concat([self._private_columns, self._staged_columns])
+        except BaseException:
+            # Leaving the empty frame behind would report the population as
+            # initialized-but-empty rather than uninitialized.
+            if population_was_uninitialized:
+                self._private_columns = None
+            raise
+        finally:
+            self.creating_initial_population = False
+            self.adding_simulants = False
+            self._staged_columns = None
 
         self._check_all_registered_columns_created()
 
@@ -924,7 +935,7 @@ class PopulationManager(Manager):
             for column in frame_update.columns:
                 values = frame_update[column]
                 if column in frame.columns and len(values) != len(frame):
-                    values = pd.concat([values, frame[column].drop(values.index)]).reindex(
-                        frame.index
-                    )
+                    # Rows the update omits keep the value they already have.
+                    untouched = frame[column].drop(values.index)
+                    values = pd.concat([values, untouched]).reindex(frame.index)
                 frame[column] = values

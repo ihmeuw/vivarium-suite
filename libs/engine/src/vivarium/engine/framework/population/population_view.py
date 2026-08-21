@@ -36,8 +36,8 @@ class PopulationView:
     PopulationView can read any column, it can only write those columns that the
     component it is attached to created (i.e. that component's private columns).
 
-    Attempts to update non-existent columns are ignored except during
-    simulant creation when new columns are allowed to be created.
+    Attempts to update columns the view does not own raise a PopulationError,
+    except during simulant creation, when new columns may be created.
 
     """
 
@@ -341,10 +341,11 @@ class PopulationView:
         Notes
         -----
         The data is written straight into the frame staging the new simulants, so
-        each column arrives with the dtype this initializer produced. Unlike
-        :meth:`update`, this never reads or rewrites the values of simulants already
-        in the population, and so costs the size of the data rather than the size of
-        the population.
+        each column arrives with the dtype this initializer produced and the write
+        costs the size of the data rather than the size of the population. Data
+        targeting a simulant already in the population is the exception: that write
+        goes to the population itself and rebuilds the column over every simulant,
+        just as :meth:`update` does.
         """
         if self._component is None:
             raise PopulationError(
