@@ -109,6 +109,7 @@ def test_disability_accumulation(
         ],
         configuration=base_config,
         plugin_configuration=base_plugins,
+        include_observers=True,
     )
 
     # Take two time steps (not just one in order to ensure metrics are updating properly)
@@ -284,6 +285,7 @@ def test_category_exclusions(
         ],
         configuration=base_config,
         plugin_configuration=base_plugins,
+        include_observers=True,
     )
 
     simulation.step()
