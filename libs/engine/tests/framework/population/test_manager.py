@@ -2,11 +2,19 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 
-from tests.framework.population.conftest import CUBE_COL_NAMES, PIE_COL_NAMES, PIE_RECORDS
+from tests.framework.population.conftest import (
+    CUBE_COL_NAMES,
+    PIE_COL_NAMES,
+    PIE_RECORDS,
+    SimulantAdder,
+    StagingRecorder,
+    TypedColumnCreator,
+)
 from tests.framework.population.helpers import (
     assert_squeezing_multi_level_multi_outer,
     assert_squeezing_multi_level_single_outer_multi_inner,
@@ -537,3 +545,289 @@ def test_register_tracked_query(mocker: MockerFixture) -> None:
     mgr.register_tracked_query("foo == 'bar'")
     mgr.logger.warning.assert_called_once()  # type: ignore[attr-defined]
     assert mgr.tracked_queries == ["foo == 'bar'", "cat != dog"]
+
+
+##############################
+# Staging new simulants      #
+##############################
+
+INITIAL_POP_SIZE = 6
+ADDED_SIMULANTS = 4
+NEW_INDEX = pd.RangeIndex(INITIAL_POP_SIZE, INITIAL_POP_SIZE + ADDED_SIMULANTS)
+SENTINEL = -999
+
+TYPED_COLUMN_CASES = [
+    pytest.param("a_bool", True, np.dtype(bool), id="bool"),
+    pytest.param("an_int", 7, np.dtype("int64"), id="int64"),
+    pytest.param("a_float", 1.5, np.dtype("float64"), id="float64"),
+    pytest.param("a_string", "spam", np.dtype(object), id="object"),
+    # pandas reads second resolution out of a date-only Timestamp, so the unit is
+    # pinned here to keep the dtype under test unambiguous.
+    pytest.param(
+        "a_datetime",
+        pd.Timestamp("2020-01-01").as_unit("ns"),
+        np.dtype("datetime64[ns]"),
+        id="datetime64",
+    ),
+]
+
+
+class OneTypedColumnCreator(TypedColumnCreator):
+    """Create a single typed column, so one dtype at a time can be exercised."""
+
+    def __init__(self, column: str, value: Any) -> None:
+        super().__init__()
+        self.COLUMNS = {column: value}
+
+
+class FloatThenIntCreator(OneTypedColumnCreator):
+    """Initialize a float column, then hand it int values on every later pass."""
+
+    def __init__(self) -> None:
+        super().__init__("a_float", 1.5)
+        self._passes = 0
+
+    def initialize_columns(self, pop_data: SimulantData) -> None:
+        self._passes += 1
+        value = 1.5 if self._passes == 1 else 3
+        self.population_view.initialize(
+            pd.Series(value, index=pop_data.index, name="a_float")
+        )
+
+
+def _grow(*components: Component) -> InteractiveContext:
+    """Build a simulation that adds ``ADDED_SIMULANTS`` simulants on its first step."""
+    return InteractiveContext(
+        components=[*components, SimulantAdder(count=ADDED_SIMULANTS)],
+        configuration={"population": {"population_size": INITIAL_POP_SIZE}},
+        setup=True,
+    )
+
+
+def _population(sim: InteractiveContext) -> pd.DataFrame:
+    """Read a simulation's whole population state table."""
+    pop = sim._population.get_population("all")
+    assert isinstance(pop, pd.DataFrame)
+    return pop
+
+
+def _column(sim: InteractiveContext, column: str) -> pd.Series[Any]:
+    """Read one column of a simulation's population state table."""
+    values = sim._population.get_population([column], squeeze=True)
+    assert isinstance(values, pd.Series)
+    return values
+
+
+def test_create_simulants_appends_staged_simulants_once() -> None:
+    """A creation pass adds every new row to the population in a single append."""
+    first = StagingRecorder(name="first_recorder", column="recorded_first")
+    second = StagingRecorder(
+        name="second_recorder", column="recorded_second", requires=["recorded_first"]
+    )
+    sim = _grow(first, second)
+    committed = sim._population.get_population_index()
+    assert sim._population._staged_columns is None
+    for recorder in (first, second):
+        recorder.observations.clear()
+
+    sim.step()
+
+    # A partly grown population at either initializer would mean the new rows were
+    # appended more than once.
+    for recorder in (first, second):
+        (observation,) = recorder.observations
+        assert observation.committed_index.equals(committed)
+
+    assert sim._population._staged_columns is None
+    grown = pd.DataFrame(sim._population.private_columns)
+    assert grown.index.equals(pd.RangeIndex(0, INITIAL_POP_SIZE + ADDED_SIMULANTS))
+    assert not grown.index.has_duplicates
+    assert not grown.isna().to_numpy().any()
+
+
+def test_mid_sim_addition_leaves_committed_rows_untouched() -> None:
+    """Adding simulants mid-simulation does not alter existing simulants' values."""
+    sim = _grow(ColumnCreator(), TypedColumnCreator())
+    before = _population(sim)
+
+    sim.step()
+
+    after = _population(sim)
+    assert len(after) == len(before) + ADDED_SIMULANTS
+    pd.testing.assert_frame_equal(after.loc[before.index], before)
+
+
+@pytest.mark.parametrize("column, value, expected_dtype", TYPED_COLUMN_CASES)
+def test_mid_sim_addition_preserves_committed_dtypes(
+    column: str, value: Any, expected_dtype: np.dtype[Any]
+) -> None:
+    """A column's dtype survives a mid-simulation addition for every dtype we support."""
+    sim = _grow(OneTypedColumnCreator(column, value))
+    committed = _column(sim, column)
+    assert committed.dtype == expected_dtype
+
+    sim.step()
+
+    grown = _column(sim, column)
+    assert len(grown) == INITIAL_POP_SIZE + ADDED_SIMULANTS
+    assert grown.dtype == expected_dtype
+    assert (grown == value).all()
+
+
+def test_committed_float_column_survives_int_initializer() -> None:
+    """An int-typed initializer no longer truncates a committed float column."""
+    sim = _grow(FloatThenIntCreator())
+    committed = _column(sim, "a_float")
+    assert committed.dtype == np.dtype("float64")
+    assert (committed == 1.5).all()
+
+    sim.step()
+
+    grown = _column(sim, "a_float")
+    assert grown.dtype == np.dtype("float64")
+    pd.testing.assert_series_equal(grown.loc[committed.index], committed)
+    assert (grown.loc[NEW_INDEX] == 3.0).all()
+
+
+def test_get_population_index_includes_staged_simulants() -> None:
+    """During initialization the population index covers committed and new simulants."""
+    recorder = StagingRecorder()
+    sim = _grow(recorder)
+    committed = sim._population.get_population_index()
+    recorder.observations.clear()
+
+    sim.step()
+
+    (observation,) = recorder.observations
+    assert observation.committed_index.equals(committed)
+    assert observation.population_index.equals(
+        pd.RangeIndex(0, INITIAL_POP_SIZE + ADDED_SIMULANTS)
+    )
+
+
+def test_initializer_reads_column_created_earlier_in_the_same_pass() -> None:
+    """An initializer sees the values a preceding initializer staged."""
+    first = StagingRecorder(name="first_recorder", column="recorded_first")
+    second = StagingRecorder(
+        name="second_recorder",
+        column="recorded_second",
+        requires=["recorded_first"],
+        reads=["recorded_first"],
+    )
+    sim = _grow(first, second)
+    second.observations.clear()
+
+    sim.step()
+
+    (observation,) = second.observations
+    assert observation.read is not None
+    pd.testing.assert_series_equal(
+        observation.read["recorded_first"],
+        pd.Series([i * 10 for i in NEW_INDEX], index=NEW_INDEX, name="recorded_first"),
+        check_index_type=False,
+    )
+
+
+def test_read_of_uninitialized_private_column_yields_null() -> None:
+    """A column whose initializer has not run yet reads as null, not an error."""
+    first = StagingRecorder(
+        name="first_recorder", column="recorded_first", reads=["recorded_second"]
+    )
+    second = StagingRecorder(
+        name="second_recorder", column="recorded_second", requires=["recorded_first"]
+    )
+    sim = _grow(first, second)
+
+    sim.step()
+
+    # Both the initial creation pass and the mid-simulation one.
+    assert len(first.observations) == 2
+    for observation in first.observations:
+        read = observation.read
+        assert read is not None and not read.empty
+        assert read["recorded_second"].isna().all()
+
+
+@pytest.mark.parametrize("target", ["staged", "committed", "spanning"])
+def test_update_routes_write_to_the_frame_holding_its_simulants(target: str) -> None:
+    """A write lands in the staged frame or the population per its index."""
+    committed_target = [0, 1]
+    targets: dict[str, pd.Index[int]] = {
+        "staged": NEW_INDEX,
+        "committed": pd.Index(committed_target),
+        "spanning": pd.Index([*committed_target, *NEW_INDEX]),
+    }
+
+    def write_sentinel(manager: PopulationManager, pop_data: SimulantData) -> None:
+        # Only the mid-simulation pass has a population to write to alongside the
+        # staged frame.
+        if manager.creating_initial_population:
+            return
+        manager.update(pd.DataFrame({"recorded": SENTINEL}, index=targets[target]))
+
+    sim = _grow(StagingRecorder(on_initialized=write_sentinel))
+
+    sim.step()
+
+    recorded = _column(sim, "recorded")
+    written = targets[target]
+    assert (recorded.loc[written] == SENTINEL).all()
+    untouched = recorded.index.difference(written)
+    pd.testing.assert_series_equal(
+        recorded.loc[untouched],
+        pd.Series([i * 10 for i in untouched], index=untouched, name="recorded"),
+        check_index_type=False,
+    )
+
+
+def test_initialize_may_target_an_already_committed_simulant() -> None:
+    """An initializer can still write to a simulant already in the population."""
+    committed_target = 0
+
+    class WideningInitializer(Component):
+        def setup(self, builder: Builder) -> None:
+            self.population_manager: PopulationManager = builder.population._manager
+            builder.population.register_initializer(
+                initializer=self.initialize_widened, columns=["widened"]
+            )
+
+        def initialize_widened(self, pop_data: SimulantData) -> None:
+            if self.population_manager.creating_initial_population:
+                values = pd.Series(list(pop_data.index), index=pop_data.index, name="widened")
+            else:
+                index = pd.Index([committed_target, *pop_data.index])
+                values = pd.Series(SENTINEL, index=index, name="widened")
+            self.population_view.initialize(values)
+
+    sim = _grow(WideningInitializer())
+    before = _column(sim, "widened")
+
+    sim.step()
+
+    after = _column(sim, "widened")
+    assert after.loc[committed_target] == SENTINEL
+    assert (after.loc[NEW_INDEX] == SENTINEL).all()
+    untouched = before.index.drop(committed_target)
+    pd.testing.assert_series_equal(after.loc[untouched], before.loc[untouched])
+
+
+def test_mid_sim_addition_matches_state_of_an_equally_sized_initial_population() -> None:
+    """End-to-end: growing to N simulants yields the same state as starting with N."""
+    grown = InteractiveContext(
+        components=[
+            ColumnCreator(),
+            TypedColumnCreator(),
+            SimulantAdder(count=INITIAL_POP_SIZE),
+        ],
+        configuration={"population": {"population_size": INITIAL_POP_SIZE}},
+        setup=True,
+    )
+    grown.step()
+
+    started_large = InteractiveContext(
+        components=[ColumnCreator(), TypedColumnCreator()],
+        configuration={"population": {"population_size": 2 * INITIAL_POP_SIZE}},
+        setup=True,
+    )
+
+    pd.testing.assert_frame_equal(_population(grown), _population(started_large))

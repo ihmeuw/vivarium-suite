@@ -709,28 +709,21 @@ def test__coerce_update_result_unnamed_series_multi_col_raises() -> None:
 def test__update_column_and_ensure_dtype() -> None:
     random.seed("test__update_column_and_ensure_dtype")
 
-    for adding_simulants in [True, False]:
-        # Test full and partial column updates
-        for update_index in [PIE_DF.index, PIE_DF.index[::2]]:
-            for col in PIE_DF:
-                update = pd.Series(
-                    random.sample(PIE_DF[col].tolist(), k=len(update_index)),
-                    index=update_index,
-                    name=col,
-                )
-                existing = PIE_DF[col].copy()
+    # Test full and partial column updates
+    for update_index in [PIE_DF.index, PIE_DF.index[::2]]:
+        for col in PIE_DF:
+            update = pd.Series(
+                random.sample(PIE_DF[col].tolist(), k=len(update_index)),
+                index=update_index,
+                name=col,
+            )
+            existing = PIE_DF[col].copy()
 
-                new_values = PopulationView._update_column_and_ensure_dtype(
-                    update,
-                    existing,
-                    adding_simulants,
-                )
-                assert new_values.loc[update_index].astype(update.dtype).equals(update)
-                non_update_index = existing.index.difference(update_index)
-                if not non_update_index.empty:
-                    assert new_values.loc[non_update_index].equals(
-                        existing.loc[non_update_index]
-                    )
+            new_values = PopulationView._update_column_and_ensure_dtype(update, existing)
+            assert new_values.loc[update_index].astype(update.dtype).equals(update)
+            non_update_index = existing.index.difference(update_index)
+            if not non_update_index.empty:
+                assert new_values.loc[non_update_index].equals(existing.loc[non_update_index])
 
 
 def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
@@ -743,29 +736,13 @@ def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
         index=update_index,
         name=col,
     )
-    existing = PIE_DF[col].copy()
-    # object mimics a column without a natural null type that went object
-    # while the population is grown (see the FIXME above the implementation)
-    existing = existing.astype(object)
+    existing = PIE_DF[col].astype(object)
 
-    # Should work fine when we're adding simulants
-    new_values = PopulationView._update_column_and_ensure_dtype(
-        update,
-        existing,
-        adding_simulants=True,
-    )
-    assert new_values.loc[update_index].equals(update)
-
-    # And be bad news otherwise.
     with pytest.raises(
         PopulationError,
         match="A component is corrupting the population table by modifying the dtype",
     ):
-        PopulationView._update_column_and_ensure_dtype(
-            update,
-            existing,
-            adding_simulants=False,
-        )
+        PopulationView._update_column_and_ensure_dtype(update, existing)
 
 
 @pytest.mark.parametrize(
@@ -791,11 +768,7 @@ def test__update_column_and_ensure_dtype_compatible_dtypes(
     if update.dtype == existing.dtype:
         pytest.skip("dtypes coincide on this pandas version; nothing to check")
 
-    new_values = PopulationView._update_column_and_ensure_dtype(
-        update,
-        existing,
-        adding_simulants=False,
-    )
+    new_values = PopulationView._update_column_and_ensure_dtype(update, existing)
     assert new_values.dtype == existing.dtype
     assert new_values.equals(update.astype(existing.dtype))
 
@@ -809,11 +782,7 @@ def test__update_column_and_ensure_dtype_incompatible_still_raises() -> None:
         PopulationError,
         match="A component is corrupting the population table by modifying the dtype",
     ):
-        PopulationView._update_column_and_ensure_dtype(
-            update,
-            existing,
-            adding_simulants=False,
-        )
+        PopulationView._update_column_and_ensure_dtype(update, existing)
 
 
 #################################
@@ -1174,3 +1143,101 @@ def _combine_queries(
         combined_query_parts.append(f"{query}")
     combined_query = " and ".join(combined_query_parts)
     return combined_query
+
+
+##################################
+# PopulationView.initialize      #
+# staging behavior (MIC-7428)    #
+##################################
+
+
+STAGED_INDEX = pd.RangeIndex(len(PIE_RECORDS), len(PIE_RECORDS) + 3)
+
+
+def _stage(
+    manager: PopulationManager,
+    index: pd.Index[int] = STAGED_INDEX,
+    creating_initial_population: bool = False,
+) -> None:
+    """Put the manager mid-creation-pass with ``index`` staged."""
+    manager._staged_columns = pd.DataFrame(index=index)
+    manager.creating_initial_population = creating_initial_population
+    manager.adding_simulants = True
+
+
+def test_initialize_writes_only_the_staged_rows(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """initialize() writes the new simulants without rewriting the whole column."""
+    committed = pd.DataFrame(pies_and_cubes_pop_mgr._private_columns).copy()
+    _stage(pies_and_cubes_pop_mgr)
+    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
+
+    pv.initialize(pd.DataFrame({"pie": "apple", "pi": 3.0}, index=STAGED_INDEX))
+
+    pd.testing.assert_frame_equal(
+        pd.DataFrame(pies_and_cubes_pop_mgr._private_columns), committed
+    )
+    staged = pies_and_cubes_pop_mgr._staged_columns
+    assert staged is not None
+    assert list(staged.columns) == PIE_COL_NAMES
+    assert staged.index.equals(STAGED_INDEX)
+    assert (staged["pie"] == "apple").all()
+    assert (staged["pi"] == 3.0).all()
+
+
+@pytest.mark.parametrize(
+    "values, expected_dtype",
+    [
+        pytest.param([True, False, True], np.dtype(bool), id="bool"),
+        pytest.param([1, 2, 3], np.dtype("int64"), id="int64"),
+        pytest.param([1.5, 2.5, 3.5], np.dtype("float64"), id="float64"),
+        pytest.param(["a", "b", "c"], np.dtype(object), id="object"),
+        pytest.param(
+            pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03"]),
+            np.dtype("datetime64[ns]"),
+            id="datetime64",
+        ),
+    ],
+)
+def test_initialize_gives_each_column_its_initializers_dtype(
+    values: list[Any] | pd.DatetimeIndex,
+    expected_dtype: np.dtype[Any],
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """A staged column holds exactly the dtype its initializer produced."""
+    _stage(pies_and_cubes_pop_mgr)
+    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
+
+    # 'pi' is a float column in the population, so a staged column that took the
+    # committed dtype instead of the initializer's would show up here.
+    pv.initialize(pd.Series(values, index=STAGED_INDEX, name="pi"))
+
+    staged = pies_and_cubes_pop_mgr._staged_columns
+    assert staged is not None
+    assert staged["pi"].dtype == expected_dtype
+
+
+def test_initialize_still_requires_covering_every_new_simulant_at_creation(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """Initial population creation still rejects an initializer that skips simulants."""
+    _stage(pies_and_cubes_pop_mgr, index=PIE_DF.index, creating_initial_population=True)
+    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
+
+    with pytest.raises(
+        PopulationError, match="Component 'pie_component' is missing updates for"
+    ):
+        pv.initialize(PIE_DF.iloc[::2])
+
+
+def test_initialize_still_rejects_simulants_outside_the_population(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """An index with no matching simulant anywhere still raises."""
+    _stage(pies_and_cubes_pop_mgr)
+    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
+    strangers = pd.DataFrame({"pie": "apple", "pi": 3.0}, index=STAGED_INDEX + 1000)
+
+    with pytest.raises(PopulationError, match="no matching index"):
+        pv.initialize(strangers)

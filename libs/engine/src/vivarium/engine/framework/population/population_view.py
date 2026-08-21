@@ -337,6 +337,14 @@ class PopulationView:
             - If the data is missing simulants during initial population creation.
         TypeError
             If the data is not a Series or DataFrame.
+
+        Notes
+        -----
+        The data is written straight into the frame staging the new simulants, so
+        each column arrives with the dtype this initializer produced. Unlike
+        :meth:`update`, this never reads or rewrites the values of simulants already
+        in the population, and so costs the size of the data rather than the size of
+        the population.
         """
         if self._component is None:
             raise PopulationError(
@@ -349,9 +357,9 @@ class PopulationView:
             )
 
         data_df = self._coerce_init_data(data, self.private_columns)
-        existing = pd.DataFrame(self._manager.get_private_columns(self._component))
+        population_index = self._manager.get_population_index()
 
-        unknown_simulants = len(data_df.index.difference(existing.index))
+        unknown_simulants = len(data_df.index.difference(population_index))
         if unknown_simulants:
             raise PopulationError(
                 "Population updates must have an index that is a subset of the current "
@@ -360,26 +368,17 @@ class PopulationView:
             )
 
         if self._manager.creating_initial_population:
-            missing_pops = len(existing.index.difference(data_df.index))
+            missing_pops = len(population_index.difference(data_df.index))
             if missing_pops:
                 raise PopulationError(
                     "Components must initialize all simulants during population "
                     f"initialization. Component '{self._component.name}' is missing "
                     f"updates for {missing_pops} simulants."
                 )
-            new_columns = list(set(data_df.columns).difference(existing.columns))
-            self._manager.update(data_df[new_columns])
-        elif not data_df.empty:
-            update_columns = list(set(data_df.columns).intersection(existing.columns))
-            updated_cols_list = []
-            for column in update_columns:
-                column_update = self._update_column_and_ensure_dtype(
-                    data_df[column],
-                    existing[column],
-                    adding_simulants=True,
-                )
-                updated_cols_list.append(column_update)
-            self._manager.update(pd.concat(updated_cols_list, axis=1))
+        elif data_df.empty:
+            return
+
+        self._manager.update(data_df)
 
     @overload
     def update(
@@ -452,7 +451,6 @@ class PopulationView:
                 column_update = self._update_column_and_ensure_dtype(
                     result_df[column],
                     existing_full[column],
-                    adding_simulants=self._manager.adding_simulants,
                 )
                 updated_cols_list.append(column_update)
             self._manager.update(pd.concat(updated_cols_list, axis=1))
@@ -626,14 +624,13 @@ class PopulationView:
     def _update_column_and_ensure_dtype(
         update: pd.Series[Any],
         existing: pd.Series[Any],
-        adding_simulants: bool,
     ) -> pd.Series[Any]:
         """Builds the updated private column with an appropriate dtype.
 
         This method updates any existing private column values with their corresponding
         new values from the update; existing values not in the update are preserved.
         It also ensures that the resulting column has a dtype consistent with the
-        original column (unless new simulants are being added).
+        original column.
 
         Parameters
         ----------
@@ -641,34 +638,21 @@ class PopulationView:
             The new column values for a subset of the existing index.
         existing
             The existing column values for all simulants.
-        adding_simulants
-            Whether new simulants are currently being initialized.
 
         Returns
         -------
             The column with the provided update applied
+
+        Raises
+        ------
+        PopulationError
+            If the update's dtype cannot represent the same data as the column's.
         """
-        # FIXME: This code does not work as described. I'm leaving it here because writing
-        #  real dtype checking code is a pain and we never seem to hit the actual edge cases.
-        #  I've also seen this error, though I don't have a reproducible and useful example.
-        #  I'm reasonably sure what's really being accounted for here is non-nullable columns
-        #  that temporarily have null values introduced in the space between rows being
-        #  added to the private data and initializers filling them with their first values.
-        #  That means the space of dtype casting issues is actually quite small. What should
-        #  actually happen in the long term is to separate the population creation entirely
-        #  from the mutation of existing state. I.e. there's not an actual reason we need
-        #  to do all these sequential operations on a single underlying dataframe during
-        #  the creation of new simulants besides the fact that it's the existing
-        #  implementation.
         update_values = update.array.copy()
         new_values = existing.array.copy()
         update_index_positional = existing.index.get_indexer(update.index)  # type: ignore [no-untyped-call]
 
-        unmatched_dtypes = new_values.dtype != update_values.dtype
-        if unmatched_dtypes and not adding_simulants:
-            # Mismatches also arise while the population is being grown, because
-            # extending the index forces columns that don't have a natural null
-            # type to become 'object' — hence the adding_simulants exemption.
+        if new_values.dtype != update_values.dtype:
             if not PopulationView._dtypes_compatible(update_values.dtype, new_values.dtype):
                 raise PopulationError(
                     "A component is corrupting the population table by modifying the dtype of "
