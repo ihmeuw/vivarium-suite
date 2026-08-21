@@ -1,3 +1,7 @@
+**6.5.1 - 08/24/26**
+
+- Pass ``include_observers=True`` to ``InteractiveContext`` in the results test suite
+
 **6.5.0 - 08/06/26**
 
 - Support pandas 3
