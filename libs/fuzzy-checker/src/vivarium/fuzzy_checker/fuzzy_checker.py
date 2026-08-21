@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Collection
 from functools import cache
 from itertools import chain, combinations
 from pathlib import Path
@@ -11,9 +12,14 @@ import numpy as np
 import pandas as pd
 import scipy.stats
 from loguru import logger
+from scipy.special import gammaln
 from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_frozen
 
-from vivarium.fuzzy_checker.data_structures import TargetIntervalConfig, TestResult
+from vivarium.fuzzy_checker.data_structures import (
+    MeanTestResult,
+    TargetIntervalConfig,
+    TestResult,
+)
 
 
 class FuzzyChecker:
@@ -50,6 +56,7 @@ class FuzzyChecker:
 
     def __init__(self) -> None:
         self.proportion_test_diagnostics: list[TestResult] = []
+        self.mean_test_diagnostics: list[MeanTestResult] = []
 
     def assert_proportion(
         self,
@@ -691,6 +698,338 @@ class FuzzyChecker:
             # We return an arbitrarily large penalty to ensure this is never selected as the minimum.
             return float("inf")
 
+    def assert_mean(
+        self,
+        observed_values: Collection[float] | None = None,
+        target_mean: tuple[float, float] | float = 0.0,
+        *,
+        observed_zeroth_moment: int | None = None,
+        observed_first_moment: float | None = None,
+        observed_second_moment: float | None = None,
+        fail_bayes_factor_cutoff: float = 100.0,
+        inconclusive_bayes_factor_cutoff: float = 0.1,
+        bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
+        alpha_prior: float = 2.0,
+        beta_prior: float | None = None,
+        name: str = "",
+        name_additional: str = "",
+    ) -> None:
+        """Assert that observed continuous values came from a distribution with a target mean.
+
+        Perform a Bayesian hypothesis test comparing how likely the observed data
+        is under two scenarios -- one where the simulation is working as intended
+        (target mean) and one where something is wrong (bug/issue mean). Raise an
+        AssertionError if the test decisively favors the bug/issue scenario and
+        warn if the test is not conclusive.
+
+        For more details, see:
+        https://vivarium-research.readthedocs.io/en/latest/model_design/vivarium_features/automated_v_and_v/index.html
+
+        Parameters
+        ----------
+        observed_values
+            The observed continuous values in the simulation. If omitted, all three
+            of observed_zeroth_moment, observed_first_moment, and
+            observed_second_moment must be supplied instead.
+        target_mean
+            What the mean *should* be if there is no bug/issue in the simulation,
+            as the number of observations goes to infinity. A tuple of two floats
+            is interpreted as the 2.5th and 97.5th percentiles of an uncertainty
+            interval; a single float is interpreted as an exact value.
+        observed_zeroth_moment
+            The count of observed values.
+        observed_first_moment
+            The sum of observed values.
+        observed_second_moment
+            The sum of squares of observed values.
+        fail_bayes_factor_cutoff
+            The Bayes factor above which the test is considered to favor a
+            bug/issue so strongly that the assertion should fail. The default of
+            100 is conventionally called a "decisive" result.
+        inconclusive_bayes_factor_cutoff
+            The Bayes factor above which the test is considered inconclusive, not
+            ruling out a bug/issue. Causes a warning.
+        bug_issue_distribution_mean_uncertainty_interval
+            What the mean might be if there is a bug/issue. Uses a very wide
+            interval by default.
+        alpha_prior
+            The alpha parameter of the inverse-gamma prior on the variance of the
+            continuous values. Defaults to 2, which is weakly informative.
+        beta_prior
+            The beta parameter of the inverse-gamma prior on the variance.
+            Defaults to ``(alpha_prior - 1) * data_scale**2`` where data_scale is
+            the target mean (if a point) or the midpoint of the target interval.
+        name
+            The name of the assertion, for use in messages and diagnostics.
+        name_additional
+            An optional additional name output in diagnostics but not warnings,
+            e.g. the timestep when the assertion happened.
+
+        Raises
+        ------
+        AssertionError
+            If the test decisively favors the bug/issue hypothesis.
+        """
+        test_mean = self.test_mean(
+            name=name,
+            name_additional=name_additional,
+            target_mean=target_mean,
+            observed_values=observed_values,
+            observed_zeroth_moment=observed_zeroth_moment,
+            observed_first_moment=observed_first_moment,
+            observed_second_moment=observed_second_moment,
+            bug_issue_distribution_mean_uncertainty_interval=bug_issue_distribution_mean_uncertainty_interval,
+            alpha_prior=alpha_prior,
+            beta_prior=beta_prior,
+            fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+        )
+
+        if test_mean.reject_null:
+            if test_mean.observed_mean < test_mean.target_lower_bound:
+                raise AssertionError(
+                    f"{name} value {test_mean.observed_mean:g} is significantly less "
+                    f"than expected, bayes factor = {test_mean.bayes_factor:g}"
+                )
+            else:
+                raise AssertionError(
+                    f"{name} value {test_mean.observed_mean:g} is significantly greater "
+                    f"than expected, bayes factor = {test_mean.bayes_factor:g}"
+                )
+
+        if fail_bayes_factor_cutoff > test_mean.bayes_factor > inconclusive_bayes_factor_cutoff:
+            logger.warning(f"Bayes factor for '{name}' is not conclusive.")
+
+        self.mean_test_diagnostics.append(test_mean)
+
+    def test_mean(
+        self,
+        name: str = "",
+        name_additional: str = "",
+        target_mean: tuple[float, float] | float = 0.0,
+        observed_values: Collection[float] | None = None,
+        observed_zeroth_moment: int | None = None,
+        observed_first_moment: float | None = None,
+        observed_second_moment: float | None = None,
+        bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
+        alpha_prior: float = 2.0,
+        beta_prior: float | None = None,
+        fail_bayes_factor_cutoff: float = 100.0,
+    ) -> MeanTestResult:
+        """Run the Bayesian hypothesis test for one observed mean and return its result.
+
+        Parameters are as described in :meth:`assert_mean`.
+        """
+        if isinstance(target_mean, tuple):
+            target_lower_bound, target_upper_bound = target_mean
+        else:
+            target_lower_bound = target_upper_bound = target_mean
+
+        assert (
+            target_upper_bound >= target_lower_bound
+        ), f"The lower bound of the V&V target ({target_lower_bound}) cannot be greater than the upper bound ({target_upper_bound})"
+
+        assert (
+            (observed_zeroth_moment is None)
+            == (observed_first_moment is None)
+            == (observed_second_moment is None)
+        ), "Either all three moments or none of them must be supplied"
+        assert (observed_first_moment is None) != (
+            observed_values is None
+        ), "Exactly one of observed_values or the three moments must be supplied"
+        if observed_values is not None:
+            values = np.asarray(observed_values, dtype=float)
+            observed_zeroth_moment = len(values)
+            observed_first_moment = float(np.sum(values))
+            observed_second_moment = float(np.sum(values**2))
+
+        assert (
+            observed_zeroth_moment is not None
+            and observed_first_moment is not None
+            and observed_second_moment is not None
+        )
+
+        data_scale = (target_lower_bound + target_upper_bound) / 2
+        if beta_prior is None:
+            # A weakly informative prior for the variance, using the target mean as
+            # a priori information about the expected scale of the data.
+            # https://chatgpt.com/share/68b768f5-214c-8005-8d4c-1b12c6c4f2d0
+            beta_prior = (alpha_prior - 1) * data_scale**2
+
+        if bug_issue_distribution_mean_uncertainty_interval is None:
+            # With the default alpha and beta priors, this recovers the default
+            # lambda prior suggested in the link above.
+            bug_issue_distribution_mean_uncertainty_interval = (
+                -62.0 * data_scale,
+                62.0 * data_scale,
+            )
+
+        bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+            bug_issue_distribution_mean_uncertainty_interval,
+            observed_zeroth_moment,
+            observed_first_moment,
+            observed_second_moment,
+            alpha_prior=alpha_prior,
+            beta_prior=beta_prior,
+        )
+
+        no_bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+            target_mean,
+            observed_zeroth_moment,
+            observed_first_moment,
+            observed_second_moment,
+            alpha_prior=alpha_prior,
+            beta_prior=beta_prior,
+        )
+
+        with np.errstate(under="ignore", over="ignore"):
+            bayes_factor = float(
+                np.exp(bug_issue_log_likelihood - no_bug_issue_log_likelihood)
+            )
+
+        observed_mean = observed_first_moment / observed_zeroth_moment
+        observed_variance = (
+            observed_second_moment / observed_zeroth_moment - observed_mean**2
+        )
+        observed_std = float(np.sqrt(observed_variance))
+        reject_null = bayes_factor > fail_bayes_factor_cutoff
+
+        return MeanTestResult(
+            name=name,
+            name_additional=name_additional,
+            observed_mean=observed_mean,
+            observed_std=observed_std,
+            observed_count=observed_zeroth_moment,
+            target_lower_bound=target_lower_bound,
+            target_upper_bound=target_upper_bound,
+            bayes_factor=bayes_factor,
+            reject_null=reject_null,
+        )
+
+    def _compute_continuous_log_likelihood(
+        self,
+        target_mean: float | tuple[float, float],
+        observed_zeroth_moment: int,
+        observed_first_moment: float,
+        observed_second_moment: float,
+        alpha_prior: float,
+        beta_prior: float,
+    ) -> float:
+        """Return the log marginal likelihood of the data under a fixed or uncertain mean."""
+        if isinstance(target_mean, tuple):
+            assert len(target_mean) == 2
+            prior_mu_center, lambda_prior = self._compute_parameters_for_marginal_mu_interval(
+                target_mean[0], target_mean[1], alpha_prior, beta_prior
+            )
+
+            return self._log_likelihood_normal_inverse_gamma(
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                mu0=prior_mu_center,
+                lambda0=lambda_prior,
+                alpha0=alpha_prior,
+                beta0=beta_prior,
+            )
+        else:
+            return self._log_likelihood_normal_inverse_gamma_fixed_mean(
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                mu_star=target_mean,
+                alpha0=alpha_prior,
+                beta0=beta_prior,
+            )
+
+    def _log_likelihood_normal_inverse_gamma(
+        self,
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        mu0: float,
+        lambda0: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
+        """Return the log marginal likelihood under the free-mean model.
+
+        The model is the standard normal-inverse-gamma conjugate family:
+        ``y_i ~ N(mu, sigma^2)``, ``mu | sigma^2 ~ N(mu0, sigma^2/lambda0)``,
+        ``sigma^2 ~ Inv-Gamma(alpha0, beta0)``.
+        """
+        n = zeroth_moment
+        ybar = first_moment / zeroth_moment
+        S = second_moment - 2 * ybar * first_moment + zeroth_moment * (ybar**2)
+
+        lambda_n = lambda0 + n
+        alpha_n = alpha0 + n / 2.0
+        beta_n = beta0 + 0.5 * (S + (lambda0 * n / lambda_n) * (ybar - mu0) ** 2)
+
+        return float(
+            -0.5 * n * np.log(2.0 * np.pi)
+            + 0.5 * (np.log(lambda0) - np.log(lambda_n))
+            + (gammaln(alpha_n) - gammaln(alpha0))
+            + alpha0 * np.log(beta0)
+            - alpha_n * np.log(beta_n)
+        )
+
+    def _log_likelihood_normal_inverse_gamma_fixed_mean(
+        self,
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        mu_star: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
+        """Return the log marginal likelihood under the fixed-mean model.
+
+        The model is ``y_i ~ N(mu_star, sigma^2)`` with
+        ``sigma^2 ~ Inv-Gamma(alpha0, beta0)``.
+        """
+        n = zeroth_moment
+        S_star = second_moment - 2 * mu_star * first_moment + zeroth_moment * (mu_star**2)
+
+        alpha_n = alpha0 + n / 2.0
+        beta_n = beta0 + 0.5 * S_star
+
+        return float(
+            -0.5 * n * np.log(2.0 * np.pi)
+            + (gammaln(alpha_n) - gammaln(alpha0))
+            + alpha0 * np.log(beta0)
+            - alpha_n * np.log(beta_n)
+        )
+
+    def _compute_parameters_for_marginal_mu_interval(
+        self,
+        desired_lower: float,
+        desired_upper: float,
+        alpha_prior: float,
+        beta_prior: float,
+    ) -> tuple[float, float]:
+        """Return (mu0, lambda0) whose marginal prior for mu has the desired 95% interval.
+
+        After integrating out sigma^2 under ``Inv-Gamma(alpha_prior, beta_prior)``,
+        the marginal prior for mu is a Student-t; solve for the (mu0, lambda0)
+        that give it a central 95% interval of [desired_lower, desired_upper].
+        """
+        if desired_upper <= desired_lower:
+            raise ValueError("desired_upper must be greater than desired_lower")
+
+        if alpha_prior <= 0 or beta_prior <= 0:
+            raise ValueError("alpha_prior and beta_prior must be positive")
+
+        prior_mu_center = 0.5 * (desired_lower + desired_upper)
+        half_width = 0.5 * (desired_upper - desired_lower)
+
+        degrees_freedom = 2.0 * alpha_prior
+        t975 = scipy.stats.t.ppf(0.975, df=degrees_freedom)
+
+        # The marginal scale for mu satisfies s_mu^2 = beta0 / (alpha0 * lambda0).
+        scale_mu_marginal = half_width / t975
+        prior_lambda = beta_prior / (alpha_prior * scale_mu_marginal**2)
+
+        return prior_mu_center, float(prior_lambda)
+
     def save_diagnostic_output(self, output_directory: Path | str) -> None:
         """
         Note: Users will need to set the output directory by creating a fixture with
@@ -700,13 +1039,17 @@ class FuzzyChecker:
         Can be useful to get more information about warnings, or to prioritize
         areas to be more thorough in manual V&V.
         """
-        output = pd.DataFrame(self.proportion_test_diagnostics)
         # Include the xdist worker id so parallel workers (separate processes)
         # don't overwrite each other's diagnostics file.
         worker = os.environ.get("PYTEST_XDIST_WORKER")
-        filename = (
-            f"proportion_test_diagnostics_{worker}.csv"
-            if worker
-            else "proportion_test_diagnostics.csv"
-        )
-        output.to_csv(Path(output_directory) / filename, index=False)
+        suffix = f"_{worker}" if worker else ""
+        diagnostics: dict[str, list[TestResult] | list[MeanTestResult]] = {
+            "proportion": self.proportion_test_diagnostics,
+            "mean": self.mean_test_diagnostics,
+        }
+        for kind, results in diagnostics.items():
+            output = pd.DataFrame(results)
+            output.to_csv(
+                Path(output_directory) / f"{kind}_test_diagnostics{suffix}.csv",
+                index=False,
+            )
