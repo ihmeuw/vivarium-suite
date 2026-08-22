@@ -1068,6 +1068,8 @@ class FuzzyChecker:
             "mean": self.mean_test_diagnostics,
         }
         for kind, results in diagnostics.items():
+            if not results:
+                continue
             output = pd.DataFrame(results)
             output.to_csv(
                 Path(output_directory) / f"{kind}_test_diagnostics{suffix}.csv",
