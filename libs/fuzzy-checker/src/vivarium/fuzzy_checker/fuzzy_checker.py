@@ -806,7 +806,11 @@ class FuzzyChecker:
                     f"than expected, bayes factor = {test_mean.bayes_factor:g}"
                 )
 
-        if fail_bayes_factor_cutoff > test_mean.bayes_factor > inconclusive_bayes_factor_cutoff:
+        if (
+            fail_bayes_factor_cutoff
+            > test_mean.bayes_factor
+            > inconclusive_bayes_factor_cutoff
+        ):
             logger.warning(f"Bayes factor for '{name}' is not conclusive.")
 
         self.mean_test_diagnostics.append(test_mean)

@@ -154,6 +154,7 @@ def test_mean_diagnostics_saved(tmp_path: Path) -> None:
     assert checker.mean_test_diagnostics[0].name == "hemoglobin"
 
     checker.save_diagnostic_output(tmp_path)
-    diagnostics_file = tmp_path / "mean_test_diagnostics.csv"
-    assert diagnostics_file.exists()
-    assert "hemoglobin" in diagnostics_file.read_text()
+    # The filename carries the xdist worker id when tests run in parallel.
+    diagnostics_files = list(tmp_path.glob("mean_test_diagnostics*.csv"))
+    assert len(diagnostics_files) == 1
+    assert "hemoglobin" in diagnostics_files[0].read_text()
