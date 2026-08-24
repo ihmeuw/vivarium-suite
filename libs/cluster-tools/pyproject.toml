@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "vivarium-cluster-tools"
 description = "A set of tools for running simulation using vivarium on cluster."
 readme = "README.rst"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
