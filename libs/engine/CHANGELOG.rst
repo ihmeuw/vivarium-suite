@@ -1,3 +1,8 @@
+**5.6.1 - 08/24/26**
+
+- Declare ``InteractiveContext``'s full constructor signature and default ``logging_verbosity`` to 0
+- Document the ``SimulationContext`` and ``InteractiveContext`` constructors
+
 **5.6.0 - 08/06/26**
 
 - Support pandas 3
