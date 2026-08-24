@@ -127,7 +127,7 @@ class ResultsManager(Manager):
         self.set_default_stratifications(builder)
 
     def on_post_setup(self, _: Event) -> None:
-        """Sets stratifications on observations and initializes results for each measure."""
+        """Set stratifications on observations, and initialize results if gathering."""
         self._results_context.set_stratifications()
         if not self.gathering_enabled:
             # Leaving these unallocated is what keeps "never gathered" distinct

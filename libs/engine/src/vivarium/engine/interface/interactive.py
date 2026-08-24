@@ -36,7 +36,10 @@ if TYPE_CHECKING:
 
 
 class InteractiveContext(SimulationContext):
-    """A simulation context with helper methods for running simulations interactively."""
+    """A simulation context with helper methods for running simulations interactively.
+
+    Does not gather results; pass ``gather_results=True`` to collect them.
+    """
 
     def __init__(
         self,
@@ -83,7 +86,8 @@ class InteractiveContext(SimulationContext):
             Whether to gather results as the simulation runs. A value of False
             (the default) leaves the results system's per-step listeners
             unregistered, so ``get_results`` has nothing to return. Observers
-            are still registered.
+            are still registered, and their stratifications are still validated,
+            so a misconfigured stratifier fails either way.
         setup
             Whether to set the simulation up on construction. A value of True
             (the default) freezes the configuration; pass False to change
