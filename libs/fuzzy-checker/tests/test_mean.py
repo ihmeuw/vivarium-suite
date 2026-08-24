@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -21,24 +22,30 @@ def _values(mean: float, sd: float, n: int, seed: int) -> np.ndarray:
     return np.random.default_rng(seed).normal(mean, sd, size=n)
 
 
+@pytest.mark.parametrize("method", ["conjugate", "fractional"])
 @pytest.mark.parametrize("ratio", SD_TO_MEAN_RATIOS)
-def test_correct_data_passes(ratio: float) -> None:
+def test_correct_data_passes(
+    ratio: float, method: Literal["conjugate", "fractional"]
+) -> None:
     """A simulation matching its target must pass at any SD-to-mean ratio."""
     values = _values(TARGET_MEAN, ratio * TARGET_MEAN, 1_000, seed=12345)
     result = FuzzyChecker().test_mean(
-        name="correct", target_mean=TARGET_MEAN, observed_values=values
+        name="correct", target_mean=TARGET_MEAN, observed_values=values, method=method
     )
     assert not result.reject_null
     assert result.bayes_factor < 1.0
 
 
+@pytest.mark.parametrize("method", ["conjugate", "fractional"])
 @pytest.mark.parametrize("ratio", SD_TO_MEAN_RATIOS)
-def test_one_sd_bias_is_caught(ratio: float) -> None:
+def test_one_sd_bias_is_caught(
+    ratio: float, method: Literal["conjugate", "fractional"]
+) -> None:
     """A one-SD bias at n=100 is decisive at any SD-to-mean ratio."""
     sd = ratio * TARGET_MEAN
     values = _values(TARGET_MEAN + sd, sd, 100, seed=12345)
     result = FuzzyChecker().test_mean(
-        name="biased", target_mean=TARGET_MEAN, observed_values=values
+        name="biased", target_mean=TARGET_MEAN, observed_values=values, method=method
     )
     assert result.reject_null
 
@@ -54,20 +61,87 @@ def test_assert_mean_reports_direction(shift: float, direction: str) -> None:
         FuzzyChecker().assert_mean(values, target_mean=TARGET_MEAN, name="biased")
 
 
+@pytest.mark.parametrize("method", ["conjugate", "fractional"])
 @pytest.mark.parametrize("target", [0.0, -5.0])
-def test_targets_at_or_below_zero(target: float) -> None:
+def test_targets_at_or_below_zero(
+    target: float, method: Literal["conjugate", "fractional"]
+) -> None:
     """Zero and negative targets are in-domain: correct passes, biased rejects."""
     checker = FuzzyChecker()
     correct = _values(target, 1.0, 1_000, seed=12345)
     assert not checker.test_mean(
-        name="correct", target_mean=target, observed_values=correct
+        name="correct", target_mean=target, observed_values=correct, method=method
     ).reject_null
 
     biased = checker.test_mean(
-        name="biased", target_mean=target, observed_values=correct + 0.5
+        name="biased", target_mean=target, observed_values=correct + 0.5, method=method
     )
     assert biased.reject_null
     assert biased.comparison_to_target == "Overestimated"
+
+
+def test_fractional_interval_target_matches_point_in_the_limit() -> None:
+    """A vanishingly narrow target interval reproduces the point-target Bayes factor."""
+    values = _values(TARGET_MEAN, 15.0, 500, seed=12345)
+    checker = FuzzyChecker()
+    point = checker.test_mean(
+        name="point", target_mean=TARGET_MEAN, observed_values=values, method="fractional"
+    )
+    narrow = checker.test_mean(
+        name="narrow",
+        target_mean=(TARGET_MEAN - 1e-4, TARGET_MEAN + 1e-4),
+        observed_values=values,
+        method="fractional",
+    )
+    assert narrow.bayes_factor == pytest.approx(point.bayes_factor, rel=1e-4)
+
+
+def test_fractional_rejects_conjugate_hyperparameters() -> None:
+    """The fractional method has no hyperparameters, so passing them is an error."""
+    values = _values(TARGET_MEAN, 15.0, 100, seed=12345)
+    checker = FuzzyChecker()
+    with pytest.raises(ValueError, match="no prior hyperparameters"):
+        checker.test_mean(
+            name="x",
+            target_mean=TARGET_MEAN,
+            observed_values=values,
+            method="fractional",
+            beta_prior=1.0,
+        )
+    with pytest.raises(ValueError, match="no prior hyperparameters"):
+        checker.test_mean(
+            name="x",
+            target_mean=TARGET_MEAN,
+            observed_values=values,
+            method="fractional",
+            bug_issue_distribution_mean_uncertainty_interval=(0.0, 200.0),
+        )
+
+
+def test_fractional_input_validation() -> None:
+    """Reject out-of-range training fractions, spreadless data, and unknown methods."""
+    values = _values(TARGET_MEAN, 15.0, 100, seed=12345)
+    checker = FuzzyChecker()
+    for bad_fraction in [1.0 / 200, 1.0, 1.5]:
+        with pytest.raises(ValueError, match="training_fraction"):
+            checker.test_mean(
+                name="x",
+                target_mean=TARGET_MEAN,
+                observed_values=values,
+                method="fractional",
+                training_fraction=bad_fraction,
+            )
+    with pytest.raises(ValueError, match="distinct observed values"):
+        checker.test_mean(
+            name="x",
+            target_mean=TARGET_MEAN,
+            observed_values=[5.0, 5.0, 5.0],
+            method="fractional",
+        )
+    with pytest.raises(ValueError, match="Unknown method"):
+        checker.test_mean(
+            name="x", target_mean=TARGET_MEAN, observed_values=values, method="nonsense"  # type: ignore[arg-type]
+        )
 
 
 def test_moments_match_values() -> None:

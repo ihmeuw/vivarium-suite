@@ -6,12 +6,13 @@ from collections.abc import Collection
 from functools import cache
 from itertools import chain, combinations
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
 import scipy.stats
 from loguru import logger
+from scipy.integrate import quad
 from scipy.special import gammaln
 from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_frozen
 
@@ -717,6 +718,8 @@ class FuzzyChecker:
         bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
         alpha_prior: float = 2.0,
         beta_prior: float | None = None,
+        method: Literal["conjugate", "fractional"] = "conjugate",
+        training_fraction: float | None = None,
         name: str = "",
         name_additional: str = "",
     ) -> None:
@@ -769,6 +772,17 @@ class FuzzyChecker:
             Defaults to ``(alpha_prior - 1) * observed_variance``, an
             empirical-Bayes choice that keeps the test's power independent of how
             the data's spread compares to its mean.
+        method
+            How to compute the Bayes factor. "conjugate" (the default) uses
+            normal-inverse-gamma marginal likelihoods with the prior parameters
+            above. "fractional" uses O'Hagan's fractional Bayes factor with
+            reference priors: a fraction of the likelihood trains the priors and
+            the remainder tests, so no prior hyperparameters exist at all --
+            alpha_prior, beta_prior, and the bug/issue interval do not apply.
+        training_fraction
+            The fraction of the likelihood used to train the priors under the
+            "fractional" method. Must be strictly between 1/n and 1; defaults to
+            the minimal 2/n, which reserves the most data for testing.
         name
             The name of the assertion, for use in messages and diagnostics.
         name_additional
@@ -791,6 +805,8 @@ class FuzzyChecker:
             bug_issue_distribution_mean_uncertainty_interval=bug_issue_distribution_mean_uncertainty_interval,
             alpha_prior=alpha_prior,
             beta_prior=beta_prior,
+            method=method,
+            training_fraction=training_fraction,
             fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
         )
 
@@ -827,6 +843,8 @@ class FuzzyChecker:
         bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
         alpha_prior: float = 2.0,
         beta_prior: float | None = None,
+        method: Literal["conjugate", "fractional"] = "conjugate",
+        training_fraction: float | None = None,
         fail_bayes_factor_cutoff: float = 100.0,
     ) -> MeanTestResult:
         """Run the Bayesian hypothesis test for one observed mean and return its result.
@@ -869,51 +887,72 @@ class FuzzyChecker:
         )
         observed_std = float(np.sqrt(observed_variance))
 
-        if beta_prior is None:
-            # Scale the variance prior by the observed spread of the data, not the
-            # target mean: a prior that assumes sigma ~ |target mean| swamps the
-            # evidence whenever the data's spread is much smaller than its mean,
-            # silently costing the test its power against real bias.
-            beta_prior = (alpha_prior - 1) * observed_variance
-
-        if bug_issue_distribution_mean_uncertainty_interval is None:
-            # Center the bug hypothesis on the target so that targets at or below
-            # zero remain in-domain. The width encodes the prior weight directly:
-            # this interval round-trips through
-            # _compute_parameters_for_marginal_mu_interval to
-            # lambda0 = _BUG_MEAN_PSEUDO_OBSERVATIONS for any alpha and beta
-            # (it is ~62 observed SDs at the defaults).
-            degrees_freedom = 2.0 * alpha_prior
-            half_width = scipy.stats.t.ppf(0.975, df=degrees_freedom) * float(
-                np.sqrt(beta_prior / (alpha_prior * _BUG_MEAN_PSEUDO_OBSERVATIONS))
+        if method == "fractional":
+            if (
+                beta_prior is not None
+                or bug_issue_distribution_mean_uncertainty_interval is not None
+            ):
+                raise ValueError(
+                    "The fractional method has no prior hyperparameters: beta_prior "
+                    "and bug_issue_distribution_mean_uncertainty_interval do not "
+                    "apply to it."
+                )
+            log_bayes_factor = self._fractional_log_bayes_factor(
+                target_mean,
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                training_fraction,
             )
-            bug_issue_distribution_mean_uncertainty_interval = (
-                target_midpoint - half_width,
-                target_midpoint + half_width,
+        elif method == "conjugate":
+            if beta_prior is None:
+                # Scale the variance prior by the observed spread of the data, not the
+                # target mean: a prior that assumes sigma ~ |target mean| swamps the
+                # evidence whenever the data's spread is much smaller than its mean,
+                # silently costing the test its power against real bias.
+                beta_prior = (alpha_prior - 1) * observed_variance
+
+            if bug_issue_distribution_mean_uncertainty_interval is None:
+                # Center the bug hypothesis on the target so that targets at or below
+                # zero remain in-domain. The width encodes the prior weight directly:
+                # this interval round-trips through
+                # _compute_parameters_for_marginal_mu_interval to
+                # lambda0 = _BUG_MEAN_PSEUDO_OBSERVATIONS for any alpha and beta
+                # (it is ~62 observed SDs at the defaults).
+                degrees_freedom = 2.0 * alpha_prior
+                half_width = scipy.stats.t.ppf(0.975, df=degrees_freedom) * float(
+                    np.sqrt(beta_prior / (alpha_prior * _BUG_MEAN_PSEUDO_OBSERVATIONS))
+                )
+                bug_issue_distribution_mean_uncertainty_interval = (
+                    target_midpoint - half_width,
+                    target_midpoint + half_width,
+                )
+
+            bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+                bug_issue_distribution_mean_uncertainty_interval,
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                alpha_prior=alpha_prior,
+                beta_prior=beta_prior,
             )
 
-        bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
-            bug_issue_distribution_mean_uncertainty_interval,
-            observed_zeroth_moment,
-            observed_first_moment,
-            observed_second_moment,
-            alpha_prior=alpha_prior,
-            beta_prior=beta_prior,
-        )
-
-        no_bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
-            target_mean,
-            observed_zeroth_moment,
-            observed_first_moment,
-            observed_second_moment,
-            alpha_prior=alpha_prior,
-            beta_prior=beta_prior,
-        )
+            no_bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+                target_mean,
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                alpha_prior=alpha_prior,
+                beta_prior=beta_prior,
+            )
+            log_bayes_factor = bug_issue_log_likelihood - no_bug_issue_log_likelihood
+        else:
+            raise ValueError(
+                f"Unknown method '{method}'; choose 'conjugate' or 'fractional'."
+            )
 
         with np.errstate(under="ignore", over="ignore"):
-            bayes_factor = float(
-                np.exp(bug_issue_log_likelihood - no_bug_issue_log_likelihood)
-            )
+            bayes_factor = float(np.exp(log_bayes_factor))
 
         reject_null = bayes_factor > fail_bayes_factor_cutoff
 
@@ -1053,6 +1092,142 @@ class FuzzyChecker:
         prior_lambda = beta_prior / (alpha_prior * scale_mu_marginal**2)
 
         return prior_mu_center, float(prior_lambda)
+
+    def _fractional_log_bayes_factor(
+        self,
+        target_mean: float | tuple[float, float],
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        training_fraction: float | None,
+    ) -> float:
+        """Return the log fractional Bayes factor of the bug over the no-bug model.
+
+        Both models get the reference prior ``1/sigma^2`` (the bug model's mean is
+        additionally unconstrained); O'Hagan's fractional Bayes factor divides each
+        model's marginal likelihood by its marginal with the likelihood raised to
+        ``training_fraction``, so the improper priors' arbitrary constants cancel
+        and a fraction of the data calibrates the scales instead of any
+        hyperparameter.
+
+        Raises
+        ------
+        ValueError
+            If the observed values have no spread, or the training fraction is
+            outside (1/n, 1).
+        """
+        n = zeroth_moment
+        observed_mean = first_moment / n
+        sum_squared_deviations = second_moment - n * observed_mean**2
+        if not sum_squared_deviations > 0:
+            raise ValueError(
+                "The fractional method requires at least two distinct observed values."
+            )
+        b = 2.0 / n if training_fraction is None else training_fraction
+        if not 1.0 / n < b < 1.0:
+            raise ValueError(
+                f"training_fraction must be strictly between 1/n and 1; got {b} "
+                f"with n = {n}."
+            )
+
+        log_q_bug = self._log_fractional_marginal_free_mean(
+            1.0, n, sum_squared_deviations
+        ) - self._log_fractional_marginal_free_mean(b, n, sum_squared_deviations)
+
+        if isinstance(target_mean, tuple) and target_mean[1] > target_mean[0]:
+            prior_mean = (target_mean[0] + target_mean[1]) / 2
+            prior_sd = (target_mean[1] - target_mean[0]) / (2 * scipy.stats.norm.ppf(0.975))
+            log_q_no_bug = self._log_fractional_marginal_interval_mean(
+                1.0, n, observed_mean, sum_squared_deviations, prior_mean, prior_sd
+            ) - self._log_fractional_marginal_interval_mean(
+                b, n, observed_mean, sum_squared_deviations, prior_mean, prior_sd
+            )
+        else:
+            mu_star = (
+                (target_mean[0] + target_mean[1]) / 2
+                if isinstance(target_mean, tuple)
+                else target_mean
+            )
+            sum_squared_errors = sum_squared_deviations + n * (observed_mean - mu_star) ** 2
+            log_q_no_bug = self._log_fractional_marginal_fixed_mean(
+                1.0, n, sum_squared_errors
+            ) - self._log_fractional_marginal_fixed_mean(b, n, sum_squared_errors)
+
+        return log_q_bug - log_q_no_bug
+
+    @staticmethod
+    def _log_fractional_marginal_free_mean(
+        b: float, n: int, sum_squared_deviations: float
+    ) -> float:
+        """Return the log marginal of the likelihood to the power b, mean free.
+
+        The model is ``y_i ~ N(mu, sigma^2)`` with reference prior
+        ``pi(mu, sigma^2) = 1/sigma^2``; both integrals are analytic.
+        """
+        a = (b * n - 1) / 2
+        return float(
+            -a * np.log(2 * np.pi)
+            - 0.5 * np.log(b * n)
+            + gammaln(a)
+            - a * np.log(b * sum_squared_deviations / 2)
+        )
+
+    @staticmethod
+    def _log_fractional_marginal_fixed_mean(
+        b: float, n: int, sum_squared_errors: float
+    ) -> float:
+        """Return the log marginal of the likelihood to the power b, mean fixed.
+
+        The model is ``y_i ~ N(mu*, sigma^2)`` with reference prior
+        ``pi(sigma^2) = 1/sigma^2``; ``sum_squared_errors`` is taken about mu*.
+        """
+        a = b * n / 2
+        return float(
+            -a * np.log(2 * np.pi) + gammaln(a) - a * np.log(b * sum_squared_errors / 2)
+        )
+
+    @staticmethod
+    def _log_fractional_marginal_interval_mean(
+        b: float,
+        n: int,
+        observed_mean: float,
+        sum_squared_deviations: float,
+        prior_mean: float,
+        prior_sd: float,
+    ) -> float:
+        """Return the log marginal of the likelihood to the power b, mean from a proper prior.
+
+        The model is ``y_i ~ N(mu, sigma^2)`` with ``mu ~ N(prior_mean,
+        prior_sd^2)`` (the research-supplied target interval, which needs no
+        training) and reference prior ``1/sigma^2``. The mean integrates out
+        analytically; the variance integral has no closed form, so integrate in
+        ``u = log(sigma^2)``, shifted by the peak for stability.
+        """
+        log_2pi = np.log(2 * np.pi)
+
+        def log_integrand(u: float) -> float:
+            marginal_variance = prior_sd**2 + np.exp(u) / (b * n)
+            return float(
+                -(b * n / 2) * (log_2pi + u)
+                - (b * sum_squared_deviations / 2) * np.exp(-u)
+                + 0.5 * (log_2pi + u - np.log(b * n))
+                - 0.5 * (log_2pi + np.log(marginal_variance))
+                - (observed_mean - prior_mean) ** 2 / (2 * marginal_variance)
+            )
+
+        u_center = float(np.log(sum_squared_deviations / n))
+        # The integrand's tails underflow to zero by design; don't let a strict
+        # numpy error state turn that into an exception.
+        with np.errstate(under="ignore"):
+            grid = np.linspace(u_center - 40, u_center + 40, 161)
+            shift = max(log_integrand(u) for u in grid)
+            value, _ = quad(
+                lambda u: np.exp(log_integrand(u) - shift),
+                u_center - 40,
+                u_center + 40,
+                limit=400,
+            )
+        return float(shift + np.log(value))
 
     def save_diagnostic_output(self, output_directory: Path | str) -> None:
         """
