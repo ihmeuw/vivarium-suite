@@ -107,7 +107,7 @@ class InteractiveContext(SimulationContext):
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Get the formatted results, saying why there are none if gathering is off."""
         results = super().get_results()
-        if not results and not self._results.gathering_enabled:
+        if not self._results.gathering_enabled:
             if not self._warned_no_results:
                 self._warned_no_results = True
                 self._logger.warning(
