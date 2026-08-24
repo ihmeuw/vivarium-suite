@@ -32,7 +32,7 @@ is not useful on its own. The point is the extras.
 Installation
 ============
 
-**Supported Python versions: 3.13**
+**Supported Python versions: 3.11, 3.12, 3.13**
 
 You can install ``vivarium-dependencies`` from PyPI:
 

@@ -4,7 +4,7 @@ Vivarium Build Utils
 
 Vivarium Build Utils contains shared build utilities for Simulation Science projects.
 
-**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
+**Supported Python versions: 3.11, 3.12, 3.13**
 
 You can install ``vivarium-build-utils`` from PyPI with pip:
 
