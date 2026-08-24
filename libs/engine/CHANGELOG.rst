@@ -1,3 +1,7 @@
+**5.6.2 - 08/24/26**
+
+- Bugfix: apply ``configuration.randomness.rate_conversion_type`` to the randomness streams it configures
+
 **5.6.1 - 08/24/26**
 
 - Declare ``InteractiveContext``'s full constructor signature and default ``logging_verbosity`` to 0
