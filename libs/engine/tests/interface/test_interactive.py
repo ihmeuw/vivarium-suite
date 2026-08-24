@@ -440,6 +440,12 @@ def test_setup_is_keyword_only() -> None:
         InteractiveContext(None, None, None, None, None, 0, False)  # type: ignore[call-arg]
 
 
+def test_gather_results_is_keyword_only() -> None:
+    """Like ``setup``, it is not a parent parameter, so it must not take that slot."""
+    parameter = inspect.signature(InteractiveContext.__init__).parameters["gather_results"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+
+
 class TestResultsGathering:
     """An InteractiveContext does not gather results unless it is asked to.
 
@@ -485,7 +491,18 @@ class TestResultsGathering:
         assert caplog.text.count("gather_results=True") == 1
 
     def test_no_warning_when_gathering_was_requested(self, caplog: LogCaptureFixture) -> None:
-        self._hogwarts(gather_results=True).get_results()
+        """Empty results with gathering on must stay quiet.
+
+        Built without an observer so the results really are empty. The shared
+        fixture would make them non-empty, which satisfies the guard on its own
+        and never exercises the flag.
+        """
+        sim = InteractiveContext(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts()],
+            gather_results=True,
+        )
+        assert sim.get_results() == {}
         assert "gather_results=True" not in caplog.text
 
     def test_gathered_when_requested(self) -> None:
