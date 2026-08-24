@@ -1,4 +1,4 @@
-**5.6.1 - 08/21/26**
+**5.6.1 - 08/24/26**
 
 - Declare ``InteractiveContext``'s full constructor signature and default ``logging_verbosity`` to 0
 - Document the ``SimulationContext`` and ``InteractiveContext`` constructors
