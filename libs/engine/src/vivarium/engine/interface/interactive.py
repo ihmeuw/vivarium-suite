@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 class InteractiveContext(SimulationContext):
     """A simulation context with helper methods for running simulations interactively.
 
-    Does not gather results; pass ``gather_results=True`` to collect them.
+    Does not gather results by default; pass ``gather_results=True`` to collect them.
     """
 
     def __init__(
@@ -86,7 +86,7 @@ class InteractiveContext(SimulationContext):
             Whether to gather results as the simulation runs. A value of False
             (the default) leaves the results system's per-step listeners
             unregistered, so ``get_results`` has nothing to return. Observers
-            are still registered, and their stratifications are still validated,
+            are still registered and their stratifications are still validated,
             so a misconfigured stratifier fails either way.
         setup
             Whether to set the simulation up on construction. A value of True
@@ -110,15 +110,13 @@ class InteractiveContext(SimulationContext):
 
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Get the formatted results, saying why there are none if gathering is off."""
-        results = super().get_results()
-        if not self._results.gathering_enabled:
-            if not self._warned_no_results:
-                self._warned_no_results = True
-                self._logger.warning(
-                    "No results to return. An InteractiveContext does not gather"
-                    " results by default; pass gather_results=True to collect them."
-                )
-        return results
+        if not self._results.gathering_enabled and not self._warned_no_results:
+            self._warned_no_results = True
+            self._logger.warning(
+                "No results to return. An InteractiveContext does not gather"
+                " results by default; pass gather_results=True to collect them."
+            )
+        return super().get_results()
 
     @property
     def current_time(self) -> ClockTime:

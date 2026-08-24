@@ -429,21 +429,24 @@ def test_positional_arguments_map_to_parameters() -> None:
     assert sim.configuration.population.population_size == 123
 
 
-def test_setup_is_keyword_only() -> None:
-    """``setup`` is not one of the parent's parameters, so it must not take that slot."""
-    setup = inspect.signature(InteractiveContext.__init__).parameters["setup"]
-    assert setup.kind is inspect.Parameter.KEYWORD_ONLY
+@pytest.mark.parametrize("parameter", ["setup", "gather_results"])
+def test_args_are_keyword_only(parameter: str) -> None:
+    """keyword-only args are not parent parameters so must not take that slot."""
+    param = inspect.signature(InteractiveContext.__init__).parameters[parameter]
+    assert param.kind is inspect.Parameter.KEYWORD_ONLY
 
+
+def test_keyword_only_parameters_reject_a_positional_call() -> None:
+    """The runtime half of the guard above.
+
+    The parent contributes six positional parameters, so a seventh argument has
+    nowhere to bind. Were either keyword-only parameter to drift in front of the
+    ``*``, it would quietly accept that seventh instead of raising.
+    """
     with pytest.raises(TypeError):
         # Deliberately invalid: mypy catches this statically, and the ignore lets
         # us also pin the runtime behaviour.
         InteractiveContext(None, None, None, None, None, 0, False)  # type: ignore[call-arg]
-
-
-def test_gather_results_is_keyword_only() -> None:
-    """Like ``setup``, it is not a parent parameter, so it must not take that slot."""
-    parameter = inspect.signature(InteractiveContext.__init__).parameters["gather_results"]
-    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
 
 
 class TestResultsGathering:
@@ -481,14 +484,14 @@ class TestResultsGathering:
 
     def test_empty_results_say_why(self, caplog: LogCaptureFixture) -> None:
         self._hogwarts(gather_results=False).get_results()
-        assert "gather_results=True" in caplog.text
+        assert "pass gather_results=True" in caplog.text
 
     def test_empty_results_say_why_only_once(self, caplog: LogCaptureFixture) -> None:
         """Polling results in a loop is the normal case; the warning must not repeat."""
         sim = self._hogwarts(gather_results=False)
         for _ in range(3):
             sim.get_results()
-        assert caplog.text.count("gather_results=True") == 1
+        assert caplog.text.count("pass gather_results=True") == 1
 
     def test_no_warning_when_gathering_was_requested(self, caplog: LogCaptureFixture) -> None:
         """Empty results with gathering on must stay quiet.
@@ -502,8 +505,10 @@ class TestResultsGathering:
             components=[Hogwarts()],
             gather_results=True,
         )
+        # Confirm that results are "empty" (not just all-zero)
         assert sim.get_results() == {}
-        assert "gather_results=True" not in caplog.text
+        # Despite empty results, confirm that we do not log the gather_results warning
+        assert "pass gather_results=True" not in caplog.text
 
     def test_gathered_when_requested(self) -> None:
         sim = self._hogwarts(gather_results=True)
