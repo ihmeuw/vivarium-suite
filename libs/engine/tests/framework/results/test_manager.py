@@ -1116,31 +1116,43 @@ def test_register_observation_invalid_priority_raises(
         )
 
 
+def test_get_results_is_empty_when_gathering_is_disabled() -> None:
+    """The honesty guarantee belongs to the manager, not to InteractiveContext.
+
+    A non-interactive caller that disables gathering must not be handed
+    structurally complete, uniformly zero frames that read as measurements.
+    """
+    components = [Hogwarts(), NoStratificationsQuidditchWinsObserver()]
+    sim = SimulationContext(configuration=HARRY_POTTER_CONFIG, components=components)
+    sim._results.set_gathering_enabled(False)
+    sim.setup()
+    sim.initialize_simulants()
+    sim.step()
+
+    assert sim.get_results() == {}
+
+
 def test_gathering_enabled_gates_the_per_step_listeners() -> None:
     """The flag is a manager capability, not just an InteractiveContext one.
 
-    Turning it off leaves the per-step listeners unregistered, so no results
-    accumulate even though the observation itself is registered and its raw
-    results are initialized.
+    Turning it off leaves the per-step listeners unregistered, so nothing is
+    gathered and no raw results are allocated to gather into.
     """
     measure = "no_stratifications_quidditch_wins"
 
-    def accumulated_after_one_step(gathering_enabled: bool) -> float:
+    def raw_results_after_one_step(gathering_enabled: bool) -> dict[str, pd.DataFrame]:
         components = [Hogwarts(), NoStratificationsQuidditchWinsObserver()]
         sim = SimulationContext(configuration=HARRY_POTTER_CONFIG, components=components)
         sim._results.set_gathering_enabled(gathering_enabled)
         sim.setup()
         sim.initialize_simulants()
-        # raw results are still initialized regardless of gathering_enabled
-        assert measure in sim._results._raw_results
         sim.step()
-        total: float = sim._results._raw_results[measure][VALUE_COLUMN].sum()
-        return total
+        return dict(sim._results._raw_results)
 
-    # Confirm that non-zero raw results should exist if we are gathering results
-    assert accumulated_after_one_step(gathering_enabled=True) > 0
-    # Confirm that raw results are not updated when gathering_enabled is False
-    assert accumulated_after_one_step(gathering_enabled=False) == 0
+    # Confirm that results are indeed gathered when the flag is on
+    assert raw_results_after_one_step(gathering_enabled=True)[measure][VALUE_COLUMN].sum() > 0
+
+    assert raw_results_after_one_step(gathering_enabled=False) == {}
 
 
 def test_gathering_enabled_cannot_be_switched_after_setup() -> None:

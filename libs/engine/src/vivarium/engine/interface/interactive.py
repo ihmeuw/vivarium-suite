@@ -105,18 +105,16 @@ class InteractiveContext(SimulationContext):
             self.setup()
 
     def get_results(self) -> dict[str, pd.DataFrame]:
-        """Get the formatted results, warning if none were gathered."""
-        if not self._results.gathering_enabled:
+        """Get the formatted results, saying why there are none if gathering is off."""
+        results = super().get_results()
+        if not results and not self._results.gathering_enabled:
             if not self._warned_no_results:
                 self._warned_no_results = True
                 self._logger.warning(
                     "No results to return. An InteractiveContext does not gather"
                     " results by default; pass gather_results=True to collect them."
                 )
-            # Return and empty dict instead of zeros since zeros are a valid result
-            # and would be misleading.
-            return {}
-        return super().get_results()
+        return results
 
     @property
     def current_time(self) -> ClockTime:

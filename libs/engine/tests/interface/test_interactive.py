@@ -468,11 +468,9 @@ class TestResultsGathering:
         )
         sim.step()
 
-        # Raw results are initialized for every observation even with gathering
-        # off, so returning nothing is a choice to withhold a complete, uniformly
-        # zero frame. Non-emptiness is load-bearing: (empty == 0).all() is True.
-        raw = sim._results._raw_results["house_points"]
-        assert not raw.empty and (raw[VALUE_COLUMN] == 0).all()
+        # No frames are allocated, so there are no zeros to mistake for
+        # measurements of nothing.
+        assert sim._results._raw_results == {}
         assert sim.get_results() == {}
 
     def test_empty_results_say_why(self, caplog: LogCaptureFixture) -> None:

@@ -75,12 +75,14 @@ class ResultsManager(Manager):
         Returns
         -------
             A dictionary of measure-specific formatted results. The keys are the
-            measure names and the values are the respective results.
+            measure names and the values are the respective results. Empty when
+            gathering is disabled, since no measure was taken.
         """
+        observations = self._results_context.observations
         formatted = {}
-        for name, observation in self._results_context.observations.items():
+        for name in self._raw_results:
             results = self._raw_results[name].copy()
-            formatted[name] = observation.results_formatter(name, results)
+            formatted[name] = observations[name].results_formatter(name, results)
         return formatted
 
     # noinspection PyAttributeOutsideInit
@@ -127,6 +129,10 @@ class ResultsManager(Manager):
     def on_post_setup(self, _: Event) -> None:
         """Sets stratifications on observations and initializes results for each measure."""
         self._results_context.set_stratifications()
+        if not self.gathering_enabled:
+            # Leaving these unallocated is what keeps "never gathered" distinct
+            # from "gathered nothing".
+            return
         for name, observation in self._results_context.observations.items():
             self._raw_results[name] = observation.results_initializer()
 
