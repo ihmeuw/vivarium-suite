@@ -232,3 +232,183 @@ def test_mean_diagnostics_saved(tmp_path: Path) -> None:
     diagnostics_files = list(tmp_path.glob("mean_test_diagnostics*.csv"))
     assert len(diagnostics_files) == 1
     assert "hemoglobin" in diagnostics_files[0].read_text()
+
+
+# --- Tests adapted from vivarium_testing_utils#79 (zmbc) ---------------------
+#
+# The original API took a user-supplied standard_deviation_estimate; here that
+# maps onto the conjugate method's variance prior, beta_prior = (alpha - 1) *
+# estimate**2, so the estimate-relative-error dimension exercises exactly the
+# mis-estimate robustness the original formulation could not achieve. The
+# fractional method has no such parameter, so it runs the same scenarios
+# without that dimension.
+
+ZEB_SHIFTS = [
+    -10_000_000,
+    -1_000_000,
+    -1_000,
+    -100,
+    -10,
+    -0.1,
+    0,
+    0.1,
+    10,
+    100,
+    1_000,
+    1_000_000,
+    10_000_000,
+]
+
+METHOD_AND_SD_ESTIMATE_ERROR = [
+    ("conjugate", 0.1),
+    ("conjugate", 1.0),
+    ("conjugate", 10.0),
+    ("fractional", 1.0),
+]
+
+
+def _zeb_seed(*args: object) -> int:
+    """Reproduce the original tests' parameter-hashed seeds."""
+    import hashlib
+    import json
+
+    return int.from_bytes(hashlib.sha256(json.dumps(args).encode()).digest(), "big")
+
+
+def _sd_estimate_kwargs(
+    method: str, actual_sd: float, relative_error: float
+) -> dict[str, object]:
+    """Translate the original standard_deviation_estimate argument to the new API."""
+    if method == "fractional":
+        return {"method": "fractional"}
+    # alpha_prior defaults to 2, so (alpha - 1) is 1.
+    return {"beta_prior": (actual_sd * relative_error) ** 2}
+
+
+def _shifted_target(
+    target_mean: float | tuple[float, float], shift: float
+) -> float | tuple[float, float]:
+    """Translate a target by the scenario's shift."""
+    if isinstance(target_mean, tuple):
+        return (target_mean[0] + shift, target_mean[1] + shift)
+    return target_mean + shift
+
+
+@pytest.mark.parametrize("method, sd_estimate_relative_error", METHOD_AND_SD_ESTIMATE_ERROR)
+@pytest.mark.parametrize("shift", ZEB_SHIFTS)
+@pytest.mark.parametrize(
+    "actual_mean, actual_sd, n, target_mean",
+    [
+        (0, 0.5, 5, 0),
+        (0, 50_000, 50, 0),
+        (9, 100, 5_000, (-10, 10)),
+        (9, 100, 500_000, (-10, 10)),
+        # Would fail, but the SD is too big for the sample to show it.
+        (-20, 10_000, 500_000, (-10, 10)),
+        # Would fail, but the sample size is too small to show it.
+        (-20, 100, 100, (-10, 10)),
+    ],
+)
+def test_pass_assert_mean(
+    shift: float,
+    actual_mean: float,
+    actual_sd: float,
+    n: int,
+    target_mean: float | tuple[float, float],
+    method: str,
+    sd_estimate_relative_error: float,
+) -> None:
+    """Data consistent with its target must not fail, at any translation."""
+    seed = _zeb_seed(shift, actual_mean, actual_sd, n, target_mean)
+    rng = np.random.default_rng(seed)
+    observed_values = rng.normal(actual_mean + shift, actual_sd, size=n)
+    FuzzyChecker().assert_mean(
+        observed_values,
+        target_mean=_shifted_target(target_mean, shift),
+        name="pass",
+        **_sd_estimate_kwargs(method, actual_sd, sd_estimate_relative_error),  # type: ignore[arg-type]
+    )
+
+
+@pytest.mark.parametrize("method, sd_estimate_relative_error", METHOD_AND_SD_ESTIMATE_ERROR)
+@pytest.mark.parametrize("shift", ZEB_SHIFTS)
+@pytest.mark.parametrize(
+    "actual_mean, actual_sd, n, target_mean, match",
+    [
+        (-30, 100, 3_000, (-10, 10), "is significantly less than expected"),
+        (30, 100, 3_000, (-10, 10), "is significantly greater than expected"),
+        (-25, 100, 100_000, (-10, 10), "is significantly less than expected"),
+        (25, 100, 100_000, (-10, 10), "is significantly greater than expected"),
+        # Test extreme precision with large numbers.
+        pytest.param(
+            5,
+            100,
+            10_000_000,
+            0,
+            "is significantly greater than expected",
+            marks=pytest.mark.slow,
+        ),
+    ],
+)
+def test_fail_assert_mean(
+    shift: float,
+    actual_mean: float,
+    actual_sd: float,
+    n: int,
+    target_mean: float | tuple[float, float],
+    match: str,
+    method: str,
+    sd_estimate_relative_error: float,
+) -> None:
+    """Biased data must fail with the right direction, at any translation."""
+    seed = _zeb_seed(shift, actual_mean, actual_sd, n, target_mean)
+    rng = np.random.default_rng(seed)
+    observed_values = rng.normal(actual_mean + shift, actual_sd, size=n)
+    with pytest.raises(AssertionError, match=match):
+        FuzzyChecker().assert_mean(
+            observed_values,
+            target_mean=_shifted_target(target_mean, shift),
+            name="fail",
+            **_sd_estimate_kwargs(method, actual_sd, sd_estimate_relative_error),  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize("method, sd_estimate_relative_error", METHOD_AND_SD_ESTIMATE_ERROR)
+@pytest.mark.parametrize("shift", [0.0, 1_000_000.0])
+@pytest.mark.parametrize("actual_sd", [1.0, 100.0])
+def test_pass_then_inconclusive_then_fail(
+    shift: float,
+    actual_sd: float,
+    method: str,
+    sd_estimate_relative_error: float,
+) -> None:
+    """Growing bias moves the verdict pass -> inconclusive -> fail, in order.
+
+    Bounded adaptation of the original's walking loop: scan biases on a fixed
+    grid of standard errors and require all three verdicts to appear, in order,
+    with no regression.
+    """
+    n = 10_000
+    seed = _zeb_seed(shift, actual_sd, n, sd_estimate_relative_error)
+    values = np.random.default_rng(seed).normal(shift, actual_sd, size=n)
+    standard_error = actual_sd / np.sqrt(n)
+    checker = FuzzyChecker()
+
+    statuses = []
+    for bias_in_standard_errors in np.linspace(0.0, 15.0, 61):
+        result = checker.test_mean(
+            name="walk",
+            target_mean=shift,
+            observed_values=values + bias_in_standard_errors * standard_error,
+            **_sd_estimate_kwargs(method, actual_sd, sd_estimate_relative_error),  # type: ignore[arg-type]
+        )
+        if result.bayes_factor > 100:
+            statuses.append("fail")
+        elif result.bayes_factor > 0.1:
+            statuses.append("inconclusive")
+        else:
+            statuses.append("pass")
+
+    assert set(statuses) == {"pass", "inconclusive", "fail"}
+    severity = [{"pass": 0, "inconclusive": 1, "fail": 2}[status] for status in statuses]
+    assert severity == sorted(severity)

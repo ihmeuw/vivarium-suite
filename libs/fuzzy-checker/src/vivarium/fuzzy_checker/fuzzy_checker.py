@@ -868,11 +868,34 @@ class FuzzyChecker:
         assert (observed_first_moment is None) != (
             observed_values is None
         ), "Exactly one of observed_values or the three moments must be supplied"
+        center = 0.0
         if observed_values is not None:
             values = np.asarray(observed_values, dtype=float)
+            # Compute in centered coordinates: a sum of squares of values far from
+            # zero loses the spread to floating point cancellation (a mean of 1e7
+            # with an SD of 0.5 corrupts the variance by ~8%), and the test is
+            # translation invariant, so shift the data and every mean-like input
+            # to zero and shift the results back at the end.
+            center = float(np.mean(values))
+            centered_values = values - center
             observed_zeroth_moment = len(values)
-            observed_first_moment = float(np.sum(values))
-            observed_second_moment = float(np.sum(values**2))
+            observed_first_moment = float(np.sum(centered_values))
+            observed_second_moment = float(np.sum(centered_values**2))
+
+        if center != 0.0:
+            target_lower_bound -= center
+            target_upper_bound -= center
+            target_mean = (
+                (target_lower_bound, target_upper_bound)
+                if isinstance(target_mean, tuple)
+                else target_lower_bound
+            )
+            if bug_issue_distribution_mean_uncertainty_interval is not None:
+                interval_low, interval_high = bug_issue_distribution_mean_uncertainty_interval
+                bug_issue_distribution_mean_uncertainty_interval = (
+                    interval_low - center,
+                    interval_high - center,
+                )
 
         assert (
             observed_zeroth_moment is not None
@@ -937,14 +960,30 @@ class FuzzyChecker:
                 beta_prior=beta_prior,
             )
 
-            no_bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
-                target_mean,
-                observed_zeroth_moment,
-                observed_first_moment,
-                observed_second_moment,
-                alpha_prior=alpha_prior,
-                beta_prior=beta_prior,
-            )
+            if isinstance(target_mean, tuple) and target_upper_bound > target_lower_bound:
+                # The target interval is a fixed prior in data units, decoupled
+                # from beta_prior: tying its width to the variance prior (as the
+                # bug interval's construction does) rescales the interval by
+                # sigma/estimate whenever the variance is misestimated.
+                no_bug_issue_log_likelihood = self._log_conjugate_marginal_interval_mean(
+                    observed_zeroth_moment,
+                    observed_mean,
+                    observed_variance * observed_zeroth_moment,
+                    prior_mean=target_midpoint,
+                    prior_sd=(target_upper_bound - target_lower_bound)
+                    / (2 * scipy.stats.norm.ppf(0.975)),
+                    alpha0=alpha_prior,
+                    beta0=beta_prior,
+                )
+            else:
+                no_bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+                    target_lower_bound,
+                    observed_zeroth_moment,
+                    observed_first_moment,
+                    observed_second_moment,
+                    alpha_prior=alpha_prior,
+                    beta_prior=beta_prior,
+                )
             log_bayes_factor = bug_issue_log_likelihood - no_bug_issue_log_likelihood
         else:
             raise ValueError(
@@ -959,11 +998,11 @@ class FuzzyChecker:
         return MeanTestResult(
             name=name,
             name_additional=name_additional,
-            observed_mean=observed_mean,
+            observed_mean=observed_mean + center,
             observed_std=observed_std,
             observed_count=observed_zeroth_moment,
-            target_lower_bound=target_lower_bound,
-            target_upper_bound=target_upper_bound,
+            target_lower_bound=target_lower_bound + center,
+            target_upper_bound=target_upper_bound + center,
             bayes_factor=bayes_factor,
             reject_null=reject_null,
         )
@@ -1186,8 +1225,8 @@ class FuzzyChecker:
             -a * np.log(2 * np.pi) + gammaln(a) - a * np.log(b * sum_squared_errors / 2)
         )
 
-    @staticmethod
     def _log_fractional_marginal_interval_mean(
+        self,
         b: float,
         n: int,
         observed_mean: float,
@@ -1199,35 +1238,95 @@ class FuzzyChecker:
 
         The model is ``y_i ~ N(mu, sigma^2)`` with ``mu ~ N(prior_mean,
         prior_sd^2)`` (the research-supplied target interval, which needs no
-        training) and reference prior ``1/sigma^2``. The mean integrates out
-        analytically; the variance integral has no closed form, so integrate in
-        ``u = log(sigma^2)``, shifted by the peak for stability.
+        training) and reference prior ``1/sigma^2``. The marginal factors
+        exactly into the free-mean closed form times the expected density of
+        the observed mean under the implied inverse-gamma posterior for the
+        variance.
         """
-        log_2pi = np.log(2 * np.pi)
+        return self._log_fractional_marginal_free_mean(
+            b, n, sum_squared_deviations
+        ) + self._log_expected_mean_density(
+            a=(b * n - 1) / 2,
+            scale=b * sum_squared_deviations / 2,
+            effective_n=b * n,
+            observed_mean=observed_mean,
+            prior_mean=prior_mean,
+            prior_sd=prior_sd,
+        )
 
-        def log_integrand(u: float) -> float:
-            marginal_variance = prior_sd**2 + np.exp(u) / (b * n)
+    def _log_conjugate_marginal_interval_mean(
+        self,
+        n: int,
+        observed_mean: float,
+        sum_squared_deviations: float,
+        prior_mean: float,
+        prior_sd: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
+        """Return the log marginal likelihood with the mean from a fixed proper prior.
+
+        The model is ``y_i ~ N(mu, sigma^2)`` with ``mu ~ N(prior_mean,
+        prior_sd^2)`` and ``sigma^2 ~ Inv-Gamma(alpha0, beta0)``. Unlike the
+        normal-inverse-gamma construction, the mean's prior is independent of
+        sigma^2: a target interval is research data in data units, and a width
+        that rescaled with the variance prior would corrupt the interval
+        whenever the variance was misestimated. In the ``prior_sd -> 0`` limit
+        this reproduces the fixed-mean closed form exactly.
+        """
+        a_n = alpha0 + (n - 1) / 2
+        scale_n = beta0 + sum_squared_deviations / 2
+        log_base = float(
+            -0.5 * np.log(n)
+            - ((n - 1) / 2) * np.log(2 * np.pi)
+            + alpha0 * np.log(beta0)
+            + gammaln(a_n)
+            - gammaln(alpha0)
+            - a_n * np.log(scale_n)
+        )
+        return log_base + self._log_expected_mean_density(
+            a=a_n,
+            scale=scale_n,
+            effective_n=n,
+            observed_mean=observed_mean,
+            prior_mean=prior_mean,
+            prior_sd=prior_sd,
+        )
+
+    @staticmethod
+    def _log_expected_mean_density(
+        a: float,
+        scale: float,
+        effective_n: float,
+        observed_mean: float,
+        prior_mean: float,
+        prior_sd: float,
+    ) -> float:
+        """Return the log expected density of the observed mean over the variance posterior.
+
+        Computes ``log E[N(observed_mean | prior_mean, prior_sd^2 +
+        sigma^2/effective_n)]`` with ``sigma^2 ~ Inv-Gamma(a, scale)``,
+        integrating over the inverse-gamma's quantiles so the integrand is
+        smooth and bounded no matter how peaked the variance posterior is.
+        """
+        variance_posterior = scipy.stats.invgamma(a, scale=scale)
+
+        def integrand(quantile: float) -> float:
+            variance = prior_sd**2 + variance_posterior.ppf(quantile) / effective_n
             return float(
-                -(b * n / 2) * (log_2pi + u)
-                - (b * sum_squared_deviations / 2) * np.exp(-u)
-                + 0.5 * (log_2pi + u - np.log(b * n))
-                - 0.5 * (log_2pi + np.log(marginal_variance))
-                - (observed_mean - prior_mean) ** 2 / (2 * marginal_variance)
+                np.exp(
+                    -0.5 * np.log(2 * np.pi * variance)
+                    - (observed_mean - prior_mean) ** 2 / (2 * variance)
+                )
             )
 
-        u_center = float(np.log(sum_squared_deviations / n))
         # The integrand's tails underflow to zero by design; don't let a strict
-        # numpy error state turn that into an exception.
-        with np.errstate(under="ignore"):
-            grid = np.linspace(u_center - 40, u_center + 40, 161)
-            shift = max(log_integrand(u) for u in grid)
-            value, _ = quad(
-                lambda u: np.exp(log_integrand(u) - shift),
-                u_center - 40,
-                u_center + 40,
-                limit=400,
-            )
-        return float(shift + np.log(value))
+        # numpy error state turn that into an exception. An expectation of zero
+        # means the observed mean is impossibly far from the prior: log of it is
+        # -inf, which the caller turns into an infinite Bayes factor.
+        with np.errstate(under="ignore", divide="ignore"):
+            value, _ = quad(integrand, 0.0, 1.0, limit=200)
+            return float(np.log(value)) if value > 0 else float("-inf")
 
     def save_diagnostic_output(self, output_directory: Path | str) -> None:
         """
