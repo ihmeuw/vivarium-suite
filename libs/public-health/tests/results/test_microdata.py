@@ -83,7 +83,7 @@ def _build_microdata_sim(
         components=components,
         configuration=_configure(base_config, microdata, population_size=population_size),
         plugin_configuration=base_plugins,
-        gather_results=True,
+        observe=True,
     )
 
 

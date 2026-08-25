@@ -279,7 +279,7 @@ def test_stratified__raw_results_initialization() -> None:
     ]
 
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     raw_results = sim._results._raw_results
     assert isinstance(raw_results, dict)
@@ -335,7 +335,7 @@ def test_no_stratifications__raw_results_initialization() -> None:
     """
     components = [Hogwarts(), NoStratificationsQuidditchWinsObserver()]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     raw_results = sim._results._raw_results["no_stratifications_quidditch_wins"]
     assert isinstance(raw_results, pd.DataFrame)
@@ -357,7 +357,7 @@ def test_observers_with_missing_stratifications_fail() -> None:
 
     with pytest.raises(ValueError, match=expected_log_msg):
         InteractiveContext(
-            configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+            configuration=HARRY_POTTER_CONFIG, components=components, observe=True
         )
 
 
@@ -378,9 +378,7 @@ def test_unused_stratifications_are_logged(caplog: LogCaptureFixture) -> None:
         QuidditchWinsObserver(),
         MagicalAttributesObserver(),
     ]
-    InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
-    )
+    InteractiveContext(configuration=HARRY_POTTER_CONFIG, components=components, observe=True)
 
     log_split = caplog.text.split(
         "The following stratifications are registered but not used by any observers: \n"
@@ -445,7 +443,7 @@ def test_gather_results_with_different_stratifications_and_to_observes() -> None
         NeverObserver(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
 
     initial_raw_results = sim._results._raw_results.copy()
@@ -485,7 +483,7 @@ def test_gather_results_different_include_untracked_observations() -> None:
         SimulantCountObserver(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     pop_mgr = sim._population
     pop_mgr.tracked_queries = ['student_house != "slytherin"']
@@ -504,7 +502,7 @@ def test_gather_results_different_include_untracked_observations() -> None:
 @pytest.fixture(scope="module")
 def prepare_population_sim() -> InteractiveContext:
     return InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=[Hogwarts()], gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=[Hogwarts()], observe=True
     )
 
 
@@ -708,7 +706,7 @@ def test_stratified_observation_results() -> None:
         HogwartsResultsStratifier(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     assert (sim.get_results()["cat_bomb"]["value"] == 0.0).all()
     sim.step()
@@ -752,7 +750,7 @@ def test_unstratified_observation_results() -> None:
         ValedictorianObserver(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     sim.step()
     first_valedictorian = sim.get_results()["valedictorian"]
@@ -773,7 +771,7 @@ def test_concatenating_observation_results() -> None:
         ExamScoreObserver(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     sim.step()
     results_one_step = sim.get_results()["exam_score"]
@@ -837,7 +835,7 @@ def test_adding_observation_results() -> None:
         HogwartsResultsStratifier(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     sim.step()
     pop = sim.get_population(
@@ -865,7 +863,7 @@ def test_concatenating_observation_updates() -> None:
         ExamScoreObserver(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     sim.step()
     results_one_step = sim.get_results()["exam_score"]
@@ -888,7 +886,7 @@ def test_update__raw_results_fully_filtered_pop() -> None:
         HogwartsResultsStratifier(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     sim.step()
     # The FullyFilteredHousePointsObserver filters the population to a bogus
@@ -901,7 +899,7 @@ def test_update__raw_results_fully_filtered_pop() -> None:
 def test_update__raw_results_no_stratifications() -> None:
     components = [Hogwarts(), NoStratificationsQuidditchWinsObserver()]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     sim.step()
     wins = sim.get_population("quidditch_wins")
@@ -919,7 +917,7 @@ def test_update__raw_results_extra_columns() -> None:
     """
     components = [Hogwarts(), HogwartsResultsStratifier(), MagicalAttributesObserver()]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     sim.step()
     raw_results = sim._results._raw_results["magical_attributes"]
@@ -944,7 +942,7 @@ class TestCategoricalParquetOutput:
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Run two steps, then write the measure's results to .parquet and read back."""
         sim = InteractiveContext(
-            configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+            configuration=HARRY_POTTER_CONFIG, components=components, observe=True
         )
         sim.step()
         sim.step()
@@ -1088,7 +1086,7 @@ def test_observation_fires_on_correct_priority() -> None:
         PriorityTrackingObserver(),
     ]
     sim = InteractiveContext(
-        configuration=HARRY_POTTER_CONFIG, components=components, gather_results=True
+        configuration=HARRY_POTTER_CONFIG, components=components, observe=True
     )
     sim.step()
 
@@ -1124,7 +1122,7 @@ def test_get_results_is_empty_when_gathering_is_disabled() -> None:
     """
     components = [Hogwarts(), NoStratificationsQuidditchWinsObserver()]
     sim = SimulationContext(configuration=HARRY_POTTER_CONFIG, components=components)
-    sim._results.set_gathering_enabled(False)
+    sim._results.set_to_observe(False)
     sim.setup()
     sim.initialize_simulants()
     sim.step()
@@ -1132,7 +1130,7 @@ def test_get_results_is_empty_when_gathering_is_disabled() -> None:
     assert sim.get_results() == {}
 
 
-def test_gathering_enabled_gates_the_per_step_listeners() -> None:
+def test_to_observe_gates_the_per_step_listeners() -> None:
     """The flag is a manager capability, not just an InteractiveContext one.
 
     Turning it off leaves the per-step listeners unregistered, so nothing is
@@ -1140,22 +1138,22 @@ def test_gathering_enabled_gates_the_per_step_listeners() -> None:
     """
     measure = "no_stratifications_quidditch_wins"
 
-    def raw_results_after_one_step(gathering_enabled: bool) -> dict[str, pd.DataFrame]:
+    def raw_results_after_one_step(observe: bool) -> dict[str, pd.DataFrame]:
         components = [Hogwarts(), NoStratificationsQuidditchWinsObserver()]
         sim = SimulationContext(configuration=HARRY_POTTER_CONFIG, components=components)
-        sim._results.set_gathering_enabled(gathering_enabled)
+        sim._results.set_to_observe(observe)
         sim.setup()
         sim.initialize_simulants()
         sim.step()
         return dict(sim._results._raw_results)
 
     # Confirm that results are indeed gathered when the flag is on
-    assert raw_results_after_one_step(gathering_enabled=True)[measure][VALUE_COLUMN].sum() > 0
+    assert raw_results_after_one_step(observe=True)[measure][VALUE_COLUMN].sum() > 0
 
-    assert raw_results_after_one_step(gathering_enabled=False) == {}
+    assert raw_results_after_one_step(observe=False) == {}
 
 
-def test_gathering_enabled_cannot_be_switched_after_setup() -> None:
+def test_to_observe_cannot_be_switched_after_setup() -> None:
     """The setter is constrained to initialization.
 
     The listeners it controls are registered during setup and never afterwards,
@@ -1163,4 +1161,4 @@ def test_gathering_enabled_cannot_be_switched_after_setup() -> None:
     """
     sim = InteractiveContext(configuration=HARRY_POTTER_CONFIG, components=[Hogwarts()])
     with pytest.raises(ConstraintError, match="may only be called during"):
-        sim._results.set_gathering_enabled(True)
+        sim._results.set_to_observe(True)

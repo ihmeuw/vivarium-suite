@@ -1,10 +1,9 @@
 **5.7.0 - 08/25/26**
 
-- Skip results gathering in ``InteractiveContext`` by default
-- Add ``ResultsManager.set_gathering_enabled`` to gate the per-step gathering listeners
-- Return no results rather than zero-filled frames when gathering is disabled, so
+- Skip observing results in ``InteractiveContext`` by default
+- Add ``ResultsManager.set_to_observe`` to gate the per-step gathering listeners
+- Return no results rather than zero-filled frames when observers are disabled, so
   ``report`` writes no files for those measures
-- Warn once when interactive results are empty because gathering is off
 
 **5.6.1 - 08/24/26**
 

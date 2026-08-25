@@ -584,4 +584,4 @@ def test_simulation_context_gathers_results_by_default(
 ) -> None:
     """Only InteractiveContext turns gathering off; the non-interactive default must not."""
     sim = SimulationContext(components=components)
-    assert sim._results.gathering_enabled
+    assert sim._results.to_observe

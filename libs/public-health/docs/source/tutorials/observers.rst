@@ -64,11 +64,11 @@ Common Setup
    base_plugins = BASE_PLUGINS
    config = make_base_config()
 
-Every example below passes ``gather_results=True``. An
+Every example below passes ``observe=True``. An
 :class:`~vivarium.engine.interface.interactive.InteractiveContext` does not gather
 results by default since an interactive session is usually for inspecting the
 simulation rather than measuring it. However, this tutorial is about the results
-themselves. Observers are registered either way; only the gathering differs.
+themselves.
 
 
 Data sources
@@ -151,7 +151,7 @@ observations for a disease model:
        ],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    sim.step()
    results = sim.get_results()
@@ -219,7 +219,7 @@ non-zero ``excess_mortality_rate``.
        ],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    for _ in range(5):
        sim.step()
@@ -277,7 +277,7 @@ It requires at least one disease state with a non-zero
        ],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    for _ in range(3):
        sim.step()
@@ -323,7 +323,7 @@ one observation:
        ],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    for _ in range(3):
        sim.step()
@@ -381,7 +381,7 @@ an empty list raises a configuration error.
        ],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    sim.step()
    sim.step()
@@ -432,7 +432,7 @@ females aged 20 or older:
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    sim.step()
 
@@ -472,7 +472,7 @@ latter leaves the first step empty:
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
 
    sim.step()  # 1990-08-01 - not recorded
@@ -517,7 +517,7 @@ simulation - each time-step is capped at 100.
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    sim.step()
    sim.step()
@@ -580,7 +580,7 @@ shows the same simulants recurring each step:
        components=[BasePopulation(), SimulantID(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    sim.step()
    sim.step()
@@ -639,7 +639,7 @@ the four stratifications registered by ``ResultsStratifier`` (``age_group``,
        ],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    sim.step()
 
@@ -687,7 +687,7 @@ ones per observer with ``stratification.<observer_name>.exclude``:
        ],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    sim.step()
 
@@ -755,7 +755,7 @@ name in the observer's ``include`` list:
        ],
        configuration=config,
        plugin_configuration=base_plugins,
-       gather_results=True,
+       observe=True,
    )
    sim.step()
 

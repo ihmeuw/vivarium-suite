@@ -922,7 +922,7 @@ In an interactive setting, we can access these observations via the
 observations up to this point in the simulation.
 
 An :class:`~vivarium.engine.interface.interactive.InteractiveContext` does not
-gather results by default; pass ``gather_results=True`` to collect them.
+include observers by default; pass ``observe=True`` to include them.
 
 .. code-block:: python
 
@@ -946,7 +946,7 @@ gather results by default; pass ``gather_results=True`` to collect them.
          YllsObserver(),
       ],
       configuration=config,
-      gather_results=True,
+      observe=True,
    )
    sim.take_steps(365)  # Run for one year with one day time steps
 
@@ -976,7 +976,7 @@ been a total of 27,720 years of life lost.
          YllsObserver(),
       ],
       configuration=config,
-      gather_results=True,
+      observe=True,
    )
 
    # It takes too long to run 365 steps in the test, so we just run 10 steps here

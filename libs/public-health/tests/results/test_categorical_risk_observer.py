@@ -99,7 +99,7 @@ def categorical_risk_observer_sim(base_config_factory, base_plugins, risk_data):
         configuration=base_config_factory(),
         plugin_configuration=base_plugins,
         setup=False,
-        gather_results=True,
+        observe=True,
     )
     simulation.configuration.update(
         {
@@ -196,7 +196,7 @@ def test_category_exclusions(base_config, base_plugins, risk, risk_data, exclusi
         configuration=base_config,
         plugin_configuration=base_plugins,
         setup=False,
-        gather_results=True,
+        observe=True,
     )
     simulation.configuration.update(
         {
@@ -237,7 +237,7 @@ def test_observer_sources_categories_from_risk_component(
         configuration=base_config,
         plugin_configuration=base_plugins,
         setup=False,
-        gather_results=True,
+        observe=True,
     )
     categories = pd.DataFrame(
         {

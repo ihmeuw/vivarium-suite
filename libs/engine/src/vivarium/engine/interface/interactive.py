@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 class InteractiveContext(SimulationContext):
     """A simulation context with helper methods for running simulations interactively.
 
-    Does not gather results by default; pass ``gather_results=True`` to collect them.
+    Does not observe results by default; pass ``observe=True`` to include them.
     """
 
     def __init__(
@@ -50,7 +50,7 @@ class InteractiveContext(SimulationContext):
         sim_name: str | None = None,
         logging_verbosity: int = 0,
         *,
-        gather_results: bool = False,
+        observe: bool = False,
         setup: bool = True,
     ) -> None:
         """Create an interactive simulation context.
@@ -82,12 +82,9 @@ class InteractiveContext(SimulationContext):
             logs INFO-level messages, and 2+ logs DEBUG-level messages.
             Note that only the first context built in a process configures logging
             and subsequent contexts will inherit that configuration.
-        gather_results
-            Whether to gather results as the simulation runs. A value of False
-            (the default) leaves the results system's per-step listeners
-            unregistered, so ``get_results`` has nothing to return. Observers
-            are still registered and their stratifications are still validated,
-            so a misconfigured stratifier fails either way.
+        observe
+            Whether to observe results. A value of False (the default) prevents
+            observations from being recorded and results generated.
         setup
             Whether to set the simulation up on construction. A value of True
             (the default) freezes the configuration; pass False to change
@@ -102,19 +99,17 @@ class InteractiveContext(SimulationContext):
             logging_verbosity=logging_verbosity,
         )
 
-        self._results.set_gathering_enabled(gather_results)
-        self._warned_no_results = False
+        self._results.set_to_observe(observe)
 
         if setup:
             self.setup()
 
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Get the formatted results, saying why there are none if gathering is off."""
-        if not self._results.gathering_enabled and not self._warned_no_results:
-            self._warned_no_results = True
+        if not self._results.to_observe:
             self._logger.warning(
-                "No results to return. An InteractiveContext does not gather"
-                " results by default; pass gather_results=True to collect them."
+                "No results to return. An InteractiveContext does not observe "
+                "results by default; pass observe=True to include them."
             )
         return super().get_results()
 
