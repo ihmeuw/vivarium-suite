@@ -49,10 +49,25 @@ class ResultsManager(Manager):
         self._raw_results: defaultdict[str, pd.DataFrame] = defaultdict()
         self._results_context = ResultsContext()
         self._name = "results_manager"
+        self._to_observe = True
 
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def to_observe(self) -> bool:
+        """Whether results are observed as the simulation runs."""
+        return self._to_observe
+
+    def set_to_observe(self, observe: bool) -> None:
+        """Turn per-step results gathering on or off.
+
+        Constrained to initialization during setup, because the listeners this
+        controls are registered in :meth:`setup` and never afterwards, so a
+        later call could not take effect.
+        """
+        self._to_observe = observe
 
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Gets the measure-specific formatted results in a dictionary.
@@ -60,12 +75,14 @@ class ResultsManager(Manager):
         Returns
         -------
             A dictionary of measure-specific formatted results. The keys are the
-            measure names and the values are the respective results.
+            measure names and the values are the respective results. Empty when
+            gathering is disabled, since no measure was taken.
         """
+        observations = self._results_context.observations
         formatted = {}
-        for name, observation in self._results_context.observations.items():
+        for name in self._raw_results:
             results = self._raw_results[name].copy()
-            formatted[name] = observation.results_formatter(name, results)
+            formatted[name] = observations[name].results_formatter(name, results)
         return formatted
 
     # noinspection PyAttributeOutsideInit
@@ -78,32 +95,44 @@ class ResultsManager(Manager):
         self.clock = builder.time.clock()
         self.step_size = builder.time.step_size()
 
-        builder.event.register_listener(lifecycle_states.POST_SETUP, self.on_post_setup)
+        builder.lifecycle.add_constraint(
+            self.set_to_observe, allow_during=[lifecycle_states.INITIALIZATION]
+        )
 
-        # Register at every priority level so that observations fire in the
-        # correct priority order relative to other components' listeners.
-        for priority in range(NUM_EVENT_PRIORITIES):
-            builder.event.register_listener(
-                lifecycle_states.TIME_STEP_PREPARE,
-                self.on_time_step_prepare,
-                priority=priority,
-            )
-            builder.event.register_listener(
-                lifecycle_states.TIME_STEP, self.on_time_step, priority=priority
-            )
-            builder.event.register_listener(
-                lifecycle_states.TIME_STEP_CLEANUP,
-                self.on_time_step_cleanup,
-                priority=priority,
-            )
-            builder.event.register_listener(
-                lifecycle_states.COLLECT_METRICS, self.on_collect_metrics, priority=priority
-            )
+        if self.to_observe:
+            builder.event.register_listener(lifecycle_states.POST_SETUP, self.on_post_setup)
+
+            # Register at every priority level so that observations fire in the
+            # correct priority order relative to other components' listeners.
+            for priority in range(NUM_EVENT_PRIORITIES):
+                builder.event.register_listener(
+                    lifecycle_states.TIME_STEP_PREPARE,
+                    self.on_time_step_prepare,
+                    priority=priority,
+                )
+                builder.event.register_listener(
+                    lifecycle_states.TIME_STEP, self.on_time_step, priority=priority
+                )
+                builder.event.register_listener(
+                    lifecycle_states.TIME_STEP_CLEANUP,
+                    self.on_time_step_cleanup,
+                    priority=priority,
+                )
+                builder.event.register_listener(
+                    lifecycle_states.COLLECT_METRICS,
+                    self.on_collect_metrics,
+                    priority=priority,
+                )
 
         self.set_default_stratifications(builder)
 
     def on_post_setup(self, _: Event) -> None:
-        """Sets stratifications on observations and initializes results for each measure."""
+        """Set stratifications on observations and initialize results for each measure.
+
+        Only registered when observing, so nothing here runs otherwise. That is
+        what leaves ``_raw_results`` empty, keeping "never observed" distinct from
+        "observed nothing".
+        """
         self._results_context.set_stratifications()
         for name, observation in self._results_context.observations.items():
             self._raw_results[name] = observation.results_initializer()

@@ -2,15 +2,23 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
+from pathlib import Path
 
 import pandas as pd
 import pytest
+from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
 
 from tests.framework.population.helpers import (
     assert_squeezing_multi_level_single_outer_multi_inner,
     assert_squeezing_multi_level_single_outer_single_inner,
     assert_squeezing_single_level_single_col,
+)
+from tests.framework.results.helpers import (
+    HARRY_POTTER_CONFIG,
+    Hogwarts,
+    HogwartsResultsStratifier,
+    HousePointsObserver,
 )
 from tests.helpers import (
     AttributePipelineCreator,
@@ -21,8 +29,10 @@ from tests.helpers import (
     NestedLookupCaller,
     SingleColumnCreator,
 )
-from vivarium.engine import InteractiveContext
+from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.results import Observer
+from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import Pipeline
 
 
@@ -381,8 +391,9 @@ def test_init_signature_agrees_with_simulation_context() -> None:
     parent = inspect.signature(SimulationContext.__init__).parameters
     child = inspect.signature(InteractiveContext.__init__).parameters
 
+    child_only = ("self", "observe", "setup")
     inherited = [name for name in parent if name != "self"]
-    assert [name for name in child if name not in ("self", "setup")] == inherited
+    assert [name for name in child if name not in child_only] == inherited
 
     for name in inherited:
         assert child[name].annotation == parent[name].annotation, name
@@ -418,12 +429,155 @@ def test_positional_arguments_map_to_parameters() -> None:
     assert sim.configuration.population.population_size == 123
 
 
-def test_setup_is_keyword_only() -> None:
-    """``setup`` is not one of the parent's parameters, so it must not take that slot."""
-    setup = inspect.signature(InteractiveContext.__init__).parameters["setup"]
-    assert setup.kind is inspect.Parameter.KEYWORD_ONLY
+@pytest.mark.parametrize("parameter", ["setup", "observe"])
+def test_args_are_keyword_only(parameter: str) -> None:
+    """keyword-only args are not parent parameters so must not take that slot."""
+    param = inspect.signature(InteractiveContext.__init__).parameters[parameter]
+    assert param.kind is inspect.Parameter.KEYWORD_ONLY
 
+
+def test_keyword_only_parameters_reject_a_positional_call() -> None:
+    """The runtime half of the guard above.
+
+    The parent contributes six positional parameters, so a seventh argument has
+    nowhere to bind. Were either keyword-only parameter to drift in front of the
+    ``*``, it would quietly accept that seventh instead of raising.
+    """
     with pytest.raises(TypeError):
         # Deliberately invalid: mypy catches this statically, and the ignore lets
         # us also pin the runtime behaviour.
         InteractiveContext(None, None, None, None, None, 0, False)  # type: ignore[call-arg]
+
+
+class TestResultsGathering:
+    """An InteractiveContext does not gather results unless it is asked to.
+
+    Gathering is switched off by leaving the results manager's per-step listeners
+    unregistered. Observers stay registered, so the state table an interactive run
+    produces is the same one a gathering run produces.
+    """
+
+    @staticmethod
+    def _hogwarts(observe: bool) -> InteractiveContext:
+        return InteractiveContext(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+            observe=observe,
+        )
+
+    def test_observe_defaults_to_off(self) -> None:
+        """Constructed without the flag, so a change to the default fails here.
+
+        Named for the parameter rather than "by default" because the manager's
+        own ``to_observe`` defaults the other way, for non-interactive runs.
+        """
+        sim = InteractiveContext(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+        )
+        sim.step()
+
+        # No frames are allocated, so there are no zeros to mistake for
+        # measurements of nothing.
+        assert sim._results._raw_results == {}
+        assert sim.get_results() == {}
+
+    def test_empty_results_say_why(self, caplog: LogCaptureFixture) -> None:
+        self._hogwarts(observe=False).get_results()
+        assert "pass observe=True" in caplog.text
+
+    def test_no_warning_when_observing_was_requested(self, caplog: LogCaptureFixture) -> None:
+        """Empty results with observing on must stay quiet.
+
+        Built without an observer so the results really are empty. The shared
+        fixture would make them non-empty, which satisfies the guard on its own
+        and never exercises the flag.
+        """
+        sim = InteractiveContext(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts()],
+            observe=True,
+        )
+        # Confirm that results are "empty" (not just all-zero)
+        assert sim.get_results() == {}
+        # Despite empty results, confirm that we do not log the observe warning
+        assert "pass observe=True" not in caplog.text
+
+    def test_observed_when_requested(self) -> None:
+        sim = self._hogwarts(observe=True)
+        sim.step()
+        assert sim.get_results()["house_points"][VALUE_COLUMN].sum() > 0
+
+    def test_observers_are_still_registered(self) -> None:
+        """The point of gating the manager rather than filtering by type."""
+        sim = self._hogwarts(observe=False)
+        observers = [
+            c.name for c in sim._component_manager._components if isinstance(c, Observer)
+        ]
+        assert observers == ["house_points_observer"]
+
+    @staticmethod
+    def _gather_listeners(sim: InteractiveContext) -> int:
+        """Count the results manager's per-step gathering listeners.
+
+        Excludes its post-setup listener, which is registered either way.
+        """
+        return sum(
+            1
+            for channel in sim._events._event_types.values()
+            for priority in channel.listeners
+            for listener in priority
+            if getattr(listener, "__self__", None) is sim._results
+            and listener.__name__ != "on_post_setup"
+        )
+
+    def test_whether_listeners_are_registered(self) -> None:
+        """The results manager registers at every priority in four phases."""
+        assert self._gather_listeners(self._hogwarts(observe=False)) == 0
+        assert self._gather_listeners(self._hogwarts(observe=True)) > 0
+
+    def test_state_table_is_unchanged(self, disease_model_spec: Path) -> None:
+        """Observers are still registered and can manage columns.
+
+        Excluding an observer would take its own columns with it - the
+        ``disease_model`` example's ``DeathsObserver`` owns ``previous_alive`` -
+        and an InteractiveContext exists to inspect the state table.
+        """
+
+        def run(observe: bool) -> pd.DataFrame:
+            sim = InteractiveContext(str(disease_model_spec), observe=observe)
+            sim.take_steps(5)
+            return sim.get_population(sim.get_attribute_names())
+
+        on, off = run(observe=True), run(observe=False)
+        assert "previous_alive" in off.columns
+        assert sorted(on.columns) == sorted(off.columns)
+        for column in on.columns:
+            assert on[column].equals(off[column]), column
+
+    def test_observations_from_a_non_observer_are_not_gathered(self) -> None:
+        """Even non-Observers are technically allowed to register observations."""
+
+        class SneakyComponent(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.results.register_adding_observation(
+                    name="sneaky",
+                    requires_attributes=["house_points"],
+                    aggregator_sources=["house_points"],
+                    aggregator=lambda df: df.sum(),
+                    excluded_stratifications=["student_house", "power_level_group"],
+                )
+
+        def run(observe: bool) -> dict[str, pd.DataFrame]:
+            sim = InteractiveContext(
+                configuration=HARRY_POTTER_CONFIG,
+                components=[Hogwarts(), SneakyComponent()],
+                observe=observe,
+            )
+            sim.step()
+            return sim.get_results()
+
+        # Confirm that the sneaky observer did successfully register an observation
+        assert run(observe=True)["sneaky"][VALUE_COLUMN].sum() > 0
+        # Now confirm that the sneaky observer's observation is not gathered
+        assert run(observe=False) == {}
