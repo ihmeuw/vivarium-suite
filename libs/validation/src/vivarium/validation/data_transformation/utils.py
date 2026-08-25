@@ -9,6 +9,7 @@ from vivarium.validation.constants import INPUT_DATA_INDEX_NAMES
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+# FIXME [MIC-7445]
 # Mirrors vivarium_inputs.globals.VIVARIUM_COLUMNS, defined locally so the non-GBD
 # schema path stays usable without the artifactory-only `gbd` extra. Guarded against
 # upstream drift by test_vivarium_columns_matches_upstream.
