@@ -33,7 +33,7 @@ dependencies = [
     "vivarium-artifact",
     "vivarium-config-tree",
     "vivarium-fuzzy-checker>=0.3.0",
-    "vivarium-gbd-mapping>=6.0.0,<7.0.0",
+    "vivarium-gbd-mapping>=6.0.0",
     "jinja2>=3.0.0",
     "pandera<0.23.0",
     "seaborn",
