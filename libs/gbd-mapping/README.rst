@@ -24,7 +24,7 @@ including:
  - Etiologies
  - Sequelae
 
-**Supported Python versions: 3.10, 3.11**
+**Supported Python versions: 3.11, 3.12, 3.13**
 
 You can install ``vivarium-gbd-mapping`` from PyPI with pip:
 

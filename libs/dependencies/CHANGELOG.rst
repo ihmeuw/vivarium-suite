@@ -1,3 +1,7 @@
+**1.3.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10 and add support for Python 3.11 and 3.12
+
 **1.2.4 - 07/14/26**
 
 - Update stale references for monorepo libraries
