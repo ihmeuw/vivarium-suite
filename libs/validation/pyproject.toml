@@ -119,15 +119,13 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-# Two reasons something might land here:
-#   1. Upstream lacks py.typed/stubs entirely (scipy, py._path.local, pandera,
-#      vivarium-gbd-mapping).
-#   2. The dep lives in the `gbd` extra and is not installed on ci_github
-#      (vivarium-inputs is artifactory-only). With this override mypy treats it
-#      as Any on ci_github. On Jenkins (which installs `gbd`) the imports
-#      resolve and mypy uses the real py.typed types —
-#      `ignore_missing_imports` is a no-op when the module is actually
-#      findable, so this does NOT mask Jenkins type errors.
+# Two reasons something might land here. vivarium-inputs has both:
+#   1. Upstream ships no py.typed or stubs, so mypy types it as Any even where
+#      it is installed (scipy, py._path.local, pandera, vivarium-gbd-mapping,
+#      vivarium-inputs).
+#   2. The dep is not installed on ci_github at all, vivarium-inputs being
+#      artifactory-only and declared in the `gbd` extra. Without the override
+#      mypy would fail on the missing import rather than fall back to Any.
 module = [
     "py._path.local",
     "scipy.*",
