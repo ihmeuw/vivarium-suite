@@ -14,7 +14,7 @@ Vivarium Public Health
 
 This library contains several components for modelling diseases and their interventions.
 
-**Supported Python versions: 3.10, 3.11, 3.12**
+**Supported Python versions: 3.11, 3.12, 3.13**
 
 You can install ``vivarium-public-health`` from PyPI with pip:
 

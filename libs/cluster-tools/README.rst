@@ -11,7 +11,7 @@ Vivarium Cluster Tools
 Vivarium cluster tools is a python package that makes running ``vivarium``
 simulations at scale on a Slurm cluster easy.
 
-**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
+**Supported Python versions: 3.11, 3.12, 3.13**
 
 You can install ``vivarium-cluster-tools`` from PyPI with pip:
 

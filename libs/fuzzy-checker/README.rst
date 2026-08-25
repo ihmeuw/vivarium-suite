@@ -13,7 +13,7 @@ This library provides the ``FuzzyChecker``, a tool for statistical "fuzzy" check
 of values that are subject to stochastic variation, used to verify and validate
 Vivarium simulation outputs.
 
-**Supported Python versions: 3.10, 3.11**
+**Supported Python versions: 3.11, 3.12, 3.13**
 
 You can install ``vivarium-fuzzy-checker`` from PyPI with pip:
 
