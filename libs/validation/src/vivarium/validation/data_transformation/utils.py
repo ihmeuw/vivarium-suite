@@ -4,7 +4,6 @@ from typing import Any, Callable, TypeVar
 
 import pandas as pd
 import pandera as pa
-from vivarium_inputs.globals import DEMOGRAPHIC_COLUMNS, VIVARIUM_COLUMNS
 
 from vivarium.validation.constants import INPUT_DATA_INDEX_NAMES
 
@@ -109,6 +108,9 @@ def get_measure_index_names(data_key: str, data_schema: str = "gbd") -> list[str
     -------
         The list of expected index names for the given data key and data schema pair.
     """
+    # Deferred: vivarium-inputs is artifactory-only and lives in the
+    # `gbd` extra.
+    from vivarium_inputs.globals import DEMOGRAPHIC_COLUMNS, VIVARIUM_COLUMNS
 
     measure = data_key.split(".")[-1]
     if data_schema == "gbd":

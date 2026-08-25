@@ -15,7 +15,6 @@ from IPython.display import HTML, display
 from loguru import logger
 from matplotlib.figure import Figure
 from vivarium.fuzzy_checker import TestResult
-from vivarium_inputs import utilities as vi
 
 from vivarium.validation.bundle import RatioMeasureDataBundle
 from vivarium.validation.comparison import (
@@ -907,6 +906,10 @@ class ValidationContext:
         self, data: pd.DataFrame, data_key: str
     ) -> pd.DataFrame:
         """Format the output of a get_draws call to data schema conventions for the validation context."""
+        # Deferred: vivarium-inputs is artifactory-only and lives in the
+        # `gbd` extra.
+        from vivarium_inputs import utilities as vi
+
         if "relative_risk" in data_key:
             data = vi.get_affected_measure_column(data)
         data = drop_extra_columns(data, data_key)

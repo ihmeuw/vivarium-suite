@@ -1,15 +1,10 @@
 import pytest
 
-# This validation test suite requires deps from the `validation` extra
-# (vivarium-inputs is artifactory-only and not installed on GitHub Actions CI;
-# vivarium-artifact is also monorepo-local and only installed via `validation`).
-
-# The importorskip below runs while this conftest is imported, so it skips this
-# entire subdirectory when either dep is unavailable; Jenkins runs the full
-# suite via ci_jenkins, which installs the validation extra. Both probes are
-# needed because either could be missing independently (e.g., partial extras
-# install during local dev).
-pytest.importorskip("vivarium.artifact")
+# This suite exercises the GBD data source, which needs vivarium-inputs from
+# the `gbd` extra (artifactory-only, so not installed on GitHub Actions CI).
+# The importorskip runs while this conftest is imported, so it skips this entire
+# subdirectory when the dep is unavailable; Jenkins runs the full suite via
+# ci_jenkins, which installs `gbd`.
 pytest.importorskip("vivarium_inputs")
 
 from pathlib import Path
