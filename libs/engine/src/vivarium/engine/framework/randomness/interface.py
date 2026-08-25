@@ -9,6 +9,8 @@ This module provides an interface to the :class:`RandomnessManager <vivarium.eng
 
 from __future__ import annotations
 
+from typing import Literal
+
 import pandas as pd
 
 from vivarium.engine.framework.randomness.manager import RandomnessManager
@@ -24,6 +26,7 @@ class RandomnessInterface(Interface):
         self,
         decision_point: str,
         initializes_crn_attributes: bool = False,
+        rate_conversion_type: Literal["linear", "exponential"] | None = None,
     ) -> RandomnessStream:
         """Provides a new source of random numbers for the given decision point.
 
@@ -45,6 +48,12 @@ class RandomnessInterface(Interface):
             in the Common Random Number framework. These streams cannot be
             copied and should only be used to generate the state table columns
             specified in ``builder.configuration.randomness.key_columns``.
+        rate_conversion_type
+            The type of conversion to use when converting rates to
+            probabilities. If None, the value of
+            ``builder.configuration.randomness.rate_conversion_type`` is used,
+            which defaults to "linear" for a simple multiplication of rate and
+            time_scaling_factor. The other option is "exponential".
 
         Returns
         -------
@@ -52,7 +61,9 @@ class RandomnessInterface(Interface):
             The stream provides vectorized access to random numbers and a few
             other utilities.
         """
-        return self._manager.get_randomness_stream(decision_point, initializes_crn_attributes)
+        return self._manager.get_randomness_stream(
+            decision_point, initializes_crn_attributes, rate_conversion_type
+        )
 
     def get_seed(self, decision_point: str) -> int:
         """Gets a randomly generated seed for use with external randomness tools.
