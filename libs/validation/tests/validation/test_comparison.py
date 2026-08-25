@@ -26,7 +26,7 @@ from vivarium.validation.constants import (
     DataSource,
 )
 from vivarium.validation.data_loader import DataLoader
-from vivarium.validation.data_transformation import age_groups
+from vivarium.validation.data_transformation import age_groups, calculations
 from vivarium.validation.data_transformation.measures import Incidence, RatioMeasure
 
 
@@ -385,20 +385,27 @@ def _finest_results(comparison: FuzzyComparison) -> dict[str, TestResult]:
     return stratified[("year", "sex", "age")]
 
 
-def _declare(
+def _convert(
     comparison: FuzzyComparison,
     *,
     denominator_is_person_time: bool = False,
     reference_is_rate: bool = False,
 ) -> None:
-    """Set what the comparison's mock measure declares about its data.
+    """Point the comparison's mock measure at the real conversions.
 
-    ``is_person_time`` and ``reference_is_rate`` are read-only properties on the real
-    classes, so the annotations reject assignment even though the mock accepts it.
+    The mock leaves data alone by default, so a test opts in to the conversion it
+    wants. Wiring the genuine functions rather than a stub keeps these tests honest
+    about what a real measure would do.
     """
     measure = cast(Any, comparison.measure)
-    measure.denominator.is_person_time = denominator_is_person_time
-    measure.reference_is_rate = reference_is_rate
+    if denominator_is_person_time:
+        measure.denominator.to_opportunity_counts.side_effect = (
+            calculations.person_time_to_person_steps
+        )
+    if reference_is_rate:
+        measure.reference_to_step_probability.side_effect = (
+            calculations.rate_to_step_probability
+        )
 
 
 @pytest.mark.parametrize("step_size_days", [1, 7, 28])
@@ -410,7 +417,7 @@ def test_verify_preserves_expected_events(
     """Test that converting to person-steps leaves the expected event count alone."""
     step_size = step_size_days / DAYS_PER_YEAR
 
-    # A measure that declares neither side converts is the unscaled baseline.
+    # A measure that converts neither side is the unscaled baseline.
     baseline = FuzzyComparison(test_bundle, reference_bundle)
     baseline.verify(step_size=step_size)
     expected_events = {
@@ -419,7 +426,7 @@ def test_verify_preserves_expected_events(
     }
 
     converted = FuzzyComparison(test_bundle, reference_bundle)
-    _declare(converted, denominator_is_person_time=True, reference_is_rate=True)
+    _convert(converted, denominator_is_person_time=True, reference_is_rate=True)
     converted.verify(step_size=step_size)
 
     for key, result in _finest_results(converted).items():
@@ -440,7 +447,7 @@ def test_verify_requires_step_size_only_for_person_time(
     assert counts.proportion_test_results["overall"]
 
     person_time = FuzzyComparison(test_bundle, reference_bundle)
-    _declare(person_time, denominator_is_person_time=True)
+    _convert(person_time, denominator_is_person_time=True)
     with pytest.raises(ValueError, match="without a step size"):
         person_time.verify(step_size=None)
 
@@ -462,7 +469,7 @@ def test_verify_scales_only_rate_targets(
     """Test that the step size converts a rate target and leaves a proportion alone."""
     step_size = 28 / DAYS_PER_YEAR
     comparison = FuzzyComparison(test_bundle, reference_bundle)
-    _declare(comparison, reference_is_rate=reference_is_rate)
+    _convert(comparison, reference_is_rate=reference_is_rate)
     comparison.verify(step_size=step_size)
 
     expected = sorted(reference_data["value"] * (step_size if scaled else 1.0))
@@ -470,34 +477,6 @@ def test_verify_scales_only_rate_targets(
         result.target_lower_bound for result in _finest_results(comparison).values()
     )
     assert actual == pytest.approx(expected)
-
-
-def test_rate_to_step_probability_leaves_an_impossible_rate_out_of_domain() -> None:
-    """Test that a rate too high to be a per-step probability is not clamped to 1.
-
-    Clamping reported the group as a decisive failure, because a target of exactly 1
-    leaves the no-bug distribution with mass only at the denominator. Out of domain, the
-    fuzzy checker raises on the resulting nan instead.
-    """
-    impossible = pd.DataFrame({"value": [20.0]})
-    probability = FuzzyComparison._rate_to_step_probability(impossible, 28 / DAYS_PER_YEAR)
-    assert probability["value"].iloc[0] > 1.0
-
-
-@pytest.mark.parametrize(
-    "step_size, warns",
-    [
-        pytest.param(0.1, False, id="whole_number_of_steps_is_quiet"),
-        pytest.param(28 / DAYS_PER_YEAR, True, id="mismatched_step_size_warns"),
-    ],
-)
-def test_person_time_to_person_steps_warns_on_drift(
-    step_size: float, warns: bool, caplog: LogCaptureFixture
-) -> None:
-    """Test that person-time which is not a whole number of person-steps is reported."""
-    person_years = pd.DataFrame({"value": [100.0]})
-    FuzzyComparison._person_time_to_person_steps(person_years, step_size)
-    assert ("is not a whole number of person-steps" in caplog.text) == warns
 
 
 def test_target_interval_configuration_default_none(

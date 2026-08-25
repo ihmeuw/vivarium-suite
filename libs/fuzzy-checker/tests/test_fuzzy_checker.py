@@ -147,7 +147,7 @@ def test__calculate_bayes_factor(step: int) -> None:
 @pytest.mark.parametrize(
     "numerator, denominator, target_proportion",
     [
-        pytest.param(3, 100.5, 0.1, id="non_integral_denominator"),
+        pytest.param(3, 100.5, 0.1, id="non_integer_denominator"),
         pytest.param(10, 100, 1.56, id="target_proportion_above_one"),
     ],
 )

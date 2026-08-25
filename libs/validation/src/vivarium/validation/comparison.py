@@ -10,14 +10,10 @@ from vivarium.validation.bundle import RatioMeasureDataBundle
 from vivarium.validation.constants import DRAW_INDEX, DataSource
 from vivarium.validation.data_transformation.calculations import stratify
 from vivarium.validation.data_transformation.measures import RatioMeasure
+from vivarium.validation.data_transformation.types import RateConversionType
 from vivarium.validation.visualization import dataframe_utils
 
 StratValue = str | int | float
-
-# Person-time accrues as ``people * step_size`` each step, so dividing it back out is
-# exact up to accumulated floating point error -- orders of magnitude below the ~0.5
-# drift a step size that does not match the simulation's would produce.
-_PERSON_STEP_ROUNDING_TOLERANCE = 1e-3
 
 
 @dataclass(kw_only=True)
@@ -131,6 +127,7 @@ class Comparison(ABC):
         self,
         step_size: float | None,
         stratifications: Collection[str] | Literal["all"] = "all",
+        rate_conversion_type: RateConversionType = "linear",
     ) -> None:
         pass
 
@@ -324,14 +321,15 @@ class FuzzyComparison(Comparison):
         self,
         step_size: float | None,
         stratifications: Collection[str] | Literal["all"] = "all",
+        rate_conversion_type: RateConversionType = "linear",
     ) -> None:
         """Verify test and reference data are statistically indistinguishable according to the fuzzy checker.
 
         Raises
         ------
         ValueError
-            If step_size is None and the measure is measured in person-time, which
-            cannot be converted to a count of opportunities without it.
+            If step_size is None and the measure holds person-time or an annual rate,
+            neither of which the measure can convert without it.
         NotImplementedError
             If the test data is not from a simulation, or the reference data is not
             from an artifact or GBD.
@@ -364,33 +362,19 @@ class FuzzyComparison(Comparison):
             key: stratify(data, stratify_cols)
             for key, data in self.reference_bundle.datasets.items()
         }
-        numerator = test_datasets["numerator_data"]
-        denominator = test_datasets["denominator_data"]
-        target = ref_datasets["data"]
-
-        # The fuzzy checker tests a proportion of discrete opportunities, so the
-        # observed counts and the target have to agree on what one opportunity is.
-        # We use the person-step: person-time becomes a count of person-steps, and an
-        # annual rate becomes the probability of an event in one step. Both sides then
-        # scale by step_size, leaving the expected number of events unchanged.
-        if step_size is None:
-            if (
-                self.measure.numerator.is_person_time
-                or self.measure.denominator.is_person_time
-            ):
-                raise ValueError(
-                    f"Cannot verify '{self.measure.measure_key}' without a step size. It "
-                    "is measured in person-time, which has no meaning as a count of "
-                    "opportunities until it is divided by the simulation's time step. "
-                    "Set 'time.step_size' in the model specification."
-                )
-        else:
-            if self.measure.numerator.is_person_time:
-                numerator = self._person_time_to_person_steps(numerator, step_size)
-            if self.measure.denominator.is_person_time:
-                denominator = self._person_time_to_person_steps(denominator, step_size)
-            if self.measure.reference_is_rate:
-                target = self._rate_to_step_probability(target, step_size)
+        # The fuzzy checker tests a proportion of discrete opportunities, so the observed
+        # counts and the target have to agree on what one opportunity is. The measure
+        # owns that conversion, since it is the only thing that knows what its data
+        # holds; both sides scale by step_size, leaving the expected event count alone.
+        numerator = self.measure.numerator.to_opportunity_counts(
+            test_datasets["numerator_data"], step_size
+        )
+        denominator = self.measure.denominator.to_opportunity_counts(
+            test_datasets["denominator_data"], step_size
+        )
+        target = self.measure.reference_to_step_probability(
+            ref_datasets["data"], step_size, rate_conversion_type
+        )
 
         fuzzy_checker.test_proportion_vectorized(
             name=self.measure.measure_key,
@@ -409,64 +393,6 @@ class FuzzyComparison(Comparison):
                     if strat_key not in stratified:
                         stratified[strat_key] = {}
                     stratified[strat_key][result.name_additional] = result
-
-    @staticmethod
-    def _person_time_to_person_steps(data: pd.DataFrame, step_size: float) -> pd.DataFrame:
-        """Convert person-time in years to a whole number of person-steps.
-
-        Parameters
-        ----------
-        data
-            Person-time in years.
-        step_size
-            The simulation's time step, as a fraction of a year.
-
-        Returns
-        -------
-            The equivalent count of person-steps.
-        """
-        person_steps = data / step_size
-        rounded = person_steps.round()
-
-        drift = float((person_steps - rounded).abs().max().max())
-        if drift > _PERSON_STEP_ROUNDING_TOLERANCE:
-            logger.warning(
-                f"Person-time is not a whole number of person-steps at a step size of "
-                f"{step_size} years; the largest value is off by {drift:g} steps. This "
-                "usually means the step size does not match the one the simulation ran "
-                "with, which would bias every target this comparison tests."
-            )
-
-        return rounded
-
-    @staticmethod
-    def _rate_to_step_probability(data: pd.DataFrame, step_size: float) -> pd.DataFrame:
-        """Convert an annual rate to the probability of an event in one time step.
-
-        This is the linear conversion that
-        ``vivarium.engine.framework.utilities.rate_to_probability`` performs. It is
-        spelled out here rather than imported so that vivarium-validation does not take
-        a runtime dependency on vivarium-engine. A model configured for the exponential
-        conversion is not yet handled.
-
-        A rate above ``1 / step_size`` cannot be expressed as a per-step probability.
-        Clamping it to 1 is worse than useless: the no-bug distribution then has zero
-        mass anywhere but ``n``, so the Bayes factor is infinite and the group reports a
-        decisive failure. Such a rate is left out of domain so that the fuzzy checker
-        raises on the resulting nan instead.
-
-        Parameters
-        ----------
-        data
-            An annual rate.
-        step_size
-            The simulation's time step, as a fraction of a year.
-
-        Returns
-        -------
-            The per-time-step probability.
-        """
-        return data * step_size
 
     def align_datasets(
         self,

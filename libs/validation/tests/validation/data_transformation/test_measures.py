@@ -711,10 +711,10 @@ def test_rate_aggregation_weights(
     pd.testing.assert_frame_equal(weights, expected_weights)
 
 
-# (numerator.is_person_time, denominator.is_person_time, reference_is_rate) for every
-# registered measure. FuzzyComparison.verify reads exactly these three to decide what the
-# step size converts, and a wrong declaration mis-scales the fuzzy check silently rather
-# than failing, so each one is pinned rather than derived.
+# Whether each registered measure converts its numerator, its denominator, and its
+# reference when given a step size. FuzzyComparison.verify delegates all three to the
+# measure, and a measure that forgets one mis-scales the fuzzy check silently rather
+# than failing, so each is pinned rather than derived.
 DECLARED_UNITS: dict[str, tuple[RatioMeasure, bool, bool, bool]] = {
     "cause.incidence_rate": (Incidence("c"), False, True, True),
     "cause.prevalence": (Prevalence("c"), True, True, False),
@@ -735,7 +735,7 @@ DECLARED_UNITS: dict[str, tuple[RatioMeasure, bool, bool, bool]] = {
     "measure, numerator_is_person_time, denominator_is_person_time, reference_is_rate",
     [pytest.param(*values, id=key) for key, values in DECLARED_UNITS.items()]
     + [
-        # Not in the registry; built over another measure, whose declarations it inherits.
+        # Not in the registry; built over another measure, whose conversions it inherits.
         pytest.param(
             CategoricalRelativeRisk("r", "c", "excess_mortality_rate", None, None),
             False,
@@ -758,14 +758,27 @@ def test_declared_units(
     denominator_is_person_time: bool,
     reference_is_rate: bool,
 ) -> None:
-    """Test that each measure declares whether its data is person-time and a rate."""
-    assert measure.numerator.is_person_time == numerator_is_person_time
-    assert measure.denominator.is_person_time == denominator_is_person_time
-    assert measure.reference_is_rate == reference_is_rate
+    """Test that each measure converts exactly the data that needs it.
+
+    A step size of 0.1 turns 100 person-years into 1000 person-steps and an annual
+    rate of 0.12 into a per-step probability of 0.012; data needing no conversion
+    comes back untouched.
+    """
+    step_size = 0.1
+    person_time = pd.DataFrame({"value": [100.0]})
+    rate = pd.DataFrame({"value": [0.12]})
+
+    numerator = measure.numerator.to_opportunity_counts(person_time, step_size)
+    denominator = measure.denominator.to_opportunity_counts(person_time, step_size)
+    reference = measure.reference_to_step_probability(rate, step_size)
+
+    assert numerator["value"].iloc[0] == (1000.0 if numerator_is_person_time else 100.0)
+    assert denominator["value"].iloc[0] == (1000.0 if denominator_is_person_time else 100.0)
+    assert reference["value"].iloc[0] == pytest.approx(0.012 if reference_is_rate else 0.12)
 
 
 def test_every_registered_measure_declares_its_units() -> None:
-    """Test that no registered measure escapes the declared-units table."""
+    """Test that no registered measure escapes the conversion table."""
     registered = {
         f"{entity_type}.{measure}"
         for entity_type, measures in MEASURE_KEY_MAPPINGS.items()

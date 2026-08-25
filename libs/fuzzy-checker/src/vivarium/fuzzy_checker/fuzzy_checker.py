@@ -543,9 +543,6 @@ class FuzzyChecker:
         except (ZeroDivisionError, FloatingPointError):
             return float("inf")
 
-        # Every comparison against a nan is False, so a nan reaching the caller would
-        # leave reject_null False and confidence "Conclusive" -- a test that never ran
-        # reported as a confident pass. A nan means "did not evaluate", never "passed".
         if np.isnan(bayes_factor):
             raise ValueError(
                 f"Bayes factor at numerator {numerator} is nan, so this test did not "

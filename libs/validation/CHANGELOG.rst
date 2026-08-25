@@ -14,6 +14,16 @@
   when the affected measure's data is
 - Set ``measure`` on ``RiskStatePersonTime`` so risk exposure data is recognized as
   person-time
+- Add a ``vivarium-engine`` dependency and defer the rate-to-probability conversion to
+  ``vivarium.engine.framework.utilities.rate_to_probability``, so validation converts a
+  rate exactly as the simulation did
+- Read the rate conversion type from the model specification rather than assuming the
+  linear conversion, so a model configured for the exponential conversion is no longer
+  validated against a linear target
+- ``verify()`` takes the conversion type, and each measure owns converting its own data,
+  so a measure that needs no conversion no longer relies on the comparison knowing that
+- Raise ``ValueError`` for a reference rate too high to express as a per-step
+  probability, rather than testing it against a target clamped to 1
 
 **0.2.1 - 08/06/26**
 

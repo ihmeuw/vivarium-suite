@@ -6,7 +6,7 @@ import io
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Collection, Literal, Mapping
+from typing import Any, Collection, Literal, Mapping, cast, get_args
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -34,6 +34,7 @@ from vivarium.validation.data_transformation.measures import (
     MeasureMapper,
     RatioMeasure,
 )
+from vivarium.validation.data_transformation.types import RateConversionType
 from vivarium.validation.data_transformation.utils import (
     add_comparison_metadata_levels,
     drop_extra_columns,
@@ -269,6 +270,32 @@ class ValidationContext:
             self.comparisons[comparison][f"{test_source}_{ref_source}"], stratifications
         )
 
+    def _rate_conversion_type(self) -> RateConversionType:
+        """Return the rate-to-probability conversion the simulation was configured with.
+
+        Read from ``randomness.rate_conversion_type``, which is where a model
+        specification sets it. Unset means the framework default.
+
+        Raises
+        ------
+        ValueError
+            If the model specification names a conversion the engine does not
+            implement.
+        """
+        if "randomness" not in self.model_spec:
+            return DEFAULT_RATE_CONVERSION_TYPE
+        if "rate_conversion_type" not in self.model_spec.randomness:
+            return DEFAULT_RATE_CONVERSION_TYPE
+
+        conversion_type = self.model_spec.randomness.rate_conversion_type
+        if conversion_type not in get_args(RateConversionType):
+            raise ValueError(
+                f"Unknown rate conversion type '{conversion_type}' in the model "
+                f"specification. Expected one of {get_args(RateConversionType)}."
+            )
+        # Narrowed by the membership check above, which mypy cannot see through.
+        return cast(RateConversionType, conversion_type)
+
     def _verify(
         self,
         comparison: Comparison,
@@ -284,7 +311,7 @@ class ValidationContext:
                 "in inaccurate verification results."
             )
 
-        comparison.verify(step_size, stratifications)
+        comparison.verify(step_size, stratifications, self._rate_conversion_type())
         if comparison.verified:
             logger.info(f"Comparison {comparison.comparison_key} passed!")
             return True
@@ -952,3 +979,7 @@ class ValidationContext:
         """
 
         self.measure_mapper.add_new_measure(measure_key, measure_class)
+
+
+DEFAULT_RATE_CONVERSION_TYPE: RateConversionType = "linear"
+"""What the framework uses when a model specification does not say otherwise."""

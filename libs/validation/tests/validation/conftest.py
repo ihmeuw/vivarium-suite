@@ -647,21 +647,24 @@ def reference_data() -> pd.DataFrame:
 @pytest.fixture
 def mock_ratio_measure() -> RatioMeasure:
     """Create generic mock RatioMeasure for testing."""
-    # Create mock formatters. is_person_time and reference_is_rate have to be set
-    # explicitly: a bare Mock attribute is truthy, which would send this measure's
-    # plain counts and proportions through the person-step conversion in verify().
+    # The conversions have to be wired explicitly: a bare Mock method returns a Mock
+    # rather than the data. Leaving the data alone stands in for a measure whose data
+    # is already counts and proportions; tests needing a conversion opt into it.
+    def identity(data: pd.DataFrame, *_: object) -> pd.DataFrame:
+        return data
+
     mock_numerator = mock.Mock()
     mock_numerator.name = "numerator"
-    mock_numerator.is_person_time = False
+    mock_numerator.to_opportunity_counts.side_effect = identity
 
     mock_denominator = mock.Mock()
     mock_denominator.name = "denominator"
-    mock_denominator.is_person_time = False
+    mock_denominator.to_opportunity_counts.side_effect = identity
 
     measure = mock.Mock(spec=RatioMeasure)
     measure.measure_key = "mock_measure"
     measure.measure = "some_measure"
-    measure.reference_is_rate = False
+    measure.reference_to_step_probability.side_effect = identity
     measure.numerator = mock_numerator
     measure.denominator = mock_denominator
     measure.get_measure_data_from_ratio.side_effect = calculations.ratio

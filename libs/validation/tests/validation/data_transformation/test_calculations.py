@@ -3,15 +3,19 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+from _pytest.logging import LogCaptureFixture
 
 from vivarium.validation.constants import DRAW_INDEX, SEED_INDEX
 from vivarium.validation.data_transformation.calculations import (
     aggregate_sum,
     filter_data,
     linear_combination,
+    person_time_to_person_steps,
+    rate_to_step_probability,
     ratio,
     weighted_average,
 )
+from vivarium.validation.data_transformation.types import RateConversionType
 
 
 @pytest.fixture
@@ -417,3 +421,83 @@ def test_weighted_average_error_on_extra_data_indices() -> None:
     weights = weights.set_index(["location", "sex", "age", "color"])
     with pytest.raises(ValueError, match="are not present in weights index levels"):
         weighted_average(data, weights)
+
+
+DAYS_PER_YEAR = 365.0
+
+
+def test_rate_to_step_probability_refuses_an_impossible_rate() -> None:
+    """Test that a rate too high to be a per-step probability is refused, not clamped.
+
+    The engine clamps such a rate to 1, which leaves the no-bug distribution with mass
+    only at the denominator, so the group would report a decisive failure rather than
+    the error it deserves.
+    """
+    impossible = pd.DataFrame({"value": [20.0]})
+    with pytest.raises(ValueError, match="too high to express as a probability"):
+        rate_to_step_probability(impossible, 28 / DAYS_PER_YEAR)
+
+
+@pytest.mark.parametrize(
+    "step_size, warns",
+    [
+        pytest.param(0.1, False, id="whole_number_of_steps_is_quiet"),
+        pytest.param(28 / DAYS_PER_YEAR, True, id="mismatched_step_size_warns"),
+    ],
+)
+def test_person_time_to_person_steps_warns_on_drift(
+    step_size: float, warns: bool, caplog: LogCaptureFixture
+) -> None:
+    """Test that person-time which is not a whole number of person-steps is reported."""
+    person_years = pd.DataFrame({"value": [100.0]})
+    person_time_to_person_steps(person_years, step_size)
+    assert ("is not a whole number of person-steps" in caplog.text) == warns
+
+
+@pytest.mark.parametrize(
+    "convert",
+    [person_time_to_person_steps, rate_to_step_probability],
+    ids=["person_time_to_person_steps", "rate_to_step_probability"],
+)
+def test_conversions_require_a_step_size(convert) -> None:  # type: ignore[no-untyped-def]
+    """Test that neither conversion silently proceeds without a step size."""
+    with pytest.raises(ValueError, match="without a step size"):
+        convert(pd.DataFrame({"value": [1.0]}), None)
+
+
+@pytest.mark.parametrize(
+    "rate_conversion_type, expected",
+    [
+        pytest.param("linear", 0.12 * 28 / DAYS_PER_YEAR, id="linear"),
+        pytest.param("exponential", 1 - np.exp(-0.12 * 28 / DAYS_PER_YEAR), id="exponential"),
+    ],
+)
+def test_rate_to_step_probability_uses_the_configured_conversion(
+    rate_conversion_type: RateConversionType, expected: float
+) -> None:
+    """Test that the conversion follows what the simulation was configured to use.
+
+    Converting a rate differently than the simulation did makes a correct model look
+    wrong, so these values are pinned against the arithmetic rather than against the
+    engine helper this defers to.
+    """
+    rate = pd.DataFrame({"value": [0.12]}, index=pd.Index(["a"], name="k"))
+    converted = rate_to_step_probability(rate, 28 / DAYS_PER_YEAR, rate_conversion_type)
+
+    assert converted["value"].iloc[0] == pytest.approx(expected)
+    assert converted.index.equals(rate.index)
+
+
+def test_rate_to_step_probability_does_not_consume_its_input() -> None:
+    """Test that converting leaves the caller's data alone.
+
+    The engine's exponential branch caps its input in place, which would otherwise
+    rewrite the reference data held by the bundle.
+    """
+    rate = pd.DataFrame({"value": [300.0, 1.0]})
+    before = rate.copy()
+    with pytest.raises(ValueError, match="too high to express as a probability"):
+        rate_to_step_probability(rate, 28 / DAYS_PER_YEAR, "linear")
+    rate_to_step_probability(rate, 1 / DAYS_PER_YEAR, "exponential")
+
+    assert before.equals(rate)

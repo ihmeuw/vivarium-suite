@@ -25,6 +25,7 @@ from vivarium.validation.data_transformation.rate_aggregation import (
     RateAggregationWeights,
     population_weighted,
 )
+from vivarium.validation.data_transformation.types import RateConversionType
 
 
 class Measure(ABC):
@@ -51,17 +52,28 @@ class Measure(ABC):
         """Return a formatted title for the measure."""
         return _format_title(self.measure_key)
 
-    @property
-    def reference_is_rate(self) -> bool:
-        """Whether the reference data is an annual rate rather than a proportion.
+    def reference_to_step_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the reference data as the probability of an event in one time step.
 
-        A rate has to be converted to the probability of an event in one time step
-        before it can be compared against an observed proportion; a proportion is
-        already independent of the step size. Every measure in this package is named
-        for what it holds, so the suffix decides it; a measure whose name does not
-        follow that pattern should override this.
+        A proportion is already independent of the step size, so this returns it
+        unchanged; a measure whose reference is an annual rate overrides this.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
         """
-        return self.measure.endswith("_rate")
+        return data
 
     def __str__(self) -> str:
         return self.measure_key
@@ -184,6 +196,15 @@ class Incidence(RatioMeasure):
             denominator=StatePersonTime(cause, f"susceptible_to_{cause}"),
         )
 
+    def reference_to_step_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the annual rate as the probability of an event in one time step."""
+        return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
+
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
     def get_measure_data_from_sim_inputs(self, data: pd.DataFrame) -> pd.DataFrame:
         return data
@@ -235,6 +256,15 @@ class SIRemission(RatioMeasure):
             denominator=StatePersonTime(cause, cause),
         )
 
+    def reference_to_step_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the annual rate as the probability of an event in one time step."""
+        return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
+
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
     def get_measure_data_from_sim_inputs(self, data: pd.DataFrame) -> pd.DataFrame:
         return data
@@ -256,6 +286,15 @@ class CauseSpecificMortalityRate(RatioMeasure):
             numerator=Deaths(cause),  # Deaths due to specific cause
             denominator=StatePersonTime(),  # Total person time
         )
+
+    def reference_to_step_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the annual rate as the probability of an event in one time step."""
+        return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
     def get_measure_data_from_sim_inputs(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -287,6 +326,15 @@ class ExcessMortalityRate(RatioMeasure):
                 cause, cause
             ),  # Person time among those with the disease
         )
+
+    def reference_to_step_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the annual rate as the probability of an event in one time step."""
+        return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
     def get_measure_data_from_sim_inputs(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -437,15 +485,20 @@ class CategoricalRelativeRisk(RatioMeasure):
         """Returns rate aggregated weights."""
         return self.affected_measure.rate_aggregation_weights
 
-    @property
-    def reference_is_rate(self) -> bool:
+    def reference_to_step_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
         """Defer to the affected measure, whose data the reference is a multiple of.
 
         A relative risk is unitless, so ``relative_risks * affected_measure_data`` is a
-        rate exactly when the affected measure's data is. The measure name is
-        "relative_risk", so the inherited name-based default cannot see this.
+        rate exactly when the affected measure's data is.
         """
-        return self.affected_measure.reference_is_rate
+        return self.affected_measure.reference_to_step_probability(
+            data, step_size, rate_conversion_type
+        )
 
     @utils.check_io(
         relative_risks=SingleNumericColumn,
