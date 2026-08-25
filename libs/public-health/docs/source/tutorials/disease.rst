@@ -12,6 +12,12 @@ The disease components in this package extend the base
 :class:`~vivarium.engine.framework.state_machine.Transition` classes from
 :mod:`vivarium.engine.framework.state_machine`.
 
+.. 
+   The ``testoutput`` blocks below assume ``InteractiveContext``'s quiet logging
+   default, i.e. vivarium-engine >= 5.6.1. Under an older engine the default is
+   info level, so ``sim.step()`` logs the simulation time between the ``print``
+   calls and each of those blocks needs an inner ``...`` marker to absorb it.
+
 .. contents::
    :local:
    :depth: 2
@@ -315,7 +321,6 @@ reading from the artifact:
 
    ...
    States: ['diarrheal_diseases', 'susceptible_to_diarrheal_diseases']
-   ...
    Transitions occurred: True
 
 .. note::
@@ -456,7 +461,6 @@ All measures are set through the configuration:
 
    ...
    All susceptible: True
-   ...
    Infections occurred: True
 
 
@@ -769,7 +773,6 @@ afterward:
 
    ...
    Born with condition: True
-   ...
    No new cases: True
 
 
@@ -839,7 +842,6 @@ via an incidence rate.
 
    ...
    Initially infected: True
-   ...
    New cases arose: True
 
 
@@ -987,9 +989,7 @@ constructor:
 
    ...
    All in acute: True
-   ...
    Still in acute: True
-   ...
    All in chronic: True
 
 

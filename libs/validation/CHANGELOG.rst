@@ -1,11 +1,15 @@
-**0.3.0 - 08/25/26**
+**0.4.0 - 08/26/26**
 
 - Fix a bug in converting rates to probabilities for fuzzy checking
-- Require ``vivarium-fuzzy-checker>=0.4.0`` and add a ``vivarium-engine`` dependency,
+- Require ``vivarium-fuzzy-checker>=0.5.0`` and add a ``vivarium-engine`` dependency,
   which supplies the rate conversion
 - ``verify()`` takes the rate conversion type, raises without a step size or on a rate
   too high to express as a probability, and no longer reports a comparison as verified
   when any of its tests did not evaluate
+
+**0.3.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10
 
 **0.2.1 - 08/06/26**
 

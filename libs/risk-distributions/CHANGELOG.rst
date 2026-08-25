@@ -1,3 +1,7 @@
+**3.2.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10
+
 **3.1.9 - 07/29/26**
 
 - Support pandas 3 (MIC-6773): cast ensemble weights and distribution call data

@@ -14,24 +14,83 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 """
 from __future__ import annotations
 
-from collections.abc import Callable
 from math import ceil
-from typing import Any, overload
+from typing import TYPE_CHECKING, overload
 
 import pandas as pd
 
 from vivarium.engine.framework.engine import SimulationContext
-from vivarium.engine.framework.event import Event
-from vivarium.engine.framework.values import Pipeline
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
-from vivarium.engine.types import ClockStepSize, ClockTime
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+    from typing import Any
+
+    from vivarium.config_tree.main import ConfigTree
+
+    from vivarium.engine import Component
+    from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.values import Pipeline
+    from vivarium.engine.types import ClockStepSize, ClockTime
 
 
 class InteractiveContext(SimulationContext):
     """A simulation context with helper methods for running simulations interactively."""
 
-    def __init__(self, *args: Any, setup: bool = True, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        model_specification: str | Path | ConfigTree | None = None,
+        components: list[Component] | dict[str, Any] | ConfigTree | None = None,
+        configuration: dict[str, Any] | ConfigTree | None = None,
+        plugin_configuration: dict[str, Any] | ConfigTree | None = None,
+        sim_name: str | None = None,
+        logging_verbosity: int = 0,
+        *,
+        setup: bool = True,
+    ) -> None:
+        """Create an interactive simulation context.
+
+        Parameters
+        ----------
+        model_specification
+            Path to a model specification yaml, or an already-parsed ``ConfigTree``.
+            A path must exist, end in ``.yaml`` or ``.yml``, and use only the
+            top-level keys ``plugins``, ``components``, and ``configuration``.
+            A value of None will build the simulation from the other arguments alone.
+        components
+            Components to include in addition to the specification's. A dict or
+            ``ConfigTree`` merges into the specification's ``components`` block
+            instead, replacing the keys it names. A value of None will use the
+            specification's components without change.
+        configuration
+            Values overriding the specification's ``configuration`` block. A value
+            of None will use the specification's configuration without change.
+        plugin_configuration
+            Managers overriding the specification's ``plugins`` block. A value of
+            None will use the specification's plugin configuration without change.
+        sim_name
+            Name for this context, used to label its log records. Must be unique
+            within the process. A value of None names the context ``simulation_<n>``
+            by how many have been created so far.
+        logging_verbosity
+            How much to log. A value of 0 (the default) logs warnings and errors, 1
+            logs INFO-level messages, and 2+ logs DEBUG-level messages.
+            Note that only the first context built in a process configures logging
+            and subsequent contexts will inherit that configuration.
+        setup
+            Whether to set the simulation up on construction. A value of True
+            (the default) freezes the configuration; pass False to change
+            configuration before setting up.
+        """
+        super().__init__(
+            model_specification=model_specification,
+            components=components,
+            configuration=configuration,
+            plugin_configuration=plugin_configuration,
+            sim_name=sim_name,
+            logging_verbosity=logging_verbosity,
+        )
 
         if setup:
             self.setup()

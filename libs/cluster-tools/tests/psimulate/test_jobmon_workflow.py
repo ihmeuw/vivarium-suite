@@ -205,6 +205,42 @@ class TestBuildWorkflow:
         workflow.add_tasks.assert_called_once_with(expected_tasks)
 
 
+class TestGetTaskListEnvPrefix:
+    """Verify the ``PATH`` prepend built from ``env_prefix``."""
+
+    def test_venv_env_prefix_includes_base_env_bin(
+        self,
+        mock_tool_cls: MagicMock,
+        mock_write_metadata: MagicMock,
+        output_paths: OutputPaths,
+        native_spec: MagicMock,
+        two_jobs: list[JobParameters],
+        tmp_path: Path,
+    ) -> None:
+        """The command template is wired through ``resolve_env_bin_path``:
+        a venv overlay's base env bin follows the venv's own bin so console
+        scripts installed only in the base env still resolve. (A conda
+        prefix could not pin this wiring - its bin path is indistinguishable
+        from a plain ``<prefix>/bin`` append.)"""
+        venv = tmp_path / "venv"
+        (venv / "bin").mkdir(parents=True)
+        (venv / "pyvenv.cfg").write_text("home = /shared_envs/my_env_current/bin\n")
+        get_task_list(
+            tool=mock_tool_cls.return_value,
+            command="run",
+            job_parameters_list=two_jobs,
+            metadata_dir=output_paths.metadata_dir,
+            results_dir=output_paths.results_dir,
+            worker_logging_root=output_paths.worker_logging_root,
+            native_specification=native_spec,
+            env_prefix=str(venv),
+        )
+        kwargs = mock_tool_cls.return_value.get_task_template.call_args.kwargs
+        assert kwargs["command_template"].startswith(
+            f"PATH={venv}/bin:/shared_envs/my_env_current/bin:$PATH "
+        )
+
+
 class TestGetTaskListBackupAwareRetryScaling:
     """Verify the simulation-task retry-scaling policy.
 

@@ -1,3 +1,7 @@
+**6.6.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10 and add support for Python 3.13
+
 **6.5.0 - 08/06/26**
 
 - Support pandas 3

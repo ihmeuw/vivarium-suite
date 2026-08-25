@@ -15,6 +15,7 @@ from pathlib import Path
 
 from vivarium.cluster_tools.core.cluster.interface import NativeSpecification
 from vivarium.cluster_tools.core.jobmon import client
+from vivarium.cluster_tools.core.jobmon.env import resolve_env_bin_path
 
 
 def build_artifacts_in_parallel(
@@ -48,8 +49,10 @@ def build_artifacts_in_parallel(
     worker_logging_root
         Directory Jobmon writes per-task worker logs under.
     env_prefix
-        Absolute prefix of the conda env whose ``bin`` is prepended to
-        ``PATH`` so each build command's interpreter resolves without ``conda``.
+        Absolute prefix of the conda env or venv whose bin directories are
+        prepended to ``PATH`` so each build command's interpreter resolves
+        without ``conda``. For a venv, the base environment's ``bin`` is
+        included as well.
     resume
         If True, resume the workflow with the same ``workflow_name`` instead of
         starting fresh: Jobmon skips the location builds that already completed
@@ -75,12 +78,13 @@ def build_artifacts_in_parallel(
     if not build_commands:
         raise ValueError("build_commands is empty; there are no location artifacts to build.")
 
+    env_bin_path = resolve_env_bin_path(env_prefix)
     tool = client.make_tool()
     template = client.make_task_template(
         tool,
         template_name="build_artifact",
-        command_template="PATH={env_prefix}/bin:$PATH {command}",
-        node_args=["command", "env_prefix"],
+        command_template="PATH={env_bin_path}:$PATH {command}",
+        node_args=["command", "env_bin_path"],
         task_args=[],
         op_args=[],
     )
@@ -90,7 +94,7 @@ def build_artifacts_in_parallel(
             template,
             name=name,
             compute_resources=compute_resources,
-            env_prefix=env_prefix,
+            env_bin_path=env_bin_path,
             command=command,
         )
         for name, command in build_commands.items()

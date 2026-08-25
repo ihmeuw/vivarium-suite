@@ -10,7 +10,7 @@ A configuration structure that supports cascading layers.
 Installation
 ------------
 
-**Supported Python versions: 3.10, 3.11, 3.12, 3.13**
+**Supported Python versions: 3.11, 3.12, 3.13**
 
 ``vivarium-config-tree`` is published on PyPI as part of the vivarium-suite monorepo:
 

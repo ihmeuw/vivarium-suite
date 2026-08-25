@@ -1,3 +1,7 @@
+**4.6.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10
+
 **4.5.1 - 08/12/26**
 
 - Publish docs under the distribution name from ``[project].name`` instead of the

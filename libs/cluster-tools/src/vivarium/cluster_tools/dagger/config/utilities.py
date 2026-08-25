@@ -4,7 +4,7 @@ Workflow Utilities
 ==================
 
 Shared helpers used across the ``workflow_config`` package: filesystem
-constants for resume markers, build-timestamp management, conda env
+constants for resume markers, build-timestamp management, environment
 resolution, and step-config scalar validation.
 
 """
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from vivarium.cluster_tools.core.jobmon import client
-from vivarium.cluster_tools.core.jobmon.env import resolve_env_prefix
+from vivarium.cluster_tools.core.jobmon.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.cluster_tools.dagger.config.config import ResourceConfig
 
 if TYPE_CHECKING:
@@ -76,11 +76,14 @@ def resolve_step_env_prefix(
     name: str,
     environment: str | None,
 ) -> str:
-    """Resolve a step's conda environment to an absolute filesystem prefix.
+    """Resolve a step's environment to an absolute filesystem prefix.
 
-    Falls back to the runner's active ``CONDA_DEFAULT_ENV`` when
-    ``environment`` is unset. The resolved env name must be a
-    non-``"base"`` conda environment.
+    ``environment`` may be a conda env name, a venv name, or a path to
+    either's prefix (see
+    :func:`~vivarium.cluster_tools.core.jobmon.env.resolve_env_prefix`).
+    When unset, falls back to the runner's active venv (``VIRTUAL_ENV``),
+    then the active conda env (``CONDA_DEFAULT_ENV``). The resolved env
+    must not be conda's ``base``.
 
     Parameters
     ----------
@@ -91,7 +94,7 @@ def resolve_step_env_prefix(
 
     Returns
     -------
-        The absolute filesystem prefix of the resolved conda environment,
+        The absolute filesystem prefix of the resolved environment,
         suitable for passing as ``env_prefix`` to Jobmon task builders.
 
     Raises
@@ -101,12 +104,12 @@ def resolve_step_env_prefix(
     RuntimeError
         If the resolved env name has no matching filesystem prefix.
     """
-    env = environment or os.environ.get("CONDA_DEFAULT_ENV")
+    env = environment or os.environ.get("VIRTUAL_ENV") or os.environ.get("CONDA_DEFAULT_ENV")
     if not env or env == "base":
         raise ValueError(
-            f"Step '{name}': a non-base conda environment is required. "
+            f"Step '{name}': a non-base environment is required. "
             "Set 'environment' on the step, 'default_environment' on the workflow, "
-            "or activate a conda environment before running."
+            "or activate a conda environment or venv before running."
         )
     return resolve_env_prefix(env)
 
@@ -120,7 +123,7 @@ def get_single_command_task(
     env_prefix: str,
     command: str,
 ) -> list[Task]:
-    """Return a one-element ``list[Task]`` for a step that runs a single command in a conda env.
+    """Return a one-element ``list[Task]`` for a step that runs a single command in an env.
 
     The child inherits SLURM's stdout/stderr file descriptors via the
     ``stdout`` / ``stderr`` keys on the compute resources dict
@@ -131,8 +134,8 @@ def get_single_command_task(
     task_template = client.make_task_template(
         tool,
         template_name="workflow_command_step",
-        command_template="PATH={env_prefix}/bin:$PATH {command}",
-        node_args=["command", "env_prefix"],
+        command_template="PATH={env_bin_path}:$PATH {command}",
+        node_args=["command", "env_bin_path"],
         task_args=[],
         op_args=[],
     )
@@ -149,7 +152,7 @@ def get_single_command_task(
             task_template,
             name=name,
             compute_resources=compute_resources,
-            env_prefix=env_prefix,
+            env_bin_path=resolve_env_bin_path(env_prefix),
             command=wrapped_command,
         )
     ]

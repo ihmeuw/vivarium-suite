@@ -1,3 +1,7 @@
+**7.1.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10 and add support for Python 3.12 and 3.13
+
 **7.0.0 - 07/27/26**
 
 - Remove ``gbd_mapping_generator`` submodule and related tests and documentation
