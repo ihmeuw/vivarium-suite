@@ -13,7 +13,11 @@ import scipy.stats
 from loguru import logger
 from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_frozen
 
-from vivarium.fuzzy_checker.data_structures import TargetIntervalConfig, TestResult
+from vivarium.fuzzy_checker.data_structures import (
+    Confidence,
+    TargetIntervalConfig,
+    TestResult,
+)
 
 
 class FuzzyChecker:
@@ -126,6 +130,16 @@ class FuzzyChecker:
             fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
             inconclusive_bayes_factor_cutoff=inconclusive_bayes_factor_cutoff,
         )
+
+        if not test_proportion.evaluated:
+            raise ValueError(
+                f"The '{name}' test did not evaluate: its Bayes factor is nan, so it "
+                "neither passed nor failed. This usually means a distribution was built "
+                "with out-of-domain parameters, such as a target proportion outside "
+                f"[0, 1] (target was {test_proportion.target_lower_bound:g} to "
+                f"{test_proportion.target_upper_bound:g}) or a non-integral denominator "
+                f"(was {test_proportion.observed_denominator})."
+            )
 
         if test_proportion.reject_null:
             if test_proportion.observed_proportion < test_proportion.target_lower_bound:
@@ -493,9 +507,14 @@ class FuzzyChecker:
         inconclusive_bayes_factor_cutoff: float,
         bug_issue_distribution: rv_discrete_frozen,
         no_bug_issue_distribution: rv_discrete_frozen,
-    ) -> tuple[str, float | None, float | None]:
+    ) -> tuple[Confidence, float | None, float | None]:
         """Determine confidence level and compute edge Bayes factors."""
-        confidence = "Conclusive"
+        if np.isnan(bayes_factor):
+            # Every comparison below would be False, leaving the default "Conclusive"
+            # on a test that never ran.
+            return "Did not evaluate", None, None
+
+        confidence: Confidence = "Conclusive"
         lower_bound_bayes_factor = None
         upper_bound_bayes_factor = None
 
@@ -526,10 +545,9 @@ class FuzzyChecker:
     ) -> float:
         """Return the ratio of the bug to no-bug marginal likelihoods at the numerator.
 
-        Raises
-        ------
-        ValueError
-            If the Bayes factor is nan, meaning the test did not evaluate.
+        A nan means the test did not evaluate, usually because a distribution was built
+        with out-of-domain parameters. It is returned rather than raised so the caller
+        still gets a TestResult; ``TestResult.evaluated`` is how it is read back.
         """
         # We can be dealing with some _extremely_ unlikely events here, so we have to set numpy to not error
         # if we generate a probability too small to be stored in a floating point number(!), which is known
@@ -542,16 +560,6 @@ class FuzzyChecker:
             bayes_factor = bug_marginal_likelihood / no_bug_marginal_likelihood
         except (ZeroDivisionError, FloatingPointError):
             return float("inf")
-
-        if np.isnan(bayes_factor):
-            raise ValueError(
-                f"Bayes factor at numerator {numerator} is nan, so this test did not "
-                f"evaluate. The bug/issue distribution gave a marginal likelihood of "
-                f"{bug_marginal_likelihood} and the no-bug/issue distribution "
-                f"{no_bug_marginal_likelihood}; a nan from either usually means a "
-                "distribution was built with out-of-domain parameters, such as a "
-                "target proportion outside [0, 1]."
-            )
 
         return bayes_factor
 

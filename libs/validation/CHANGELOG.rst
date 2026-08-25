@@ -1,29 +1,11 @@
-**0.3.0 - 08/21/26**
+**0.3.0 - 08/25/26**
 
-**Breaking changes**
-- Require ``vivarium-fuzzy-checker>=0.4.0``, which now raises on a nan Bayes factor
-  instead of reporting the test as a confident pass
-- Convert person-time to a whole number of person-steps and annual rates to a
-  per-time-step probability before fuzzy checking, rather than dividing the target by
-  the step size, which inflated it by a factor of 1/step_size
-- ``verify()`` now raises ``ValueError`` when no step size is given for a measure
-  recorded in person-time, which is every measure in this package, rather than silently
-  skipping the conversion
-- Scale only rate measures' targets by the step size, which fixes ``prevalence``, and
-  defer to the affected measure for ``relative_risk``, whose reference is a rate exactly
-  when the affected measure's data is
-- Set ``measure`` on ``RiskStatePersonTime`` so risk exposure data is recognized as
-  person-time
-- Add a ``vivarium-engine`` dependency and defer the rate-to-probability conversion to
-  ``vivarium.engine.framework.utilities.rate_to_probability``, so validation converts a
-  rate exactly as the simulation did
-- Read the rate conversion type from the model specification rather than assuming the
-  linear conversion, so a model configured for the exponential conversion is no longer
-  validated against a linear target
-- ``verify()`` takes the conversion type, and each measure owns converting its own data,
-  so a measure that needs no conversion no longer relies on the comparison knowing that
-- Raise ``ValueError`` for a reference rate too high to express as a per-step
-  probability, rather than testing it against a target clamped to 1
+- Fix a bug in converting rates to probabilities for fuzzy checking
+- Require ``vivarium-fuzzy-checker>=0.4.0`` and add a ``vivarium-engine`` dependency,
+  which supplies the rate conversion
+- ``verify()`` takes the rate conversion type, raises without a step size or on a rate
+  too high to express as a probability, and no longer reports a comparison as verified
+  when any of its tests did not evaluate
 
 **0.2.1 - 08/06/26**
 

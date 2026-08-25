@@ -312,6 +312,18 @@ class ValidationContext:
             )
 
         comparison.verify(step_size, stratifications, self._rate_conversion_type())
+
+        unevaluated = comparison.unevaluated_results
+        if unevaluated:
+            # Reported separately: these neither passed nor failed, and calling them a
+            # failure would send someone looking for a discrepancy that was never measured.
+            logger.warning(
+                f"{len(unevaluated)} of {len(comparison.test_results)} tests for "
+                f"{comparison.comparison_key} did not evaluate, so this comparison "
+                "cannot pass. Their Bayes factors are nan, which usually means a target "
+                "outside [0, 1] or a denominator that is not a whole number."
+            )
+
         if comparison.verified:
             logger.info(f"Comparison {comparison.comparison_key} passed!")
             return True

@@ -1,6 +1,10 @@
-**0.4.0 - 08/21/26**
+**0.4.0 - 08/25/26**
 
-- Raise ``ValueError`` when a Bayes factor evaluates to nan
+- ``TestResult`` reports whether a test evaluated, via a new ``evaluated`` property and
+  a "Did not evaluate" confidence. A nan Bayes factor leaves ``reject_null`` False
+  without having decided anything, so it must not be read as a pass
+- ``assert_proportion`` raises ``ValueError`` on such a test; ``test_proportion``
+  returns it, so one group no longer abandons a whole batch
 
 **0.3.0 - 08/06/26**
 

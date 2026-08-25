@@ -1,10 +1,19 @@
 """Data structures used by :class:`vivarium.fuzzy_checker.fuzzy_checker.FuzzyChecker`."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from scipy.stats._distn_infrastructure import rv_discrete_frozen
+
+Confidence = Literal["Conclusive", "Inconclusive", "Did not evaluate"]
+"""How much a test result tells you.
+
+"Did not evaluate" is not a weak result but the absence of one: the hypothesis
+test never ran, so nothing about the result speaks to whether the simulation is
+correct.
+"""
 
 
 # Keyword-only so that subclasses can add fields without the inherited
@@ -73,7 +82,7 @@ class TestResult:
     """The no-bug/issue distribution used in the test."""
     index_info: dict[str, Any] | None = None
     """Index name mapping for name_additional attribute."""
-    confidence: str = "Conclusive"
+    confidence: Confidence = "Conclusive"
     """Whether the test result is conclusive or inconclusive based on sample size and Bayes factor."""
     lower_bound_bayes_factor: float | None = None
     """Bayes factor at numerator=0, used to check if sample size is too small for lower bound detection."""
@@ -81,8 +90,21 @@ class TestResult:
     """Bayes factor at numerator=denominator, used to check if sample size is too small for upper bound detection."""
 
     @property
+    def evaluated(self) -> bool:
+        """Whether the test produced a usable Bayes factor.
+
+        A nan Bayes factor means the test never ran, and every comparison against nan
+        is False, so ``reject_null`` comes back False without having been decided.
+        Callers must check this before reading a result as a pass.
+        """
+        return not math.isnan(self.bayes_factor)
+
+    @property
     def comparison_to_target(self) -> str:
         """Describe whether the observed proportion is below, above, or aligned with target."""
+        if not self.evaluated:
+            return "Did not evaluate"
+
         if not self.reject_null:
             return "No significant difference"
 
@@ -106,6 +128,7 @@ class TestResult:
             "target_upper_bound": self.target_upper_bound,
             "bayes_factor": self.bayes_factor,
             "reject_null": self.reject_null,
+            "evaluated": self.evaluated,
             "comparison_to_target": self.comparison_to_target,
             "confidence": self.confidence,
         }

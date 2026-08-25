@@ -1,4 +1,5 @@
 from collections.abc import Callable, Collection
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal, cast
 from unittest import mock
@@ -638,3 +639,28 @@ def test_verify_applies_stratified_target_interval(
         )
     else:
         assert overall_result.target_lower_bound == overall_result.target_upper_bound
+
+
+def test_a_test_that_did_not_evaluate_cannot_pass(
+    test_bundle: RatioMeasureDataBundle,
+    reference_bundle: RatioMeasureDataBundle,
+) -> None:
+    """Test that a comparison holding an unevaluated result does not report as verified.
+
+    The fuzzy checker returns such a result rather than raising, and its ``reject_null``
+    is False, so reading only that would call a test that never ran a pass. This is the
+    bug the whole change exists to prevent, one layer up.
+    """
+    comparison = FuzzyComparison(test_bundle, reference_bundle)
+    comparison.verify(step_size=None)
+    assert comparison.verified
+
+    overall = comparison.proportion_test_results["overall"]
+    assert isinstance(overall, TestResult)
+    unevaluated = replace(overall, bayes_factor=float("nan"))
+    comparison.proportion_test_results["overall"] = unevaluated
+
+    assert not unevaluated.evaluated
+    assert not unevaluated.reject_null
+    assert comparison.unevaluated_results == [unevaluated]
+    assert comparison.verified is False

@@ -135,17 +135,31 @@ class Comparison(ABC):
     def verified(self) -> bool | None:
         """Whether this comparison passes validation.
 
-        Returns None if verification has not been run yet,
-        True if all test results pass, False if any fail.
+        Returns None if verification has not been run yet, True if every test passed,
+        and False if any failed or could not be run at all. A test that did not
+        evaluate leaves ``reject_null`` False without having decided anything, so it
+        must not count towards a pass.
         """
         if "overall" not in self.proportion_test_results:
             return None
+        results = self.test_results
+        if not all(result.evaluated for result in results):
+            return False
+        return not any(result.reject_null for result in results)
+
+    @property
+    def test_results(self) -> list[TestResult]:
+        """Every test result this comparison produced, overall and stratified."""
+        if "overall" not in self.proportion_test_results:
+            return []
         overall = self.proportion_test_results["overall"]
         stratified = self.proportion_test_results.get("stratified", {})
-        reject_nulls = [overall.reject_null] + [
-            tr.reject_null for group in stratified.values() for tr in group.values()
-        ]
-        return not any(reject_nulls)
+        return [overall] + [tr for group in stratified.values() for tr in group.values()]
+
+    @property
+    def unevaluated_results(self) -> list[TestResult]:
+        """The test results that never produced a usable Bayes factor."""
+        return [result for result in self.test_results if not result.evaluated]
 
     @property
     def stratification_metadata(self) -> dict[str, Any]:
