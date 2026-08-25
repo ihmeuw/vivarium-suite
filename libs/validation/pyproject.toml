@@ -54,6 +54,9 @@ lint = ["vivarium-dependencies[lint]"]
 gbd = ["vivarium-inputs>=8.0.0,<9.0.0"]
 dev = ["vivarium-validation[test,docs,interactive,lint,gbd]"]
 ci_github = ["vivarium-validation[test,docs,lint]"]
+# Diverges from the sibling [ci_github,cluster] pattern by adding `gbd`: Jenkins is
+# the only env that can install vivarium-inputs, so it alone runs the GBD tests
+# and type-checks against real vivarium-inputs types.
 ci_jenkins = ["vivarium-validation[ci_github,cluster,gbd]"]
 
 [project.urls]
