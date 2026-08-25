@@ -1,6 +1,10 @@
-**5.6.2 - 08/24/26**
+**5.7.1 - 08/25/26**
 
 - Bugfix: apply ``configuration.randomness.rate_conversion_type`` to the randomness streams it configures
+
+**5.7.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10 and add support for Python 3.13
 
 **5.6.1 - 08/24/26**
 

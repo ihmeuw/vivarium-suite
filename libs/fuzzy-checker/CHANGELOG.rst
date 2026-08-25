@@ -1,3 +1,7 @@
+**0.4.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10 and add support for Python 3.12 and 3.13
+
 **0.3.0 - 08/06/26**
 
 **Breaking changes**

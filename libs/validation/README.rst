@@ -12,7 +12,7 @@ Vivarium Validation
 This library provides tooling for automated verification and validation (V&V) of
 Vivarium simulations, including data loading, measure comparison, and reporting.
 
-**Supported Python versions: 3.10, 3.11**
+**Supported Python versions: 3.11**
 
 You can install ``vivarium-validation`` from PyPI with pip:
 

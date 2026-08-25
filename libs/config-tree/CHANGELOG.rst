@@ -1,3 +1,7 @@
+**5.1.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10
+
 **5.0.12 - 07/23/26**
 
 - Streamline package __init__.py docstring

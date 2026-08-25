@@ -19,7 +19,7 @@ Installation
 For local development against the monorepo source, see the monorepo README at
 https://github.com/ihmeuw/vivarium-suite.
 
-Supported Python versions: 3.10, 3.11
+Supported Python versions: 3.11, 3.12, 3.13
 
 **HDF5 backing storage.** Vivarium uses the Hierarchical Data Format (HDF) for its
 data artifacts, and the libraries pip needs to read these files may not be present

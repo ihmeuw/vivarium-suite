@@ -1,3 +1,7 @@
+**4.6.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10
+
 **4.5.0 - 08/20/26**
 
 - Resolve dagger step environments that are venvs (e.g. shared-env venv overlays), not just conda envs

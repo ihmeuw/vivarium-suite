@@ -1,3 +1,7 @@
+**0.2.0 - 08/25/26**
+
+- **Breaking change.** Drop support for Python 3.10 and add support for Python 3.13
+
 **0.1.2 - 07/23/26**
 
 - Add 3.12 to python_versions.json
