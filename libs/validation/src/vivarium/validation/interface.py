@@ -14,6 +14,7 @@ import yaml
 from IPython.display import HTML, display
 from loguru import logger
 from matplotlib.figure import Figure
+from vivarium.artifact import ArtifactException
 from vivarium.fuzzy_checker import TestResult
 
 from vivarium.validation.bundle import RatioMeasureDataBundle
@@ -866,8 +867,6 @@ class ValidationContext:
     # TODO MIC-6047 Let user pass in custom age groups
     def _get_age_groups(self) -> pd.DataFrame:
         """Get the age groups from the given DataFrame or from the artifact."""
-        from vivarium.artifact import ArtifactException
-
         try:
             age_groups: pd.DataFrame = self.data_loader.get_data(
                 "population.age_bins", DataSource.ARTIFACT
