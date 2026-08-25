@@ -238,8 +238,7 @@ class DataLoader:
         return data
 
     def _load_from_gbd(self, data_key: str) -> Any:
-        # Deferred: vivarium-inputs is artifactory-only and lives in the
-        # `gbd` extra.
+        # Deferred: vivarium-inputs is artifactory-only and lives in the `gbd` extra.
         from vivarium_inputs import interface
 
         if "categories" in data_key:
@@ -269,8 +268,7 @@ class DataLoader:
     def _load_metadata(self, key: str, location: str) -> Any:
         """Loads metadata for a given entity from GBD mapping. Generally will be in the
         form of dict[str, str]. Most commonly used for risk factor categories."""
-        # Deferred: vivarium-inputs is artifactory-only and lives in the
-        # `gbd` extra.
+        # Deferred: vivarium-inputs is artifactory-only and lives in the `gbd` extra.
         from vivarium_inputs.mapping_extension import alternative_risk_factors
 
         entity_key = EntityKey(key)

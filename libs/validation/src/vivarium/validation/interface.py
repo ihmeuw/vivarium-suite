@@ -906,8 +906,7 @@ class ValidationContext:
         self, data: pd.DataFrame, data_key: str
     ) -> pd.DataFrame:
         """Format the output of a get_draws call to data schema conventions for the validation context."""
-        # Deferred: vivarium-inputs is artifactory-only and lives in the
-        # `gbd` extra.
+        # Deferred: vivarium-inputs is artifactory-only and lives in the `gbd` extra.
         from vivarium_inputs import utilities as vi
 
         if "relative_risk" in data_key:

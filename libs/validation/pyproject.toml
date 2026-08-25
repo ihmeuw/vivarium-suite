@@ -27,12 +27,6 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Topic :: Software Development :: Libraries",
 ]
-# Everything imported at module load time belongs here, not in an extra:
-# `import vivarium.validation` pulls in interface.py, which transitively imports
-# plotting, reporting, schema, and artifact/GBD-mapping modules. The one
-# exception is vivarium-inputs, which is IHME-artifactory-only and would make
-# the package uninstallable from public PyPI, so its imports are deferred into
-# the functions that need it (see the `gbd` extra below).
 dependencies = [
     "vivarium-dependencies[numpy,pandas,loguru,pyyaml,matplotlib,ipython,pyarrow]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
@@ -57,22 +51,9 @@ test = [
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
-# The GBD data source (`DataSource.GBD`): pulled in only by Jenkins
-# (ci_jenkins) because vivarium-inputs is IHME-artifactory-only and unreachable
-# from GH Actions. Its imports are deferred into the functions that use it, so
-# every other DataSource works without this extra installed.
 gbd = ["vivarium-inputs>=8.0.0,<9.0.0"]
-# Deprecated alias for `gbd`, kept for one release because pip treats an unknown
-# extra as a warning rather than an error: a hard rename would silently stop
-# installing vivarium-inputs for downstream repos still pinning the old name.
-# Remove once vivarium_gates_lsff_2026 (0200_pregnancy_sim, 0300_child_sim) has
-# migrated to `[gbd]`.
-validation = ["vivarium-validation[gbd]"]
 dev = ["vivarium-validation[test,docs,interactive,lint,gbd]"]
 ci_github = ["vivarium-validation[test,docs,lint]"]
-# Diverges from the sibling convention `[ci_github,cluster]` by adding `gbd`:
-# Jenkins is the only env that can install vivarium-inputs, so it also runs the
-# GBD data source's tests + mypy with real types.
 ci_jenkins = ["vivarium-validation[ci_github,cluster,gbd]"]
 
 [project.urls]

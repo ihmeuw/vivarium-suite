@@ -2,7 +2,7 @@
 
 - Declare every import-time dependency as a base dependency rather than an extra
 - Defer ``vivarium-inputs`` imports so the package imports without the ``gbd`` extra
-- Rename the ``validation`` extra to ``gbd``; ``validation`` is kept as a deprecated alias
+- Rename the ``validation`` extra to ``gbd``
 
 **0.3.0 - 08/25/26**
 
