@@ -508,3 +508,50 @@ def test_nan_bayes_factor_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     values = _values(TARGET_MEAN, 15.0, 100, seed=12345)
     with pytest.raises(ValueError, match="did not evaluate"):
         checker.test_mean(name="x", target_mean=TARGET_MEAN, observed_values=values)
+
+
+@pytest.mark.parametrize("method", ["conjugate", "fractional"])
+@pytest.mark.parametrize("scale", [1e-6, 1e6])
+@pytest.mark.parametrize(
+    "target_mean, tolerance",
+    [
+        # Point targets go through closed forms and are invariant to rounding;
+        # interval targets go through adaptive quadrature, whose subdivision
+        # choices vary slightly with the scale of the integrand.
+        pytest.param(TARGET_MEAN, 1e-9, id="point"),
+        pytest.param((0.98 * TARGET_MEAN, 1.02 * TARGET_MEAN), 1e-3, id="interval"),
+    ],
+)
+def test_scale_invariance(
+    method: Literal["conjugate", "fractional"],
+    scale: float,
+    target_mean: float | tuple[float, float],
+    tolerance: float,
+) -> None:
+    """Multiplying the values and target by a constant must not change the verdict.
+
+    The multiplicative counterpart of the translation sweep: both methods'
+    priors are scale-covariant (the empirical-Bayes variance prior scales with
+    the observed variance; the fractional reference prior is scale-free), so
+    the Bayes factor is a function of the data in units of its own spread.
+    """
+    values = _values(TARGET_MEAN, 15.0, 500, seed=12345)
+    base = FuzzyChecker().test_mean(
+        name="base", target_mean=target_mean, observed_values=values, method=method
+    )
+
+    scaled_target: float | tuple[float, float]
+    if isinstance(target_mean, tuple):
+        scaled_target = (target_mean[0] * scale, target_mean[1] * scale)
+    else:
+        scaled_target = target_mean * scale
+    scaled = FuzzyChecker().test_mean(
+        name="scaled",
+        target_mean=scaled_target,
+        observed_values=values * scale,
+        method=method,
+    )
+
+    assert scaled.bayes_factor == pytest.approx(base.bayes_factor, rel=tolerance)
+    assert scaled.reject_null == base.reject_null
+    assert scaled.observed_std == pytest.approx(base.observed_std * scale, rel=1e-9)
