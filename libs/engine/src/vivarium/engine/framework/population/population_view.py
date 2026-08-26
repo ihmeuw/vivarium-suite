@@ -619,7 +619,6 @@ class PopulationView:
             update_dtype
         ) and pd.api.types.is_datetime64_any_dtype(existing_dtype):
             return True
-        # is_datetime64_any_dtype excludes timedelta64 despite the name.
         if pd.api.types.is_timedelta64_dtype(
             update_dtype
         ) and pd.api.types.is_timedelta64_dtype(existing_dtype):
