@@ -420,8 +420,9 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        # Walk '_children' rather than indexing so that an unresolvable key path
-        # does not mark any traversed ConfigNode as accessed.
+        # Read '_children' rather than indexing: __getitem__ resolves a leaf to
+        # its value via get_value(), which marks it accessed even when the key
+        # path turns out not to resolve.
         node: ConfigTree | ConfigNode = self
         for key in keys:
             if not isinstance(node, ConfigTree) or key not in node._children:

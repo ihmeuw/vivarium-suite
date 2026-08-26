@@ -641,7 +641,7 @@ def test_get_subtree_ignores_layer(layer: str, nested_dict: dict[str, Any]) -> N
 def test_get_unresolved_path_does_not_mark_nodes_accessed(
     nested_dict: dict[str, Any]
 ) -> None:
-    """An unresolved ``get`` marks no traversed node as accessed, so ``unused_keys`` is unchanged."""
+    """An unresolved ``get`` marks nothing as accessed, so ``unused_keys`` is unchanged."""
     tree = ConfigTree(nested_dict)
     unused_keys = [
         "outer_layer_1",
