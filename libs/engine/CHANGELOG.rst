@@ -1,3 +1,7 @@
+**5.8.1 - 08/26/26**
+
+- Treat timedelta64 columns that differ only in unit as compatible population updates
+
 **5.8.0 - 08/25/26**
 
 - Skip observing results in ``InteractiveContext`` by default
