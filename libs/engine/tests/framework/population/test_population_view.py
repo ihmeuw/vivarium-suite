@@ -777,12 +777,17 @@ def test__update_column_and_ensure_dtype_unmatched_dtype() -> None:
             pd.to_datetime(["2025-01-01", "2025-01-02", "2025-01-03"]),
             np.dtype("datetime64[us]"),
         ),
+        (
+            pd.to_timedelta([1, 2, 3], unit="days"),
+            pd.to_timedelta([4, 5, 6], unit="days"),
+            np.dtype("timedelta64[ns]"),
+        ),
     ],
-    ids=["string_vs_object", "datetime_unit"],
+    ids=["string_vs_object", "datetime_unit", "timedelta_unit"],
 )
 def test__update_column_and_ensure_dtype_compatible_dtypes(
-    update_values: list[str] | pd.DatetimeIndex,
-    existing_values: list[str] | pd.DatetimeIndex,
+    update_values: list[str] | pd.DatetimeIndex | pd.TimedeltaIndex,
+    existing_values: list[str] | pd.DatetimeIndex | pd.TimedeltaIndex,
     existing_dtype: np.dtype[Any],
 ) -> None:
     """Compatible-but-unequal dtype updates keep the existing column's dtype."""
