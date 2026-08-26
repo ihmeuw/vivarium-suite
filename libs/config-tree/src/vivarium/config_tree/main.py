@@ -375,6 +375,10 @@ class ConfigTree:
     ) -> Any:
         """Return the value at the key or key path in the outermost layer.
 
+        Lenient like :meth:`dict.get` across the whole key path: a key missing
+        at any depth yields ``default_value``. Use :meth:`get_tree` to raise
+        instead.
+
         Parameters
         ----------
         keys
@@ -387,22 +391,10 @@ class ConfigTree:
 
         Notes
         -----
-        This method is lenient like :meth:`dict.get` across the *entire* key
-        path. ``default_value`` is returned if any key in the path is missing,
-        or if a key before the last one resolves to a value rather than to a
-        sub-tree. Use :meth:`get_tree` for a strict lookup that raises on an
-        unresolvable key path.
-
-        The leniency is about resolving the key path and does not extend to
-        layer lookups. ``layer`` applies only when the path resolves to a
-        value; if no value is set there, a
-        :class:`~vivarium.config_tree.exceptions.MissingLayerError` is raised
-        rather than ``default_value`` returned. When the path resolves to a
-        sub-tree, ``layer`` is ignored entirely -- even a layer name that does
-        not exist on the tree is accepted without error.
-
-        The ``keys`` argument is never modified, so a key path can be reused
-        across calls.
+        Leniency covers resolving the key path only. ``layer`` applies when the
+        path resolves to a value; when it resolves to a sub-tree ``layer`` is
+        ignored entirely, and even a layer name that does not exist on the tree
+        is accepted without error.
 
         Returns
         -------
@@ -430,20 +422,15 @@ class ConfigTree:
 
         # Walk '_children' rather than indexing so that an unresolvable key path
         # does not mark any traversed ConfigNode as accessed.
-        tree: ConfigTree = self
-        for key in keys[:-1]:
-            child = tree._children.get(key)
-            if not isinstance(child, ConfigTree):
+        node: ConfigTree | ConfigNode = self
+        for key in keys:
+            if not isinstance(node, ConfigTree) or key not in node._children:
                 return default_value
-            tree = child
+            node = node._children[key]
 
-        final_key = keys[-1]
-        if final_key not in tree._children:
-            return default_value
-        child = tree._children[final_key]
-        if isinstance(child, ConfigTree):
-            return child
-        return child.get_value(layer=layer)
+        if isinstance(node, ConfigTree):
+            return node
+        return node.get_value(layer=layer)
 
     def get_tree(self, keys: str | list[str]) -> ConfigTree:
         """Return the ``ConfigTree`` at the key or key path from the outermost layer.
