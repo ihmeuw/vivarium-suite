@@ -554,7 +554,6 @@ def test_get_chained_tree(nested_dict: dict[str, Any]) -> None:
 
 def test_get_chained_value(nested_dict: dict[str, Any]) -> None:
     tree = ConfigTree(nested_dict)
-    tree.get(["outer_layer_3", "inner_layer_1", "inner_layer_2"])
     assert (
         tree.get("outer_layer_3").get("inner_layer_1").get("inner_layer_2")
         == tree.get(["outer_layer_3", "inner_layer_1", "inner_layer_2"])
@@ -565,12 +564,147 @@ def test_get_chained_value(nested_dict: dict[str, Any]) -> None:
 def test_get_chained_default(nested_dict: dict[str, Any]) -> None:
     tree = ConfigTree(nested_dict)
     assert tree.get(["outer_layer_3", "missing_key"], "foo") == "foo"
-    # Check that the default only works for the last key
-    with pytest.raises(
-        ConfigurationKeyError,
-        match=re.escape("No value at key mapping '['outer_layer_3', 'whoops']'."),
-    ):
-        tree.get(["outer_layer_3", "whoops", "missing_key"], "foo")
+
+
+def test_get_chained_default_missing_intermediate_key(nested_dict: dict[str, Any]) -> None:
+    """``get`` returns the default when a key before the final one is missing."""
+    tree = ConfigTree(nested_dict)
+    key_paths = [
+        ["fake_key", "inner_layer"],
+        ["outer_layer_3", "fake_key", "inner_layer_2"],
+        ["outer_layer_3", "inner_layer_1", "fake_key", "deeper"],
+    ]
+    for keys in key_paths:
+        assert tree.get(keys) is None
+        assert tree.get(keys, "some_default") == "some_default"
+        assert tree.get(keys, default_value=7) == 7
+
+
+def test_get_chained_default_prefix_resolves_to_value(nested_dict: dict[str, Any]) -> None:
+    """``get`` returns the default when a key in the path resolves to a value, not a tree."""
+    tree = ConfigTree(nested_dict)
+    key_paths = [
+        ["outer_layer_1", "deeper"],
+        ["outer_layer_1", "deeper", "even_deeper"],
+        ["outer_layer_2", "inner_layer", "deeper"],
+        ["outer_layer_3", "inner_layer_1", "inner_layer_2", "deeper"],
+    ]
+    for keys in key_paths:
+        assert tree.get(keys) is None
+        assert tree.get(keys, "some_default") == "some_default"
+        assert tree.get(keys, default_value=7) == 7
+
+
+def test_get_does_not_mutate_keys(nested_dict: dict[str, Any]) -> None:
+    """``get`` leaves the caller's key list unchanged, whether or not the path resolves."""
+    tree = ConfigTree(nested_dict)
+
+    unresolvable = ["fake_key", "inner_layer"]
+    assert tree.get(unresolvable) is None
+    assert unresolvable == ["fake_key", "inner_layer"]
+
+    prefix_is_value = ["outer_layer_1", "deeper"]
+    assert tree.get(prefix_is_value) is None
+    assert prefix_is_value == ["outer_layer_1", "deeper"]
+
+    to_value = ["outer_layer_3", "inner_layer_1", "inner_layer_2"]
+    assert tree.get(to_value) == "test_value3"
+    assert to_value == ["outer_layer_3", "inner_layer_1", "inner_layer_2"]
+    # A key path is reusable across calls
+    assert tree.get(to_value) == "test_value3"
+
+    to_tree = ["outer_layer_3", "inner_layer_1"]
+    assert tree.get(to_tree).to_dict() == nested_dict["outer_layer_3"]["inner_layer_1"]
+    assert to_tree == ["outer_layer_3", "inner_layer_1"]
+
+
+def test_get_chained_missing_layer_raises(nested_dict: dict[str, Any]) -> None:
+    """A resolvable key path missing the requested layer still raises ``MissingLayerError``."""
+    tree = ConfigTree(nested_dict, layers=["base", "override"])
+
+    error_msg = re.escape(
+        "No value stored in this ConfigNode outer_layer_2 at layer override."
+    )
+    with pytest.raises(MissingLayerError, match=error_msg):
+        tree.get(["outer_layer_2", "inner_layer"], layer="override")
+
+    # Leniency covers missing keys only, so a default does not suppress the error
+    with pytest.raises(MissingLayerError, match=error_msg):
+        tree.get(["outer_layer_2", "inner_layer"], "some_default", layer="override")
+
+
+def test_get_subtree_ignores_layer(nested_dict: dict[str, Any]) -> None:
+    """A key path resolving to a sub-tree returns it and ignores ``layer`` entirely."""
+    tree = ConfigTree(nested_dict, layers=["base", "override"])
+
+    for layer in ["base", "override", "this-layer-does-not-exist"]:
+        assert (
+            tree.get(["outer_layer_3", "inner_layer_1"], layer=layer).to_dict()
+            == nested_dict["outer_layer_3"]["inner_layer_1"]
+        )
+        assert (
+            tree.get("outer_layer_3", layer=layer).to_dict() == nested_dict["outer_layer_3"]
+        )
+
+
+def test_get_unresolved_path_does_not_mark_nodes_accessed(
+    nested_dict: dict[str, Any]
+) -> None:
+    """An unresolved ``get`` marks no traversed node as accessed, so ``unused_keys`` is unchanged."""
+    tree = ConfigTree(nested_dict)
+    unused_keys = [
+        "outer_layer_1",
+        "outer_layer_2.inner_layer",
+        "outer_layer_3.inner_layer_1.inner_layer_2",
+    ]
+    assert tree.unused_keys() == unused_keys
+
+    assert tree.get(["fake_key", "inner_layer"]) is None
+    assert tree.get(["outer_layer_3", "fake_key", "inner_layer_2"]) is None
+    assert tree.get(["outer_layer_3", "inner_layer_1", "fake_key"]) is None
+    assert tree.get(["outer_layer_1", "deeper"]) is None
+    assert tree.get(["outer_layer_3", "inner_layer_1", "inner_layer_2", "deeper"]) is None
+
+    assert tree.unused_keys() == unused_keys
+
+
+def test_get_resolved_path_marks_leaf_node_accessed(nested_dict: dict[str, Any]) -> None:
+    """A resolved multi-key ``get`` marks the leaf node accessed."""
+    tree = ConfigTree(nested_dict)
+    assert "outer_layer_3.inner_layer_1.inner_layer_2" in tree.unused_keys()
+
+    assert tree.get(["outer_layer_3", "inner_layer_1", "inner_layer_2"]) == "test_value3"
+
+    assert "outer_layer_3.inner_layer_1.inner_layer_2" not in tree.unused_keys()
+
+
+def test_get_unresolved_path_with_layer_returns_default(nested_dict: dict[str, Any]) -> None:
+    """An unresolvable key path returns the default even when a ``layer`` is requested."""
+    tree = ConfigTree(nested_dict, layers=["base", "override"])
+    key_paths = [
+        ["fake_key"],
+        ["fake_key", "inner_layer"],
+        ["outer_layer_3", "fake_key", "inner_layer_2"],
+        ["outer_layer_1", "deeper"],
+        ["outer_layer_3", "inner_layer_1", "inner_layer_2", "deeper"],
+    ]
+    for layer in ["base", "override", "this-layer-does-not-exist"]:
+        for keys in key_paths:
+            assert tree.get(keys, layer=layer) is None
+            assert tree.get(keys, "some_default", layer=layer) == "some_default"
+            assert tree.get(keys, default_value=7, layer=layer) == 7
+
+
+def test_get_bad_keys_type_raises() -> None:
+    """``get`` raises a ``TypeError`` if ``keys`` is neither a string nor a list."""
+    tree = ConfigTree({"outer_layer": {"inner_layer": "test_value"}})
+    error_msg = re.escape("The 'keys' parameter must be a string or a list of strings.")
+    bad_keys: list[Any] = [1, ("outer_layer", "inner_layer")]
+    for keys in bad_keys:
+        with pytest.raises(TypeError, match=error_msg):
+            tree.get(keys)
+        with pytest.raises(TypeError, match=error_msg):
+            tree.get(keys, "some_default")
 
 
 def test_get_defaults_and_layers() -> None:

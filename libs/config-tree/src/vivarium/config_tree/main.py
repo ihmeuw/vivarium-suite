@@ -381,42 +381,68 @@ class ConfigTree:
             The string or ordered list of strings to look for in the tree
             starting from the outermost layer.
         default_value
-            The value to return if and only if the *final* key in the key path
-            does not exist.
+            The value to return if the key path does not resolve.
         layer
             The name of the layer to retrieve the value from.
 
         Notes
         -----
-        The ``default_value`` will only be used if *final* key in the key path
-        does not exist *but the rest of the key path does*.
+        This method is lenient like :meth:`dict.get` across the *entire* key
+        path. ``default_value`` is returned if any key in the path is missing,
+        or if a key before the last one resolves to a value rather than to a
+        sub-tree. Use :meth:`get_tree` for a strict lookup that raises on an
+        unresolvable key path.
+
+        The leniency is about resolving the key path and does not extend to
+        layer lookups. ``layer`` applies only when the path resolves to a
+        value; if no value is set there, a
+        :class:`~vivarium.config_tree.exceptions.MissingLayerError` is raised
+        rather than ``default_value`` returned. When the path resolves to a
+        sub-tree, ``layer`` is ignored.
+
+        The ``keys`` argument is never modified, so a key path can be reused
+        across calls.
 
         Returns
         -------
-            The value at the key or nested keys and at the requested layer (the outer, by default).
-            ``default_value`` (None, by default) is returned if the full key path *except
-            for the final key* exists at an *explicitly-requested* layer.
+            The value at the key or key path and at the requested layer (the
+            outermost, by default), or the sub-tree if the key path resolves to
+            one. ``default_value`` (None, by default) is returned if the key
+            path does not resolve.
 
         Raises
         ------
         TypeError
             If the ``keys`` parameter is not a string or a list of strings.
+        MissingLayerError
+            If the key path resolves to a value but none is set at an
+            explicitly-requested ``layer``.
+        ConfigurationKeyError
+            If the key path resolves to a ``ConfigNode`` holding no value at any
+            layer.
         """
         if not isinstance(keys, (str, list)):
             raise TypeError("The 'keys' parameter must be a string or a list of strings.")
 
         if isinstance(keys, str):
-            if keys not in self._children:
+            keys = [keys]
+
+        # Walk '_children' rather than indexing so that an unresolvable key path
+        # does not mark any traversed ConfigNode as accessed.
+        tree: ConfigTree = self
+        for key in keys[:-1]:
+            child = tree._children.get(key)
+            if not isinstance(child, ConfigTree):
                 return default_value
-            child = self._children[keys]
-            if isinstance(child, ConfigNode):
-                return child.get_value(layer=layer)
+            tree = child
+
+        final_key = keys[-1]
+        if final_key not in tree._children:
+            return default_value
+        child = tree._children[final_key]
+        if isinstance(child, ConfigTree):
             return child
-        else:
-            # get the second-to-last value (which is by definition a ConfigTree)
-            final_key = keys.pop()
-            tree = self.get_tree(keys)
-            return tree.get(final_key, default_value=default_value, layer=layer)
+        return child.get_value(layer=layer)
 
     def get_tree(self, keys: str | list[str]) -> ConfigTree:
         """Return the ``ConfigTree`` at the key or key path from the outermost layer.
