@@ -1,3 +1,10 @@
+**5.2.0 - 08/26/26**
+
+- **Behavior change.** ``ConfigTree.get`` returns ``default_value`` for a missing key anywhere in
+  the key path (previously ``ConfigurationKeyError``) and for a prefix key resolving to a value
+  rather than a sub-tree (previously ``ConfigurationError``). Use ``get_tree`` for a strict lookup.
+- Stop ``ConfigTree.get`` from mutating the ``keys`` argument
+
 **5.1.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10

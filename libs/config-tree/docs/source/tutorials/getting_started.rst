@@ -149,7 +149,7 @@ Notice that ``host`` returns ``"prod-server"`` (from the ``override`` layer), no
 ``"localhost"`` (from the ``base`` layer). The ``port`` value was only set at the
 ``base`` layer, so that value is returned.
 
-A ``ConfigurationKeyError`` will be raised of the requested key does not exist at any layer.
+A ``ConfigurationKeyError`` will be raised if the requested key does not exist at any layer.
 
 .. note::
 
@@ -212,10 +212,12 @@ A ``ConfigurationKeyError`` will be raised of the requested key does not exist a
 get() method access
 -------------------
 
-:meth:`~vivarium.config_tree.main.ConfigTree.get` works like :meth:`dict.get` 
-and returns a default value (``None`` by default) when the key is missing instead of 
-raising an error. It also accepts a list of keys for nested lookups and supports a 
-``layer`` parameter to read from a specific layer:
+:meth:`~vivarium.config_tree.main.ConfigTree.get` works like :meth:`dict.get`
+and returns a default value (``None`` by default) instead of raising an error when
+a key is missing. It also accepts a list of keys for nested lookups, and its
+leniency applies to the *entire* key path: the default is returned if *any* key in
+the path is missing, or if a key before the last one resolves to a value rather
+than to a sub-tree. A ``layer`` parameter reads from a specific layer:
 
 .. testcode::
 
@@ -223,6 +225,9 @@ raising an error. It also accepts a list of keys for nested lookups and supports
     print(tree.get("missing"))                              # returns None
     print(tree.get("missing", default_value="fallback"))    # custom default
     print(tree.get(["database", "host"]))                   # nested lookup
+    print(tree.get(["missing", "host"]))                    # missing prefix key
+    print(tree.get(["name", "host"]))                       # prefix key is a value
+    print(tree.get(["missing", "host"], "fallback"))        # custom default
     print(tree.database.get("host", layer="base"))          # specific layer
 
 .. testoutput::
@@ -231,7 +236,17 @@ raising an error. It also accepts a list of keys for nested lookups and supports
     None
     fallback
     prod-server
+    None
+    None
+    fallback
     localhost
+
+The leniency is about resolving the key path and does not extend to layer lookups.
+``layer`` applies only when the path resolves to a value; if no value is set there, a
+``MissingLayerError`` is raised rather than the default returned. When the path
+resolves to a sub-tree, ``layer`` is ignored. Use
+:meth:`~vivarium.config_tree.main.ConfigTree.get_tree` when you want an
+unresolvable key path to raise.
        
 get_tree() method access
 ------------------------
