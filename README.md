@@ -4,21 +4,21 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 
 ## Packages
 
-| Directory | PyPI name | Import path |
-|---|---|---|
-| `libs/artifact/` | `vivarium-artifact` | `import vivarium.artifact` |
-| `libs/build-utils/` | `vivarium-build-utils` | `import vivarium.build_utils` |
-| `libs/cluster-tools/` | `vivarium-cluster-tools` | `import vivarium.cluster_tools` |
-| `libs/config-tree/` | `vivarium-config-tree` | `import vivarium.config_tree` |
-| `libs/dependencies/` | `vivarium-dependencies` | *(meta-package)* |
-| `libs/engine/` | `vivarium-engine` | `import vivarium.engine` |
-| `libs/fuzzy-checker/` | `vivarium-fuzzy-checker` | `import vivarium.fuzzy_checker` |
-| `libs/gbd-mapping/` | `vivarium-gbd-mapping` | `import vivarium.gbd_mapping` |
-| `libs/profiling/` | `vivarium-profiling` | `import vivarium.profiling` |
-| `libs/public-health/` | `vivarium-public-health` | `import vivarium.public_health` |
-| `libs/pytest-vivarium/` | `pytest-vivarium` | *(pytest plugin — auto-loaded)* |
-| `libs/risk-distributions/` | `vivarium-risk-distributions` | `import vivarium.risk_distributions` |
-| `libs/validation/` | `vivarium-validation` | `import vivarium.validation` |
+| Directory | PyPI name | Import path | Documentation |
+|---|---|---|---|
+| `libs/artifact/` | `vivarium-artifact` | `import vivarium.artifact` | https://vivarium-artifact.readthedocs.io |
+| `libs/build-utils/` | `vivarium-build-utils` | `import vivarium.build_utils` | *(no docs)* |
+| `libs/cluster-tools/` | `vivarium-cluster-tools` | `import vivarium.cluster_tools` | https://vivarium-cluster-tools.readthedocs.io |
+| `libs/config-tree/` | `vivarium-config-tree` | `import vivarium.config_tree` | https://vivarium-config-tree.readthedocs.io |
+| `libs/dependencies/` | `vivarium-dependencies` | *(meta-package)* | *(no docs)* |
+| `libs/engine/` | `vivarium-engine` | `import vivarium.engine` | https://vivarium-engine.readthedocs.io |
+| `libs/fuzzy-checker/` | `vivarium-fuzzy-checker` | `import vivarium.fuzzy_checker` | https://vivarium-fuzzy-checker.readthedocs.io |
+| `libs/gbd-mapping/` | `vivarium-gbd-mapping` | `import vivarium.gbd_mapping` | https://vivarium-gbd-mapping.readthedocs.io |
+| `libs/profiling/` | `vivarium-profiling` | `import vivarium.profiling` | *(no docs)* |
+| `libs/public-health/` | `vivarium-public-health` | `import vivarium.public_health` | https://vivarium-public-health.readthedocs.io |
+| `libs/pytest-vivarium/` | `pytest-vivarium` | *(pytest plugin — auto-loaded)* | https://pytest-vivarium.readthedocs.io |
+| `libs/risk-distributions/` | `vivarium-risk-distributions` | `import vivarium.risk_distributions` | https://vivarium-risk-distributions.readthedocs.io |
+| `libs/validation/` | `vivarium-validation` | `import vivarium.validation` | https://vivarium-validation.readthedocs.io |
 
 ## Tools
 
