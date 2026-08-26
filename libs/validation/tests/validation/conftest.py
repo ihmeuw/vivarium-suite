@@ -1,10 +1,7 @@
 import pytest
 
-# This suite exercises the GBD data source, which needs vivarium-inputs from
-# the `gbd` extra (artifactory-only, so not installed on GitHub Actions CI).
-# The importorskip runs while this conftest is imported, so it skips this entire
-# subdirectory when the dep is unavailable; Jenkins runs the full suite via
-# ci_jenkins, which installs `gbd`.
+# vivarium_inputs is available on Jenkins (through 'gbd' extra) but not
+# GitHub Actions CI, so run or skip accordingly.
 pytest.importorskip("vivarium_inputs")
 
 from pathlib import Path
