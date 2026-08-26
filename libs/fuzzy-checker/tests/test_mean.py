@@ -131,7 +131,7 @@ def test_fractional_input_validation() -> None:
                 method="fractional",
                 training_fraction=bad_fraction,
             )
-    with pytest.raises(ValueError, match="distinct observed values"):
+    with pytest.raises(ValueError, match="no spread"):
         checker.test_mean(
             name="x",
             target_mean=TARGET_MEAN,
@@ -412,3 +412,99 @@ def test_pass_then_inconclusive_then_fail(
     assert set(statuses) == {"pass", "inconclusive", "fail"}
     severity = [{"pass": 0, "inconclusive": 1, "fail": 2}[status] for status in statuses]
     assert severity == sorted(severity)
+
+
+# --- Degenerate and corrupted inputs must be loud, never a silent pass -------
+
+
+@pytest.mark.parametrize("method", ["conjugate", "fractional"])
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_values_are_rejected(
+    method: Literal["conjugate", "fractional"], bad_value: float
+) -> None:
+    """A nan or infinite observation is an error, not a quiet 'Conclusive' pass."""
+    values = _values(TARGET_MEAN, 15.0, 1_000, seed=12345)
+    values[3] = bad_value
+    with pytest.raises(ValueError, match="nan or infinite"):
+        FuzzyChecker().test_mean(
+            name="x", target_mean=TARGET_MEAN, observed_values=values, method=method
+        )
+
+
+@pytest.mark.parametrize("method", ["conjugate", "fractional"])
+def test_nonfinite_moments_are_rejected(method: Literal["conjugate", "fractional"]) -> None:
+    """A nan smuggled in through the moments API is an error too."""
+    with pytest.raises(ValueError, match="not finite"):
+        FuzzyChecker().test_mean(
+            name="x",
+            target_mean=TARGET_MEAN,
+            observed_zeroth_moment=1_000,
+            observed_first_moment=float("nan"),
+            observed_second_moment=1e7,
+            method=method,
+        )
+
+
+@pytest.mark.parametrize("method", ["conjugate", "fractional"])
+def test_requires_two_observations(method: Literal["conjugate", "fractional"]) -> None:
+    """One observation cannot separate the mean from the spread."""
+    with pytest.raises(ValueError, match="at least two observed values"):
+        FuzzyChecker().test_mean(
+            name="x", target_mean=TARGET_MEAN, observed_values=[5.0], method=method
+        )
+
+
+def test_conjugate_spreadless_values_need_explicit_beta_prior() -> None:
+    """Constant values are an error by default but run with a supplied variance scale."""
+    values = [5.0, 5.0, 5.0]
+    with pytest.raises(ValueError, match="no spread"):
+        FuzzyChecker().test_mean(name="x", target_mean=5.0, observed_values=values)
+
+    result = FuzzyChecker().test_mean(
+        name="x", target_mean=5.0, observed_values=values, beta_prior=1.0
+    )
+    assert not result.reject_null
+
+
+def test_fractional_two_observations_need_explicit_training_fraction() -> None:
+    """The default 2/n fraction leaves no data to test at n=2; an explicit one works."""
+    values = [4.0, 6.0]
+    with pytest.raises(ValueError, match="at least three observed values"):
+        FuzzyChecker().test_mean(
+            name="x", target_mean=5.0, observed_values=values, method="fractional"
+        )
+
+    result = FuzzyChecker().test_mean(
+        name="x",
+        target_mean=5.0,
+        observed_values=values,
+        method="fractional",
+        training_fraction=0.75,
+    )
+    assert not result.reject_null
+
+
+def test_moments_implying_negative_variance_are_rejected() -> None:
+    """A negative implied variance is cancellation damage, not data."""
+    # Sum of squares slightly below n * mean**2, as cancellation produces.
+    with pytest.raises(ValueError, match="negative variance"):
+        FuzzyChecker().test_mean(
+            name="x",
+            target_mean=1e7,
+            observed_zeroth_moment=100,
+            observed_first_moment=1e9,
+            observed_second_moment=0.999999 * 1e16,
+        )
+
+
+def test_nan_bayes_factor_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A test that cannot evaluate must raise, never report a confident pass."""
+    checker = FuzzyChecker()
+    monkeypatch.setattr(
+        FuzzyChecker,
+        "_compute_continuous_log_likelihood",
+        lambda self, *args, **kwargs: float("-inf"),
+    )
+    values = _values(TARGET_MEAN, 15.0, 100, seed=12345)
+    with pytest.raises(ValueError, match="did not evaluate"):
+        checker.test_mean(name="x", target_mean=TARGET_MEAN, observed_values=values)

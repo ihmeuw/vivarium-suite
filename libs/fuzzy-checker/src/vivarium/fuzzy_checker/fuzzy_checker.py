@@ -871,6 +871,14 @@ class FuzzyChecker:
         center = 0.0
         if observed_values is not None:
             values = np.asarray(observed_values, dtype=float)
+            if not np.isfinite(values).all():
+                bad_count = int(values.size - np.isfinite(values).sum())
+                raise ValueError(
+                    f"{bad_count} of the {values.size} observed values are nan or "
+                    "infinite. A nan cannot fail a hypothesis test -- every "
+                    "comparison against it is False -- so it would report as a "
+                    "pass; clean the values before testing them."
+                )
             # Compute in centered coordinates: a sum of squares of values far from
             # zero loses the spread to floating point cancellation (a mean of 1e7
             # with an SD of 0.5 corrupts the variance by ~8%), and the test is
@@ -903,11 +911,37 @@ class FuzzyChecker:
             and observed_second_moment is not None
         )
 
+        if not (np.isfinite(observed_first_moment) and np.isfinite(observed_second_moment)):
+            raise ValueError(
+                f"The observed moments are not finite (sum = {observed_first_moment}, "
+                f"sum of squares = {observed_second_moment}). A nan cannot fail a "
+                "hypothesis test -- every comparison against it is False -- so it "
+                "would report as a pass; clean the values before accumulating moments."
+            )
+        if observed_zeroth_moment < 2:
+            raise ValueError(
+                "test_mean requires at least two observed values to separate the "
+                f"mean from the spread; got {observed_zeroth_moment}."
+            )
+
         target_midpoint = (target_lower_bound + target_upper_bound) / 2
         observed_mean = observed_first_moment / observed_zeroth_moment
         observed_variance = (
             observed_second_moment / observed_zeroth_moment - observed_mean**2
         )
+        if observed_variance < 0:
+            raise ValueError(
+                "The observed moments imply a negative variance, which usually "
+                "means floating point cancellation corrupted them: a sum of "
+                "squares of values far from zero loses the spread. Accumulate "
+                "the moments of centered values, or pass observed_values instead."
+            )
+        if observed_variance == 0 and (method == "fractional" or beta_prior is None):
+            raise ValueError(
+                "The observed values have no spread, so the variance cannot be "
+                "estimated from them. With method='conjugate', supply beta_prior "
+                "to provide the variance scale the data cannot."
+            )
         observed_std = float(np.sqrt(observed_variance))
 
         if method == "fractional":
@@ -992,6 +1026,17 @@ class FuzzyChecker:
 
         with np.errstate(under="ignore", over="ignore"):
             bayes_factor = float(np.exp(log_bayes_factor))
+
+        # Every comparison against a nan is False, so a nan reaching the caller
+        # would leave reject_null False -- a test that never evaluated reported
+        # as a pass. A nan means "did not evaluate", never "passed".
+        if np.isnan(bayes_factor):
+            raise ValueError(
+                f"The Bayes factor for '{name}' is nan, so this test did not "
+                f"evaluate (log Bayes factor = {log_bayes_factor}). This usually "
+                "means a marginal likelihood was zero or infinite under both "
+                "hypotheses, such as from out-of-domain prior parameters."
+            )
 
         reject_null = bayes_factor > fail_bayes_factor_cutoff
 
@@ -1164,6 +1209,13 @@ class FuzzyChecker:
             )
         b = 2.0 / n if training_fraction is None else training_fraction
         if not 1.0 / n < b < 1.0:
+            if training_fraction is None:
+                raise ValueError(
+                    "The fractional method's default training fraction of 2/n "
+                    f"needs at least three observed values to leave data for "
+                    f"testing; got {n}. Supply a training_fraction strictly "
+                    f"between 1/{n} and 1 to run with this few."
+                )
             raise ValueError(
                 f"training_fraction must be strictly between 1/n and 1; got {b} "
                 f"with n = {n}."
