@@ -31,3 +31,5 @@ To build it from source, clone the monorepo and install from the package directo
 For broader monorepo development setup, see the monorepo README at
 https://github.com/ihmeuw/vivarium-suite.
 
+`Check out the docs! <https://vivarium-config-tree.readthedocs.io/en/latest/>`_
+-------------------------------------------------------------------------------
