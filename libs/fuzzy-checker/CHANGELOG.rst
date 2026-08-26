@@ -1,8 +1,7 @@
-**0.5.0 - 08/26/26**
+**0.5.0 - 08/27/26**
 
-- ``TestResult`` reports whether a test evaluated, via a new ``evaluated`` property and
-  a "Did not evaluate" confidence. A nan Bayes factor leaves ``reject_null`` False
-  without having decided anything, so it must not be read as a pass
+- added a new ``evaluated`` property to distinguish tests that did not generate
+  a numerical result, namely NaN Bayes factors.
 - ``assert_proportion`` raises ``ValueError`` on such a test; ``test_proportion``
   returns it, so one group no longer abandons a whole batch
 

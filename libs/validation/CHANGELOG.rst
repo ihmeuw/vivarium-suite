@@ -1,4 +1,4 @@
-**0.4.0 - 08/26/26**
+**0.4.0 - 08/27/26**
 
 - Fix a bug in converting rates to probabilities for fuzzy checking
 - Require ``vivarium-fuzzy-checker>=0.5.0`` and add a ``vivarium-engine`` dependency,

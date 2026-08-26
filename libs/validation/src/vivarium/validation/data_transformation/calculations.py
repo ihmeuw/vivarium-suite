@@ -286,10 +286,10 @@ def weighted_average(
     return ratio(numerator, denominator)
 
 
-# Person-time accrues as ``people * step_size`` each step, so dividing it back out is
-# exact up to accumulated floating point error -- orders of magnitude below the ~0.5
-# drift a step size that does not match the simulation's would produce.
 _PERSON_STEP_ROUNDING_TOLERANCE = 1e-3
+"""Person-time accrues as ``people * step_size`` each step, so dividing it back out is
+exact up to accumulated floating point error -- orders of magnitude below the ~0.5 drift
+a step size that does not match the simulation's would produce."""
 
 
 @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
@@ -326,9 +326,10 @@ def person_time_to_person_steps(data: pd.DataFrame, step_size: float | None) -> 
     if drift > _PERSON_STEP_ROUNDING_TOLERANCE:
         logger.warning(
             f"Person-time is not a whole number of person-steps at a step size of "
-            f"{step_size} years; the largest value is off by {drift:g} steps. This "
-            "usually means the step size does not match the one the simulation ran "
-            "with, which would bias every target this comparison tests."
+            f"{step_size} years; the largest value is off by {drift:g} steps. Either "
+            "the step size does not match the one the simulation ran with, which would "
+            "bias every target this comparison tests, or the simulation used a variable "
+            "clock, in which case person-steps are not a meaningful count."
         )
 
     return rounded

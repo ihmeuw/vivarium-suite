@@ -376,10 +376,6 @@ class FuzzyComparison(Comparison):
             key: stratify(data, stratify_cols)
             for key, data in self.reference_bundle.datasets.items()
         }
-        # The fuzzy checker tests a proportion of discrete opportunities, so the observed
-        # counts and the target have to agree on what one opportunity is. The measure
-        # owns that conversion, since it is the only thing that knows what its data
-        # holds; both sides scale by step_size, leaving the expected event count alone.
         numerator = self.measure.numerator.to_opportunity_counts(
             test_datasets["numerator_data"], step_size
         )

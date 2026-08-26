@@ -60,8 +60,8 @@ class Measure(ABC):
     ) -> pd.DataFrame:
         """Return the reference data as the probability of an event in one time step.
 
-        A proportion is already independent of the step size, so this returns it
-        unchanged; a measure whose reference is an annual rate overrides this.
+        A proportion is already independent of the step size, so it is returned
+        unchanged.
 
         Parameters
         ----------
@@ -202,7 +202,18 @@ class Incidence(RatioMeasure):
         step_size: float | None,
         rate_conversion_type: RateConversionType = "linear",
     ) -> pd.DataFrame:
-        """Return the annual rate as the probability of an event in one time step."""
+        """Return the annual rate as the probability of an event in one time step.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure, as an annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
         return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
@@ -262,7 +273,18 @@ class SIRemission(RatioMeasure):
         step_size: float | None,
         rate_conversion_type: RateConversionType = "linear",
     ) -> pd.DataFrame:
-        """Return the annual rate as the probability of an event in one time step."""
+        """Return the annual rate as the probability of an event in one time step.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure, as an annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
         return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
@@ -293,7 +315,18 @@ class CauseSpecificMortalityRate(RatioMeasure):
         step_size: float | None,
         rate_conversion_type: RateConversionType = "linear",
     ) -> pd.DataFrame:
-        """Return the annual rate as the probability of an event in one time step."""
+        """Return the annual rate as the probability of an event in one time step.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure, as an annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
         return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
@@ -333,7 +366,18 @@ class ExcessMortalityRate(RatioMeasure):
         step_size: float | None,
         rate_conversion_type: RateConversionType = "linear",
     ) -> pd.DataFrame:
-        """Return the annual rate as the probability of an event in one time step."""
+        """Return the annual rate as the probability of an event in one time step.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure, as an annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
         return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)

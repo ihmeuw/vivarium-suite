@@ -190,10 +190,11 @@ class FuzzyChecker:
     ) -> TestResult:
         """Run the hypothesis test for one observed proportion and return its result.
 
+        A test that does not evaluate is returned like any other; read it back with
+        ``TestResult.evaluated``.
+
         Raises
         ------
-        ValueError
-            If the test does not evaluate to a usable Bayes factor.
         AssertionError
             If there are more events than opportunities, or the target bounds are
             inverted.
@@ -508,7 +509,13 @@ class FuzzyChecker:
         bug_issue_distribution: rv_discrete_frozen,
         no_bug_issue_distribution: rv_discrete_frozen,
     ) -> tuple[Confidence, float | None, float | None]:
-        """Determine confidence level and compute edge Bayes factors."""
+        """Determine confidence level and compute edge Bayes factors.
+
+        The edge Bayes factors are what this test would have produced at its most
+        extreme possible observations: zero events, and events at every opportunity.
+        Each is None when the corresponding target bound cannot be exceeded, or when
+        the test did not evaluate.
+        """
         if np.isnan(bayes_factor):
             # Every comparison below would be False, leaving the default "Conclusive"
             # on a test that never ran.
@@ -543,12 +550,7 @@ class FuzzyChecker:
         bug_distribution: rv_discrete_frozen,
         no_bug_distribution: rv_discrete_frozen,
     ) -> float:
-        """Return the ratio of the bug to no-bug marginal likelihoods at the numerator.
-
-        A nan means the test did not evaluate, usually because a distribution was built
-        with out-of-domain parameters. It is returned rather than raised so the caller
-        still gets a TestResult; ``TestResult.evaluated`` is how it is read back.
-        """
+        """Return the ratio of the bug to no-bug marginal likelihoods at the numerator."""
         # We can be dealing with some _extremely_ unlikely events here, so we have to set numpy to not error
         # if we generate a probability too small to be stored in a floating point number(!), which is known
         # as "underflow"
@@ -557,11 +559,9 @@ class FuzzyChecker:
             no_bug_marginal_likelihood = float(no_bug_distribution.pmf(numerator))
 
         try:
-            bayes_factor = bug_marginal_likelihood / no_bug_marginal_likelihood
+            return bug_marginal_likelihood / no_bug_marginal_likelihood
         except (ZeroDivisionError, FloatingPointError):
             return float("inf")
-
-        return bayes_factor
 
     @cache
     def _fit_beta_distribution_to_uncertainty_interval(
