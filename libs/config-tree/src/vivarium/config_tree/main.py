@@ -398,7 +398,8 @@ class ConfigTree:
         value; if no value is set there, a
         :class:`~vivarium.config_tree.exceptions.MissingLayerError` is raised
         rather than ``default_value`` returned. When the path resolves to a
-        sub-tree, ``layer`` is ignored.
+        sub-tree, ``layer`` is ignored entirely -- even a layer name that does
+        not exist on the tree is accepted without error.
 
         The ``keys`` argument is never modified, so a key path can be reused
         across calls.

@@ -244,7 +244,8 @@ than to a sub-tree. A ``layer`` parameter reads from a specific layer:
 The leniency is about resolving the key path and does not extend to layer lookups.
 ``layer`` applies only when the path resolves to a value; if no value is set there, a
 ``MissingLayerError`` is raised rather than the default returned. When the path
-resolves to a sub-tree, ``layer`` is ignored. Use
+resolves to a sub-tree, ``layer`` is ignored entirely -- even a layer name that
+does not exist on the tree is accepted without error. Use
 :meth:`~vivarium.config_tree.main.ConfigTree.get_tree` when you want an
 unresolvable key path to raise.
        
