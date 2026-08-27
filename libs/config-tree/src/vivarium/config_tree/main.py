@@ -421,8 +421,6 @@ class ConfigTree:
 
         if isinstance(keys, str):
             keys = [keys]
-        if not keys:
-            raise IndexError("The 'keys' parameter must not be empty.")
 
         node = self._get_node(keys)
         if node is None:
@@ -448,6 +446,8 @@ class ConfigTree:
         ------
         TypeError
             If the ``keys`` parameter is not a string or list of strings.
+        IndexError
+            If the ``keys`` parameter is an empty list.
         ConfigurationKeyError
             If any of the keys in the key path do not exist in the tree.
         ConfigurationError
@@ -481,7 +481,15 @@ class ConfigTree:
         Reads ``_children`` rather than indexing: ``__getitem__`` resolves a leaf
         to its value via ``get_value``, which would mark it accessed even when
         the key path turns out not to resolve.
+
+        Raises
+        ------
+        IndexError
+            If ``keys`` is empty.
         """
+        if not keys:
+            raise IndexError("The 'keys' parameter must not be empty.")
+
         node: ConfigTree | ConfigNode = self
         for key in keys:
             if not isinstance(node, ConfigTree) or key not in node._children:

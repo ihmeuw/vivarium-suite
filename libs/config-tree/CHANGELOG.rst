@@ -8,6 +8,8 @@
   failed ``get_tree`` no longer marks a leaf as accessed, so ``unused_keys`` is
   no longer under-reported after one, and a repeated key in a key path is now
   reported at the position that actually failed
+- ``ConfigTree.get_tree`` raises an ``IndexError`` for an empty key path rather than
+  returning the tree itself, matching ``ConfigTree.get``
 
 **5.1.0 - 08/25/26**
 
