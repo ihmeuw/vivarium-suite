@@ -7,6 +7,7 @@ import pandas as pd
 from vivarium.artifact import Artifact, EntityKey
 from vivarium.config_tree import ConfigTree
 from vivarium.gbd_mapping import causes, covariates, risk_factors
+
 # FIXME REMOVE
 from vivarium_inputs.mapping_extension import alternative_risk_factors
 
