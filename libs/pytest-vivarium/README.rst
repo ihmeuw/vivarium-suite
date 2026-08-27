@@ -24,8 +24,6 @@ Installation
 pytest discovers the plugin automatically via its ``pytest11`` entry point; there
 is nothing to import or enable.
 
-Documentation
--------------
 
-Check out the `documentation <https://pytest-vivarium.readthedocs.io/en/latest/>`_
-for the full list of markers, options, and fixtures.
+`Check out the docs! <https://pytest-vivarium.readthedocs.io/en/latest/>`_
+--------------------------------------------------------------------------
