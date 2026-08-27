@@ -420,15 +420,9 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        # Read '_children' rather than indexing: __getitem__ resolves a leaf to
-        # its value via get_value(), which marks it accessed even when the key
-        # path turns out not to resolve.
-        node: ConfigTree | ConfigNode = self
-        for key in keys:
-            if not isinstance(node, ConfigTree) or key not in node._children:
-                return default_value
-            node = node._children[key]
-
+        node, _ = self._resolve(keys)
+        if node is None:
+            return default_value
         if isinstance(node, ConfigTree):
             return node
         return node.get_value(layer=layer)
@@ -461,19 +455,31 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        tree = self
-        for key in keys:
-            if key not in tree:
-                raise ConfigurationKeyError(
-                    f"No value at key mapping '{keys[:keys.index(key) + 1]}'."
-                )
-            tree = tree[key]
+        tree, failed_at = self._resolve(keys)
+        if tree is None:
+            raise ConfigurationKeyError(f"No value at key mapping '{keys[:failed_at + 1]}'.")
         if not isinstance(tree, ConfigTree):
             raise ConfigurationError(
                 f"The data you accessed using {keys} with get_tree was of type {type(tree)}, "
                 "but get_tree must return a ConfigTree."
             )
         return tree
+
+    def _resolve(self, keys: list[str]) -> tuple[ConfigTree | ConfigNode | None, int]:
+        """Return the node at the key path, or ``None`` and the index that failed.
+
+        Notes
+        -----
+        Reads ``_children`` rather than indexing: ``__getitem__`` resolves a leaf
+        to its value via ``get_value``, which would mark it accessed even when
+        the key path turns out not to resolve.
+        """
+        node: ConfigTree | ConfigNode = self
+        for i, key in enumerate(keys):
+            if not isinstance(node, ConfigTree) or key not in node._children:
+                return None, i
+            node = node._children[key]
+        return node, len(keys)
 
     def update(
         self,

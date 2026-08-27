@@ -4,6 +4,10 @@
   the key path (previously ``ConfigurationKeyError``) and for a prefix key resolving to a value
   rather than a sub-tree (previously ``ConfigurationError``). Use ``get_tree`` for a strict lookup.
 - Stop ``ConfigTree.get`` from mutating the ``keys`` argument
+- ``ConfigTree.get`` and ``ConfigTree.get_tree`` now share one key-path walk. A
+  failed ``get_tree`` no longer marks a leaf as accessed, so ``unused_keys`` is
+  no longer under-reported after one, and a repeated key in a key path is now
+  reported at the position that actually failed
 
 **5.1.0 - 08/25/26**
 

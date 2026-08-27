@@ -746,6 +746,20 @@ def test_get_tree_chained_returns_value_raises(nested_dict: dict[str, Any]) -> N
         tree.get_tree(["outer_layer_3", "inner_layer_1", "inner_layer_2"])
 
 
+def test_get_tree_unresolved_path_does_not_mark_nodes_accessed(
+    nested_dict: dict[str, Any]
+) -> None:
+    """A failed ``get_tree`` marks nothing as accessed, so ``unused_keys`` is unchanged."""
+    tree = ConfigTree(nested_dict)
+    unused_keys = tree.unused_keys()
+
+    for keys in [["outer_layer_1"], ["outer_layer_1", "deeper"], ["fake_key"]]:
+        with pytest.raises(ConfigurationError):
+            tree.get_tree(keys)
+
+    assert tree.unused_keys() == unused_keys
+
+
 def test_get_tree_chained_missing_key_raises(nested_dict: dict[str, Any]) -> None:
     tree = ConfigTree(nested_dict)
     with pytest.raises(
