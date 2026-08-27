@@ -861,8 +861,8 @@ def test_failed_mid_sim_addition_discards_the_staged_frame() -> None:
     pd.testing.assert_frame_equal(_population(sim), before)
 
 
-def test_failed_initial_population_creation_leaves_manager_uninitialized() -> None:
-    """A first-pass failure commits nothing, so the population is still absent."""
+def test_failed_initial_population_creation_commits_no_simulants() -> None:
+    """A first-pass failure commits nothing, so the population stays empty."""
     sim = InteractiveContext(
         components=[ColumnCreator(), FailingInitializer(fail_on_pass=1)],
         configuration={"population": {"population_size": INITIAL_POP_SIZE}},
@@ -876,8 +876,7 @@ def test_failed_initial_population_creation_leaves_manager_uninitialized() -> No
     assert manager._staged_columns is None
     assert not manager.adding_simulants
     assert not manager.creating_initial_population
-    with pytest.raises(PopulationError, match="Population has not been initialized."):
-        manager.private_columns
+    assert manager.private_columns.empty
 
 
 def test_mid_sim_addition_matches_state_of_an_equally_sized_initial_population() -> None:

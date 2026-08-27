@@ -376,6 +376,8 @@ class PopulationView:
                     f"updates for {missing_pops} simulants."
                 )
         elif data_df.empty:
+            # Assigning a rowless frame would align against the staged simulants
+            # and null the columns it names.
             return
 
         self._manager.update(data_df)

@@ -75,10 +75,9 @@ class PopulationManager(Manager):
         index for the entire population. Even if no private columns are created,
         this dataframe will exist and all simulants will be represented by its index.
 
-        While simulants are being added, the population spans two frames and this
-        property materializes their concatenation. Prefer ``_read_frame`` on any
-        path that knows which simulants it wants; it serves the read from a single
-        frame whenever the requested index sits in one.
+        While simulants are being added this is the committed population only; the
+        simulants being initialized live in their own frame until the pass ends.
+        Use ``get_population_index`` for an index covering both.
         """
         return self._read_frame()
 
@@ -95,6 +94,15 @@ class PopulationManager(Manager):
         the population is never widened with null rows to make room for simulants
         whose values have not been computed yet. It is appended to
         ``_private_columns`` once every initializer has run.
+
+        Two rules hold whenever this is not None, and the rest of the class is
+        built on them. The two frames' indices are **disjoint**, so no simulant is
+        ever in both. And they are reached differently: a **read** picks its frame
+        by which one holds the index it was asked for, because an initializer may
+        legitimately read either the simulants it is creating or the ones already
+        there, while a **write** always goes to this frame, because
+        :meth:`~vivarium.engine.framework.population.population_view.PopulationView.initialize`
+        is the only way to write during a pass and it only ever writes new simulants.
         """
         self._private_column_metadata: defaultdict[str, list[str]] = defaultdict(list)
         self._registered_initializers: list[Callable[[SimulantData], None]] = []
@@ -308,8 +316,8 @@ class PopulationManager(Manager):
         Parameters
         ----------
         index
-            The simulants to read. If None, every simulant is read, including any
-            being staged.
+            The simulants to read. If None, every simulant in the population is
+            read; simulants still being staged are not included.
         columns
             The columns to read. If None, every column is read.
 
@@ -327,19 +335,13 @@ class PopulationManager(Manager):
         if self._private_columns is None:
             raise PopulationError("Population has not been initialized.")
 
-        frame: pd.DataFrame
-        if self._staged_columns is None:
-            frame = self._private_columns
-        elif index is None:
-            frame = pd.concat([self._private_columns, self._staged_columns])
-        else:
+        frame = self._private_columns
+        if self._staged_columns is not None and index is not None:
             is_staged = index.isin(self._staged_columns.index)
-            if not is_staged.any():
-                frame = self._private_columns
-            elif is_staged.all():
+            if is_staged.all():
                 frame = self._staged_columns
-            else:
-                frame = pd.concat([self._private_columns, self._staged_columns])
+            elif is_staged.any():
+                frame = pd.concat([frame, self._staged_columns])
 
         if index is not None:
             frame = frame.loc[index]
@@ -443,7 +445,6 @@ class PopulationManager(Manager):
         population_configuration = (
             population_configuration if population_configuration else {}
         )
-        population_was_uninitialized = self._private_columns is None
         if self._private_columns is None:
             self.creating_initial_population = True
             self._private_columns = pd.DataFrame()
@@ -466,12 +467,6 @@ class PopulationManager(Manager):
             self._private_columns = pd.concat(
                 [self._private_columns, self._staged_columns.copy()]
             )
-        except BaseException:
-            # Leaving the empty frame behind would report the population as
-            # initialized-but-empty rather than uninitialized.
-            if population_was_uninitialized:
-                self._private_columns = None
-            raise
         finally:
             self.creating_initial_population = False
             self.adding_simulants = False
@@ -483,10 +478,9 @@ class PopulationManager(Manager):
 
     def _check_all_registered_columns_created(self) -> None:
         """Raise if an initializer did not create a private column it registered."""
-        private_columns = self.private_columns
         missing = {}
         for component, cols_created in self._private_column_metadata.items():
-            missing_cols = [col for col in cols_created if col not in private_columns]
+            missing_cols = [col for col in cols_created if col not in self.private_columns]
             if missing_cols:
                 missing[component] = missing_cols
         if missing:
