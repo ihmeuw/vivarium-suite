@@ -713,6 +713,7 @@ class FuzzyChecker:
         observed_zeroth_moment: int | None = None,
         observed_first_moment: float | None = None,
         observed_second_moment: float | None = None,
+        moments_center: float = 0.0,
         fail_bayes_factor_cutoff: float = 100.0,
         inconclusive_bayes_factor_cutoff: float = 0.1,
         bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
@@ -748,9 +749,21 @@ class FuzzyChecker:
         observed_zeroth_moment
             The count of observed values.
         observed_first_moment
-            The sum of observed values.
+            The sum of ``y - moments_center`` over the observed values.
         observed_second_moment
-            The sum of squares of observed values.
+            The sum of squares of ``y - moments_center`` over the observed values.
+        moments_center
+            The constant subtracted from every value before the moments were
+            accumulated. Sums of squares of values far from zero lose the spread
+            to floating point cancellation, so accumulate moments of
+            ``y - moments_center`` for any constant near the data -- the target
+            mean is a good choice -- and pass it here. Defaults to 0 (raw
+            moments), which is safe only when the data's mean is within a few
+            hundred standard deviations of zero; a warning fires when it looks
+            like it was not. Running (mean, sum-of-squared-deviations)
+            accumulators like Welford's algorithm convert exactly:
+            ``first = n * (running_mean - center)`` and
+            ``second = M2 + n * (running_mean - center)**2``.
         fail_bayes_factor_cutoff
             The Bayes factor above which the test is considered to favor a
             bug/issue so strongly that the assertion should fail. The default of
@@ -802,6 +815,7 @@ class FuzzyChecker:
             observed_zeroth_moment=observed_zeroth_moment,
             observed_first_moment=observed_first_moment,
             observed_second_moment=observed_second_moment,
+            moments_center=moments_center,
             bug_issue_distribution_mean_uncertainty_interval=bug_issue_distribution_mean_uncertainty_interval,
             alpha_prior=alpha_prior,
             beta_prior=beta_prior,
@@ -840,6 +854,7 @@ class FuzzyChecker:
         observed_zeroth_moment: int | None = None,
         observed_first_moment: float | None = None,
         observed_second_moment: float | None = None,
+        moments_center: float = 0.0,
         bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
         alpha_prior: float = 2.0,
         beta_prior: float | None = None,
@@ -868,8 +883,13 @@ class FuzzyChecker:
         assert (observed_first_moment is None) != (
             observed_values is None
         ), "Exactly one of observed_values or the three moments must be supplied"
-        center = 0.0
         if observed_values is not None:
+            if moments_center != 0.0:
+                raise ValueError(
+                    "moments_center declares that supplied *moments* were "
+                    "accumulated for y - moments_center; it does not apply when "
+                    "observed_values are supplied (they are centered internally)."
+                )
             values = np.asarray(observed_values, dtype=float)
             if not np.isfinite(values).all():
                 bad_count = int(values.size - np.isfinite(values).sum())
@@ -889,6 +909,10 @@ class FuzzyChecker:
             observed_zeroth_moment = len(values)
             observed_first_moment = float(np.sum(centered_values))
             observed_second_moment = float(np.sum(centered_values**2))
+        else:
+            # The caller did the centering (or didn't): the moments are of
+            # y - moments_center, so the same shift-back machinery applies.
+            center = moments_center
 
         if center != 0.0:
             target_lower_bound -= center
@@ -942,6 +966,28 @@ class FuzzyChecker:
                 "estimated from them. With method='conjugate', supply beta_prior "
                 "to provide the variance scale the data cannot."
             )
+        if observed_values is None and observed_variance > 0:
+            # A conservative estimate of the cancellation error in the caller's
+            # accumulation: each squared term carries a relative rounding of about
+            # machine epsilon at the magnitude of ((y - center)^2), and roughly
+            # sqrt(n) of those roundings survive the sum, so the variance -- the
+            # small difference of two such sums -- is off by about this fraction.
+            estimated_corruption = (
+                (1.0 + observed_mean**2 / observed_variance)
+                * np.sqrt(observed_zeroth_moment)
+                * np.finfo(float).eps
+            )
+            if estimated_corruption > 0.01:
+                logger.warning(
+                    f"The moments supplied for '{name}' sit about "
+                    f"{abs(observed_mean) / np.sqrt(observed_variance):.3g} standard "
+                    "deviations from their center, so floating point cancellation "
+                    f"has likely corrupted the variance (rough estimate: "
+                    f"{estimated_corruption:.0%}). Accumulate moments of "
+                    "y - moments_center for a center near the data -- the target "
+                    "mean is a good choice -- and pass that moments_center, or "
+                    "pass observed_values instead."
+                )
         observed_std = float(np.sqrt(observed_variance))
 
         if method == "fractional":

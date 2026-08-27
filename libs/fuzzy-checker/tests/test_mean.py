@@ -555,3 +555,99 @@ def test_scale_invariance(
     assert scaled.bayes_factor == pytest.approx(base.bayes_factor, rel=tolerance)
     assert scaled.reject_null == base.reject_null
     assert scaled.observed_std == pytest.approx(base.observed_std * scale, rel=1e-9)
+
+
+# --- Streaming moments: moments_center and the precision warning -------------
+
+
+@pytest.mark.parametrize("method", ["conjugate", "fractional"])
+def test_target_centered_moments_match_values_far_from_zero(
+    method: Literal["conjugate", "fractional"],
+) -> None:
+    """Moments accumulated about the target reproduce the values path exactly.
+
+    Raw moments of values with mean 1e7 and SD 0.5 lose the spread to floating
+    point cancellation; centered accumulation is the streaming-safe recipe.
+    """
+    center = 1e7
+    values = _values(center + 0.1, 0.5, 1_000, seed=12345)
+    from_values = FuzzyChecker().test_mean(
+        name="values", target_mean=center, observed_values=values, method=method
+    )
+    shifted = values - center
+    from_moments = FuzzyChecker().test_mean(
+        name="moments",
+        target_mean=center,
+        observed_zeroth_moment=len(values),
+        observed_first_moment=float(np.sum(shifted)),
+        observed_second_moment=float(np.sum(shifted**2)),
+        moments_center=center,
+        method=method,
+    )
+    assert from_moments.bayes_factor == pytest.approx(from_values.bayes_factor, rel=1e-9)
+    assert from_moments.observed_std == pytest.approx(from_values.observed_std)
+    # Results are reported in original units.
+    assert from_moments.observed_mean == pytest.approx(from_values.observed_mean)
+    assert from_moments.target_lower_bound == center
+
+
+def test_moments_center_rejected_with_values() -> None:
+    """moments_center describes moments; it cannot accompany observed_values."""
+    values = _values(TARGET_MEAN, 15.0, 100, seed=12345)
+    with pytest.raises(ValueError, match="does not apply when observed_values"):
+        FuzzyChecker().test_mean(
+            name="x",
+            target_mean=TARGET_MEAN,
+            observed_values=values,
+            moments_center=TARGET_MEAN,
+        )
+
+
+def test_corrupted_raw_moments_warn(caplog: pytest.LogCaptureFixture) -> None:
+    """Raw moments of far-from-zero values warn; centered moments do not."""
+    center = 1e7
+    values = _values(center, 0.5, 1_000, seed=12345)
+    checker = FuzzyChecker()
+
+    caplog.clear()
+    checker.test_mean(
+        name="raw",
+        target_mean=center,
+        observed_zeroth_moment=len(values),
+        observed_first_moment=float(np.sum(values)),
+        observed_second_moment=float(np.sum(values**2)),
+    )
+    assert "floating point cancellation" in caplog.text
+
+    caplog.clear()
+    shifted = values - center
+    checker.test_mean(
+        name="centered",
+        target_mean=center,
+        observed_zeroth_moment=len(values),
+        observed_first_moment=float(np.sum(shifted)),
+        observed_second_moment=float(np.sum(shifted**2)),
+        moments_center=center,
+    )
+    assert "floating point cancellation" not in caplog.text
+
+    # The values path centers internally, so it never warns either.
+    caplog.clear()
+    checker.test_mean(name="values", target_mean=center, observed_values=values)
+    assert "floating point cancellation" not in caplog.text
+
+
+def test_well_conditioned_raw_moments_do_not_warn(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Ordinary data (mean within a few SDs of zero-ish scales) stays quiet."""
+    values = _values(110.0, 15.0, 1_000_000, seed=12345)
+    caplog.clear()
+    FuzzyChecker().test_mean(
+        name="hemoglobin",
+        target_mean=110.0,
+        observed_zeroth_moment=len(values),
+        observed_first_moment=float(np.sum(values)),
+        observed_second_moment=float(np.sum(values**2)),
+    )
+    assert "floating point cancellation" not in caplog.text
