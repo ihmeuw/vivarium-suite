@@ -661,7 +661,7 @@ def test_create_simulants_appends_staged_simulants_once() -> None:
     )
     sim = _grow(first, second)
     committed = sim._population.get_population_index()
-    assert sim._population._staged_columns is None
+    assert sim._population._staged_simulants is None
     for recorder in (first, second):
         recorder.observations.clear()
 
@@ -673,7 +673,7 @@ def test_create_simulants_appends_staged_simulants_once() -> None:
         (observation,) = recorder.observations
         assert observation.committed_index.equals(committed)
 
-    assert sim._population._staged_columns is None
+    assert sim._population._staged_simulants is None
     grown = pd.DataFrame(sim._population.private_columns)
     assert grown.index.equals(pd.RangeIndex(0, INITIAL_POP_SIZE + ADDED_SIMULANTS))
     assert not grown.index.has_duplicates
@@ -855,7 +855,7 @@ def test_failed_mid_sim_addition_discards_the_staged_frame() -> None:
         sim.step()
 
     manager = sim._population
-    assert manager._staged_columns is None
+    assert manager._staged_simulants is None
     assert not manager.adding_simulants
     assert not manager.creating_initial_population
     pd.testing.assert_frame_equal(_population(sim), before)
@@ -873,7 +873,7 @@ def test_failed_initial_population_creation_commits_no_simulants() -> None:
         sim.setup()
 
     manager = sim._population
-    assert manager._staged_columns is None
+    assert manager._staged_simulants is None
     assert not manager.adding_simulants
     assert not manager.creating_initial_population
     assert manager.private_columns.empty
@@ -899,26 +899,6 @@ def test_mid_sim_addition_matches_state_of_an_equally_sized_initial_population()
     )
 
     pd.testing.assert_frame_equal(_population(grown), _population(started_large))
-
-
-def test_initializer_reads_across_frames_through_the_population_view() -> None:
-    """A view read spanning committed and staged simulants serves both correctly."""
-    staged_first = StagingRecorder(name="first_recorder", column="recorded_first")
-    reader = CrossFrameReader(attribute="recorded_first", requires=["recorded_first"])
-    sim = _grow(staged_first, reader)
-    committed = _column(sim, "recorded_first")
-    reader.reads.clear()
-
-    sim.step()
-
-    (read,) = reader.reads
-    assert read.index.equals(pd.RangeIndex(0, INITIAL_POP_SIZE + ADDED_SIMULANTS))
-    pd.testing.assert_series_equal(
-        read.loc[committed.index], committed, check_index_type=False
-    )
-    pd.testing.assert_series_equal(
-        read.loc[NEW_INDEX], _staged_values(NEW_INDEX, "recorded_first")
-    )
 
 
 class TrackedQueryRegistrar(Component):
@@ -949,22 +929,6 @@ def test_tracked_query_is_suppressed_for_reads_during_initial_creation() -> None
     )
 
 
-def test_tracked_query_filters_a_creation_pass_read_across_both_frames() -> None:
-    """A read that asks for the tracked query has it applied to both frames."""
-    reader = CrossFrameReader(
-        attribute="recorded", requires=["recorded"], include_untracked=False
-    )
-    sim = _grow(TrackedQueryRegistrar(TRACKED_QUERY), StagingRecorder(), reader)
-
-    sim.step()
-
-    pd.testing.assert_series_equal(
-        reader.reads[-1],
-        _staged_values(pd.Index([0, 1, 3, 4, 5, 6, 8, 9])),
-        check_index_type=False,
-    )
-
-
 def test_mid_sim_addition_of_zero_simulants_changes_nothing() -> None:
     """Creating zero simulants leaves the population exactly as it was."""
     sim = InteractiveContext(
@@ -980,7 +944,7 @@ def test_mid_sim_addition_of_zero_simulants_changes_nothing() -> None:
     pd.testing.assert_frame_equal(after, before)
     assert after.index.equals(pd.RangeIndex(0, INITIAL_POP_SIZE))
     assert not after.isna().to_numpy().any()
-    assert sim._population._staged_columns is None
+    assert sim._population._staged_simulants is None
 
 
 def test_initial_population_of_zero_simulants_is_coherent() -> None:
@@ -1006,7 +970,7 @@ def test_initial_population_of_zero_simulants_is_coherent() -> None:
     # which pandas types as float64 whatever the values would have been.
     typed_columns = typed.columns_created
     pd.testing.assert_series_equal(empty[typed_columns].dtypes, full[typed_columns].dtypes)
-    assert sim._population._staged_columns is None
+    assert sim._population._staged_simulants is None
 
 
 def test_repeated_mid_sim_additions_keep_the_population_coherent() -> None:
@@ -1035,4 +999,15 @@ def test_repeated_mid_sim_additions_keep_the_population_coherent() -> None:
         assert pop.index.equals(pd.RangeIndex(0, expected_size))
         assert not pop.isna().to_numpy().any()
         assert pop.dtypes.equals(dtypes)
-        assert sim._population._staged_columns is None
+        assert sim._population._staged_simulants is None
+
+
+def test_read_spanning_both_frames_is_rejected() -> None:
+    """A read cannot cover the simulants being added and the settled ones at once."""
+    reader = CrossFrameReader(attribute="recorded", requires=["recorded"])
+    sim = _grow(StagingRecorder(), reader)
+
+    # The initial pass is fine: every simulant is being added, so the read sits in
+    # one frame. Only a mid-simulation addition puts simulants in both.
+    with pytest.raises(PopulationError, match="cannot cover both the simulants being added"):
+        sim.step()

@@ -87,7 +87,7 @@ class PopulationManager(Manager):
 
     def __init__(self) -> None:
         self._private_columns: pd.DataFrame | None = None
-        self._staged_columns: pd.DataFrame | None = None
+        self._staged_simulants: pd.DataFrame | None = None
         """The simulants currently being initialized, or None outside of creation.
 
         Initializers write their columns here rather than into the population, so
@@ -316,8 +316,9 @@ class PopulationManager(Manager):
         Parameters
         ----------
         index
-            The simulants to read. If None, every simulant in the population is
-            read; simulants still being staged are not included.
+            The simulants to read, all of which must sit in one frame. If None,
+            every simulant in the population is read; simulants still being staged
+            are not included.
         columns
             The columns to read. If None, every column is read.
 
@@ -332,35 +333,62 @@ class PopulationManager(Manager):
         population itself used to carry while it was being grown, and keeps an
         under-declared resource requirement reading as null rather than raising.
         """
-        if self._private_columns is None:
-            raise PopulationError("Population has not been initialized.")
-
-        frame = self._private_columns
-        if self._staged_columns is not None and index is not None:
-            is_staged = index.isin(self._staged_columns.index)
-            if is_staged.all():
-                frame = self._staged_columns
-            elif is_staged.any():
-                frame = pd.concat([frame, self._staged_columns])
-
+        frame = self._frame_holding(index)
         if index is not None:
             frame = frame.loc[index]
         return frame if columns is None else frame.reindex(columns=columns)
 
+    def _frame_holding(self, index: pd.Index[int] | None) -> pd.DataFrame:
+        """Get the frame that holds ``index``, combining both if it spans them.
+
+        Outside a creation pass there is only the population. During one there is
+        also the frame of simulants being added, and the two hold disjoint indices,
+        so any given read falls into one of three cases:
+
+        - ``index`` is None, meaning every simulant the population itself holds.
+          The simulants being added are not in it yet.
+        - Every simulant asked for is being added, so the staged frame answers it.
+        - None of them are, so the population answers it.
+
+        Raises
+        ------
+        PopulationError
+            If the population has not been initialized, or if ``index`` names both
+            simulants being added and simulants already in the population. The two
+            are kept apart on purpose: a simulant being added has no value yet for
+            any column whose initializer has not run, so serving it alongside a
+            settled one would quietly mix real values with nulls.
+        """
+        if self._private_columns is None:
+            raise PopulationError("Population has not been initialized.")
+        population = self._private_columns
+        being_added = self._staged_simulants
+        if index is None or being_added is None:
+            return population
+        is_being_added = index.isin(being_added.index)
+        if is_being_added.all():
+            return being_added
+        if is_being_added.any():
+            raise PopulationError(
+                "A read cannot cover both the simulants being added and those "
+                "already in the population. Read them separately."
+            )
+        return population
+
     def get_staged_index(self) -> pd.Index[int]:
         """Gets the index of the simulants currently being initialized."""
-        if self._staged_columns is None:
+        if self._staged_simulants is None:
             raise PopulationError("No simulants are being added.")
-        return self._staged_columns.index
+        return self._staged_simulants.index
 
     def get_population_index(self) -> pd.Index[int]:
         """Gets the index of the current population, including simulants being added."""
         if self._private_columns is None:
             raise PopulationError("Population has not been initialized.")
-        if self._staged_columns is None:
+        if self._staged_simulants is None:
             return self._private_columns.index
         full_index: pd.Index[int] = self._private_columns.index.append(  # type: ignore [no-untyped-call]
-            self._staged_columns.index
+            self._staged_simulants.index
         )
         return full_index
 
@@ -451,7 +479,7 @@ class PopulationManager(Manager):
 
         existing_index = self._private_columns.index
         index = pd.RangeIndex(len(existing_index) + count).difference(existing_index)
-        self._staged_columns = pd.DataFrame(index=index)
+        self._staged_simulants = pd.DataFrame(index=index)
 
         self.adding_simulants = True
         try:
@@ -465,12 +493,12 @@ class PopulationManager(Manager):
             # whatever each initializer handed over, and concatenating from those
             # costs far more than consolidating a few thousand rows first.
             self._private_columns = pd.concat(
-                [self._private_columns, self._staged_columns.copy()]
+                [self._private_columns, self._staged_simulants.copy()]
             )
         finally:
             self.creating_initial_population = False
             self.adding_simulants = False
-            self._staged_columns = None
+            self._staged_simulants = None
 
         self._check_all_registered_columns_created()
 
@@ -921,6 +949,8 @@ class PopulationManager(Manager):
         if self._private_columns is None:
             raise PopulationError("Population has not been initialized.")
         frame = (
-            self._private_columns if self._staged_columns is None else self._staged_columns
+            self._private_columns
+            if self._staged_simulants is None
+            else self._staged_simulants
         )
         frame[update.columns] = update

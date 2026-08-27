@@ -964,7 +964,7 @@ def test_population_view_initialize_init(
 
     pv.initialize(population_update_new_cols)
 
-    staged = pd.DataFrame(pies_and_cubes_pop_mgr._staged_columns)
+    staged = pd.DataFrame(pies_and_cubes_pop_mgr._staged_simulants)
     for col in population_update_new_cols:
         assert staged[col].equals(population_update_new_cols[col])
 
@@ -981,7 +981,7 @@ def test_population_view_initialize_add(
     _stage(pies_and_cubes_pop_mgr, update_index)
     pv_pies.initialize(population_update)
 
-    staged = pd.DataFrame(pies_and_cubes_pop_mgr._staged_columns)
+    staged = pd.DataFrame(pies_and_cubes_pop_mgr._staged_simulants)
     for col in population_update:
         if update_index.empty:
             # Nothing to write, so the column is never created on the staged frame;
@@ -1154,7 +1154,7 @@ def _stage(
         # Nothing is committed until the initial population is, and the fixture's
         # committed rows would otherwise share an index with the staged ones.
         manager._private_columns = pd.DataFrame(manager._private_columns).iloc[:0]
-    manager._staged_columns = pd.DataFrame(index=index)
+    manager._staged_simulants = pd.DataFrame(index=index)
     manager.creating_initial_population = creating_initial_population
     manager.adding_simulants = True
 
@@ -1172,7 +1172,7 @@ def test_initialize_writes_only_the_staged_rows(
     pd.testing.assert_frame_equal(
         pd.DataFrame(pies_and_cubes_pop_mgr._private_columns), committed
     )
-    staged = pies_and_cubes_pop_mgr._staged_columns
+    staged = pies_and_cubes_pop_mgr._staged_simulants
     assert staged is not None
     assert list(staged.columns) == PIE_COL_NAMES
     assert staged.index.equals(STAGED_INDEX)
@@ -1207,7 +1207,7 @@ def test_initialize_gives_each_column_its_initializers_dtype(
     # committed dtype instead of the initializer's would show up here.
     pv.initialize(pd.Series(values, index=STAGED_INDEX, name="pi"))
 
-    staged = pies_and_cubes_pop_mgr._staged_columns
+    staged = pies_and_cubes_pop_mgr._staged_simulants
     assert staged is not None
     assert staged["pi"].dtype == expected_dtype
 
