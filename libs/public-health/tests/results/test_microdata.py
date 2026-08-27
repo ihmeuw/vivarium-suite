@@ -1,7 +1,11 @@
+from typing import Any
+
 import pandas as pd
 import pytest
 from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.components import ComponentConfigError
+from vivarium.engine.framework.configuration import build_simulation_configuration
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population import SimulantData
@@ -58,56 +62,120 @@ class _Disqualifier(Component):
         return eligible
 
 
-def _configure(
-    base_config: ConfigTree, microdata: dict, population_size: int | None = None
-) -> ConfigTree:
-    overrides: dict = {"microdata_observer": microdata}
-    if population_size is not None:
-        overrides["population"] = {"population_size": population_size}
-    base_config.update(overrides, layer="model_override", source="test_microdata")
-    return base_config
-
-
-def _build_microdata_sim(
-    base_config: ConfigTree,
-    base_plugins: ConfigTree,
-    microdata: dict,
-    *,
-    components: list[Component] | None = None,
-    population_size: int | None = None,
-) -> InteractiveContext:
-    """Build a sim with a MicrodataObserver configured by ``microdata``."""
-    if components is None:
-        components = [BasePopulation(), MicrodataObserver()]
-    return InteractiveContext(
-        components=components,
-        configuration=_configure(base_config, microdata, population_size=population_size),
-        plugin_configuration=base_plugins,
-        observe=True,
-    )
+# One config per observer in the shared sim, keyed by label (None = the unlabeled default
+# observer). Each test reads the observation of the scenario it exercises.
+_SCENARIOS: dict[str | None, dict[str, Any]] = {
+    None: {"columns": ["age", "sex"]},
+    "filtered": {"columns": ["age", "sex"], "filter": ['sex == "Female"', "age >= 20"]},
+    "second_step": {"columns": ["age"], "timesteps": [SECOND_EVENT_TIME]},
+    "capped": {
+        # 2 observed timesteps -> 200 // 2 = 100 rows each
+        "columns": ["simulant_id"],
+        "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
+        "row_limit": 200,
+    },
+    "estimated": {
+        # row_limit 2 * ESTIMATED_TIMESTEPS -> 2 rows per step
+        "columns": ["simulant_id"],
+        "row_limit": 2 * ESTIMATED_TIMESTEPS,
+    },
+    "cohort": {
+        # 2 observed timesteps -> a closed cohort of 200 // 2 = 100 simulants
+        "columns": ["simulant_id"],
+        "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
+        "row_limit": 200,
+        "single_random_sample": True,
+    },
+    "dropout": {
+        # like 'cohort', but members leaving the filter drop out (the _Disqualifier
+        # flips half the population ineligible between the two observed steps)
+        "columns": ["simulant_id"],
+        "filter": ["eligible == True"],
+        "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
+        "row_limit": 200,
+        "single_random_sample": True,
+    },
+}
 
 
 @pytest.fixture(scope="module")
 def microdata_observer_sim(base_config_factory, base_plugins) -> InteractiveContext:
-    """Shared read-only sim recording [age, sex] over two steps; don't step or mutate it."""
-    sim = _build_microdata_sim(
-        base_config_factory(), base_plugins, {"columns": ["age", "sex"]}
+    """Shared read-only sim with one observer per scenario, stepped twice; don't step or mutate it."""
+    observers = {label: MicrodataObserver(label) for label in _SCENARIOS}
+    config = base_config_factory()
+    config.update(
+        {
+            "population": {"population_size": 250},
+            **{observers[label].name: settings for label, settings in _SCENARIOS.items()},
+        },
+        layer="model_override",
+        source="test_microdata",
+    )
+    sim = InteractiveContext(
+        components=[BasePopulation(), _SimulantID(), _Disqualifier(), *observers.values()],
+        configuration=config,
+        plugin_configuration=base_plugins,
+        observe=True,
     )
     sim.step()
     sim.step()
     return sim
 
 
+def _observation(sim: InteractiveContext, label: str | None = None) -> pd.DataFrame:
+    """Get the shared sim's results for the observer with the given label."""
+    return sim.get_results()[MicrodataObserver(label).name]
+
+
+def _build_microdata_sim(
+    base_config: ConfigTree, base_plugins: ConfigTree, microdata: dict
+) -> InteractiveContext:
+    """Build a single-observer sim with the unlabeled observer configured by ``microdata``."""
+    base_config.update(
+        {"microdata_observer": microdata}, layer="model_override", source="test_microdata"
+    )
+    return InteractiveContext(
+        components=[BasePopulation(), MicrodataObserver()],
+        configuration=base_config,
+        plugin_configuration=base_plugins,
+        observe=True,
+    )
+
+
+def test_microdata_observer_label_sets_component_name() -> None:
+    """A label suffixes the component name with ``.<label>``; unlabeled keeps the default name."""
+    assert MicrodataObserver().name == "microdata_observer"
+    assert MicrodataObserver("my_label").name == "microdata_observer.my_label"
+
+
+def test_duplicate_microdata_observers_raise(base_config, base_plugins) -> None:
+    """Two observers with the same label (or both unlabeled) fail fast on the name collision."""
+    with pytest.raises(ComponentConfigError, match="already been set"):
+        InteractiveContext(
+            components=[MicrodataObserver(), MicrodataObserver()],
+            configuration=base_config,
+            plugin_configuration=base_plugins,
+        )
+    # Constructing a sim mutates the configuration it is given, so the labeled
+    # pair needs a fresh config rather than reusing base_config.
+    with pytest.raises(ComponentConfigError, match="already been set"):
+        InteractiveContext(
+            components=[MicrodataObserver("twin"), MicrodataObserver("twin")],
+            configuration=build_simulation_configuration(),
+            plugin_configuration=base_plugins,
+        )
+
+
 def test_microdata_observer_can_be_registered(microdata_observer_sim) -> None:
-    """The observer sets up and registers a single named observation."""
-    observations = microdata_observer_sim._results._results_context.observations
-    assert "microdata_observer" in observations
+    """Every observer, labeled and unlabeled, registers an observation under its own name."""
+    expected = {MicrodataObserver(label).name for label in _SCENARIOS}
+    assert expected <= set(microdata_observer_sim.get_results())
 
 
 def test_microdata_observer_records_configured_columns(microdata_observer_sim) -> None:
-    """Records exactly the configured columns (+ event_time) for every simulant, each step."""
+    """The unlabeled observer records exactly its columns (+ event_time) for every simulant, each step."""
     n_simulants = len(microdata_observer_sim.get_population_index())
-    results = microdata_observer_sim.get_results()["microdata_observer"]
+    results = _observation(microdata_observer_sim)
 
     assert set(results.columns) == {"age", "sex", "event_time"}
     assert results["event_time"].nunique() == 2  # both steps observed
@@ -149,82 +217,52 @@ def test_microdata_observer_invalid_config_raises(
         _build_microdata_sim(base_config, base_plugins, microdata)
 
 
-def test_microdata_observer_filter_subsets_simulants(base_config, base_plugins) -> None:
-    """`filter` entries restrict recording to matching simulants, AND-combined."""
-    sim = _build_microdata_sim(
-        base_config,
-        base_plugins,
-        {"columns": ["age", "sex"], "filter": ['sex == "Female"', "age >= 20"]},
-        population_size=250,
-    )
-    n_simulants = len(sim.get_population_index())
-    sim.step()
-    result = sim.get_results()["microdata_observer"]
+def test_microdata_observer_filter_subsets_simulants(microdata_observer_sim) -> None:
+    """The 'filtered' observer records only the simulants matching its AND-combined filters."""
+    n_simulants = len(microdata_observer_sim.get_population_index())
+    result = _observation(microdata_observer_sim, "filtered")
 
     assert not result.empty
-    assert len(result) < n_simulants  # the filter actually removed some simulants
+    # the filters actually removed some simulants over the two observed steps
+    assert len(result) < 2 * n_simulants
     assert (result["sex"] == "Female").all()
     assert (result["age"] >= 20).all()
 
 
 def test_microdata_observer_observes_only_configured_timesteps(
-    base_config, base_plugins
+    microdata_observer_sim,
 ) -> None:
-    """Only timesteps whose event time matches `timesteps` are recorded."""
-    sim = _build_microdata_sim(
-        base_config, base_plugins, {"columns": ["age"], "timesteps": [SECOND_EVENT_TIME]}
-    )
+    """The 'second_step' observer records rows only for its configured timestep."""
+    result = _observation(microdata_observer_sim, "second_step")
 
-    sim.step()  # event_time FIRST_EVENT_TIME -> not in timesteps
-    assert sim.get_results()["microdata_observer"].empty
-    sim.step()  # event_time SECOND_EVENT_TIME -> in timesteps
-    assert not sim.get_results()["microdata_observer"].empty
+    assert not result.empty
+    # The sim also stepped through FIRST_EVENT_TIME, but only the configured
+    # timestep was recorded.
+    recorded_times = {pd.Timestamp(time).normalize() for time in result["event_time"]}
+    assert recorded_times == {pd.Timestamp(SECOND_EVENT_TIME)}
 
 
 def test_microdata_observer_row_limit_randomly_samples_per_timestep(
-    base_config, base_plugins
+    microdata_observer_sim,
 ) -> None:
-    """`row_limit` caps to row_limit // n_observed_timesteps rows, randomly resampled each step."""
-    sim = _build_microdata_sim(
-        base_config,
-        base_plugins,
-        # 2 observed timesteps -> 200 // 2 = 100 rows each
-        {
-            "columns": ["simulant_id"],
-            "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
-            "row_limit": 200,
-        },
-        components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
-        population_size=250,
-    )
+    """The 'capped' observer records row_limit // n_timesteps rows, freshly resampled each step."""
+    result = _observation(microdata_observer_sim, "capped")
 
-    sim.step()  # FIRST_EVENT_TIME -> observed
-    sim.step()  # SECOND_EVENT_TIME -> observed
-    result = sim.get_results()["microdata_observer"]
-
-    cohorts = result.groupby("event_time")["simulant_id"].apply(set)
-    assert all(len(cohort) == 100 for cohort in cohorts)
+    samples = result.groupby("event_time")["simulant_id"].apply(set)
+    assert len(samples) == 2  # both configured timesteps recorded
+    assert all(len(sample) == 100 for sample in samples)  # 200 // 2 rows each
     # A fresh random sample each step - not the same simulants both steps.
-    assert cohorts.iloc[0] != cohorts.iloc[1]
+    assert samples.iloc[0] != samples.iloc[1]
 
 
 def test_microdata_observer_row_limit_without_timesteps_uses_step_estimate(
-    base_config, base_plugins
+    microdata_observer_sim,
 ) -> None:
-    """With no `timesteps`, the per-step cap divides `row_limit` by the estimated step count."""
-    sim = _build_microdata_sim(
-        base_config,
-        base_plugins,
-        # row_limit 2 * ESTIMATED_TIMESTEPS -> 2 rows per step
-        {"columns": ["simulant_id"], "row_limit": 2 * ESTIMATED_TIMESTEPS},
-        components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
-        population_size=250,
-    )
+    """The 'estimated' observer divides row_limit by the estimated step count for its per-step cap."""
+    result = _observation(microdata_observer_sim, "estimated")
 
-    sim.step()
-    sim.step()
-    result = sim.get_results()["microdata_observer"]
-
+    assert result["event_time"].nunique() == 2  # both steps observed
+    # (2 * ESTIMATED_TIMESTEPS) // ESTIMATED_TIMESTEPS = 2 rows per step
     assert (result.groupby("event_time").size() == 2).all()
 
 
@@ -242,58 +280,27 @@ def test_microdata_observer_warns_and_deduplicates_timesteps(
 
 
 def test_microdata_observer_single_random_sample_records_fixed_cohort(
-    base_config, base_plugins
+    microdata_observer_sim,
 ) -> None:
-    """single_random_sample records the same once-sampled cohort at every observed step."""
-    sim = _build_microdata_sim(
-        base_config,
-        base_plugins,
-        # 2 observed timesteps -> 200 // 2 = 100 rows each
-        {
-            "columns": ["simulant_id"],
-            "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
-            "row_limit": 200,
-            "single_random_sample": True,
-        },
-        components=[BasePopulation(), _SimulantID(), MicrodataObserver()],
-        population_size=250,
-    )
-
-    sim.step()  # FIRST_EVENT_TIME -> observed
-    sim.step()  # SECOND_EVENT_TIME -> observed
-    result = sim.get_results()["microdata_observer"]
+    """The 'cohort' observer records the same once-sampled cohort at every observed step."""
+    result = _observation(microdata_observer_sim, "cohort")
 
     recorded = result.groupby("event_time")["simulant_id"].apply(set)
+    assert len(recorded) == 2  # both configured timesteps recorded
     assert len(recorded.iloc[0]) == 100  # row_limit // n_observed_timesteps
     # The same simulants both steps - a fixed closed cohort, not a fresh sample each step.
     assert recorded.iloc[0] == recorded.iloc[1]
 
 
 def test_microdata_observer_single_random_sample_drops_members_leaving_filter(
-    base_config, base_plugins
+    microdata_observer_sim,
 ) -> None:
-    """A cohort member that leaves the filter is dropped and never refilled (upper bound)."""
-    sim = _build_microdata_sim(
-        base_config,
-        base_plugins,
-        {
-            "columns": ["simulant_id"],
-            "filter": ["eligible == True"],
-            "timesteps": [FIRST_EVENT_TIME, SECOND_EVENT_TIME],
-            "row_limit": 200,  # cohort size 100
-            "single_random_sample": True,
-        },
-        components=[BasePopulation(), _SimulantID(), _Disqualifier(), MicrodataObserver()],
-        population_size=250,
-    )
-
-    sim.step()  # FIRST_EVENT_TIME -> full cohort still eligible
-    sim.step()  # _Disqualifier flips half ineligible, then SECOND_EVENT_TIME observes
-    result = sim.get_results()["microdata_observer"]
+    """The 'dropout' observer drops cohort members that leave the filter and never refills."""
+    result = _observation(microdata_observer_sim, "dropout")
 
     recorded = result.groupby("event_time")["simulant_id"].apply(set)
-    assert len(recorded.iloc[0]) == 100  # full cohort recorded the first step
+    assert len(recorded.iloc[0]) == 100  # the full cohort, all eligible on the first step
     # No new simulants enter the cohort (no refill)...
     assert recorded.iloc[1].issubset(recorded.iloc[0])
-    # ...and the disqualified members really did drop out.
+    # ...and the members the _Disqualifier flipped ineligible really did drop out.
     assert len(recorded.iloc[1]) < len(recorded.iloc[0])
