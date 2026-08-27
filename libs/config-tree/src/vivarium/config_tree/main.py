@@ -407,6 +407,8 @@ class ConfigTree:
         ------
         TypeError
             If the ``keys`` parameter is not a string or a list of strings.
+        IndexError
+            If the ``keys`` parameter is an empty list.
         MissingLayerError
             If the key path resolves to a value but none is set at an
             explicitly-requested ``layer``.
@@ -419,6 +421,8 @@ class ConfigTree:
 
         if isinstance(keys, str):
             keys = [keys]
+        if not keys:
+            raise IndexError("The 'keys' parameter must not be empty.")
 
         node = self._get_node(keys)
         if node is None:

@@ -680,6 +680,15 @@ def test_get_unresolved_path_with_layer_returns_default(
     assert tree.get(keys, default_value=7, layer=layer) == 7
 
 
+def test_get_empty_keys_raises(nested_dict: dict[str, Any]) -> None:
+    """``get`` raises an ``IndexError`` if ``keys`` is an empty list."""
+    tree = ConfigTree(nested_dict)
+    with pytest.raises(
+        IndexError, match=re.escape("The 'keys' parameter must not be empty.")
+    ):
+        tree.get([])
+
+
 def test_get_bad_keys_type_raises() -> None:
     """``get`` raises a ``TypeError`` if ``keys`` is neither a string nor a list."""
     tree = ConfigTree({"outer_layer": {"inner_layer": "test_value"}})
