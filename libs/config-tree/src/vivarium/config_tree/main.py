@@ -375,10 +375,6 @@ class ConfigTree:
     ) -> Any:
         """Return the value at the key or key path in the outermost layer.
 
-        Lenient like :meth:`dict.get` across the whole key path: a key missing
-        at any depth yields ``default_value``. Use :meth:`get_tree` to raise
-        instead.
-
         Parameters
         ----------
         keys
@@ -387,14 +383,8 @@ class ConfigTree:
         default_value
             The value to return if the key path does not resolve.
         layer
-            The name of the layer to retrieve the value from.
-
-        Notes
-        -----
-        Leniency covers resolving the key path only. ``layer`` applies when the
-        path resolves to a value; when it resolves to a sub-tree ``layer`` is
-        ignored entirely, and even a layer name that does not exist on the tree
-        is accepted without error.
+            The name of the layer to retrieve the value from. Is ignored if a
+            ConfigTree is returned.
 
         Returns
         -------
@@ -407,7 +397,7 @@ class ConfigTree:
         ------
         TypeError
             If the ``keys`` parameter is not a string or a list of strings.
-        IndexError
+        ValueError
             If the ``keys`` parameter is an empty list.
         MissingLayerError
             If the key path resolves to a value but none is set at an
@@ -446,7 +436,7 @@ class ConfigTree:
         ------
         TypeError
             If the ``keys`` parameter is not a string or list of strings.
-        IndexError
+        ValueError
             If the ``keys`` parameter is an empty list.
         ConfigurationKeyError
             If any of the keys in the key path do not exist in the tree.
@@ -476,19 +466,13 @@ class ConfigTree:
     def _get_node(self, keys: list[str]) -> ConfigTree | ConfigNode | None:
         """Return the ``ConfigTree`` or ``ConfigNode`` at the key path, or ``None``.
 
-        Notes
-        -----
-        Reads ``_children`` rather than indexing: ``__getitem__`` resolves a leaf
-        to its value via ``get_value``, which would mark it accessed even when
-        the key path turns out not to resolve.
-
         Raises
         ------
-        IndexError
+        ValueError
             If ``keys`` is empty.
         """
         if not keys:
-            raise IndexError("The 'keys' parameter must not be empty.")
+            raise ValueError("The 'keys' parameter must not be empty.")
 
         node: ConfigTree | ConfigNode = self
         for key in keys:

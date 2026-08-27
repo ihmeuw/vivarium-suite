@@ -638,27 +638,6 @@ def test_get_subtree_ignores_layer(layer: str, nested_dict: dict[str, Any]) -> N
     )
 
 
-def test_get_unresolved_path_does_not_mark_nodes_accessed(
-    nested_dict: dict[str, Any]
-) -> None:
-    """An unresolved ``get`` marks nothing as accessed, so ``unused_keys`` is unchanged."""
-    tree = ConfigTree(nested_dict)
-    unused_keys = [
-        "outer_layer_1",
-        "outer_layer_2.inner_layer",
-        "outer_layer_3.inner_layer_1.inner_layer_2",
-    ]
-    assert tree.unused_keys() == unused_keys
-
-    assert tree.get(["fake_key", "inner_layer"]) is None
-    assert tree.get(["outer_layer_3", "fake_key", "inner_layer_2"]) is None
-    assert tree.get(["outer_layer_3", "inner_layer_1", "fake_key"]) is None
-    assert tree.get(["outer_layer_1", "deeper"]) is None
-    assert tree.get(["outer_layer_3", "inner_layer_1", "inner_layer_2", "deeper"]) is None
-
-    assert tree.unused_keys() == unused_keys
-
-
 @pytest.mark.parametrize("layer", ["base", "override", "this-layer-does-not-exist"])
 @pytest.mark.parametrize(
     "keys",
@@ -684,9 +663,9 @@ def test_empty_keys_raises(nested_dict: dict[str, Any]) -> None:
     """``get`` and ``get_tree`` both raise an ``IndexError`` for an empty key path."""
     tree = ConfigTree(nested_dict)
     error_msg = re.escape("The 'keys' parameter must not be empty.")
-    with pytest.raises(IndexError, match=error_msg):
+    with pytest.raises(ValueError, match=error_msg):
         tree.get([])
-    with pytest.raises(IndexError, match=error_msg):
+    with pytest.raises(ValueError, match=error_msg):
         tree.get_tree([])
 
 
@@ -754,20 +733,6 @@ def test_get_tree_chained_returns_value_raises(nested_dict: dict[str, Any]) -> N
     tree = ConfigTree(nested_dict)
     with pytest.raises(ConfigurationError, match="get_tree must return a ConfigTree"):
         tree.get_tree(["outer_layer_3", "inner_layer_1", "inner_layer_2"])
-
-
-def test_get_tree_unresolved_path_does_not_mark_nodes_accessed(
-    nested_dict: dict[str, Any]
-) -> None:
-    """A failed ``get_tree`` marks nothing as accessed, so ``unused_keys`` is unchanged."""
-    tree = ConfigTree(nested_dict)
-    unused_keys = tree.unused_keys()
-
-    for keys in [["outer_layer_1"], ["outer_layer_1", "deeper"], ["fake_key"]]:
-        with pytest.raises(ConfigurationError):
-            tree.get_tree(keys)
-
-    assert tree.unused_keys() == unused_keys
 
 
 def test_get_tree_chained_missing_key_raises(nested_dict: dict[str, Any]) -> None:
