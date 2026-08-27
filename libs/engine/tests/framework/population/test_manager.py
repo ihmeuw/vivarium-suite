@@ -783,11 +783,11 @@ def test_read_of_uninitialized_private_column_yields_null() -> None:
         assert read["recorded_second"].isna().all()
 
 
-def test_update_writes_to_the_staged_frame_during_a_creation_pass() -> None:
-    """A write while simulants are being added lands on the staged frame alone."""
+def test_stage_writes_to_the_simulants_being_added_alone() -> None:
+    """stage() reaches the simulants being added and leaves the population alone."""
 
     def write_sentinel(manager: PopulationManager, pop_data: SimulantData) -> None:
-        manager.update(pd.DataFrame({"recorded": SENTINEL}, index=pop_data.index))
+        manager.stage(pd.DataFrame({"recorded": SENTINEL}, index=pop_data.index))
 
     sim = _grow(StagingRecorder(on_initialized=write_sentinel))
     committed = _column(sim, "recorded")
@@ -1011,3 +1011,10 @@ def test_read_spanning_both_frames_is_rejected() -> None:
     # one frame. Only a mid-simulation addition puts simulants in both.
     with pytest.raises(PopulationError, match="cannot cover both the simulants being added"):
         sim.step()
+
+
+def test_stage_is_refused_outside_a_creation_pass() -> None:
+    """stage() has no frame to write to once the pass has ended."""
+    sim = _grow(StagingRecorder())
+    with pytest.raises(PopulationError, match="No simulants are being added"):
+        sim._population.stage(pd.DataFrame({"recorded": SENTINEL}, index=pd.Index([0])))

@@ -380,7 +380,7 @@ class PopulationView:
             # and null the columns it names.
             return
 
-        self._manager.update(data_df)
+        self._manager.stage(data_df)
 
     @overload
     def update(

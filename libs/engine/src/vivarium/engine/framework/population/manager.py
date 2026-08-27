@@ -950,25 +950,32 @@ class PopulationManager(Manager):
         return df
 
     def update(self, update: pd.DataFrame) -> None:
-        """Write ``update`` into the frame holding its simulants.
+        """Write ``update`` into the population.
 
         Parameters
         ----------
         update
-            The new values, indexed by the simulants to write. Writes land in the
-            frame staging new simulants while simulants are being added, and in the
-            population otherwise; the two are never written together.
+            The new values, indexed by the simulants to write, all of which must
+            already be in the population. Use :meth:`stage` for simulants that are
+            still being added.
+        """
+        if self._private_columns is None:
+            raise PopulationError("Population has not been initialized.")
+        self._private_columns[update.columns] = update
+
+    def stage(self, update: pd.DataFrame) -> None:
+        """Write ``update`` into the simulants being added.
+
+        Parameters
+        ----------
+        update
+            The initial values, indexed by the simulants being added.
 
         Notes
         -----
         Assigning a whole column at a time is what lets a column the frame does not
         have yet be created with the update's own dtype rather than the frame's.
         """
-        if self._private_columns is None:
-            raise PopulationError("Population has not been initialized.")
-        frame = (
-            self._private_columns
-            if self._staged_simulants is None
-            else self._staged_simulants
-        )
-        frame[update.columns] = update
+        if self._staged_simulants is None:
+            raise PopulationError("No simulants are being added.")
+        self._staged_simulants[update.columns] = update
