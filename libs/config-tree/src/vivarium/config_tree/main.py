@@ -457,9 +457,11 @@ class ConfigTree:
 
         tree = self._get_node(keys)
         if tree is None:
-            raise ConfigurationKeyError(
-                f"No value at key mapping '{self._unresolved_prefix(keys)}'."
+            # Name the shortest prefix that fails rather than the whole path.
+            depth = next(
+                d for d in range(1, len(keys) + 1) if self._get_node(keys[:d]) is None
             )
+            raise ConfigurationKeyError(f"No value at key mapping '{keys[:depth]}'.")
         if not isinstance(tree, ConfigTree):
             raise ConfigurationError(
                 f"The data you accessed using {keys} with get_tree was of type {type(tree)}, "
@@ -482,13 +484,6 @@ class ConfigTree:
                 return None
             node = node._children[key]
         return node
-
-    def _unresolved_prefix(self, keys: list[str]) -> list[str]:
-        """Return the key path truncated to the first key that does not resolve."""
-        for depth in range(1, len(keys) + 1):
-            if self._get_node(keys[:depth]) is None:
-                return keys[:depth]
-        return keys
 
     def update(
         self,
