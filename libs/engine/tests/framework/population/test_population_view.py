@@ -913,14 +913,24 @@ def test__build_query_handles_tracked_queries(
 ##############################
 
 
+def _stage(
+    manager: PopulationManager,
+    index: pd.Index[int],
+    creating_initial_population: bool = True,
+) -> None:
+    """Put the manager mid-creation-pass with ``index`` staged."""
+    manager._staged_simulants = pd.DataFrame(index=index)
+    manager.creating_initial_population = creating_initial_population
+    manager.adding_simulants = True
+
+
 def test_population_view_initialize_format_fail(
     pies_and_cubes_pop_mgr: PopulationManager,
     population_update: pd.Series[Any] | pd.DataFrame,
     update_index: pd.Index[int],
 ) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr.creating_initial_population = True
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, PIE_DF.index)
     # Bad type
     with pytest.raises(TypeError):
         pv.initialize(PIE_DF.iloc[:, 0].tolist())  # type: ignore[arg-type]
@@ -936,7 +946,7 @@ def test_population_view_initialize_format_fail(
             pv.initialize(update)
 
     # Missing an update
-    pies_and_cubes_pop_mgr._private_columns = PIE_DF.loc[update_index]
+    _stage(pies_and_cubes_pop_mgr, update_index)
     if not update_index.empty:
         with pytest.raises(
             PopulationError, match="Component 'pie_component' is missing updates for"
@@ -950,9 +960,7 @@ def test_population_view_initialize_format_fail_new_cols(
     update_index: pd.Index[int],
 ) -> None:
     pv_pies = pies_and_cubes_pop_mgr.get_view(PieComponent())
-
-    pies_and_cubes_pop_mgr.creating_initial_population = True
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, PIE_DF.index)
 
     with pytest.raises(PopulationError, match="unnamed pandas series"):
         pv_pies.initialize(PIE_DF.iloc[:, 0].rename(None))
@@ -998,20 +1006,15 @@ def test_population_view_initialize_init(
     if isinstance(population_update_new_cols, pd.Series):
         pytest.skip()
 
-    # Remove the cubes backing data to test that initialization works
-    pies_and_cubes_pop_mgr._private_columns = PIE_DF.loc[update_index]
-
     pv = pies_and_cubes_pop_mgr.get_view(CubeComponent())
-
-    pies_and_cubes_pop_mgr.creating_initial_population = True
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, update_index)
 
     pv.initialize(population_update_new_cols)
 
+    staged = pies_and_cubes_pop_mgr._staged_simulants
+    assert staged is not None
     for col in population_update_new_cols:
-        assert pies_and_cubes_pop_mgr._private_columns[col].equals(
-            population_update_new_cols[col]
-        )
+        assert staged[col].equals(population_update_new_cols[col])
 
 
 def test_population_view_initialize_add(
@@ -1023,18 +1026,17 @@ def test_population_view_initialize_add(
         pytest.skip()
 
     pv_pies = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr._private_columns = PIE_DF.loc[update_index]
-    for col in population_update:
-        pies_and_cubes_pop_mgr._private_columns[col] = None
-    pies_and_cubes_pop_mgr.creating_initial_population = False
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, update_index, creating_initial_population=False)
     pv_pies.initialize(population_update)
 
+    staged = pies_and_cubes_pop_mgr._staged_simulants
+    assert staged is not None
     for col in population_update:
         if update_index.empty:
-            assert pies_and_cubes_pop_mgr._private_columns[col].empty
+            # Nothing to write, so the column is never created on the staged frame.
+            assert col not in staged
         else:
-            assert pies_and_cubes_pop_mgr._private_columns[col].equals(population_update[col])
+            assert staged[col].equals(population_update[col])
 
 
 #########################

@@ -349,9 +349,9 @@ class PopulationView:
             )
 
         data_df = self._coerce_init_data(data, self.private_columns)
-        existing = pd.DataFrame(self._manager.get_private_columns(self._component))
+        staged_index = self._manager._staged_index
 
-        unknown_simulants = len(data_df.index.difference(existing.index))
+        unknown_simulants = len(data_df.index.difference(staged_index))
         if unknown_simulants:
             raise PopulationError(
                 "Population updates must have an index that is a subset of the current "
@@ -360,26 +360,19 @@ class PopulationView:
             )
 
         if self._manager.creating_initial_population:
-            missing_pops = len(existing.index.difference(data_df.index))
+            missing_pops = len(staged_index.difference(data_df.index))
             if missing_pops:
                 raise PopulationError(
                     "Components must initialize all simulants during population "
                     f"initialization. Component '{self._component.name}' is missing "
                     f"updates for {missing_pops} simulants."
                 )
-            new_columns = list(set(data_df.columns).difference(existing.columns))
-            self._manager.update(data_df[new_columns])
-        elif not data_df.empty:
-            update_columns = list(set(data_df.columns).intersection(existing.columns))
-            updated_cols_list = []
-            for column in update_columns:
-                column_update = self._update_column_and_ensure_dtype(
-                    data_df[column],
-                    existing[column],
-                    adding_simulants=True,
-                )
-                updated_cols_list.append(column_update)
-            self._manager.update(pd.concat(updated_cols_list, axis=1))
+        elif data_df.empty:
+            # Assigning a rowless frame would align against the staged simulants
+            # and null the columns it names.
+            return
+
+        self._manager.update(data_df)
 
     @overload
     def update(
