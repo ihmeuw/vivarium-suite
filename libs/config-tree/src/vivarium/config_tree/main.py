@@ -420,7 +420,7 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        node, _ = self._resolve(keys)
+        node = self._resolve(keys)
         if node is None:
             return default_value
         if isinstance(node, ConfigTree):
@@ -455,9 +455,11 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        tree, failed_at = self._resolve(keys)
+        tree = self._resolve(keys)
         if tree is None:
-            raise ConfigurationKeyError(f"No value at key mapping '{keys[:failed_at + 1]}'.")
+            raise ConfigurationKeyError(
+                f"No value at key mapping '{self._unresolved_prefix(keys)}'."
+            )
         if not isinstance(tree, ConfigTree):
             raise ConfigurationError(
                 f"The data you accessed using {keys} with get_tree was of type {type(tree)}, "
@@ -465,8 +467,8 @@ class ConfigTree:
             )
         return tree
 
-    def _resolve(self, keys: list[str]) -> tuple[ConfigTree | ConfigNode | None, int]:
-        """Return the node at the key path, or ``None`` and the index that failed.
+    def _resolve(self, keys: list[str]) -> ConfigTree | ConfigNode | None:
+        """Return the node at the key path, or ``None`` if it does not resolve.
 
         Notes
         -----
@@ -475,11 +477,18 @@ class ConfigTree:
         the key path turns out not to resolve.
         """
         node: ConfigTree | ConfigNode = self
-        for i, key in enumerate(keys):
+        for key in keys:
             if not isinstance(node, ConfigTree) or key not in node._children:
-                return None, i
+                return None
             node = node._children[key]
-        return node, len(keys)
+        return node
+
+    def _unresolved_prefix(self, keys: list[str]) -> list[str]:
+        """Return the key path truncated to the first key that does not resolve."""
+        for depth in range(1, len(keys) + 1):
+            if self._resolve(keys[:depth]) is None:
+                return keys[:depth]
+        return keys
 
     def update(
         self,
