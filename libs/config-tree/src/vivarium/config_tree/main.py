@@ -420,7 +420,7 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        node = self._resolve(keys)
+        node = self._get_node(keys)
         if node is None:
             return default_value
         if isinstance(node, ConfigTree):
@@ -455,7 +455,7 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        tree = self._resolve(keys)
+        tree = self._get_node(keys)
         if tree is None:
             raise ConfigurationKeyError(
                 f"No value at key mapping '{self._unresolved_prefix(keys)}'."
@@ -467,8 +467,8 @@ class ConfigTree:
             )
         return tree
 
-    def _resolve(self, keys: list[str]) -> ConfigTree | ConfigNode | None:
-        """Return the node at the key path, or ``None`` if it does not resolve.
+    def _get_node(self, keys: list[str]) -> ConfigTree | ConfigNode | None:
+        """Return the ``ConfigTree`` or ``ConfigNode`` at the key path, or ``None``.
 
         Notes
         -----
@@ -486,7 +486,7 @@ class ConfigTree:
     def _unresolved_prefix(self, keys: list[str]) -> list[str]:
         """Return the key path truncated to the first key that does not resolve."""
         for depth in range(1, len(keys) + 1):
-            if self._resolve(keys[:depth]) is None:
+            if self._get_node(keys[:depth]) is None:
                 return keys[:depth]
         return keys
 
