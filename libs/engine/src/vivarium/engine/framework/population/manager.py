@@ -77,7 +77,7 @@ class PopulationManager(Manager):
 
         While simulants are being added this is the committed population only; the
         simulants being initialized live in their own frame until the pass ends.
-        Use ``get_population_index`` for an index covering both.
+        Neither this property nor any single read covers both at once.
         """
         return self._read_frame()
 
@@ -95,7 +95,7 @@ class PopulationManager(Manager):
         whose values have not been computed yet. It is appended to
         ``_private_columns`` once every initializer has run.
 
-        Two rules hold whenever this is not None, and the rest of the class is
+        Three rules hold whenever this is not None, and the rest of the class is
         built on them. The two frames' indices are **disjoint**, so no simulant is
         ever in both. And they are reached differently: a **read** picks its frame
         by which one holds the index it was asked for, because an initializer may
@@ -103,6 +103,9 @@ class PopulationManager(Manager):
         there, while a **write** always goes to this frame, because
         :meth:`~vivarium.engine.framework.population.population_view.PopulationView.initialize`
         is the only way to write during a pass and it only ever writes new simulants.
+        And neither a read nor a write may cover both frames at once: a simulant
+        here has no value yet for any column whose initializer has not run, so
+        serving it beside a settled one would mix real values with nulls.
         """
         self._private_column_metadata: defaultdict[str, list[str]] = defaultdict(list)
         self._registered_initializers: list[Callable[[SimulantData], None]] = []
@@ -308,10 +311,9 @@ class PopulationManager(Manager):
         """Get private data for ``index`` and ``columns`` from wherever it lives.
 
         While simulants are being added the population spans two frames: the
-        population proper and the staged frame holding the simulants being
-        initialized. Their indices are disjoint, so a read is served from whichever
-        frame holds ``index`` and only falls back to concatenating them when the
-        requested index spans both.
+        population proper and the frame of simulants being initialized. Their
+        indices are disjoint, and a read is served from whichever of the two holds
+        ``index``. A read covering both is refused.
 
         Parameters
         ----------
@@ -326,6 +328,12 @@ class PopulationManager(Manager):
         -------
             The requested private data.
 
+        Raises
+        ------
+        PopulationError
+            If the population has not been initialized, or if ``index`` covers both
+            the simulants being added and those already in the population.
+
         Notes
         -----
         A staged simulant has no value yet for a column whose initializer has not
@@ -339,7 +347,7 @@ class PopulationManager(Manager):
         return frame if columns is None else frame.reindex(columns=columns)
 
     def _frame_holding(self, index: pd.Index[int] | None) -> pd.DataFrame:
-        """Get the frame that holds ``index``, combining both if it spans them.
+        """Get the one frame that holds ``index``.
 
         Outside a creation pass there is only the population. During one there is
         also the frame of simulants being added, and the two hold disjoint indices,
@@ -382,7 +390,14 @@ class PopulationManager(Manager):
         return self._staged_simulants.index
 
     def get_population_index(self) -> pd.Index[int]:
-        """Gets the index of the current population, including simulants being added."""
+        """Gets the index of the current population, including simulants being added.
+
+        Notes
+        -----
+        While simulants are being added this spans two frames, and a read has to
+        sit within one, so the index returned here cannot be used to read until the
+        pass ends. Use :meth:`get_staged_index` for the simulants being added.
+        """
         if self._private_columns is None:
             raise PopulationError("Population has not been initialized.")
         if self._staged_simulants is None:
@@ -655,7 +670,8 @@ class PopulationManager(Manager):
             The attributes to include as the state table. If "all", all attributes are included.
         index
             The index of simulants to include in the returned population. If None,
-            all simulants are included.
+            all simulants are included, which while simulants are being added means
+            an index spanning two frames and is refused.
         query
             Additional conditions used to filter the index.
         squeeze
@@ -682,6 +698,8 @@ class PopulationManager(Manager):
             - If any of the requested attributes do not exist in the state table.
             - If a required column for querying is missing from the state table.
             - If the population has not yet been initialized.
+            - If the requested index covers both the simulants being added and
+              those already in the population.
         ValueError
             If multiple attributes are requested when ``mode`` is not "default".
         """
