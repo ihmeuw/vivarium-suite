@@ -51,7 +51,7 @@ test = [
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
-gbd = ["vivarium-inputs>=8.0.0,<9.0.0"]
+gbd = ["vivarium-inputs>=8.0.0"]
 dev = ["vivarium-validation[test,docs,interactive,lint,gbd]"]
 ci_github = ["vivarium-validation[test,docs,lint]"]
 ci_jenkins = ["vivarium-validation[ci_github,cluster,gbd]"]
