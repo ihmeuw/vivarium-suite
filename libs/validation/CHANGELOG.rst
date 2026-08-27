@@ -1,3 +1,9 @@
+**0.3.1 - 08/27/26**
+
+- Declare every import-time dependency as a base dependency rather than an extra
+- Defer ``vivarium-inputs`` imports so the package imports without the ``gbd`` extra
+- **Breaking change.** Rename the ``validation`` extra to ``gbd``
+
 **0.3.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10
