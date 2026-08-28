@@ -52,7 +52,7 @@ class Measure(ABC):
         """Return a formatted title for the measure."""
         return _format_title(self.measure_key)
 
-    def reference_to_step_probability(
+    def get_as_probability(
         self,
         data: pd.DataFrame,
         step_size: float | None,
@@ -196,7 +196,7 @@ class Incidence(RatioMeasure):
             denominator=StatePersonTime(cause, f"susceptible_to_{cause}"),
         )
 
-    def reference_to_step_probability(
+    def get_as_probability(
         self,
         data: pd.DataFrame,
         step_size: float | None,
@@ -267,7 +267,7 @@ class SIRemission(RatioMeasure):
             denominator=StatePersonTime(cause, cause),
         )
 
-    def reference_to_step_probability(
+    def get_as_probability(
         self,
         data: pd.DataFrame,
         step_size: float | None,
@@ -309,7 +309,7 @@ class CauseSpecificMortalityRate(RatioMeasure):
             denominator=StatePersonTime(),  # Total person time
         )
 
-    def reference_to_step_probability(
+    def get_as_probability(
         self,
         data: pd.DataFrame,
         step_size: float | None,
@@ -360,7 +360,7 @@ class ExcessMortalityRate(RatioMeasure):
             ),  # Person time among those with the disease
         )
 
-    def reference_to_step_probability(
+    def get_as_probability(
         self,
         data: pd.DataFrame,
         step_size: float | None,
@@ -529,7 +529,7 @@ class CategoricalRelativeRisk(RatioMeasure):
         """Returns rate aggregated weights."""
         return self.affected_measure.rate_aggregation_weights
 
-    def reference_to_step_probability(
+    def get_as_probability(
         self,
         data: pd.DataFrame,
         step_size: float | None,
@@ -540,9 +540,7 @@ class CategoricalRelativeRisk(RatioMeasure):
         A relative risk is unitless, so ``relative_risks * affected_measure_data`` is a
         rate exactly when the affected measure's data is.
         """
-        return self.affected_measure.reference_to_step_probability(
-            data, step_size, rate_conversion_type
-        )
+        return self.affected_measure.get_as_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(
         relative_risks=SingleNumericColumn,

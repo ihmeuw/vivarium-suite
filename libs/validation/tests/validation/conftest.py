@@ -664,7 +664,7 @@ def mock_ratio_measure() -> RatioMeasure:
     measure = mock.Mock(spec=RatioMeasure)
     measure.measure_key = "mock_measure"
     measure.measure = "some_measure"
-    measure.reference_to_step_probability.side_effect = identity
+    measure.get_as_probability.side_effect = identity
     measure.numerator = mock_numerator
     measure.denominator = mock_denominator
     measure.get_measure_data_from_ratio.side_effect = calculations.ratio

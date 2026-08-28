@@ -770,7 +770,7 @@ def test_declared_units(
 
     numerator = measure.numerator.to_opportunity_counts(person_time, step_size)
     denominator = measure.denominator.to_opportunity_counts(person_time, step_size)
-    reference = measure.reference_to_step_probability(rate, step_size)
+    reference = measure.get_as_probability(rate, step_size)
 
     assert numerator["value"].iloc[0] == (1000.0 if numerator_is_person_time else 100.0)
     assert denominator["value"].iloc[0] == (1000.0 if denominator_is_person_time else 100.0)

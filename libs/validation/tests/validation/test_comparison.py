@@ -404,9 +404,7 @@ def _convert(
             calculations.person_time_to_person_steps
         )
     if reference_is_rate:
-        measure.reference_to_step_probability.side_effect = (
-            calculations.rate_to_step_probability
-        )
+        measure.get_as_probability.side_effect = calculations.rate_to_step_probability
 
 
 @pytest.mark.parametrize("step_size_days", [1, 7, 28])

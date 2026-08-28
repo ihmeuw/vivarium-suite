@@ -382,7 +382,7 @@ class FuzzyComparison(Comparison):
         denominator = self.measure.denominator.to_opportunity_counts(
             test_datasets["denominator_data"], step_size
         )
-        target = self.measure.reference_to_step_probability(
+        target = self.measure.get_as_probability(
             ref_datasets["data"], step_size, rate_conversion_type
         )
 
