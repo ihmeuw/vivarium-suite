@@ -4,11 +4,23 @@ from typing import Any, Callable, TypeVar
 
 import pandas as pd
 import pandera as pa
-from vivarium_inputs.globals import DEMOGRAPHIC_COLUMNS, VIVARIUM_COLUMNS
 
 from vivarium.validation.constants import INPUT_DATA_INDEX_NAMES
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+# FIXME [MIC-7445]
+# Mirrors vivarium_inputs.globals.VIVARIUM_COLUMNS, defined locally so the non-GBD
+# schema path stays usable without the artifactory-only `gbd` extra. Guarded against
+# upstream drift by test_vi_vivarium_columns_matches_upstream.
+VI_VIVARIUM_COLUMNS = [
+    INPUT_DATA_INDEX_NAMES.LOCATION,
+    INPUT_DATA_INDEX_NAMES.SEX,
+    INPUT_DATA_INDEX_NAMES.AGE_START,
+    INPUT_DATA_INDEX_NAMES.AGE_END,
+    INPUT_DATA_INDEX_NAMES.YEAR_START,
+    INPUT_DATA_INDEX_NAMES.YEAR_END,
+]
 
 
 def check_io(**model_dict: type) -> Callable[[F], F]:
@@ -109,12 +121,14 @@ def get_measure_index_names(data_key: str, data_schema: str = "gbd") -> list[str
     -------
         The list of expected index names for the given data key and data schema pair.
     """
-
     measure = data_key.split(".")[-1]
     if data_schema == "gbd":
+        # Deferred: vivarium-inputs is artifactory-only and lives in the `gbd` extra.
+        from vivarium_inputs.globals import DEMOGRAPHIC_COLUMNS
+
         measure_cols = list(DEMOGRAPHIC_COLUMNS)
     else:
-        measure_cols = list(VIVARIUM_COLUMNS)
+        measure_cols = list(VI_VIVARIUM_COLUMNS)
     if measure in ["exposure", "relative_risk"]:
         measure_cols.append(INPUT_DATA_INDEX_NAMES.PARAMETER)
     if measure == "relative_risk":
