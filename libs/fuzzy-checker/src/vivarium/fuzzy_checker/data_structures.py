@@ -112,3 +112,65 @@ class TestResult:
         if self.index_info is not None:
             results_dict["index_info"] = self.index_info
         return results_dict
+
+
+@dataclass
+class MeanTestResult:
+
+    """Class to store metadata for individual mean tests run by FuzzyChecker."""
+
+    name: str
+    """Name of the test mean being calculated."""
+    name_additional: str
+    """Additional name for test, used for when the same mean is calculated multiple times."""
+    observed_mean: float
+    """The observed mean of the continuous values."""
+    observed_std: float
+    """The observed standard deviation of the continuous values."""
+    observed_count: int
+    """The count of observed values."""
+    target_lower_bound: float
+    """Lower bound of the target mean range."""
+    target_upper_bound: float
+    """Upper bound of the target mean range."""
+    bayes_factor: float
+    """Calculated Bayes factor from the test for the observed mean."""
+    reject_null: bool
+    """Whether the null hypothesis was rejected."""
+    index_info: dict[str, Any] | None = None
+    """Index name mapping for name_additional attribute."""
+    confidence: str = "Conclusive"
+    """Whether the test result is conclusive or inconclusive based on sample size and Bayes factor."""
+
+    @property
+    def comparison_to_target(self) -> str:
+        """Describe whether the observed mean is below, above, or aligned with target."""
+        if not self.reject_null:
+            return "No significant difference"
+
+        if self.observed_mean < self.target_lower_bound:
+            return "Underestimated"
+
+        if self.observed_mean > self.target_upper_bound:
+            return "Overestimated"
+
+        return "No significant difference"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary of the main metadata for this TestResult, including index info if present."""
+        results_dict = {
+            "name": self.name,
+            "name_additional": self.name_additional,
+            "observed_mean": self.observed_mean,
+            "observed_std": self.observed_std,
+            "observed_count": self.observed_count,
+            "target_lower_bound": self.target_lower_bound,
+            "target_upper_bound": self.target_upper_bound,
+            "bayes_factor": self.bayes_factor,
+            "reject_null": self.reject_null,
+            "comparison_to_target": self.comparison_to_target,
+            "confidence": self.confidence,
+        }
+        if self.index_info is not None:
+            results_dict["index_info"] = self.index_info
+        return results_dict

@@ -2,18 +2,31 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Collection
 from functools import cache
 from itertools import chain, combinations
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
 import scipy.stats
 from loguru import logger
+from scipy.integrate import quad
+from scipy.special import gammaln
 from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_frozen
 
-from vivarium.fuzzy_checker.data_structures import TargetIntervalConfig, TestResult
+from vivarium.fuzzy_checker.data_structures import (
+    MeanTestResult,
+    TargetIntervalConfig,
+    TestResult,
+)
+
+# The weight, in pseudo-observations, of the bug/issue hypothesis's mean prior in
+# test_mean: mu | sigma^2 ~ N(mu0, sigma^2 / lambda0) with lambda0 this value, so
+# the alternative's mean is deliberately almost data-free. The historic default
+# interval of +/-62 data scales encoded exactly this weight at alpha_prior=2.
+_BUG_MEAN_PSEUDO_OBSERVATIONS = 0.001
 
 
 class FuzzyChecker:
@@ -50,6 +63,7 @@ class FuzzyChecker:
 
     def __init__(self) -> None:
         self.proportion_test_diagnostics: list[TestResult] = []
+        self.mean_test_diagnostics: list[MeanTestResult] = []
 
     def assert_proportion(
         self,
@@ -691,6 +705,727 @@ class FuzzyChecker:
             # We return an arbitrarily large penalty to ensure this is never selected as the minimum.
             return float("inf")
 
+    def assert_mean(
+        self,
+        observed_values: Collection[float] | None = None,
+        target_mean: tuple[float, float] | float = 0.0,
+        *,
+        observed_zeroth_moment: int | None = None,
+        observed_first_moment: float | None = None,
+        observed_second_moment: float | None = None,
+        moments_center: float = 0.0,
+        fail_bayes_factor_cutoff: float = 100.0,
+        inconclusive_bayes_factor_cutoff: float = 0.1,
+        bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
+        alpha_prior: float = 2.0,
+        beta_prior: float | None = None,
+        method: Literal["conjugate", "fractional"] = "conjugate",
+        training_fraction: float | None = None,
+        name: str = "",
+        name_additional: str = "",
+    ) -> None:
+        """Assert that observed continuous values came from a distribution with a target mean.
+
+        Perform a Bayesian hypothesis test comparing how likely the observed data
+        is under two scenarios -- one where the simulation is working as intended
+        (target mean) and one where something is wrong (bug/issue mean). Raise an
+        AssertionError if the test decisively favors the bug/issue scenario and
+        warn if the test is not conclusive.
+
+        For more details, see:
+        https://vivarium-research.readthedocs.io/en/latest/model_design/vivarium_features/automated_v_and_v/index.html
+
+        Parameters
+        ----------
+        observed_values
+            The observed continuous values in the simulation. If omitted, all three
+            of observed_zeroth_moment, observed_first_moment, and
+            observed_second_moment must be supplied instead.
+        target_mean
+            What the mean *should* be if there is no bug/issue in the simulation,
+            as the number of observations goes to infinity. A tuple of two floats
+            is interpreted as the 2.5th and 97.5th percentiles of an uncertainty
+            interval; a single float is interpreted as an exact value.
+        observed_zeroth_moment
+            The count of observed values.
+        observed_first_moment
+            The sum of ``y - moments_center`` over the observed values.
+        observed_second_moment
+            The sum of squares of ``y - moments_center`` over the observed values.
+        moments_center
+            The constant subtracted from every value before the moments were
+            accumulated. Sums of squares of values far from zero lose the spread
+            to floating point cancellation, so accumulate moments of
+            ``y - moments_center`` for any constant near the data -- the target
+            mean is a good choice -- and pass it here. Defaults to 0 (raw
+            moments), which is safe only when the data's mean is within a few
+            hundred standard deviations of zero; a warning fires when it looks
+            like it was not. Running (mean, sum-of-squared-deviations)
+            accumulators like Welford's algorithm convert exactly:
+            ``first = n * (running_mean - center)`` and
+            ``second = M2 + n * (running_mean - center)**2``.
+        fail_bayes_factor_cutoff
+            The Bayes factor above which the test is considered to favor a
+            bug/issue so strongly that the assertion should fail. The default of
+            100 is conventionally called a "decisive" result.
+        inconclusive_bayes_factor_cutoff
+            The Bayes factor above which the test is considered inconclusive, not
+            ruling out a bug/issue. Causes a warning.
+        bug_issue_distribution_mean_uncertainty_interval
+            What the mean might be if there is a bug/issue. Defaults to a very
+            wide interval centered on the target, sized so the bug hypothesis's
+            mean prior carries a weight of ``_BUG_MEAN_PSEUDO_OBSERVATIONS``
+            (0.001) observations -- about 62 observed standard deviations to
+            either side at the default priors.
+        alpha_prior
+            The alpha parameter of the inverse-gamma prior on the variance of the
+            continuous values. Defaults to 2, which is weakly informative.
+        beta_prior
+            The beta parameter of the inverse-gamma prior on the variance.
+            Defaults to ``(alpha_prior - 1) * observed_variance``, an
+            empirical-Bayes choice that keeps the test's power independent of how
+            the data's spread compares to its mean.
+        method
+            How to compute the Bayes factor. "conjugate" (the default) uses
+            normal-inverse-gamma marginal likelihoods with the prior parameters
+            above. "fractional" uses O'Hagan's fractional Bayes factor with
+            reference priors: a fraction of the likelihood trains the priors and
+            the remainder tests, so no prior hyperparameters exist at all --
+            alpha_prior, beta_prior, and the bug/issue interval do not apply.
+        training_fraction
+            The fraction of the likelihood used to train the priors under the
+            "fractional" method. Must be strictly between 1/n and 1; defaults to
+            the minimal 2/n, which reserves the most data for testing.
+        name
+            The name of the assertion, for use in messages and diagnostics.
+        name_additional
+            An optional additional name output in diagnostics but not warnings,
+            e.g. the timestep when the assertion happened.
+
+        Raises
+        ------
+        AssertionError
+            If the test decisively favors the bug/issue hypothesis.
+        """
+        test_mean = self.test_mean(
+            name=name,
+            name_additional=name_additional,
+            target_mean=target_mean,
+            observed_values=observed_values,
+            observed_zeroth_moment=observed_zeroth_moment,
+            observed_first_moment=observed_first_moment,
+            observed_second_moment=observed_second_moment,
+            moments_center=moments_center,
+            bug_issue_distribution_mean_uncertainty_interval=bug_issue_distribution_mean_uncertainty_interval,
+            alpha_prior=alpha_prior,
+            beta_prior=beta_prior,
+            method=method,
+            training_fraction=training_fraction,
+            fail_bayes_factor_cutoff=fail_bayes_factor_cutoff,
+        )
+
+        if test_mean.reject_null:
+            if test_mean.observed_mean < test_mean.target_lower_bound:
+                raise AssertionError(
+                    f"{name} value {test_mean.observed_mean:g} is significantly less "
+                    f"than expected, bayes factor = {test_mean.bayes_factor:g}"
+                )
+            else:
+                raise AssertionError(
+                    f"{name} value {test_mean.observed_mean:g} is significantly greater "
+                    f"than expected, bayes factor = {test_mean.bayes_factor:g}"
+                )
+
+        if (
+            fail_bayes_factor_cutoff
+            > test_mean.bayes_factor
+            > inconclusive_bayes_factor_cutoff
+        ):
+            logger.warning(f"Bayes factor for '{name}' is not conclusive.")
+
+        self.mean_test_diagnostics.append(test_mean)
+
+    def test_mean(
+        self,
+        name: str = "",
+        name_additional: str = "",
+        target_mean: tuple[float, float] | float = 0.0,
+        observed_values: Collection[float] | None = None,
+        observed_zeroth_moment: int | None = None,
+        observed_first_moment: float | None = None,
+        observed_second_moment: float | None = None,
+        moments_center: float = 0.0,
+        bug_issue_distribution_mean_uncertainty_interval: tuple[float, float] | None = None,
+        alpha_prior: float = 2.0,
+        beta_prior: float | None = None,
+        method: Literal["conjugate", "fractional"] = "conjugate",
+        training_fraction: float | None = None,
+        fail_bayes_factor_cutoff: float = 100.0,
+    ) -> MeanTestResult:
+        """Run the Bayesian hypothesis test for one observed mean and return its result.
+
+        Parameters are as described in :meth:`assert_mean`.
+        """
+        if isinstance(target_mean, tuple):
+            target_lower_bound, target_upper_bound = target_mean
+        else:
+            target_lower_bound = target_upper_bound = target_mean
+
+        assert (
+            target_upper_bound >= target_lower_bound
+        ), f"The lower bound of the V&V target ({target_lower_bound}) cannot be greater than the upper bound ({target_upper_bound})"
+
+        assert (
+            (observed_zeroth_moment is None)
+            == (observed_first_moment is None)
+            == (observed_second_moment is None)
+        ), "Either all three moments or none of them must be supplied"
+        assert (observed_first_moment is None) != (
+            observed_values is None
+        ), "Exactly one of observed_values or the three moments must be supplied"
+        if observed_values is not None:
+            if moments_center != 0.0:
+                raise ValueError(
+                    "moments_center declares that supplied *moments* were "
+                    "accumulated for y - moments_center; it does not apply when "
+                    "observed_values are supplied (they are centered internally)."
+                )
+            values = np.asarray(observed_values, dtype=float)
+            if not np.isfinite(values).all():
+                bad_count = int(values.size - np.isfinite(values).sum())
+                raise ValueError(
+                    f"{bad_count} of the {values.size} observed values are nan or "
+                    "infinite. A nan cannot fail a hypothesis test -- every "
+                    "comparison against it is False -- so it would report as a "
+                    "pass; clean the values before testing them."
+                )
+            # Compute in centered coordinates: a sum of squares of values far from
+            # zero loses the spread to floating point cancellation (a mean of 1e7
+            # with an SD of 0.5 corrupts the variance by ~8%), and the test is
+            # translation invariant, so shift the data and every mean-like input
+            # to zero and shift the results back at the end.
+            center = float(np.mean(values))
+            centered_values = values - center
+            observed_zeroth_moment = len(values)
+            observed_first_moment = float(np.sum(centered_values))
+            observed_second_moment = float(np.sum(centered_values**2))
+        else:
+            # The caller did the centering (or didn't): the moments are of
+            # y - moments_center, so the same shift-back machinery applies.
+            center = moments_center
+
+        if center != 0.0:
+            target_lower_bound -= center
+            target_upper_bound -= center
+            target_mean = (
+                (target_lower_bound, target_upper_bound)
+                if isinstance(target_mean, tuple)
+                else target_lower_bound
+            )
+            if bug_issue_distribution_mean_uncertainty_interval is not None:
+                interval_low, interval_high = bug_issue_distribution_mean_uncertainty_interval
+                bug_issue_distribution_mean_uncertainty_interval = (
+                    interval_low - center,
+                    interval_high - center,
+                )
+
+        assert (
+            observed_zeroth_moment is not None
+            and observed_first_moment is not None
+            and observed_second_moment is not None
+        )
+
+        if not (np.isfinite(observed_first_moment) and np.isfinite(observed_second_moment)):
+            raise ValueError(
+                f"The observed moments are not finite (sum = {observed_first_moment}, "
+                f"sum of squares = {observed_second_moment}). A nan cannot fail a "
+                "hypothesis test -- every comparison against it is False -- so it "
+                "would report as a pass; clean the values before accumulating moments."
+            )
+        if observed_zeroth_moment < 2:
+            raise ValueError(
+                "test_mean requires at least two observed values to separate the "
+                f"mean from the spread; got {observed_zeroth_moment}."
+            )
+
+        target_midpoint = (target_lower_bound + target_upper_bound) / 2
+        observed_mean = observed_first_moment / observed_zeroth_moment
+        observed_variance = (
+            observed_second_moment / observed_zeroth_moment - observed_mean**2
+        )
+        if observed_variance < 0:
+            raise ValueError(
+                "The observed moments imply a negative variance, which usually "
+                "means floating point cancellation corrupted them: a sum of "
+                "squares of values far from zero loses the spread. Accumulate "
+                "the moments of centered values, or pass observed_values instead."
+            )
+        if observed_variance == 0 and (method == "fractional" or beta_prior is None):
+            raise ValueError(
+                "The observed values have no spread, so the variance cannot be "
+                "estimated from them. With method='conjugate', supply beta_prior "
+                "to provide the variance scale the data cannot."
+            )
+        if observed_values is None and observed_variance > 0:
+            # A conservative estimate of the cancellation error in the caller's
+            # accumulation: each squared term carries a relative rounding of about
+            # machine epsilon at the magnitude of ((y - center)^2), and roughly
+            # sqrt(n) of those roundings survive the sum, so the variance -- the
+            # small difference of two such sums -- is off by about this fraction.
+            estimated_corruption = (
+                (1.0 + observed_mean**2 / observed_variance)
+                * np.sqrt(observed_zeroth_moment)
+                * np.finfo(float).eps
+            )
+            if estimated_corruption > 0.01:
+                logger.warning(
+                    f"The moments supplied for '{name}' sit about "
+                    f"{abs(observed_mean) / np.sqrt(observed_variance):.3g} standard "
+                    "deviations from their center, so floating point cancellation "
+                    f"has likely corrupted the variance (rough estimate: "
+                    f"{estimated_corruption:.0%}). Accumulate moments of "
+                    "y - moments_center for a center near the data -- the target "
+                    "mean is a good choice -- and pass that moments_center, or "
+                    "pass observed_values instead."
+                )
+        observed_std = float(np.sqrt(observed_variance))
+
+        if method == "fractional":
+            if (
+                beta_prior is not None
+                or bug_issue_distribution_mean_uncertainty_interval is not None
+            ):
+                raise ValueError(
+                    "The fractional method has no prior hyperparameters: beta_prior "
+                    "and bug_issue_distribution_mean_uncertainty_interval do not "
+                    "apply to it."
+                )
+            log_bayes_factor = self._fractional_log_bayes_factor(
+                target_mean,
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                training_fraction,
+            )
+        elif method == "conjugate":
+            if beta_prior is None:
+                # Scale the variance prior by the observed spread of the data, not the
+                # target mean: a prior that assumes sigma ~ |target mean| swamps the
+                # evidence whenever the data's spread is much smaller than its mean,
+                # silently costing the test its power against real bias.
+                beta_prior = (alpha_prior - 1) * observed_variance
+
+            if bug_issue_distribution_mean_uncertainty_interval is None:
+                # Center the bug hypothesis on the target so that targets at or below
+                # zero remain in-domain. The width encodes the prior weight directly:
+                # this interval round-trips through
+                # _compute_parameters_for_marginal_mu_interval to
+                # lambda0 = _BUG_MEAN_PSEUDO_OBSERVATIONS for any alpha and beta
+                # (it is ~62 observed SDs at the defaults).
+                degrees_freedom = 2.0 * alpha_prior
+                half_width = scipy.stats.t.ppf(0.975, df=degrees_freedom) * float(
+                    np.sqrt(beta_prior / (alpha_prior * _BUG_MEAN_PSEUDO_OBSERVATIONS))
+                )
+                bug_issue_distribution_mean_uncertainty_interval = (
+                    target_midpoint - half_width,
+                    target_midpoint + half_width,
+                )
+
+            bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+                bug_issue_distribution_mean_uncertainty_interval,
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                alpha_prior=alpha_prior,
+                beta_prior=beta_prior,
+            )
+
+            if isinstance(target_mean, tuple) and target_upper_bound > target_lower_bound:
+                # The target interval is a fixed prior in data units, decoupled
+                # from beta_prior: tying its width to the variance prior (as the
+                # bug interval's construction does) rescales the interval by
+                # sigma/estimate whenever the variance is misestimated.
+                no_bug_issue_log_likelihood = self._log_conjugate_marginal_interval_mean(
+                    observed_zeroth_moment,
+                    observed_mean,
+                    observed_variance * observed_zeroth_moment,
+                    prior_mean=target_midpoint,
+                    prior_sd=(target_upper_bound - target_lower_bound)
+                    / (2 * scipy.stats.norm.ppf(0.975)),
+                    alpha0=alpha_prior,
+                    beta0=beta_prior,
+                )
+            else:
+                no_bug_issue_log_likelihood = self._compute_continuous_log_likelihood(
+                    target_lower_bound,
+                    observed_zeroth_moment,
+                    observed_first_moment,
+                    observed_second_moment,
+                    alpha_prior=alpha_prior,
+                    beta_prior=beta_prior,
+                )
+            log_bayes_factor = bug_issue_log_likelihood - no_bug_issue_log_likelihood
+        else:
+            raise ValueError(
+                f"Unknown method '{method}'; choose 'conjugate' or 'fractional'."
+            )
+
+        with np.errstate(under="ignore", over="ignore"):
+            bayes_factor = float(np.exp(log_bayes_factor))
+
+        # Every comparison against a nan is False, so a nan reaching the caller
+        # would leave reject_null False -- a test that never evaluated reported
+        # as a pass. A nan means "did not evaluate", never "passed".
+        if np.isnan(bayes_factor):
+            raise ValueError(
+                f"The Bayes factor for '{name}' is nan, so this test did not "
+                f"evaluate (log Bayes factor = {log_bayes_factor}). This usually "
+                "means a marginal likelihood was zero or infinite under both "
+                "hypotheses, such as from out-of-domain prior parameters."
+            )
+
+        reject_null = bayes_factor > fail_bayes_factor_cutoff
+
+        return MeanTestResult(
+            name=name,
+            name_additional=name_additional,
+            observed_mean=observed_mean + center,
+            observed_std=observed_std,
+            observed_count=observed_zeroth_moment,
+            target_lower_bound=target_lower_bound + center,
+            target_upper_bound=target_upper_bound + center,
+            bayes_factor=bayes_factor,
+            reject_null=reject_null,
+        )
+
+    def _compute_continuous_log_likelihood(
+        self,
+        target_mean: float | tuple[float, float],
+        observed_zeroth_moment: int,
+        observed_first_moment: float,
+        observed_second_moment: float,
+        alpha_prior: float,
+        beta_prior: float,
+    ) -> float:
+        """Return the log marginal likelihood of the data under a fixed or uncertain mean."""
+        if isinstance(target_mean, tuple):
+            assert len(target_mean) == 2
+            prior_mu_center, lambda_prior = self._compute_parameters_for_marginal_mu_interval(
+                target_mean[0], target_mean[1], alpha_prior, beta_prior
+            )
+
+            return self._log_likelihood_normal_inverse_gamma(
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                mu0=prior_mu_center,
+                lambda0=lambda_prior,
+                alpha0=alpha_prior,
+                beta0=beta_prior,
+            )
+        else:
+            return self._log_likelihood_normal_inverse_gamma_fixed_mean(
+                observed_zeroth_moment,
+                observed_first_moment,
+                observed_second_moment,
+                mu_star=target_mean,
+                alpha0=alpha_prior,
+                beta0=beta_prior,
+            )
+
+    def _log_likelihood_normal_inverse_gamma(
+        self,
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        mu0: float,
+        lambda0: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
+        """Return the log marginal likelihood under the free-mean model.
+
+        The model is the standard normal-inverse-gamma conjugate family:
+        ``y_i ~ N(mu, sigma^2)``, ``mu | sigma^2 ~ N(mu0, sigma^2/lambda0)``,
+        ``sigma^2 ~ Inv-Gamma(alpha0, beta0)``.
+        """
+        n = zeroth_moment
+        ybar = first_moment / zeroth_moment
+        S = second_moment - 2 * ybar * first_moment + zeroth_moment * (ybar**2)
+
+        lambda_n = lambda0 + n
+        alpha_n = alpha0 + n / 2.0
+        beta_n = beta0 + 0.5 * (S + (lambda0 * n / lambda_n) * (ybar - mu0) ** 2)
+
+        return float(
+            -0.5 * n * np.log(2.0 * np.pi)
+            + 0.5 * (np.log(lambda0) - np.log(lambda_n))
+            + (gammaln(alpha_n) - gammaln(alpha0))
+            + alpha0 * np.log(beta0)
+            - alpha_n * np.log(beta_n)
+        )
+
+    def _log_likelihood_normal_inverse_gamma_fixed_mean(
+        self,
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        mu_star: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
+        """Return the log marginal likelihood under the fixed-mean model.
+
+        The model is ``y_i ~ N(mu_star, sigma^2)`` with
+        ``sigma^2 ~ Inv-Gamma(alpha0, beta0)``.
+        """
+        n = zeroth_moment
+        S_star = second_moment - 2 * mu_star * first_moment + zeroth_moment * (mu_star**2)
+
+        alpha_n = alpha0 + n / 2.0
+        beta_n = beta0 + 0.5 * S_star
+
+        return float(
+            -0.5 * n * np.log(2.0 * np.pi)
+            + (gammaln(alpha_n) - gammaln(alpha0))
+            + alpha0 * np.log(beta0)
+            - alpha_n * np.log(beta_n)
+        )
+
+    def _compute_parameters_for_marginal_mu_interval(
+        self,
+        desired_lower: float,
+        desired_upper: float,
+        alpha_prior: float,
+        beta_prior: float,
+    ) -> tuple[float, float]:
+        """Return (mu0, lambda0) whose marginal prior for mu has the desired 95% interval.
+
+        After integrating out sigma^2 under ``Inv-Gamma(alpha_prior, beta_prior)``,
+        the marginal prior for mu is a Student-t; solve for the (mu0, lambda0)
+        that give it a central 95% interval of [desired_lower, desired_upper].
+        """
+        if desired_upper <= desired_lower:
+            raise ValueError("desired_upper must be greater than desired_lower")
+
+        if alpha_prior <= 0 or beta_prior <= 0:
+            raise ValueError("alpha_prior and beta_prior must be positive")
+
+        prior_mu_center = 0.5 * (desired_lower + desired_upper)
+        half_width = 0.5 * (desired_upper - desired_lower)
+
+        degrees_freedom = 2.0 * alpha_prior
+        t975 = scipy.stats.t.ppf(0.975, df=degrees_freedom)
+
+        # The marginal scale for mu satisfies s_mu^2 = beta0 / (alpha0 * lambda0).
+        scale_mu_marginal = half_width / t975
+        prior_lambda = beta_prior / (alpha_prior * scale_mu_marginal**2)
+
+        return prior_mu_center, float(prior_lambda)
+
+    def _fractional_log_bayes_factor(
+        self,
+        target_mean: float | tuple[float, float],
+        zeroth_moment: int,
+        first_moment: float,
+        second_moment: float,
+        training_fraction: float | None,
+    ) -> float:
+        """Return the log fractional Bayes factor of the bug over the no-bug model.
+
+        Both models get the reference prior ``1/sigma^2`` (the bug model's mean is
+        additionally unconstrained); O'Hagan's fractional Bayes factor divides each
+        model's marginal likelihood by its marginal with the likelihood raised to
+        ``training_fraction``, so the improper priors' arbitrary constants cancel
+        and a fraction of the data calibrates the scales instead of any
+        hyperparameter.
+
+        Raises
+        ------
+        ValueError
+            If the observed values have no spread, or the training fraction is
+            outside (1/n, 1).
+        """
+        n = zeroth_moment
+        observed_mean = first_moment / n
+        sum_squared_deviations = second_moment - n * observed_mean**2
+        if not sum_squared_deviations > 0:
+            raise ValueError(
+                "The fractional method requires at least two distinct observed values."
+            )
+        b = 2.0 / n if training_fraction is None else training_fraction
+        if not 1.0 / n < b < 1.0:
+            if training_fraction is None:
+                raise ValueError(
+                    "The fractional method's default training fraction of 2/n "
+                    f"needs at least three observed values to leave data for "
+                    f"testing; got {n}. Supply a training_fraction strictly "
+                    f"between 1/{n} and 1 to run with this few."
+                )
+            raise ValueError(
+                f"training_fraction must be strictly between 1/n and 1; got {b} "
+                f"with n = {n}."
+            )
+
+        log_q_bug = self._log_fractional_marginal_free_mean(
+            1.0, n, sum_squared_deviations
+        ) - self._log_fractional_marginal_free_mean(b, n, sum_squared_deviations)
+
+        if isinstance(target_mean, tuple) and target_mean[1] > target_mean[0]:
+            prior_mean = (target_mean[0] + target_mean[1]) / 2
+            prior_sd = (target_mean[1] - target_mean[0]) / (2 * scipy.stats.norm.ppf(0.975))
+            log_q_no_bug = self._log_fractional_marginal_interval_mean(
+                1.0, n, observed_mean, sum_squared_deviations, prior_mean, prior_sd
+            ) - self._log_fractional_marginal_interval_mean(
+                b, n, observed_mean, sum_squared_deviations, prior_mean, prior_sd
+            )
+        else:
+            mu_star = (
+                (target_mean[0] + target_mean[1]) / 2
+                if isinstance(target_mean, tuple)
+                else target_mean
+            )
+            sum_squared_errors = sum_squared_deviations + n * (observed_mean - mu_star) ** 2
+            log_q_no_bug = self._log_fractional_marginal_fixed_mean(
+                1.0, n, sum_squared_errors
+            ) - self._log_fractional_marginal_fixed_mean(b, n, sum_squared_errors)
+
+        return log_q_bug - log_q_no_bug
+
+    @staticmethod
+    def _log_fractional_marginal_free_mean(
+        b: float, n: int, sum_squared_deviations: float
+    ) -> float:
+        """Return the log marginal of the likelihood to the power b, mean free.
+
+        The model is ``y_i ~ N(mu, sigma^2)`` with reference prior
+        ``pi(mu, sigma^2) = 1/sigma^2``; both integrals are analytic.
+        """
+        a = (b * n - 1) / 2
+        return float(
+            -a * np.log(2 * np.pi)
+            - 0.5 * np.log(b * n)
+            + gammaln(a)
+            - a * np.log(b * sum_squared_deviations / 2)
+        )
+
+    @staticmethod
+    def _log_fractional_marginal_fixed_mean(
+        b: float, n: int, sum_squared_errors: float
+    ) -> float:
+        """Return the log marginal of the likelihood to the power b, mean fixed.
+
+        The model is ``y_i ~ N(mu*, sigma^2)`` with reference prior
+        ``pi(sigma^2) = 1/sigma^2``; ``sum_squared_errors`` is taken about mu*.
+        """
+        a = b * n / 2
+        return float(
+            -a * np.log(2 * np.pi) + gammaln(a) - a * np.log(b * sum_squared_errors / 2)
+        )
+
+    def _log_fractional_marginal_interval_mean(
+        self,
+        b: float,
+        n: int,
+        observed_mean: float,
+        sum_squared_deviations: float,
+        prior_mean: float,
+        prior_sd: float,
+    ) -> float:
+        """Return the log marginal of the likelihood to the power b, mean from a proper prior.
+
+        The model is ``y_i ~ N(mu, sigma^2)`` with ``mu ~ N(prior_mean,
+        prior_sd^2)`` (the research-supplied target interval, which needs no
+        training) and reference prior ``1/sigma^2``. The marginal factors
+        exactly into the free-mean closed form times the expected density of
+        the observed mean under the implied inverse-gamma posterior for the
+        variance.
+        """
+        return self._log_fractional_marginal_free_mean(
+            b, n, sum_squared_deviations
+        ) + self._log_expected_mean_density(
+            a=(b * n - 1) / 2,
+            scale=b * sum_squared_deviations / 2,
+            effective_n=b * n,
+            observed_mean=observed_mean,
+            prior_mean=prior_mean,
+            prior_sd=prior_sd,
+        )
+
+    def _log_conjugate_marginal_interval_mean(
+        self,
+        n: int,
+        observed_mean: float,
+        sum_squared_deviations: float,
+        prior_mean: float,
+        prior_sd: float,
+        alpha0: float,
+        beta0: float,
+    ) -> float:
+        """Return the log marginal likelihood with the mean from a fixed proper prior.
+
+        The model is ``y_i ~ N(mu, sigma^2)`` with ``mu ~ N(prior_mean,
+        prior_sd^2)`` and ``sigma^2 ~ Inv-Gamma(alpha0, beta0)``. Unlike the
+        normal-inverse-gamma construction, the mean's prior is independent of
+        sigma^2: a target interval is research data in data units, and a width
+        that rescaled with the variance prior would corrupt the interval
+        whenever the variance was misestimated. In the ``prior_sd -> 0`` limit
+        this reproduces the fixed-mean closed form exactly.
+        """
+        a_n = alpha0 + (n - 1) / 2
+        scale_n = beta0 + sum_squared_deviations / 2
+        log_base = float(
+            -0.5 * np.log(n)
+            - ((n - 1) / 2) * np.log(2 * np.pi)
+            + alpha0 * np.log(beta0)
+            + gammaln(a_n)
+            - gammaln(alpha0)
+            - a_n * np.log(scale_n)
+        )
+        return log_base + self._log_expected_mean_density(
+            a=a_n,
+            scale=scale_n,
+            effective_n=n,
+            observed_mean=observed_mean,
+            prior_mean=prior_mean,
+            prior_sd=prior_sd,
+        )
+
+    @staticmethod
+    def _log_expected_mean_density(
+        a: float,
+        scale: float,
+        effective_n: float,
+        observed_mean: float,
+        prior_mean: float,
+        prior_sd: float,
+    ) -> float:
+        """Return the log expected density of the observed mean over the variance posterior.
+
+        Computes ``log E[N(observed_mean | prior_mean, prior_sd^2 +
+        sigma^2/effective_n)]`` with ``sigma^2 ~ Inv-Gamma(a, scale)``,
+        integrating over the inverse-gamma's quantiles so the integrand is
+        smooth and bounded no matter how peaked the variance posterior is.
+        """
+        variance_posterior = scipy.stats.invgamma(a, scale=scale)
+
+        def integrand(quantile: float) -> float:
+            variance = prior_sd**2 + variance_posterior.ppf(quantile) / effective_n
+            return float(
+                np.exp(
+                    -0.5 * np.log(2 * np.pi * variance)
+                    - (observed_mean - prior_mean) ** 2 / (2 * variance)
+                )
+            )
+
+        # The integrand's tails underflow to zero by design; don't let a strict
+        # numpy error state turn that into an exception. An expectation of zero
+        # means the observed mean is impossibly far from the prior: log of it is
+        # -inf, which the caller turns into an infinite Bayes factor.
+        with np.errstate(under="ignore", divide="ignore"):
+            value, _ = quad(integrand, 0.0, 1.0, limit=200)
+            return float(np.log(value)) if value > 0 else float("-inf")
+
     def save_diagnostic_output(self, output_directory: Path | str) -> None:
         """
         Note: Users will need to set the output directory by creating a fixture with
@@ -700,13 +1435,19 @@ class FuzzyChecker:
         Can be useful to get more information about warnings, or to prioritize
         areas to be more thorough in manual V&V.
         """
-        output = pd.DataFrame(self.proportion_test_diagnostics)
         # Include the xdist worker id so parallel workers (separate processes)
         # don't overwrite each other's diagnostics file.
         worker = os.environ.get("PYTEST_XDIST_WORKER")
-        filename = (
-            f"proportion_test_diagnostics_{worker}.csv"
-            if worker
-            else "proportion_test_diagnostics.csv"
-        )
-        output.to_csv(Path(output_directory) / filename, index=False)
+        suffix = f"_{worker}" if worker else ""
+        diagnostics: dict[str, list[TestResult] | list[MeanTestResult]] = {
+            "proportion": self.proportion_test_diagnostics,
+            "mean": self.mean_test_diagnostics,
+        }
+        for kind, results in diagnostics.items():
+            if not results:
+                continue
+            output = pd.DataFrame(results)
+            output.to_csv(
+                Path(output_directory) / f"{kind}_test_diagnostics{suffix}.csv",
+                index=False,
+            )

@@ -157,10 +157,11 @@ Hypotheses by quantity type
 ---------------------------
 
 .. todo::
-  For now, we have only implemented methods for fuzzy checking proportions.
-  Presumably, other types of values could be checked using appropriate hypothesis tests:
+  We have implemented methods for fuzzy checking proportions and means of
+  continuous values. Other types of values could be checked using appropriate
+  hypothesis tests:
 
-  * Summary statistics of continuous values, such as the mean or standard deviation of a hemoglobin distribution
+  * Other summary statistics of continuous values, such as the standard deviation of a hemoglobin distribution
   * Relative risks/rate ratios between categorical groups
   * More complex situations such as the number of unique values of an attribute observed, though these may
     be hard to work out hypotheses for, and are not likely to come up frequently in our simulations.
@@ -197,7 +198,80 @@ For simplicity, we default to a `Jeffreys prior <https://en.wikipedia.org/wiki/J
 a beta distribution with :math:`\alpha = \beta = 0.5` --
 which results in a beta-binomial distribution on the number of events.
 
+Means of continuous values
+++++++++++++++++++++++++++
+
+Continuous values (real numbers) show up in our simulations in a number of places.
+For example, certain risk factors (e.g. hemoglobin) have continuous exposures.
+Additionally, many intermediates in simulation computations are continuous values.
+For example, even though mortality can be seen as a binary event and dealt with as a proportion,
+more statistical power can be gained (at the expense of not testing that the sampling step is
+working appropriately) by checking the underlying *probability* of mortality, which is real-valued.
+
+We assume that each simulant's continuous value was independently drawn from a normal distribution
+with unknown mean and variance.
+(When the draws are not in fact identically distributed, we will ignore our knowledge of this, as in
+the proportions case.)
+``FuzzyChecker.assert_mean`` offers two constructions of
+the Bayes factor, selected by its ``method`` parameter.
+
+The default, ``method="conjugate"``, mirrors the proportions machinery.
+The variance gets a weakly informative :math:`\Gamma^{-1}(2, s^2)` prior, where :math:`\Gamma^{-1}`
+refers to `the inverse-gamma distribution <https://en.wikipedia.org/wiki/Inverse-gamma_distribution>`_.
+This family is used because there is no proper Jeffreys prior for this unbounded parameter,
+and setting the scale from the data is much less informative than heuristics
+such as setting both parameters to nearly zero. [Gelman_2006]_
+The scale :math:`s` defaults to the *observed* standard deviation -- an empirical-Bayes choice.
+Deriving it from the target instead (as an early version did) silently costs the test its power
+whenever the data's spread is much smaller than its mean, which is the common case.
+The no-bug/issue model fixes the mean at the target value; a target 95% UI instead becomes
+a fixed normal prior on the mean, in data units, independent of the variance prior.
+The bug/issue model's mean prior is nearly data-free: it carries a weight of
+:math:`\lambda_0 = 10^{-3}` pseudo-observations, expressed as a very wide uncertainty interval
+centered on the target (roughly :math:`\pm 62` observed standard deviations at the default priors),
+which can be customized more interpretably than :math:`\lambda_0` itself.
+Because the priors are conjugate, the Bayes factor is a ratio of closed-form marginal likelihoods.
+
+The alternative, ``method="fractional"``, is `O'Hagan's fractional Bayes factor <https://doi.org/10.1111/j.2517-6161.1995.tb02017.x>`_
+with reference priors. [OHagan_1995]_
+A fraction of the likelihood (``training_fraction``, default the minimal :math:`2/n`) trains the
+priors and the remainder tests, so the improper priors' arbitrary constants cancel and **no prior
+hyperparameters exist at all**.
+This avoids the empirical-Bayes caveat of the conjugate defaults (the data setting its own prior
+scale) at a cost in small samples: evidence *for* the null accumulates more slowly, so correct
+data at :math:`n \lesssim` a few hundred often lands in the inconclusive warning band rather
+than a conclusive pass.
+Both methods are calibrated (essentially zero false decisive failures on correct data) with power
+that depends only on the size of the bias and the sample size.
+
+The zeroth, first, and second moments of the continuous values are sufficient statistics, so
+either the moments or the values themselves can be passed in, whichever is more convenient.
+When accumulating moments while streaming over a large population, accumulate them for
+:math:`y - c` for any constant :math:`c` near the data -- the target mean is a natural choice --
+and pass :math:`c` as ``moments_center``: a raw sum of squares of values far from zero loses the
+spread to floating point cancellation, and a warning fires when the supplied moments look
+corrupted by it.
+
+Two caveats on the normality assumption.
+Realistic departures -- skewed, zero-inflated, or heavy-tailed values -- cost essentially nothing:
+calibration and power match the normal case.
+*Extremely* skewed values (skewness in the hundreds) at small :math:`n` bias the test toward
+**false alarms** (never silent passes); for such quantities, check the mean of the log values or a
+quantile instead, or use more simulants.
+Bounded values such as probabilities can be checked as if unbounded, at some cost in sensitivity
+and specificity.
+
+.. note::
+
+  It would be interesting to explore using a transformation function on bounded values, such as logit
+  for probabilities, before performing the fuzzy check as if they were unbounded continuous values.
+  The main difficulty here would be dealing with values exactly at the boundary.
+
 References
 ----------
 
 .. [Bernardo_2002] Bernardo, José M., and Raúl Rueda. “Bayesian Hypothesis Testing: A Reference Approach.” International Statistical Review / Revue Internationale de Statistique, vol. 70, no. 3, 2002, pp. 351–72. JSTOR, https://doi.org/10.2307/1403862. Accessed 6 Nov. 2023.
+
+.. [Gelman_2006] Gelman, Andrew. "Prior distributions for variance parameters in hierarchical models (comment on article by Browne and Draper)." (2006): 515-534. https://sites.stat.columbia.edu/gelman/research/published/taumain.pdf
+
+.. [OHagan_1995] O'Hagan, Anthony. "Fractional Bayes factors for model comparison." Journal of the Royal Statistical Society: Series B (Methodological) 57.1 (1995): 99-118.
