@@ -23,6 +23,25 @@ class SimDataFormatter:
         self.filter_value = filter_value
         self.name = f"{self.filter_value}_{self.measure}"
 
+    def to_opportunity_counts(
+        self, dataset: pd.DataFrame, step_size: float | None
+    ) -> pd.DataFrame:
+        """Return the dataset as whole counts of discrete opportunities.
+
+        A proportion test counts opportunities, so whoever knows what a dataset holds
+        owns converting it. This formatter's data is already counts, so subclasses
+        holding a continuous quantity override this.
+
+        Parameters
+        ----------
+        dataset
+            The formatted dataset.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        """
+        return dataset
+
     def format_dataset(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """Clean up unused columns, and filter for the state."""
         dataset = calculations.marginalize(dataset, self.unused_columns)
@@ -53,6 +72,12 @@ class StatePersonTime(SimDataFormatter):
             entity=entity or "total",
             filter_value=filter_value or "total",
         )
+
+    def to_opportunity_counts(
+        self, dataset: pd.DataFrame, step_size: float | None
+    ) -> pd.DataFrame:
+        """Return the person-time as a whole number of person-steps."""
+        return calculations.person_time_to_person_steps(dataset, step_size)
 
 
 class TotalPopulationPersonTime(StatePersonTime):
@@ -112,12 +137,19 @@ class RiskStatePersonTime(SimDataFormatter):
 
     def __init__(self, entity: str, sum_all: bool = False) -> None:
         self.entity = entity
+        self.measure = "person_time"
         self.raw_dataset_name = f"person_time_{self.entity}"
         self.sum_all = sum_all
         self.name = "person_time"
         if sum_all:
             self.name += "_total"
         self.unused_columns = ["measure", "entity_type", "entity"]
+
+    def to_opportunity_counts(
+        self, dataset: pd.DataFrame, step_size: float | None
+    ) -> pd.DataFrame:
+        """Return the person-time as a whole number of person-steps."""
+        return calculations.person_time_to_person_steps(dataset, step_size)
 
     def format_dataset(self, dataset: pd.DataFrame) -> pd.DataFrame:
         dataset = calculations.marginalize(dataset, self.unused_columns)

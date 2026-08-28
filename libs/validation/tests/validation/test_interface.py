@@ -13,6 +13,7 @@ from pandas.testing import assert_frame_equal
 from pytest import TempPathFactory
 from pytest_mock import MockFixture
 from vivarium.artifact import Artifact, ArtifactException
+from vivarium.config_tree import ConfigTree
 from vivarium.fuzzy_checker import TestResult
 from vivarium_inputs import get_age_bins
 
@@ -1117,3 +1118,43 @@ def _make_mock_comparison(
         mock.verified = not any(reject_nulls)
 
     return mock
+
+
+@pytest.mark.parametrize(
+    "configuration, expected",
+    [
+        pytest.param({}, "linear", id="no_randomness_block"),
+        pytest.param(
+            {"randomness": {"random_seed": 0}}, "linear", id="unset_uses_the_default"
+        ),
+        pytest.param(
+            {"randomness": {"rate_conversion_type": "exponential"}},
+            "exponential",
+            id="exponential",
+        ),
+        pytest.param(
+            {"randomness": {"rate_conversion_type": "linear"}}, "linear", id="linear"
+        ),
+    ],
+)
+def test_rate_conversion_type(
+    sim_result_dir: Path, configuration: dict[str, Any], expected: str
+) -> None:
+    """Test that the conversion is read from the model specification."""
+    context = ValidationContext(sim_result_dir)
+    context.model_spec = ConfigTree(configuration)
+
+    assert context._rate_conversion_type() == expected
+
+
+def test_rate_conversion_type_rejects_an_unknown_conversion(sim_result_dir: Path) -> None:
+    """Test that a conversion the engine does not implement is refused.
+
+    Passing it through would fail later inside the engine, naming neither the model
+    specification nor the key that set it.
+    """
+    context = ValidationContext(sim_result_dir)
+    context.model_spec = ConfigTree({"randomness": {"rate_conversion_type": "quadratic"}})
+
+    with pytest.raises(ValueError, match="Unknown rate conversion type 'quadratic'"):
+        context._rate_conversion_type()
