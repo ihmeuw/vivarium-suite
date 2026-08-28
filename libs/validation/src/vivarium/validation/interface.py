@@ -282,12 +282,10 @@ class ValidationContext:
             If the model specification names a conversion the engine does not
             implement.
         """
-        if "randomness" not in self.model_spec:
-            return DEFAULT_RATE_CONVERSION_TYPE
-        if "rate_conversion_type" not in self.model_spec.randomness:
-            return DEFAULT_RATE_CONVERSION_TYPE
-
-        conversion_type = self.model_spec.randomness.rate_conversion_type
+        conversion_type = self.model_spec.get(
+            ["randomness", "rate_conversion_type"],
+            default_value=DEFAULT_RATE_CONVERSION_TYPE,
+        )
         if conversion_type not in get_args(RateConversionType):
             raise ValueError(
                 f"Unknown rate conversion type '{conversion_type}' in the model "
