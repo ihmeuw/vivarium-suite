@@ -134,32 +134,33 @@ for what the phases and states are.
     sim.print_lifecycle_order()
 
 .. testoutput::
+    :options: +NORMALIZE_WHITESPACE
 
     initialization
-            initialization
+        initialization
     setup
-            setup
-            post_setup
-                    ValuesManager(values_manager).on_post_setup
-                    PopulationManager(population_manager).on_post_setup
-                    DateTimeClock(datetime_clock).on_post_setup
-                    EventManager(event_manager).on_post_setup
-                    LookupTableManager(lookup_table_manager).on_post_setup
-                    DiseaseModel(disease_model.lower_respiratory_infections).on_post_setup
-            population_creation
+        setup
+        post_setup
+            ValuesManager(values_manager).on_post_setup
+            PopulationManager(population_manager).on_post_setup
+            DateTimeClock(datetime_clock).on_post_setup
+            EventManager(event_manager).on_post_setup
+            LookupTableManager(lookup_table_manager).on_post_setup
+            DiseaseModel(disease_model.lower_respiratory_infections).on_post_setup
+        population_creation
     main_loop*
-            time_step__prepare
-                    DeathsObserver(deaths_observer).on_time_step_prepare
-            time_step
-                    BasePopulation(base_population).on_time_step
-                    Mortality(mortality).on_time_step
-                    DiseaseModel(disease_model.lower_respiratory_infections).on_time_step
-            time_step__cleanup
-                    DiseaseModel(disease_model.lower_respiratory_infections).on_time_step_cleanup
-            collect_metrics
+        time_step__prepare
+            DeathsObserver(deaths_observer).on_time_step_prepare
+        time_step
+            BasePopulation(base_population).on_time_step
+            Mortality(mortality).on_time_step
+            DiseaseModel(disease_model.lower_respiratory_infections).on_time_step
+        time_step__cleanup
+            DiseaseModel(disease_model.lower_respiratory_infections).on_time_step_cleanup
+        collect_metrics
     simulation_end
-            simulation_end
-            report
+        simulation_end
+        report
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
 shows the order in which components populate new simulants.
@@ -236,7 +237,7 @@ lists the names of all of the attributes in a given simulation and
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_population`
 gets their current values.
 
-.. testcode::
+.. code-block:: python
 
     attribute_names = sim.get_attribute_names()
     print(len(attribute_names))
@@ -244,17 +245,27 @@ gets their current values.
     print(attribute_names[0:4])
     print(sim.get_population(["age", "sex"]).head())
 
-.. testoutput::
-    :options: +ELLIPSIS
+::
 
-    ...
-    [...]
+    24
+    ['entrance_time', 'age', 'sex', 'mortality_rate']
             age     sex
-    0 ...
-    1 ...
-    2 ...
-    3 ...
-    4 ...
+    0  1.709032  Female
+    1  2.733035    Male
+    2  0.512616    Male
+    3  2.900084  Female
+    4  1.383266  Female
+
+.. testcode::
+    :hide:
+
+    fresh = get_disease_model_simulation()
+    attribute_names = fresh.get_attribute_names()
+    assert len(attribute_names) == 24
+    pop = fresh.get_population(["age", "sex"])
+    assert list(pop.columns) == ["age", "sex"]
+    assert set(pop["sex"]) == {"Female", "Male"}
+    assert pop["age"].between(0, 5).all()
 
 An attribute pipeline (which produces attributes) are a specific type of the more
 generic :term:`Pipeline`, which produce :term:`values <Value>`. While attributes
@@ -324,22 +335,68 @@ observers and observations.
 
 Pass ``observe=True`` to collect them:
 
-.. testcode::
+.. code-block:: python
 
     sim = InteractiveContext(get_model_specification_path(), observe=True)
     sim.take_steps(10)
     for metric, results in sim.get_results().items():
         print(metric)
-        results
+        print(results)
 
-.. testoutput::
+::
 
     dead
-    stratification  value
+      stratification  value
     0            all   23.0
     ylls
-    stratification        value
+      stratification        value
     0            all  1989.372585
+
+.. testcode::
+    :hide:
+
+    from vivarium.fuzzy_checker import FuzzyChecker
+
+    fuzzy_checker = FuzzyChecker()
+
+    sim = InteractiveContext(get_model_specification_path(), observe=True)
+    sim.take_steps(10)
+
+    results = sim.get_results()
+    population_size = sim.configuration.population.population_size
+    deaths = int(results["dead"]["value"].iloc[0])
+    ylls = results["ylls"]["value"].iloc[0]
+
+    # Bound the death rate from the model parameters rather than from the
+    # observed value. Everyone faces background mortality, and the infected
+    # additionally face excess mortality, so the death rate lies between
+    # background alone and background at the disease's equilibrium prevalence.
+    # Prevalence starts near zero and is still climbing after ten steps, so
+    # equilibrium is a ceiling for this window.
+    lri = sim.configuration.lower_respiratory_infections
+    years = 10 * sim.configuration.time.step_size / 365
+    background_rate = sim.configuration.mortality.mortality_rate
+    equilibrium_prevalence = lri.incidence_rate / (
+        lri.incidence_rate + lri.remission_rate
+    )
+
+    fuzzy_checker.assert_proportion(
+        deaths,
+        population_size,
+        (
+            background_rate * years,
+            (background_rate + lri.excess_mortality_rate * equilibrium_prevalence)
+            * years,
+        ),
+        name="exploration_tutorial_deaths",
+    )
+
+    # YLLs are a sum of years, not a proportion, so the fuzzy checker does not
+    # apply. Every death contributes life_expectancy minus the simulant's age,
+    # and simulants are aged 0 to age_end, which bounds the per-death value.
+    life_expectancy = sim.configuration.mortality.life_expectancy
+    age_end = sim.configuration.population.age_end
+    assert life_expectancy - age_end < ylls / deaths <= life_expectancy
 
 We see above that there are two results being observed in this simulation:
 the total number of dead simulants and the total years of lives lost (ylls).
@@ -347,7 +404,7 @@ Indeed, we see that there are two Observers registered in this simulation:
 
 .. testcode::
 
-    [component for component in sim.list_components().keys() if "observer" in component]
+    print([component for component in sim.list_components() if "observer" in component])
 
 .. testoutput::
 
@@ -577,7 +634,7 @@ Looking at the Simulation Population
 Another interesting thing to look at at the beginning of the simulation is
 your starting population.
 
-.. testcode::
+.. code-block:: python
 
     pop = sim.get_population(
         [
@@ -590,15 +647,14 @@ your starting population.
     )
     print(pop.head())
 
-.. testoutput::
-    :options: +ELLIPSIS
+::
 
             age  is_alive       entrance_time                 lower_respiratory_infections  child_wasting_propensity
-    0 ...
-    1 ...
-    2 ...
-    3 ...
-    4 ...
+    0  1.721361      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.979461
+    1  2.745364      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.170346
+    2  0.524944      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.593326
+    3  2.912412      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.725294
+    4  1.395594      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.724847
 
 This gives you a ``pandas.DataFrame`` representing your starting population.
 You can use it to check all sorts of characteristics about individuals or
@@ -607,33 +663,34 @@ the population as a whole.
 For example, summary statistics give you a quick look at the population's
 demographics (your exact values will vary with the random draws):
 
-.. testcode::
+.. code-block:: python
 
     pop = sim.get_population(["age", "sex"])
     print(pop.age.describe())
     print(pop.sex.value_counts())
 
-.. testoutput::
-    :options: +ELLIPSIS
+::
 
     count    100000.000000
-    mean ...
-    std ...
-    min ...
-    25% ...
-    50% ...
-    75% ...
-    max ...
+    mean          2.504026
+    std           1.441763
+    min           0.013709
+    25%           1.255798
+    50%           2.501152
+    75%           3.744254
+    max           5.013655
     Name: age, dtype: float64
     sex
-    Female ...
-    Male ...
+    Female    50135
+    Male      49865
     Name: count, dtype: int64
 
 .. testcode::
     :hide:
 
-    pop = sim.get_population(
+    fresh = get_disease_model_simulation()
+
+    pop = fresh.get_population(
         [
             "age",
             "sex",
