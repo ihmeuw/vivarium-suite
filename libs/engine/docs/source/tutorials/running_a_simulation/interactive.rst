@@ -38,7 +38,7 @@ Setting up a Simulation
 -----------------------
 
 To run a simulation interactively, we will need to create an
-:class:`interactive context <vivarium.engine.interface.interactive.InteractiveContext>`.
+:class:`~vivarium.engine.interface.interactive.InteractiveContext`.
 At a bare minimum, we need to provide the context with a set of
 :ref:`components <components_concept>` that encode all the behavior of
 the simulation model. Frequently, we'll also provide some
@@ -57,10 +57,9 @@ The combination of components, configuration, and plugins forms a
 :term:`model specification <Model Specification>`, a complete description
 of a ``vivarium`` model.
 
-The :class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
-can be generated from several different kinds of data and may be generated
-at two separate :ref:`lifecycle <lifecycle_concept>` stages. We'll explore
-several examples of generating simulation objects here.
+The interactive context can be generated from several different kinds of data
+and may be generated at two separate :ref:`lifecycle <lifecycle_concept>` stages.
+We'll explore several examples of generating simulation objects here.
 
 With a Model Specification File (The Automatic Way)
 +++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -364,7 +363,7 @@ the simulation :term:`configuration <Configuration>`. If you need finer
 control, there are a set of methods on the context that allow you to run
 the simulation for specified spans of time or numbers of simulation steps.
 Below is a table of the functions that can be called on an
-:class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
+:class:`~vivarium.engine.interface.interactive.InteractiveContext`
 to advance a simulation in different ways.
 
 .. list-table:: **InteractiveContext methods for advancing simulations**
