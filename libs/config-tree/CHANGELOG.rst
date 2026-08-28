@@ -1,4 +1,4 @@
-**5.2.0 - 08/26/26**
+**5.2.0 - 08/28/26**
 
 - ``get()`` returns ``default_value`` when any key in the path is missing
 - Stop ``get()`` from mutating the ``keys`` argument
