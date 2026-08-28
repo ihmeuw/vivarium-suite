@@ -381,42 +381,43 @@ class ConfigTree:
             The string or ordered list of strings to look for in the tree
             starting from the outermost layer.
         default_value
-            The value to return if and only if the *final* key in the key path
-            does not exist.
+            The value to return if the key path does not resolve.
         layer
-            The name of the layer to retrieve the value from.
-
-        Notes
-        -----
-        The ``default_value`` will only be used if *final* key in the key path
-        does not exist *but the rest of the key path does*.
+            The name of the layer to retrieve the value from. Is ignored if a
+            ConfigTree is returned.
 
         Returns
         -------
-            The value at the key or nested keys and at the requested layer (the outer, by default).
-            ``default_value`` (None, by default) is returned if the full key path *except
-            for the final key* exists at an *explicitly-requested* layer.
+            The value at the key or key path and at the requested layer (the
+            outermost, by default), or the sub-tree if the key path resolves to
+            one. ``default_value`` (None, by default) is returned if the key
+            path does not resolve.
 
         Raises
         ------
         TypeError
             If the ``keys`` parameter is not a string or a list of strings.
+        ValueError
+            If the ``keys`` parameter is an empty list.
+        MissingLayerError
+            If the key path resolves to a value but none is set at an
+            explicitly-requested ``layer``.
+        ConfigurationKeyError
+            If the key path resolves to a ``ConfigNode`` holding no value at any
+            layer.
         """
         if not isinstance(keys, (str, list)):
             raise TypeError("The 'keys' parameter must be a string or a list of strings.")
 
         if isinstance(keys, str):
-            if keys not in self._children:
-                return default_value
-            child = self._children[keys]
-            if isinstance(child, ConfigNode):
-                return child.get_value(layer=layer)
-            return child
-        else:
-            # get the second-to-last value (which is by definition a ConfigTree)
-            final_key = keys.pop()
-            tree = self.get_tree(keys)
-            return tree.get(final_key, default_value=default_value, layer=layer)
+            keys = [keys]
+
+        node = self._get_node(keys)
+        if node is None:
+            return default_value
+        if isinstance(node, ConfigTree):
+            return node
+        return node.get_value(layer=layer)
 
     def get_tree(self, keys: str | list[str]) -> ConfigTree:
         """Return the ``ConfigTree`` at the key or key path from the outermost layer.
@@ -435,6 +436,8 @@ class ConfigTree:
         ------
         TypeError
             If the ``keys`` parameter is not a string or list of strings.
+        ValueError
+            If the ``keys`` parameter is an empty list.
         ConfigurationKeyError
             If any of the keys in the key path do not exist in the tree.
         ConfigurationError
@@ -446,19 +449,37 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        tree = self
-        for key in keys:
-            if key not in tree:
-                raise ConfigurationKeyError(
-                    f"No value at key mapping '{keys[:keys.index(key) + 1]}'."
-                )
-            tree = tree[key]
+        tree = self._get_node(keys)
+        if tree is None:
+            # Name the shortest prefix that fails rather than the whole path.
+            depth = next(
+                d for d in range(1, len(keys) + 1) if self._get_node(keys[:d]) is None
+            )
+            raise ConfigurationKeyError(f"No value at key mapping '{keys[:depth]}'.")
         if not isinstance(tree, ConfigTree):
             raise ConfigurationError(
                 f"The data you accessed using {keys} with get_tree was of type {type(tree)}, "
                 "but get_tree must return a ConfigTree."
             )
         return tree
+
+    def _get_node(self, keys: list[str]) -> ConfigTree | ConfigNode | None:
+        """Return the ``ConfigTree`` or ``ConfigNode`` at the key path, or ``None``.
+
+        Raises
+        ------
+        ValueError
+            If ``keys`` is empty.
+        """
+        if not keys:
+            raise ValueError("The 'keys' parameter must not be empty.")
+
+        node: ConfigTree | ConfigNode = self
+        for key in keys:
+            if not isinstance(node, ConfigTree) or key not in node._children:
+                return None
+            node = node._children[key]
+        return node
 
     def update(
         self,
