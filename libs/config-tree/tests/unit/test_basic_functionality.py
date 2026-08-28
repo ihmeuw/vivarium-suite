@@ -625,7 +625,7 @@ class TestGet:
             tree.get(["outer_layer_2", "inner_layer"], "some_default", layer="override")
 
     @pytest.mark.parametrize("layer", ["base", "this-layer-does-not-exist"])
-    def test_subtree_works_when_layer_does_not_exist(
+    def test_subtree_retrieved_when_layer_does_not_exist(
         self, layer: str, nested_dict: dict[str, Any]
     ) -> None:
         """A key path resolving to a sub-tree returns it and ignores ``layer`` entirely."""

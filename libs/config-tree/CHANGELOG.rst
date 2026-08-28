@@ -1,16 +1,9 @@
 **5.2.0 - 08/26/26**
 
-- **Behavior change.** ``ConfigTree.get`` returns ``default_value`` for a missing key anywhere in
-  the key path (previously ``ConfigurationKeyError``) and for a prefix key resolving to a value
-  rather than a sub-tree (previously ``ConfigurationError``). Use ``get_tree`` for a strict lookup.
-- Stop ``ConfigTree.get`` from mutating the ``keys`` argument
-- ``ConfigTree.get`` and ``ConfigTree.get_tree`` now share one key-path walk. A
-  failed ``get_tree`` no longer marks a leaf as accessed, so ``unused_keys`` is
-  no longer under-reported after one, and a repeated key in a key path is now
-  reported at the position that actually failed
-- ``ConfigTree.get`` and ``ConfigTree.get_tree`` raise a ``ValueError`` for an empty
-  key path. ``get`` previously raised an ``IndexError`` and ``get_tree`` returned the
-  tree itself
+- ``get()`` returns ``default_value`` when any key in the path is missing
+- Stop ``get()`` from mutating the ``keys`` argument
+- Stop marking a leaf as accessed due to a failed ``get_tree()`` call
+- ``get()`` and ``get_tree()`` raise a ``ValueError`` for an empty key path
 
 **5.1.0 - 08/25/26**
 
