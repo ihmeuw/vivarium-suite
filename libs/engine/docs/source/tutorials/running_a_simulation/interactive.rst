@@ -34,7 +34,7 @@ don't need to build them yourself before starting this tutorial.
 
 .. _interactive_setup_tutorial:
 
-Setting up a Simulation
+Setting up a simulation
 -----------------------
 
 To run a simulation interactively, we will need to create an
@@ -61,7 +61,7 @@ The interactive context can be generated from several different kinds of data
 and may be generated at two separate :ref:`lifecycle <lifecycle_concept>` stages.
 We'll explore several examples of generating simulation objects here.
 
-With a Model Specification File (The Automatic Way)
+With a model specification file (the automatic way)
 +++++++++++++++++++++++++++++++++++++++++++++++++++
 
 A :term:`model specification <Model Specification>` file contains all the
@@ -105,7 +105,7 @@ The ``sim`` object produced here is all set up and ready to run if you want
 to jump directly to the :ref:`running the simulation <interactive_run>`
 section.
 
-The Manual Way (Without a Model Specification File)
+The manual way (without a model specification file)
 +++++++++++++++++++++++++++++++++++++++++++++++++++
 
 It is possible to prepare a simulation by explicitly passing in the
@@ -215,7 +215,7 @@ With this final step, you can proceed directly to
 one last way to set up the simulation in an interactive setting.
 
 
-Modifying an Existing Simulation
+Modifying an existing simulation
 ++++++++++++++++++++++++++++++++
 
 Another frequent use case is when you're trying to modify an already
@@ -352,7 +352,7 @@ the InteractiveContext:
 
 .. _interactive_run:
 
-Running the Simulation
+Running the simulation
 ----------------------
 
 A simulation can be run in several ways once it is set up. The simplest way to

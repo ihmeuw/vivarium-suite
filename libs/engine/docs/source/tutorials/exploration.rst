@@ -29,7 +29,7 @@ built in the other tutorials.
    :local:
    :backlinks: none
 
-What Are We Looking At?
+What are we looking at?
 -----------------------
 
 Simulations are complicated things. It's beyond the scope of this tutorial
@@ -51,7 +51,7 @@ simulation.
 
 .. _exploration_introspection:
 
-Getting Things Set Up
+Getting things set up
 ---------------------
 
 Before we can start exploring properties of the simulation, we need to get
@@ -72,7 +72,7 @@ notebook or python interpreter, you can run the following
 The ``sim`` object returned here is our simulation context. With it, we're
 ready to begin examining various aspects of the simulation state.
 
-Finding Your Way Around
+Finding your way around
 -----------------------
 
 Before looking at what a simulation *does*, it helps to be able to ask what it
@@ -222,8 +222,8 @@ to the ``time_step`` phase, all at priority 5.
 
 .. _interactive_results:
 
-Attributes, columns, and value pipelines
-++++++++++++++++++++++++++++++++++++++++
+State table attributes and value pipelines
+++++++++++++++++++++++++++++++++++++++++++
 
 This is the distinction that causes the most confusion, so it is worth being
 precise. A simulation exposes two things that are similar but not identical:
@@ -308,8 +308,8 @@ and its error message will point you back at attributes.
     the attribute's values with ``get_population()``, but not inspect how it is
     computed.
 
-Getting Observed Results
-------------------------
+Observed results
+----------------
 
 While the state table is always available for inspection in an interactive
 context (via :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_population`),
@@ -419,7 +419,7 @@ Note that because the observers' listeners are registered during setup,
 ``observe`` has to be decided when the InteractiveContext is constructed; it
 cannot be changed during a simulation.
 
-Case Study #1: Population Epidemiology
+Case study #1: population epidemiology
 --------------------------------------
 
 In this case study, we're going to put together and examine an individual-based
@@ -429,7 +429,7 @@ out interesting data. As we go on, we'll talk about what sort of results
 we should expect from the structure of the model and how we can verify those
 expectations.
 
-Checking Out the Configuration
+Checking out the configuration
 ++++++++++++++++++++++++++++++
 
 One of the things we might want to look at is the simulation
@@ -628,7 +628,7 @@ when ready to proceed.
 
     Can't update configuration after setup
 
-Looking at the Simulation Population
+Looking at the simulation population
 ++++++++++++++++++++++++++++++++++++
 
 Another interesting thing to look at at the beginning of the simulation is
@@ -721,7 +721,7 @@ demographics (your exact values will vary with the random draws):
     assert abs(propensity.std() - (1 / 12) ** 0.5) < 0.005
 
 
-Understanding the Simulation Data
+Understanding the simulation data
 +++++++++++++++++++++++++++++++++
 
 Our model starts with a bunch of people with uniformly distributed ages and
