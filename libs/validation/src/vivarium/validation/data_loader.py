@@ -7,8 +7,6 @@ import pandas as pd
 from vivarium.artifact import Artifact, EntityKey
 from vivarium.config_tree import ConfigTree
 from vivarium.gbd_mapping import causes, covariates, risk_factors
-from vivarium_inputs import interface
-from vivarium_inputs.mapping_extension import alternative_risk_factors
 
 from vivarium.validation.constants import (
     DRAW_PREFIX,
@@ -92,11 +90,7 @@ class DataLoader:
         )
 
     def get_artifact_keys(self) -> list[str]:
-        # vivarium-artifact lives in the validation extra; the typed assignment
-        # narrows Any-on-GH-Actions back to list[str] without tripping
-        # warn_unused_ignores (Jenkins) or warn_redundant_casts (Jenkins).
-        keys: list[str] = self._artifact.keys
-        return keys
+        return self._artifact.keys
 
     def get_data(self, data_key: str, source: DataSource) -> Any:
         """Return the data from the cache if it exists, otherwise load it from the source."""
@@ -240,6 +234,9 @@ class DataLoader:
         return data
 
     def _load_from_gbd(self, data_key: str) -> Any:
+        # Deferred: vivarium-inputs is artifactory-only and lives in the `gbd` extra.
+        from vivarium_inputs import interface
+
         if "categories" in data_key:
             # Used for risk factor categories
             data = self._load_metadata(data_key, self.location)
@@ -267,6 +264,8 @@ class DataLoader:
     def _load_metadata(self, key: str, location: str) -> Any:
         """Loads metadata for a given entity from GBD mapping. Generally will be in the
         form of dict[str, str]. Most commonly used for risk factor categories."""
+        # Deferred: vivarium-inputs is artifactory-only and lives in the `gbd` extra.
+        from vivarium_inputs.mapping_extension import alternative_risk_factors
 
         entity_key = EntityKey(key)
         type_map = {

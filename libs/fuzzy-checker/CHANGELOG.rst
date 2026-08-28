@@ -1,4 +1,4 @@
-**0.5.0 - 08/27/26**
+**0.5.0 - 08/28/26**
 
 - added a new ``evaluated`` property to distinguish tests that did not generate
   a numerical result, namely NaN Bayes factors.

@@ -604,9 +604,10 @@ class PopulationView:
         """Check whether two column dtypes can represent the same data.
 
         String columns infer as ``object`` under pandas 2 but ``str`` under
-        pandas 3, and datetime columns can differ only in unit (pandas 3
-        infers microseconds where pandas 2 inferred nanoseconds). Neither
-        difference indicates a component corrupting the population table.
+        pandas 3, and datetime and timedelta columns can differ only in unit
+        (pandas 3 infers microseconds or seconds where pandas 2 inferred
+        nanoseconds). Neither difference indicates a component corrupting the
+        population table.
         """
         if update_dtype == existing_dtype:
             return True
@@ -617,6 +618,10 @@ class PopulationView:
         if pd.api.types.is_datetime64_any_dtype(
             update_dtype
         ) and pd.api.types.is_datetime64_any_dtype(existing_dtype):
+            return True
+        if pd.api.types.is_timedelta64_dtype(
+            update_dtype
+        ) and pd.api.types.is_timedelta64_dtype(existing_dtype):
             return True
         return pd.api.types.is_string_dtype(update_dtype) and pd.api.types.is_string_dtype(
             existing_dtype

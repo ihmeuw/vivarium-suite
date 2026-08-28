@@ -577,3 +577,11 @@ def _get_num_steps(sim: SimulationContext_) -> int:
     num_steps = math.ceil((end_date - start_date).days / time_dict["step_size"])
     assert isinstance(num_steps, int)
     return num_steps
+
+
+def test_simulation_context_gathers_results_by_default(
+    SimulationContext: type[SimulationContext_], components: list[Component]
+) -> None:
+    """Only InteractiveContext turns gathering off; the non-interactive default must not."""
+    sim = SimulationContext(components=components)
+    assert sim._results.to_observe

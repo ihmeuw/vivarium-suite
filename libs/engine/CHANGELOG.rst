@@ -1,3 +1,18 @@
+**5.8.1 - 08/26/26**
+
+- Treat timedelta64 columns that differ only in unit as compatible population updates
+
+**5.8.0 - 08/25/26**
+
+- Skip observing results in ``InteractiveContext`` by default
+- Add ``ResultsManager.set_to_observe`` to gate the per-step gathering listeners
+- Return no results rather than zero-filled frames when observers are disabled, so
+  ``report`` writes no files for those measures
+
+**5.7.1 - 08/25/26**
+
+- Bugfix: apply ``configuration.randomness.rate_conversion_type`` to the randomness streams it configures
+
 **5.7.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10 and add support for Python 3.13

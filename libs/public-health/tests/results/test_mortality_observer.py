@@ -60,6 +60,7 @@ def simulation_after_one_step(base_config, base_plugins):
         configuration=base_config,
         plugin_configuration=base_plugins,
         setup=False,
+        observe=True,
     )
     simulation.configuration.update(
         {
@@ -173,6 +174,7 @@ def test_aggregation_configuration(base_config, base_plugins):
         configuration=base_config,
         plugin_configuration=base_plugins,
         setup=False,
+        observe=True,
     )
     aggregate_sim.configuration.update(
         {
@@ -223,6 +225,7 @@ def test_category_exclusions(base_config, base_plugins, exclusions):
         configuration=base_config,
         plugin_configuration=base_plugins,
         setup=False,
+        observe=True,
     )
     simulation.configuration.update(
         {
@@ -305,6 +308,7 @@ def test_person_time_includes_dying_simulants(base_config, base_plugins):
         configuration=base_config,
         plugin_configuration=base_plugins,
         setup=False,
+        observe=True,
     )
     simulation.configuration.update({"stratification": {disease_name: {"include": []}}})
 

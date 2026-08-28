@@ -102,7 +102,7 @@ class RandomnessManager(Manager):
         self,
         decision_point: str,
         initializes_crn_attributes: bool = False,
-        rate_conversion_type: Literal["linear", "exponential"] = "linear",
+        rate_conversion_type: Literal["linear", "exponential"] | None = None,
     ) -> RandomnessStream:
         """Provides a new source of random numbers for the given decision point.
 
@@ -119,9 +119,10 @@ class RandomnessManager(Manager):
             copied and should only be used to generate the state table columns
             specified in ``builder.configuration.randomness.key_columns``.
         rate_conversion_type
-            The type of conversion to use. Default is "linear" for a simple
-            multiplication of rate and time_scaling_factor. The other option is
-            "exponential".
+            The type of conversion to use. If None, the value of
+            ``builder.configuration.randomness.rate_conversion_type`` is used,
+            which defaults to "linear" for a simple multiplication of rate and
+            time_scaling_factor. The other option is "exponential".
 
         Returns
         -------
@@ -139,7 +140,7 @@ class RandomnessManager(Manager):
             decision_point,
             self._get_current_component(),
             initializes_crn_attributes,
-            rate_conversion_type,
+            rate_conversion_type or self._rate_conversion_type,
             self._key_columns if not initializes_crn_attributes else [],
         )
 

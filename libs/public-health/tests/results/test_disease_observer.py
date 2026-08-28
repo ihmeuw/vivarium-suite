@@ -49,6 +49,7 @@ def _build_disease_observer_sim(configuration, base_plugins, components, config_
         configuration=configuration,
         plugin_configuration=base_plugins,
         setup=False,
+        observe=True,
     )
     if config_update:
         simulation.configuration.update(config_update)
@@ -300,6 +301,7 @@ def test_aging_before_person_time_observation(base_config, base_plugins):
         configuration=base_config,
         plugin_configuration=base_plugins,
         setup=False,
+        observe=True,
     )
     simulation.configuration.update({"stratification": {disease_name: {"include": []}}})
 

@@ -11,7 +11,8 @@ from vivarium.config_tree import ConfigTree
 from vivarium.fuzzy_checker import FuzzyChecker
 
 from tests.helpers import ColumnCreator
-from vivarium.engine import InteractiveContext
+from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.randomness import (
     RESIDUAL_CHOICE,
     RandomnessError,
@@ -340,6 +341,22 @@ def test_stream_rate_conversion_config(
     if rate_conversion is None:
         rate_conversion = "linear"
     assert sim._randomness._rate_conversion_type == rate_conversion
+
+
+class StreamRequirer(Component):
+    def setup(self, builder: Builder) -> None:
+        self.randomness = builder.randomness.get_stream("test_stream")
+
+
+def test_component_stream_uses_configured_rate_conversion(base_config: ConfigTree) -> None:
+    base_config.update(
+        {"configuration": {"randomness": {"rate_conversion_type": "exponential"}}}
+    )
+    component = StreamRequirer()
+
+    InteractiveContext(base_config, components=[component])
+
+    assert component.randomness.rate_conversion_type == "exponential"
 
 
 @pytest.mark.parametrize(
