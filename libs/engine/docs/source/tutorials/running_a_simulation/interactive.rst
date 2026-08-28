@@ -256,7 +256,7 @@ population size to be smaller so the simulation takes less time to run.
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
 We then need to call the
-:meth:`vivarium.engine.framework.engine.SimulationContext.setup` method on the
+:meth:`~vivarium.engine.framework.engine.SimulationContext.setup` method on the
 simulation context to prepare it to run.
 
 .. testcode::
@@ -358,7 +358,7 @@ Running the Simulation
 
 A simulation can be run in several ways once it is set up. The simplest way to
 advance a simulation is to call
-:meth:`sim.run() <vivarium.engine.interface.interactive.InteractiveContext.run>` on
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.run` on
 it, which will advance it from its current time to the end time specified in
 the simulation :term:`configuration <Configuration>`. If you need finer
 control, there are a set of methods on the context that allow you to run
@@ -373,19 +373,19 @@ to advance a simulation in different ways.
 
    *   - Method
        - Description
-   *   - | :meth:`run <vivarium.engine.interface.interactive.InteractiveContext.run>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run`
        - | Run the simulation for its entire duration, from its current time
          | to its end time. The start time and end time are specified in the
          | ``time`` block of the configuration.
-   *   - | :meth:`step <vivarium.engine.interface.interactive.InteractiveContext.step>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.step`
        - | Advance the simulation one step. The step size is taken from the
          | ``time`` block of the configuration.
-   *   - | :meth:`take_steps <vivarium.engine.interface.interactive.InteractiveContext.take_steps>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.take_steps`
        - | Advance the simulation ``n`` steps.
-   *   - | :meth:`run_until <vivarium.engine.interface.interactive.InteractiveContext.run_until>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_until`
        - | Advance the simulation to a specific time. This time should make
          | sense given the simulation's clock type.
-   *   - | :meth:`run_for <vivarium.engine.interface.interactive.InteractiveContext.run_for>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_for`
        - | Advance the simulation for a duration. This duration should make
          | sense given the simulation's clock type.
 
