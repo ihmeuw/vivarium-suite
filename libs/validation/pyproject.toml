@@ -28,10 +28,15 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[numpy,pandas,loguru,pyyaml]",
+    "vivarium-dependencies[numpy,pandas,loguru,pyyaml,matplotlib,ipython,pyarrow]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
+    "vivarium-artifact",
     "vivarium-config-tree",
     "vivarium-fuzzy-checker>=0.3.0",
+    "vivarium-gbd-mapping>=6.0.0",
+    "jinja2>=3.0.0",
+    "pandera<0.23.0",
+    "seaborn",
 ]
 
 [project.optional-dependencies]
@@ -45,34 +50,11 @@ test = [
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
-# Internal extra so both `lint` (for mypy's pandera.mypy plugin) and `validation`
-# (the runtime feature) can pin pandera from one place.
-pandera = ["pandera<0.23.0"]
-# `[pandera]` is here so mypy's `pandera.mypy` plugin loads on ci_github (which
-# only installs `[test,docs,lint]` and skips `validation`).
-lint = ["vivarium-dependencies[lint]", "vivarium-validation[pandera]"]
-# Validation feature: pulled in only by Jenkins (ci_jenkins) because
-# vivarium-inputs is IHME-artifactory-only and unreachable from GH Actions.
-validation = [
-    "vivarium-artifact",
-    "vivarium-gbd-mapping",
-    "vivarium-inputs>=8.0.0,<9.0.0",
-    "vivarium-validation[pandera]",
-    "pyarrow",
-    "seaborn",
-    "jinja2>=3.0.0",
-    # matplotlib/ipython are imported unconditionally by the feature (plotting
-    # and in-notebook HTML report display), so they belong here rather than only
-    # in `docs`, or `pip install vivarium-validation[validation]` can't
-    # import the package.
-    "vivarium-dependencies[matplotlib,ipython]",
-]
-dev = ["vivarium-validation[test,docs,interactive,lint,validation]"]
+lint = ["vivarium-dependencies[lint]"]
+gbd = ["vivarium-inputs>=8.0.0"]
+dev = ["vivarium-validation[test,docs,interactive,lint,gbd]"]
 ci_github = ["vivarium-validation[test,docs,lint]"]
-# Diverges from the sibling convention `[ci_github,cluster]` by adding
-# `validation`: Jenkins is the only env that can install vivarium-inputs, so it
-# also runs the validation feature's tests + mypy with real types.
-ci_jenkins = ["vivarium-validation[ci_github,cluster,validation]"]
+ci_jenkins = ["vivarium-validation[ci_github,cluster,gbd]"]
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
@@ -134,22 +116,12 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-# Two reasons something might land here:
-#   1. Upstream lacks py.typed/stubs entirely (scipy, py._path.local, pandera,
-#      vivarium-gbd-mapping).
-#   2. The dep lives in the `validation` extra and is not installed on
-#      ci_github (vivarium-inputs is artifactory-only; vivarium-artifact is
-#      pulled in transitively only via `validation`). With this override
-#      mypy treats them as Any on ci_github. On Jenkins (which installs
-#      `validation`) the imports resolve and mypy uses the real py.typed
-#      types — `ignore_missing_imports` is a no-op when the module is
-#      actually findable, so this does NOT mask Jenkins type errors.
+# Override mypy for modules that are untyped or not importable in github CI environment
 module = [
     "py._path.local",
     "scipy.*",
     "pandera.*",
     "vivarium_inputs.*",
-    "vivarium.artifact.*",
     "vivarium.gbd_mapping.*",
 ]
 ignore_missing_imports = true
