@@ -333,8 +333,8 @@ class PopulationView:
             - If this view is read-only.
             - If called outside of simulant initialization.
             - If the data contains columns not managed by this view.
-            - If the data has simulants not in the population.
-            - If the data is missing simulants during initial population creation.
+            - If the data names simulants that are not being added.
+            - If the data does not cover every simulant being added.
         TypeError
             If the data is not a Series or DataFrame.
         """
@@ -349,28 +349,22 @@ class PopulationView:
             )
 
         data_df = self._coerce_init_data(data, self.private_columns)
-        staged_index = self._manager._staged_index
+        staged_index = self._manager.staged_index
 
         unknown_simulants = len(data_df.index.difference(staged_index))
         if unknown_simulants:
             raise PopulationError(
-                "Population updates must have an index that is a subset of the current "
-                f"private data. {unknown_simulants} simulants were provided "
-                "in an update with no matching index in the existing table."
+                "Initial values must be indexed by the simulants being added. Component "
+                f"'{self._component.name}' provided values for {unknown_simulants} "
+                "simulants that are not being added."
             )
 
-        if self._manager.creating_initial_population:
-            missing_pops = len(staged_index.difference(data_df.index))
-            if missing_pops:
-                raise PopulationError(
-                    "Components must initialize all simulants during population "
-                    f"initialization. Component '{self._component.name}' is missing "
-                    f"updates for {missing_pops} simulants."
-                )
-        elif data_df.empty:
-            # Assigning a rowless frame would align against the staged simulants
-            # and null the columns it names.
-            return
+        missing_pops = len(staged_index.difference(data_df.index))
+        if missing_pops:
+            raise PopulationError(
+                "Components must initialize every simulant being added. Component "
+                f"'{self._component.name}' is missing updates for {missing_pops} simulants."
+            )
 
         self._manager.update(data_df)
 
