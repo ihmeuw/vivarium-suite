@@ -13,6 +13,10 @@ for debugging and validation work. It allows for changing simulation
 simulation in a controlled fashion, and examining the
 :term:`state <Population State Table>` of the simulation itself.
 
+This tutorial covers building a context and advancing it. Refer to
+:ref:`Exploring a Simulation in an Interactive Setting <exploration_tutorial>`
+for details on how to interrogate one, i.e. what a simulation contains, how to
+read its attributes and value pipelines, and how to get results out of it.
 
 For the following tutorial, we will assume you have set up an environment and
 installed ``vivarium-engine``. If you have not, please see the
