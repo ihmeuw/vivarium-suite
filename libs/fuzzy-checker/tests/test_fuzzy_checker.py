@@ -144,6 +144,66 @@ def test__calculate_bayes_factor(step: int) -> None:
         previous_bayes_factor = bayes_factor
 
 
+@pytest.mark.parametrize(
+    "numerator, denominator, target_proportion",
+    [
+        pytest.param(3, 100.5, 0.1, id="non_integer_denominator"),
+        pytest.param(10, 100, 1.56, id="target_proportion_above_one"),
+    ],
+)
+def test_nan__calculate_bayes_factor(
+    numerator: int, denominator: float, target_proportion: float
+) -> None:
+    """Test that a test which does not evaluate says so instead of reading as a pass.
+
+    Every comparison against nan is False, so ``reject_null`` comes back False without
+    anything having been decided. ``evaluated`` is what separates that from a pass.
+    """
+    result = FuzzyChecker().test_proportion(
+        observed_numerator=numerator,
+        # A float denominator violates the annotated contract on purpose; that is
+        # the condition under test.
+        observed_denominator=denominator,  # type: ignore[arg-type]
+        target_proportion=target_proportion,
+    )
+
+    assert not result.evaluated
+    assert result.confidence == "Did not evaluate"
+    assert result.comparison_to_target == "Did not evaluate"
+    # The trap this guards: on its own, this reads as a passing test.
+    assert not result.reject_null
+
+
+@pytest.mark.parametrize(
+    "numerator, denominator, target_proportion",
+    [
+        pytest.param(3, 100.5, 0.1, id="non_integer_denominator"),
+        pytest.param(10, 100, 1.56, id="target_proportion_above_one"),
+    ],
+)
+def test_assert_proportion_raises_when_the_test_does_not_evaluate(
+    numerator: int, denominator: float, target_proportion: float
+) -> None:
+    """Test that the pytest-facing entry point refuses to pass a test that never ran."""
+    with pytest.raises(ValueError, match="did not evaluate"):
+        FuzzyChecker().assert_proportion(
+            observed_numerator=numerator,
+            observed_denominator=denominator,  # type: ignore[arg-type]
+            target_proportion=target_proportion,
+            name="a check",
+        )
+
+
+def test_evaluated_is_true_for_a_test_that_ran() -> None:
+    """Test that an ordinary result is not mistaken for one that did not evaluate."""
+    result = FuzzyChecker().test_proportion(
+        observed_numerator=10, observed_denominator=100, target_proportion=0.1
+    )
+
+    assert result.evaluated
+    assert result.confidence == "Conclusive"
+
+
 def test_zero_division__calculate_bayes_factor() -> None:
     # This is just testing that we will hit a zero division error or floating point error
     # and handle it correctly.

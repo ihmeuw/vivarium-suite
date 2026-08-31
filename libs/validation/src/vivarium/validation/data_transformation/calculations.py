@@ -5,10 +5,12 @@ from typing import Any, Collection, Literal, Mapping
 import numpy as np
 import pandas as pd
 from loguru import logger
+from vivarium.engine.framework.utilities import rate_to_probability
 
 from vivarium.validation.constants import DRAW_INDEX, DRAW_PREFIX, SEED_INDEX
 from vivarium.validation.data_transformation import utils
 from vivarium.validation.data_transformation.data_schema import DrawData, SingleNumericColumn
+from vivarium.validation.data_transformation.types import RateConversionType
 
 
 def filter_data(
@@ -282,3 +284,118 @@ def weighted_average(
     numerator = aggregate_sum(data.mul(weights), stratifications)
     denominator = aggregate_sum(weights, stratifications)
     return ratio(numerator, denominator)
+
+
+_PERSON_STEP_ROUNDING_TOLERANCE = 1e-3
+"""Person-time accrues as ``people * step_size`` each step, so dividing it back out is
+exact up to accumulated floating point error -- orders of magnitude below the ~0.5 drift
+a step size that does not match the simulation's would produce."""
+
+
+@utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
+def person_time_to_person_steps(data: pd.DataFrame, step_size: float | None) -> pd.DataFrame:
+    """Convert person-time in years to a whole number of person-steps.
+
+    Parameters
+    ----------
+    data
+        Person-time in years.
+    step_size
+        The simulation's time step, as a fraction of a year.
+
+    Returns
+    -------
+        The equivalent count of person-steps.
+
+    Raises
+    ------
+    ValueError
+        If step_size is None, since person-time has no meaning as a count of
+        opportunities until it is divided by one.
+    """
+    if step_size is None:
+        raise ValueError(
+            "Cannot convert person-time to a count of opportunities without a step "
+            "size. Set 'time.step_size' in the model specification."
+        )
+
+    person_steps = data / step_size
+    rounded = person_steps.round()
+
+    drift = float((person_steps - rounded).abs().max().max())
+    if drift > _PERSON_STEP_ROUNDING_TOLERANCE:
+        logger.warning(
+            f"Person-time is not a whole number of person-steps at a step size of "
+            f"{step_size} years; the largest value is off by {drift:g} steps. Either "
+            "the step size does not match the one the simulation ran with, which would "
+            "bias every target this comparison tests, or the simulation used a variable "
+            "clock, in which case person-steps are not a meaningful count."
+        )
+
+    return rounded
+
+
+@utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
+def rate_to_step_probability(
+    data: pd.DataFrame,
+    step_size: float | None,
+    rate_conversion_type: RateConversionType = "linear",
+) -> pd.DataFrame:
+    """Convert an annual rate to the probability of an event in one time step.
+
+    Defers to the engine so that validation converts rates exactly as the simulation
+    did, including the caller's choice of conversion. The engine helper returns a bare
+    array and its exponential branch caps its input in place, so it is handed a copy
+    and its result is put back on the original index.
+
+    A rate too high to express as a per-step probability is refused rather than
+    tested. The engine clamps such a rate to 1, which is worse than useless here: it
+    leaves the no-bug distribution with mass only at ``n``, so the Bayes factor is
+    infinite and the group reports a decisive failure rather than the error it
+    deserves.
+
+    Parameters
+    ----------
+    data
+        An annual rate.
+    step_size
+        The simulation's time step, as a fraction of a year.
+    rate_conversion_type
+        The conversion the simulation was configured to use.
+
+    Returns
+    -------
+        The per-time-step probability.
+
+    Raises
+    ------
+    ValueError
+        If step_size is None, since a rate has no per-step probability without one, or
+        if a rate is too high to express as a per-step probability.
+    """
+    if step_size is None:
+        raise ValueError(
+            "Cannot convert an annual rate to a per-step probability without a step "
+            "size. Set 'time.step_size' in the model specification."
+        )
+
+    column = data.columns[0]
+    probability = rate_to_probability(
+        data[column].copy(),
+        time_scaling_factor=step_size,
+        rate_conversion_type=rate_conversion_type,
+    )
+    converted = pd.DataFrame({column: np.asarray(probability)}, index=data.index)
+
+    # A probability of exactly 1 means the engine clamped a rate it could not express
+    # at this step size; no conversion reaches 1 otherwise.
+    impossible = converted[column] >= 1.0
+    if impossible.any():
+        raise ValueError(
+            f"{int(impossible.sum())} of {len(converted)} reference rates are too high "
+            f"to express as a probability over a step of {step_size} years, the largest "
+            f"being {data[column].max():g} per year. Those groups cannot be tested as a "
+            "proportion of per-step opportunities."
+        )
+
+    return converted

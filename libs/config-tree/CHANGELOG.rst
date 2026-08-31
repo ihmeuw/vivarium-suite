@@ -1,3 +1,10 @@
+**5.2.0 - 08/28/26**
+
+- ``get()`` returns ``default_value`` when any key in the path is missing
+- Stop ``get()`` from mutating the ``keys`` argument
+- Stop marking a leaf as accessed due to a failed ``get_tree()`` call
+- ``get()`` and ``get_tree()`` raise a ``ValueError`` for an empty key path
+
 **5.1.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10

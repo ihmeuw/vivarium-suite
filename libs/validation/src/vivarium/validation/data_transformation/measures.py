@@ -25,6 +25,7 @@ from vivarium.validation.data_transformation.rate_aggregation import (
     RateAggregationWeights,
     population_weighted,
 )
+from vivarium.validation.data_transformation.types import RateConversionType
 
 
 class Measure(ABC):
@@ -50,6 +51,29 @@ class Measure(ABC):
     def title(self) -> str:
         """Return a formatted title for the measure."""
         return _format_title(self.measure_key)
+
+    def get_as_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the reference data as the probability of an event in one time step.
+
+        A proportion is already independent of the step size, so it is returned
+        unchanged.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
+        return data
 
     def __str__(self) -> str:
         return self.measure_key
@@ -172,6 +196,26 @@ class Incidence(RatioMeasure):
             denominator=StatePersonTime(cause, f"susceptible_to_{cause}"),
         )
 
+    def get_as_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the annual rate as the probability of an event in one time step.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure, as an annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
+        return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
+
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
     def get_measure_data_from_sim_inputs(self, data: pd.DataFrame) -> pd.DataFrame:
         return data
@@ -223,6 +267,26 @@ class SIRemission(RatioMeasure):
             denominator=StatePersonTime(cause, cause),
         )
 
+    def get_as_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the annual rate as the probability of an event in one time step.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure, as an annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
+        return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
+
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
     def get_measure_data_from_sim_inputs(self, data: pd.DataFrame) -> pd.DataFrame:
         return data
@@ -244,6 +308,26 @@ class CauseSpecificMortalityRate(RatioMeasure):
             numerator=Deaths(cause),  # Deaths due to specific cause
             denominator=StatePersonTime(),  # Total person time
         )
+
+    def get_as_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the annual rate as the probability of an event in one time step.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure, as an annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
+        return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
     def get_measure_data_from_sim_inputs(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -275,6 +359,26 @@ class ExcessMortalityRate(RatioMeasure):
                 cause, cause
             ),  # Person time among those with the disease
         )
+
+    def get_as_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Return the annual rate as the probability of an event in one time step.
+
+        Parameters
+        ----------
+        data
+            The reference data for this measure, as an annual rate.
+        step_size
+            The simulation's time step, as a fraction of a year, or None if the model
+            specification does not set one.
+        rate_conversion_type
+            The conversion the simulation was configured to use.
+        """
+        return calculations.rate_to_step_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(data=SingleNumericColumn, out=SingleNumericColumn)
     def get_measure_data_from_sim_inputs(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -424,6 +528,19 @@ class CategoricalRelativeRisk(RatioMeasure):
     def rate_aggregation_weights(self) -> RateAggregationWeights:
         """Returns rate aggregated weights."""
         return self.affected_measure.rate_aggregation_weights
+
+    def get_as_probability(
+        self,
+        data: pd.DataFrame,
+        step_size: float | None,
+        rate_conversion_type: RateConversionType = "linear",
+    ) -> pd.DataFrame:
+        """Defer to the affected measure, whose data the reference is a multiple of.
+
+        A relative risk is unitless, so ``relative_risks * affected_measure_data`` is a
+        rate exactly when the affected measure's data is.
+        """
+        return self.affected_measure.get_as_probability(data, step_size, rate_conversion_type)
 
     @utils.check_io(
         relative_risks=SingleNumericColumn,
