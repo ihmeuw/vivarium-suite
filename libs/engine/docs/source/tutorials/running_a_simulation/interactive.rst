@@ -38,24 +38,65 @@ Setting up a simulation
 -----------------------
 
 To run a simulation interactively, we will need to create an
-:class:`~vivarium.engine.interface.interactive.InteractiveContext`.
-At a bare minimum, we need to provide the context with a set of
+:class:`~vivarium.engine.interface.interactive.InteractiveContext`. There are
+several arguments available for construction - all individually optional -
+but at a bare minimum we need to provide the context with a set of
 :ref:`components <components_concept>` that encode all the behavior of
 the simulation model. Frequently, we'll also provide some
 :ref:`configuration <configuration_concept>` data that is used to parameterize
 those components.
 
-.. note::
+All arguments fall into two groups. The first four describe *what the simulation
+is made of*. The combination of components, configuration, and plugins forms a
+complete description of a ``vivarium`` model, which we refer to as a
+:term:`model specification <Model Specification>`; you will usually provide
+either a model specification or some combination of the other three.
 
-   We can also optionally provide a set of :term:`plugins <Plugin>` to the
-   simulation framework. Plugins are special components that add new
-   functionality to the framework itself. This is an advanced feature
-   for building tools to adapt ``vivarium`` to models in a particular problem
-   domain and not important for most users.
+.. list-table:: **Describing the model**
+   :header-rows: 1
+   :widths: 25, 55
 
-The combination of components, configuration, and plugins forms a
-:term:`model specification <Model Specification>`, a complete description
-of a ``vivarium`` model.
+   *   - Argument
+       - Description
+   *   - | ``model_specification``
+       - | Path to a model specification yaml or an already-instantiated
+         | ``ConfigTree``. Omit it to build the simulation from the other
+         | arguments alone.
+   *   - | ``components``
+       - | Components to include *in addition to* the specification's. While a
+         | list is purely additive, a dict or ``ConfigTree`` merges into the
+         | specification's ``components`` blockiand replaces the keys it names.
+   *   - | ``configuration``
+       - | Values overriding the specification's ``configuration`` block.
+   *   - | ``plugin_configuration``
+       - | Managers overriding the specification's ``plugins`` block. An advanced
+         | feature for adapting the framework itself; most models never need it.
+
+The remaining four control *how the context behaves* rather than what it
+contains.
+
+.. list-table:: **Controlling the context**
+   :header-rows: 1
+   :widths: 25, 55
+
+   *   - Argument
+       - Description
+   *   - | ``sim_name``
+       - | Name for this context, used to label its log records. Must be unique
+         | within the process. Defaults to ``simulation_<n>``, numbered by how
+         | many contexts have been created so far.
+   *   - | ``logging_verbosity``
+       - | How much to log. 0 (the default) logs warnings and errors, 1 adds
+         | INFO, 2 or more adds DEBUG. Note that only the *first* context built
+         | in a process configures logging; later ones inherit it.
+   *   - | ``observe``
+       - | Whether to observe results. False (the default) means no observations
+         | are recorded and no results generated. See :ref:`getting results <interactive_results>`.
+   *   - | ``setup``
+       - | Whether to set the simulation up on construction. True (the default)
+         | freezes the configuration; pass False to change configuration first,
+         | then call :meth:`~vivarium.engine.interface.interactive.InteractiveContext.setup`
+         | yourself.
 
 The interactive context can be generated from several different kinds of data
 and may be generated at two separate :ref:`lifecycle <lifecycle_concept>` stages.
