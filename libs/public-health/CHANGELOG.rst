@@ -1,4 +1,4 @@
-**6.6.1 - 08/27/26**
+**6.6.1 - 08/31/26**
 
 - Support multiple ``MicrodataObserver`` instances in one simulation via an optional ``label``
 
