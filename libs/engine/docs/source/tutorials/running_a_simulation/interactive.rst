@@ -15,8 +15,7 @@ simulation in a controlled fashion, and examining the
 
 This tutorial covers building a context and advancing it. Refer to
 :ref:`Exploring a Simulation in an Interactive Setting <exploration_tutorial>`
-for details on how to interrogate one, i.e. what a simulation contains, how to
-read its attributes and value pipelines, and how to get results out of it.
+for details on how to interrogate one.
 
 For the following tutorial, we will assume you have set up an environment and
 installed ``vivarium-engine``. If you have not, please see the
@@ -24,8 +23,8 @@ installed ``vivarium-engine``. If you have not, please see the
 the :ref:`disease model <disease_model_tutorial>` constructed
 in a separate tutorial here, though no background knowledge of population
 health is necessary to follow along. The :ref:`components <components_concept>`
-constructed in that tutorial are available in the ``vivarium`` package, so you
-don't need to build them yourself before starting this tutorial.
+constructed in that tutorial ship with ``vivarium-engine``, so you don't need to
+build them yourself before starting this tutorial.
 
 .. contents::
    :depth: 2
@@ -60,12 +59,14 @@ either a model specification or some combination of the other three.
        - Description
    *   - | ``model_specification``
        - | Path to a model specification yaml or an already-instantiated
-         | ``ConfigTree``. Omit it to build the simulation from the other
+         | ``ConfigTree``. A path must exist, end in ``.yaml`` or ``.yml``, and
+         | use only the top-level keys ``plugins``, ``components``, and
+         | ``configuration``. Omit it to build the simulation from the other
          | arguments alone.
    *   - | ``components``
        - | Components to include *in addition to* the specification's. While a
          | list is purely additive, a dict or ``ConfigTree`` merges into the
-         | specification's ``components`` blockiand replaces the keys it names.
+         | specification's ``components`` block and replaces the keys it names.
    *   - | ``configuration``
        - | Values overriding the specification's ``configuration`` block.
    *   - | ``plugin_configuration``
@@ -91,12 +92,18 @@ contains.
          | in a process configures logging; later ones inherit it.
    *   - | ``observe``
        - | Whether to observe results. False (the default) means no observations
-         | are recorded and no results generated. See :ref:`getting results <interactive_results>`.
+         | are recorded and no results generated. The observers' listeners are
+         | registered during setup, so this has to be decided here; it cannot be
+         | switched on afterwards. See
+         | :ref:`getting results <interactive_results>`.
    *   - | ``setup``
        - | Whether to set the simulation up on construction. True (the default)
          | freezes the configuration; pass False to change configuration first,
          | then call :meth:`~vivarium.engine.interface.interactive.InteractiveContext.setup`
          | yourself.
+
+``observe`` and ``setup`` must be passed by keyword. The other six may be passed
+positionally, in the order shown above.
 
 The interactive context can be generated from several different kinds of data
 and may be generated at two separate :ref:`lifecycle <lifecycle_concept>` stages.
@@ -132,7 +139,7 @@ as it is the primary use case.
 
 In order to make it easier to follow along with this tutorial, we've provided
 a convenience function to get the path to the disease model specification
-distributed with ``vivarium``.
+distributed with ``vivarium-engine``.
 
 .. testcode::
 
@@ -171,13 +178,13 @@ example and we will place them in a normal Python list.
 
     from vivarium.engine.examples.disease_model import (
         BasePopulation,
-            DeathsObserver,
-            Risk,
-            RiskEffect,
-            SISDiseaseModel,
-            TreatmentIntervention,
-            YllsObserver,
-        )
+        DeathsObserver,
+        Risk,
+        RiskEffect,
+        SISDiseaseModel,
+        TreatmentIntervention,
+        YllsObserver,
+    )
 
     components = [
         BasePopulation(),
@@ -190,7 +197,7 @@ example and we will place them in a normal Python list.
         TreatmentIntervention(
             "breastfeeding_promotion", "child_growth_failure.proportion_exposed"
         ),
-    ]                                     
+    ]
 
 .. note::
 
@@ -308,7 +315,8 @@ After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 .. note::
 
    **Once a simulation has been set up, the configuration has been "frozen" and
-   cannot be changed!**
+   cannot be changed!** See :ref:`frozen configuration <frozen_configuration>`
+   for what that looks like.
 
    While this is a kind of trivial example, this last use case is extremely
    important. Practically speaking, the utility of initializing the simulation
