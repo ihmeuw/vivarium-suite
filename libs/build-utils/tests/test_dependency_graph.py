@@ -12,6 +12,7 @@ from packaging.specifiers import SpecifierSet
 
 from vivarium.build_utils import dependency_graph
 from vivarium.build_utils.dependency_graph import (
+    CandidateVersionConflictError,
     DependencyConflictError,
     DependencyCycleError,
     InstallPlan,
@@ -25,6 +26,7 @@ from vivarium.build_utils.dependency_graph import (
     get_transitive_downstreams,
     get_transitive_upstreams,
     load_libs,
+    read_candidate_versions,
     sort_topologically,
 )
 
@@ -60,6 +62,8 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
       ``python_versions.json``.
     - ``omit_python_versions`` (bool, default ``False``): write no
       ``python_versions.json`` (for the missing-file error path).
+    - ``candidates`` (Sequence[str]): ``[tool.vivarium.python-support] candidates``,
+      the versions soaked in CI ahead of support. Omitted entirely by default.
 
     Returns the ``libs/`` Path.
     """
@@ -93,6 +97,10 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
                 lines.append("[project.optional-dependencies]")
                 for extra_name, extra_deps in extras.items():
                     lines.append(f"{extra_name} = [{_render_dep_array(extra_deps)}]")
+            if "candidates" in cfg:
+                lines.append("")
+                lines.append("[tool.vivarium.python-support]")
+                lines.append(f"candidates = {json.dumps(list(cfg['candidates']))}")
             (pkg_dir / "pyproject.toml").write_text("\n".join(lines) + "\n")
 
             if "changelog_first_line" in cfg:
@@ -1015,8 +1023,8 @@ class TestBuildPythonMatrix:
         libs = load_libs(make_monorepo({"a": {"python_versions": ["3.11", "3.12"]}}))
         assert build_python_matrix(["a"], libs) == {
             "include": [
-                {"library": "a", "python-version": "3.11"},
-                {"library": "a", "python-version": "3.12"},
+                {"library": "a", "python-version": "3.11", "experimental": False},
+                {"library": "a", "python-version": "3.12", "experimental": False},
             ]
         }
 
@@ -1033,11 +1041,126 @@ class TestBuildPythonMatrix:
         matrix = build_python_matrix(["b", "a"], libs)
         assert matrix == {
             "include": [
-                {"library": "a", "python-version": "3.10"},
-                {"library": "b", "python-version": "3.11"},
-                {"library": "b", "python-version": "3.12"},
+                {"library": "a", "python-version": "3.10", "experimental": False},
+                {"library": "b", "python-version": "3.11", "experimental": False},
+                {"library": "b", "python-version": "3.12", "experimental": False},
             ]
         }
+
+    def test_candidates_add_experimental_entries(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A lib's declared candidates are appended after its supported versions."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.11", "3.12"], "candidates": ["3.13"]}}
+            )
+        )
+        assert build_python_matrix(["a"], libs) == {
+            "include": [
+                {"library": "a", "python-version": "3.11", "experimental": False},
+                {"library": "a", "python-version": "3.12", "experimental": False},
+                {"library": "a", "python-version": "3.13", "experimental": True},
+            ]
+        }
+
+    def test_candidates_are_per_lib(self, make_monorepo: MonorepoFactory) -> None:
+        """Each lib soaks only what it declares, so libs can diverge."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {
+                        "python_versions": ["3.11", "3.12", "3.13"],
+                        "candidates": ["3.14"],
+                    },
+                    "b": {"python_versions": ["3.11"]},
+                }
+            )
+        )
+        matrix = build_python_matrix(["a", "b"], libs)
+        assert matrix["include"] == [
+            {"library": "a", "python-version": "3.11", "experimental": False},
+            {"library": "a", "python-version": "3.12", "experimental": False},
+            {"library": "a", "python-version": "3.13", "experimental": False},
+            {"library": "a", "python-version": "3.14", "experimental": True},
+            {"library": "b", "python-version": "3.11", "experimental": False},
+        ]
+
+    def test_a_lib_can_soak_several_versions_at_once(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A held-back lib can catch up on every version it needs in one pass."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {
+                        "python_versions": ["3.11", "3.12", "3.13"],
+                        "candidates": ["3.14"],
+                    },
+                    "b": {
+                        "python_versions": ["3.11"],
+                        "candidates": ["3.12", "3.13", "3.14"],
+                    },
+                }
+            )
+        )
+        matrix = build_python_matrix(["a", "b"], libs)
+        assert matrix["include"] == [
+            {"library": "a", "python-version": "3.11", "experimental": False},
+            {"library": "a", "python-version": "3.12", "experimental": False},
+            {"library": "a", "python-version": "3.13", "experimental": False},
+            {"library": "a", "python-version": "3.14", "experimental": True},
+            {"library": "b", "python-version": "3.11", "experimental": False},
+            {"library": "b", "python-version": "3.12", "experimental": True},
+            {"library": "b", "python-version": "3.13", "experimental": True},
+            {"library": "b", "python-version": "3.14", "experimental": True},
+        ]
+
+    def test_no_candidates_yields_no_experimental_entries(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A lib declaring no candidates gets nothing marked experimental."""
+        libs = load_libs(make_monorepo({"a": {"python_versions": ["3.11", "3.12"]}}))
+        matrix = build_python_matrix(["a"], libs)
+        assert not any(entry["experimental"] for entry in matrix["include"])
+
+    def test_candidates_are_emitted_in_numeric_order(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """Candidates are sorted numerically, so declared order and 3.9 vs 3.10 hold."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.8"], "candidates": ["3.10", "3.9"]}})
+        )
+        matrix = build_python_matrix(["a"], libs)
+        assert [entry["python-version"] for entry in matrix["include"]] == [
+            "3.8",
+            "3.9",
+            "3.10",
+        ]
+
+    def test_raises_when_a_candidate_is_already_supported(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """Promoting a candidate without removing it fails loudly, not silently twice.
+
+        Leaving it in both places would emit the version twice, once gating and once
+        not, so this is caught rather than tolerated.
+        """
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {
+                        "python_versions": ["3.11", "3.12"],
+                        "candidates": ["3.12", "3.13"],
+                    }
+                }
+            )
+        )
+        with pytest.raises(
+            CandidateVersionConflictError,
+            match="as both a supported and a candidate Python version",
+        ):
+            build_python_matrix(["a"], libs)
 
     def test_empty_names_yields_empty_include(self, make_monorepo: MonorepoFactory) -> None:
         """No libs yields an empty include for the caller to detect."""
@@ -1055,6 +1178,33 @@ class TestBuildPythonMatrix:
         libs = load_libs(make_monorepo({"a": {}}))
         with pytest.raises(KeyError):
             build_python_matrix(["ghost"], libs)
+
+
+class TestReadCandidateVersions:
+    """Tests for ``read_candidate_versions``."""
+
+    def test_reads_declared_candidates(self, tmp_path: Path) -> None:
+        """Candidates are read from the lib's [tool.vivarium.python-support]."""
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.vivarium.python-support]\ncandidates = ["3.13", "3.14"]\n'
+        )
+        assert read_candidate_versions(tmp_path) == ["3.13", "3.14"]
+
+    def test_missing_pyproject_yields_empty(self, tmp_path: Path) -> None:
+        """No pyproject means no candidates, not an error."""
+        assert read_candidate_versions(tmp_path) == []
+
+    def test_missing_section_yields_empty(self, tmp_path: Path) -> None:
+        """A pyproject without the section means no candidates."""
+        (tmp_path / "pyproject.toml").write_text("[tool.black]\nline-length = 94\n")
+        assert read_candidate_versions(tmp_path) == []
+
+    def test_empty_list_yields_empty(self, tmp_path: Path) -> None:
+        """An emptied-out list turns the lib's candidate jobs off, as October does."""
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.vivarium.python-support]\ncandidates = []\n"
+        )
+        assert read_candidate_versions(tmp_path) == []
 
 
 class TestCLIInstallEditable:
@@ -1327,7 +1477,9 @@ class TestCLIBuildDownstreamMatrix:
         )
         assert rc == 0
         out = json.loads(capsys.readouterr().out)
-        assert out == {"include": [{"library": "a", "python-version": "3.11"}]}
+        assert out == {
+            "include": [{"library": "a", "python-version": "3.11", "experimental": False}]
+        }
 
     def test_empty_for_leaf_release(
         self,
@@ -1360,7 +1512,11 @@ class TestCLIBuildDownstreamMatrix:
         )
         assert rc == 0
         out = json.loads(capsys.readouterr().out)
-        assert out == {"include": [{"library": "shared", "python-version": "3.11"}]}
+        assert out == {
+            "include": [
+                {"library": "shared", "python-version": "3.11", "experimental": False}
+            ]
+        }
 
     def test_emits_one_entry_per_python_version(
         self,
@@ -1378,8 +1534,8 @@ class TestCLIBuildDownstreamMatrix:
         out = json.loads(capsys.readouterr().out)
         assert out == {
             "include": [
-                {"library": "a", "python-version": "3.11"},
-                {"library": "a", "python-version": "3.12"},
+                {"library": "a", "python-version": "3.11", "experimental": False},
+                {"library": "a", "python-version": "3.12", "experimental": False},
             ]
         }
 
@@ -1446,7 +1602,9 @@ class TestCLIClassifyChanges:
             "pending-release": ["a"],
             "to-build": ["a"],
             "shared-changed": False,
-            "matrix": {"include": [{"library": "a", "python-version": "3.11"}]},
+            "matrix": {
+                "include": [{"library": "a", "python-version": "3.11", "experimental": False}]
+            },
             "has-changes": True,
         }
 
@@ -1478,9 +1636,9 @@ class TestCLIClassifyChanges:
         assert rc == 0
         out = json.loads(capsys.readouterr().out)
         assert out["matrix"]["include"] == [
-            {"library": "a", "python-version": "3.11"},
-            {"library": "a", "python-version": "3.12"},
-            {"library": "b", "python-version": "3.11"},
+            {"library": "a", "python-version": "3.11", "experimental": False},
+            {"library": "a", "python-version": "3.12", "experimental": False},
+            {"library": "b", "python-version": "3.11", "experimental": False},
         ]
         # Nothing installs editably: the shared path belongs to no lib.
         assert out["source-changed"] == []

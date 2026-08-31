@@ -79,10 +79,13 @@ jobs:
           echo "has-changes=$(jq -r '.["has-changes"]' <<< "$CLASSIFIED_CHANGES")" >> $GITHUB_OUTPUT
 
   build-and-test:
-    name: ${{ matrix.library }} (Python ${{ matrix.python-version }})
+    name: ${{ matrix.library }} (Python ${{ matrix.python-version }})${{ matrix.experimental && ' [candidate]' || '' }}
     needs: detect-changes
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    # Candidate versions (each lib's [tool.vivarium.python-support] candidates)
+    # run the full check but must not block a merge.
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}

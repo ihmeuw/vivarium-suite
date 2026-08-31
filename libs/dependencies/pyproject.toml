@@ -104,6 +104,9 @@ test = ["vivarium-dependencies[pytest]"]
 ci_github = ["vivarium-dependencies[test,lint]"]
 ci_jenkins = ["vivarium-dependencies[ci_github]"]
 
+[tool.vivarium.python-support]
+candidates = ["3.14"]
+
 [tool.setuptools_scm]
 # Monorepo tagging convention: tags must be prefixed with "vivarium-dependencies-v"
 # (e.g. vivarium-dependencies-v1.1.0). tag_regex strips the prefix so setuptools_scm

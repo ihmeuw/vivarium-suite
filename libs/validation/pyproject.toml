@@ -61,6 +61,9 @@ ci_jenkins = ["vivarium-validation[ci_github,cluster,gbd]"]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/validation"
 
+[tool.vivarium.python-support]
+candidates = []
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.validation and its subpackages. Excluding vivarium

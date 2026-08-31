@@ -29,6 +29,15 @@ class MissingPythonVersionsError(Exception):
     """A library has no ``python_versions.json``, so its CI matrix cannot be built."""
 
 
+class CandidateVersionConflictError(Exception):
+    """A library declares a candidate Python version it already supports.
+
+    Promoting a candidate means moving it into ``python_versions.json`` *and* dropping
+    it from ``candidates``; leaving both would emit the version twice, once gating and
+    once not.
+    """
+
+
 @dataclass(frozen=True)
 class Lib:
     """A single independently-released library under ``libs/``.
@@ -118,7 +127,13 @@ class ChangedLibs:
 # is the key GitHub Actions expects and a hyphen is not a valid attribute name. Its
 # ``library`` is the ``libs/`` directory name and ``python-version`` is one entry from
 # that library's ``python_versions.json``.
-PythonMatrixEntry = TypedDict("PythonMatrixEntry", {"library": str, "python-version": str})
+#
+# ``experimental`` marks a candidate version (one being soaked in CI but not yet
+# supported). It is emitted on every entry, not just candidates.
+PythonMatrixEntry = TypedDict(
+    "PythonMatrixEntry",
+    {"library": str, "python-version": str, "experimental": bool},
+)
 
 
 class PythonMatrix(TypedDict):

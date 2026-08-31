@@ -56,9 +56,10 @@ from .changes import (
 from .cli import _discover_libs_dir, main
 from .editable import build_install_plan, get_editable_upstreams, run_install
 from .graph import get_transitive_downstreams, get_transitive_upstreams, sort_topologically
-from .loading import load_libs
+from .loading import load_libs, read_candidate_versions
 from .models import (
     DEFAULT_EXTRAS,
+    CandidateVersionConflictError,
     ChangedLibs,
     DependencyConflictError,
     DependencyCycleError,

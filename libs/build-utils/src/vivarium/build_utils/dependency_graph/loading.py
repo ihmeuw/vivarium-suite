@@ -20,6 +20,31 @@ else:  # Python < 3.11
 from .models import DEFAULT_EXTRAS, Lib
 
 
+def read_candidate_versions(lib_path: Path) -> list[str]:
+    """Read a library's candidate Python versions from ``[tool.vivarium.python-support]``.
+
+    Parameters
+    ----------
+    lib_path
+        The ``libs/<name>`` directory holding the library's ``pyproject.toml``.
+
+    Returns
+    -------
+        The declared candidate versions (e.g. ``["3.14"]``), empty when the
+        ``pyproject.toml`` is absent or declares no non-empty ``candidates``.
+    """
+    pyproject_path = lib_path / "pyproject.toml"
+    if not pyproject_path.exists():
+        return []
+    with pyproject_path.open("rb") as handle:
+        pyproject = tomllib.load(handle)
+    tool = pyproject.get("tool", {})
+    declared = tool.get("vivarium", {}).get("python-support", {}).get("candidates")
+    if not declared:
+        return []
+    return [str(version) for version in declared]
+
+
 def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[str, Lib]:
     """Parse every library under ``libs_dir`` into a :class:`Lib`.
 

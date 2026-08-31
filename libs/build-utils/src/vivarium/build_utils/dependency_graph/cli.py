@@ -20,6 +20,7 @@ from .graph import get_transitive_downstreams, sort_topologically
 from .loading import load_libs
 from .models import (
     DEFAULT_EXTRAS,
+    CandidateVersionConflictError,
     DependencyConflictError,
     DependencyCycleError,
     MissingPythonVersionsError,
@@ -255,9 +256,9 @@ def _run_classify_changes(args: argparse.Namespace) -> int:
     changed = classify_changed_libs(changed_files, libs.keys())
     try:
         # Unlike classification, the matrix needs each lib's path to read its
-        # python_versions.json, so this takes the parsed libraries.
+        # python_versions.json and candidates, so this takes the parsed libraries.
         matrix = build_python_matrix(changed.to_build, libs)
-    except MissingPythonVersionsError as error:
+    except (MissingPythonVersionsError, CandidateVersionConflictError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
 

@@ -48,6 +48,9 @@ update-readme = "vivarium.build_utils.readme:main"
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/build-utils"
 
+[tool.vivarium.python-support]
+candidates = ["3.14"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.build_utils and its subpackages. Excluding vivarium

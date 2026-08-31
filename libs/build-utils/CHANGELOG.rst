@@ -1,3 +1,7 @@
+**4.7.0 - 09/01/26**
+
+- Support non-gating candidate Python versions in the CI matrix
+
 **4.6.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10
