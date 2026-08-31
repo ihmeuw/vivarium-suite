@@ -7,6 +7,7 @@ from pandas.testing import assert_frame_equal
 from vivarium.validation.constants import DRAW_INDEX
 from vivarium.validation.data_transformation.formatting import TotalPopulationPersonTime
 from vivarium.validation.data_transformation.measures import (
+    MEASURE_KEY_MAPPINGS,
     CategoricalRelativeRisk,
     CauseSpecificMortalityRate,
     ExcessMortalityRate,
@@ -708,3 +709,79 @@ def test_rate_aggregation_weights(
         expected_weights = population_data
 
     pd.testing.assert_frame_equal(weights, expected_weights)
+
+
+# Whether each registered measure converts its numerator, its denominator, and its
+# reference when given a step size. FuzzyComparison.verify delegates all three to the
+# measure, and a measure that forgets one mis-scales the fuzzy check silently rather
+# than failing, so each is pinned rather than derived.
+DECLARED_UNITS: dict[str, tuple[RatioMeasure, bool, bool, bool]] = {
+    "cause.incidence_rate": (Incidence("c"), False, True, True),
+    "cause.prevalence": (Prevalence("c"), True, True, False),
+    "cause.remission_rate": (SIRemission("c"), False, True, True),
+    "cause.cause_specific_mortality_rate": (
+        CauseSpecificMortalityRate("c"),
+        False,
+        True,
+        True,
+    ),
+    "cause.excess_mortality_rate": (ExcessMortalityRate("c"), False, True, True),
+    "population.structure": (PopulationStructure([]), True, True, False),
+    "risk_factor.exposure": (RiskExposure("r"), True, True, False),
+}
+
+
+@pytest.mark.parametrize(
+    "measure, numerator_is_person_time, denominator_is_person_time, reference_is_rate",
+    [pytest.param(*values, id=key) for key, values in DECLARED_UNITS.items()]
+    + [
+        # Not in the registry; built over another measure, whose conversions it inherits.
+        pytest.param(
+            CategoricalRelativeRisk("r", "c", "excess_mortality_rate", None, None),
+            False,
+            True,
+            True,
+            id="risk_factor.relative_risk_of_a_rate",
+        ),
+        pytest.param(
+            CategoricalRelativeRisk("r", "c", "prevalence", None, None),
+            True,
+            True,
+            False,
+            id="risk_factor.relative_risk_of_a_proportion",
+        ),
+    ],
+)
+def test_declared_units(
+    measure: RatioMeasure,
+    numerator_is_person_time: bool,
+    denominator_is_person_time: bool,
+    reference_is_rate: bool,
+) -> None:
+    """Test that each measure converts exactly the data that needs it.
+
+    A step size of 0.1 turns 100 person-years into 1000 person-steps and an annual
+    rate of 0.12 into a per-step probability of 0.012; data needing no conversion
+    comes back untouched.
+    """
+    step_size = 0.1
+    person_time = pd.DataFrame({"value": [100.0]})
+    rate = pd.DataFrame({"value": [0.12]})
+
+    numerator = measure.numerator.to_opportunity_counts(person_time, step_size)
+    denominator = measure.denominator.to_opportunity_counts(person_time, step_size)
+    reference = measure.get_as_probability(rate, step_size)
+
+    assert numerator["value"].iloc[0] == (1000.0 if numerator_is_person_time else 100.0)
+    assert denominator["value"].iloc[0] == (1000.0 if denominator_is_person_time else 100.0)
+    assert reference["value"].iloc[0] == pytest.approx(0.012 if reference_is_rate else 0.12)
+
+
+def test_every_registered_measure_declares_its_units() -> None:
+    """Test that no registered measure escapes the conversion table."""
+    registered = {
+        f"{entity_type}.{measure}"
+        for entity_type, measures in MEASURE_KEY_MAPPINGS.items()
+        for measure in measures
+    }
+    assert registered == set(DECLARED_UNITS)
