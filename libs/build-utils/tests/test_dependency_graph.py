@@ -1207,6 +1207,34 @@ class TestLoadLibCandidates:
         libs = load_libs(make_monorepo({"a": {"candidates": []}}))
         assert libs["a"].candidates == ()
 
+    def test_rejects_unquoted_numeric_candidate(self, make_monorepo: MonorepoFactory) -> None:
+        """An unquoted 3.10 is a TOML float that would coerce to the wrong version."""
+        libs_dir = make_monorepo({"a": {}})
+        pyproject = libs_dir / "a" / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + "\n[tool.vivarium.python-support]\ncandidates = [3.10]\n"
+        )
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+    def test_rejects_a_bare_string(self, make_monorepo: MonorepoFactory) -> None:
+        """A bare string would otherwise iterate into one entry per character."""
+        libs_dir = make_monorepo({"a": {}})
+        pyproject = libs_dir / "a" / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + '\n[tool.vivarium.python-support]\ncandidates = "3.14"\n'
+        )
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+    @pytest.mark.parametrize("version", ["3", "3.12.1"])
+    def test_rejects_an_unparseable_version(
+        self, version: str, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A version with no minor component or with a patch component fails at load."""
+        libs_dir = make_monorepo({"a": {"candidates": [version]}})
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
 
 
 class TestCLIInstallEditable:

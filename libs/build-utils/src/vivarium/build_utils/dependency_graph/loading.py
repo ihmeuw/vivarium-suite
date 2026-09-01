@@ -108,6 +108,14 @@ def _get_candidates(pyproject: Mapping[str, Any], pkg_dir: Path) -> tuple[str, .
     )
     if not declared:
         return ()
+    if not isinstance(declared, list) or not all(
+        isinstance(version, str) and re.fullmatch(r"\d+\.\d+", version)
+        for version in declared
+    ):
+        raise ValueError(
+            f"{pkg_dir / 'pyproject.toml'}: [tool.vivarium.python-support] candidates "
+            f"must be a list of quoted 'X.Y' strings, got {declared!r}"
+        )
     return tuple(declared)
 
 
