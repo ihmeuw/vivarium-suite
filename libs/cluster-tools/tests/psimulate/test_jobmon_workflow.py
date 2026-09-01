@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -74,6 +75,7 @@ def _get_task_list(
     output_paths: OutputPaths,
     native_spec: MagicMock,
     job_parameters_list: list[JobParameters],
+    **overrides: Any,
 ) -> list[Task]:
     return get_task_list(
         tool=tool,
@@ -83,6 +85,7 @@ def _get_task_list(
         results_dir=output_paths.results_dir,
         worker_logging_root=output_paths.worker_logging_root,
         native_specification=native_spec,
+        **overrides,
     )
 
 
@@ -176,6 +179,25 @@ class TestGetTaskList:
         assert kwargs["metadata_dir"] == str(output_paths.metadata_dir)
         assert kwargs["results_dir"] == str(output_paths.results_dir)
         assert kwargs["command"] == "run"
+
+    def test_non_default_max_attempts_reaches_create_tasks(
+        self,
+        mock_tool_cls: MagicMock,
+        mock_write_metadata: MagicMock,
+        output_paths: OutputPaths,
+        native_spec: MagicMock,
+        two_jobs: list[JobParameters],
+    ) -> None:
+        """A caller's attempt cap is not silently replaced by the default."""
+        _get_task_list(
+            mock_tool_cls.return_value,
+            output_paths,
+            native_spec,
+            two_jobs,
+            max_attempts=7,
+        )
+        task_template = mock_tool_cls.return_value.get_task_template.return_value
+        assert task_template.create_tasks.call_args.kwargs["max_attempts"] == 7
 
 
 class TestBuildWorkflow:

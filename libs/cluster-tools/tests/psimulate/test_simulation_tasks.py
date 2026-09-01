@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -170,6 +171,41 @@ class TestResolveSimulationRun:
             )
 
 
+class TestResolveOutputPaths:
+    """Verify the directory layout a resolved run gets."""
+
+    def test_each_restart_gets_its_own_logging_root(self, tmp_path: Path) -> None:
+        """Two restarts share a run root but never share a logs directory.
+
+        This is what replaced the removed ``is_resume`` flag: a restart takes
+        its logging timestamp from the current time, so each attempt's worker
+        logs stay separate.
+        """
+        input_paths = InputPaths.from_entry_point_args(result_directory=tmp_path)
+        first = resolve_output_paths(command=COMMANDS.restart, input_paths=input_paths)
+        with patch("vivarium.cluster_tools.psimulate.paths.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2031, 7, 4, 12, 30, 15)
+            second = resolve_output_paths(command=COMMANDS.restart, input_paths=input_paths)
+
+        assert first.root == second.root == tmp_path
+        assert first.logging_root != second.logging_root
+        assert second.logging_root.name == "2031_07_04_12_30_15_restart"
+
+    def test_run_derives_a_timestamped_root_under_the_result_directory(
+        self, run_input_paths: InputPaths, model_spec_file: Path
+    ) -> None:
+        """A fresh run nests its root under ``<model_name>/<launch_time>``."""
+        output_paths = resolve_output_paths(
+            command=COMMANDS.run,
+            input_paths=run_input_paths,
+            launch_time="2031_01_01_00_00_00",
+        )
+        assert output_paths.root == (
+            run_input_paths.result_directory / model_spec_file.stem / "2031_01_01_00_00_00"
+        )
+        assert output_paths.logging_root.name == "2031_01_01_00_00_00_run"
+
+
 class TestBuildSimulationTasks:
     """Verify the task list built from a resolved run."""
 
@@ -180,7 +216,9 @@ class TestBuildSimulationTasks:
             input_paths=InputPaths.from_entry_point_args(result_directory=tmp_path),
         )
         keyspace = MagicMock()
-        keyspace.__iter__.return_value = iter(
+        # A fresh iterator per pass, so a caller that iterates twice does not
+        # silently see an exhausted keyspace on the second.
+        keyspace.__iter__.side_effect = lambda: iter(
             [(draw, seed, {}) for draw in (0, 1) for seed in (0, 1)]
         )
         keyspace.__len__.return_value = 4
