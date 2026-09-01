@@ -131,6 +131,9 @@ def resolve_simulation_run(
     -------
         The resolved run.
     """
+    if command in (COMMANDS.restart, COMMANDS.expand):
+        _validate_resumable(output_paths)
+
     logger.debug(
         "Parsing input arguments into model specification and branches and writing to disk."
     )
@@ -167,6 +170,25 @@ def resolve_simulation_run(
             output_paths.metadata_dir, output_paths.results_dir
         ),
     )
+
+
+def _validate_resumable(output_paths: OutputPaths) -> None:
+    """Raise if a run directory lacks the state a resume reads back."""
+    missing = [
+        path
+        for path in (
+            output_paths.keyspace,
+            output_paths.branches,
+            output_paths.model_specification,
+        )
+        if not path.exists()
+    ]
+    if missing:
+        raise FileNotFoundError(
+            f"{output_paths.root} cannot be resumed: it is missing "
+            f"{', '.join(path.name for path in missing)}. A run directory created "
+            "before these files were persisted is not resumable; start a new run."
+        )
 
 
 def build_simulation_tasks(

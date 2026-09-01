@@ -149,6 +149,25 @@ class TestResolveSimulationRun:
         )
         assert len(restart_run.keyspace) == 4
 
+    def test_restart_without_persisted_state_names_what_is_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """A run directory predating keyspace persistence is rejected clearly.
+
+        Without this, the resume reads an empty keyspace and the failure
+        surfaces as a ConfigurationError blaming the caller for a model
+        specification they never supplied.
+        """
+        input_paths = InputPaths.from_entry_point_args(result_directory=tmp_path)
+        output_paths = resolve_output_paths(command=COMMANDS.restart, input_paths=input_paths)
+        with pytest.raises(FileNotFoundError, match="cannot be resumed"):
+            resolve_simulation_run(
+                command=COMMANDS.restart,
+                input_paths=input_paths,
+                output_paths=output_paths,
+                extra_args={},
+            )
+
 
 class TestBuildSimulationTasks:
     """Verify the task list built from a resolved run."""
