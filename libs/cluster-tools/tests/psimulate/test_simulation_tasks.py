@@ -26,6 +26,7 @@ from vivarium.cluster_tools.psimulate.paths import InputPaths
 from vivarium.cluster_tools.psimulate.simulation_tasks import (
     SimulationRun,
     build_simulation_tasks,
+    report_initial_status,
     resolve_output_paths,
     resolve_simulation_run,
     write_backup_metadata,
@@ -260,9 +261,10 @@ class TestBuildSimulationTasks:
         """A fully finished keyspace produces no tasks and no Jobmon call."""
         get_task_list = mocker.patch(f"{_MODULE}.get_task_list")
         mocker.patch(f"{_MODULE}.jobs.build_job_list", return_value=([], 4))
+        run = self._run(tmp_path)._replace(finished_sim_metadata=pd.DataFrame(index=range(4)))
         sim_tasks = build_simulation_tasks(
             MagicMock(),
-            self._run(tmp_path),
+            run,
             native_specification=MagicMock(),
             backup_freq=None,
             extra_args={},
@@ -291,6 +293,39 @@ class TestBuildSimulationTasks:
             extra_args={},
         )
         assert sim_tasks.num_jobs_completed == 3
+
+
+def test_report_initial_status() -> None:
+    number_existing_jobs = 10
+    finished_sim_metadata = pd.DataFrame(index=range(number_existing_jobs))
+    report_initial_status(number_existing_jobs, finished_sim_metadata, 100)
+    with pytest.raises(RuntimeError, match="There are 1 jobs from the previous run"):
+        report_initial_status(number_existing_jobs + 1, finished_sim_metadata, 100)
+
+
+def test_inconsistent_prior_run_is_rejected_before_anything_is_written(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """The consistency check runs before the backup table and task metadata.
+
+    Otherwise an aborted run leaves task metadata and appended backup rows
+    behind for a directory it just refused to use.
+    """
+    get_task_list = mocker.patch(f"{_MODULE}.get_task_list")
+    mocker.patch(f"{_MODULE}.jobs.build_job_list", return_value=([make_job_parameters()], 4))
+    run = TestBuildSimulationTasks._run(tmp_path)._replace(
+        finished_sim_metadata=pd.DataFrame(index=range(2))
+    )
+    with pytest.raises(RuntimeError, match="jobs from the previous run"):
+        build_simulation_tasks(
+            MagicMock(),
+            run,
+            native_specification=MagicMock(),
+            backup_freq=1800.0,
+            extra_args={},
+        )
+    assert not run.output_paths.backup_metadata_path.exists()
+    get_task_list.assert_not_called()
 
 
 def test_write_backup_metadata(tmp_path: Path) -> None:

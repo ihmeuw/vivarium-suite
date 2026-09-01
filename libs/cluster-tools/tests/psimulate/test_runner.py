@@ -2,19 +2,17 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import pandas as pd
 import pytest
 
 pytest.importorskip("jobmon")
 
 import yaml
 from click.testing import CliRunner
-from pandas.testing import assert_frame_equal
 
 from vivarium.cluster_tools.core.cluster.interface import NativeSpecification
 from vivarium.cluster_tools.psimulate.cli import psimulate
 from vivarium.cluster_tools.psimulate.paths import InputPaths
-from vivarium.cluster_tools.psimulate.runner import report_initial_status, write_configuration
+from vivarium.cluster_tools.psimulate.runner import write_configuration
 
 _RUNNER_MAIN = "vivarium.cluster_tools.psimulate.runner.main"
 
@@ -69,14 +67,6 @@ def _read_configuration_yaml(output_root: Path) -> dict[str, Any]:
     assert config_file.exists()
     result: dict[str, Any] = yaml.safe_load(config_file.read_text())
     return result
-
-
-def test_report_initial_status() -> None:
-    number_existing_jobs = 10
-    finished_sim_metadata = pd.DataFrame(index=range(number_existing_jobs))
-    report_initial_status(number_existing_jobs, finished_sim_metadata, 100)
-    with pytest.raises(RuntimeError, match="There are 1 jobs from the previous run"):
-        report_initial_status(number_existing_jobs + 1, finished_sim_metadata, 100)
 
 
 def test_write_configuration_run_command(tmp_path: Path) -> None:

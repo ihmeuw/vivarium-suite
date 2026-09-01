@@ -172,6 +172,42 @@ def resolve_simulation_run(
     )
 
 
+def report_initial_status(
+    num_jobs_completed: int, finished_sim_metadata: pd.DataFrame, total_num_jobs: int
+) -> None:
+    """Log how much of the keyspace a previous run finished, and sanity-check it.
+
+    Parameters
+    ----------
+    num_jobs_completed
+        How many of the keyspace's simulations are already complete.
+    finished_sim_metadata
+        Metadata for the simulations a previous invocation finished.
+    total_num_jobs
+        The size of the keyspace.
+
+    Raises
+    ------
+    RuntimeError
+        If the previous run holds results the current configuration would not
+        have produced, meaning the code or the outputs have since changed.
+    """
+    if num_jobs_completed:
+        logger.debug(
+            f"{num_jobs_completed} of {total_num_jobs} jobs completed in previous run."
+        )
+    extra_jobs_completed = num_jobs_completed - len(finished_sim_metadata)
+    # NOTE: there can never be more rows in `finished_sim_metadata` than `num_jobs_completed`
+    # because `num_jobs_completed` was calculated by comparing the keyspace to `finished_sim_metadata`.
+    if extra_jobs_completed:
+        raise RuntimeError(
+            f"There are {extra_jobs_completed} jobs from the previous run which would not have been created "
+            "with the configuration saved with that run. That either means that code "
+            "has changed between then and now or that the outputs or configuration data "
+            "have been modified."
+        )
+
+
 def _validate_resumable(output_paths: OutputPaths) -> None:
     """Raise if a run directory lacks the state a resume reads back."""
     missing = [
@@ -258,6 +294,10 @@ def build_simulation_tasks(
     # not from build_job_list, which saw an empty DataFrame.
     if restart:
         num_jobs_completed = len(run.finished_sim_metadata)
+
+    # Check the prior run for consistency before writing anything, so an
+    # inconsistent directory is rejected without leaving task metadata behind.
+    report_initial_status(num_jobs_completed, run.finished_sim_metadata, len(run.keyspace))
 
     if not job_parameters:
         return SimulationTasks(tasks=[], num_jobs_completed=num_jobs_completed)

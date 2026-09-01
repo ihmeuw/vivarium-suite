@@ -13,7 +13,6 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import yaml
 from loguru import logger
 
@@ -28,25 +27,6 @@ from vivarium.cluster_tools.psimulate.performance_logger import (
 )
 from vivarium.cluster_tools.utilities import hash_output_path
 from vivarium.cluster_tools.vipin.perf_report import report_performance
-
-
-def report_initial_status(
-    num_jobs_completed: int, finished_sim_metadata: pd.DataFrame, total_num_jobs: int
-) -> None:
-    if num_jobs_completed:
-        logger.debug(
-            f"{num_jobs_completed} of {total_num_jobs} jobs completed in previous run."
-        )
-    extra_jobs_completed = num_jobs_completed - len(finished_sim_metadata)
-    # NOTE: there can never be more rows in `finished_sim_metadata` than `num_jobs_completed`
-    # because `num_jobs_completed` was calculated by comparing the keyspace to `finished_sim_metadata`.
-    if extra_jobs_completed:
-        raise RuntimeError(
-            f"There are {extra_jobs_completed} jobs from the previous run which would not have been created "
-            "with the configuration saved with that run. That either means that code "
-            "has changed between then and now or that the outputs or configuration data "
-            "have been modified."
-        )
 
 
 def try_run_vipin(output_paths: OutputPaths) -> None:
@@ -214,9 +194,7 @@ def main(
         max_attempts=max_attempts,
     )
     num_jobs_completed = sim_tasks.num_jobs_completed
-    # Let the user know if something is fishy at this point.
     total_num_jobs = len(run.keyspace)
-    report_initial_status(num_jobs_completed, run.finished_sim_metadata, total_num_jobs)
     if not sim_tasks.tasks:
         logger.debug("No jobs to run, exiting.")
         return
