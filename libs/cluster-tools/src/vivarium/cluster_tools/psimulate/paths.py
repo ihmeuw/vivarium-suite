@@ -21,6 +21,52 @@ CENTRAL_PERFORMANCE_LOGS_DIRECTORY = Path(
 )
 
 
+def resolve_run_root(
+    *,
+    command: str,
+    result_directory: Path,
+    input_artifact_path: Path | None,
+    input_model_spec_path: Path | None,
+    launch_time: str,
+) -> Path:
+    """Return the timestamped root directory for a simulation run.
+
+    ``run`` and ``load_test`` derive the root as a
+    ``<name>/<launch_time>`` subdirectory of ``result_directory``;
+    ``restart`` and ``expand`` are handed the root directly.
+
+    Parameters
+    ----------
+    command
+        The specific ``psimulate`` command being run.
+    result_directory
+        The path to the results directory.
+    input_artifact_path
+        The path to the data artifact.
+    input_model_spec_path
+        The path to the model specification file.
+    launch_time
+        Timestamp string (``YYYY_MM_DD_HH_MM_SS``) naming the run.
+
+    Returns
+    -------
+        The root directory for the run's output.
+
+    Raises
+    ------
+    ValueError
+        If ``command`` is ``run`` and no model specification path is given.
+    """
+    if command == COMMANDS.run:
+        if input_model_spec_path is None:
+            raise ValueError("Model specification path must be provided for 'run' command.")
+        model_name = get_output_model_name_string(input_artifact_path, input_model_spec_path)
+        return result_directory / model_name / launch_time
+    if command == COMMANDS.load_test:
+        return result_directory / "load_test" / launch_time
+    return result_directory
+
+
 def build_perf_log_filename(
     task_id: str, array_job_id: str = "", array_task_id: str = ""
 ) -> str:
@@ -190,7 +236,6 @@ class OutputPaths(NamedTuple):
         result_directory: Path,
         input_model_spec_path: Path | None,
         launch_time: str | None = None,
-        is_resume: bool = False,
     ) -> "OutputPaths":
         """Create an instance of OutputPaths from the arguments passed to the entry point.
 
@@ -206,14 +251,9 @@ class OutputPaths(NamedTuple):
             The path to the model specification file.
         launch_time
             Optional timestamp string (``YYYY_MM_DD_HH_MM_SS``). When provided,
-            this timestamp is used for directory naming instead of generating a
-            new one from ``datetime.now()``. This ensures that all steps in a
-            workflow share the same timestamp, and that resume builds produce
-            identical paths.
-        is_resume
-            If True, generates a fresh timestamp for the logging directory so
-            that each resume attempt gets its own logs, mirroring ``psimulate
-            restart`` behavior. The output root still uses ``launch_time``.
+            this timestamp names the run's directories instead of a fresh one
+            from ``datetime.now()``, so that all steps in a workflow share the
+            same timestamp and resume builds produce identical paths.
 
         Returns
         -------
@@ -222,23 +262,14 @@ class OutputPaths(NamedTuple):
         """
         launch_time = launch_time or datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
-        output_directory = result_directory
-        if command == COMMANDS.run:
-            if input_model_spec_path is None:
-                raise ValueError(
-                    "Model specification path must be provided for 'run' command."
-                )
-            model_name = get_output_model_name_string(
-                input_artifact_path, input_model_spec_path
-            )
-            output_directory = output_directory / model_name / launch_time
-        elif command == COMMANDS.load_test:
-            output_directory = output_directory / "load_test" / launch_time
-
-        logging_timestamp = (
-            datetime.now().strftime("%Y_%m_%d_%H_%M_%S") if is_resume else launch_time
+        output_directory = resolve_run_root(
+            command=command,
+            result_directory=result_directory,
+            input_artifact_path=input_artifact_path,
+            input_model_spec_path=input_model_spec_path,
+            launch_time=launch_time,
         )
-        logging_directory = output_directory / "logs" / f"{logging_timestamp}_{command}"
+        logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
         logging_dirs = {
             "logging_root": logging_directory,
             "worker_logging_root": logging_directory / "worker_logs",

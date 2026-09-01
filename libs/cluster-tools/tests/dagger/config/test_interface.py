@@ -45,6 +45,7 @@ def _resources() -> ResourceConfig:
 _TOOL: Any = "tool-sentinel"
 _BUILD_TIMESTAMP = "2026_05_18_10_00_00"
 _TASKS = ["task-sentinel"]
+_INTERFACE = "vivarium.cluster_tools.dagger.config.interface"
 
 
 @pytest.fixture()
@@ -62,7 +63,7 @@ def patch_get_single_command_task(mocker: MockerFixture) -> MagicMock:
 
 @pytest.fixture()
 def patch_simulation_internals(mocker: MockerFixture) -> dict[str, MagicMock]:
-    """Patch the simulation-step internals so the API can be exercised
+    """Patch the shared simulation pipeline so the step API can be exercised
     without filesystem or Jobmon side effects.
 
     Returns a mapping of internal names to their mocks so tests can assert
@@ -70,33 +71,22 @@ def patch_simulation_internals(mocker: MockerFixture) -> dict[str, MagicMock]:
     """
     output_paths = MagicMock()
     output_paths.root = Path("/out/root")
-    output_paths.worker_logging_root = Path("/out/logs")
-    output_paths.backup_dir = Path("/out/backup")
-    output_paths.backup_metadata_path = Path("/out/backup_meta.csv")
-    output_paths.metadata_dir = Path("/out/metadata")
-    output_paths.results_dir = Path("/out/results")
-    output_paths_cls = mocker.patch(
-        "vivarium.cluster_tools.dagger.config.interface.OutputPaths"
-    )
-    output_paths_cls.from_entry_point_args.return_value = output_paths
-
-    keyspace_cls = mocker.patch(
-        "vivarium.cluster_tools.dagger.config.interface.branches.Keyspace"
-    )
-    keyspace_cls.from_branch_configuration.return_value = MagicMock()
+    simulation_run = MagicMock()
 
     return {
-        "OutputPaths": output_paths_cls,
         "output_paths": output_paths,
-        "Keyspace": keyspace_cls,
-        "build_job_parameters_from_keyspace": mocker.patch(
-            "vivarium.cluster_tools.dagger.config.interface."
-            "build_job_parameters_from_keyspace",
-            return_value=[MagicMock()],
+        "run": simulation_run,
+        "resolve_output_paths": mocker.patch(
+            f"{_INTERFACE}.simulation_tasks.resolve_output_paths",
+            return_value=output_paths,
         ),
-        "get_task_list": mocker.patch(
-            "vivarium.cluster_tools.dagger.config.interface.get_task_list",
-            return_value=_TASKS,
+        "resolve_simulation_run": mocker.patch(
+            f"{_INTERFACE}.simulation_tasks.resolve_simulation_run",
+            return_value=simulation_run,
+        ),
+        "build_simulation_tasks": mocker.patch(
+            f"{_INTERFACE}.simulation_tasks.build_simulation_tasks",
+            return_value=MagicMock(tasks=_TASKS),
         ),
     }
 
@@ -158,7 +148,7 @@ def test_get_simulation_step_returns_tasks(
     valid_branch_config_file: Path,
     valid_artifact_file: Path,
 ) -> None:
-    """API validates kwargs and dispatches to the simulation pipeline."""
+    """API validates kwargs and dispatches to the shared simulation pipeline."""
     output_directory = Path("/tmp/results")
     tasks = get_simulation_step_tasks(
         name="sim",
@@ -171,23 +161,64 @@ def test_get_simulation_step_returns_tasks(
         sim_verbosity=2,
         environment="sim_env",
         tool=_TOOL,
-        is_resume=True,
     )
     assert tasks is _TASKS
     patch_build_timestamp.assert_called_once_with(output_directory)
 
-    patch_simulation_internals["OutputPaths"].from_entry_point_args.assert_called_once_with(
-        command="run",
-        input_artifact_path=valid_artifact_file,
-        result_directory=output_directory,
-        input_model_spec_path=valid_model_spec_file,
-        launch_time=_BUILD_TIMESTAMP,
+    resolve_kwargs = patch_simulation_internals["resolve_output_paths"].call_args.kwargs
+    assert resolve_kwargs["command"] == "run"
+    assert resolve_kwargs["launch_time"] == _BUILD_TIMESTAMP
+    input_paths = resolve_kwargs["input_paths"]
+    assert input_paths.result_directory == output_directory
+    assert input_paths.model_specification == valid_model_spec_file
+    assert input_paths.branch_configuration == valid_branch_config_file
+    assert input_paths.artifact == valid_artifact_file
+
+    kwargs = patch_simulation_internals["build_simulation_tasks"].call_args.kwargs
+    assert kwargs["env_prefix"] == "/envs/sim_env"
+    assert kwargs["template_name"] == "psimulate_sim"
+    assert kwargs["backup_freq"] == 600.0
+    assert kwargs["extra_args"] == {"sim_verbosity": 2}
+
+
+def test_get_simulation_step_resume_restarts_into_the_original_run_root(
+    patch_simulation_internals: dict[str, MagicMock],
+    patch_resolve_env_prefix: MagicMock,
+    patch_build_timestamp: MagicMock,
+    valid_model_spec_file: Path,
+    valid_branch_config_file: Path,
+) -> None:
+    """A resumed step restarts into the run root the first build derived.
+
+    It passes ``restart`` so the shared pipeline reads the persisted keyspace
+    and model specification rather than re-parsing the step's inputs, which
+    means it must resolve that run root itself -- a restart is handed its
+    root instead of deriving one.
+    """
+    output_directory = Path("/tmp/results")
+    get_simulation_step_tasks(
+        name="sim",
+        resources=_resources(),
+        output_directory=output_directory,
+        model_specification=valid_model_spec_file,
+        branch_configuration=valid_branch_config_file,
+        environment="sim_env",
+        tool=_TOOL,
         is_resume=True,
     )
 
-    _, kwargs = patch_simulation_internals["get_task_list"].call_args
-    assert kwargs["env_prefix"] == "/envs/sim_env"
-    assert kwargs["template_name"] == "psimulate_sim"
+    resolve_kwargs = patch_simulation_internals["resolve_output_paths"].call_args.kwargs
+    assert resolve_kwargs["command"] == "restart"
+    # A fresh launch_time keeps each resume's logs separate; the run root
+    # still comes from the persisted build timestamp.
+    assert resolve_kwargs["launch_time"] is None
+    input_paths = resolve_kwargs["input_paths"]
+    assert input_paths.result_directory == (
+        output_directory / valid_model_spec_file.stem / _BUILD_TIMESTAMP
+    )
+    # The inputs are not re-read on a resume.
+    assert input_paths.model_specification is None
+    assert input_paths.branch_configuration is None
 
 
 def test_get_pytest_step_returns_tasks(
@@ -419,9 +450,9 @@ _VALIDATORS: dict[str, Callable[..., None]] = {
 @pytest.mark.parametrize("step_type", sorted(STEP_TYPE_API_FNS))
 def test_validate_signature_matches_api_fn_signature(step_type: str) -> None:
     """Each per-type validator must take exactly the kwargs the matching API
-    function accepts, minus ``tool`` and ``is_resume`` (supplied by the
-    builder) and ``output_directory`` (workflow-level plumbing that the
-    validator does not inspect).
+    function accepts, minus ``tool``, ``is_resume`` and ``max_attempts``
+    (supplied by the builder) and ``output_directory`` (workflow-level
+    plumbing that the validator does not inspect).
 
     Locks in the contract between each validator and its
     ``get_*_step_tasks`` partner so a kwarg rename / addition / removal on
@@ -431,7 +462,12 @@ def test_validate_signature_matches_api_fn_signature(step_type: str) -> None:
     api_fn = STEP_TYPE_API_FNS[step_type]
     validate_params = set(inspect.signature(validator).parameters)
     api_params = set(inspect.signature(api_fn).parameters)
-    assert validate_params == api_params - {"tool", "is_resume", "output_directory"}
+    assert validate_params == api_params - {
+        "tool",
+        "is_resume",
+        "max_attempts",
+        "output_directory",
+    }
 
 
 def test_get_step_resources_builds_resource_config() -> None:

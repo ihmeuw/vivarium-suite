@@ -1,3 +1,25 @@
+**4.7.0 - 09/02/26**
+
+- Build ``psimulate`` and ``dagger`` simulation-step task lists from one shared
+  pipeline (``psimulate.simulation_tasks``) instead of two copies of the same steps
+- **Behavior change.** A ``dagger`` simulation step now matches ``psimulate run``,
+  closing four gaps that the duplicated logic had let drift:
+
+  - The model specification is parsed and persisted, so a step's ``artifact_path``
+    reaches the simulation and results are written under the step's own run root
+  - The backup lookup table is written, so a retried task can resume from its
+    backup rather than silently restarting from the beginning
+  - The workflow's ``max_attempts`` reaches the simulation tasks instead of an
+    unrelated default of 3
+  - The keyspace and expanded branches are persisted, and ``dagger restart`` reads
+    them (and the persisted model specification) rather than re-parsing its inputs
+
+- ``build_workflow`` wraps an existing task list; it no longer creates the tasks
+- ``OutputPaths.from_entry_point_args`` drops ``is_resume``; a restart already gets
+  a fresh logging timestamp from its command
+- Fix the ``backup_freq`` type hints, which claimed ``int`` for a value the CLI has
+  always produced as a ``float``
+
 **4.6.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10

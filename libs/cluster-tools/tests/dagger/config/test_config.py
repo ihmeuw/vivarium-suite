@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
 pytest.importorskip("jobmon")
@@ -51,6 +52,7 @@ from vivarium.cluster_tools.dagger.config.validation import (
     validate_pytest_step,
     validate_python_step,
 )
+from vivarium.cluster_tools.psimulate.simulation_tasks import SimulationRun
 
 
 class TestWorkflowConfigFromYaml:
@@ -675,37 +677,24 @@ class TestSimulationStep:
         """Verify get_simulation_step_tasks passes the right arguments through the pipeline."""
         _utilities = "vivarium.cluster_tools.dagger.config.utilities"
         _interface = "vivarium.cluster_tools.dagger.config.interface"
+        _tasks = f"{_interface}.simulation_tasks"
         with (
             patch(f"{_utilities}.resolve_env_prefix", return_value="/envs/test_env"),
             patch(
                 f"{_interface}.get_or_create_build_timestamp",
                 return_value="2026_04_24_10_00_00",
             ),
-            patch(f"{_interface}.OutputPaths") as mock_output_paths_cls,
-            patch(f"{_interface}.branches.Keyspace") as mock_keyspace_cls,
-            patch(
-                f"{_interface}.build_job_parameters_from_keyspace"
-            ) as mock_build_job_params,
-            patch(f"{_interface}.get_task_list") as mock_get_task_list,
+            patch(f"{_tasks}.resolve_output_paths") as mock_resolve_output_paths,
+            patch(f"{_tasks}.resolve_simulation_run") as mock_resolve_run,
+            patch(f"{_tasks}.build_simulation_tasks") as mock_build_tasks,
         ):
-            # -- Arrange --
             mock_output_paths = MagicMock()
-            mock_output_paths.root = Path("/out/root")
-            mock_output_paths.worker_logging_root = Path("/out/logs")
-            mock_output_paths.backup_dir = Path("/out/backup")
-            mock_output_paths.backup_metadata_path = Path("/out/backup_meta.csv")
-            mock_output_paths.metadata_dir = Path("/out/metadata")
-            mock_output_paths.results_dir = Path("/out/results")
-            mock_output_paths_cls.from_entry_point_args.return_value = mock_output_paths
-
-            mock_keyspace = MagicMock()
-            mock_keyspace_cls.from_branch_configuration.return_value = mock_keyspace
-
-            sentinel_job_params = [MagicMock(), MagicMock()]
-            mock_build_job_params.return_value = sentinel_job_params
+            mock_resolve_output_paths.return_value = mock_output_paths
+            mock_run = MagicMock()
+            mock_resolve_run.return_value = mock_run
 
             sentinel_tasks = [MagicMock(), MagicMock(), MagicMock()]
-            mock_get_task_list.return_value = sentinel_tasks
+            mock_build_tasks.return_value = MagicMock(tasks=sentinel_tasks)
 
             resources = ResourceConfig(
                 memory_gb=8,
@@ -716,7 +705,6 @@ class TestSimulationStep:
 
             mock_tool = MagicMock()
 
-            # -- Act --
             result = get_simulation_step_tasks(
                 name="sim_step",
                 resources=resources,
@@ -728,51 +716,37 @@ class TestSimulationStep:
                 sim_verbosity=1,
                 environment="test_env",
                 tool=mock_tool,
+                max_attempts=4,
             )
 
-            # -- Assert: OutputPaths created correctly --
-            mock_output_paths_cls.from_entry_point_args.assert_called_once_with(
-                command="run",
-                input_artifact_path=valid_artifact_file,
-                result_directory=Path("/tmp/results"),
-                input_model_spec_path=valid_model_spec_file,
-                launch_time="2026_04_24_10_00_00",
-                is_resume=False,
+            # A fresh build lays out its run root beneath the step's output
+            # directory, using the persisted build timestamp.
+            resolve_kwargs = mock_resolve_output_paths.call_args.kwargs
+            assert resolve_kwargs["command"] == "run"
+            assert resolve_kwargs["launch_time"] == "2026_04_24_10_00_00"
+            input_paths = resolve_kwargs["input_paths"]
+            assert input_paths.result_directory == Path("/tmp/results")
+            assert input_paths.model_specification == valid_model_spec_file
+            assert input_paths.branch_configuration == valid_branch_config_file
+            assert input_paths.artifact == valid_artifact_file
+
+            # The run is resolved against those paths, not a second layout.
+            run_kwargs = mock_resolve_run.call_args.kwargs
+            assert run_kwargs["command"] == "run"
+            assert run_kwargs["output_paths"] is mock_output_paths
+            assert run_kwargs["extra_args"] == {"sim_verbosity": 1}
+
+            assert mock_build_tasks.call_args.args == (mock_tool, mock_run)
+            build_kwargs = mock_build_tasks.call_args.kwargs
+            assert build_kwargs["native_specification"] == resources.to_native_specification(
+                "sim_step"
             )
-            mock_output_paths.touch.assert_called_once()
+            assert build_kwargs["backup_freq"] == 300
+            assert build_kwargs["extra_args"] == {"sim_verbosity": 1}
+            assert build_kwargs["max_attempts"] == 4
+            assert build_kwargs["env_prefix"] == "/envs/test_env"
+            assert build_kwargs["template_name"] == "psimulate_sim_step"
 
-            # -- Assert: Keyspace parsed from branch config --
-            mock_keyspace_cls.from_branch_configuration.assert_called_once_with(
-                valid_branch_config_file,
-            )
-
-            # -- Assert: job parameters built with correct args --
-            mock_build_job_params.assert_called_once()
-            call_kwargs = mock_build_job_params.call_args
-            assert call_kwargs.args[0] is mock_keyspace
-            assert call_kwargs.kwargs["model_specification_path"] == valid_model_spec_file
-            assert call_kwargs.kwargs["output_root"] == Path("/out/root")
-            assert call_kwargs.kwargs["worker_logging_root"] == Path("/out/logs")
-            backup_cfg = call_kwargs.kwargs["backup_configuration"]
-            assert backup_cfg["backup_dir"] == str(Path("/out/backup"))
-            assert backup_cfg["backup_freq"] == 300
-            assert backup_cfg["backup_metadata_path"] == str(Path("/out/backup_meta.csv"))
-            assert call_kwargs.kwargs["extras"] == {"sim_verbosity": 1}
-
-            # -- Assert: get_task_list called with pipeline outputs --
-            mock_get_task_list.assert_called_once_with(
-                tool=mock_tool,
-                command="run",
-                job_parameters_list=sentinel_job_params,
-                metadata_dir=Path("/out/metadata"),
-                results_dir=Path("/out/results"),
-                worker_logging_root=Path("/out/logs"),
-                native_specification=resources.to_native_specification("sim_step"),
-                env_prefix="/envs/test_env",
-                template_name="psimulate_sim_step",
-            )
-
-            # -- Assert: returns whatever get_task_list returns --
             assert result is sentinel_tasks
 
     def test_multiple_steps_register_distinct_jobmon_templates(
@@ -784,15 +758,15 @@ class TestSimulationStep:
         Jobmon TaskTemplates so their ``create_tasks`` calls don't collide."""
         _utilities = "vivarium.cluster_tools.dagger.config.utilities"
         _interface = "vivarium.cluster_tools.dagger.config.interface"
+        _tasks = "vivarium.cluster_tools.psimulate.simulation_tasks"
         _wf = "vivarium.cluster_tools.psimulate.jobmon_workflow"
         with (
             patch(f"{_utilities}.resolve_env_prefix", return_value="/envs/test_env"),
             patch(f"{_interface}.get_or_create_build_timestamp", return_value="ts"),
-            patch(f"{_interface}.OutputPaths") as mock_output_paths_cls,
-            patch(f"{_interface}.branches.Keyspace") as mock_keyspace_cls,
-            patch(
-                f"{_interface}.build_job_parameters_from_keyspace"
-            ) as mock_build_job_params,
+            patch(f"{_tasks}.resolve_output_paths") as mock_resolve_output_paths,
+            patch(f"{_tasks}.resolve_simulation_run") as mock_resolve_run,
+            patch(f"{_tasks}.jobs.build_job_list") as mock_build_job_list,
+            patch(f"{_tasks}.write_backup_metadata"),
             patch(f"{_wf}.write_metadata"),
         ):
             mock_output_paths = MagicMock()
@@ -802,9 +776,14 @@ class TestSimulationStep:
             mock_output_paths.backup_metadata_path = Path("/out/backup_meta.csv")
             mock_output_paths.metadata_dir = Path("/out/metadata")
             mock_output_paths.results_dir = Path("/out/results")
-            mock_output_paths_cls.from_entry_point_args.return_value = mock_output_paths
-            mock_keyspace_cls.from_branch_configuration.return_value = MagicMock()
-            mock_build_job_params.return_value = [MagicMock(task_id=0)]
+            mock_resolve_output_paths.return_value = mock_output_paths
+            mock_resolve_run.return_value = SimulationRun(
+                command="run",
+                output_paths=mock_output_paths,
+                keyspace=MagicMock(),
+                finished_sim_metadata=pd.DataFrame(),
+            )
+            mock_build_job_list.return_value = ([MagicMock(task_id=0)], 0)
 
             resources = ResourceConfig(
                 memory_gb=4,
