@@ -569,17 +569,18 @@ class ComprehensionColumnCreator(Component):
 
 
 class SimulantAdder(Component):
-    """Add simulants on the first time step."""
+    """Add simulants on the first time step, keeping what the creator returned."""
 
     def __init__(self, count: int) -> None:
         super().__init__()
         self.count = count
+        self.created_index: pd.Index[int] | None = None
 
     def setup(self, builder: Builder) -> None:
         self.simulant_creator = builder.population.get_simulant_creator()
 
     def on_time_step(self, event: Event) -> None:
-        self.simulant_creator(self.count, {})
+        self.created_index = self.simulant_creator(self.count, {})
 
 
 INITIAL_SIZE = 6
@@ -843,10 +844,32 @@ def test_read_spanning_both_frames_raises() -> None:
         sim.step()
 
 
-def test_zero_count_addition_changes_nothing() -> None:
-    """Adding no simulants leaves the population exactly as it was."""
+def test_creator_returns_the_whole_population_index() -> None:
+    """The creator hands back the whole population, not just the simulants it added."""
+    adder = SimulantAdder(ADDED)
     sim = InteractiveContext(
-        components=[ColumnCreator(), TypedColumnCreator(), SimulantAdder(0)],
+        components=[ColumnCreator(), adder],
+        configuration={"population": {"population_size": INITIAL_SIZE}},
+        setup=True,
+    )
+
+    sim.step()
+
+    assert adder.created_index is not None
+    assert adder.created_index.equals(pd.RangeIndex(0, INITIAL_SIZE + ADDED))
+    # The pass staged simulants and then handed them over, so it is over.
+    assert not sim._population.adding_simulants
+
+
+def test_zero_count_addition_changes_nothing() -> None:
+    """Adding no simulants leaves the population exactly as it was.
+
+    The creator still returns the whole population, so a caller cannot tell a
+    no-op addition apart from one that added nothing new.
+    """
+    adder = SimulantAdder(0)
+    sim = InteractiveContext(
+        components=[ColumnCreator(), TypedColumnCreator(), adder],
         configuration={"population": {"population_size": INITIAL_SIZE}},
         setup=True,
     )
@@ -855,7 +878,19 @@ def test_zero_count_addition_changes_nothing() -> None:
     sim.step()
 
     pd.testing.assert_frame_equal(sim._population.private_columns, before)
-    assert sim._population._staged_simulants is None
+    assert adder.created_index is not None
+    assert adder.created_index.equals(before.index)
+
+
+def test_staged_accessors_raise_outside_a_creation_pass() -> None:
+    """The staged frame and its index are only reachable during a creation pass."""
+    manager = _grow(ColumnCreator())._population
+    assert not manager.adding_simulants
+
+    with pytest.raises(PopulationError, match="No simulants are being added."):
+        _ = manager.staged_simulants
+    with pytest.raises(PopulationError, match="No simulants are being added."):
+        _ = manager.staged_index
 
 
 def test_partial_mid_sim_initialization_raises() -> None:
