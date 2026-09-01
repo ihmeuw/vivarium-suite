@@ -83,6 +83,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.downstream-matrix) }}
+    # Candidate python versions should not gate CI builds
+    continue-on-error: ${{ matrix.experimental }}
     steps:
       - name: Checkout code
         # Must precede the local action: `uses: ./...` resolves from the workspace.

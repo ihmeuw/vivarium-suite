@@ -1554,6 +1554,51 @@ class TestCLIBuildDownstreamMatrix:
         assert rc == 1
         assert "python_versions.json not found" in capsys.readouterr().err
 
+    def test_errors_on_candidate_conflict(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A stale candidate declaration fails the gate cleanly, not with a traceback."""
+        libs_dir = make_monorepo(
+            {
+                "a": {
+                    "deps": ["vivarium-b"],
+                    "python_versions": ["3.11"],
+                    "candidates": ["3.11"],
+                },
+                "b": {},
+            }
+        )
+        exit_code = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert exit_code == 1
+        assert "both a supported and a candidate" in capsys.readouterr().err
+
+    def test_ignores_a_candidate_conflict_in_the_released_lib(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Only the downstream set is checked; the released lib is CI's job.
+
+        ``build_python_matrix`` is handed the dependents, not the released libraries,
+        so a stale declaration in a released lib is invisible here. That is covered by
+        ``classify-changes`` instead, since releasing a lib means editing its files.
+        """
+        libs_dir = make_monorepo(
+            {
+                "a": {"deps": ["vivarium-b"]},
+                "b": {"python_versions": ["3.11"], "candidates": ["3.11"]},
+            }
+        )
+        exit_code = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert exit_code == 0
+        assert "both a supported and a candidate" not in capsys.readouterr().err
+
     def test_clean_exit_on_unknown_library(
         self,
         make_monorepo: MonorepoFactory,
@@ -1654,6 +1699,18 @@ class TestCLIClassifyChanges:
         rc = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
         assert rc == 1
         assert "python_versions.json not found" in capsys.readouterr().err
+
+    def test_errors_on_candidate_conflict(
+        self,
+        tmp_path: Path,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A stale candidate declaration fails CI cleanly, not with a traceback."""
+        libs_dir = make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.11"]}})
+        exit_code = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
+        assert exit_code == 1
+        assert "both a supported and a candidate" in capsys.readouterr().err
 
     def test_errors_on_missing_changed_files(
         self, tmp_path: Path, make_monorepo: MonorepoFactory

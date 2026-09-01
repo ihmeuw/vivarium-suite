@@ -235,13 +235,14 @@ def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
     released = args.released.split()
     try:
         downstream = get_transitive_downstreams(released, libs)
-        # Every dependent runs on its full python_versions.json matrix: the check runs
-        # once at merge, so there's no cost reason to sample a single canonical version.
+        # Every dependent runs on its full supported python versions matrix plus
+        # candidates: the check runs once at merge, so there's no cost reason to
+        # sample a single canonical version.
         matrix = build_python_matrix(downstream, libs)
     except KeyError as error:
         print(f"unknown library: {error.args[0]}", file=sys.stderr)
         return 1
-    except MissingPythonVersionsError as error:
+    except (MissingPythonVersionsError, CandidateVersionConflictError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
     print(json.dumps(matrix))
