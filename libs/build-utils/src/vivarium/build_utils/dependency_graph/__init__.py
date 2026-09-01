@@ -33,7 +33,8 @@ release:
    :func:`classify_changed_libs` reports which libraries have source changes (the
    set to resolve editably in flows 1 and 3) and which are bumping a version, and
    :func:`build_python_matrix` fans the libraries to check out over their supported
-   Python versions.
+   Python versions, plus a non-gating entry per version in any library's
+   ``[tool.vivarium.python-support] candidates``.
 
 Run as ``python -m vivarium.build_utils.dependency_graph <subcommand>``.
 

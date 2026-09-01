@@ -1,4 +1,4 @@
-**4.7.0 - 09/01/26**
+**4.7.0 - 09/02/26**
 
 - Support non-gating candidate Python versions in the CI matrix
 

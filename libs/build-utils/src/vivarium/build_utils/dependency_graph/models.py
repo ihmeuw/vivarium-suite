@@ -125,13 +125,12 @@ class ChangedLibs:
 
 
 # The GitHub Actions ``strategy.matrix`` payloads. Both are matrix objects, so both
-# wrap an ``include`` list of per-job entries; a shared generic base would need
-# PEP 646 generic TypedDicts (3.11+) and this package supports 3.10.
+# wrap an ``include`` list of per-job entries.
 #
 # ``PythonMatrixEntry`` needs the functional TypedDict form because ``python-version``
 # is the key GitHub Actions expects and a hyphen is not a valid attribute name. Its
 # ``library`` is the ``libs/`` directory name and ``python-version`` is one entry from
-# that library's ``python_versions.json``.
+# that library's ``python_versions.json`` or its declared candidate versions.
 #
 # ``experimental`` marks a candidate version (one being soaked in CI but not yet
 # supported). It is emitted on every entry, not just candidates.
