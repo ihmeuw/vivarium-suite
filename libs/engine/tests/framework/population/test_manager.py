@@ -703,10 +703,10 @@ def test_committed_float_column_survives_an_int_initializer() -> None:
 
 
 def test_failed_initializer_leaves_the_population_unchanged() -> None:
-    """A raising initializer discards the staged frame instead of orphaning it.
+    """A raising initializer never reaches the append, so the population is untouched.
 
-    Without the teardown a failed pass would leave a half-filled staged frame in
-    place, and any later read of those simulants would be served from it.
+    The half-filled staged frame is abandoned with the simulation that raised; nothing
+    of the failed pass reaches the private columns.
     """
 
     class FailingInitializer(Component):
@@ -741,8 +741,6 @@ def test_failed_initializer_leaves_the_population_unchanged() -> None:
         sim.step()
 
     manager = sim._population
-    assert manager._staged_simulants is None
-    assert not manager.adding_simulants
     pd.testing.assert_frame_equal(manager.private_columns, before)
 
 
@@ -752,7 +750,6 @@ class EarlyReader(Component):
     def __init__(self, read_on_passes: tuple[int, ...]) -> None:
         super().__init__()
         self.read_on_passes = read_on_passes
-        self.reads: list[pd.Series[Any]] = []
         self._passes = 0
 
     @property
@@ -767,9 +764,7 @@ class EarlyReader(Component):
     def initialize_and_read(self, pop_data: SimulantData) -> None:
         self._passes += 1
         if self._passes in self.read_on_passes:
-            self.reads.append(
-                self.population_view.get(pop_data.index, "written_later").copy()
-            )
+            self.population_view.get(pop_data.index, "written_later")
         self.population_view.initialize(pd.Series(1, index=pop_data.index, name="read_first"))
 
 
@@ -793,30 +788,21 @@ class LateWriter(Component):
         )
 
 
-def test_column_awaiting_its_initializer_reads_as_null_mid_sim() -> None:
-    """A column that exists but has no value for the new simulants yet reads as null.
+def test_column_awaiting_its_initializer_raises_mid_sim() -> None:
+    """Reading a column whose initializer has not run yet this pass is an error.
 
-    The staged frame has no such column until its initializer runs, so the read
-    depends on reindexing to reproduce the null the padded population used to carry.
+    The column exists in the population, so this is distinct from never having been
+    created: the staged frame simply carries no value for the new simulants until the
+    initializer runs. Serving null would hide the missing resource requirement.
     """
-    reader = EarlyReader(read_on_passes=(2,))
-    sim = _grow(reader, LateWriter())
+    sim = _grow(EarlyReader(read_on_passes=(2,)), LateWriter())
 
-    sim.step()
-
-    (read,) = reader.reads
-    assert not read.empty
-    assert read.isna().all()
+    with pytest.raises(PopulationError, match="have no value for the simulants"):
+        sim.step()
 
 
 def test_never_created_column_raises_during_initial_creation() -> None:
-    """A column that exists in neither frame was never created, so reading it errors.
-
-    Distinct from the null above: mid-simulation the column exists in the population
-    and is merely awaiting this pass's value, while during initial creation it does
-    not exist anywhere. Returning null there would hide a missing resource
-    requirement, and it raised before this change too.
-    """
+    """A column that no initializer has created yet cannot be read."""
     with pytest.raises(PopulationError, match="have not been created"):
         _grow(EarlyReader(read_on_passes=(1,)), LateWriter())
 

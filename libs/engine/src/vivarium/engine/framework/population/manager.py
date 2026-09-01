@@ -80,6 +80,18 @@ class PopulationManager(Manager):
         return self._private_columns
 
     @property
+    def staged_simulants(self) -> pd.DataFrame:
+        """The dataframe of the simulants currently being initialized.
+
+        Initializers write here rather than into the population, so the population is
+        never widened with null rows for simulants whose values have not been computed
+        yet. Appended to the private columns once every initializer has run.
+        """
+        if self._staged_simulants is None:
+            raise PopulationError("No simulants are being added.")
+        return self._staged_simulants
+
+    @property
     def adding_simulants(self) -> bool:
         """Whether simulants are currently being initialized."""
         return self._staged_simulants is not None
@@ -91,12 +103,6 @@ class PopulationManager(Manager):
     def __init__(self) -> None:
         self._private_columns: pd.DataFrame | None = None
         self._staged_simulants: pd.DataFrame | None = None
-        """The simulants being initialized, or None outside of a creation pass.
-
-        Initializers write here rather than into the population, so the population
-        is never widened with null rows for simulants whose values have not been
-        computed yet. Appended to ``_private_columns`` once every initializer has run.
-        """
         self._private_column_metadata: defaultdict[str, list[str]] = defaultdict(list)
         self._registered_initializers: list[Callable[[SimulantData], None]] = []
         self._last_id = -1
@@ -288,11 +294,6 @@ class PopulationManager(Manager):
         During a creation pass the new simulants live in their own frame, so a read of
         them is served from there.
 
-        Columns are taken by ``reindex``, so one that exists but has no value for these
-        simulants yet reads as null, which is what the padded population used to carry.
-        A column that exists in neither frame was never created at all, and that is an
-        error rather than a null.
-
         Raises
         ------
         PopulationError
@@ -300,29 +301,28 @@ class PopulationManager(Manager):
             the population. A simulant being added has no value yet for any column
             whose initializer has not run, so serving it alongside a settled one would
             quietly mix real values with nulls.
+        PopulationError
+            If no initializer has created one of ``columns`` yet.
+        PopulationError
+            If a column exists but the frame serving the read has no value for it.
         """
-        self._check_columns_created(columns)
         frame = self.private_columns
-        staged = self._staged_simulants
-        if staged is not None and index is not None:
-            is_staged = index.isin(staged.index)
-            if is_staged.all():
-                frame = staged
-            elif is_staged.any():
-                raise PopulationError(
-                    "A read cannot cover both the simulants being added and those "
-                    "already in the population, because a simulant being added has no "
-                    "value yet for any column whose initializer has not run. Read them "
-                    "separately."
-                )
-        frame = frame.reindex(columns=columns)
-        return frame if index is None else frame.loc[index]
+        created = set(frame.columns)
+        if self.adding_simulants:
+            staged = self.staged_simulants
+            created.update(staged.columns)
+            if index is not None:
+                is_staged = index.isin(staged.index)
+                if is_staged.all():
+                    frame = staged
+                elif is_staged.any():
+                    raise PopulationError(
+                        "A read cannot cover both the simulants being added and those "
+                        "already in the population, because a simulant being added has "
+                        "no value yet for any column whose initializer has not run. "
+                        "Read them separately."
+                    )
 
-    def _check_columns_created(self, columns: list[str]) -> None:
-        """Raise if any of ``columns`` has not been created by any initializer yet."""
-        created = set(self.private_columns.columns)
-        if self._staged_simulants is not None:
-            created.update(self._staged_simulants.columns)
         missing = [column for column in columns if column not in created]
         if missing:
             raise PopulationError(
@@ -330,13 +330,19 @@ class PopulationManager(Manager):
                 "initializer that reads a private column must require it, so that it "
                 "runs after the initializer that creates it."
             )
+        unset = [column for column in columns if column not in frame.columns]
+        if unset:
+            raise PopulationError(
+                f"The following private columns have no value for the simulants being "
+                f"read: {unset}. Their initializer has not run for these simulants, so "
+                "an initializer that reads them must require them."
+            )
+        return frame[columns] if index is None else frame.loc[index, columns]
 
     @property
     def staged_index(self) -> pd.Index[int]:
         """The index of the simulants currently being initialized."""
-        if self._staged_simulants is None:
-            raise PopulationError("No simulants are being added.")
-        return self._staged_simulants.index
+        return self.staged_simulants.index
 
     def get_population_index(self) -> pd.Index[int]:
         """Gets the index of the current population."""
@@ -394,7 +400,8 @@ class PopulationManager(Manager):
         in the population state table and then calls each initializer registered
         with the population system with a data object containing the state table
         index of the new simulants, the configuration info passed to the creator,
-        the current simulation time, and the size of the next time step.
+        the current simulation time, and the size of the next time step. It returns
+        the index of the whole population, including the simulants just created.
 
         Returns
         -------
@@ -418,32 +425,28 @@ class PopulationManager(Manager):
         if new_index.empty and not initial_pass:
             # Nothing to initialize. The initial pass still runs its initializers,
             # because they are what create the population's columns.
-            return new_index
+            return self.private_columns.index
 
         self._staged_simulants = pd.DataFrame(index=new_index)
-        try:
-            for initializer in self.resources.get_population_initializers():
-                initializer(
-                    SimulantData(
-                        new_index, population_configuration, self.clock(), self.step_size()
-                    )
+        for initializer in self.resources.get_population_initializers():
+            initializer(
+                SimulantData(
+                    new_index, population_configuration, self.clock(), self.step_size()
                 )
-            # Consolidate before appending; the staged columns are views into whatever
-            # each initializer handed over.
-            staged = self._staged_simulants.copy()
-            committed = self.private_columns
-            # A rowless population contributes nothing but its dtypes, and those are
-            # unreliable: an initializer that builds values by comprehension yields an
-            # empty list for an empty index, which pandas types object or float64
-            # whatever the values would have been. Concatenating would resolve to that
-            # dtype and lose the real one, so the staged frame stands alone. Note
-            # len() rather than .empty, which is also true of a frame that has rows
-            # but no columns.
-            self._private_columns = (
-                staged if len(committed) == 0 else pd.concat([committed, staged])
             )
-        finally:
-            self._staged_simulants = None
+        staged = self.staged_simulants
+        committed = self.private_columns
+        # A rowless population contributes nothing but its dtypes, and those are
+        # unreliable: an initializer that builds values by comprehension yields an
+        # empty list for an empty index, which pandas types object or float64
+        # whatever the values would have been. Concatenating would resolve to that
+        # dtype and lose the real one, so the staged frame stands alone. Note
+        # len() rather than .empty, which is also true of a frame that has rows
+        # but no columns.
+        self._private_columns = (
+            staged if len(committed) == 0 else pd.concat([committed, staged])
+        )
+        self._staged_simulants = None
 
         missing = {}
         for component, cols_created in self._private_column_metadata.items():
@@ -456,7 +459,7 @@ class PopulationManager(Manager):
                 f"that were not actually created: {missing}."
             )
 
-        return new_index
+        return self.private_columns.index
 
     def register_initializer(
         self,
@@ -872,6 +875,5 @@ class PopulationManager(Manager):
 
     def update(self, update: pd.DataFrame) -> None:
         # Writes during a creation pass belong to the simulants being added.
-        staged = self._staged_simulants
-        frame = staged if staged is not None else self.private_columns
+        frame = self.staged_simulants if self.adding_simulants else self.private_columns
         frame[update.columns] = update
