@@ -14,9 +14,17 @@
   - The keyspace and expanded branches are persisted, and ``dagger restart`` reads
     them (and the persisted model specification) rather than re-parsing its inputs
 
-- ``build_workflow`` wraps an existing task list; it no longer creates the tasks
-- ``OutputPaths.from_entry_point_args`` drops ``is_resume``; a restart already gets
-  a fresh logging timestamp from its command
+- A ``dagger`` resume is now recorded as ``run_type`` ``restart`` rather than ``run``
+  in the central performance logs, so that column is not comparable across this
+  release for dagger resumes
+
+- **Breaking change.** ``build_workflow`` takes a ``Tool`` and an existing task list;
+  it no longer creates the tasks, and its ``command``, ``job_parameters_list``,
+  ``output_paths``, and ``native_specification`` arguments are gone
+- **Breaking change.** ``OutputPaths.from_entry_point_args`` drops ``is_resume``;
+  a restart already gets a fresh logging timestamp from its command
+- Move ``report_initial_status`` from ``psimulate.runner`` to
+  ``psimulate.simulation_tasks``, which now runs it before writing any task metadata
 - Fix the ``backup_freq`` type hints, which claimed ``int`` for a value the CLI has
   always produced as a ``float``
 

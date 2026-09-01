@@ -329,7 +329,15 @@ def build_simulation_tasks(
 def write_backup_metadata(
     backup_metadata_path: Path, job_parameters_list: list[jobs.JobParameters]
 ) -> None:
-    """Append the job-to-backup-file lookup table the workers read to resume."""
+    """Append the job-to-backup-file lookup table the workers read to resume.
+
+    Parameters
+    ----------
+    backup_metadata_path
+        CSV to append to, created if it does not yet exist.
+    job_parameters_list
+        The jobs to record, one row each.
+    """
     lookup_table = []
     for params in job_parameters_list:
         job_dict: dict[str, Any] = {

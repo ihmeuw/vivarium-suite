@@ -44,8 +44,10 @@ def get_task_list(
     """Create Jobmon tasks for a list of job parameters.
 
     Writes per-task metadata JSON files and batch-creates one Jobmon Task
-    per job. This is the reusable core extracted from :func:`build_workflow`
-    so that workflow step configs can also produce simulation task lists.
+    per job. Called by
+    :func:`~vivarium.cluster_tools.psimulate.simulation_tasks.build_simulation_tasks`,
+    the shared pipeline both ``psimulate`` and ``dagger``'s simulation step
+    build their tasks through.
 
     Parameters
     ----------
