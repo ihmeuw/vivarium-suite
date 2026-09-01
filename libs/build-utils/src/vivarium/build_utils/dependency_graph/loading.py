@@ -7,6 +7,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from functools import reduce
 from pathlib import Path
+from typing import Any
 
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
@@ -18,31 +19,6 @@ else:  # Python < 3.11
     import tomli as tomllib
 
 from .models import DEFAULT_EXTRAS, Lib
-
-
-def read_candidate_versions(lib_path: Path) -> list[str]:
-    """Read a library's candidate Python versions from ``[tool.vivarium.python-support]``.
-
-    Parameters
-    ----------
-    lib_path
-        The ``libs/<name>`` directory holding the library's ``pyproject.toml``.
-
-    Returns
-    -------
-        The declared candidate versions (e.g. ``["3.14"]``), empty when the
-        ``pyproject.toml`` is absent or declares no non-empty ``candidates``.
-    """
-    pyproject_path = lib_path / "pyproject.toml"
-    if not pyproject_path.exists():
-        return []
-    with pyproject_path.open("rb") as handle:
-        pyproject = tomllib.load(handle)
-    tool = pyproject.get("tool", {})
-    declared = tool.get("vivarium", {}).get("python-support", {}).get("candidates")
-    if not declared:
-        return []
-    return [str(version) for version in declared]
 
 
 def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[str, Lib]:
@@ -117,8 +93,22 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
             path=lib_dir.resolve(),
             version=versions[name],
             upstreams=upstreams,
+            candidates=_get_candidates(pyprojects[name], lib_dir),
         )
     return libs
+
+
+def _get_candidates(pyproject: Mapping[str, Any], pkg_dir: Path) -> tuple[str, ...]:
+    """Return ``[tool.vivarium.python-support].candidates`` from a parsed pyproject."""
+    declared = (
+        pyproject.get("tool", {})
+        .get("vivarium", {})
+        .get("python-support", {})
+        .get("candidates")
+    )
+    if not declared:
+        return ()
+    return tuple(declared)
 
 
 def _get_dist_name(pyproject: Mapping[str, object], pkg_dir: Path) -> str:

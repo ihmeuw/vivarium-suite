@@ -64,6 +64,10 @@ class Lib:
         over the runtime dependencies plus whichever extras :func:`load_libs`
         resolved; if a upstream is constrained in more than one of those places,
         the constraints are intersected into a single :class:`SpecifierSet`.
+    candidates
+        Python candidate versions from ``[tool.vivarium.python-support] candidates``
+        - ones tested in CI ahead of being supported, whose failures cannot fail
+        a build. Empty when the library declares none.
     """
 
     name: str
@@ -71,6 +75,7 @@ class Lib:
     path: Path
     version: str
     upstreams: Mapping[str, SpecifierSet]
+    candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

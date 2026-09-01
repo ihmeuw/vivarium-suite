@@ -26,7 +26,6 @@ from vivarium.build_utils.dependency_graph import (
     get_transitive_downstreams,
     get_transitive_upstreams,
     load_libs,
-    read_candidate_versions,
     sort_topologically,
 )
 
@@ -1116,6 +1115,16 @@ class TestBuildPythonMatrix:
             {"library": "b", "python-version": "3.14", "experimental": True},
         ]
 
+    def test_repeated_candidate_is_emitted_once(self, make_monorepo: MonorepoFactory) -> None:
+        """A duplicated declaration must not run the same experimental job twice."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.13"], "candidates": ["3.14", "3.14"]}}
+            )
+        )
+        matrix = build_python_matrix(["a"], libs)
+        assert [entry["python-version"] for entry in matrix["include"]] == ["3.13", "3.14"]
+
     def test_no_candidates_yields_no_experimental_entries(
         self, make_monorepo: MonorepoFactory
     ) -> None:
@@ -1180,31 +1189,24 @@ class TestBuildPythonMatrix:
             build_python_matrix(["ghost"], libs)
 
 
-class TestReadCandidateVersions:
-    """Tests for ``read_candidate_versions``."""
+class TestLoadLibCandidates:
+    """Tests for the ``candidates`` field ``load_libs`` puts on each ``Lib``."""
 
-    def test_reads_declared_candidates(self, tmp_path: Path) -> None:
-        """Candidates are read from the lib's [tool.vivarium.python-support]."""
-        (tmp_path / "pyproject.toml").write_text(
-            '[tool.vivarium.python-support]\ncandidates = ["3.13", "3.14"]\n'
-        )
-        assert read_candidate_versions(tmp_path) == ["3.13", "3.14"]
+    def test_reads_declared_candidates(self, make_monorepo: MonorepoFactory) -> None:
+        """Candidates come off the lib's [tool.vivarium.python-support]."""
+        libs = load_libs(make_monorepo({"a": {"candidates": ["3.13", "3.14"]}}))
+        assert libs["a"].candidates == ("3.13", "3.14")
 
-    def test_missing_pyproject_yields_empty(self, tmp_path: Path) -> None:
-        """No pyproject means no candidates, not an error."""
-        assert read_candidate_versions(tmp_path) == []
+    def test_missing_section_yields_empty(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib without the section declares no candidates."""
+        libs = load_libs(make_monorepo({"a": {}}))
+        assert libs["a"].candidates == ()
 
-    def test_missing_section_yields_empty(self, tmp_path: Path) -> None:
-        """A pyproject without the section means no candidates."""
-        (tmp_path / "pyproject.toml").write_text("[tool.black]\nline-length = 94\n")
-        assert read_candidate_versions(tmp_path) == []
+    def test_empty_list_yields_empty(self, make_monorepo: MonorepoFactory) -> None:
+        """An emptied-out list turns the lib's candidate jobs off."""
+        libs = load_libs(make_monorepo({"a": {"candidates": []}}))
+        assert libs["a"].candidates == ()
 
-    def test_empty_list_yields_empty(self, tmp_path: Path) -> None:
-        """An emptied-out list turns the lib's candidate jobs off, as October does."""
-        (tmp_path / "pyproject.toml").write_text(
-            "[tool.vivarium.python-support]\ncandidates = []\n"
-        )
-        assert read_candidate_versions(tmp_path) == []
 
 
 class TestCLIInstallEditable:

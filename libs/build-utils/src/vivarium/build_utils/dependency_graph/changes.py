@@ -7,7 +7,7 @@ import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from .loading import read_candidate_versions
+from ..versions import version_key
 from .models import (
     CandidateVersionConflictError,
     ChangedLibs,
@@ -98,9 +98,8 @@ def classify_changed_libs(
 def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> PythonMatrix:
     """Fan each library in ``names`` out over the versions in its ``python_versions.json``.
 
-    Each library also gets a non-gating ``experimental`` entry for every version in its
-    own ``[tool.vivarium.python-support] candidates`` (see
-    :func:`~.loading.read_candidate_versions`); these are python versions being
+    Each library also gets a non-gating ``experimental`` entry for every version
+    in its :attr:`~.models.Lib.candidates`; these are python versions being
     soaked in CI without blocking the builds if they fail.
 
     Parameters
@@ -152,10 +151,10 @@ def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> Python
             raise MissingPythonVersionsError(
                 f"libs/{name}/python_versions.json not found or empty"
             )
-        candidates = read_candidate_versions(libs[name].path)
-        already_supported = sorted(
-            set(candidates) & set(supported_versions), key=_version_key
-        )
+        # Deduped so a repeated declaration cannot emit the same job twice.
+        candidates = sorted(set(libs[name].candidates), key=version_key)
+        supported = set(supported_versions)
+        already_supported = [c for c in candidates if c in supported]
         if already_supported:
             raise CandidateVersionConflictError(
                 f"libs/{name} declares {', '.join(already_supported)} as both a "
@@ -166,17 +165,11 @@ def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> Python
             include.append(
                 {"library": name, "python-version": version, "experimental": False}
             )
-        for candidate in sorted(candidates, key=_version_key):
+        for candidate in candidates:
             include.append(
                 {"library": name, "python-version": candidate, "experimental": True}
             )
     return {"include": include}
-
-
-def _version_key(version: str) -> tuple[int, int]:
-    """Return ``version``'s ``(major, minor)`` as ints, so ``3.9`` sorts below ``3.10``."""
-    major, minor = version.split(".")[:2]
-    return int(major), int(minor)
 
 
 def _read_python_versions(lib_path: Path) -> list[str]:
