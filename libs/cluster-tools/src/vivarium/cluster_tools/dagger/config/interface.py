@@ -226,16 +226,21 @@ def get_simulation_step_tasks(
     # so it reads that run's persisted keyspace and model specification the
     # same way ``psimulate restart`` does.
     command = COMMANDS.restart if is_resume else COMMANDS.run
+    # A restart is handed its root, so the launch time names only its logs and
+    # a fresh one keeps each attempt's logs separate; a fresh build needs the
+    # persisted timestamp to name the root itself.
+    launch_time = None if command == COMMANDS.restart else build_timestamp
     output_paths = simulation_tasks.resolve_output_paths(
         command=command,
         input_paths=input_paths,
-        launch_time=None if is_resume else build_timestamp,
+        launch_time=launch_time,
     )
+    extra_args = {"sim_verbosity": sim_verbosity}
     run = simulation_tasks.resolve_simulation_run(
         command=command,
         input_paths=input_paths,
         output_paths=output_paths,
-        extra_args={"sim_verbosity": sim_verbosity},
+        extra_args=extra_args,
     )
 
     return simulation_tasks.build_simulation_tasks(
@@ -243,7 +248,7 @@ def get_simulation_step_tasks(
         run,
         native_specification=resources.to_native_specification(name),
         backup_freq=backup_freq,
-        extra_args={"sim_verbosity": sim_verbosity},
+        extra_args=extra_args,
         max_attempts=max_attempts,
         env_prefix=resolve_step_env_prefix(name=name, environment=environment),
         template_name=f"psimulate_{name}",
