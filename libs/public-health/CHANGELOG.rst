@@ -1,3 +1,7 @@
+**6.6.1 - 08/31/26**
+
+- Support multiple ``MicrodataObserver`` instances in one simulation via an optional ``label``
+
 **6.6.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10 and add support for Python 3.13

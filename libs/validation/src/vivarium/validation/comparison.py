@@ -9,7 +9,8 @@ from vivarium.fuzzy_checker import FuzzyChecker, TargetIntervalConfig, TestResul
 from vivarium.validation.bundle import RatioMeasureDataBundle
 from vivarium.validation.constants import DRAW_INDEX, DataSource
 from vivarium.validation.data_transformation.calculations import stratify
-from vivarium.validation.data_transformation.measures import Measure
+from vivarium.validation.data_transformation.measures import RatioMeasure
+from vivarium.validation.data_transformation.types import RateConversionType
 from vivarium.validation.visualization import dataframe_utils
 
 StratValue = str | int | float
@@ -126,6 +127,7 @@ class Comparison(ABC):
         self,
         step_size: float | None,
         stratifications: Collection[str] | Literal["all"] = "all",
+        rate_conversion_type: RateConversionType = "linear",
     ) -> None:
         pass
 
@@ -133,17 +135,31 @@ class Comparison(ABC):
     def verified(self) -> bool | None:
         """Whether this comparison passes validation.
 
-        Returns None if verification has not been run yet,
-        True if all test results pass, False if any fail.
+        Returns None if verification has not been run yet, True if every test passed,
+        and False if any failed or could not be run at all. A test that did not
+        evaluate leaves ``reject_null`` False without having decided anything, so it
+        must not count towards a pass.
         """
         if "overall" not in self.proportion_test_results:
             return None
+        results = self.test_results
+        if not all(result.evaluated for result in results):
+            return False
+        return not any(result.reject_null for result in results)
+
+    @property
+    def test_results(self) -> list[TestResult]:
+        """Every test result this comparison produced, overall and stratified."""
+        if "overall" not in self.proportion_test_results:
+            return []
         overall = self.proportion_test_results["overall"]
         stratified = self.proportion_test_results.get("stratified", {})
-        reject_nulls = [overall.reject_null] + [
-            tr.reject_null for group in stratified.values() for tr in group.values()
-        ]
-        return not any(reject_nulls)
+        return [overall] + [tr for group in stratified.values() for tr in group.values()]
+
+    @property
+    def unevaluated_results(self) -> list[TestResult]:
+        """The test results that never produced a usable Bayes factor."""
+        return [result for result in self.test_results if not result.evaluated]
 
     @property
     def stratification_metadata(self) -> dict[str, Any]:
@@ -194,7 +210,7 @@ class FuzzyComparison(Comparison):
         self.reference_bundle = reference_bundle
         if self.test_bundle.measure != self.reference_bundle.measure:
             raise ValueError("Test and reference measures must be the same.")
-        self.measure: Measure = self.test_bundle.measure
+        self.measure: RatioMeasure = self.test_bundle.measure
         self.proportion_test_results: dict[
             str, TestResult | dict[tuple[str, ...], dict[str, TestResult]]
         ] = {
@@ -319,8 +335,19 @@ class FuzzyComparison(Comparison):
         self,
         step_size: float | None,
         stratifications: Collection[str] | Literal["all"] = "all",
+        rate_conversion_type: RateConversionType = "linear",
     ) -> None:
-        """Verify test and reference data are statistically indistinguishable according to the fuzzy checker."""
+        """Verify test and reference data are statistically indistinguishable according to the fuzzy checker.
+
+        Raises
+        ------
+        ValueError
+            If step_size is None and the measure holds person-time or an annual rate,
+            neither of which the measure can convert without it.
+        NotImplementedError
+            If the test data is not from a simulation, or the reference data is not
+            from an artifact or GBD.
+        """
 
         if self.test_bundle.source != DataSource.SIM:
             raise NotImplementedError("Verification is only implemented for SIM test data.")
@@ -349,16 +376,20 @@ class FuzzyComparison(Comparison):
             key: stratify(data, stratify_cols)
             for key, data in self.reference_bundle.datasets.items()
         }
-        # Scale rates to the step size of the simulation
-        if step_size is None or "population" in self.measure.measure_key:
-            target = ref_datasets["data"]
-        else:
-            target = ref_datasets["data"] / step_size
+        numerator = self.measure.numerator.to_opportunity_counts(
+            test_datasets["numerator_data"], step_size
+        )
+        denominator = self.measure.denominator.to_opportunity_counts(
+            test_datasets["denominator_data"], step_size
+        )
+        target = self.measure.get_as_probability(
+            ref_datasets["data"], step_size, rate_conversion_type
+        )
 
         fuzzy_checker.test_proportion_vectorized(
             name=self.measure.measure_key,
-            observed_numerator=test_datasets["numerator_data"],
-            observed_denominator=test_datasets["denominator_data"],
+            observed_numerator=numerator,
+            observed_denominator=denominator,
             target_proportion=target,
             target_interval_config=self.target_interval_configuration,
         )

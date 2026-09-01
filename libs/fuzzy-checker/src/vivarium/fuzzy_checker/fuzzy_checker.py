@@ -13,7 +13,11 @@ import scipy.stats
 from loguru import logger
 from scipy.stats._distn_infrastructure import rv_continuous_frozen, rv_discrete_frozen
 
-from vivarium.fuzzy_checker.data_structures import TargetIntervalConfig, TestResult
+from vivarium.fuzzy_checker.data_structures import (
+    Confidence,
+    TargetIntervalConfig,
+    TestResult,
+)
 
 
 class FuzzyChecker:
@@ -127,6 +131,16 @@ class FuzzyChecker:
             inconclusive_bayes_factor_cutoff=inconclusive_bayes_factor_cutoff,
         )
 
+        if not test_proportion.evaluated:
+            raise ValueError(
+                f"The '{name}' test did not evaluate: its Bayes factor is nan, so it "
+                "neither passed nor failed. This usually means a distribution was built "
+                "with out-of-domain parameters, such as a target proportion outside "
+                f"[0, 1] (target was {test_proportion.target_lower_bound:g} to "
+                f"{test_proportion.target_upper_bound:g}) or a non-integral denominator "
+                f"(was {test_proportion.observed_denominator})."
+            )
+
         if test_proportion.reject_null:
             if test_proportion.observed_proportion < test_proportion.target_lower_bound:
                 raise AssertionError(
@@ -174,7 +188,17 @@ class FuzzyChecker:
         fail_bayes_factor_cutoff: float = 100.0,
         inconclusive_bayes_factor_cutoff: float = 0.1,
     ) -> TestResult:
-        """Convert a dictionary representation of a test result to a TestResult object."""
+        """Run the hypothesis test for one observed proportion and return its result.
+
+        A test that does not evaluate is returned like any other; read it back with
+        ``TestResult.evaluated``.
+
+        Raises
+        ------
+        AssertionError
+            If there are more events than opportunities, or the target bounds are
+            inverted.
+        """
         if isinstance(target_proportion, tuple):
             target_lower_bound, target_upper_bound = target_proportion
         else:
@@ -484,9 +508,20 @@ class FuzzyChecker:
         inconclusive_bayes_factor_cutoff: float,
         bug_issue_distribution: rv_discrete_frozen,
         no_bug_issue_distribution: rv_discrete_frozen,
-    ) -> tuple[str, float | None, float | None]:
-        """Determine confidence level and compute edge Bayes factors."""
-        confidence = "Conclusive"
+    ) -> tuple[Confidence, float | None, float | None]:
+        """Determine confidence level and compute edge Bayes factors.
+
+        The edge Bayes factors are what this test would have produced at its most
+        extreme possible observations: zero events, and events at every opportunity.
+        Each is None when the corresponding target bound cannot be exceeded, or when
+        the test did not evaluate.
+        """
+        if np.isnan(bayes_factor):
+            # Every comparison below would be False, leaving the default "Conclusive"
+            # on a test that never ran.
+            return "Did not evaluate", None, None
+
+        confidence: Confidence = "Conclusive"
         lower_bound_bayes_factor = None
         upper_bound_bayes_factor = None
 

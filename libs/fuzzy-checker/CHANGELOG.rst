@@ -1,3 +1,10 @@
+**0.5.0 - 08/28/26**
+
+- added a new ``evaluated`` property to distinguish tests that did not generate
+  a numerical result, namely NaN Bayes factors.
+- ``assert_proportion`` raises ``ValueError`` on such a test; ``test_proportion``
+  returns it, so one group no longer abandons a whole batch
+
 **0.4.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10 and add support for Python 3.12 and 3.13

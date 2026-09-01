@@ -217,6 +217,11 @@ def test_risk_state_person_time(risk_state_person_time_data: pd.DataFrame) -> No
     """Test RiskStatePersonTime formatting without sum_all."""
     formatter = RiskStatePersonTime("child_stunting")
 
+    assert formatter.measure == "person_time"
+    assert (
+        formatter.to_opportunity_counts(pd.DataFrame({"value": [10.0]}), 0.1)["value"].iloc[0]
+        == 100
+    )
     assert formatter.entity == "child_stunting"
     assert formatter.raw_dataset_name == "person_time_child_stunting"
     assert formatter.sum_all == False
@@ -249,6 +254,11 @@ def test_risk_state_person_time_sum_all(risk_state_person_time_data: pd.DataFram
     """Test RiskStatePersonTime formatting with sum_all=True."""
     formatter = RiskStatePersonTime("child_stunting", sum_all=True)
 
+    assert formatter.measure == "person_time"
+    assert (
+        formatter.to_opportunity_counts(pd.DataFrame({"value": [10.0]}), 0.1)["value"].iloc[0]
+        == 100
+    )
     assert formatter.entity == "child_stunting"
     assert formatter.raw_dataset_name == "person_time_child_stunting"
     assert formatter.sum_all == True
