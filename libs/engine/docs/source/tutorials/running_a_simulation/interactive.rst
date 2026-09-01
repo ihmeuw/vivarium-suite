@@ -92,10 +92,7 @@ contains.
          | in a process configures logging; later ones inherit it.
    *   - | ``observe``
        - | Whether to observe results. False (the default) means no observations
-         | are recorded and no results generated. The observers' listeners are
-         | registered during setup, so this has to be decided here; it cannot be
-         | switched on afterwards. See
-         | :ref:`getting results <interactive_results>`.
+         | are recorded and no results generated.
    *   - | ``setup``
        - | Whether to set the simulation up on construction. True (the default)
          | freezes the configuration; pass False to change configuration first,
@@ -105,9 +102,8 @@ contains.
 ``observe`` and ``setup`` must be passed by keyword. The other six may be passed
 positionally, in the order shown above.
 
-The interactive context can be generated from several different kinds of data
-and may be generated at two separate :ref:`lifecycle <lifecycle_concept>` stages.
-We'll explore several examples of generating simulation objects here.
+The interactive context can be generated from several different kinds of data;
+we'll explore several examples of generating simulation objects here.
 
 With a model specification file (the automatic way)
 +++++++++++++++++++++++++++++++++++++++++++++++++++
