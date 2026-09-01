@@ -60,8 +60,6 @@ class SimulationTasks(NamedTuple):
 
     tasks: list[Task]
     """One Jobmon task per simulation still to be run."""
-    job_parameters: list[jobs.JobParameters]
-    """The parameters backing ``tasks``, in the same order."""
     num_jobs_completed: int
     """How many of the keyspace's simulations are already complete."""
 
@@ -217,7 +215,8 @@ def build_simulation_tasks(
 
     Returns
     -------
-        The tasks, their backing job parameters, and the completed count.
+        The tasks and how many of the keyspace's simulations are already
+        complete.
     """
     logger.debug("Parsing arguments into worker job parameters.")
     restart = run.command == COMMANDS.restart
@@ -239,9 +238,7 @@ def build_simulation_tasks(
         num_jobs_completed = len(run.finished_sim_metadata)
 
     if not job_parameters:
-        return SimulationTasks(
-            tasks=[], job_parameters=[], num_jobs_completed=num_jobs_completed
-        )
+        return SimulationTasks(tasks=[], num_jobs_completed=num_jobs_completed)
     logger.debug(f"Found {len(job_parameters)} jobs to run.")
 
     if backup_freq is not None:
@@ -263,7 +260,6 @@ def build_simulation_tasks(
             env_prefix=env_prefix,
             template_name=template_name,
         ),
-        job_parameters=job_parameters,
         num_jobs_completed=num_jobs_completed,
     )
 

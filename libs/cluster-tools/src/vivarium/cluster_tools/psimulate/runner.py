@@ -213,7 +213,6 @@ def main(
         extra_args=extra_args,
         max_attempts=max_attempts,
     )
-    job_parameters = sim_tasks.job_parameters
     num_jobs_completed = sim_tasks.num_jobs_completed
     # Let the user know if something is fishy at this point.
     total_num_jobs = len(run.keyspace)
@@ -263,7 +262,7 @@ def main(
     # Count task outcomes from Jobmon's in-memory task statuses
     num_done_total = client.count_completed_tasks(workflow)
     num_completed_this_run = num_done_total - num_jobs_completed
-    num_jobs_attempted = len(job_parameters) - num_jobs_completed
+    num_jobs_attempted = len(sim_tasks.tasks) - num_jobs_completed
     num_failed = num_jobs_attempted - num_completed_this_run
     num_successful = num_jobs_completed + num_completed_this_run
 
