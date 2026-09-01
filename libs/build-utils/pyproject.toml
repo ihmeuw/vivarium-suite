@@ -98,8 +98,7 @@ strict = true
 disallow_any_unimported = false
 implicit_reexport = true
 exclude = [
-    # Anchored: an unanchored "build" also matches the "build" in "build_utils",
-    # which excluded this package's entire src/ tree from type checking.
+    # Anchor so it doesn't match the "build" in "build_utils"
     "^build/",
     "setup.py",
 ]
