@@ -1325,8 +1325,8 @@ class TestCLIInstallEditable:
     ) -> None:
         """`install-editable` for a target not under libs/ exits non-zero with a clear message."""
         libs_dir = make_monorepo({"build-utils": {}, "a": {}})
-        rc = main_with(["install-editable", "ghost", "--libs-dir", str(libs_dir)])
-        assert rc == 1
+        exit_code = main_with(["install-editable", "ghost", "--libs-dir", str(libs_dir)])
+        assert exit_code == 1
         assert "unknown library" in capsys.readouterr().err
 
 
@@ -1485,10 +1485,10 @@ class TestCLIBuildReleaseMatrix:
         libs_dir = make_monorepo({"build-utils": {}, "a": {}})
         pairs = tmp_path / "release_pairs.txt"
         pairs.write_text("ghost 1.0.0\n")  # non-monorepo library!
-        rc = main_with(
+        exit_code = main_with(
             ["build-release-matrix", "--versions", str(pairs), "--libs-dir", str(libs_dir)]
         )
-        assert rc == 1
+        assert exit_code == 1
         assert "unknown library" in capsys.readouterr().err
 
 
@@ -1502,10 +1502,10 @@ class TestCLIBuildDownstreamMatrix:
     ) -> None:
         """The downstream lib is emitted; the released lib is excluded."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out == {
             "include": [{"library": "a", "python-version": "3.11", "experimental": False}]
@@ -1518,10 +1518,10 @@ class TestCLIBuildDownstreamMatrix:
     ) -> None:
         """Releasing a library nothing depends on yields an empty include."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "a", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
         assert json.loads(capsys.readouterr().out) == {"include": []}
 
     def test_shared_dependent_appears_once(
@@ -1537,10 +1537,10 @@ class TestCLIBuildDownstreamMatrix:
                 "y": {},
             }
         )
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "x y", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out == {
             "include": [
@@ -1557,10 +1557,10 @@ class TestCLIBuildDownstreamMatrix:
         libs_dir = make_monorepo(
             {"a": {"deps": ["vivarium-b"], "python_versions": ["3.11", "3.12"]}, "b": {}}
         )
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out == {
             "include": [
@@ -1578,10 +1578,10 @@ class TestCLIBuildDownstreamMatrix:
         libs_dir = make_monorepo(
             {"a": {"deps": ["vivarium-b"], "omit_python_versions": True}, "b": {}}
         )
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 1
+        assert exit_code == 1
         assert "python_versions.json not found" in capsys.readouterr().err
 
     def test_errors_on_candidate_conflict(
@@ -1636,10 +1636,10 @@ class TestCLIBuildDownstreamMatrix:
     ) -> None:
         """An unknown released library name exits non-zero with a clear message."""
         libs_dir = make_monorepo({"build-utils": {}, "a": {}})
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "ghost", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 1
+        assert exit_code == 1
         assert "unknown library" in capsys.readouterr().err
 
 
@@ -1669,8 +1669,8 @@ class TestCLIClassifyChanges:
     ) -> None:
         """The JSON carries each key the detect jobs pipe into $GITHUB_OUTPUT."""
         libs_dir = make_monorepo({"a": {}, "b": {}})
-        rc = self._classify(tmp_path, libs_dir, ["libs/a/CHANGELOG.rst"])
-        assert rc == 0
+        exit_code = self._classify(tmp_path, libs_dir, ["libs/a/CHANGELOG.rst"])
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out == {
             "source-changed": ["a"],
@@ -1691,8 +1691,8 @@ class TestCLIClassifyChanges:
     ) -> None:
         """A diff touching no lib reports has-changes false with an empty matrix."""
         libs_dir = make_monorepo({"a": {}, "b": {}})
-        rc = self._classify(tmp_path, libs_dir, ["README.md"])
-        assert rc == 0
+        exit_code = self._classify(tmp_path, libs_dir, ["README.md"])
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out["has-changes"] is False
         assert out["matrix"] == {"include": []}
@@ -1707,8 +1707,8 @@ class TestCLIClassifyChanges:
         libs_dir = make_monorepo(
             {"a": {"python_versions": ["3.11", "3.12"]}, "b": {"python_versions": ["3.11"]}}
         )
-        rc = self._classify(tmp_path, libs_dir, [".github/workflows/ci.yml"])
-        assert rc == 0
+        exit_code = self._classify(tmp_path, libs_dir, [".github/workflows/ci.yml"])
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out["matrix"]["include"] == [
             {"library": "a", "python-version": "3.11", "experimental": False},
@@ -1726,8 +1726,8 @@ class TestCLIClassifyChanges:
     ) -> None:
         """A changed lib with no python_versions.json fails CI instead of being dropped."""
         libs_dir = make_monorepo({"a": {"omit_python_versions": True}})
-        rc = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
-        assert rc == 1
+        exit_code = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
+        assert exit_code == 1
         assert "python_versions.json not found" in capsys.readouterr().err
 
     def test_errors_on_candidate_conflict(
@@ -1768,10 +1768,10 @@ class TestCLIVerifyEditable:
         """`verify-editable` exits 0 when each selected upstream is an editable install."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
         monkeypatch.setattr(dependency_graph.cli, "_is_editable_install", lambda dist: True)
-        rc = main_with(
+        exit_code = main_with(
             ["verify-editable", "a", "--changed", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
 
     def test_fails_when_upstream_from_pypi(
         self,
@@ -1782,10 +1782,10 @@ class TestCLIVerifyEditable:
         """`verify-editable` exits non-zero when a selected upstream is not an editable install."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
         monkeypatch.setattr(dependency_graph.cli, "_is_editable_install", lambda dist: False)
-        rc = main_with(
+        exit_code = main_with(
             ["verify-editable", "a", "--changed", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 1
+        assert exit_code == 1
         assert "not editable" in capsys.readouterr().err
 
     def test_noop_when_no_upstreams(
@@ -1793,8 +1793,10 @@ class TestCLIVerifyEditable:
     ) -> None:
         """`verify-editable` exits 0 and checks nothing when the target has no changed upstreams."""
         libs_dir = make_monorepo({"a": {}, "b": {}})
-        rc = main_with(["verify-editable", "a", "--changed", "", "--libs-dir", str(libs_dir)])
-        assert rc == 0
+        exit_code = main_with(
+            ["verify-editable", "a", "--changed", "", "--libs-dir", str(libs_dir)]
+        )
+        assert exit_code == 0
         assert "no changed in-tree upstreams" in capsys.readouterr().out
 
 
