@@ -8,6 +8,7 @@ timestep, concatenated across timesteps. Unlike the stratified public health obs
 raw per-simulant rows so that derived quantities can be derived downstream.
 
 """
+
 from __future__ import annotations
 
 import math
@@ -20,6 +21,7 @@ from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
 
 if TYPE_CHECKING:
+    from vivarium.config_tree.main import ConfigTree
     from vivarium.engine.framework.engine import Builder
     from vivarium.engine.framework.event import Event
     from vivarium.engine.framework.population import SimulantData
@@ -36,7 +38,8 @@ class MicrodataObserver(Observer):
 
     Configuration
     -------------
-    Configured under this observer's name (e.g. ``microdata_observer``) in the model spec:
+    Configured under this observer's name (``microdata_observer``, or
+    ``microdata_observer.<label>`` for a labeled instance) in the model spec:
 
     columns
         The population columns/attributes to record. Required; an empty list is an error.
@@ -59,17 +62,44 @@ class MicrodataObserver(Observer):
         they leave the filter or simulation, so ``row_limit`` stays an upper bound. False by default.
     """
 
+    def __init__(self, label: str | None = None) -> None:
+        """Create a microdata observer with optional label for unique naming."""
+        super().__init__()
+        self.label = label
+
+    @property
+    def name(self) -> str:
+        """The component name, ``microdata_observer``, suffixed with ``.<label>`` if labeled."""
+        if self.label is None or self.label == "":
+            return "microdata_observer"
+        return f"microdata_observer.{self.label}"
+
     @property
     def configuration_defaults(self) -> dict[str, Any]:
-        config = super().configuration_defaults
-        config[self.name] = {
-            "columns": [],
-            "filter": [],
-            "timesteps": [],
-            "row_limit": None,
-            "single_random_sample": False,
+        """The default configuration, keyed under this instance's name.
+
+        Unlike other observers, omit the inherited per-observer ``stratification`` block:
+        a concatenating observation never uses it (see ``get_configuration``), and
+        multiple instances would collide writing the same stratification key.
+        """
+        return {
+            self.name: {
+                "columns": [],
+                "filter": [],
+                "timesteps": [],
+                "row_limit": None,
+                "single_random_sample": False,
+            }
         }
-        return config
+
+    def get_configuration(self, builder: Builder) -> ConfigTree:
+        """Return this observer's own config block, like a plain ``Component``.
+
+        Override the ``Observer`` base, which returns the per-observer ``stratification``
+        block instead: this observer registers no stratified observations and declares no
+        such block, and the base lookup would raise for the missing key during setup.
+        """
+        return builder.configuration.get_tree(self.name)
 
     def setup(self, builder: Builder) -> None:
         self.randomness = builder.randomness.get_stream(self.name)
