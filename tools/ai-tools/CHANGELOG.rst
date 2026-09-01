@@ -1,9 +1,7 @@
 **0.27.0 - 09/01/26**
 
 - ``design-doc``: create new design docs in the ``_ Draft and Exploratory`` Hub
-  subdirectory instead of directly under ``Design documents``, keeping the
-  curated folder free of unratified drafts (MIC-7228). Ratification is a human
-  step: someone moves the page up and adds the ``requirements`` label.
+  subdirectory instead of directly under ``Design documents``
 
 **0.26.0 - 08/17/26**
 
