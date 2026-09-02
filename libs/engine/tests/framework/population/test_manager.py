@@ -659,16 +659,85 @@ def test_mid_sim_addition_preserves_dtype_and_values(column: str) -> None:
     assert (grown == TypedColumnCreator.COLUMNS[column]).all()
 
 
+class DtypeShifter(Component):
+    """Initialize a column with one value on the first pass and another after."""
+
+    def __init__(self, first: Any, later: Any) -> None:
+        super().__init__()
+        self.first = first
+        self.later = later
+        self._passes = 0
+
+    @property
+    def columns_created(self) -> list[str]:
+        return ["shifting"]
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_initializer(
+            initializer=self.initialize_column, columns=self.columns_created
+        )
+
+    def initialize_column(self, pop_data: SimulantData) -> None:
+        self._passes += 1
+        value = self.first if self._passes == 1 else self.later
+        self.population_view.initialize(
+            pd.Series(value, index=pop_data.index, name="shifting")
+        )
+
+
+@pytest.mark.parametrize(
+    "first, later",
+    [
+        pytest.param(1, 3.7, id="int_column_given_a_fractional_float"),
+        pytest.param(1, 3.0, id="int_column_given_a_whole_float"),
+        pytest.param(1, "spam", id="int_column_given_a_string"),
+        pytest.param(True, 1, id="bool_column_given_an_int"),
+        pytest.param(pd.Timestamp("2020-01-01"), "spam", id="datetime_column_given_a_string"),
+    ],
+)
+def test_a_pass_may_not_retype_a_committed_column(first: Any, later: Any) -> None:
+    """An initializer cannot change the dtype of a column the population already has.
+
+    The whole-float case raises even though the values would coerce losslessly.
+    Accepting it would make the check depend on the values a pass happened to
+    produce, so the same initializer would pass on one seed and raise on another.
+    """
+    sim = _grow(DtypeShifter(first, later))
+
+    with pytest.raises(PopulationError, match="would change the dtype"):
+        sim.step()
+
+
 def test_committed_float_column_survives_an_int_initializer() -> None:
     """An int-typed initializer no longer truncates a committed float column.
 
     The padded population let the whole column take the update's dtype, so existing
     simulants' values were rewritten as ints. The staged frame carries the int only
-    for the new simulants, and the append resolves back to float.
+    for the new simulants, and the append promotes it back to float. This is the one
+    direction the dtype check permits, so it also pins the check against overreach.
+    """
+    sim = _grow(DtypeShifter(1.5, 3))
+    committed = sim._population.private_columns["shifting"]
+    assert committed.dtype == np.dtype("float64")
+    assert (committed == 1.5).all()
+
+    sim.step()
+
+    grown = sim._population.private_columns["shifting"]
+    assert grown.dtype == np.dtype("float64")
+    pd.testing.assert_series_equal(grown.loc[committed.index], committed)
+    assert (grown.loc[NEW_INDEX] == 3.0).all()
+
+
+def test_a_pass_must_initialize_every_committed_column() -> None:
+    """An initializer cannot skip a column the population already holds.
+
+    Skipping it appends nulls for the new simulants. That retypes an int column but
+    leaves a float one intact, so the dtype check alone would not catch it.
     """
 
-    class FloatThenInt(Component):
-        """Initialize a float column, then hand it int values on later passes."""
+    class SkipsLaterPasses(Component):
+        """Create the column on the first pass, then never initialize it again."""
 
         def __init__(self) -> None:
             super().__init__()
@@ -676,7 +745,7 @@ def test_committed_float_column_survives_an_int_initializer() -> None:
 
         @property
         def columns_created(self) -> list[str]:
-            return ["a_float"]
+            return ["skipped"]
 
         def setup(self, builder: Builder) -> None:
             builder.population.register_initializer(
@@ -685,22 +754,15 @@ def test_committed_float_column_survives_an_int_initializer() -> None:
 
         def initialize_column(self, pop_data: SimulantData) -> None:
             self._passes += 1
-            value = 1.5 if self._passes == 1 else 3
-            self.population_view.initialize(
-                pd.Series(value, index=pop_data.index, name="a_float")
-            )
+            if self._passes == 1:
+                self.population_view.initialize(
+                    pd.Series(1.5, index=pop_data.index, name="skipped")
+                )
 
-    sim = _grow(FloatThenInt())
-    committed = sim._population.private_columns["a_float"]
-    assert committed.dtype == np.dtype("float64")
-    assert (committed == 1.5).all()
+    sim = _grow(SkipsLaterPasses())
 
-    sim.step()
-
-    grown = sim._population.private_columns["a_float"]
-    assert grown.dtype == np.dtype("float64")
-    pd.testing.assert_series_equal(grown.loc[committed.index], committed)
-    assert (grown.loc[NEW_INDEX] == 3.0).all()
+    with pytest.raises(PopulationError, match="No initializer produced values"):
+        sim.step()
 
 
 def test_failed_initializer_leaves_the_population_unchanged() -> None:

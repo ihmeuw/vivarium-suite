@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pandas as pd
 
@@ -83,9 +83,9 @@ class PopulationManager(Manager):
     def staged_simulants(self) -> pd.DataFrame:
         """The dataframe of the simulants currently being initialized.
 
-        Initializers write here rather than into the population, so the population is
-        never widened with null rows for simulants whose values have not been computed
-        yet. Appended to the private columns once every initializer has run.
+        Initializers write here rather than into the population, so the population
+        never gains null rows for simulants whose values have not been computed yet.
+        Appended to the private columns once every initializer has run.
         """
         if self._staged_simulants is None:
             raise PopulationError("No simulants are being added.")
@@ -309,7 +309,7 @@ class PopulationManager(Manager):
         frame = self.private_columns
         created = set(frame.columns)
         if self.adding_simulants:
-            staged = self.staged_simulants
+            staged = cast(pd.DataFrame, self._staged_simulants)
             created.update(staged.columns)
             if index is not None:
                 is_staged = index.isin(staged.index)
@@ -436,16 +436,17 @@ class PopulationManager(Manager):
             )
         staged = self.staged_simulants
         committed = self.private_columns
-        # A rowless population contributes nothing but its dtypes, and those are
-        # unreliable: an initializer that builds values by comprehension yields an
-        # empty list for an empty index, which pandas types object or float64
-        # whatever the values would have been. Concatenating would resolve to that
-        # dtype and lose the real one, so the staged frame stands alone. Note
-        # len() rather than .empty, which is also true of a frame that has rows
-        # but no columns.
-        self._private_columns = (
-            staged if len(committed) == 0 else pd.concat([committed, staged])
-        )
+        if len(committed) == 0:
+            # A rowless population contributes nothing but its dtypes, and those are
+            # unreliable: an initializer that builds values by comprehension yields an
+            # empty list for an empty index, which pandas types without reference to
+            # what the values would have been. Concatenating would resolve to that
+            # dtype and lose the real one, so the staged frame stands alone.
+            self._private_columns = staged
+        else:
+            grown = pd.concat([committed, staged])
+            self._check_committed_columns_survive(committed, staged, grown)
+            self._private_columns = grown
         self._staged_simulants = None
 
         missing = {}
@@ -460,6 +461,41 @@ class PopulationManager(Manager):
             )
 
         return self.private_columns.index
+
+    @staticmethod
+    def _check_committed_columns_survive(
+        committed: pd.DataFrame, staged: pd.DataFrame, grown: pd.DataFrame
+    ) -> None:
+        """Raise if appending the staged simulants damaged a committed column.
+
+        A pass must produce a value for every column the population already holds,
+        and may not retype one. Both checks are needed: a column missing from the
+        staged frame is appended as null, which retypes an int column but leaves a
+        float one alone, so neither check subsumes the other.
+
+        The append may promote the staged values up to the committed dtype, so an
+        int handed to a float column is fine. It may not promote the column itself,
+        which would retype the simulants already in the population.
+        """
+        skipped = [column for column in committed.columns if column not in staged.columns]
+        if skipped:
+            raise PopulationError(
+                "No initializer produced values for the following private columns, "
+                f"which the population already holds: {skipped}. Appending the new "
+                "simulants would leave them null."
+            )
+        retyped = {
+            column: f"{committed[column].dtype} -> {grown[column].dtype} "
+            f"(initializer gave {staged[column].dtype})"
+            for column in committed.columns
+            if grown[column].dtype != committed[column].dtype
+        }
+        if retyped:
+            raise PopulationError(
+                "Appending the simulants being added would change the dtype of the "
+                f"following private columns: {retyped}. An initializer must produce "
+                "values that the column's existing dtype can hold."
+            )
 
     def register_initializer(
         self,
@@ -875,5 +911,9 @@ class PopulationManager(Manager):
 
     def update(self, update: pd.DataFrame) -> None:
         # Writes during a creation pass belong to the simulants being added.
-        frame = self.staged_simulants if self.adding_simulants else self.private_columns
+        frame = (
+            cast(pd.DataFrame, self._staged_simulants)
+            if self.adding_simulants
+            else self.private_columns
+        )
         frame[update.columns] = update

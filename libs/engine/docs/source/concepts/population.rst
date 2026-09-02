@@ -225,8 +225,13 @@ acceptable.
 
 Only once every initializer has run is the staged frame appended to the state table.
 Deferring the append keeps the existing simulants' columns untouched while the new
-ones are being filled in, so a column is never widened with null rows for simulants
-whose values have not been computed yet. Reads during a creation pass are served from
-whichever frame holds the requested simulants, so an initializer still sees the values
-that earlier initializers produced, and a column whose initializer has not run yet
-reads as null just as it did when the state table was padded directly.
+ones are being filled in, so a column is never appended with null rows for simulants
+whose values have not been computed yet. The append also may not change a committed
+column's dtype; an initializer that hands back values of a different type raises
+rather than quietly retyping the column for the simulants already in the table.
+
+Reads during a creation pass are served from whichever frame holds the requested
+simulants, so an initializer still sees the values that earlier initializers
+produced. Reading a column whose initializer has not run yet raises, because the
+simulants being added have no value for it. An initializer that needs another
+component's column must require it, so that it runs afterwards.
