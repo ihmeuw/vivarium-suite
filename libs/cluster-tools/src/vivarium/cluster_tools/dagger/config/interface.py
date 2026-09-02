@@ -222,13 +222,11 @@ def get_simulation_step_tasks(
         build_timestamp=build_timestamp,
         is_resume=is_resume,
     )
-    # A resumed step restarts into the run root the original build laid out,
-    # so it reads that run's persisted keyspace and model specification the
-    # same way ``psimulate restart`` does.
+    # Resuming reads the original build's persisted keyspace and model
+    # specification, the way ``psimulate restart`` does.
     command = COMMANDS.restart if is_resume else COMMANDS.run
-    # A restart is handed its root, so the launch time names only its logs and
-    # a fresh one keeps each attempt's logs separate; a fresh build needs the
-    # persisted timestamp to name the root itself.
+    # A restart is handed its root, so a fresh launch time names only its logs,
+    # keeping each attempt's separate. A fresh build names the root with it.
     launch_time = None if command == COMMANDS.restart else build_timestamp
     output_paths = simulation_tasks.resolve_output_paths(
         command=command,
