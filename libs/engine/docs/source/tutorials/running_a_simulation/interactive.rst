@@ -15,7 +15,7 @@ simulation in a controlled fashion, and examining the
 
 This tutorial covers building a context and advancing it. Refer to
 :ref:`Exploring a Simulation in an Interactive Setting <exploration_tutorial>`
-for details on how to interrogate one.
+for details on how to examine the internal state and properties of a simulation.
 
 For the following tutorial, we will assume you have set up an environment and
 installed ``vivarium-engine``. If you have not, please see the
@@ -38,12 +38,11 @@ Setting up a simulation
 
 To run a simulation interactively, we will need to create an
 :class:`~vivarium.engine.interface.interactive.InteractiveContext`. There are
-several arguments available for construction - all individually optional -
-but at a bare minimum we need to provide the context with a set of
-:ref:`components <components_concept>` that encode all the behavior of
-the simulation model. Frequently, we'll also provide some
-:ref:`configuration <configuration_concept>` data that is used to parameterize
-those components.
+several (optional) arguments available for construction, but at a bare minimum
+we need to provide the context with a set of :ref:`components <components_concept>`
+that encode all the behavior of the simulation model. Frequently, we'll also
+provide some :ref:`configuration <configuration_concept>` data that is used to
+parameterize those components.
 
 All arguments fall into two groups. The first four describe *what the simulation
 is made of*. The combination of components, configuration, and plugins forms a

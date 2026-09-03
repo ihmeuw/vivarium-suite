@@ -225,7 +225,9 @@ State table attributes and value pipelines
 
 This is the distinction that causes the most confusion, so it is worth being
 precise. A simulation exposes two things that are similar but not identical:
-*attributes / attribute pipelines* and *value pipelines*.
+*attributes / attribute pipelines* and *value pipelines*. Refer to the
+:ref:`population management concept page <population_concept>` for more detail.
+
 
 :term:`Attributes <Attribute>` - computed by
 :term:`attribute pipelines <Attribute Pipeline>` - are simulant-specific values;
