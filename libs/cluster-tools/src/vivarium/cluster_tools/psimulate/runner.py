@@ -9,54 +9,30 @@ The main process loop for `psimulate` runs.
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import yaml
 from loguru import logger
-from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium.cluster_tools.core import cluster, logs
 from vivarium.cluster_tools.core.jobmon import client
 from vivarium.cluster_tools.core.notifications import send_slack_notification
 from vivarium.cluster_tools.psimulate import (
     COMMANDS,
-    branches,
-    jobs,
-    model_specification,
+    RESUME_COMMANDS,
     paths,
     pip_env,
+    simulation_tasks,
 )
 from vivarium.cluster_tools.psimulate.jobmon_workflow import build_workflow
 from vivarium.cluster_tools.psimulate.paths import OutputPaths
 from vivarium.cluster_tools.psimulate.performance_logger import (
     append_perf_data_to_central_logs,
 )
-from vivarium.cluster_tools.psimulate.results.writing import collect_metadata
 from vivarium.cluster_tools.utilities import hash_output_path
 from vivarium.cluster_tools.vipin.perf_report import report_performance
-
-
-def report_initial_status(
-    num_jobs_completed: int, finished_sim_metadata: pd.DataFrame, total_num_jobs: int
-) -> None:
-    if num_jobs_completed:
-        logger.debug(
-            f"{num_jobs_completed} of {total_num_jobs} jobs completed in previous run."
-        )
-    extra_jobs_completed = num_jobs_completed - len(finished_sim_metadata)
-    # NOTE: there can never be more rows in `finished_sim_metadata` than `num_jobs_completed`
-    # because `num_jobs_completed` was calculated by comparing the keyspace to `finished_sim_metadata`.
-    if extra_jobs_completed:
-        raise RuntimeError(
-            f"There are {extra_jobs_completed} jobs from the previous run which would not have been created "
-            "with the configuration saved with that run. That either means that code "
-            "has changed between then and now or that the outputs or configuration data "
-            "have been modified."
-        )
 
 
 def try_run_vipin(output_paths: OutputPaths) -> None:
@@ -76,30 +52,6 @@ def try_run_vipin(output_paths: OutputPaths) -> None:
         logger.warning(f"Appending performance data to central logs failed with: {e}")
 
 
-def write_backup_metadata(
-    backup_metadata_path: Path, job_parameters_list: list[jobs.JobParameters]
-) -> None:
-    lookup_table = []
-    for params in job_parameters_list:
-        job_dict: dict[str, Any] = {
-            "input_draw": params.input_draw,
-            "random_seed": params.random_seed,
-            "job_id": params.task_id,
-        }
-        branch_config = collapse_nested_dict(params.branch_configuration)
-        for k, v in branch_config:
-            job_dict[k] = v
-        lookup_table.append(job_dict)
-
-    df = pd.DataFrame(lookup_table)
-    df.to_csv(
-        backup_metadata_path,
-        index=False,
-        mode="a",
-        header=not os.path.exists(backup_metadata_path),
-    )
-
-
 def write_configuration(
     output_root: Path,
     command: str,
@@ -107,7 +59,7 @@ def write_configuration(
     native_specification: cluster.NativeSpecification,
     max_workers: int,
     max_attempts: int,
-    backup_freq: int | None,
+    backup_freq: float | None,
     extra_args: dict[str, Any],
 ) -> None:
     """Write the resolved run configuration to a YAML file in the output directory.
@@ -189,7 +141,7 @@ def main(
     native_specification: cluster.NativeSpecification,
     max_workers: int,
     max_attempts: int,
-    backup_freq: int | None,
+    backup_freq: float | None,
     extra_args: dict[str, Any],
     slack_channel: str | None = None,
     slack_tag: str | None = None,
@@ -198,15 +150,10 @@ def main(
     logger.debug("Validating cluster environment.")
     cluster.validate_cluster_environment()
 
-    # Generate programmatic representation of the output directory structure
-    output_paths = paths.OutputPaths.from_entry_point_args(
+    output_paths = paths.resolve_output_paths(
         command=command,
-        input_artifact_path=input_paths.artifact,
-        result_directory=input_paths.result_directory,
-        input_model_spec_path=input_paths.model_specification,
+        input_paths=input_paths,
     )
-    logger.debug("Setting up output directory and all subdirectories.")
-    output_paths.touch()
 
     logger.debug("Writing run configuration to output directory.")
     write_configuration(
@@ -229,84 +176,33 @@ def main(
     # used when doing a restart.
     pip_env.validate(output_paths.environment_file)
 
-    logger.debug(
-        "Parsing input arguments into model specification and branches and writing to disk."
-    )
-    # Parse the branches configuration into a parameter space
-    # and a flat representation of all parameters to be run.
-    if command == COMMANDS.load_test:
-        keyspace = branches.Keyspace.for_load_test(extra_args["num_workers"])
-    else:
-        keyspace = branches.Keyspace.from_entry_point_args(
-            input_branch_configuration_path=input_paths.branch_configuration,
-            keyspace_path=output_paths.keyspace,
-            branches_path=output_paths.branches,
-            extras=extra_args,
-        )
-    # Throw that into our output directory. The keyspace output is
-    # a cartesian product representation of the parameter space and
-    # branches is a flat representation with the product expanded out.
-    keyspace.persist(output_paths.keyspace, output_paths.branches)
-
-    # Parse the model specification and resolve the artifact path
-    # and then write to the output directory.
-    model_spec = model_specification.parse(
+    run = simulation_tasks.resolve_simulation_run(
         command=command,
-        input_model_specification_path=input_paths.model_specification,
-        artifact_path=input_paths.artifact,
-        model_specification_path=output_paths.model_specification,
-        results_root=output_paths.root,
-        keyspace=keyspace,
+        input_paths=input_paths,
+        output_paths=output_paths,
+        extra_args=extra_args,
     )
-    model_specification.persist(model_spec, output_paths.model_specification)
-
-    logger.debug("Loading existing outputs if present.")
-    # Collect existing metadata from per-task CSV files in results/metadata/
-    finished_sim_metadata = collect_metadata(
-        output_paths.metadata_dir, output_paths.results_dir
-    )
-    if not finished_sim_metadata.empty and command not in [COMMANDS.restart, COMMANDS.expand]:
+    if not run.finished_sim_metadata.empty and command not in RESUME_COMMANDS:
         raise RuntimeError(
             "Existing outputs detected. Please choose a different output directory or use the 'restart' or 'expand' command to continue from these outputs."
         )
 
-    logger.debug("Parsing arguments into worker job parameters.")
-    # For restart, we build the full job list (no filtering) and let Jobmon's
-    # native resume skip already-completed tasks.  For other commands, we
-    # filter out completed jobs ourselves.
-    restart = command == COMMANDS.restart
-    job_list_metadata = pd.DataFrame() if restart else finished_sim_metadata
-    job_parameters, num_jobs_completed = jobs.build_job_list(
-        model_specification_path=output_paths.model_specification,
-        output_root=output_paths.root,
-        keyspace=keyspace,
-        finished_sim_metadata=job_list_metadata,
+    tool = client.make_tool()
+    sim_tasks = simulation_tasks.build_simulation_tasks(
+        tool,
+        run,
+        native_specification=native_specification,
         backup_freq=backup_freq,
-        backup_dir=output_paths.backup_dir,
-        backup_metadata_path=output_paths.backup_metadata_path,
-        worker_logging_root=output_paths.worker_logging_root,
-        extras=extra_args,
+        extra_args=extra_args,
+        max_attempts=max_attempts,
     )
-    # For restart, we know the real completed count from collect_metadata,
-    # not from build_job_list (which saw an empty DataFrame).
-    if restart:
-        num_jobs_completed = len(finished_sim_metadata)
-    # Let the user know if something is fishy at this point.
-    total_num_jobs = len(keyspace)
-    report_initial_status(num_jobs_completed, finished_sim_metadata, total_num_jobs)
-    if len(job_parameters) == 0:
+    num_jobs_completed = sim_tasks.num_jobs_completed
+    total_num_jobs = len(run.keyspace)
+    if not sim_tasks.tasks:
         logger.debug("No jobs to run, exiting.")
         return
-    else:
-        logger.debug(f"Found {len(job_parameters)} jobs to run.")
 
-    if backup_freq is not None:
-        write_backup_metadata(
-            backup_metadata_path=output_paths.backup_metadata_path,
-            job_parameters_list=job_parameters,
-        )
-
-    # Build the Jobmon workflow.
+    restart = command == COMMANDS.restart
     # For restart we reuse the original run's workflow_args so Jobmon can
     # resume the same workflow (skipping already-completed tasks).
     wf_command = COMMANDS.run if restart else command
@@ -316,11 +212,9 @@ def main(
     workflow_name = f"psimulate_{wf_command}_{output_paths.root.name}_{root_hash}"
     logger.debug("Building Jobmon workflow.")
     workflow = build_workflow(
+        tool,
         workflow_name=workflow_name,
-        command=command,
-        job_parameters_list=job_parameters,
-        output_paths=output_paths,
-        native_specification=native_specification,
+        tasks=sim_tasks.tasks,
         max_workers=max_workers,
         max_attempts=max_attempts,
     )
@@ -349,7 +243,7 @@ def main(
     # Count task outcomes from Jobmon's in-memory task statuses
     num_done_total = client.count_completed_tasks(workflow)
     num_completed_this_run = num_done_total - num_jobs_completed
-    num_jobs_attempted = len(job_parameters) - num_jobs_completed
+    num_jobs_attempted = len(sim_tasks.tasks) - num_jobs_completed
     num_failed = num_jobs_attempted - num_completed_this_run
     num_successful = num_jobs_completed + num_completed_this_run
 

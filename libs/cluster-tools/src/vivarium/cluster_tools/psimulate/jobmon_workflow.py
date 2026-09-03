@@ -3,9 +3,9 @@
 psimulate Jobmon Workflow
 =========================
 
-Build the Jobmon workflow for a psimulate ``run`` / ``restart`` / ``expand``
-/ ``load_test`` command: construct one Jobmon task per ``JobParameters``,
-register the task template, and wire them into a single workflow.
+Jobmon plumbing for parallel simulations: construct one Jobmon task per
+``JobParameters`` against a registered task template, and wrap a list of
+those tasks in a workflow of their own.
 
 """
 
@@ -21,7 +21,6 @@ from vivarium.cluster_tools.core.jobmon import client
 from vivarium.cluster_tools.core.jobmon.env import resolve_env_bin_path
 from vivarium.cluster_tools.psimulate import TASK_RUNNER_MODULE
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
-from vivarium.cluster_tools.psimulate.paths import OutputPaths
 from vivarium.cluster_tools.psimulate.results.writing import write_metadata
 
 if TYPE_CHECKING:
@@ -45,8 +44,7 @@ def get_task_list(
     """Create Jobmon tasks for a list of job parameters.
 
     Writes per-task metadata JSON files and batch-creates one Jobmon Task
-    per job. This is the reusable core extracted from :func:`build_workflow`
-    so that workflow step configs can also produce simulation task lists.
+    per job.
 
     Parameters
     ----------
@@ -139,31 +137,24 @@ def _simulation_resource_scales(
 
 
 def build_workflow(
+    tool: Tool,
+    *,
     workflow_name: str,
-    command: str,
-    job_parameters_list: list[JobParameters],
-    output_paths: OutputPaths,
-    native_specification: NativeSpecification,
+    tasks: list[Task],
     max_workers: int,
     max_attempts: int = 3,
 ) -> Workflow:
-    """Build a Jobmon workflow for a psimulate command.
-
-    Creates a Jobmon Tool, TaskTemplate, and one Task per job. Also writes
-    metadata JSON files to ``output_paths.metadata_dir``.
+    """Wrap a list of simulation tasks in a single Jobmon workflow.
 
     Parameters
     ----------
+    tool
+        The Jobmon Tool the tasks were created from.
     workflow_name
         A unique name for the workflow.
-    command
-        The psimulate command (run, restart, expand, load_test).
-    job_parameters_list
-        List of job parameters (one per task).
-    output_paths
-        The output paths container.
-    native_specification
-        SLURM resource specification.
+    tasks
+        The Jobmon tasks to run, from
+        :func:`~vivarium.cluster_tools.psimulate.simulation_tasks.build_simulation_tasks`.
     max_workers
         Maximum number of concurrent tasks.
     max_attempts
@@ -173,19 +164,6 @@ def build_workflow(
     -------
         A ready-to-run Jobmon Workflow object.
     """
-    tool = client.make_tool()
-
-    tasks = get_task_list(
-        tool=tool,
-        command=command,
-        job_parameters_list=job_parameters_list,
-        metadata_dir=output_paths.metadata_dir,
-        results_dir=output_paths.results_dir,
-        worker_logging_root=output_paths.worker_logging_root,
-        native_specification=native_specification,
-        max_attempts=max_attempts,
-    )
-
     workflow = client.make_workflow(
         tool,
         workflow_args=workflow_name,
