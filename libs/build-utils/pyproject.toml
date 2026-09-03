@@ -98,7 +98,8 @@ strict = true
 disallow_any_unimported = false
 implicit_reexport = true
 exclude = [
-    "build",
+    # Anchor so it doesn't match the "build" in "build_utils"
+    "^build/",
     "setup.py",
 ]
 mypy_path = "src"
