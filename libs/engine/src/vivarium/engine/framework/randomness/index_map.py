@@ -218,7 +218,7 @@ class IndexMap:
             numeric.
         """
         if pdt.is_datetime64_any_dtype(column):
-            integers = self._clip_to_seconds(column.astype(np.int64))
+            integers = self._clip_to_seconds(column)
         elif pdt.is_integer_dtype(column):
             column = column.astype(int)
             if not len(column >= 0) == len(column):
@@ -242,9 +242,29 @@ class IndexMap:
         return nth_digits
 
     @staticmethod
-    def _clip_to_seconds(m: pd.Series[int]) -> pd.Series[int]:
-        """Clips UTC datetime in nanoseconds to seconds."""
-        return m // pd.Timedelta(1, unit="s").value
+    def _clip_to_seconds(m: pd.Series[Any]) -> pd.Series[int]:
+        """Converts a datetime column to whole seconds since the Unix epoch.
+
+        Parameters
+        ----------
+        m
+            A series of datetimes.
+
+        Returns
+        -------
+            A series of whole seconds since the Unix epoch.
+
+        Raises
+        ------
+        RandomnessError
+            If the column contains NaT. A missing key would otherwise hash as
+            though it were a real time.
+        """
+        if m.isna().any():
+            raise RandomnessError(
+                "Datetime columns used as randomness keys cannot contain NaT."
+            )
+        return (m - pd.Timestamp(0)) // pd.Timedelta(1, unit="s")
 
     def _spread(self, m: pd.Series[int]) -> pd.Series[int]:
         """Spreads out integer values to give smaller values more weight."""

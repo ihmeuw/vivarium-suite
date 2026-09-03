@@ -1,3 +1,9 @@
+**5.8.2 - 09/03/26**
+
+- Bugfix: hash datetime randomness keys independent of the column's resolution, so
+  common random numbers align across environments regardless of the pandas version
+- Raise rather than silently hash NaT in a datetime randomness key column
+
 **5.8.1 - 08/26/26**
 
 - Treat timedelta64 columns that differ only in unit as compatible population updates
