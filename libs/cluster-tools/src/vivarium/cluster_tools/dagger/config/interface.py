@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from vivarium.cluster_tools.dagger.config.config import (
     DEFAULT_BACKUP_FREQ_SECONDS,
+    DEFAULT_MAX_ATTEMPTS,
     ResourceConfig,
 )
 from vivarium.cluster_tools.dagger.config.utilities import (
@@ -32,13 +33,8 @@ from vivarium.cluster_tools.dagger.config.validation import (
     validate_python_step,
     validate_simulation_step,
 )
-from vivarium.cluster_tools.psimulate import COMMANDS, branches
-from vivarium.cluster_tools.psimulate.jobmon_workflow import get_task_list
-from vivarium.cluster_tools.psimulate.jobs import (
-    BackupConfiguration,
-    build_job_parameters_from_keyspace,
-)
-from vivarium.cluster_tools.psimulate.paths import OutputPaths
+from vivarium.cluster_tools.psimulate import COMMANDS, paths, simulation_tasks
+from vivarium.cluster_tools.psimulate.paths import InputPaths
 
 if TYPE_CHECKING:
     from jobmon.client.api import Tool
@@ -157,6 +153,7 @@ def get_simulation_step_tasks(
     backup_freq: float | None = DEFAULT_BACKUP_FREQ_SECONDS,
     sim_verbosity: int = 0,
     is_resume: bool = False,
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
 ) -> list[Task]:
     """Build a parallel-simulation workflow step and return its Jobmon tasks.
 
@@ -195,7 +192,11 @@ def get_simulation_step_tasks(
     sim_verbosity
         Vivarium simulation logging verbosity level. Default is 0.
     is_resume
-        Whether this is a resumed workflow build.
+        Whether this is a resumed workflow build. A resume builds the step as a
+        ``psimulate restart``, reusing the keyspace and model specification the
+        original build persisted rather than re-reading the step's input files.
+    max_attempts
+        Maximum number of Jobmon attempts per simulation task.
 
     Returns
     -------
@@ -212,42 +213,73 @@ def get_simulation_step_tasks(
         sim_verbosity=sim_verbosity,
     )
     ensure_output_directory_exists(output_directory)
-    output_paths = OutputPaths.from_entry_point_args(
-        command=COMMANDS.run,
-        input_artifact_path=artifact_path,
-        result_directory=output_directory,
-        input_model_spec_path=model_specification,
-        launch_time=get_or_create_build_timestamp(output_directory),
+    build_timestamp = get_or_create_build_timestamp(output_directory)
+    input_paths = _simulation_step_input_paths(
+        output_directory=output_directory,
+        model_specification=model_specification,
+        branch_configuration=branch_configuration,
+        artifact_path=artifact_path,
+        build_timestamp=build_timestamp,
         is_resume=is_resume,
     )
-    output_paths.touch()
-
-    keyspace = branches.Keyspace.from_branch_configuration(branch_configuration)
-    job_parameters = build_job_parameters_from_keyspace(
-        keyspace,
-        model_specification_path=model_specification,
-        output_root=output_paths.root,
-        worker_logging_root=output_paths.worker_logging_root,
-        backup_configuration=BackupConfiguration(
-            backup_dir=str(output_paths.backup_dir),
-            backup_freq=backup_freq,
-            backup_metadata_path=str(output_paths.backup_metadata_path),
-        ),
-        extras={
-            "sim_verbosity": sim_verbosity,
-        },
+    # Resuming reads the original build's persisted keyspace and model
+    # specification, the way ``psimulate restart`` does.
+    command = COMMANDS.restart if is_resume else COMMANDS.run
+    # A restart is handed its root, so a fresh launch time names only its logs,
+    # keeping each attempt's separate. A fresh build names the root with it.
+    launch_time = None if command == COMMANDS.restart else build_timestamp
+    output_paths = paths.resolve_output_paths(
+        command=command,
+        input_paths=input_paths,
+        launch_time=launch_time,
+    )
+    extra_args = {"sim_verbosity": sim_verbosity}
+    run = simulation_tasks.resolve_simulation_run(
+        command=command,
+        input_paths=input_paths,
+        output_paths=output_paths,
+        extra_args=extra_args,
     )
 
-    return get_task_list(
-        tool=tool,
-        command=COMMANDS.run,
-        job_parameters_list=job_parameters,
-        metadata_dir=output_paths.metadata_dir,
-        results_dir=output_paths.results_dir,
-        worker_logging_root=output_paths.worker_logging_root,
+    return simulation_tasks.build_simulation_tasks(
+        tool,
+        run,
         native_specification=resources.to_native_specification(name),
+        backup_freq=backup_freq,
+        extra_args=extra_args,
+        max_attempts=max_attempts,
         env_prefix=resolve_step_env_prefix(name=name, environment=environment),
         template_name=f"psimulate_{name}",
+    ).tasks
+
+
+def _simulation_step_input_paths(
+    *,
+    output_directory: Path,
+    model_specification: Path,
+    branch_configuration: Path,
+    artifact_path: Path | None,
+    build_timestamp: str,
+    is_resume: bool,
+) -> InputPaths:
+    """Resolve a simulation step's inputs for a fresh build or a resume."""
+    if not is_resume:
+        return InputPaths.from_entry_point_args(
+            result_directory=output_directory,
+            input_model_specification_path=model_specification,
+            input_branch_configuration_path=branch_configuration,
+            input_artifact_path=artifact_path,
+        )
+    # A restart is handed its run root rather than deriving one, so resolve
+    # the root the original build derived from the persisted timestamp.
+    return InputPaths.from_entry_point_args(
+        result_directory=paths.resolve_run_root(
+            command=COMMANDS.run,
+            result_directory=output_directory,
+            input_artifact_path=artifact_path,
+            input_model_spec_path=model_specification,
+            launch_time=build_timestamp,
+        ),
     )
 
 

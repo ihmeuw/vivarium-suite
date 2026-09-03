@@ -16,6 +16,7 @@ from vivarium.cluster_tools.dagger.config.builder import (
     build_workflow_from_config,
 )
 from vivarium.cluster_tools.dagger.config.config import (
+    DEFAULT_MAX_ATTEMPTS,
     ParsedStep,
     ResourceConfig,
     WorkflowConfig,
@@ -259,10 +260,10 @@ class TestEnvironmentResolution:
 
 
 class TestResumeInjection:
-    """Verify how the ``resume`` flag is threaded to per-step API functions."""
+    """Verify how the simulation step's own kwargs are threaded from the config."""
 
     @staticmethod
-    def _two_step_config() -> WorkflowConfig:
+    def _two_step_config(max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> WorkflowConfig:
         """A bash step followed by a (stubbed) simulation step."""
         resources = ResourceConfig(memory_gb=1, project="proj_simscience", queue="all.q")
         return WorkflowConfig(
@@ -271,6 +272,7 @@ class TestResumeInjection:
             queue="all.q",
             output_directory=Path("/tmp/results"),
             default_environment="env",
+            max_attempts=max_attempts,
             steps=[
                 _bash_parsed_step(
                     name="bash_step",
@@ -318,3 +320,19 @@ class TestResumeInjection:
         build_workflow_from_config(self._two_step_config(), workflow_args="args")
 
         assert patched_api_fns["simulation"].call_args.kwargs["is_resume"] is False
+
+    def test_workflow_max_attempts_reaches_the_simulation_step_only(
+        self, mock_tool_cls: MagicMock, patched_api_fns: dict[str, MagicMock]
+    ) -> None:
+        """The workflow's attempt cap is forwarded to the simulation step's tasks.
+
+        The simulation step is the only type whose tasks carry their own
+        ``max_attempts``; every other type inherits the workflow's.
+        """
+        max_attempts = DEFAULT_MAX_ATTEMPTS + 1
+        config = self._two_step_config(max_attempts=max_attempts)
+        build_workflow_from_config(config, workflow_args="args")
+
+        sim_kwargs = patched_api_fns["simulation"].call_args.kwargs
+        assert sim_kwargs["max_attempts"] == max_attempts
+        assert "max_attempts" not in patched_api_fns["bash"].call_args.kwargs

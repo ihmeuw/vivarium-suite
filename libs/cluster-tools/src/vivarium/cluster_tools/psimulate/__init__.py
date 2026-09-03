@@ -18,6 +18,9 @@ class __Commands(NamedTuple):
 
 COMMANDS = __Commands(*__Commands._fields)
 
+RESUME_COMMANDS = (COMMANDS.restart, COMMANDS.expand)
+"""The commands that continue an existing run rather than starting a new one."""
+
 del NamedTuple
 del __Commands
 
