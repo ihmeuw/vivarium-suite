@@ -11,6 +11,7 @@ import pytest
 
 pytest.importorskip("jobmon")
 
+from jobmon.client.task import Task
 from pytest_mock import MockerFixture
 
 from vivarium.cluster_tools.dagger.config.builder import STEP_TYPE_API_FNS
@@ -77,7 +78,7 @@ def patch_simulation_internals(mocker: MockerFixture) -> dict[str, MagicMock]:
         "output_paths": output_paths,
         "run": simulation_run,
         "resolve_output_paths": mocker.patch(
-            f"{_INTERFACE}.simulation_tasks.resolve_output_paths",
+            f"{_INTERFACE}.paths.resolve_output_paths",
             return_value=output_paths,
         ),
         "resolve_simulation_run": mocker.patch(
@@ -140,7 +141,22 @@ def test_get_bash_step_returns_tasks(
     assert kwargs["env_prefix"] == "/envs/my_env"
 
 
-def test_get_simulation_step_returns_tasks(
+def _get_simulation_step_tasks(**overrides: Any) -> list[Task]:
+    """Call the simulation step API with valid defaults."""
+    kwargs: dict[str, Any] = {
+        "name": "sim",
+        "resources": _resources(),
+        "output_directory": Path("/tmp/results"),
+        "backup_freq": 600.0,
+        "sim_verbosity": 2,
+        "environment": "sim_env",
+        "tool": _TOOL,
+    }
+    kwargs.update(overrides)
+    return get_simulation_step_tasks(**kwargs)
+
+
+def test_get_simulation_step_resolves_its_output_paths_once(
     patch_simulation_internals: dict[str, MagicMock],
     patch_resolve_env_prefix: MagicMock,
     patch_build_timestamp: MagicMock,
@@ -148,19 +164,12 @@ def test_get_simulation_step_returns_tasks(
     valid_branch_config_file: Path,
     valid_artifact_file: Path,
 ) -> None:
-    """API validates kwargs and dispatches to the shared simulation pipeline."""
+    """The step's inputs reach the pipeline, and one layout serves both stages."""
     output_directory = Path("/tmp/results")
-    tasks = get_simulation_step_tasks(
-        name="sim",
-        resources=_resources(),
-        output_directory=output_directory,
+    tasks = _get_simulation_step_tasks(
         model_specification=valid_model_spec_file,
         branch_configuration=valid_branch_config_file,
         artifact_path=valid_artifact_file,
-        backup_freq=600.0,
-        sim_verbosity=2,
-        environment="sim_env",
-        tool=_TOOL,
     )
     assert tasks is _TASKS
     patch_build_timestamp.assert_called_once_with(output_directory)
@@ -174,11 +183,37 @@ def test_get_simulation_step_returns_tasks(
     assert input_paths.branch_configuration == valid_branch_config_file
     assert input_paths.artifact == valid_artifact_file
 
-    kwargs = patch_simulation_internals["build_simulation_tasks"].call_args.kwargs
-    assert kwargs["env_prefix"] == "/envs/sim_env"
-    assert kwargs["template_name"] == "psimulate_sim"
+    # The run is resolved against that same layout, not a second one.
+    run_kwargs = patch_simulation_internals["resolve_simulation_run"].call_args.kwargs
+    assert run_kwargs["command"] == "run"
+    assert run_kwargs["output_paths"] is patch_simulation_internals["output_paths"]
+
+
+def test_get_simulation_step_forwards_step_settings_to_the_task_builder(
+    patch_simulation_internals: dict[str, MagicMock],
+    patch_resolve_env_prefix: MagicMock,
+    patch_build_timestamp: MagicMock,
+    valid_model_spec_file: Path,
+    valid_branch_config_file: Path,
+) -> None:
+    """Each step's own resources, attempt cap, and template name reach the builder."""
+    resources = _resources()
+    _get_simulation_step_tasks(
+        resources=resources,
+        model_specification=valid_model_spec_file,
+        branch_configuration=valid_branch_config_file,
+        max_attempts=4,
+    )
+
+    build = patch_simulation_internals["build_simulation_tasks"]
+    assert build.call_args.args == (_TOOL, patch_simulation_internals["run"])
+    kwargs = build.call_args.kwargs
+    assert kwargs["native_specification"] == resources.to_native_specification("sim")
+    assert kwargs["max_attempts"] == 4
     assert kwargs["backup_freq"] == 600.0
     assert kwargs["extra_args"] == {"sim_verbosity": 2}
+    assert kwargs["env_prefix"] == "/envs/sim_env"
+    assert kwargs["template_name"] == "psimulate_sim"
 
 
 def test_get_simulation_step_resume_restarts_into_the_original_run_root(

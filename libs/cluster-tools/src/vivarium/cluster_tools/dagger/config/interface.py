@@ -192,9 +192,9 @@ def get_simulation_step_tasks(
     sim_verbosity
         Vivarium simulation logging verbosity level. Default is 0.
     is_resume
-        Whether this is a resumed workflow build. A resume reuses the
-        keyspace and model specification the original build persisted,
-        rather than re-reading the step's input files.
+        Whether this is a resumed workflow build. A resume builds the step as a
+        ``psimulate restart``, reusing the keyspace and model specification the
+        original build persisted rather than re-reading the step's input files.
     max_attempts
         Maximum number of Jobmon attempts per simulation task.
 
@@ -228,7 +228,7 @@ def get_simulation_step_tasks(
     # A restart is handed its root, so a fresh launch time names only its logs,
     # keeping each attempt's separate. A fresh build names the root with it.
     launch_time = None if command == COMMANDS.restart else build_timestamp
-    output_paths = simulation_tasks.resolve_output_paths(
+    output_paths = paths.resolve_output_paths(
         command=command,
         input_paths=input_paths,
         launch_time=launch_time,

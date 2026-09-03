@@ -1,10 +1,17 @@
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
 
 from vivarium.cluster_tools.psimulate import COMMANDS
-from vivarium.cluster_tools.psimulate.paths import build_perf_log_filename, resolve_run_root
+from vivarium.cluster_tools.psimulate.paths import (
+    InputPaths,
+    build_perf_log_filename,
+    resolve_output_paths,
+    resolve_run_root,
+)
 
 TASK_ID = "0123456789abcdef"
 LAUNCH_TIME = "2031_01_01_00_00_00"
@@ -119,3 +126,42 @@ class TestResolveRunRoot:
                 input_model_spec_path=None,
                 launch_time=LAUNCH_TIME,
             )
+
+
+class TestResolveOutputPaths:
+    """Verify the directory layout a resolved run gets, and that it exists."""
+
+    def test_each_restart_gets_its_own_logging_root(self, tmp_path: Path) -> None:
+        """Two restarts share a run root but never share a logs directory.
+
+        This is what replaced the removed ``is_resume`` flag: a restart takes
+        its logging timestamp from the current time, so each attempt's worker
+        logs stay separate.
+        """
+        input_paths = InputPaths.from_entry_point_args(result_directory=tmp_path)
+        first = resolve_output_paths(command=COMMANDS.restart, input_paths=input_paths)
+        with patch("vivarium.cluster_tools.psimulate.paths.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2031, 7, 4, 12, 30, 15)
+            second = resolve_output_paths(command=COMMANDS.restart, input_paths=input_paths)
+
+        assert first.root == second.root == tmp_path
+        assert first.logging_root != second.logging_root
+        assert second.logging_root.name == "2031_07_04_12_30_15_restart"
+
+    def test_run_derives_a_timestamped_root_and_creates_it(
+        self, tmp_path: Path, model_spec: Path
+    ) -> None:
+        """A fresh run nests its root under ``<model_name>/<launch_time>``."""
+        result_directory = tmp_path / "results"
+        input_paths = InputPaths.from_entry_point_args(
+            result_directory=result_directory,
+            input_model_specification_path=model_spec,
+        )
+        output_paths = resolve_output_paths(
+            command=COMMANDS.run, input_paths=input_paths, launch_time=LAUNCH_TIME
+        )
+
+        assert output_paths.root == result_directory / model_spec.stem / LAUNCH_TIME
+        assert output_paths.logging_root.name == f"{LAUNCH_TIME}_run"
+        assert output_paths.root.is_dir()
+        assert output_paths.results_dir.is_dir()

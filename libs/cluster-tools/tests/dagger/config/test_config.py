@@ -668,87 +668,6 @@ class TestSimulationStep:
         assert "artifact_path" not in result["args"]
         assert "hardware" not in result["resources"]
 
-    def test_build_tasks_wires_arguments(
-        self,
-        valid_model_spec_file: Path,
-        valid_branch_config_file: Path,
-        valid_artifact_file: Path,
-    ) -> None:
-        """Verify get_simulation_step_tasks passes the right arguments through the pipeline."""
-        _utilities = "vivarium.cluster_tools.dagger.config.utilities"
-        _interface = "vivarium.cluster_tools.dagger.config.interface"
-        _tasks = f"{_interface}.simulation_tasks"
-        with (
-            patch(f"{_utilities}.resolve_env_prefix", return_value="/envs/test_env"),
-            patch(
-                f"{_interface}.get_or_create_build_timestamp",
-                return_value="2026_04_24_10_00_00",
-            ),
-            patch(f"{_tasks}.resolve_output_paths") as mock_resolve_output_paths,
-            patch(f"{_tasks}.resolve_simulation_run") as mock_resolve_run,
-            patch(f"{_tasks}.build_simulation_tasks") as mock_build_tasks,
-        ):
-            mock_output_paths = MagicMock()
-            mock_resolve_output_paths.return_value = mock_output_paths
-            mock_run = MagicMock()
-            mock_resolve_run.return_value = mock_run
-
-            sentinel_tasks = [MagicMock(), MagicMock(), MagicMock()]
-            mock_build_tasks.return_value = MagicMock(tasks=sentinel_tasks)
-
-            resources = ResourceConfig(
-                memory_gb=8,
-                runtime="02:00:00",
-                project="proj_simscience",
-                queue="all.q",
-            )
-
-            mock_tool = MagicMock()
-
-            result = get_simulation_step_tasks(
-                name="sim_step",
-                resources=resources,
-                output_directory=Path("/tmp/results"),
-                model_specification=valid_model_spec_file,
-                branch_configuration=valid_branch_config_file,
-                artifact_path=valid_artifact_file,
-                backup_freq=300,
-                sim_verbosity=1,
-                environment="test_env",
-                tool=mock_tool,
-                max_attempts=4,
-            )
-
-            # A fresh build lays out its run root beneath the step's output
-            # directory, using the persisted build timestamp.
-            resolve_kwargs = mock_resolve_output_paths.call_args.kwargs
-            assert resolve_kwargs["command"] == "run"
-            assert resolve_kwargs["launch_time"] == "2026_04_24_10_00_00"
-            input_paths = resolve_kwargs["input_paths"]
-            assert input_paths.result_directory == Path("/tmp/results")
-            assert input_paths.model_specification == valid_model_spec_file
-            assert input_paths.branch_configuration == valid_branch_config_file
-            assert input_paths.artifact == valid_artifact_file
-
-            # The run is resolved against those paths, not a second layout.
-            run_kwargs = mock_resolve_run.call_args.kwargs
-            assert run_kwargs["command"] == "run"
-            assert run_kwargs["output_paths"] is mock_output_paths
-            assert run_kwargs["extra_args"] == {"sim_verbosity": 1}
-
-            assert mock_build_tasks.call_args.args == (mock_tool, mock_run)
-            build_kwargs = mock_build_tasks.call_args.kwargs
-            assert build_kwargs["native_specification"] == resources.to_native_specification(
-                "sim_step"
-            )
-            assert build_kwargs["backup_freq"] == 300
-            assert build_kwargs["extra_args"] == {"sim_verbosity": 1}
-            assert build_kwargs["max_attempts"] == 4
-            assert build_kwargs["env_prefix"] == "/envs/test_env"
-            assert build_kwargs["template_name"] == "psimulate_sim_step"
-
-            assert result is sentinel_tasks
-
     def test_multiple_steps_register_distinct_jobmon_templates(
         self,
         valid_model_spec_file: Path,
@@ -758,12 +677,13 @@ class TestSimulationStep:
         Jobmon TaskTemplates so their ``create_tasks`` calls don't collide."""
         _utilities = "vivarium.cluster_tools.dagger.config.utilities"
         _interface = "vivarium.cluster_tools.dagger.config.interface"
+        _paths = "vivarium.cluster_tools.psimulate.paths"
         _tasks = "vivarium.cluster_tools.psimulate.simulation_tasks"
         _wf = "vivarium.cluster_tools.psimulate.jobmon_workflow"
         with (
             patch(f"{_utilities}.resolve_env_prefix", return_value="/envs/test_env"),
             patch(f"{_interface}.get_or_create_build_timestamp", return_value="ts"),
-            patch(f"{_tasks}.resolve_output_paths") as mock_resolve_output_paths,
+            patch(f"{_paths}.resolve_output_paths") as mock_resolve_output_paths,
             patch(f"{_tasks}.resolve_simulation_run") as mock_resolve_run,
             patch(f"{_tasks}.jobs.build_job_list") as mock_build_job_list,
             patch(f"{_tasks}.write_backup_metadata"),

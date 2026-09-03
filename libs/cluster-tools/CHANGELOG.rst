@@ -1,32 +1,15 @@
-**4.7.0 - 09/02/26**
+**4.7.0 - 09/03/26**
 
 - Build ``psimulate`` and ``dagger`` simulation-step task lists from one shared
   pipeline (``psimulate.simulation_tasks``) instead of two copies of the same steps
-- **Behavior change.** A ``dagger`` simulation step now matches ``psimulate run``,
-  closing four gaps that the duplicated logic had let drift:
-
-  - The model specification is parsed and persisted, so a step's ``artifact_path``
-    reaches the simulation and results are written under the step's own run root
-  - The backup lookup table is written, so a retried task can resume from its
-    backup rather than silently restarting from the beginning
-  - The workflow's ``max_attempts`` reaches the simulation tasks instead of an
-    unrelated default of 3
-  - The keyspace and expanded branches are persisted, and ``dagger restart`` reads
-    them (and the persisted model specification) rather than re-parsing its inputs
-
-- A ``dagger`` resume is now recorded as ``run_type`` ``restart`` rather than ``run``
-  in the central performance logs, so that column is not comparable across this
-  release for dagger resumes
-
-- **Breaking change.** ``build_workflow`` takes a ``Tool`` and an existing task list;
-  it no longer creates the tasks, and its ``command``, ``job_parameters_list``,
-  ``output_paths``, and ``native_specification`` arguments are gone
-- **Breaking change.** ``OutputPaths.from_entry_point_args`` drops ``is_resume``;
-  a restart already gets a fresh logging timestamp from its command
-- Move ``report_initial_status`` from ``psimulate.runner`` to
-  ``psimulate.simulation_tasks``, which now runs it before writing any task metadata
-- Fix the ``backup_freq`` type hints, which claimed ``int`` for a value the CLI has
-  always produced as a ``float``
+- **Behavior change.** A ``dagger`` simulation step now matches ``psimulate run``: it
+  persists the model specification, keyspace, and branches, writes the backup lookup
+  table so a retried task resumes instead of starting over, and honors the workflow's
+  ``max_attempts``. ``dagger restart`` reads that persisted state rather than
+  re-parsing its inputs, and is recorded as ``run_type`` ``restart``, not ``run``
+- **Breaking change.** ``build_workflow`` takes a ``Tool`` and a ready task list
+  instead of building the tasks itself, ``OutputPaths.from_entry_point_args`` drops
+  ``is_resume``, and ``report_initial_status`` moves to ``psimulate.simulation_tasks``
 
 **4.6.0 - 08/25/26**
 

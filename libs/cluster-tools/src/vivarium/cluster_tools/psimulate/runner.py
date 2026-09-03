@@ -19,7 +19,13 @@ from loguru import logger
 from vivarium.cluster_tools.core import cluster, logs
 from vivarium.cluster_tools.core.jobmon import client
 from vivarium.cluster_tools.core.notifications import send_slack_notification
-from vivarium.cluster_tools.psimulate import COMMANDS, paths, pip_env, simulation_tasks
+from vivarium.cluster_tools.psimulate import (
+    COMMANDS,
+    RESUME_COMMANDS,
+    paths,
+    pip_env,
+    simulation_tasks,
+)
 from vivarium.cluster_tools.psimulate.jobmon_workflow import build_workflow
 from vivarium.cluster_tools.psimulate.paths import OutputPaths
 from vivarium.cluster_tools.psimulate.performance_logger import (
@@ -144,7 +150,7 @@ def main(
     logger.debug("Validating cluster environment.")
     cluster.validate_cluster_environment()
 
-    output_paths = simulation_tasks.resolve_output_paths(
+    output_paths = paths.resolve_output_paths(
         command=command,
         input_paths=input_paths,
     )
@@ -176,10 +182,7 @@ def main(
         output_paths=output_paths,
         extra_args=extra_args,
     )
-    if not run.finished_sim_metadata.empty and command not in [
-        COMMANDS.restart,
-        COMMANDS.expand,
-    ]:
+    if not run.finished_sim_metadata.empty and command not in RESUME_COMMANDS:
         raise RuntimeError(
             "Existing outputs detected. Please choose a different output directory or use the 'restart' or 'expand' command to continue from these outputs."
         )

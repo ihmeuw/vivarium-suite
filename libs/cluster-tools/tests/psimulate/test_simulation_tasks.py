@@ -23,12 +23,11 @@ from vivarium.cluster_tools.psimulate.jobs import (
     JobParameters,
     generate_task_id,
 )
-from vivarium.cluster_tools.psimulate.paths import InputPaths
+from vivarium.cluster_tools.psimulate.paths import InputPaths, resolve_output_paths
 from vivarium.cluster_tools.psimulate.simulation_tasks import (
     SimulationRun,
     build_simulation_tasks,
     report_initial_status,
-    resolve_output_paths,
     resolve_simulation_run,
     write_backup_metadata,
 )
@@ -151,6 +150,21 @@ class TestResolveSimulationRun:
         )
         assert len(restart_run.keyspace) == 4
 
+    def test_load_test_sizes_its_keyspace_by_worker_count(self, tmp_path: Path) -> None:
+        """A load test builds its keyspace from ``num_workers``, not a branch config."""
+        input_paths = InputPaths.from_entry_point_args(result_directory=tmp_path)
+        output_paths = resolve_output_paths(
+            command=COMMANDS.load_test, input_paths=input_paths
+        )
+        run = resolve_simulation_run(
+            command=COMMANDS.load_test,
+            input_paths=input_paths,
+            output_paths=output_paths,
+            extra_args={"num_workers": 3},
+        )
+        assert len(run.keyspace) == 3
+        assert output_paths.keyspace.exists()
+
     def test_restart_without_persisted_state_names_what_is_missing(
         self, tmp_path: Path
     ) -> None:
@@ -169,41 +183,6 @@ class TestResolveSimulationRun:
                 output_paths=output_paths,
                 extra_args={},
             )
-
-
-class TestResolveOutputPaths:
-    """Verify the directory layout a resolved run gets."""
-
-    def test_each_restart_gets_its_own_logging_root(self, tmp_path: Path) -> None:
-        """Two restarts share a run root but never share a logs directory.
-
-        This is what replaced the removed ``is_resume`` flag: a restart takes
-        its logging timestamp from the current time, so each attempt's worker
-        logs stay separate.
-        """
-        input_paths = InputPaths.from_entry_point_args(result_directory=tmp_path)
-        first = resolve_output_paths(command=COMMANDS.restart, input_paths=input_paths)
-        with patch("vivarium.cluster_tools.psimulate.paths.datetime") as mock_datetime:
-            mock_datetime.now.return_value = datetime(2031, 7, 4, 12, 30, 15)
-            second = resolve_output_paths(command=COMMANDS.restart, input_paths=input_paths)
-
-        assert first.root == second.root == tmp_path
-        assert first.logging_root != second.logging_root
-        assert second.logging_root.name == "2031_07_04_12_30_15_restart"
-
-    def test_run_derives_a_timestamped_root_under_the_result_directory(
-        self, run_input_paths: InputPaths, model_spec_file: Path
-    ) -> None:
-        """A fresh run nests its root under ``<model_name>/<launch_time>``."""
-        output_paths = resolve_output_paths(
-            command=COMMANDS.run,
-            input_paths=run_input_paths,
-            launch_time="2031_01_01_00_00_00",
-        )
-        assert output_paths.root == (
-            run_input_paths.result_directory / model_spec_file.stem / "2031_01_01_00_00_00"
-        )
-        assert output_paths.logging_root.name == "2031_01_01_00_00_00_run"
 
 
 class TestBuildSimulationTasks:

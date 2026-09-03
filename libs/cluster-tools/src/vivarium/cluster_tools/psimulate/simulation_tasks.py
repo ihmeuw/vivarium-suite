@@ -11,13 +11,14 @@ here: ``psimulate run`` / ``restart`` / ``expand`` / ``test``, which wraps
 the tasks in a workflow of their own, and ``dagger``'s ``simulation`` step,
 which wires them into a multi-step DAG.
 
-The pipeline is three calls rather than one so that each caller can do its
-own run-level work at the points where the two genuinely differ: between
-laying out the output directory and resolving what the run contains
-(``psimulate`` writes its ``configuration.yaml``, starts file logging, and
-validates the environment there), and between resolving the run and
-building its tasks (``psimulate`` rejects a directory that already holds
-results, where ``dagger`` prompts the user instead).
+Callers first lay out the run's output directory with
+:func:`~vivarium.cluster_tools.psimulate.paths.resolve_output_paths`, then
+resolve the run and build its tasks here. Those are separate calls so that
+each caller can do its own run-level work between them, at the points where
+the two genuinely differ: ``psimulate`` writes its ``configuration.yaml``,
+starts file logging, and validates the environment before resolving the run,
+and rejects a directory that already holds results before building tasks,
+where ``dagger`` prompts the user instead.
 
 """
 
@@ -32,7 +33,13 @@ from loguru import logger
 from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium.cluster_tools.core.cluster.interface import NativeSpecification
-from vivarium.cluster_tools.psimulate import COMMANDS, branches, jobs, model_specification
+from vivarium.cluster_tools.psimulate import (
+    COMMANDS,
+    RESUME_COMMANDS,
+    branches,
+    jobs,
+    model_specification,
+)
 from vivarium.cluster_tools.psimulate.jobmon_workflow import get_task_list
 from vivarium.cluster_tools.psimulate.paths import InputPaths, OutputPaths
 from vivarium.cluster_tools.psimulate.results.writing import collect_metadata
@@ -64,40 +71,6 @@ class SimulationTasks(NamedTuple):
     """How many of the keyspace's simulations are already complete."""
 
 
-def resolve_output_paths(
-    *,
-    command: str,
-    input_paths: InputPaths,
-    launch_time: str | None = None,
-) -> OutputPaths:
-    """Lay out a run's output directory tree and create it.
-
-    Parameters
-    ----------
-    command
-        The psimulate command being run.
-    input_paths
-        The resolved input file paths.
-    launch_time
-        Optional timestamp (``YYYY_MM_DD_HH_MM_SS``) naming the run's
-        directories. Defaults to the current time.
-
-    Returns
-    -------
-        The run's output directory layout.
-    """
-    output_paths = OutputPaths.from_entry_point_args(
-        command=command,
-        input_artifact_path=input_paths.artifact,
-        result_directory=input_paths.result_directory,
-        input_model_spec_path=input_paths.model_specification,
-        launch_time=launch_time,
-    )
-    logger.debug("Setting up output directory and all subdirectories.")
-    output_paths.touch()
-    return output_paths
-
-
 def resolve_simulation_run(
     *,
     command: str,
@@ -122,7 +95,7 @@ def resolve_simulation_run(
         The resolved input file paths.
     output_paths
         The run's output directory layout, from
-        :func:`resolve_output_paths`.
+        :func:`~vivarium.cluster_tools.psimulate.paths.resolve_output_paths`.
     extra_args
         Additional command-specific arguments (e.g. ``num_draws``,
         ``num_seeds``, ``num_workers``).
@@ -131,7 +104,7 @@ def resolve_simulation_run(
     -------
         The resolved run.
     """
-    if command in (COMMANDS.restart, COMMANDS.expand):
+    if command in RESUME_COMMANDS:
         _validate_resumable(output_paths)
 
     logger.debug(

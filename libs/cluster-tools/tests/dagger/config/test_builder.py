@@ -329,8 +329,10 @@ class TestResumeInjection:
         The simulation step is the only type whose tasks carry their own
         ``max_attempts``; every other type inherits the workflow's.
         """
-        config = self._two_step_config(max_attempts=5)
+        max_attempts = DEFAULT_MAX_ATTEMPTS + 1
+        config = self._two_step_config(max_attempts=max_attempts)
         build_workflow_from_config(config, workflow_args="args")
 
-        assert patched_api_fns["simulation"].call_args.kwargs["max_attempts"] == 5
+        sim_kwargs = patched_api_fns["simulation"].call_args.kwargs
+        assert sim_kwargs["max_attempts"] == max_attempts
         assert "max_attempts" not in patched_api_fns["bash"].call_args.kwargs

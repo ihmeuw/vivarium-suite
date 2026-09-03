@@ -10,6 +10,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import NamedTuple
 
+from loguru import logger
 from vivarium.engine.interface.utilities import get_output_model_name_string
 
 from vivarium.cluster_tools import utilities as vct_utils
@@ -300,3 +301,37 @@ class OutputPaths(NamedTuple):
             vct_utils.mkdir(dir, exists_ok=True, parents=True)
         for dir in [self.logging_root, self.worker_logging_root]:
             vct_utils.mkdir(dir, parents=True)
+
+
+def resolve_output_paths(
+    *,
+    command: str,
+    input_paths: InputPaths,
+    launch_time: str | None = None,
+) -> OutputPaths:
+    """Lay out a run's output directory tree and create it.
+
+    Parameters
+    ----------
+    command
+        The specific ``psimulate`` command being run.
+    input_paths
+        The resolved input file paths.
+    launch_time
+        Optional timestamp (``YYYY_MM_DD_HH_MM_SS``) naming the run's
+        directories. Defaults to the current time.
+
+    Returns
+    -------
+        The run's output directory layout.
+    """
+    output_paths = OutputPaths.from_entry_point_args(
+        command=command,
+        input_artifact_path=input_paths.artifact,
+        result_directory=input_paths.result_directory,
+        input_model_spec_path=input_paths.model_specification,
+        launch_time=launch_time,
+    )
+    logger.debug("Setting up output directory and all subdirectories.")
+    output_paths.touch()
+    return output_paths
