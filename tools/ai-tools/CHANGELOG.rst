@@ -1,4 +1,4 @@
-**0.27.0 - 09/01/26**
+**0.27.0 - 09/03/26**
 
 - ``design-doc``: create new design docs in the ``_ Draft and Exploratory`` Hub
   subdirectory instead of directly under ``Design documents``
