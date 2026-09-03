@@ -921,8 +921,10 @@ In an interactive setting, we can access these observations via the
 ``sim.get_results()`` command. This will return a dictionary of all  
 observations up to this point in the simulation.
 
-An :class:`~vivarium.engine.interface.interactive.InteractiveContext` does not
-include observers by default; pass ``observe=True`` to include them.
+Note that the ``observe=True`` below is required: an
+:class:`~vivarium.engine.interface.interactive.InteractiveContext` does not
+observe results by default. See :ref:`getting results <interactive_results>`
+for what that means and why.
 
 .. code-block:: python
 
