@@ -1,15 +1,7 @@
 **4.7.0 - 09/03/26**
 
-- Build ``psimulate`` and ``dagger`` simulation-step task lists from one shared
-  pipeline (``psimulate.simulation_tasks``) instead of two copies of the same steps
-- **Behavior change.** A ``dagger`` simulation step now matches ``psimulate run``: it
-  persists the model specification, keyspace, and branches, writes the backup lookup
-  table so a retried task resumes instead of starting over, and honors the workflow's
-  ``max_attempts``. ``dagger restart`` reads that persisted state rather than
-  re-parsing its inputs, and is recorded as ``run_type`` ``restart``, not ``run``
-- **Breaking change.** ``build_workflow`` takes a ``Tool`` and a ready task list
-  instead of building the tasks itself, ``OutputPaths.from_entry_point_args`` drops
-  ``is_resume``, and ``report_initial_status`` moves to ``psimulate.simulation_tasks``
+- DRY up simulation-task creation shared by ``psimulate`` and ``dagger``. A ``dagger``
+  simulation step now behaves like ``psimulate run``
 
 **4.6.0 - 08/25/26**
 
