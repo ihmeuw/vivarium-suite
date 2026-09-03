@@ -5,10 +5,12 @@ description: SimSci Engineering team convention for drafting a Design Document o
 
 # SimSci Engineering design documents
 
-Design documents live in the SSE Confluence space under the **Design documents** parent page. There is one canonical template — `_TEMPLATE` — and every doc descends from it. Do not invent a structure; pull the template and follow it.
+Human-reviewed design documents live in the SSE Confluence space under the **Design documents** parent page. New docs are not created there directly: always create them in the **`_ Draft and Exploratory`** subdirectory. 
+There is one canonical template — `_TEMPLATE` — and every doc descends from it. Do not invent a structure; pull the template and follow it.
 
 - Template page id: `210206856` (https://hub.ihme.washington.edu/spaces/SSE/pages/210206856/_TEMPLATE)
-- Design documents parent page id: `176589711` (https://hub.ihme.washington.edu/spaces/SSE/pages/176589711/Design+documents)
+- Drafts subdirectory page id — create new docs here: `588415332` (https://hub.ihme.washington.edu/spaces/SSE/pages/588415332/_+Draft+and+Exploratory)
+- Design documents parent page id — human-reviewed docs only: `176589711` (https://hub.ihme.washington.edu/spaces/SSE/pages/176589711/Design+documents)
 - Space key: `SSE`
 
 ## 1. Read the template
@@ -40,7 +42,7 @@ Once the user approves, create the page directly:
 ```
 mcp__plugin_mcp-hub_mcp-hub__create_page(
     space="SSE",
-    parent_id="176589711",
+    parent_id="588415332",
     title="<doc title>",
     body=<full storage-format XHTML, headings + content>,
 )
@@ -48,4 +50,4 @@ mcp__plugin_mcp-hub_mcp-hub__create_page(
 
 For subsequent edits, use `mcp__plugin_mcp-hub_mcp-hub__update_page` — prefer `mode="replace_section"` with the heading name when revising one section, and pass `expected_version` from a fresh `get_page` to avoid clobbering concurrent edits.
 
-This skill does not transition the page status, review the doc, or notify reviewers. Leave it in DRAFT and let the user circulate it.
+This skill does not transition the page status, review the doc, or notify reviewers. Leave it in DRAFT in the drafts subdirectory and let the user circulate it.
