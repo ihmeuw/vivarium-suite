@@ -79,7 +79,10 @@ jobs:
           echo "has-changes=$(jq -r '.["has-changes"]' <<< "$CLASSIFIED_CHANGES")" >> $GITHUB_OUTPUT
 
   build-and-test:
-    name: ${{ matrix.library }} (Python ${{ matrix.python-version }})${{ matrix.experimental && ' [CANDIDATE]' || '' }}
+    # [CANDIDATE] leads so it sits at a fixed offset in the check list and is easy to
+    # scan for. It cannot go further left: that is the workflow name, which is one
+    # value per run and so cannot vary per matrix entry.
+    name: ${{ matrix.experimental && '[CANDIDATE] ' || '' }}${{ matrix.library }} (Python ${{ matrix.python-version }})
     needs: detect-changes
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest

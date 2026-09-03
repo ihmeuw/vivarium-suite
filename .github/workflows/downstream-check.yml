@@ -77,7 +77,7 @@ jobs:
     # The fan-out: run each dependent's tests against the releasing libs installed
     # editably at their pending versions. Runs only when there ARE dependents AND
     # the run was requested (the label is present, or a manual dispatch).
-    name: ${{ matrix.library }} (Python ${{ matrix.python-version }})${{ matrix.experimental && ' [CANDIDATE]' || '' }}
+    name: ${{ matrix.experimental && '[CANDIDATE] ' || '' }}${{ matrix.library }} (Python ${{ matrix.python-version }})
     needs: detect
     if: needs.detect.outputs.has-downstream == 'true' && needs.detect.outputs.is-requested == 'true'
     runs-on: ubuntu-latest
