@@ -1,3 +1,8 @@
+**0.27.0 - 09/03/26**
+
+- ``design-doc``: create new design docs in the ``_ Draft and Exploratory`` Hub
+  subdirectory instead of directly under ``Design documents``
+
 **0.26.0 - 08/17/26**
 
 - Add a TL;DR section to every created Jira ticket
