@@ -436,66 +436,43 @@ class PopulationManager(Manager):
             )
         staged = self.staged_simulants
         committed = self.private_columns
-        if len(committed) == 0:
-            # A rowless population contributes nothing but its dtypes, and those are
-            # unreliable: an initializer that builds values by comprehension yields an
-            # empty list for an empty index, which pandas types without reference to
-            # what the values would have been. Concatenating would resolve to that
-            # dtype and lose the real one, so the staged frame stands alone.
-            self._private_columns = staged
-        else:
-            grown = pd.concat([committed, staged])
-            self._check_committed_columns_survive(committed, staged, grown)
-            self._private_columns = grown
-        self._staged_simulants = None
 
-        missing = {}
-        for component, cols_created in self._private_column_metadata.items():
-            missing_cols = [col for col in cols_created if col not in self._private_columns]
-            if missing_cols:
-                missing[component] = missing_cols
+        missing = {
+            component: skipped
+            for component, cols_created in self._private_column_metadata.items()
+            if (skipped := [col for col in cols_created if col not in staged])
+        }
         if missing:
             raise PopulationError(
                 "The following components registered initializers to create columns "
                 f"that were not actually created: {missing}."
             )
 
+        if len(committed) == 0:
+            # An empty index tells pandas nothing about the dtype a column would have
+            # held, so a rowless population's dtypes are not worth concatenating with.
+            self._private_columns = staged
+        else:
+            grown = pd.concat([committed, staged])
+            # The append may promote the staged values up to the committed dtype, so an
+            # int handed to a float column is fine. It may not promote the column
+            # itself, which would retype the simulants already in the population.
+            retyped = {
+                column: f"{committed[column].dtype} -> {grown[column].dtype} "
+                f"(initializer gave {staged[column].dtype})"
+                for column in committed.columns
+                if grown[column].dtype != committed[column].dtype
+            }
+            if retyped:
+                raise PopulationError(
+                    "Appending the simulants being added would change the dtype of the "
+                    f"following private columns: {retyped}. An initializer must produce "
+                    "values that the column's existing dtype can hold."
+                )
+            self._private_columns = grown
+        self._staged_simulants = None
+
         return self.private_columns.index
-
-    @staticmethod
-    def _check_committed_columns_survive(
-        committed: pd.DataFrame, staged: pd.DataFrame, grown: pd.DataFrame
-    ) -> None:
-        """Raise if appending the staged simulants damaged a committed column.
-
-        A pass must produce a value for every column the population already holds,
-        and may not retype one. Both checks are needed: a column missing from the
-        staged frame is appended as null, which retypes an int column but leaves a
-        float one alone, so neither check subsumes the other.
-
-        The append may promote the staged values up to the committed dtype, so an
-        int handed to a float column is fine. It may not promote the column itself,
-        which would retype the simulants already in the population.
-        """
-        skipped = [column for column in committed.columns if column not in staged.columns]
-        if skipped:
-            raise PopulationError(
-                "No initializer produced values for the following private columns, "
-                f"which the population already holds: {skipped}. Appending the new "
-                "simulants would leave them null."
-            )
-        retyped = {
-            column: f"{committed[column].dtype} -> {grown[column].dtype} "
-            f"(initializer gave {staged[column].dtype})"
-            for column in committed.columns
-            if grown[column].dtype != committed[column].dtype
-        }
-        if retyped:
-            raise PopulationError(
-                "Appending the simulants being added would change the dtype of the "
-                f"following private columns: {retyped}. An initializer must produce "
-                "values that the column's existing dtype can hold."
-            )
 
     def register_initializer(
         self,

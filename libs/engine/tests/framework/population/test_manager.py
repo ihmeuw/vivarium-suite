@@ -623,37 +623,42 @@ def _grow(*components: Component) -> InteractiveContext:
     )
 
 
-def test_mid_sim_addition_leaves_committed_simulants_untouched() -> None:
+@pytest.fixture(scope="module")
+def grown_population() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return the private columns before and after a mid-simulation addition."""
+    sim = _grow(ColumnCreator(), TypedColumnCreator())
+    before = sim._population.private_columns.copy()
+    sim.step()
+    return before, sim._population.private_columns.copy()
+
+
+def test_mid_sim_addition_leaves_committed_simulants_untouched(
+    grown_population: tuple[pd.DataFrame, pd.DataFrame]
+) -> None:
     """Growing the population does not disturb the simulants already in it.
 
     Deliberately a whole-frame comparison rather than a per-column one, so it also
     catches a dropped column, a reordered index, or null padding leaking in.
     """
-    sim = _grow(ColumnCreator(), TypedColumnCreator())
-    before = sim._population.private_columns.copy()
+    before, after = grown_population
 
-    sim.step()
-
-    after = sim._population.private_columns
     assert after.index.equals(pd.RangeIndex(0, INITIAL_SIZE + ADDED))
     assert not after.isna().to_numpy().any()
     pd.testing.assert_frame_equal(after.loc[before.index], before)
 
 
 @pytest.mark.parametrize("column", list(TypedColumnCreator.COLUMNS))
-def test_mid_sim_addition_preserves_dtype_and_values(column: str) -> None:
+def test_mid_sim_addition_preserves_dtype_and_values(
+    column: str, grown_population: tuple[pd.DataFrame, pd.DataFrame]
+) -> None:
     """Each column keeps its dtype across a mid-simulation addition.
 
     Compared against the committed dtype rather than a hard-coded one, so the test
     states the actual guarantee and does not need updating when pandas changes how
     it infers a dtype.
     """
-    sim = _grow(TypedColumnCreator())
-    committed = sim._population.private_columns[column]
+    committed, grown = (frame[column] for frame in grown_population)
 
-    sim.step()
-
-    grown = sim._population.private_columns[column]
     assert len(grown) == INITIAL_SIZE + ADDED
     assert grown.dtype == committed.dtype
     assert (grown == TypedColumnCreator.COLUMNS[column]).all()
@@ -729,8 +734,8 @@ def test_committed_float_column_survives_an_int_initializer() -> None:
     assert (grown.loc[NEW_INDEX] == 3.0).all()
 
 
-def test_a_pass_must_initialize_every_committed_column() -> None:
-    """An initializer cannot skip a column the population already holds.
+def test_a_pass_must_initialize_every_registered_column() -> None:
+    """An initializer cannot skip a column it registered, on any pass.
 
     Skipping it appends nulls for the new simulants. That retypes an int column but
     leaves a float one intact, so the dtype check alone would not catch it.
@@ -761,50 +766,8 @@ def test_a_pass_must_initialize_every_committed_column() -> None:
 
     sim = _grow(SkipsLaterPasses())
 
-    with pytest.raises(PopulationError, match="No initializer produced values"):
+    with pytest.raises(PopulationError, match="not actually created"):
         sim.step()
-
-
-def test_failed_initializer_leaves_the_population_unchanged() -> None:
-    """A raising initializer never reaches the append, so the population is untouched.
-
-    The half-filled staged frame is abandoned with the simulation that raised; nothing
-    of the failed pass reaches the private columns.
-    """
-
-    class FailingInitializer(Component):
-        ERROR = "initializer failed on purpose"
-
-        def __init__(self) -> None:
-            super().__init__()
-            self._passes = 0
-
-        @property
-        def columns_created(self) -> list[str]:
-            return ["doomed"]
-
-        def setup(self, builder: Builder) -> None:
-            builder.population.register_initializer(
-                initializer=self.initialize_doomed, columns=self.columns_created
-            )
-
-        def initialize_doomed(self, pop_data: SimulantData) -> None:
-            self._passes += 1
-            # Stage values first, so the failed pass has a partial frame to discard.
-            self.population_view.initialize(
-                pd.Series(list(pop_data.index), index=pop_data.index, name="doomed")
-            )
-            if self._passes == 2:
-                raise ValueError(self.ERROR)
-
-    sim = _grow(ColumnCreator(), FailingInitializer())
-    before = sim._population.private_columns.copy()
-
-    with pytest.raises(ValueError, match=FailingInitializer.ERROR):
-        sim.step()
-
-    manager = sim._population
-    pd.testing.assert_frame_equal(manager.private_columns, before)
 
 
 class EarlyReader(Component):

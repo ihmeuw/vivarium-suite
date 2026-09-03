@@ -1,4 +1,4 @@
-**5.9.0 - 08/27/26**
+**5.8.2 - 09/03/26**
 
 - Stage new simulants in a separate frame and append them to the population once
 

@@ -230,8 +230,7 @@ whose values have not been computed yet. The append also may not change a commit
 column's dtype; an initializer that hands back values of a different type raises
 rather than quietly retyping the column for the simulants already in the table.
 
-Reads during a creation pass are served from whichever frame holds the requested
-simulants, so an initializer still sees the values that earlier initializers
-produced. Reading a column whose initializer has not run yet raises, because the
-simulants being added have no value for it. An initializer that needs another
-component's column must require it, so that it runs afterwards.
+Reading a column that has not been created yet raises a
+:class:`~vivarium.engine.framework.population.exceptions.PopulationError`, so an
+initializer that needs another component's column must require it, so it will then
+run afterwards.
