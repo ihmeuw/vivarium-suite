@@ -82,7 +82,7 @@ First, clone this repository::
   :~$ cd {{ cookiecutter.package_name }}
 
 You will need ``conda`` to install all of this repository's requirements.
-We recommend installing `Miniforge` <https://github.com/conda-forge/miniforge>`_.
+We recommend installing `Miniforge <https://github.com/conda-forge/miniforge>`_.
 The platform-specific instructions for installation can be found at that link.
 Once you have ``conda`` installed, you are ready to proceed.
 
