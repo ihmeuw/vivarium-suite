@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pandas as pd
 
@@ -79,16 +79,32 @@ class PopulationManager(Manager):
             raise PopulationError("Population has not been initialized.")
         return self._private_columns
 
+    @property
+    def staged_simulants(self) -> pd.DataFrame:
+        """The dataframe of the simulants currently being initialized.
+
+        Initializers write here rather than into the population, so the population
+        never gains null rows for simulants whose values have not been computed yet.
+        Appended to the private columns once every initializer has run.
+        """
+        if self._staged_simulants is None:
+            raise PopulationError("No simulants are being added.")
+        return self._staged_simulants
+
+    @property
+    def adding_simulants(self) -> bool:
+        """Whether simulants are currently being initialized."""
+        return self._staged_simulants is not None
+
     ############################
     # Normal Component Methods #
     ############################
 
     def __init__(self) -> None:
         self._private_columns: pd.DataFrame | None = None
+        self._staged_simulants: pd.DataFrame | None = None
         self._private_column_metadata: defaultdict[str, list[str]] = defaultdict(list)
         self._registered_initializers: list[Callable[[SimulantData], None]] = []
-        self.creating_initial_population = False
-        self.adding_simulants = False
         self._last_id = -1
         self.tracked_queries: list[str] = []
         self.pipeline_evaluation_depth: int = 0
@@ -249,37 +265,84 @@ class PopulationManager(Manager):
             a Series if a single column is requested or a Dataframe otherwise.
         """
 
-        if self.creating_initial_population:
-            if columns:
-                raise PopulationError(
-                    "Cannot get private columns during initial population "
-                    "creation when no columns yet exist."
-                )
-            returned_cols = []
-            squeeze = False  # does not really matter (will return an empty df anyway)
+        all_private_columns = self._private_column_metadata.get(component.name, [])
+        if columns is None:
+            returned_cols = all_private_columns
+            squeeze = True
         else:
-            all_private_columns = self._private_column_metadata.get(component.name, [])
-            if columns is None:
-                returned_cols = all_private_columns
+            if isinstance(columns, str):
+                columns = [columns]
                 squeeze = True
             else:
-                if isinstance(columns, str):
-                    columns = [columns]
-                    squeeze = True
-                else:
-                    columns = list(columns)
-                    squeeze = False
-                missing_cols = set(columns).difference(set(all_private_columns))
-                if missing_cols:
-                    raise PopulationError(
-                        f"Component {component.name} is requesting the following "
-                        f"private columns to which it does not have access: {missing_cols}."
-                    )
-                returned_cols = columns
-        private_columns = self.private_columns[returned_cols]
+                columns = list(columns)
+                squeeze = False
+            missing_cols = set(columns).difference(set(all_private_columns))
+            if missing_cols:
+                raise PopulationError(
+                    f"Component {component.name} is requesting the following "
+                    f"private columns to which it does not have access: {missing_cols}."
+                )
+            returned_cols = columns
+        private_columns = self._read(index, returned_cols)
         if squeeze:
             private_columns = private_columns.squeeze(axis=1)
-        return private_columns.loc[index] if index is not None else private_columns
+        return private_columns
+
+    def _read(self, index: pd.Index[int] | None, columns: list[str]) -> pd.DataFrame:
+        """Read ``columns`` for ``index`` from whichever frame holds those simulants.
+
+        During a creation pass the new simulants live in their own frame, so a read of
+        them is served from there.
+
+        Raises
+        ------
+        PopulationError
+            If ``index`` names both the simulants being added and simulants already in
+            the population. A simulant being added has no value yet for any column
+            whose initializer has not run, so serving it alongside a settled one would
+            quietly mix real values with nulls.
+        PopulationError
+            If no initializer has created one of ``columns`` yet.
+        PopulationError
+            If a column exists but the frame serving the read has no value for it.
+        """
+        frame = self.private_columns
+        created = set(frame.columns)
+        if self.adding_simulants:
+            staged = cast(pd.DataFrame, self._staged_simulants)
+            created.update(staged.columns)
+            if index is not None:
+                is_staged = index.isin(staged.index)
+                if is_staged.any() and not is_staged.all():
+                    raise PopulationError(
+                        "A read cannot cover both the simulants being added and those "
+                        "already in the population, because a simulant being added has "
+                        "no value yet for any column whose initializer has not run. "
+                        "Read them separately."
+                    )
+                if is_staged.all():
+                    frame = staged
+
+        missing = [column for column in columns if column not in created]
+        if missing:
+            raise PopulationError(
+                f"The following private columns have not been created: {missing}. An "
+                "initializer that reads a private column must require it, so that it "
+                "runs after the initializer that creates it."
+            )
+        unset = [column for column in columns if column not in frame.columns]
+        if unset:
+            raise PopulationError(
+                f"The following private columns have no value for the simulants being "
+                f"read: {unset}. Their initializer has not run for these simulants, so "
+                "an initializer that reads them must require them."
+            )
+        return frame[columns] if index is None else frame.loc[index, columns]
+
+    @property
+    def staged_index(self) -> pd.Index[int]:
+        """The index of the simulants currently being initialized."""
+        return self.staged_simulants.index
 
     def get_population_index(self) -> pd.Index[int]:
         """Gets the index of the current population."""
@@ -337,7 +400,8 @@ class PopulationManager(Manager):
         in the population state table and then calls each initializer registered
         with the population system with a data object containing the state table
         index of the new simulants, the configuration info passed to the creator,
-        the current simulation time, and the size of the next time step.
+        the current simulation time, and the size of the next time step. It returns
+        the index of the whole population, including the simulants just created.
 
         Returns
         -------
@@ -351,34 +415,64 @@ class PopulationManager(Manager):
         population_configuration = (
             population_configuration if population_configuration else {}
         )
-        if self._private_columns is None:
-            self.creating_initial_population = True
+        initial_pass = self._private_columns is None
+        if initial_pass:
             self._private_columns = pd.DataFrame()
 
-        new_index = range(len(self._private_columns) + count)
-        new_population = self._private_columns.reindex(new_index)
-        index = new_population.index.difference(self._private_columns.index)
-        self._private_columns = new_population
-        self.adding_simulants = True
+        first_simulant = len(self.private_columns)
+        new_index = pd.RangeIndex(first_simulant, first_simulant + count)
+
+        if new_index.empty and not initial_pass:
+            # Nothing to initialize. The initial pass still runs its initializers,
+            # because they are what create the population's columns.
+            return self.private_columns.index
+
+        self._staged_simulants = pd.DataFrame(index=new_index)
         for initializer in self.resources.get_population_initializers():
             initializer(
-                SimulantData(index, population_configuration, self.clock(), self.step_size())
+                SimulantData(
+                    new_index, population_configuration, self.clock(), self.step_size()
+                )
             )
-        self.creating_initial_population = False
-        self.adding_simulants = False
+        staged = self.staged_simulants
+        committed = self.private_columns
 
-        missing = {}
-        for component, cols_created in self._private_column_metadata.items():
-            missing_cols = [col for col in cols_created if col not in self._private_columns]
-            if missing_cols:
-                missing[component] = missing_cols
+        missing = {
+            component: skipped
+            for component, cols_created in self._private_column_metadata.items()
+            if (skipped := [col for col in cols_created if col not in staged])
+        }
         if missing:
             raise PopulationError(
                 "The following components registered initializers to create columns "
                 f"that were not actually created: {missing}."
             )
 
-        return index
+        if len(committed) == 0:
+            # An empty index tells pandas nothing about the dtype a column would have
+            # held, so a rowless population's dtypes are not worth concatenating with.
+            self._private_columns = staged
+        else:
+            grown = pd.concat([committed, staged])
+            # The append may promote the staged values up to the committed dtype, so an
+            # int handed to a float column is fine. It may not promote the column
+            # itself, which would retype the simulants already in the population.
+            retyped = {
+                column: f"{committed[column].dtype} -> {grown[column].dtype} "
+                f"(initializer gave {staged[column].dtype})"
+                for column in committed.columns
+                if grown[column].dtype != committed[column].dtype
+            }
+            if retyped:
+                raise PopulationError(
+                    "Appending the simulants being added would change the dtype of the "
+                    f"following private columns: {retyped}. An initializer must produce "
+                    "values that the column's existing dtype can hold."
+                )
+            self._private_columns = grown
+        self._staged_simulants = None
+
+        return self.private_columns.index
 
     def register_initializer(
         self,
@@ -742,9 +836,7 @@ class PopulationManager(Manager):
             if name in requested_attributes and pipeline.is_simple
         ]
         if simple_attributes:
-            if self._private_columns is None:
-                raise PopulationError("Population has not been initialized.")
-            attributes_list.append(self._private_columns.loc[idx, simple_attributes])
+            attributes_list.append(self._read(idx, simple_attributes))
 
         # handle remaining non-simple attributes one by one
         remaining_attributes = [
@@ -795,4 +887,10 @@ class PopulationManager(Manager):
         return df
 
     def update(self, update: pd.DataFrame) -> None:
-        self.private_columns[update.columns] = update
+        # Writes during a creation pass belong to the simulants being added.
+        frame = (
+            cast(pd.DataFrame, self._staged_simulants)
+            if self.adding_simulants
+            else self.private_columns
+        )
+        frame[update.columns] = update

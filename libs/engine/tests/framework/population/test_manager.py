@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
@@ -24,8 +25,13 @@ from tests.helpers import (
 )
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder
+from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population.exceptions import PopulationError
 from vivarium.engine.framework.population.manager import PopulationManager, SimulantData
+
+INITIAL_SIZE = 6
+ADDED = 4
+NEW_INDEX = pd.RangeIndex(INITIAL_SIZE, INITIAL_SIZE + ADDED)
 
 
 class InitializingComponent(Component):
@@ -476,14 +482,19 @@ def test_get_private_columns_squeezing() -> None:
     assert default.equals(df)
 
 
-def test_get_private_columns_raises_on_initial_pop_creation() -> None:
+def test_get_private_columns_raises_for_a_column_not_yet_created() -> None:
+    """A column the component owns but no initializer has created yet is an error.
+
+    Distinct from the access error below: here the request is legitimate and the
+    column simply does not exist yet, which is the state during initial creation.
+    """
     mgr = PopulationManager()
-    mgr.creating_initial_population = True
-    with pytest.raises(
-        PopulationError,
-        match="Cannot get private columns during initial population creation",
-    ):
-        mgr.get_private_columns(ColumnCreator(), columns=["test_column_1"])
+    component = ColumnCreator()
+    mgr._private_column_metadata[component.name] = ["test_column_1"]
+    mgr._private_columns = pd.DataFrame()
+
+    with pytest.raises(PopulationError, match="have not been created"):
+        mgr.get_private_columns(component, columns=["test_column_1"])
 
 
 def test_get_private_columns_raises_bad_column_request() -> None:
@@ -537,3 +548,430 @@ def test_register_tracked_query(mocker: MockerFixture) -> None:
     mgr.register_tracked_query("foo == 'bar'")
     mgr.logger.warning.assert_called_once()  # type: ignore[attr-defined]
     assert mgr.tracked_queries == ["foo == 'bar'", "cat != dog"]
+
+
+class ComprehensionColumnCreator(Component):
+    """Build column values by comprehension rather than broadcasting a scalar."""
+
+    @property
+    def columns_created(self) -> list[str]:
+        return ["by_comprehension"]
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_initializer(
+            initializer=self.initialize_column, columns=self.columns_created
+        )
+
+    def initialize_column(self, pop_data: SimulantData) -> None:
+        self.population_view.initialize(
+            pd.Series(
+                [int(i) for i in pop_data.index],
+                index=pop_data.index,
+                name="by_comprehension",
+            )
+        )
+
+
+class SimulantAdder(Component):
+    """Add simulants on the first time step, keeping what the creator returned."""
+
+    def __init__(self, count: int) -> None:
+        super().__init__()
+        self.count = count
+        self.created_index: pd.Index[int] | None = None
+
+    def setup(self, builder: Builder) -> None:
+        self.simulant_creator = builder.population.get_simulant_creator()
+
+    def on_time_step(self, event: Event) -> None:
+        self.created_index = self.simulant_creator(self.count, {})
+
+
+class TypedColumnCreator(Component):
+    """Create one private column per dtype, so dtype handling can be checked."""
+
+    COLUMNS: dict[str, Any] = {
+        "a_bool": True,
+        "an_int": 7,
+        "a_float": 1.5,
+        "a_string": "spam",
+        "a_datetime": pd.Timestamp("2020-01-01"),
+    }
+
+    @property
+    def columns_created(self) -> list[str]:
+        return list(self.COLUMNS)
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_initializer(
+            initializer=self.initialize_columns, columns=self.columns_created
+        )
+
+    def initialize_columns(self, pop_data: SimulantData) -> None:
+        self.population_view.initialize(
+            pd.DataFrame(self.COLUMNS, index=pop_data.index)[self.columns_created]
+        )
+
+
+def _grow(*components: Component) -> InteractiveContext:
+    """Build a simulation that adds ``ADDED`` simulants on its first step."""
+    return InteractiveContext(
+        components=[*components, SimulantAdder(ADDED)],
+        configuration={"population": {"population_size": INITIAL_SIZE}},
+        setup=True,
+    )
+
+
+@pytest.fixture(scope="module")
+def grown_population() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return the private columns before and after a mid-simulation addition."""
+    sim = _grow(ColumnCreator(), TypedColumnCreator())
+    before = sim._population.private_columns.copy()
+    sim.step()
+    return before, sim._population.private_columns.copy()
+
+
+def test_mid_sim_addition_leaves_committed_simulants_untouched(
+    grown_population: tuple[pd.DataFrame, pd.DataFrame]
+) -> None:
+    """Growing the population does not disturb the simulants already in it.
+
+    Deliberately a whole-frame comparison rather than a per-column one, so it also
+    catches a dropped column, a reordered index, or null padding leaking in.
+    """
+    before, after = grown_population
+
+    assert after.index.equals(pd.RangeIndex(0, INITIAL_SIZE + ADDED))
+    assert not after.isna().to_numpy().any()
+    pd.testing.assert_frame_equal(after.loc[before.index], before)
+
+
+@pytest.mark.parametrize("column", list(TypedColumnCreator.COLUMNS))
+def test_mid_sim_addition_preserves_dtype_and_values(
+    column: str, grown_population: tuple[pd.DataFrame, pd.DataFrame]
+) -> None:
+    """Each column keeps its dtype across a mid-simulation addition.
+
+    Compared against the committed dtype rather than a hard-coded one, so the test
+    states the actual guarantee and does not need updating when pandas changes how
+    it infers a dtype.
+    """
+    committed, grown = (frame[column] for frame in grown_population)
+
+    assert len(grown) == INITIAL_SIZE + ADDED
+    assert grown.dtype == committed.dtype
+    assert (grown == TypedColumnCreator.COLUMNS[column]).all()
+
+
+class DtypeShifter(Component):
+    """Initialize a column with one value on the first pass and another after."""
+
+    def __init__(self, first: Any, later: Any) -> None:
+        super().__init__()
+        self.first = first
+        self.later = later
+        self._passes = 0
+
+    @property
+    def columns_created(self) -> list[str]:
+        return ["shifting"]
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_initializer(
+            initializer=self.initialize_column, columns=self.columns_created
+        )
+
+    def initialize_column(self, pop_data: SimulantData) -> None:
+        self._passes += 1
+        value = self.first if self._passes == 1 else self.later
+        self.population_view.initialize(
+            pd.Series(value, index=pop_data.index, name="shifting")
+        )
+
+
+@pytest.mark.parametrize(
+    "first, later",
+    [
+        pytest.param(1, 3.7, id="int_column_given_a_fractional_float"),
+        pytest.param(1, 3.0, id="int_column_given_a_whole_float"),
+        pytest.param(1, "spam", id="int_column_given_a_string"),
+        pytest.param(True, 1, id="bool_column_given_an_int"),
+        pytest.param(pd.Timestamp("2020-01-01"), "spam", id="datetime_column_given_a_string"),
+    ],
+)
+def test_a_pass_may_not_retype_a_committed_column(first: Any, later: Any) -> None:
+    """An initializer cannot change the dtype of a column the population already has.
+
+    The whole-float case raises even though the values would coerce losslessly.
+    Accepting it would make the check depend on the values a pass happened to
+    produce, so the same initializer would pass on one seed and raise on another.
+    """
+    sim = _grow(DtypeShifter(first, later))
+
+    with pytest.raises(PopulationError, match="would change the dtype"):
+        sim.step()
+
+
+def test_committed_float_column_survives_an_int_initializer() -> None:
+    """An int-typed initializer no longer truncates a committed float column.
+
+    The padded population let the whole column take the update's dtype, so existing
+    simulants' values were rewritten as ints. The staged frame carries the int only
+    for the new simulants, and the append promotes it back to float. This is the one
+    direction the dtype check permits, so it also pins the check against overreach.
+    """
+    sim = _grow(DtypeShifter(1.5, 3))
+    committed = sim._population.private_columns["shifting"]
+    assert committed.dtype == np.dtype("float64")
+    assert (committed == 1.5).all()
+
+    sim.step()
+
+    grown = sim._population.private_columns["shifting"]
+    assert grown.dtype == np.dtype("float64")
+    pd.testing.assert_series_equal(grown.loc[committed.index], committed)
+    assert (grown.loc[NEW_INDEX] == 3.0).all()
+
+
+def test_a_pass_must_initialize_every_registered_column() -> None:
+    """An initializer cannot skip a column it registered, on any pass.
+
+    Skipping it appends nulls for the new simulants. That retypes an int column but
+    leaves a float one intact, so the dtype check alone would not catch it.
+    """
+
+    class SkipsLaterPasses(Component):
+        """Create the column on the first pass, then never initialize it again."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._passes = 0
+
+        @property
+        def columns_created(self) -> list[str]:
+            return ["skipped"]
+
+        def setup(self, builder: Builder) -> None:
+            builder.population.register_initializer(
+                initializer=self.initialize_column, columns=self.columns_created
+            )
+
+        def initialize_column(self, pop_data: SimulantData) -> None:
+            self._passes += 1
+            if self._passes == 1:
+                self.population_view.initialize(
+                    pd.Series(1.5, index=pop_data.index, name="skipped")
+                )
+
+    sim = _grow(SkipsLaterPasses())
+
+    with pytest.raises(PopulationError, match="not actually created"):
+        sim.step()
+
+
+class EarlyReader(Component):
+    """Read a column that a later initializer creates, on chosen passes."""
+
+    def __init__(self, read_on_passes: tuple[int, ...]) -> None:
+        super().__init__()
+        self.read_on_passes = read_on_passes
+        self._passes = 0
+
+    @property
+    def columns_created(self) -> list[str]:
+        return ["read_first"]
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_initializer(
+            initializer=self.initialize_and_read, columns=self.columns_created
+        )
+
+    def initialize_and_read(self, pop_data: SimulantData) -> None:
+        self._passes += 1
+        if self._passes in self.read_on_passes:
+            self.population_view.get(pop_data.index, "written_later")
+        self.population_view.initialize(pd.Series(1, index=pop_data.index, name="read_first"))
+
+
+class LateWriter(Component):
+    """Create the column, ordered after EarlyReader by a resource requirement."""
+
+    @property
+    def columns_created(self) -> list[str]:
+        return ["written_later"]
+
+    def setup(self, builder: Builder) -> None:
+        builder.population.register_initializer(
+            initializer=self.initialize_column,
+            columns=self.columns_created,
+            required_resources=["read_first"],
+        )
+
+    def initialize_column(self, pop_data: SimulantData) -> None:
+        self.population_view.initialize(
+            pd.Series(2, index=pop_data.index, name="written_later")
+        )
+
+
+def test_column_awaiting_its_initializer_raises_mid_sim() -> None:
+    """Reading a column whose initializer has not run yet this pass is an error.
+
+    The column exists in the population, so this is distinct from never having been
+    created: the staged frame simply carries no value for the new simulants until the
+    initializer runs. Serving null would hide the missing resource requirement.
+    """
+    sim = _grow(EarlyReader(read_on_passes=(2,)), LateWriter())
+
+    with pytest.raises(PopulationError, match="have no value for the simulants"):
+        sim.step()
+
+
+def test_never_created_column_raises_during_initial_creation() -> None:
+    """A column that no initializer has created yet cannot be read."""
+    with pytest.raises(PopulationError, match="have not been created"):
+        _grow(EarlyReader(read_on_passes=(1,)), LateWriter())
+
+
+def test_read_spanning_both_frames_raises() -> None:
+    """A read cannot cover the simulants being added and the settled ones at once."""
+
+    class SpanningReader(Component):
+        def __init__(self) -> None:
+            super().__init__()
+            self._passes = 0
+
+        @property
+        def columns_created(self) -> list[str]:
+            return ["spanning"]
+
+        def setup(self, builder: Builder) -> None:
+            builder.population.register_initializer(
+                initializer=self.initialize_spanning,
+                columns=self.columns_created,
+                required_resources=["test_column_1"],
+            )
+
+        def initialize_spanning(self, pop_data: SimulantData) -> None:
+            self._passes += 1
+            index = pop_data.index
+            if self._passes > 1:
+                # Simulant 0 is committed by now; the rest are being added.
+                index = pd.Index([0, *pop_data.index])
+            self.population_view.get(index, "test_column_1")
+            self.population_view.initialize(
+                pd.Series(1, index=pop_data.index, name="spanning")
+            )
+
+    sim = _grow(ColumnCreator(), SpanningReader())
+
+    with pytest.raises(PopulationError, match="cannot cover both the simulants being added"):
+        sim.step()
+
+
+def test_creator_returns_the_whole_population_index() -> None:
+    """The creator hands back the whole population, not just the simulants it added."""
+    adder = SimulantAdder(ADDED)
+    sim = InteractiveContext(
+        components=[ColumnCreator(), adder],
+        configuration={"population": {"population_size": INITIAL_SIZE}},
+        setup=True,
+    )
+
+    sim.step()
+
+    assert adder.created_index is not None
+    assert adder.created_index.equals(pd.RangeIndex(0, INITIAL_SIZE + ADDED))
+    # The pass staged simulants and then handed them over, so it is over.
+    assert not sim._population.adding_simulants
+
+
+def test_zero_count_addition_changes_nothing() -> None:
+    """Adding no simulants leaves the population exactly as it was.
+
+    The creator still returns the whole population, so a caller cannot tell a
+    no-op addition apart from one that added nothing new.
+    """
+    adder = SimulantAdder(0)
+    sim = InteractiveContext(
+        components=[ColumnCreator(), TypedColumnCreator(), adder],
+        configuration={"population": {"population_size": INITIAL_SIZE}},
+        setup=True,
+    )
+    before = sim._population.private_columns.copy()
+
+    sim.step()
+
+    pd.testing.assert_frame_equal(sim._population.private_columns, before)
+    assert adder.created_index is not None
+    assert adder.created_index.equals(before.index)
+
+
+def test_staged_accessors_raise_outside_a_creation_pass() -> None:
+    """The staged frame and its index are only reachable during a creation pass."""
+    manager = _grow(ColumnCreator())._population
+    assert not manager.adding_simulants
+
+    with pytest.raises(PopulationError, match="No simulants are being added."):
+        _ = manager.staged_simulants
+    with pytest.raises(PopulationError, match="No simulants are being added."):
+        _ = manager.staged_index
+
+
+def test_partial_mid_sim_initialization_raises() -> None:
+    """An initializer must cover every simulant being added, on every pass.
+
+    Initial creation always required full coverage. Requiring it of a
+    mid-simulation addition too is the behavior change: previously the simulants an
+    initializer skipped were left null.
+    """
+
+    class PartialOnLaterPasses(Component):
+        """Cover every simulant on the first pass, only half on later ones."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._passes = 0
+
+        @property
+        def columns_created(self) -> list[str]:
+            return ["partial"]
+
+        def setup(self, builder: Builder) -> None:
+            builder.population.register_initializer(
+                initializer=self.initialize_partial, columns=self.columns_created
+            )
+
+        def initialize_partial(self, pop_data: SimulantData) -> None:
+            self._passes += 1
+            covered = pop_data.index if self._passes == 1 else pop_data.index[::2]
+            self.population_view.initialize(pd.Series(1, index=covered, name="partial"))
+
+    component = PartialOnLaterPasses()
+    sim = _grow(component)
+    assert component._passes == 1
+
+    with pytest.raises(PopulationError, match="is missing updates for"):
+        sim.step()
+
+
+def test_adding_to_a_rowless_population_keeps_the_new_dtypes() -> None:
+    """A rowless population contributes no dtype to the simulants added after it.
+
+    An initializer building its values by comprehension gets an empty list for an
+    empty index, which pandas types without reference to what the values would have
+    been. Concatenating that rowless column with the staged frame would resolve to
+    the wrong dtype and lose the real one.
+    """
+    sim = InteractiveContext(
+        components=[ComprehensionColumnCreator(), SimulantAdder(5)],
+        configuration={"population": {"population_size": 0}},
+        setup=True,
+    )
+    assert len(sim._population.private_columns) == 0
+
+    sim.step()
+
+    grown = sim._population.private_columns
+    assert len(grown) == 5
+    assert grown["by_comprehension"].dtype == np.dtype("int64")
+    assert grown["by_comprehension"].tolist() == [0, 1, 2, 3, 4]

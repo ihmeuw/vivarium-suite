@@ -1,3 +1,7 @@
+**5.8.3 - 09/04/26**
+
+- Stage new simulants in a separate frame and append them to the population once
+
 **5.8.2 - 09/04/26**
 
 - Bugfix: hash datetime randomness keys independent of the column's resolution, so

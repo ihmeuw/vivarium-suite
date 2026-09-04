@@ -913,14 +913,18 @@ def test__build_query_handles_tracked_queries(
 ##############################
 
 
+def _stage(manager: PopulationManager, index: pd.Index[int]) -> None:
+    """Put the manager mid-creation-pass with ``index`` staged."""
+    manager._staged_simulants = pd.DataFrame(index=index)
+
+
 def test_population_view_initialize_format_fail(
     pies_and_cubes_pop_mgr: PopulationManager,
     population_update: pd.Series[Any] | pd.DataFrame,
     update_index: pd.Index[int],
 ) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr.creating_initial_population = True
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, PIE_DF.index)
     # Bad type
     with pytest.raises(TypeError):
         pv.initialize(PIE_DF.iloc[:, 0].tolist())  # type: ignore[arg-type]
@@ -931,12 +935,12 @@ def test_population_view_initialize_format_fail(
         update.index += 2 * update.index.max()
         with pytest.raises(
             PopulationError,
-            match=f"{len(update)} simulants were provided in an update with no matching index",
+            match=f"values for {len(update)} simulants that are not being added",
         ):
             pv.initialize(update)
 
     # Missing an update
-    pies_and_cubes_pop_mgr._private_columns = PIE_DF.loc[update_index]
+    _stage(pies_and_cubes_pop_mgr, update_index)
     if not update_index.empty:
         with pytest.raises(
             PopulationError, match="Component 'pie_component' is missing updates for"
@@ -950,9 +954,7 @@ def test_population_view_initialize_format_fail_new_cols(
     update_index: pd.Index[int],
 ) -> None:
     pv_pies = pies_and_cubes_pop_mgr.get_view(PieComponent())
-
-    pies_and_cubes_pop_mgr.creating_initial_population = True
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, PIE_DF.index)
 
     with pytest.raises(PopulationError, match="unnamed pandas series"):
         pv_pies.initialize(PIE_DF.iloc[:, 0].rename(None))
@@ -973,8 +975,7 @@ def test_population_view_initialize_not_adding_simulants(
     pies_and_cubes_pop_mgr: PopulationManager,
 ) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr.creating_initial_population = False
-    pies_and_cubes_pop_mgr.adding_simulants = False
+    assert not pies_and_cubes_pop_mgr.adding_simulants
     with pytest.raises(PopulationError, match="initialize\\(\\) can only be called"):
         pv.initialize(PIE_DF)
 
@@ -984,8 +985,7 @@ def test_population_view_initialize_read_only(
 ) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
     pv._component = None
-    pies_and_cubes_pop_mgr.creating_initial_population = True
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, PIE_DF.index)
     with pytest.raises(PopulationError, match="read-only"):
         pv.initialize(PIE_DF)
 
@@ -998,20 +998,15 @@ def test_population_view_initialize_init(
     if isinstance(population_update_new_cols, pd.Series):
         pytest.skip()
 
-    # Remove the cubes backing data to test that initialization works
-    pies_and_cubes_pop_mgr._private_columns = PIE_DF.loc[update_index]
-
     pv = pies_and_cubes_pop_mgr.get_view(CubeComponent())
-
-    pies_and_cubes_pop_mgr.creating_initial_population = True
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, update_index)
 
     pv.initialize(population_update_new_cols)
 
+    staged = pies_and_cubes_pop_mgr._staged_simulants
+    assert staged is not None
     for col in population_update_new_cols:
-        assert pies_and_cubes_pop_mgr._private_columns[col].equals(
-            population_update_new_cols[col]
-        )
+        assert staged[col].equals(population_update_new_cols[col])
 
 
 def test_population_view_initialize_add(
@@ -1023,18 +1018,16 @@ def test_population_view_initialize_add(
         pytest.skip()
 
     pv_pies = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr._private_columns = PIE_DF.loc[update_index]
-    for col in population_update:
-        pies_and_cubes_pop_mgr._private_columns[col] = None
-    pies_and_cubes_pop_mgr.creating_initial_population = False
-    pies_and_cubes_pop_mgr.adding_simulants = True
+    _stage(pies_and_cubes_pop_mgr, update_index)
     pv_pies.initialize(population_update)
 
+    staged = pies_and_cubes_pop_mgr._staged_simulants
+    assert staged is not None
     for col in population_update:
         if update_index.empty:
-            assert pies_and_cubes_pop_mgr._private_columns[col].empty
+            assert staged[col].empty
         else:
-            assert pies_and_cubes_pop_mgr._private_columns[col].equals(population_update[col])
+            assert staged[col].equals(population_update[col])
 
 
 #########################
@@ -1046,8 +1039,6 @@ def test_population_view_update_single_column(
     pies_and_cubes_pop_mgr: PopulationManager,
 ) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr.creating_initial_population = False
-    pies_and_cubes_pop_mgr.adding_simulants = False
     original_pi = PIE_DF["pi"].copy()
 
     pv.update("pi", lambda pi: pi * 2)
@@ -1063,8 +1054,6 @@ def test_population_view_update_multi_column(
     pies_and_cubes_pop_mgr: PopulationManager,
 ) -> None:
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr.creating_initial_population = False
-    pies_and_cubes_pop_mgr.adding_simulants = False
 
     def swap_and_double(df: pd.DataFrame) -> pd.DataFrame:
         return df.assign(pi=df["pi"] * 2)
@@ -1082,8 +1071,6 @@ def test_population_view_update_partial_index(
 ) -> None:
     """Modifier returning a subset of rows only updates those rows."""
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr.creating_initial_population = False
-    pies_and_cubes_pop_mgr.adding_simulants = False
 
     subset_idx = PIE_DF.index[::2]
 
@@ -1101,8 +1088,6 @@ def test_population_view_update_scalar(
 ) -> None:
     """Modifier returning a scalar broadcasts to all rows."""
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr.creating_initial_population = False
-    pies_and_cubes_pop_mgr.adding_simulants = False
 
     pv.update("pi", lambda s: pd.Series(99.0, index=s.index))
 
@@ -1125,8 +1110,6 @@ def test_population_view_update_empty_index(
 ) -> None:
     """Modifier returning an empty-index Series is a no-op."""
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
-    pies_and_cubes_pop_mgr.creating_initial_population = False
-    pies_and_cubes_pop_mgr.adding_simulants = False
 
     original = pies_and_cubes_pop_mgr._private_columns
     assert original is not None
