@@ -1,3 +1,8 @@
+**5.9.0 - 09/04/26**
+
+- Add an ``index`` parameter to ``PopulationView.update()`` to scope an update to a
+  subset of simulants
+
 **5.8.3 - 09/04/26**
 
 - Stage new simulants in a separate frame and append them to the population once
