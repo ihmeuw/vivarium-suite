@@ -90,10 +90,11 @@ def call(Map config = [:]){
 
   pipeline {
     environment {
-        // Cause-derived, so a rerun of a scheduled build is not IS_CRON. Only the
-        // deploy gate was moved off the cause and onto SKIP_DEPLOY; the consumers
-        // below still treat a rerun as the manual build it is.
+        // Both cause-derived: a rerun of a nightly is IS_MANUAL, not IS_CRON.
         IS_CRON = "${currentBuild.buildCauses.toString().contains('TimerTrigger')}"
+        // Started by a person in the UI: Build with Parameters, Rerun, or Replay.
+        // These never deploy unless FORCE_DEPLOY says so.
+        IS_MANUAL = "${currentBuild.buildCauses.toString().contains('UserIdCause')}"
         CRON_SCHEDULE = "${parameterized_cron_schedule}"
         // defaults for conda and pip are a local scratch directory /svc-simsci for improved speed.
         // In the past, we used the cluster filesystem which is much slower.
@@ -129,6 +130,11 @@ def call(Map config = [:]){
         name: "SKIP_DEPLOY",
         defaultValue: false,
         description: "Whether to skip deploying on a run of the default branch. Scheduled builds set this automatically, so reruns of them do not deploy."
+      )
+      booleanParam(
+        name: "FORCE_DEPLOY",
+        defaultValue: false,
+        description: "Whether to deploy from a manually started build of the default branch, which otherwise never deploys."
       )
       booleanParam(
         name: "RUN_SLOW",
@@ -292,6 +298,7 @@ def call(Map config = [:]){
                           stage("Build and Deploy - Python ${pythonVersion}") {
                             if (is_deployable &&
                               !params.SKIP_DEPLOY &&
+                              (!env.IS_MANUAL.toBoolean() || params.FORCE_DEPLOY) &&
                               (env.BRANCH == "main") &&
                               has_deployable_change()) {
                               if (!has_changelog_update()) {
