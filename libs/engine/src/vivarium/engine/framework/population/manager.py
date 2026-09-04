@@ -890,7 +890,7 @@ class PopulationManager(Manager):
         """Write new values for the simulants in update's index.
 
         Only the rows in ``update``'s index are written; every other row is left
-        alone. Use :meth:`create_columns` to add a column instead.
+        alone.
 
         Parameters
         ----------
@@ -898,17 +898,13 @@ class PopulationManager(Manager):
             The new values, indexed by the simulants to write. Its columns must
             already exist in the frame being written.
         """
-        # The only writer during a creation pass is initialize(), which creates
-        # columns rather than updating them.
         frame = (
             cast(pd.DataFrame, self._staged_simulants)
             if self.adding_simulants
             else self.private_columns
         )
         if update.index.equals(frame.index):
-            # An update covering every row leaves nothing for the row-wise write
-            # to protect, and replacing whole columns is 1.6-4.5x quicker end to
-            # end (100k-1M simulants, paired alternating runs, unanimous).
+            # Faster than writing by index when every row is being replaced.
             frame[update.columns] = update
         else:
             # Only writing into rows can leave the rows it omits alone; assigning

@@ -466,7 +466,6 @@ class PopulationView:
                     "A component is corrupting the population table by modifying the "
                     f"dtype of the {column} column from {existing_dtype} to {update_dtype}."
                 )
-            # The existing column's dtype wins so table dtypes stay stable.
             result_df[column] = result_df[column].astype(existing_dtype)
 
         self._manager.update(result_df)
