@@ -218,7 +218,7 @@ class IndexMap:
             numeric.
         """
         if pdt.is_datetime64_any_dtype(column):
-            integers = self._clip_to_seconds(column.astype(np.int64))
+            integers = self._clip_to_seconds(column)
         elif pdt.is_integer_dtype(column):
             column = column.astype(int)
             if not len(column >= 0) == len(column):
@@ -236,23 +236,43 @@ class IndexMap:
         return integers
 
     @staticmethod
-    def _digit(m: pd.Series[int], n: int) -> pd.Series[int]:
-        """Returns the nth digit of each number in m."""
-        nth_digits: pd.Series[int] = (m // (10**n)) % 10
+    def _digit(column: pd.Series[int], n: int) -> pd.Series[int]:
+        """Returns the nth digit of each number in the column."""
+        nth_digits: pd.Series[int] = (column // (10**n)) % 10
         return nth_digits
 
     @staticmethod
-    def _clip_to_seconds(m: pd.Series[int]) -> pd.Series[int]:
-        """Clips UTC datetime in nanoseconds to seconds."""
-        return m // pd.Timedelta(1, unit="s").value
+    def _clip_to_seconds(column: pd.Series[Any]) -> pd.Series[int]:
+        """Converts a datetime column to whole seconds since the Unix epoch.
 
-    def _spread(self, m: pd.Series[int]) -> pd.Series[int]:
+        Parameters
+        ----------
+        column
+            A series of datetimes.
+
+        Returns
+        -------
+            A series of whole seconds since the Unix epoch.
+
+        Raises
+        ------
+        RandomnessError
+            If the column contains NaT. A missing key would otherwise hash as
+            though it were a real time.
+        """
+        if column.isna().any():
+            raise RandomnessError(
+                "Datetime columns used as randomness keys cannot contain NaT."
+            )
+        return (column - pd.Timestamp(0)) // pd.Timedelta(1, unit="s")
+
+    def _spread(self, column: pd.Series[int]) -> pd.Series[int]:
         """Spreads out integer values to give smaller values more weight."""
-        return (m * 111_111) % self.TEN_DIGIT_MODULUS
+        return (column * 111_111) % self.TEN_DIGIT_MODULUS
 
-    def _shift(self, m: pd.Series[float]) -> pd.Series[int]:
+    def _shift(self, column: pd.Series[float]) -> pd.Series[int]:
         """Shifts floats so that the first 10 decimal digits are significant."""
-        out = m % 1 * self.TEN_DIGIT_MODULUS // 1
+        out = column % 1 * self.TEN_DIGIT_MODULUS // 1
         return out.astype("int64")
 
     def __getitem__(self, index: pd.Index[int]) -> npt.NDArray[np.int64]:
