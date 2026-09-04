@@ -906,9 +906,9 @@ class PopulationManager(Manager):
             else self.private_columns
         )
         if update.index.equals(frame.index):
-            # Fast path: replacing whole columns measures ~20% quicker than a
-            # row-wise write at a million simulants, and an update covering every
-            # row leaves nothing for the row-wise write to protect.
+            # An update covering every row leaves nothing for the row-wise write
+            # to protect, and replacing whole columns is 1.6-4.5x quicker end to
+            # end (100k-1M simulants, paired alternating runs, unanimous).
             frame[update.columns] = update
         else:
             # Only writing into rows can leave the rows it omits alone; assigning
