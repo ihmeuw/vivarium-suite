@@ -90,11 +90,21 @@ Scheduled builds
 
 Branches listed in ``scheduled_branches`` get a nightly cron trigger. The
 trigger is a ``parameterizedCron`` (Jenkins' `Parameterized Scheduler
-<https://plugins.jenkins.io/parameterized-scheduler/>`_ plugin) that supplies
-``SKIP_DEPLOY=true``, so nightly builds of the default branch never deploy.
-Because the parameter is recorded on the build, rerunning a nightly build from
-the Jenkins UI inherits it and stays non-deploying; deploys only happen on
-builds that were started with ``SKIP_DEPLOY`` unset.
+<https://plugins.jenkins.io/parameterized-scheduler/>`_ plugin, which must be
+installed on the Jenkins controller) that supplies ``SKIP_DEPLOY=true``, so
+nightly builds of the default branch never deploy. Because the parameter is
+recorded on the build, rerunning a nightly from the Jenkins UI inherits it and
+stays non-deploying — there is no need to set ``SKIP_DEPLOY`` by hand.
+
+An unset ``SKIP_DEPLOY`` is necessary but not sufficient for a deploy, which
+also requires ``deployable: true``, the ``main`` branch, and a deployable change
+since the last build.
+
+Jenkins registers a job's triggers from its last build, so the
+``parameterizedCron`` trigger replaces the old one only once a scheduled branch
+has built again under this version. Trigger one build per scheduled branch after
+upgrading, so that no nightly fires from the stale trigger without
+``SKIP_DEPLOY``.
 
 Tag prefix
 ----------
