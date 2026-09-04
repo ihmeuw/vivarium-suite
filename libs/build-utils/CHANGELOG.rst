@@ -1,3 +1,7 @@
+**4.6.1 - 09/04/26**
+
+- Add shared env for vivarium_gates_lsff_2026
+
 **4.6.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10
