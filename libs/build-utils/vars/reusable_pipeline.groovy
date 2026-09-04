@@ -90,8 +90,11 @@ def call(Map config = [:]){
 
   pipeline {
     environment {
+        // Cause-derived, so a rerun of a scheduled build is not IS_CRON. Only the
+        // deploy gate was moved off the cause and onto SKIP_DEPLOY; the consumers
+        // below still treat a rerun as the manual build it is.
         IS_CRON = "${currentBuild.buildCauses.toString().contains('TimerTrigger')}"
-        CRON_SCHEDULE = "${cron_schedule}"
+        CRON_SCHEDULE = "${parameterized_cron_schedule}"
         // defaults for conda and pip are a local scratch directory /svc-simsci for improved speed.
         // In the past, we used the cluster filesystem which is much slower.
         shared_path="/svc-simsci"
