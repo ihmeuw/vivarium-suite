@@ -75,7 +75,7 @@ sphinx-click = ["sphinx-click"]
 
 # gbd (IHME artifactory)
 db_queries = ["db-queries>=31.0.4,<32.0.0"]
-db_queries_perd = ["db-queries>=33.8.0,<34.0.0"]
+db_queries_perd = ["db-queries>=33.8.0"]
 db_tools = ["db-tools>=1.0.2,<2.0.0"]
 get_draws = ["get-draws>=5.1.4,<6.0.0"]
 
