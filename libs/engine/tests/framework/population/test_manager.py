@@ -29,6 +29,10 @@ from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population.exceptions import PopulationError
 from vivarium.engine.framework.population.manager import PopulationManager, SimulantData
 
+INITIAL_SIZE = 6
+ADDED = 4
+NEW_INDEX = pd.RangeIndex(INITIAL_SIZE, INITIAL_SIZE + ADDED)
+
 
 class InitializingComponent(Component):
     @property
@@ -581,11 +585,6 @@ class SimulantAdder(Component):
 
     def on_time_step(self, event: Event) -> None:
         self.created_index = self.simulant_creator(self.count, {})
-
-
-INITIAL_SIZE = 6
-ADDED = 4
-NEW_INDEX = pd.RangeIndex(INITIAL_SIZE, INITIAL_SIZE + ADDED)
 
 
 class TypedColumnCreator(Component):

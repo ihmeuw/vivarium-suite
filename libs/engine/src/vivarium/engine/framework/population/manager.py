@@ -313,15 +313,15 @@ class PopulationManager(Manager):
             created.update(staged.columns)
             if index is not None:
                 is_staged = index.isin(staged.index)
-                if is_staged.all():
-                    frame = staged
-                elif is_staged.any():
+                if is_staged.any() and not is_staged.all():
                     raise PopulationError(
                         "A read cannot cover both the simulants being added and those "
                         "already in the population, because a simulant being added has "
                         "no value yet for any column whose initializer has not run. "
                         "Read them separately."
                     )
+                if is_staged.all():
+                    frame = staged
 
         missing = [column for column in columns if column not in created]
         if missing:
