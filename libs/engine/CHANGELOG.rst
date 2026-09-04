@@ -1,4 +1,4 @@
-**5.8.2 - 09/03/26**
+**5.8.2 - 09/04/26**
 
 - Bugfix: hash datetime randomness keys independent of the column's resolution, so
   common random numbers align across environments regardless of the pandas version
