@@ -1004,6 +1004,25 @@ def test_population_view_update_empty_index(
     pd.testing.assert_series_equal(pop["pi"], expected_pi)
 
 
+def test_population_view_update_empty_result_keeps_column_dtype(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """An empty result is a no-op even when its own dtype differs from the column's.
+
+    A modifier that filters every row out returns a default-dtype empty Series, which
+    must not read as the component retyping the column.
+    """
+    pv = pies_and_cubes_pop_mgr.get_view(CubeComponent())
+    original = pies_and_cubes_pop_mgr.private_columns["cube"].copy()
+    assert pd.api.types.is_integer_dtype(original)
+
+    pv.update("cube", lambda cube: pd.Series([], dtype="float64", name="cube"))
+
+    updated = pies_and_cubes_pop_mgr.private_columns["cube"]
+    assert updated.dtype == original.dtype
+    pd.testing.assert_series_equal(updated, original)
+
+
 ####################################
 # PopulationView.update with index #
 ####################################
