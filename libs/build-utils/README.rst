@@ -85,25 +85,6 @@ credential used at deploy time for pushing the release tag. When omitted, the
 deploy stage falls back to the credential configured on the Multibranch
 Pipeline's branch source, which is the right default for most repos.
 
-When a build deploys
---------------------
-
-Only a build Jenkins started from a **push** deploys on its own. A nightly, or
-anything a person started in the UI — ``Build with Parameters``, ``Rerun``,
-``Replay`` — does not, so investigating a failed build cannot publish a release
-by accident. When you do want to release from a build you started by hand, set
-``FORCE_DEPLOY``; that is the way to redrive a deploy that failed partway
-through.
-
-A deploy requires all of: ``deployable: true``, the ``main`` branch, a
-push-started build or ``FORCE_DEPLOY``, and a deployable change in the tip
-commit. A build that meets everything but the push/``FORCE_DEPLOY`` condition
-says so in its log rather than passing silently.
-
-This replaces the old ``SKIP_DEPLOY`` parameter, which defaulted to deploying
-and had to be ticked to opt out. The default is now reversed: hand-started
-builds never deploy unless asked.
-
 Tag prefix
 ----------
 
@@ -143,3 +124,26 @@ Unchanged dependencies still resolve from PyPI.
 ``CHANGED_LIBS`` is a no-op when empty, so single-package installs are unaffected.
 
 The GitHub Actions CI and release workflows wire this automatically.
+
+When a build deploys
+====================
+
+This applies to repos that pass ``deployable: true``; monorepo libs release
+through GitHub Actions instead and never reach the Jenkins deploy stage.
+
+Only a build Jenkins started from a **push** deploys on its own. A nightly, or
+anything a person started in the UI — ``Build with Parameters``, ``Rerun``,
+``Replay`` — does not, so investigating a failed build cannot publish a release
+by accident. When you do want to release from a build you started by hand, set
+``FORCE_DEPLOY``; that is the way to redrive a deploy that failed partway
+through.
+
+A deploy requires all of: ``deployable: true``, the ``main`` branch, a deployable
+change in the tip commit, a push-started build or ``FORCE_DEPLOY``, and a version
+update in ``CHANGELOG.rst``. A build that meets everything but the
+push/``FORCE_DEPLOY`` condition says so in its log rather than passing silently;
+one that reaches the deploy without a changelog update fails instead.
+
+This replaces the old ``SKIP_DEPLOY`` parameter, which defaulted to deploying
+and had to be ticked to opt out. The default is now reversed: hand-started
+builds never deploy unless asked.

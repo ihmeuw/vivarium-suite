@@ -8,7 +8,8 @@ def call(Map config = [:]){
   stagger_scheduled_builds: Whether to stagger the scheduled builds.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e', 'all']
   requires_slurm: Whether the child tasks require the slurm scheduler.
-  deployable: Whether the package can be deployed by Jenkins.
+  deployable: Whether the package can be deployed by Jenkins. Only builds started
+            from a push deploy; a hand-started build needs FORCE_DEPLOY.
   skip_doc_build: Only skips the doc build.
   run_mypy: DEPRECATED and ignored. mypy now runs automatically whenever a
             py.typed marker exists under the package's src/ (matching `make check`
@@ -284,26 +285,27 @@ def call(Map config = [:]){
                           }
                           
                           stage("Build and Deploy - Python ${pythonVersion}") {
-                            // Only a build Jenkins started from a push deploys on its
-                            // own. A nightly, or anything a person started in the UI,
-                            // has to be asked via FORCE_DEPLOY.
+                            // Anything neither the timer nor a person started is taken to
+                            // be a push. That errs towards releasing rather than towards
+                            // a release that silently never happens.
                             def startedByPush = !env.IS_CRON.toBoolean() && !env.IS_MANUAL.toBoolean()
-                            if (is_deployable && !startedByPush && !params.FORCE_DEPLOY) {
-                              echo "Skipping deploy: this build was not started by a push. " +
-                                   "Set FORCE_DEPLOY to release from it."
-                            }
+                            def canDeploy = startedByPush || params.FORCE_DEPLOY
                             if (is_deployable &&
-                              (startedByPush || params.FORCE_DEPLOY) &&
                               (env.BRANCH == "main") &&
                               has_deployable_change()) {
-                              if (!has_changelog_update()) {
-                                error "Deploy failed: Changelog does not contain a proper version update."
-                              }
-                              def deployOpts = github_credentials_id ? [gitCredentialsId: github_credentials_id] : [:]
-                              buildStages.deployPackage(deployOpts)
+                              if (!canDeploy) {
+                                echo "Skipping deploy: this build was not started by a push. " +
+                                     "Set FORCE_DEPLOY to release from it."
+                              } else {
+                                if (!has_changelog_update()) {
+                                  error "Deploy failed: Changelog does not contain a proper version update."
+                                }
+                                def deployOpts = github_credentials_id ? [gitCredentialsId: github_credentials_id] : [:]
+                                buildStages.deployPackage(deployOpts)
 
-                              if (!skip_doc_build) {
-                                buildStages.deployDocs()
+                                if (!skip_doc_build) {
+                                  buildStages.deployDocs()
+                                }
                               }
                             }
                           }
