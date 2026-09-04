@@ -7,6 +7,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from functools import reduce
 from pathlib import Path
+from typing import Any
 
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
@@ -92,8 +93,30 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
             path=lib_dir.resolve(),
             version=versions[name],
             upstreams=upstreams,
+            candidates=_get_candidates(pyprojects[name], lib_dir),
         )
     return libs
+
+
+def _get_candidates(pyproject: Mapping[str, Any], pkg_dir: Path) -> tuple[str, ...]:
+    """Return ``[tool.vivarium.python-support].candidates`` from a parsed pyproject."""
+    declared = (
+        pyproject.get("tool", {})
+        .get("vivarium", {})
+        .get("python-support", {})
+        .get("candidates")
+    )
+    if not declared:
+        return ()
+    if not isinstance(declared, list) or not all(
+        isinstance(version, str) and re.fullmatch(r"\d+\.\d+", version)
+        for version in declared
+    ):
+        raise ValueError(
+            f"{pkg_dir / 'pyproject.toml'}: [tool.vivarium.python-support] candidates "
+            f"must be a list of quoted 'X.Y' strings, got {declared!r}"
+        )
+    return tuple(declared)
 
 
 def _get_dist_name(pyproject: Mapping[str, object], pkg_dir: Path) -> str:

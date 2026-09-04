@@ -77,12 +77,15 @@ jobs:
     # The fan-out: run each dependent's tests against the releasing libs installed
     # editably at their pending versions. Runs only when there ARE dependents AND
     # the run was requested (the label is present, or a manual dispatch).
+    name: ${{ matrix.experimental && '[CANDIDATE] ' || '' }}${{ matrix.library }} (Python ${{ matrix.python-version }})
     needs: detect
     if: needs.detect.outputs.has-downstream == 'true' && needs.detect.outputs.is-requested == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.downstream-matrix) }}
+    # Candidate python versions should not gate CI builds
+    continue-on-error: ${{ matrix.experimental }}
     steps:
       - name: Checkout code
         # Must precede the local action: `uses: ./...` resolves from the workspace.

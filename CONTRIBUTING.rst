@@ -17,6 +17,15 @@ versions to test against, e.g.::
 
     ["3.11", "3.12"]
 
+A package may also declare *candidate* versions in its ``pyproject.toml`` - versions tested in
+CI ahead of being supported, whose failures cannot block a merge::
+
+    [tool.vivarium.python-support]
+    candidates = ["3.14"]
+
+Promoting a candidate means moving it into ``python_versions.json`` **and** removing it from
+``candidates``; leaving it in both fails the build.
+
 Packages that are fully typed must include a ``py.typed`` marker file in their source tree (per
 PEP 561). CI will run ``mypy`` only for packages that have this marker.
 

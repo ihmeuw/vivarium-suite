@@ -29,6 +29,15 @@ class MissingPythonVersionsError(Exception):
     """A library has no ``python_versions.json``, so its CI matrix cannot be built."""
 
 
+class CandidateVersionConflictError(Exception):
+    """A library declares a candidate Python version it already supports.
+
+    Promoting a candidate means moving it into ``python_versions.json`` *and* dropping
+    it from ``candidates``; leaving both would emit the version twice, once gating and
+    once not.
+    """
+
+
 @dataclass(frozen=True)
 class Lib:
     """A single independently-released library under ``libs/``.
@@ -55,6 +64,10 @@ class Lib:
         over the runtime dependencies plus whichever extras :func:`load_libs`
         resolved; if a upstream is constrained in more than one of those places,
         the constraints are intersected into a single :class:`SpecifierSet`.
+    candidates
+        Python candidate versions from ``[tool.vivarium.python-support] candidates``
+        - ones tested in CI ahead of being supported, whose failures cannot fail
+        a build. Empty when the library declares none.
     """
 
     name: str
@@ -62,6 +75,7 @@ class Lib:
     path: Path
     version: str
     upstreams: Mapping[str, SpecifierSet]
+    candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -111,14 +125,19 @@ class ChangedLibs:
 
 
 # The GitHub Actions ``strategy.matrix`` payloads. Both are matrix objects, so both
-# wrap an ``include`` list of per-job entries; a shared generic base would need
-# PEP 646 generic TypedDicts (3.11+) and this package supports 3.10.
+# wrap an ``include`` list of per-job entries.
 #
 # ``PythonMatrixEntry`` needs the functional TypedDict form because ``python-version``
 # is the key GitHub Actions expects and a hyphen is not a valid attribute name. Its
 # ``library`` is the ``libs/`` directory name and ``python-version`` is one entry from
-# that library's ``python_versions.json``.
-PythonMatrixEntry = TypedDict("PythonMatrixEntry", {"library": str, "python-version": str})
+# that library's ``python_versions.json`` or its declared candidate versions.
+#
+# ``experimental`` marks a candidate version (one being soaked in CI but not yet
+# supported). It is emitted on every entry, not just candidates.
+PythonMatrixEntry = TypedDict(
+    "PythonMatrixEntry",
+    {"library": str, "python-version": str, "experimental": bool},
+)
 
 
 class PythonMatrix(TypedDict):

@@ -49,6 +49,9 @@ ci_jenkins = ["vivarium-artifact[ci_github,cluster]"]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/artifact"
 
+[tool.vivarium.python-support]
+candidates = ["3.14"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.artifact and its subpackages. Excluding vivarium

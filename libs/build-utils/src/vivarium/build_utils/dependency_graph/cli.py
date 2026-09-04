@@ -20,6 +20,7 @@ from .graph import get_transitive_downstreams, sort_topologically
 from .loading import load_libs
 from .models import (
     DEFAULT_EXTRAS,
+    CandidateVersionConflictError,
     DependencyConflictError,
     DependencyCycleError,
     MissingPythonVersionsError,
@@ -234,13 +235,14 @@ def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
     released = args.released.split()
     try:
         downstream = get_transitive_downstreams(released, libs)
-        # Every dependent runs on its full python_versions.json matrix: the check runs
-        # once at merge, so there's no cost reason to sample a single canonical version.
+        # Every dependent runs on its full supported python versions matrix plus
+        # candidates: the check runs once at merge, so there's no cost reason to
+        # sample a single canonical version.
         matrix = build_python_matrix(downstream, libs)
     except KeyError as error:
         print(f"unknown library: {error.args[0]}", file=sys.stderr)
         return 1
-    except MissingPythonVersionsError as error:
+    except (MissingPythonVersionsError, CandidateVersionConflictError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
     print(json.dumps(matrix))
@@ -255,9 +257,9 @@ def _run_classify_changes(args: argparse.Namespace) -> int:
     changed = classify_changed_libs(changed_files, libs.keys())
     try:
         # Unlike classification, the matrix needs each lib's path to read its
-        # python_versions.json, so this takes the parsed libraries.
+        # python_versions.json and candidates, so this takes the parsed libraries.
         matrix = build_python_matrix(changed.to_build, libs)
-    except MissingPythonVersionsError as error:
+    except (MissingPythonVersionsError, CandidateVersionConflictError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
 

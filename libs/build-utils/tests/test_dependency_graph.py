@@ -12,6 +12,7 @@ from packaging.specifiers import SpecifierSet
 
 from vivarium.build_utils import dependency_graph
 from vivarium.build_utils.dependency_graph import (
+    CandidateVersionConflictError,
     DependencyConflictError,
     DependencyCycleError,
     InstallPlan,
@@ -60,6 +61,8 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
       ``python_versions.json``.
     - ``omit_python_versions`` (bool, default ``False``): write no
       ``python_versions.json`` (for the missing-file error path).
+    - ``candidates`` (Sequence[str]): ``[tool.vivarium.python-support] candidates``,
+      the versions soaked in CI ahead of support. Omitted entirely by default.
 
     Returns the ``libs/`` Path.
     """
@@ -93,6 +96,10 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
                 lines.append("[project.optional-dependencies]")
                 for extra_name, extra_deps in extras.items():
                     lines.append(f"{extra_name} = [{_render_dep_array(extra_deps)}]")
+            if "candidates" in cfg:
+                lines.append("")
+                lines.append("[tool.vivarium.python-support]")
+                lines.append(f"candidates = {json.dumps(list(cfg['candidates']))}")
             (pkg_dir / "pyproject.toml").write_text("\n".join(lines) + "\n")
 
             if "changelog_first_line" in cfg:
@@ -1015,8 +1022,8 @@ class TestBuildPythonMatrix:
         libs = load_libs(make_monorepo({"a": {"python_versions": ["3.11", "3.12"]}}))
         assert build_python_matrix(["a"], libs) == {
             "include": [
-                {"library": "a", "python-version": "3.11"},
-                {"library": "a", "python-version": "3.12"},
+                {"library": "a", "python-version": "3.11", "experimental": False},
+                {"library": "a", "python-version": "3.12", "experimental": False},
             ]
         }
 
@@ -1033,11 +1040,136 @@ class TestBuildPythonMatrix:
         matrix = build_python_matrix(["b", "a"], libs)
         assert matrix == {
             "include": [
-                {"library": "a", "python-version": "3.10"},
-                {"library": "b", "python-version": "3.11"},
-                {"library": "b", "python-version": "3.12"},
+                {"library": "a", "python-version": "3.10", "experimental": False},
+                {"library": "b", "python-version": "3.11", "experimental": False},
+                {"library": "b", "python-version": "3.12", "experimental": False},
             ]
         }
+
+    def test_candidates_add_experimental_entries(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A lib's declared candidates are appended after its supported versions."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.11", "3.12"], "candidates": ["3.13"]}}
+            )
+        )
+        assert build_python_matrix(["a"], libs) == {
+            "include": [
+                {"library": "a", "python-version": "3.11", "experimental": False},
+                {"library": "a", "python-version": "3.12", "experimental": False},
+                {"library": "a", "python-version": "3.13", "experimental": True},
+            ]
+        }
+
+    def test_candidates_are_per_lib(self, make_monorepo: MonorepoFactory) -> None:
+        """Each lib soaks only what it declares, so libs can diverge."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {
+                        "python_versions": ["3.11", "3.12", "3.13"],
+                        "candidates": ["3.14"],
+                    },
+                    "b": {"python_versions": ["3.11"]},
+                }
+            )
+        )
+        matrix = build_python_matrix(["a", "b"], libs)
+        assert matrix["include"] == [
+            {"library": "a", "python-version": "3.11", "experimental": False},
+            {"library": "a", "python-version": "3.12", "experimental": False},
+            {"library": "a", "python-version": "3.13", "experimental": False},
+            {"library": "a", "python-version": "3.14", "experimental": True},
+            {"library": "b", "python-version": "3.11", "experimental": False},
+        ]
+
+    def test_a_lib_can_soak_several_versions_at_once(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A held-back lib can catch up on every version it needs in one pass."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {
+                        "python_versions": ["3.11", "3.12", "3.13"],
+                        "candidates": ["3.14"],
+                    },
+                    "b": {
+                        "python_versions": ["3.11"],
+                        "candidates": ["3.12", "3.13", "3.14"],
+                    },
+                }
+            )
+        )
+        matrix = build_python_matrix(["a", "b"], libs)
+        assert matrix["include"] == [
+            {"library": "a", "python-version": "3.11", "experimental": False},
+            {"library": "a", "python-version": "3.12", "experimental": False},
+            {"library": "a", "python-version": "3.13", "experimental": False},
+            {"library": "a", "python-version": "3.14", "experimental": True},
+            {"library": "b", "python-version": "3.11", "experimental": False},
+            {"library": "b", "python-version": "3.12", "experimental": True},
+            {"library": "b", "python-version": "3.13", "experimental": True},
+            {"library": "b", "python-version": "3.14", "experimental": True},
+        ]
+
+    def test_repeated_candidate_is_emitted_once(self, make_monorepo: MonorepoFactory) -> None:
+        """A duplicated declaration must not run the same experimental job twice."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.13"], "candidates": ["3.14", "3.14"]}}
+            )
+        )
+        matrix = build_python_matrix(["a"], libs)
+        assert [entry["python-version"] for entry in matrix["include"]] == ["3.13", "3.14"]
+
+    def test_no_candidates_yields_no_experimental_entries(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A lib declaring no candidates gets nothing marked experimental."""
+        libs = load_libs(make_monorepo({"a": {"python_versions": ["3.11", "3.12"]}}))
+        matrix = build_python_matrix(["a"], libs)
+        assert not any(entry["experimental"] for entry in matrix["include"])
+
+    def test_candidates_are_emitted_in_numeric_order(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """Candidates are sorted numerically, so declared order and 3.9 vs 3.10 hold."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.8"], "candidates": ["3.10", "3.9"]}})
+        )
+        matrix = build_python_matrix(["a"], libs)
+        assert [entry["python-version"] for entry in matrix["include"]] == [
+            "3.8",
+            "3.9",
+            "3.10",
+        ]
+
+    def test_raises_when_a_candidate_is_already_supported(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """Promoting a candidate without removing it fails loudly, not silently twice.
+
+        Leaving it in both places would emit the version twice, once gating and once
+        not, so this is caught rather than tolerated.
+        """
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {
+                        "python_versions": ["3.11", "3.12"],
+                        "candidates": ["3.12", "3.13"],
+                    }
+                }
+            )
+        )
+        with pytest.raises(
+            CandidateVersionConflictError,
+            match="as both a supported and a candidate Python version",
+        ):
+            build_python_matrix(["a"], libs)
 
     def test_empty_names_yields_empty_include(self, make_monorepo: MonorepoFactory) -> None:
         """No libs yields an empty include for the caller to detect."""
@@ -1055,6 +1187,54 @@ class TestBuildPythonMatrix:
         libs = load_libs(make_monorepo({"a": {}}))
         with pytest.raises(KeyError):
             build_python_matrix(["ghost"], libs)
+
+
+class TestLoadLibCandidates:
+    """Tests for the ``candidates`` field ``load_libs`` puts on each ``Lib``."""
+
+    def test_reads_declared_candidates(self, make_monorepo: MonorepoFactory) -> None:
+        """Candidates come off the lib's [tool.vivarium.python-support]."""
+        libs = load_libs(make_monorepo({"a": {"candidates": ["3.13", "3.14"]}}))
+        assert libs["a"].candidates == ("3.13", "3.14")
+
+    def test_missing_section_yields_empty(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib without the section declares no candidates."""
+        libs = load_libs(make_monorepo({"a": {}}))
+        assert libs["a"].candidates == ()
+
+    def test_empty_list_yields_empty(self, make_monorepo: MonorepoFactory) -> None:
+        """An emptied-out list turns the lib's candidate jobs off."""
+        libs = load_libs(make_monorepo({"a": {"candidates": []}}))
+        assert libs["a"].candidates == ()
+
+    def test_rejects_unquoted_numeric_candidate(self, make_monorepo: MonorepoFactory) -> None:
+        """An unquoted 3.10 is a TOML float that would coerce to the wrong version."""
+        libs_dir = make_monorepo({"a": {}})
+        pyproject = libs_dir / "a" / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + "\n[tool.vivarium.python-support]\ncandidates = [3.10]\n"
+        )
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+    def test_rejects_a_bare_string(self, make_monorepo: MonorepoFactory) -> None:
+        """A bare string would otherwise iterate into one entry per character."""
+        libs_dir = make_monorepo({"a": {}})
+        pyproject = libs_dir / "a" / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + '\n[tool.vivarium.python-support]\ncandidates = "3.14"\n'
+        )
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+    @pytest.mark.parametrize("version", ["3", "3.12.1"])
+    def test_rejects_an_unparseable_version(
+        self, version: str, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A version with no minor component or with a patch component fails at load."""
+        libs_dir = make_monorepo({"a": {"candidates": [version]}})
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
 
 
 class TestCLIInstallEditable:
@@ -1145,8 +1325,8 @@ class TestCLIInstallEditable:
     ) -> None:
         """`install-editable` for a target not under libs/ exits non-zero with a clear message."""
         libs_dir = make_monorepo({"build-utils": {}, "a": {}})
-        rc = main_with(["install-editable", "ghost", "--libs-dir", str(libs_dir)])
-        assert rc == 1
+        exit_code = main_with(["install-editable", "ghost", "--libs-dir", str(libs_dir)])
+        assert exit_code == 1
         assert "unknown library" in capsys.readouterr().err
 
 
@@ -1305,10 +1485,10 @@ class TestCLIBuildReleaseMatrix:
         libs_dir = make_monorepo({"build-utils": {}, "a": {}})
         pairs = tmp_path / "release_pairs.txt"
         pairs.write_text("ghost 1.0.0\n")  # non-monorepo library!
-        rc = main_with(
+        exit_code = main_with(
             ["build-release-matrix", "--versions", str(pairs), "--libs-dir", str(libs_dir)]
         )
-        assert rc == 1
+        assert exit_code == 1
         assert "unknown library" in capsys.readouterr().err
 
 
@@ -1322,12 +1502,14 @@ class TestCLIBuildDownstreamMatrix:
     ) -> None:
         """The downstream lib is emitted; the released lib is excluded."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
-        assert out == {"include": [{"library": "a", "python-version": "3.11"}]}
+        assert out == {
+            "include": [{"library": "a", "python-version": "3.11", "experimental": False}]
+        }
 
     def test_empty_for_leaf_release(
         self,
@@ -1336,10 +1518,10 @@ class TestCLIBuildDownstreamMatrix:
     ) -> None:
         """Releasing a library nothing depends on yields an empty include."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "a", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
         assert json.loads(capsys.readouterr().out) == {"include": []}
 
     def test_shared_dependent_appears_once(
@@ -1355,12 +1537,16 @@ class TestCLIBuildDownstreamMatrix:
                 "y": {},
             }
         )
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "x y", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
-        assert out == {"include": [{"library": "shared", "python-version": "3.11"}]}
+        assert out == {
+            "include": [
+                {"library": "shared", "python-version": "3.11", "experimental": False}
+            ]
+        }
 
     def test_emits_one_entry_per_python_version(
         self,
@@ -1371,15 +1557,15 @@ class TestCLIBuildDownstreamMatrix:
         libs_dir = make_monorepo(
             {"a": {"deps": ["vivarium-b"], "python_versions": ["3.11", "3.12"]}, "b": {}}
         )
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out == {
             "include": [
-                {"library": "a", "python-version": "3.11"},
-                {"library": "a", "python-version": "3.12"},
+                {"library": "a", "python-version": "3.11", "experimental": False},
+                {"library": "a", "python-version": "3.12", "experimental": False},
             ]
         }
 
@@ -1392,11 +1578,56 @@ class TestCLIBuildDownstreamMatrix:
         libs_dir = make_monorepo(
             {"a": {"deps": ["vivarium-b"], "omit_python_versions": True}, "b": {}}
         )
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 1
+        assert exit_code == 1
         assert "python_versions.json not found" in capsys.readouterr().err
+
+    def test_errors_on_candidate_conflict(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A stale candidate declaration fails the gate cleanly, not with a traceback."""
+        libs_dir = make_monorepo(
+            {
+                "a": {
+                    "deps": ["vivarium-b"],
+                    "python_versions": ["3.11"],
+                    "candidates": ["3.11"],
+                },
+                "b": {},
+            }
+        )
+        exit_code = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert exit_code == 1
+        assert "both a supported and a candidate" in capsys.readouterr().err
+
+    def test_ignores_a_candidate_conflict_in_the_released_lib(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Only the downstream set is checked; the released lib is CI's job.
+
+        ``build_python_matrix`` is handed the dependents, not the released libraries,
+        so a stale declaration in a released lib is invisible here. That is covered by
+        ``classify-changes`` instead, since releasing a lib means editing its files.
+        """
+        libs_dir = make_monorepo(
+            {
+                "a": {"deps": ["vivarium-b"]},
+                "b": {"python_versions": ["3.11"], "candidates": ["3.11"]},
+            }
+        )
+        exit_code = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert exit_code == 0
+        assert "both a supported and a candidate" not in capsys.readouterr().err
 
     def test_clean_exit_on_unknown_library(
         self,
@@ -1405,10 +1636,10 @@ class TestCLIBuildDownstreamMatrix:
     ) -> None:
         """An unknown released library name exits non-zero with a clear message."""
         libs_dir = make_monorepo({"build-utils": {}, "a": {}})
-        rc = main_with(
+        exit_code = main_with(
             ["build-downstream-matrix", "--released", "ghost", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 1
+        assert exit_code == 1
         assert "unknown library" in capsys.readouterr().err
 
 
@@ -1438,15 +1669,17 @@ class TestCLIClassifyChanges:
     ) -> None:
         """The JSON carries each key the detect jobs pipe into $GITHUB_OUTPUT."""
         libs_dir = make_monorepo({"a": {}, "b": {}})
-        rc = self._classify(tmp_path, libs_dir, ["libs/a/CHANGELOG.rst"])
-        assert rc == 0
+        exit_code = self._classify(tmp_path, libs_dir, ["libs/a/CHANGELOG.rst"])
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out == {
             "source-changed": ["a"],
             "pending-release": ["a"],
             "to-build": ["a"],
             "shared-changed": False,
-            "matrix": {"include": [{"library": "a", "python-version": "3.11"}]},
+            "matrix": {
+                "include": [{"library": "a", "python-version": "3.11", "experimental": False}]
+            },
             "has-changes": True,
         }
 
@@ -1458,8 +1691,8 @@ class TestCLIClassifyChanges:
     ) -> None:
         """A diff touching no lib reports has-changes false with an empty matrix."""
         libs_dir = make_monorepo({"a": {}, "b": {}})
-        rc = self._classify(tmp_path, libs_dir, ["README.md"])
-        assert rc == 0
+        exit_code = self._classify(tmp_path, libs_dir, ["README.md"])
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out["has-changes"] is False
         assert out["matrix"] == {"include": []}
@@ -1474,13 +1707,13 @@ class TestCLIClassifyChanges:
         libs_dir = make_monorepo(
             {"a": {"python_versions": ["3.11", "3.12"]}, "b": {"python_versions": ["3.11"]}}
         )
-        rc = self._classify(tmp_path, libs_dir, [".github/workflows/ci.yml"])
-        assert rc == 0
+        exit_code = self._classify(tmp_path, libs_dir, [".github/workflows/ci.yml"])
+        assert exit_code == 0
         out = json.loads(capsys.readouterr().out)
         assert out["matrix"]["include"] == [
-            {"library": "a", "python-version": "3.11"},
-            {"library": "a", "python-version": "3.12"},
-            {"library": "b", "python-version": "3.11"},
+            {"library": "a", "python-version": "3.11", "experimental": False},
+            {"library": "a", "python-version": "3.12", "experimental": False},
+            {"library": "b", "python-version": "3.11", "experimental": False},
         ]
         # Nothing installs editably: the shared path belongs to no lib.
         assert out["source-changed"] == []
@@ -1493,9 +1726,21 @@ class TestCLIClassifyChanges:
     ) -> None:
         """A changed lib with no python_versions.json fails CI instead of being dropped."""
         libs_dir = make_monorepo({"a": {"omit_python_versions": True}})
-        rc = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
-        assert rc == 1
+        exit_code = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
+        assert exit_code == 1
         assert "python_versions.json not found" in capsys.readouterr().err
+
+    def test_errors_on_candidate_conflict(
+        self,
+        tmp_path: Path,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A stale candidate declaration fails CI cleanly, not with a traceback."""
+        libs_dir = make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.11"]}})
+        exit_code = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
+        assert exit_code == 1
+        assert "both a supported and a candidate" in capsys.readouterr().err
 
     def test_errors_on_missing_changed_files(
         self, tmp_path: Path, make_monorepo: MonorepoFactory
@@ -1523,10 +1768,10 @@ class TestCLIVerifyEditable:
         """`verify-editable` exits 0 when each selected upstream is an editable install."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
         monkeypatch.setattr(dependency_graph.cli, "_is_editable_install", lambda dist: True)
-        rc = main_with(
+        exit_code = main_with(
             ["verify-editable", "a", "--changed", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 0
+        assert exit_code == 0
 
     def test_fails_when_upstream_from_pypi(
         self,
@@ -1537,10 +1782,10 @@ class TestCLIVerifyEditable:
         """`verify-editable` exits non-zero when a selected upstream is not an editable install."""
         libs_dir = make_monorepo({"a": {"deps": ["vivarium-b"]}, "b": {}})
         monkeypatch.setattr(dependency_graph.cli, "_is_editable_install", lambda dist: False)
-        rc = main_with(
+        exit_code = main_with(
             ["verify-editable", "a", "--changed", "b", "--libs-dir", str(libs_dir)]
         )
-        assert rc == 1
+        assert exit_code == 1
         assert "not editable" in capsys.readouterr().err
 
     def test_noop_when_no_upstreams(
@@ -1548,8 +1793,10 @@ class TestCLIVerifyEditable:
     ) -> None:
         """`verify-editable` exits 0 and checks nothing when the target has no changed upstreams."""
         libs_dir = make_monorepo({"a": {}, "b": {}})
-        rc = main_with(["verify-editable", "a", "--changed", "", "--libs-dir", str(libs_dir)])
-        assert rc == 0
+        exit_code = main_with(
+            ["verify-editable", "a", "--changed", "", "--libs-dir", str(libs_dir)]
+        )
+        assert exit_code == 0
         assert "no changed in-tree upstreams" in capsys.readouterr().out
 
 
