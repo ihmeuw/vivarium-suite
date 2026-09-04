@@ -24,7 +24,7 @@ def runDebugInfo(Map skipEval = [:]) {
         
         // Display parameters used.
         echo """Parameters:
-        SKIP_DEPLOY: ${params.SKIP_DEPLOY}
+        FORCE_DEPLOY: ${params.FORCE_DEPLOY}
         RUN_SLOW: ${params.RUN_SLOW}
         RUN_WEEKLY: ${params.RUN_WEEKLY}
         SLACK_TO: ${params.SLACK_TO}
@@ -47,6 +47,7 @@ def runDebugInfo(Map skipEval = [:]) {
         WORKSPACE:      '${WORKSPACE}'
         XDG_CACHE_HOME: '${XDG_CACHE_HOME}'
         IS_CRON:        '${IS_CRON}'
+        IS_MANUAL:      '${IS_MANUAL}'
         CRON_SCHEDULE:  '${env.CRON_SCHEDULE}'
         GIT_COMMIT:     '${env.GIT_COMMIT}'
         GIT_PREVIOUS_COMMIT: '${env.GIT_PREVIOUS_COMMIT}'
