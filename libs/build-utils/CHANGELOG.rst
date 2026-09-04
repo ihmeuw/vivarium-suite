@@ -1,8 +1,12 @@
-**4.7.0 - 09/04/26**
+**4.7.0 - 09/08/26**
 
 - Only builds started from a push deploy on their own
 - Replace ``SKIP_DEPLOY`` with ``FORCE_DEPLOY``; a hand-started build now opts in
   to deploying
+
+**4.6.1 - 09/04/26**
+
+- Add shared env for vivarium_gates_lsff_2026
 
 **4.6.0 - 08/25/26**
 
