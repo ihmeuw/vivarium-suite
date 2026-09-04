@@ -24,7 +24,6 @@ def runDebugInfo(Map skipEval = [:]) {
         
         // Display parameters used.
         echo """Parameters:
-        SKIP_DEPLOY: ${params.SKIP_DEPLOY}
         FORCE_DEPLOY: ${params.FORCE_DEPLOY}
         RUN_SLOW: ${params.RUN_SLOW}
         RUN_WEEKLY: ${params.RUN_WEEKLY}

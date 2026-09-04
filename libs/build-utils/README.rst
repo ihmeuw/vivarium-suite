@@ -85,31 +85,24 @@ credential used at deploy time for pushing the release tag. When omitted, the
 deploy stage falls back to the credential configured on the Multibranch
 Pipeline's branch source, which is the right default for most repos.
 
-Scheduled builds and deploys
-----------------------------
+When a build deploys
+--------------------
 
-Branches listed in ``scheduled_branches`` get a nightly cron trigger. The
-trigger is a ``parameterizedCron`` (Jenkins' `Parameterized Scheduler
-<https://plugins.jenkins.io/parameterized-scheduler/>`_ plugin, which must be
-installed on the Jenkins controller) that supplies ``SKIP_DEPLOY=true``, so
-nightly builds of the default branch never deploy. The parameter is recorded on
-the build, so a ``Rerun`` of a nightly inherits it.
+Only a build Jenkins started from a **push** deploys on its own. A nightly, or
+anything a person started in the UI — ``Build with Parameters``, ``Rerun``,
+``Replay`` — does not, so investigating a failed build cannot publish a release
+by accident. When you do want to release from a build you started by hand, set
+``FORCE_DEPLOY``; that is the way to redrive a deploy that failed partway
+through.
 
-Deploys are reserved for builds Jenkins starts from a push. Any build a person
-starts in the UI — ``Build with Parameters``, ``Rerun``, or ``Replay`` — skips
-the deploy stage whatever its parameters say, so investigating a failed nightly
-cannot publish a release. Set ``FORCE_DEPLOY`` to release by hand, which is how
-to redrive a deploy that failed partway.
+A deploy requires all of: ``deployable: true``, the ``main`` branch, a
+push-started build or ``FORCE_DEPLOY``, and a deployable change in the tip
+commit. A build that meets everything but the push/``FORCE_DEPLOY`` condition
+says so in its log rather than passing silently.
 
-A deploy therefore requires all of: ``deployable: true``, the ``main`` branch,
-a push-started build (or ``FORCE_DEPLOY``), ``SKIP_DEPLOY`` unset, and a
-deployable change in the tip commit.
-
-Jenkins registers a job's triggers from its last build, so the
-``parameterizedCron`` trigger replaces the old one only once a scheduled branch
-has built again under this version. Trigger one build per scheduled branch after
-upgrading, so that no nightly fires from the stale trigger without
-``SKIP_DEPLOY``.
+This replaces the old ``SKIP_DEPLOY`` parameter, which defaulted to deploying
+and had to be ticked to opt out. The default is now reversed: hand-started
+builds never deploy unless asked.
 
 Tag prefix
 ----------

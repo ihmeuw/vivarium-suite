@@ -1,11 +1,14 @@
 **4.7.0 - 09/04/26**
 
-- Never deploy from a build started by hand in the Jenkins UI (``Build with
-  Parameters``, ``Rerun``, ``Replay``), so investigating a failed nightly cannot
-  publish a release; add ``FORCE_DEPLOY`` to deploy from one deliberately
-- Trigger scheduled builds with ``SKIP_DEPLOY=true`` via ``parameterizedCron`` and
-  drop the deploy stage's timer-cause check, so a rerun of a nightly inherits the
-  parameter (requires the Parameterized Scheduler plugin)
+- **Breaking change.** Only builds Jenkins starts from a push deploy on their own.
+  A nightly, or any build started by hand in the UI (``Build with Parameters``,
+  ``Rerun``, ``Replay``), no longer deploys, so investigating a failed build cannot
+  publish a release by accident
+- **Breaking change.** Replace the ``SKIP_DEPLOY`` parameter with ``FORCE_DEPLOY``,
+  reversing the default: a hand-started build of the default branch now opts *in*
+  to deploying rather than opting out. Deployable repos that release by clicking
+  ``Build with Parameters`` must now set ``FORCE_DEPLOY``
+- Log the reason when a build skips the deploy stage, rather than passing silently
 
 **4.6.0 - 08/25/26**
 

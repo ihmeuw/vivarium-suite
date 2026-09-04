@@ -5,7 +5,6 @@ def call(Map config = [:]){
   -------------
   Configuration options:
   scheduled_branches: The branch names for which to run scheduled nightly builds.
-            Scheduled builds are triggered with SKIP_DEPLOY=true.
   stagger_scheduled_builds: Whether to stagger the scheduled builds.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e', 'all']
   requires_slurm: Whether the child tasks require the slurm scheduler.
@@ -82,20 +81,14 @@ def call(Map config = [:]){
     cron_schedule = scheduled_branches.contains(BRANCH_NAME) ? "H H(20-23) * * *" : ''
   }
 
-  // Stamp scheduled builds with SKIP_DEPLOY=true rather than having the deploy
-  // stage ask whether the cause was a timer: a manual rerun of a scheduled build
-  // inherits that build's parameters but not its cause, so a cause-based check
-  // would deploy off a nightly rerun. Requires the Parameterized Scheduler plugin.
-  parameterized_cron_schedule = cron_schedule ? "${cron_schedule} %SKIP_DEPLOY=true" : ''
-
   pipeline {
     environment {
-        // Both cause-derived: a rerun of a nightly is IS_MANUAL, not IS_CRON.
         IS_CRON = "${currentBuild.buildCauses.toString().contains('TimerTrigger')}"
         // Started by a person in the UI: Build with Parameters, Rerun, or Replay.
-        // These never deploy unless FORCE_DEPLOY says so.
+        // A rerun of a nightly is IS_MANUAL, not IS_CRON — it inherits the original
+        // build's parameters but not its cause.
         IS_MANUAL = "${currentBuild.buildCauses.toString().contains('UserIdCause')}"
-        CRON_SCHEDULE = "${parameterized_cron_schedule}"
+        CRON_SCHEDULE = "${cron_schedule}"
         // defaults for conda and pip are a local scratch directory /svc-simsci for improved speed.
         // In the past, we used the cluster filesystem which is much slower.
         shared_path="/svc-simsci"
@@ -127,14 +120,9 @@ def call(Map config = [:]){
 
     parameters {
       booleanParam(
-        name: "SKIP_DEPLOY",
-        defaultValue: false,
-        description: "Whether to skip deploying on a run of the default branch. Scheduled builds set this automatically, so reruns of them do not deploy."
-      )
-      booleanParam(
         name: "FORCE_DEPLOY",
         defaultValue: false,
-        description: "Whether to deploy from a manually started build of the default branch, which otherwise never deploys."
+        description: "Whether to deploy from this build of the default branch. Only builds Jenkins starts from a push deploy on their own; set this to release from a build you started by hand."
       )
       booleanParam(
         name: "RUN_SLOW",
@@ -164,7 +152,7 @@ def call(Map config = [:]){
     }
 
     triggers {
-      parameterizedCron(parameterized_cron_schedule)
+      cron(cron_schedule)
     }
 
     stages {
@@ -296,9 +284,16 @@ def call(Map config = [:]){
                           }
                           
                           stage("Build and Deploy - Python ${pythonVersion}") {
+                            // Only a build Jenkins started from a push deploys on its
+                            // own. A nightly, or anything a person started in the UI,
+                            // has to be asked via FORCE_DEPLOY.
+                            def startedByPush = !env.IS_CRON.toBoolean() && !env.IS_MANUAL.toBoolean()
+                            if (is_deployable && !startedByPush && !params.FORCE_DEPLOY) {
+                              echo "Skipping deploy: this build was not started by a push. " +
+                                   "Set FORCE_DEPLOY to release from it."
+                            }
                             if (is_deployable &&
-                              !params.SKIP_DEPLOY &&
-                              (!env.IS_MANUAL.toBoolean() || params.FORCE_DEPLOY) &&
+                              (startedByPush || params.FORCE_DEPLOY) &&
                               (env.BRANCH == "main") &&
                               has_deployable_change()) {
                               if (!has_changelog_update()) {
