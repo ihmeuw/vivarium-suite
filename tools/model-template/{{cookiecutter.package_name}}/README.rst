@@ -17,8 +17,8 @@ There are two main routes for doing so:
 to all currently supported model versions and enable you to 
 make contributions to the repository.
 
-2. Downloading a copy locally of a particular archived version 
-of the model via zenodo. This will most easily enable you to 
+2. Downloading a local copy of a particular archived version 
+of the model via zenodo.org. This will most easily enable you to 
 reproduce the results of a specific analysis. 
 
 **Note:** This repository has not yet been archived. This means that
@@ -36,7 +36,7 @@ within IHME. We usually archive a simulation when development is complete.
   .. To view available archive versions of this simulation model, view
   .. XXX (TODO, replace XXX with a DOI link to zenodo that references)
   .. all versions released for a given repository that always resolves
-  .. tod the latest version. 
+  .. to the latest version. 
 
 Installation
 ------------
@@ -102,6 +102,7 @@ automatically create the environment if it doesn't exist.
 
 Local conda environments are automatically rebuilt if they are stale (older
 than a week). To deactivate a local conda environment, run ``conda deactivate``.
+
 **Shared environment on the cluster** (recommended for cluster development)::
 
   :~$ source environment.sh -s
