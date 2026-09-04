@@ -34,9 +34,9 @@ within IHME. We usually archive a simulation when development is complete.
 .. the text below should be present at the time of archival.
 
   .. To view available archive versions of this simulation model, view
-  .. XXX (TODO, replace XXX with a DOI link to zenodo that references)
-  .. all versions released for a given repository that always resolves
-  .. to the latest version. 
+  .. XXX (TODO, replace XXX with a DOI link to zenodo that references
+  .. all versions released for a given repository and always resolves
+  .. to the latest version)
 
 Installation
 ------------
@@ -169,7 +169,8 @@ Running Simulations
 .. The simulation will run for the input draw and random seed specified in the 
 .. `src/{{ cookiecutter.package_name }}/model_specifications/model_spec.yaml` file. 
 .. Edit this file directly if you wish to change these values. A list of input draws 
-.. and random seed values used for a given archival release of the model can be found XXX.
+.. and random seed values used for a given archival release of the model can be found 
+.. at XXX. TODO: replace XXX with where this record is located.
 .. 
 .. The ``-v`` flag will log verbosely, so you will get log messages every time
 .. step. For more ways to run simulations, see the tutorials at
