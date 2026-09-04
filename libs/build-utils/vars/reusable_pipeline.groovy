@@ -5,6 +5,7 @@ def call(Map config = [:]){
   -------------
   Configuration options:
   scheduled_branches: The branch names for which to run scheduled nightly builds.
+            Scheduled builds are triggered with SKIP_DEPLOY=true.
   stagger_scheduled_builds: Whether to stagger the scheduled builds.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e', 'all']
   requires_slurm: Whether the child tasks require the slurm scheduler.
@@ -81,6 +82,12 @@ def call(Map config = [:]){
     cron_schedule = scheduled_branches.contains(BRANCH_NAME) ? "H H(20-23) * * *" : ''
   }
 
+  // Stamp scheduled builds with SKIP_DEPLOY=true rather than having the deploy
+  // stage ask whether the cause was a timer: a manual rerun of a scheduled build
+  // inherits that build's parameters but not its cause, so a cause-based check
+  // would deploy off a nightly rerun. Requires the Parameterized Scheduler plugin.
+  parameterized_cron_schedule = cron_schedule ? "${cron_schedule} %SKIP_DEPLOY=true" : ''
+
   pipeline {
     environment {
         IS_CRON = "${currentBuild.buildCauses.toString().contains('TimerTrigger')}"
@@ -118,7 +125,7 @@ def call(Map config = [:]){
       booleanParam(
         name: "SKIP_DEPLOY",
         defaultValue: false,
-        description: "Whether to skip deploying on a run of the default branch."
+        description: "Whether to skip deploying on a run of the default branch. Scheduled builds set this automatically, so reruns of them do not deploy."
       )
       booleanParam(
         name: "RUN_SLOW",
@@ -148,7 +155,7 @@ def call(Map config = [:]){
     }
 
     triggers {
-      cron(cron_schedule)
+      parameterizedCron(parameterized_cron_schedule)
     }
 
     stages {
@@ -281,7 +288,6 @@ def call(Map config = [:]){
                           
                           stage("Build and Deploy - Python ${pythonVersion}") {
                             if (is_deployable &&
-                              !env.IS_CRON.toBoolean() &&
                               !params.SKIP_DEPLOY &&
                               (env.BRANCH == "main") &&
                               has_deployable_change()) {

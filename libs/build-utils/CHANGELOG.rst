@@ -1,3 +1,9 @@
+**4.7.0 - 09/04/26**
+
+- Trigger scheduled builds with ``SKIP_DEPLOY=true`` via ``parameterizedCron`` and
+  drop the deploy stage's timer-cause check, so rerunning a nightly build from the
+  Jenkins UI no longer deploys (requires the Parameterized Scheduler plugin)
+
 **4.6.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10

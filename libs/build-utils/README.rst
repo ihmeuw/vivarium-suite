@@ -85,6 +85,17 @@ credential used at deploy time for pushing the release tag. When omitted, the
 deploy stage falls back to the credential configured on the Multibranch
 Pipeline's branch source, which is the right default for most repos.
 
+Scheduled builds
+----------------
+
+Branches listed in ``scheduled_branches`` get a nightly cron trigger. The
+trigger is a ``parameterizedCron`` (Jenkins' `Parameterized Scheduler
+<https://plugins.jenkins.io/parameterized-scheduler/>`_ plugin) that supplies
+``SKIP_DEPLOY=true``, so nightly builds of the default branch never deploy.
+Because the parameter is recorded on the build, rerunning a nightly build from
+the Jenkins UI inherits it and stays non-deploying; deploys only happen on
+builds that were started with ``SKIP_DEPLOY`` unset.
+
 Tag prefix
 ----------
 
