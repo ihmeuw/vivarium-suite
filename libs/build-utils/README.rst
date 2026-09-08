@@ -143,7 +143,3 @@ change in the tip commit, a push-started build or ``FORCE_DEPLOY``, and a versio
 update in ``CHANGELOG.rst``. A build that meets everything but the
 push/``FORCE_DEPLOY`` condition says so in its log rather than passing silently;
 one that reaches the deploy without a changelog update fails instead.
-
-This replaces the old ``SKIP_DEPLOY`` parameter, which defaulted to deploying
-and had to be ticked to opt out. The default is now reversed: hand-started
-builds never deploy unless asked.
