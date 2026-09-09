@@ -904,14 +904,11 @@ class PopulationManager(Manager):
             else self.private_columns
         )
         if update.index.equals(frame.index):
-            # Faster than writing by index when every row is being replaced.
             frame[update.columns] = update
         else:
-            # Only writing into rows can leave the rows it omits alone; assigning
-            # by column would align on index and null them.
             frame.loc[update.index, update.columns] = update
 
-    def create_columns(self, data: pd.DataFrame) -> None:
+    def initialize(self, data: pd.DataFrame) -> None:
         """Add the given columns to the simulants being initialized.
 
         Assigning whole columns is what lets a column arrive at the dtype its

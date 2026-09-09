@@ -366,7 +366,7 @@ class PopulationView:
                 f"'{self._component.name}' is missing updates for {missing_pops} simulants."
             )
 
-        self._manager.create_columns(data_df)
+        self._manager.initialize(data_df)
 
     @overload
     def update(
@@ -401,10 +401,10 @@ class PopulationView:
         data in the same form, optionally with a subset of the original index
         (in which case only those rows are updated).
 
-        Passing an ``index`` restricts the update to those simulants: the
-        modifier sees only their rows and all other rows are left untouched.
-        This avoids reading the whole population for a modifier that only
-        needs a subset of it.
+        Passing an ``index`` restricts the modifier to those simulants: it
+        sees only their rows, and no row outside the index is written. This
+        avoids reading the whole population for a modifier that only needs a
+        subset of it.
 
         Parameters
         ----------
@@ -416,9 +416,11 @@ class PopulationView:
             updated values. May return a subset of its input index to
             update only some rows.
         index
-            The simulants to update. If None (default), the modifier receives
-            every simulant in the population. To scope an update by query,
-            pass the result of :meth:`get_filtered_index`.
+            The simulants to pass to the modifier. If None (default), it
+            receives every simulant in the population. The modifier may narrow
+            this further by returning a subset, so the rows written are those
+            it returns rather than the whole index. To scope by query, pass the
+            result of :meth:`get_filtered_index`.
 
         Raises
         ------
@@ -444,7 +446,7 @@ class PopulationView:
                     "population."
                 )
 
-        column_list = [columns] if isinstance(columns, str) else list(columns)
+        column_list = [columns] if isinstance(columns, str) else columns
 
         current_data = self._manager.get_private_columns(
             self._component, index=index, columns=columns
@@ -455,13 +457,14 @@ class PopulationView:
         if result_df.empty:
             return
 
+        # A single named column reads back as a Series, which has no column keys.
         existing = pd.DataFrame(current_data)
         for column in result_df.columns:
             update_dtype = result_df[column].dtype
             existing_dtype = existing[column].dtype
             if update_dtype == existing_dtype:
                 continue
-            if not self._dtypes_compatible(update_dtype, existing_dtype):
+            if not self._compatible_non_equal_dtypes(update_dtype, existing_dtype):
                 raise PopulationError(
                     "A component is corrupting the population table by modifying the "
                     f"dtype of the {column} column from {existing_dtype} to {update_dtype}."
@@ -610,11 +613,11 @@ class PopulationView:
     #  (existing.loc[update.index] = update), which enforces the same policy
     #  (existing dtype wins; lossy or incompatible updates raise).
     @staticmethod
-    def _dtypes_compatible(
+    def _compatible_non_equal_dtypes(
         update_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
         existing_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
     ) -> bool:
-        """Check whether two column dtypes can represent the same data.
+        """Check whether two differing column dtypes can represent the same data.
 
         String columns infer as ``object`` under pandas 2 but ``str`` under
         pandas 3, and datetime and timedelta columns can differ only in unit
@@ -622,8 +625,6 @@ class PopulationView:
         nanoseconds). Neither difference indicates a component corrupting the
         population table.
         """
-        if update_dtype == existing_dtype:
-            return True
         # Array-level dtypes wrap plain numpy dtypes in NumpyEADtype, which
         # is_string_dtype does not recognize; unwrap before checking.
         update_dtype = getattr(update_dtype, "numpy_dtype", update_dtype)
