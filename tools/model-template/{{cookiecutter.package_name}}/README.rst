@@ -21,22 +21,14 @@ make contributions to the repository.
 of the model via zenodo.org. This will most easily enable you to 
 reproduce the results of a specific analysis. 
 
-**Note:** This repository has not yet been archived. This means that
-it is not yet possible to run this simulation outside of the IHME
-network as the input data artifact .hdf files are only accessible
-within IHME. We usually archive a simulation when development is complete.
+   A list of pre-existing archived model versions (if any) can be accessed here:
+   
+   **Note:** This repository has not yet been archived. This means that
+   it is not yet possible to run this simulation outside of the IHME
+   network as the input data artifact .hdf files are only accessible
+   within IHME. We usually archive a simulation when development is complete.
 
-.. TODO: delete the above note in preparation to archive the model
-
-.. TODO: include the following text AFTER a model has been archived.
-.. Note that we cannot do this in advance of archival as we cannot
-.. predict the zenodo DOI prior to archiving. Neither this note of
-.. the text below should be present at the time of archival.
-
-  .. To view available archive versions of this simulation model, view
-  .. XXX (TODO, replace XXX with a DOI link to zenodo that references
-  .. all versions released for a given repository and always resolves
-  .. to the latest version)
+.. TODO: delete the above note in preparation to archive the model. Once the archive has been issued a DOI, follow-up and add it to the list of pre-existing model archives. 
 
 Installation
 ------------
