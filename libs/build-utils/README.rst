@@ -124,3 +124,22 @@ Unchanged dependencies still resolve from PyPI.
 ``CHANGED_LIBS`` is a no-op when empty, so single-package installs are unaffected.
 
 The GitHub Actions CI and release workflows wire this automatically.
+
+When a build deploys
+====================
+
+This applies to repos that pass ``deployable: true``; monorepo libs release
+through GitHub Actions instead and never reach the Jenkins deploy stage.
+
+Only a build **Jenkins started because it found a new commit** deploys on its
+own. If you do want to release from a build you started by hand, set
+``FORCE_DEPLOY``; that is also how to redrive a deploy that failed partway
+through.
+
+A deploy requires all of:
+
+- ``deployable: true``
+- the ``main`` branch
+- a deployable change in the tip commit
+- a new-commit build or ``FORCE_DEPLOY``
+- a version update in ``CHANGELOG.rst``
