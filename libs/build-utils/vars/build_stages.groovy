@@ -47,7 +47,7 @@ def runDebugInfo(Map skipEval = [:]) {
         WORKSPACE:      '${WORKSPACE}'
         XDG_CACHE_HOME: '${XDG_CACHE_HOME}'
         IS_CRON:        '${IS_CRON}'
-        IS_MANUAL:      '${IS_MANUAL}'
+        IS_NEW_COMMIT:  '${IS_NEW_COMMIT}'
         CRON_SCHEDULE:  '${env.CRON_SCHEDULE}'
         GIT_COMMIT:     '${env.GIT_COMMIT}'
         GIT_PREVIOUS_COMMIT: '${env.GIT_PREVIOUS_COMMIT}'

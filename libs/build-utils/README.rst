@@ -131,15 +131,15 @@ When a build deploys
 This applies to repos that pass ``deployable: true``; monorepo libs release
 through GitHub Actions instead and never reach the Jenkins deploy stage.
 
-Only a build Jenkins started from a **push** deploys on its own. A nightly, or
-anything a person started in the UI — ``Build with Parameters``, ``Rerun``,
-``Replay`` — does not, so investigating a failed build cannot publish a release
-by accident. When you do want to release from a build you started by hand, set
-``FORCE_DEPLOY``; that is the way to redrive a deploy that failed partway
+Only a build **Jenkins started because it found a new commit** deploys on its
+own. If you do want to release from a build you started by hand, set
+``FORCE_DEPLOY``; that is also how to redrive a deploy that failed partway
 through.
 
-A deploy requires all of: ``deployable: true``, the ``main`` branch, a deployable
-change in the tip commit, a push-started build or ``FORCE_DEPLOY``, and a version
-update in ``CHANGELOG.rst``. A build that meets everything but the
-push/``FORCE_DEPLOY`` condition says so in its log rather than passing silently;
-one that reaches the deploy without a changelog update fails instead.
+A deploy requires all of:
+
+- ``deployable: true``
+- the ``main`` branch
+- a deployable change in the tip commit
+- a new-commit build or ``FORCE_DEPLOY``
+- a version update in ``CHANGELOG.rst``

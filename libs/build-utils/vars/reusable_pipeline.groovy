@@ -8,8 +8,8 @@ def call(Map config = [:]){
   stagger_scheduled_builds: Whether to stagger the scheduled builds.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e', 'all']
   requires_slurm: Whether the child tasks require the slurm scheduler.
-  deployable: Whether the package can be deployed by Jenkins. Only builds started
-            from a push deploy; a hand-started build needs FORCE_DEPLOY.
+  deployable: Whether the package can be deployed by Jenkins. Only builds Jenkins
+            starts for a new commit deploy; anything else needs FORCE_DEPLOY.
   skip_doc_build: Only skips the doc build.
   run_mypy: DEPRECATED and ignored. mypy now runs automatically whenever a
             py.typed marker exists under the package's src/ (matching `make check`
@@ -85,10 +85,9 @@ def call(Map config = [:]){
   pipeline {
     environment {
         IS_CRON = "${currentBuild.buildCauses.toString().contains('TimerTrigger')}"
-        // Started by a person in the UI: Build with Parameters, Rerun, or Replay.
-        // A rerun of a nightly is IS_MANUAL, not IS_CRON — it inherits the original
-        // build's parameters but not its cause.
-        IS_MANUAL = "${currentBuild.buildCauses.toString().contains('UserIdCause')}"
+        // Jenkins starting a build because it found a new commit. Today that is the
+        // branch scan; BranchEventCause covers a webhook if one is ever wired up.
+        IS_NEW_COMMIT = "${currentBuild.buildCauses.toString().contains('BranchIndexingCause') || currentBuild.buildCauses.toString().contains('BranchEventCause')}"
         CRON_SCHEDULE = "${cron_schedule}"
         // defaults for conda and pip are a local scratch directory /svc-simsci for improved speed.
         // In the past, we used the cluster filesystem which is much slower.
@@ -123,7 +122,7 @@ def call(Map config = [:]){
       booleanParam(
         name: "FORCE_DEPLOY",
         defaultValue: false,
-        description: "Whether to deploy from this build of the default branch. Only builds Jenkins starts from a push deploy on their own; set this to release from a build you started by hand."
+        description: "Whether to deploy from this build of the default branch. Only builds Jenkins starts for a new commit deploy on their own; set this to release from a build you started by hand."
       )
       booleanParam(
         name: "RUN_SLOW",
@@ -285,17 +284,13 @@ def call(Map config = [:]){
                           }
                           
                           stage("Build and Deploy - Python ${pythonVersion}") {
-                            // Anything neither the timer nor a person started is taken to
-                            // be a push. That errs towards releasing rather than towards
-                            // a release that silently never happens.
-                            def startedByPush = !env.IS_CRON.toBoolean() && !env.IS_MANUAL.toBoolean()
-                            def canDeploy = startedByPush || params.FORCE_DEPLOY
+                            def canDeploy = env.IS_NEW_COMMIT.toBoolean() || params.FORCE_DEPLOY
                             if (is_deployable &&
                               (env.BRANCH == "main") &&
                               has_deployable_change()) {
                               if (!canDeploy) {
-                                echo "Skipping deploy: this build was not started by a push. " +
-                                     "Set FORCE_DEPLOY to release from it."
+                                echo "Skipping deploy: Jenkins did not start this build for a " +
+                                     "new commit. Set FORCE_DEPLOY to release from it."
                               } else {
                                 if (!has_changelog_update()) {
                                   error "Deploy failed: Changelog does not contain a proper version update."
