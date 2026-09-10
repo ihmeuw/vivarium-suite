@@ -451,17 +451,17 @@ class PopulationView:
         current_data = self._manager.get_private_columns(
             self._component, index=index, columns=columns
         )
-        result = modifier(current_data.copy())
-        result_df = self._coerce_update_result(result, column_list, current_data.index)
+        previous_index = current_data.index
+        previous_dtypes = pd.DataFrame(current_data).dtypes
+        result = modifier(current_data)
+        result_df = self._coerce_update_result(result, column_list, previous_index)
 
         if result_df.empty:
             return
 
-        # A single named column reads back as a Series, which has no column keys.
-        existing = pd.DataFrame(current_data)
         for column in result_df.columns:
             update_dtype = result_df[column].dtype
-            existing_dtype = existing[column].dtype
+            existing_dtype = previous_dtypes[column]
             if update_dtype == existing_dtype:
                 continue
             if not self._compatible_non_equal_dtypes(update_dtype, existing_dtype):
