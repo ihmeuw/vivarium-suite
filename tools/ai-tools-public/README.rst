@@ -4,17 +4,57 @@ Simulation Science Dev AI Tools (``simsci``)
 
 ``simsci`` is a Claude Code plugin from the IHME Simulation Science team
 providing generic AI-assisted developer workflows, usable by any IHME team in
-any repository. It carries no SimSci- or
+any repository. Each skill is a scripted procedure the agent follows step by
+step, stopping at explicit points for you to approve or redirect before
+anything is committed, pushed, or filed. It carries no SimSci- or
 vivarium-specific process: every workflow runs standalone, and the places where
-a team process *could* plug in (branch conventions, ticket filing, environment
-setup) are optional seams — if an installed skill covers them, the workflow
-follows it; otherwise it falls back to sensible generic behavior.
+a team process *could* plug in (environment setup, branch and PR conventions,
+ticket filing, brainstorming and design docs, domain reference docs) are
+optional seams — if an installed skill covers them, the workflow follows it;
+otherwise it falls back to generic behavior.
 
 The plugin lives under ``tools/ai-tools-public/`` in the ``vivarium-suite``
 monorepo and is published through the ``vivarium-ai-tools`` marketplace whose
 catalog (``.claude-plugin/marketplace.json``) lives at the monorepo root.
 
-It includes:
+Which skill to use
+==================
+
+.. list-table::
+   :header-rows: 1
+
+   * - You have
+     - Use
+     - It ends with
+   * - A finished change on a branch, ready for review
+     - ``/simsci:pr-prep``
+     - fixes committed one per finding, a draft PR, leftovers listed in a PR comment
+   * - A feature that is not written yet
+     - ``/simsci:framework-development``
+     - a design, a black-box TDD build, a review, a draft PR
+   * - Behavior that changed and you do not know which commit did it
+     - ``/simsci:regression-debugger``
+     - the causal change, named; no edits
+   * - A stuck rebase or tangled history
+     - ``/simsci:git-rescue``
+     - repaired history, each rewrite confirmed by you
+   * - A package without type hints
+     - ``/simsci:type-hinter`` (needs agent teams)
+     - a typed package, handed to ``commit-splitter``
+   * - One large uncommitted diff
+     - ``/simsci:commit-splitter``
+     - small commits, and branches when needed
+   * - Boilerplate to copy into many packages or repos
+     - ``/simsci:change-propagation``
+     - one draft PR per repository
+   * - A finished agent run you want audited
+     - ``/simsci:workflow-assessment``
+     - a transcript-cited report; read-only
+
+A full ``pr-prep`` or ``framework-development`` run spawns several sub-agents
+and takes a while. Nothing is pushed until you approve the PR.
+
+In more detail:
 
 **PR Prep**
 
@@ -50,6 +90,11 @@ It includes:
   **draft**; one that is already open keeps whatever state it had. Marking a draft
   ready and announcing it are separate deliberate acts it only offers.
 
+  There is no review-only entry point: ``/simsci:code-reviewer`` was removed in
+  0.2.0 and ``pr-prep`` replaced it. ``pr-prep`` edits and commits on your branch
+  after printing its disposition table. For a review with no edits, say so in
+  the argument (``/simsci:pr-prep review only``).
+
 **Regression Debugger**
 
 - ``/simsci:regression-debugger <symptom and context>`` — traces
@@ -63,8 +108,8 @@ It includes:
   divergent history, accidental merge commits, dropped commits. Always
   creates a backup ref before rewriting history and gates every
   destructive step (including the final ``git push --force-with-lease``)
-  on explicit user confirmation. User-invoked only — there is no
-  auto-trigger.
+  on explicit user confirmation. Meant to be run by you as
+  ``/simsci:git-rescue``; the confirmation gates apply however it was invoked.
 
 **Type Hinter**
 
@@ -72,8 +117,10 @@ It includes:
   files under one package root). Runs as the **lead of an agent team**:
   resolves the inter-file dependency graph, spawns one teammate per file,
   verifies with the package's own mypy invocation, and adds ``py.typed``
-  only if the package ends clean. **Requires agent teams**
-  (``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1``, v2.1.32+; no fallback).
+  only if the package ends clean. **Requires agent teams**, an experimental
+  Claude Code feature: set ``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`` in the
+  shell that launches ``claude`` or under ``env`` in ``~/.claude/settings.json``
+  (Claude Code 2.1.32 or newer; no fallback). See "Before your first run" below.
   It **writes**, then hands the diff to ``/simsci:commit-splitter``.
 
 **Framework Development**
@@ -97,31 +144,46 @@ It includes:
 
 **Auto-triggering skills**
 
-- ``commit-splitter`` — dole out a bulk uncommitted diff into reviewable
+- ``/simsci:commit-splitter`` — dole out a bulk uncommitted diff into reviewable
   commits, and PR-sized branches when scope warrants.
-- ``change-propagation`` — propagate boilerplate across several targets
+- ``/simsci:change-propagation`` — propagate boilerplate across several targets
   (packages in the current repository and/or external repos) in parallel, one
   ``_propagate_target`` worker per target, then converge them into one draft
   PR per repo — every durable write gated on one explicit approval.
-- ``workflow-assessment`` — post-hoc audit of an agentic workflow run
+- ``/simsci:workflow-assessment`` — post-hoc audit of an agentic workflow run
   against its own definition: fans out the ``_trace_extractor`` sub-agent
   over the run's session transcripts and grades coverage, ordering/gates,
   parallelism, handoffs, tool use, and result propagation, with
   transcript-cited findings. Claude Code-only, read-only throughout.
 
-Loaded automatically when the context is relevant to the skill's description.
+These are slash commands too; Claude Code also loads them on its own when the
+conversation matches the skill's description.
 
 Working alongside a team plugin
 ===============================
 
 ``simsci`` never hard-references team tooling. Where a team process could
-apply, its workflows check for an installed skill that covers it (branch and PR
-conventions, ticket filing, environment setup, domain reference docs) and
-follow that skill when present. A team plugin can declare ``simsci`` as a
-dependency — one install then brings both — and ship skills covering its
-conventions; the seams resolve to those skills automatically. Installing
-nothing extra works too: every workflow falls back to sensible generic
-behavior.
+apply, its workflows check for an installed skill that covers it (environment
+setup, branch and PR conventions, ticket filing from review findings,
+structured brainstorming, design-doc drafting, domain reference docs and known
+regression pitfalls, announcing a PR) and follow that skill when present. A
+workflow recognizes a covering skill by its ``description``, so a team skill is
+picked up when its description names the step in those terms; one skill may
+cover several steps. The ``simsci-internal`` plugin in this repository is a
+worked example: its ``team-conventions``, ``ticket-triage``, ``environments``,
+``design-doc``, and ``brainstorming`` skills are what these seams resolve to
+when both plugins are installed. Installing nothing extra works too: every
+workflow falls back to generic behavior.
+
+To pull ``simsci`` in automatically, declare it in your plugin's
+``.claude-plugin/plugin.json``::
+
+   "dependencies": [ { "name": "simsci", "marketplace": "vivarium-ai-tools" } ]
+
+If your plugin ships from a different marketplace, that marketplace's
+``marketplace.json`` also needs
+``"allowCrossMarketplaceDependenciesOn": ["vivarium-ai-tools"]``, and your users
+need the ``vivarium-ai-tools`` marketplace added.
 
 Layout
 ======
@@ -143,37 +205,113 @@ under ``tools/ai-tools-public/``:
 Installing in Claude Code
 =========================
 
-From GitHub:
+From GitHub, inside a Claude Code session (the repository is public; no org
+membership is needed):
 
-.. code-block:: shell
+.. code-block:: text
 
    /plugin marketplace add ihmeuw/vivarium-suite
    /plugin install simsci@vivarium-ai-tools
+
+Or from a terminal, then restart Claude Code or run ``/reload-plugins`` in an
+open session:
+
+.. code-block:: shell
+
+   claude plugin marketplace add ihmeuw/vivarium-suite
+   claude plugin install simsci@vivarium-ai-tools
+
+The same marketplace lists ``simsci-internal``, which is for the Simulation
+Science team only. Other teams should install ``simsci`` alone.
 
 For local development against a checked-out monorepo, point ``marketplace add``
 at the repo root (the directory containing ``.claude-plugin/``), not at
 ``tools/ai-tools-public/``:
 
-.. code-block:: shell
+.. code-block:: text
 
    /plugin marketplace add /path/to/vivarium-suite
    /plugin install simsci@vivarium-ai-tools
 
-Once installed, the entry points are ``/simsci:pr-prep``,
-``/simsci:regression-debugger``, ``/simsci:git-rescue``,
-``/simsci:type-hinter``, and ``/simsci:framework-development``, plus the
-auto-triggering skills above.
+Once installed, every skill above is a slash command: ``/simsci:pr-prep``,
+``/simsci:framework-development``, ``/simsci:regression-debugger``,
+``/simsci:git-rescue``, ``/simsci:type-hinter``, ``/simsci:commit-splitter``,
+``/simsci:change-propagation``, and ``/simsci:workflow-assessment``.
 
-The plugin's only dependency is the ``github`` plugin from the official
-marketplace (installed automatically), whose GitHub MCP server the workflows
-use to gather PR/repo context; they fall back to read-only ``git``/``gh``
-commands when the MCP is unavailable.
+GitHub access
+-------------
+
+The plugin's only dependency is the ``github`` plugin from Anthropic's
+``claude-plugins-official`` marketplace. Claude Code installs it automatically
+when that marketplace is registered, which it normally is after the first
+interactive start. If ``/plugin`` shows ``simsci`` as failed to load with a
+``github@claude-plugins-official`` dependency error, run
+``/plugin marketplace add anthropics/claude-plugins-official``; the dependency
+installs with it, and ``simsci`` loads on the next start or ``/reload-plugins``.
+
+The ``github`` plugin's MCP server reads its token from the
+``GITHUB_PERSONAL_ACCESS_TOKEN`` environment variable of the shell that
+launches ``claude``. The install does not set this up; until it is set, ``/mcp``
+shows the ``github`` server as failed with "Missing environment variables:
+GITHUB_PERSONAL_ACCESS_TOKEN". The simplest setup is to log in with the GitHub
+CLI and export its token from your shell init (``~/.zshenv`` or
+``~/.bashrc``)::
+
+   gh auth login
+   export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"
+
+For repositories in an SSO-protected org such as ``ihme-internal``, the token
+must also be SSO-authorized. Restart Claude Code and confirm in ``/mcp`` that
+``github`` is connected.
+
+Only the PR-opening steps need GitHub access: ``/simsci:pr-prep``,
+``/simsci:framework-development``, and ``/simsci:change-propagation``. When the
+MCP is unavailable they fall back to the ``gh`` CLI, which must be logged in;
+under the sandbox configuration recommended below ``gh`` cannot read its
+credentials, so there the MCP is the only path. ``/simsci:git-rescue`` and
+``/simsci:regression-debugger`` need only ``git``.
+
+Before your first run
+---------------------
+
+- **Claude Code**: a current release (``claude --version``). The plugin needs
+  no conda, Node, or IHME-specific tooling.
+- **GitHub access**: see above. Needed only by the PR-opening steps.
+- **Agent teams** (only for ``/simsci:type-hinter``): set
+  ``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`` under ``env`` in
+  ``~/.claude/settings.json`` or export it in the shell that launches
+  ``claude``, then restart. See https://code.claude.com/docs/en/agent-teams.
+- **Your project's checks**: the review and TDD workflows run whatever test,
+  lint, and type-check commands your repository documents, from a working
+  development environment. A check that cannot run is reported as FAIL, never
+  PASS.
+- **Optional hardening**: the deny rules and sandbox baseline at the end of
+  this file. If you enable the sandbox, read its ``git push`` note first.
+
+Getting updates
+---------------
+
+Installs from GitHub track the ``main`` branch. To pick up changes, run
+``/plugin marketplace update vivarium-ai-tools``, then from a terminal
+``claude plugin update simsci@vivarium-ai-tools``, and restart Claude Code or
+run ``/reload-plugins``. Release notes are in `CHANGELOG.rst <CHANGELOG.rst>`_.
+To uninstall, run ``/plugin uninstall simsci@vivarium-ai-tools``.
+
+Feedback
+--------
+
+File bugs and suggestions as `GitHub issues on ihmeuw/vivarium-suite
+<https://github.com/ihmeuw/vivarium-suite/issues/new>`_, naming the skill and
+your Claude Code version. Pull requests are welcome; see the monorepo's
+`CONTRIBUTING.rst <../../CONTRIBUTING.rst>`_.
 
 .. note::
    Everything below this point is reference material — the delegation
    architecture and the security model — aimed at plugin authors and at
-   reviewers vetting the plugin before an install. Day-to-day use needs
-   nothing past this line.
+   reviewers vetting the plugin before an install. Day-to-day use with Claude
+   Code's default permission prompts needs nothing past this line. If you run
+   in ``bypassPermissions`` or ``auto`` mode, or with the Bash sandbox enabled,
+   read the security and sandbox sections first.
 
 Delegation mechanism
 ====================
