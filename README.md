@@ -23,13 +23,25 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 ## Tools
 
 Developer tooling that is not a Python package and is not published to PyPI lives under `tools/`.
-These are not built or released by the monorepo's CI/release workflows.
+CI does not build or test these. The two Claude Code plugins are tagged and given a GitHub Release
+by `.github/workflows/release-ai-tools-public.yml` (`simsci`) and `.github/workflows/release-ai-tools.yml`
+(`simsci-internal`) whenever the plugin's `CHANGELOG.rst` changes on `main`; `tools/model-template/`
+has no release process.
 
 | Directory | Purpose |
 |---|---|
-| `tools/ai-tools-public/` | Claude Code plugin (`simsci`): generic AI developer workflows for any IHME team (code review, git rescue, type hinting, regression debugging, guided TDD) |
+| `tools/ai-tools-public/` | Claude Code plugin (`simsci`): generic AI developer workflows for any IHME team (review-to-PR prep with multi-agent review, git rescue, commit splitting, type hinting, regression debugging, change propagation, workflow assessment, guided TDD) |
 | `tools/ai-tools/` | Claude Code plugin (`simsci-internal`): SimSci/vivarium-specific agent workflows (model development, team conventions, vivarium references); depends on `simsci` |
 | `tools/model-template/` | Cookiecutter template for producing research model repositories |
+
+To install the `simsci` plugin in Claude Code:
+
+```text
+/plugin marketplace add ihmeuw/vivarium-suite
+/plugin install simsci@vivarium-ai-tools
+```
+
+Setup and usage are in [`tools/ai-tools-public/README.rst`](tools/ai-tools-public/README.rst).
 
 ## Local development
 
@@ -60,4 +72,5 @@ CI uses [uv](https://docs.astral.sh/uv/) as the package manager.
 
 Releases are triggered automatically when a `CHANGELOG.rst` is updated on `main`. A release can
 also be triggered manually via `workflow_dispatch` on `.github/workflows/release.yml` (useful for
-recovery or retries). See that file for details.
+recovery or retries). See that file for details. The two Claude Code plugins under `tools/` release
+the same way through `.github/workflows/release-ai-tools-public.yml` and `release-ai-tools.yml`.

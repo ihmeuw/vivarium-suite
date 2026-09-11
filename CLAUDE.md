@@ -75,6 +75,22 @@ no build, test, or PyPI publish. They are kept separate from `release.yml` so pl
 releases never touch that workflow's PyPI trusted-publishing credential path (its
 `id-token: write` permission).
 
+## Working on the Claude Code plugins
+
+- Layout: `tools/ai-tools-public/` is the `simsci` plugin and `tools/ai-tools/` is
+  `simsci-internal`. Each has `.claude-plugin/plugin.json`, `skills/<name>/SKILL.md`,
+  `agents/<name>.md`, `README.rst`, and `CHANGELOG.rst`. The marketplace catalog is
+  `.claude-plugin/marketplace.json` at the repo root.
+- `simsci` must stay generic. Never name a `simsci-internal` skill, an IHME service (Jira,
+  Jenkins, the hub, MIC tickets), or vivarium in it. Where a team process could apply, write
+  "if an installed skill covers X, invoke it; otherwise <generic fallback>". The official
+  `github` plugin's MCP is the one permitted external dependency.
+- `_review-core`, `_finalize-core`, `_validator`, `_split_proposer`, and the `_review_*` agents
+  are consumed by `simsci-internal`'s `model-development`. A change to their inputs, gates, or
+  output keys needs a matching change and CHANGELOG entry in `tools/ai-tools`.
+- Each plugin's `README.rst` describes every skill and agent. Update it with the skill and add a
+  `CHANGELOG.rst` entry in the same PR.
+
 ## Note on packaging
 
 `libs/<pkg>/pyproject.toml` deliberately uses `include = ["vivarium.<pkg>", "vivarium.<pkg>.*"]` so the wheel ships only the `vivarium/<pkg>/` subtree and *not* `vivarium/__init__.py`. The canonical `vivarium/__init__.py` is owned by `vivarium-engine`; shipping our own would clobber it at install time (two distributions writing the same file). Apply this same pattern to any other package that lives under the `vivarium.*` namespace.
