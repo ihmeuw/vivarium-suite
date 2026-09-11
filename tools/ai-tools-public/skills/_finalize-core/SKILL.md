@@ -134,10 +134,10 @@ PR body, and don't soften a leftover into sounding done.
 
 Then report: the PR number and URL, the commits as they landed, any tickets filed,
 and any hold-out paths still uncommitted. If the PR is still a draft, **offer** to
-mark it ready for review. If an installed skill covers announcing a PR to your
-team, offer that too and, on an explicit yes, invoke it and follow it; otherwise
-leave announcing to the user. Delete a Step 4 backup ref once the user confirms
-things look right, or hand them the command.
+mark it ready for review and announce it per your team's convention — if an
+installed skill covers that,
+invoke it and follow it, but only on an explicit yes. Delete a Step 4 backup ref
+once the user confirms things look right, or hand them the command.
 
 ## Constraints
 
