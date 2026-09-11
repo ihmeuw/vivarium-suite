@@ -1,5 +1,5 @@
 # Tag-and-release workflow for the `tools/ai-tools-public` Claude Code plugin
-# (viv-public). A twin of release-ai-tools.yml with the plugin path and tag
+# (published as `simsci` in marketplace.json). A twin of release-ai-tools.yml with the plugin path and tag
 # prefix swapped; see that file's header for why plugin releases are kept
 # separate from release.yml (PyPI trusted-publishing credential isolation).
 #

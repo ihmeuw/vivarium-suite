@@ -2,7 +2,10 @@
     "name": "simsci-internal",
     "displayName": "Simulation Science Internal AI Tools",
     "description": "SimSci-internal agent workflows for vivarium development; depends on the simsci plugin for the generic tooling.",
-    "publisher": "ihmeuw",
+    "author": { "name": "IHME Simulation Science" },
+    "homepage": "https://github.com/ihmeuw/vivarium-suite/blob/main/tools/ai-tools/README.rst",
+    "repository": "https://github.com/ihmeuw/vivarium-suite",
+    "license": "BSD-3-Clause",
     "dependencies": [
         "simsci",
         { "name": "slack", "marketplace": "claude-plugins-official" },

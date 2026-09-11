@@ -42,10 +42,6 @@ public-health:
   - changed-files:
     - any-glob-to-any-file: 'libs/public-health/**'
 
-pytest-plugins:
-  - changed-files:
-    - any-glob-to-any-file: 'libs/pytest-plugins/**'
-
 risk-distributions:
   - changed-files:
     - any-glob-to-any-file: 'libs/risk-distributions/**'
@@ -57,6 +53,10 @@ pytest-vivarium:
 ai-tools:
   - changed-files:
     - any-glob-to-any-file: 'tools/ai-tools/**'
+
+ai-tools-public:
+  - changed-files:
+    - any-glob-to-any-file: 'tools/ai-tools-public/**'
 
 ci:
   - changed-files:

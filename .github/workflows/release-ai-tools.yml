@@ -1,7 +1,8 @@
-# Tag-and-release workflow for the `tools/ai-tools` Claude Code plugin.
+# Tag-and-release workflow for the `tools/ai-tools` Claude Code plugin
+# (published as `simsci-internal` in marketplace.json).
 #
 # Unlike the Python packages under libs/ (see release.yml), ai-tools is NOT a
-# PyPI package: it ships agents/commands/skills, not importable code. This
+# PyPI package: it ships agents and skills, not importable code. This
 # workflow exists only to cut a git tag and a GitHub Release so plugin changes
 # are tracked - there is no build/test/publish step. It is deliberately kept
 # separate from release.yml so the PyPI trusted-publishing credential path
