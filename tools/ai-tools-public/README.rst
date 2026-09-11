@@ -381,7 +381,7 @@ Code:
   can contain anything). It returns compact digests, not transcript content,
   and is spawned only by the ``workflow-assessment`` skill.
 - ``_diff_analyzer``, ``_hypothesis_tester``, and ``_split_proposer``
-  declare ``Bash`` to run ``git`` and ``gh`` commands. In practice, every
+  declare ``Bash`` to run ``git`` commands. In practice, every
   operation they perform is a read-only git command (``git diff``,
   ``git log``, ``git show``, ``git status``), which Claude Code
   auto-approves via its built-in read-only command allowlist.
@@ -401,27 +401,31 @@ Code:
   type-check commands and report a PASS/FAIL verdict. It is read-only with
   respect to source and tests — it never edits files — but running a test suite
   executes arbitrary project code, so this is a broader grant than the
-  read-only git agents above. It is spawned by
+  read-only git agents above. It is spawned by ``/simsci:pr-prep`` and
   ``/simsci:framework-development`` (and by the ``simsci-internal`` plugin's
   model-development workflow when that plugin is installed).
 - ``_propagate_target`` (spawned by the ``change-propagation`` skill) also
-  **writes** and runs the test suite: for a target in the local repository
-  it adapts files into the target package's subtree and runs that package's
-  check command inside an **isolated git worktree** (its verification
-  sandbox). Its prompt
-  constrains it to write only within its assigned target and to **never**
-  push, branch, commit, or open a PR — every durable write is the lead
-  skill's, after explicit approval. For an external target it uses only
-  read-only GitHub MCP calls and writes nothing.
+  **writes** and runs the test suite. Each worker edits inside a local
+  checkout the lead provisions (an isolated git worktree for a target in the
+  reference's own repository, a local clone for a target in another
+  repository) and runs that package's check command there. It has no GitHub
+  or other MCP tools; anything it needs from GitHub, the lead gathers and
+  passes in its brief. Its prompt constrains it to its assigned checkout and
+  to **never** push, branch, commit, or open a PR — every durable write is
+  the lead skill's, after explicit approval.
 - ``_type_hint_file`` (the type-hinter's per-file teammate) is write-capable
   within its assigned file and runs the package's mypy invocation via
   ``Bash``.
-- The ``/simsci:pr-prep``, ``/simsci:regression-debugger``,
-  and ``/simsci:framework-development`` skill bodies (running in the main
-  session) gather PR/repo context through the GitHub MCP server (a plugin
-  dependency), falling back to read-only git/``gh`` commands when the MCP is
-  unavailable; ``/simsci:framework-development`` and ``/simsci:pr-prep``
-  additionally write files and run the project's check commands.
+- ``/simsci:pr-prep`` (running in the main session) reads an existing PR's
+  context through the GitHub MCP server (a plugin dependency), falling back
+  to read-only ``git``/``gh`` reads when the MCP is unavailable. The shared
+  ``_finalize-core`` skill that it and ``/simsci:framework-development``
+  invoke pushes the branch, opens the draft PR, and posts the not-addressed
+  comment through the MCP, falling back to ``gh pr create`` and
+  ``gh pr comment``. ``/simsci:regression-debugger`` uses only local ``git``
+  and edits no files. ``/simsci:framework-development`` and
+  ``/simsci:pr-prep`` additionally write files and run the project's check
+  commands.
 - ``/simsci:pr-prep`` is the plugin's **write-capable review follow-through**, and
   unlike the framework-development build it edits **directly in the main
   session** — there is no worktree sandbox, because the code, the tests, and the
@@ -438,10 +442,13 @@ Code:
   never marks one ready or announces it unasked. It spawns ``_validator``, which
   executes the project's test suite (see that agent above).
 
-For destructive or out-of-scope commands, Claude Code's default
-permission system prompts you before execution, so a prompt-injected
-agent cannot silently run ``rm``, ``curl``, or similar without your
-approval.
+Each workflow skill's ``allowed-tools`` pre-approves the tools it lists,
+``Bash`` included for most of them, for the turn that invokes it, so you are
+not prompted per command until you next reply; the grant then clears and
+prompting resumes. That makes the deny rules below the real floor against a
+prompt-injected ``rm``, ``curl``, or credential read during a run, in every
+permission mode. Add them before your first run rather than relying on
+default-mode prompts.
 
 If you run with ``defaultMode: bypassPermissions`` or ``auto``, or
 otherwise want an explicit deny floor that cannot be bypassed by an
@@ -464,7 +471,11 @@ errant prompt-allow, add this snippet to ``~/.claude/settings.json``:
    }
 
 Deny rules take precedence over allow rules and over hook decisions, so
-these will block the listed commands in every permission mode.
+these will block the listed commands in every permission mode. Two of them
+also block steps the plugin's own skills perform: ``_finalize-core`` pushes
+the branch before opening the PR, and ``git-rescue`` rebases and pushes with
+``--force-with-lease``. With these rules in place the skill stops at those
+steps and you run the command yourself.
 
 Recommended sandbox configuration
 ----------------------------------
