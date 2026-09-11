@@ -4,9 +4,7 @@ Simulation Science Dev AI Tools (``simsci``)
 
 ``simsci`` is a Claude Code plugin from the IHME Simulation Science team
 providing generic AI-assisted developer workflows, usable by any IHME team in
-any repository. Each skill is a scripted procedure the agent follows step by
-step, stopping at explicit points for you to approve or redirect before
-anything is committed, pushed, or filed. It carries no SimSci- or
+any repository. It carries no SimSci- or
 vivarium-specific process: every workflow runs standalone, and the places where
 a team process *could* plug in (environment setup, branch and PR conventions,
 ticket filing, brainstorming and design docs, domain reference docs) are
@@ -89,11 +87,6 @@ In more detail:
   to reflow the history into reviewable commits at the end). A PR it opens is a
   **draft**; one that is already open keeps whatever state it had. Marking a draft
   ready and announcing it are separate deliberate acts it only offers.
-
-  There is no review-only entry point: ``/simsci:code-reviewer`` was removed in
-  0.2.0 and ``pr-prep`` replaced it. ``pr-prep`` edits and commits on your branch
-  after printing its disposition table. For a review with no edits, say so in
-  the argument (``/simsci:pr-prep review only``).
 
 **Regression Debugger**
 
