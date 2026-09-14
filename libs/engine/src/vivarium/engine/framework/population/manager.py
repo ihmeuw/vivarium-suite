@@ -337,7 +337,7 @@ class PopulationManager(Manager):
                 f"read: {unset}. Their initializer has not run for these simulants, so "
                 "an initializer that reads them must require them."
             )
-        return frame[columns] if index is None else frame.loc[index, columns]
+        return frame.loc[:, columns] if index is None else frame.loc[index, columns]
 
     @property
     def staged_index(self) -> pd.Index[int]:
@@ -890,7 +890,7 @@ class PopulationManager(Manager):
         """Write new values for the simulants in update's index.
 
         Only the rows in ``update``'s index are written; every other row is left
-        alone.
+        alone. Simulants being added are written by :meth:`initialize` instead.
 
         Parameters
         ----------
@@ -898,11 +898,7 @@ class PopulationManager(Manager):
             The new values, indexed by the simulants to write. Its columns must
             already exist in the frame being written.
         """
-        frame = (
-            cast(pd.DataFrame, self._staged_simulants)
-            if self.adding_simulants
-            else self.private_columns
-        )
+        frame = self.private_columns
         if update.index.equals(frame.index):
             frame[update.columns] = update
         else:

@@ -426,16 +426,23 @@ class PopulationView:
         ------
         PopulationError
             - If this view is read-only.
+            - If called while simulants are being added.
             - If ``index`` contains simulants that are not in the population.
             - If the modifier returns data with unexpected columns, or does
               not return data for all requested columns.
             - If the modifier returns simulants that are not in the update index.
+            - If the modifier returns a dtype the column cannot hold.
         TypeError
             If the modifier does not return a Series, DataFrame, or scalar.
         """
         if self._component is None:
             raise PopulationError(
                 "This PopulationView is read-only, so it doesn't have access to update()."
+            )
+        if self._manager.adding_simulants:
+            raise PopulationError(
+                "update() cannot be called while simulants are being added. Use "
+                "initialize() to give the new simulants their values."
             )
 
         if index is not None:
@@ -452,13 +459,18 @@ class PopulationView:
             self._component, index=index, columns=columns
         )
         previous_index = current_data.index
-        previous_dtypes = pd.DataFrame(current_data).dtypes
+        previous_dtypes = (
+            current_data.dtypes
+            if isinstance(current_data, pd.DataFrame)
+            else current_data.to_frame().dtypes
+        )
         result = modifier(current_data)
         result_df = self._coerce_update_result(result, column_list, previous_index)
 
         if result_df.empty:
             return
 
+        casts = {}
         for column in result_df.columns:
             update_dtype = result_df[column].dtype
             existing_dtype = previous_dtypes[column]
@@ -469,9 +481,9 @@ class PopulationView:
                     "A component is corrupting the population table by modifying the "
                     f"dtype of the {column} column from {existing_dtype} to {update_dtype}."
                 )
-            result_df[column] = result_df[column].astype(existing_dtype)
+            casts[column] = existing_dtype
 
-        self._manager.update(result_df)
+        self._manager.update(result_df.astype(casts) if casts else result_df)
 
     def __repr__(self) -> str:
         name = self._component.name if self._component else "None"
@@ -625,10 +637,6 @@ class PopulationView:
         nanoseconds). Neither difference indicates a component corrupting the
         population table.
         """
-        # Array-level dtypes wrap plain numpy dtypes in NumpyEADtype, which
-        # is_string_dtype does not recognize; unwrap before checking.
-        update_dtype = getattr(update_dtype, "numpy_dtype", update_dtype)
-        existing_dtype = getattr(existing_dtype, "numpy_dtype", existing_dtype)
         if pd.api.types.is_datetime64_any_dtype(
             update_dtype
         ) and pd.api.types.is_datetime64_any_dtype(existing_dtype):

@@ -1023,6 +1023,60 @@ def test_population_view_update_empty_result_keeps_column_dtype(
     pd.testing.assert_series_equal(updated, original)
 
 
+#################################
+# PopulationView.update helpers #
+##############################################
+# PopulationView._compatible_non_equal_dtypes #
+##############################################
+
+
+@pytest.mark.parametrize(
+    "update_dtype, existing_dtype, compatible",
+    [
+        (np.dtype(object), pd.StringDtype(), True),
+        (np.dtype("datetime64[ns]"), np.dtype("datetime64[us]"), True),
+        (np.dtype("timedelta64[ns]"), np.dtype("timedelta64[us]"), True),
+        (np.dtype("int64"), np.dtype("float64"), False),
+        (np.dtype(object), np.dtype("int64"), False),
+    ],
+    ids=[
+        "string_vs_object",
+        "datetime_unit",
+        "timedelta_unit",
+        "int_vs_float",
+        "object_vs_int",
+    ],
+)
+def test__compatible_non_equal_dtypes(
+    update_dtype: Any, existing_dtype: Any, compatible: bool
+) -> None:
+    """Only differences that cannot lose data are tolerated.
+
+    String columns infer as ``object`` under pandas 2 and ``str`` under pandas 3, and
+    datetime and timedelta columns can differ only in unit; neither means a component
+    is corrupting the table.
+    """
+    assert (
+        PopulationView._compatible_non_equal_dtypes(update_dtype, existing_dtype)
+        is compatible
+    )
+
+
+def test_population_view_update_during_a_creation_pass_raises(
+    pies_and_cubes_pop_mgr: PopulationManager,
+) -> None:
+    """update() is for simulants already in the population; initialize() is not.
+
+    The two write different frames, so an update mid-pass would read the committed
+    population and write the staged one.
+    """
+    pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
+    _stage(pies_and_cubes_pop_mgr, pd.RangeIndex(len(PIE_DF), len(PIE_DF) + 2))
+
+    with pytest.raises(PopulationError, match="while simulants are being added"):
+        pv.update("pi", lambda pi: pi * 2)
+
+
 ####################################
 # PopulationView.update with index #
 ####################################
@@ -1084,6 +1138,28 @@ class TestScopedUpdate:
 
         assert len(seen) == 1
         pd.testing.assert_series_equal(seen[0], PIE_DF.loc[index, "pi"])
+
+    def test_modifier_mutating_its_input_cannot_reach_the_population(
+        self,
+        scoped: pd.Index[int],
+        rest: pd.Index[int],
+        pie_view: PopulationView,
+        pies_and_cubes_pop_mgr: PopulationManager,
+    ) -> None:
+        """A modifier is handed real data, not a copy, so this pins that it is not a view."""
+
+        def vandal(pi: pd.Series[Any]) -> pd.Series[Any]:
+            pi.iloc[:] = -999.0
+            return pd.Series(1.0, index=pi.index, name="pi")
+
+        pie_view.update("pi", vandal, index=scoped)
+
+        pop = pies_and_cubes_pop_mgr.private_columns
+        assert not (pop["pi"] == -999.0).any()
+        pd.testing.assert_series_equal(
+            pop.loc[scoped, "pi"], pd.Series(1.0, index=scoped, name="pi")
+        )
+        pd.testing.assert_series_equal(pop.loc[rest, "pi"], PIE_DF.loc[rest, "pi"])
 
     def test_multi_column(
         self,
