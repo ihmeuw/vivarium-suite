@@ -550,6 +550,139 @@ def test_register_tracked_query(mocker: MockerFixture) -> None:
     assert mgr.tracked_queries == ["foo == 'bar'", "cat != dog"]
 
 
+#####################################
+# PopulationManager write behaviour #
+#####################################
+
+
+class TestPopulationManagerWrites:
+    """Writes reaching the population through the manager."""
+
+    @pytest.fixture
+    def original(self, pies_and_cubes_pop_mgr: PopulationManager) -> pd.DataFrame:
+        """The population as it stood before the test wrote to it."""
+        return pies_and_cubes_pop_mgr.private_columns.copy()
+
+    def test_full_index_writes_every_row(
+        self, pies_and_cubes_pop_mgr: PopulationManager, original: pd.DataFrame
+    ) -> None:
+        """An update covering the whole population writes every row of those columns."""
+        update = pd.DataFrame({"pi": original["pi"] * 2, "cube": original["cube"] + 1})
+        assert update.index.equals(original.index)
+
+        pies_and_cubes_pop_mgr.update(update)
+
+        updated = pies_and_cubes_pop_mgr.private_columns
+        pd.testing.assert_frame_equal(updated[["pi", "cube"]], update)
+        pd.testing.assert_frame_equal(
+            updated[["pie", "cube_string"]], original[["pie", "cube_string"]]
+        )
+
+    def test_initialize_uses_the_initializers_dtype(
+        self, pies_and_cubes_pop_mgr: PopulationManager, original: pd.DataFrame
+    ) -> None:
+        """A created column arrives at the dtype its initializer produced."""
+        staged_index = pd.RangeIndex(len(original), len(original) + 3)
+        pies_and_cubes_pop_mgr._staged_simulants = pd.DataFrame(index=staged_index)
+        data = pd.DataFrame(
+            {"a_bool": True, "an_int": 7, "a_string": "spam"}, index=staged_index
+        )
+
+        pies_and_cubes_pop_mgr.initialize(data)
+
+        staged = pies_and_cubes_pop_mgr.staged_simulants
+        pd.testing.assert_frame_equal(staged, data)
+        # Writing into rows could not have created these, let alone at these dtypes.
+        assert staged["a_bool"].dtype == np.dtype("bool")
+        assert staged["an_int"].dtype == np.dtype("int64")
+
+    def test_partial_index_writes_only_those_rows(
+        self, pies_and_cubes_pop_mgr: PopulationManager, original: pd.DataFrame
+    ) -> None:
+        """An update covering some simulants leaves every other row untouched."""
+        index: pd.Index[int] = original.index[::2]
+        omitted = original.index.difference(index)
+        update = pd.DataFrame({"pi": original.loc[index, "pi"] * 2})
+
+        pies_and_cubes_pop_mgr.update(update)
+
+        updated = pies_and_cubes_pop_mgr.private_columns
+        pd.testing.assert_series_equal(
+            updated.loc[index, "pi"], original.loc[index, "pi"] * 2
+        )
+        pd.testing.assert_series_equal(
+            updated.loc[omitted, "pi"], original.loc[omitted, "pi"]
+        )
+        pd.testing.assert_frame_equal(
+            updated.drop(columns=["pi"]), original.drop(columns=["pi"])
+        )
+
+    def test_partial_index_does_not_null_omitted_rows(
+        self, pies_and_cubes_pop_mgr: PopulationManager, original: pd.DataFrame
+    ) -> None:
+        """A partial update introduces no nulls in the rows it omits."""
+        assert not original.isna().to_numpy().any()
+        index: pd.Index[int] = original.index[:3]
+        omitted = original.index.difference(index)
+        update = pd.DataFrame({"pie": "banana_cream", "pi": 0.0}, index=index)
+
+        pies_and_cubes_pop_mgr.update(update)
+
+        updated = pies_and_cubes_pop_mgr.private_columns
+        assert not updated.loc[omitted, PIE_COL_NAMES].isna().to_numpy().any()
+        assert not updated.isna().to_numpy().any()
+
+    @pytest.mark.parametrize("column", ["pie", "pi", "cube", "cube_string"])
+    def test_partial_index_preserves_dtype(
+        self,
+        pies_and_cubes_pop_mgr: PopulationManager,
+        original: pd.DataFrame,
+        column: str,
+    ) -> None:
+        """A partial update leaves the written column's dtype unchanged."""
+        index: pd.Index[int] = original.index[::3]
+        # Relabelling the reversed rows changes most values without changing dtype.
+        update = original.loc[index[::-1], [column]].set_axis(index, axis="index")
+        expected = original[column].copy()
+        expected.loc[index] = update[column]
+
+        pies_and_cubes_pop_mgr.update(update)
+
+        updated = pies_and_cubes_pop_mgr.private_columns
+        assert updated[column].dtype == original[column].dtype
+        pd.testing.assert_series_equal(updated[column], expected)
+
+    def test_partial_index_empty_is_noop(
+        self, pies_and_cubes_pop_mgr: PopulationManager, original: pd.DataFrame
+    ) -> None:
+        """An update with an empty index changes nothing."""
+        update = original.loc[original.index[:0], PIE_COL_NAMES]
+
+        pies_and_cubes_pop_mgr.update(update)
+
+        pd.testing.assert_frame_equal(pies_and_cubes_pop_mgr.private_columns, original)
+
+    def test_partial_index_unordered(
+        self, pies_and_cubes_pop_mgr: PopulationManager, original: pd.DataFrame
+    ) -> None:
+        """A partial update whose index is not in population order writes the right rows."""
+        index = pd.Index([7, 2, 19, 5])
+        omitted = original.index.difference(index)
+        # Each row gets a distinct value, so writing them in population order would
+        # land the wrong value on every simulant.
+        update = pd.DataFrame(
+            {"pi": [-1.0, -2.0, -3.0, -4.0], "cube": [-1, -2, -3, -4]}, index=index
+        )
+
+        pies_and_cubes_pop_mgr.update(update)
+
+        updated = pies_and_cubes_pop_mgr.private_columns
+        pd.testing.assert_frame_equal(updated.loc[index, ["pi", "cube"]], update)
+        pd.testing.assert_frame_equal(
+            updated.loc[omitted, ["pi", "cube"]], original.loc[omitted, ["pi", "cube"]]
+        )
+
+
 class ComprehensionColumnCreator(Component):
     """Build column values by comprehension rather than broadcasting a scalar."""
 

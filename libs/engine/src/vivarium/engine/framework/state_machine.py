@@ -292,7 +292,11 @@ class State(Component):
                 f"State '{self.state_id}' has no model set. "
                 "Call set_model() before transitioning."
             )
-        population_view.update(self.model, lambda _: pd.Series(self.state_id, index=index))
+        population_view.update(
+            self.model,
+            lambda states: pd.Series(self.state_id, index=states.index),
+            index=index,
+        )
         self.transition_side_effect(index, event_time)
 
     def cleanup_effect(self, index: pd.Index[int], event_time: ClockTime) -> None:
