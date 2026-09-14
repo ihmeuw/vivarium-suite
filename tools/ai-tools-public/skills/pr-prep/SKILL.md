@@ -11,8 +11,9 @@ This is the one-off counterpart to a development workflow's converge-and-ship
 phases, for code that **already exists**. You review it, propose a disposition for
 every finding, apply the fix-now set, confirm the tree is still green, and hand the
 finish to the `simsci:_finalize-core` skill. **Exactly one user gate:** the PR,
-inside `simsci:_finalize-core`. Every Jira write keeps its own approval, owned by
-the ticket-filing skill.
+inside `simsci:_finalize-core`. If an installed ticket-filing skill takes the
+leftovers, each ticket-tracker write it makes keeps its own approval inside that
+skill; with no such skill installed, leftovers are listed, never filed.
 
 It ends at a **draft PR** with the leftovers documented — not a merge, and not an
 announcement. Marking the PR ready and telling the team stay deliberate acts.
@@ -42,6 +43,14 @@ the review — a fan-out spent on a mid-rebase repo is a fan-out thrown away.
    in the same turn as the Step 3 proposal, so it costs no extra round trip.
    Pre-existing failures are not yours, but you can only say so if you looked
    first.
+4. **Confirm a PR can be opened.** Make one cheap authenticated read: the GitHub
+   MCP's `get_me` tool, or `gh auth status` when the MCP is absent. If both fail,
+   say so before the review: the `github` plugin needs
+   `GITHUB_PERSONAL_ACCESS_TOKEN` in the environment Claude Code launches from
+   (see the README's "GitHub access" section), or `gh auth login`. Ask whether to
+   fix that first or continue. Continuing is fine, but `simsci:_finalize-core`
+   will then stop after shaping the history and hand you the PR body and comment
+   to post by hand.
 
 ## Step 2 — Gather the change and review it
 

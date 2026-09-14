@@ -1,3 +1,7 @@
+**0.2.1 - 09/11/26**
+
+- Update documentation and skills for public release
+
 **0.2.0 - 08/06/26**
 
 - **Breaking:** Remove ``/simsci:code-reviewer``. There is no longer a review-only entry point.
@@ -9,7 +13,7 @@
 
 **0.1.0 - 07/27/26**
 
-- Initial release: generic developer tooling extracted from the ``simsci-internal`` plugin (MIC-7220)
+- Initial release: generic developer tooling extracted from the ``simsci-internal`` plugin (`MIC-7220 <https://jira.ihme.washington.edu/browse/MIC-7220>`_)
 - Ships the multi-agent code review family (``/simsci:code-reviewer``), ``git-rescue``,
   ``commit-splitter``, ``type-hinter``, ``regression-debugger``, ``workflow-assessment``,
   ``change-propagation``, and ``framework-development``

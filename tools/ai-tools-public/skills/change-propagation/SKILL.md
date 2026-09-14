@@ -1,6 +1,7 @@
 ---
 name: change-propagation
 description: Propagate an adapted copy of a reference file or directory across several targets — one or more packages in one or more repositories — in parallel, then file one draft PR per repository. Use when the user wants to roll a piece of boilerplate or config out to many places at once. Not for a single-target edit (just edit it) and not when the change needs bespoke per-target design rather than adaptation of a shared reference.
+argument-hint: "The reference file or directory, then the targets (package paths and/or owner/repo entries)."
 ---
 
 # Change propagation
@@ -27,8 +28,10 @@ You **MUST** complete these in order. Track them with `TaskCreate`.
 
 ### 1. Parse and confirm the input
 
-Read `$ARGUMENTS` as natural language naming a **reference source** and a
-**target list**. Resolve and classify, then **echo your parse back and wait
+Read `$ARGUMENTS` (or, when it is empty because the skill was triggered from
+conversation, the user's most recent request) as natural language naming a
+**reference source** and a **target list**. Resolve and classify, then **echo
+your parse back and wait
 for confirmation before spawning anyone** — this is a cheap gate that catches
 a misread reference or target before any work fans out.
 

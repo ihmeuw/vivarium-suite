@@ -105,7 +105,7 @@ Installing in Claude Code
 
 From GitHub:
 
-.. code-block:: shell
+.. code-block:: text
 
    /plugin marketplace add ihmeuw/vivarium-suite
    /plugin install simsci-internal@vivarium-ai-tools
@@ -114,11 +114,16 @@ Installing ``simsci-internal`` resolves its dependencies automatically: ``simsci
 (same marketplace) plus the ``slack`` and ``github`` plugins from the official
 marketplace. One install, everything enabled.
 
+This plugin is for Simulation Science team members. It assumes access to the
+team's Jira project, hub space, Jenkins, and Slack channel, and its skills
+redirect ``simsci``'s optional seams to SimSci conventions. Other IHME teams
+should install ``simsci`` only.
+
 For local development against a checked-out monorepo, point ``marketplace add``
 at the repo root (the directory containing ``.claude-plugin/``), not at
 ``tools/ai-tools/``:
 
-.. code-block:: shell
+.. code-block:: text
 
    /plugin marketplace add /path/to/vivarium-suite
    /plugin install simsci-internal@vivarium-ai-tools
