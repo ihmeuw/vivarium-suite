@@ -18,14 +18,24 @@ everything the user must sign off on.
 
 ## Step 0 — Preflight the team feature
 
-Agent teams are experimental and opt-in. Confirm agent teams are enabled
-by checking your tool list for the team tools (spawning persistent
-teammates, the shared task list, the team mailbox); if they are absent,
-the feature is off. There is no subagent fallback, so don't emulate the
-team with one-shot sub-agents. If teams aren't available, ask the user
-to enable Claude Code's experimental agent-teams feature (see the Claude
-Code settings documentation for the current flag) and re-run once it's
-enabled.
+Agent teams are experimental and opt-in, and there is no subagent fallback:
+never emulate the team with one-shot sub-agents. Do not infer the feature
+from your tool list; on current Claude Code the team-related tools come and
+go for unrelated reasons. Instead run
+`echo "teams=${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-unset}"` in Bash. If it
+does not print `teams=1`, stop and tell the user: add
+`{"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}}` to
+`~/.claude/settings.json` (or `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+in the shell that launches `claude`), restart Claude Code, and re-run
+`/simsci:type-hinter`. Current requirements:
+https://code.claude.com/docs/en/agent-teams.
+
+The shared task list (Step 5) needs the `TaskCreate` and `TaskList` tools,
+which Claude Code omits by default on some models. If they are not in your
+tool list, tell the user they can enable them with
+`CLAUDE_CODE_ENABLE_TODO_TOOLS=1` the same way, or proceed with Step 5
+replaced by explicit assignments in each teammate's spawn brief and
+coordination over `SendMessage`.
 
 ## Step 1 — Resolve the target
 

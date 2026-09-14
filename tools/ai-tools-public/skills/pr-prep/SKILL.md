@@ -1,6 +1,6 @@
 ---
 name: pr-prep
-description: "Take a change you have already written from raw branch to a PR ready for review: multi-agent review, a per-finding disposition (fix now / ticket / drop), apply the fixes, re-validate, then organize the commits and open the draft PR. Use when the user says \"review this and open a PR\", \"prep this for review\", \"I'm done, ship it\", \"review my branch\", or \"code review\". For a feature not yet written use a development workflow instead; to split a diff you are not reviewing use commit-splitter; for branch, ticket, or PR mechanics alone use your team's conventions skill."
+description: "Take a change you have already written from raw branch to a PR ready for review: multi-agent review, a per-finding disposition (fix now / ticket / drop), apply the fixes, re-validate, then organize the commits and open the draft PR. Use when the user says \"review this and open a PR\", \"prep this for review\", \"I'm done, ship it\", \"review my branch\", or \"code review\". If the user asked only for a review, run it review-only: print the review and the disposition table, then stop with no edits and no PR. For a feature not yet written use a development workflow instead; to split a diff you are not reviewing use commit-splitter; for branch, ticket, or PR mechanics alone use your team's conventions skill."
 argument-hint: "Optional: a description of the change. Omit to work from the current branch."
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(simsci:_validator, simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 ---
@@ -102,6 +102,10 @@ below 50, so everything you are bucketing is real.
 A run where nothing lands in **fix now** is a normal outcome, not a failure — say
 so plainly and go to Step 6 rather than manufacturing work.
 
+If the user asked for a review only, bucket every row as **ticket** or **drop**,
+print the table, and stop: no edits, no commits, no PR. Offer to continue into
+Steps 4-6 if they want the fixes applied after all.
+
 Print the table, then proceed — this is a plan you report, not a decision you hand
 back. The table is the contract for Steps 4-6. If the user re-buckets a row
 (`MNT3 -> fix now`, `all nits -> drop`) or adds a finding you missed, honor it
@@ -147,12 +151,20 @@ the **checks**: the project's own test, lint, and type-check entry points. One
 `_validator` per affected package, all dispatched in one message. A runnable env is
 a precondition — a check that cannot run is a FAIL with the reason, never a PASS.
 
+Discover the entry points from the Makefile, `pyproject.toml` or `package.json`
+scripts, or the CI workflow. If none exist, ask the user for the commands and the
+environment before dispatching. If they cannot supply one, do not dispatch a check
+that cannot run: record the verdict as `unverified` and carry it into the PR gate
+and the not-addressed comment as a residual.
+
 On FAIL, attribute each failure against the Step 1 baseline:
 
 - **Your fix is wrong** → correct it, or `git revert` its commit.
 - **The fix is right and an existing test pinned the old behavior** → changing an
   assertion is a scope escalation: explicit user approval only.
 - **Red before you arrived** → not yours. Record it; spend no budget on it.
+- **Could not run at all** (missing command or environment) → not a pre-existing
+  failure; resolve it or mark the run `unverified` before proceeding.
 
 **Budget: ≤2 fix-and-re-validate rounds**, counting neither the baseline nor the
 first run. These are small edits to code that was already green, so a second
