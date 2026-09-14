@@ -337,7 +337,7 @@ class PopulationManager(Manager):
                 f"read: {unset}. Their initializer has not run for these simulants, so "
                 "an initializer that reads them must require them."
             )
-        return frame[columns] if index is None else frame.loc[index, columns]
+        return frame.loc[:, columns] if index is None else frame.loc[index, columns]
 
     @property
     def staged_index(self) -> pd.Index[int]:
@@ -887,10 +887,32 @@ class PopulationManager(Manager):
         return df
 
     def update(self, update: pd.DataFrame) -> None:
-        # Writes during a creation pass belong to the simulants being added.
-        frame = (
-            cast(pd.DataFrame, self._staged_simulants)
-            if self.adding_simulants
-            else self.private_columns
-        )
-        frame[update.columns] = update
+        """Write new values for the simulants in update's index.
+
+        Only the rows in ``update``'s index are written; every other row is left
+        alone. Simulants being added are written by :meth:`initialize` instead.
+
+        Parameters
+        ----------
+        update
+            The new values, indexed by the simulants to write. Its columns must
+            already exist in the frame being written.
+        """
+        frame = self.private_columns
+        if update.index.equals(frame.index):
+            frame[update.columns] = update
+        else:
+            frame.loc[update.index, update.columns] = update
+
+    def initialize(self, data: pd.DataFrame) -> None:
+        """Add the given columns to the simulants being initialized.
+
+        Assigning whole columns is what lets a column arrive at the dtype its
+        initializer produced; writing into rows could not create one.
+
+        Parameters
+        ----------
+        data
+            The initial values, indexed by the simulants being added.
+        """
+        self.staged_simulants[data.columns] = data
