@@ -9,6 +9,7 @@ on:
       - 'release_candidate/**'
       - 'epic/**'
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 jobs:
   detect-changes:
@@ -66,8 +67,19 @@ jobs:
           echo "Changed files:"
           cat "$CHANGED_FILES"
 
+          # Candidate python versions are soaked on the long-running branches this
+          # workflow's push trigger lists. On a pull request they are opt-in via the
+          # run-candidates label: a candidate failure is usually a property of the
+          # toolchain rather than of the diff, so it is noise on an ordinary PR but
+          # exactly the signal wanted on one promoting a candidate.
+          CANDIDATES_REQUESTED="${{ contains(github.event.pull_request.labels.*.name, 'run-candidates') }}"
+          INCLUDE_CANDIDATES=""
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "$CANDIDATES_REQUESTED" = "true" ]; then
+            INCLUDE_CANDIDATES="--include-candidates"
+          fi
+
           CLASSIFIED_CHANGES=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
-            classify-changes --changed-files "$CHANGED_FILES")
+            classify-changes --changed-files "$CHANGED_FILES" $INCLUDE_CANDIDATES)
           echo "Classification:"
           jq . <<< "$CLASSIFIED_CHANGES"
 

@@ -9,6 +9,10 @@
 # main runs the downstream check before merging. It stays red ("add the
 # run-downstream label") until the check has run for the PR, then reflects the
 # results. A PR with no in-tree dependents passes as a no-op once run.
+#
+# The `run-candidates` label additionally fans each dependent out over its candidate
+# Python versions. Those entries are non-gating, so add it to a PR promoting a
+# candidate to see whether the promotion breaks a dependent before it merges.
 name: Downstream Check
 
 on:
@@ -29,9 +33,11 @@ jobs:
       pending-release-libs: ${{ steps.detect.outputs.pending-release-libs }}
       downstream-matrix: ${{ steps.detect.outputs.downstream-matrix }}
       has-downstream: ${{ steps.detect.outputs.has-downstream }}
-      # "Was the downstream check requested?" - the run-downstream label or a manual
-      # dispatch. Computed once here so the fan-out and the required-check agree.
-      is-requested: ${{ contains(github.event.pull_request.labels.*.name, 'run-downstream') || github.event_name == 'workflow_dispatch' }}
+      # "Was the downstream check requested?" - either label or a manual dispatch.
+      # Computed once here so the fan-out and the required-check agree. run-candidates
+      # counts because a PR asking for candidate dependent coverage necessarily wants
+      # the fan-out to run; its supported-version entries still gate as usual.
+      is-requested: ${{ contains(github.event.pull_request.labels.*.name, 'run-downstream') || contains(github.event.pull_request.labels.*.name, 'run-candidates') || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -65,10 +71,21 @@ jobs:
           echo "pending-release-libs=${PENDING_RELEASE_LIBS}" >> $GITHUB_OUTPUT
           echo "Pending release libraries: ${PENDING_RELEASE_LIBS:-(none)}"
 
+          # Candidate python versions are opt-in via the run-candidates label, matching
+          # ci.yml. This is the only pre-merge signal that a candidate promotion breaks
+          # a *dependent*: on a merge to main only the pushed libs rebuild, so a
+          # dependent nobody touched is never exercised until the candidate is promoted
+          # and its job starts gating.
+          CANDIDATES_REQUESTED="${{ contains(github.event.pull_request.labels.*.name, 'run-candidates') }}"
+          CANDIDATES=""
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "$CANDIDATES_REQUESTED" = "true" ]; then
+            CANDIDATES="--include-candidates"
+          fi
+
           # An empty --released yields an empty include, so no short-circuit is needed.
           # has-downstream gates the fan-out job: an empty matrix would fail it, not skip it.
           DOWNSTREAM_MATRIX=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
-            build-downstream-matrix --released "$PENDING_RELEASE_LIBS")
+            build-downstream-matrix --released "$PENDING_RELEASE_LIBS" $CANDIDATES)
           echo "Downstream matrix: ${DOWNSTREAM_MATRIX}"
           echo "downstream-matrix=${DOWNSTREAM_MATRIX}" >> $GITHUB_OUTPUT
           echo "has-downstream=$(jq -r '.include | length > 0' <<< "$DOWNSTREAM_MATRIX")" >> $GITHUB_OUTPUT
@@ -84,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.downstream-matrix) }}
-    # Candidate python versions should not gate CI builds
+    # Candidate versions must not gate `downstream-status`, the required check on main.
     continue-on-error: ${{ matrix.experimental }}
     steps:
       - name: Checkout code

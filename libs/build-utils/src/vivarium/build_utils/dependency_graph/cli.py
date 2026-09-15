@@ -38,23 +38,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         Determine the editable upstreams of ``target`` and run the combined editable
         install. Used by ``make install`` when ``CHANGED_LIBS`` is set.
 
-    ``classify-changes --changed-files <file> [--libs-dir <path>]``
+    ``classify-changes --changed-files <file> [--libs-dir <path>] [--include-candidates]``
         Read repository-relative changed paths (one per line) from
         ``--changed-files`` and print the JSON classification of which
         libraries the diff touched, plus the GitHub Actions matrix to build. Used by
-        the CI and Downstream Check workflows' detect jobs.
+        the CI and Downstream Check workflows' detect jobs. ``--include-candidates``
+        adds the non-gating candidate Python entries; CI passes it only for pull
+        requests to long-running branches rather than on every PR.
 
     ``build-release-matrix --versions <file> [--libs-dir <path>]``
         Read ``"<name> <version>"`` lines from the ``--versions`` file and print
         the dependency-ordered release matrix JSON to stdout. Used by the
         release workflow's detect job.
 
-    ``build-downstream-matrix --released "<names>" [--libs-dir <path>]``
+    ``build-downstream-matrix --released "<names>" [--libs-dir <path>] [--include-candidates]``
         Print the GitHub Actions matrix JSON of the libraries downstream of the
         released ``<names>`` (their transitive dependents, excluding the released
         set), one entry per dependent per Python version in its
         ``python_versions.json``. Used by the Downstream Check workflow to test
         dependents against the releasing libs' pending versions.
+        ``--include-candidates`` adds the non-gating candidate Python entries; CI
+        passes it only for pull requests to long-running branches rather than on every PR.
 
     ``verify-editable <target> --changed "<names>" [--libs-dir <path>]``
         Recompute the editable upstreams selected of ``target`` and assert each
@@ -91,6 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     classify_parser = subparsers.add_parser("classify-changes")
     classify_parser.add_argument("--changed-files", required=True)
     classify_parser.add_argument("--libs-dir", default=None)
+    classify_parser.add_argument("--include-candidates", action="store_true", default=False)
 
     # build-release-matrix
     matrix_parser = subparsers.add_parser("build-release-matrix")
@@ -101,6 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     downstream_parser = subparsers.add_parser("build-downstream-matrix")
     downstream_parser.add_argument("--released", default="")
     downstream_parser.add_argument("--libs-dir", default=None)
+    downstream_parser.add_argument("--include-candidates", action="store_true", default=False)
 
     # verify-editable
     verify_parser = subparsers.add_parser("verify-editable")
@@ -235,10 +241,9 @@ def _run_build_downstream_matrix(args: argparse.Namespace) -> int:
     released = args.released.split()
     try:
         downstream = get_transitive_downstreams(released, libs)
-        # Every dependent runs on its full supported python versions matrix plus
-        # candidates: the check runs once at merge, so there's no cost reason to
-        # sample a single canonical version.
-        matrix = build_python_matrix(downstream, libs)
+        matrix = build_python_matrix(
+            downstream, libs, include_candidates=args.include_candidates
+        )
     except KeyError as error:
         print(f"unknown library: {error.args[0]}", file=sys.stderr)
         return 1
@@ -258,7 +263,9 @@ def _run_classify_changes(args: argparse.Namespace) -> int:
     try:
         # Unlike classification, the matrix needs each lib's path to read its
         # python_versions.json and candidates, so this takes the parsed libraries.
-        matrix = build_python_matrix(changed.to_build, libs)
+        matrix = build_python_matrix(
+            changed.to_build, libs, include_candidates=args.include_candidates
+        )
     except (MissingPythonVersionsError, CandidateVersionConflictError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1

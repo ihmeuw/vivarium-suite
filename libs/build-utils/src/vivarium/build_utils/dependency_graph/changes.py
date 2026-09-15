@@ -95,12 +95,16 @@ def classify_changed_libs(
     )
 
 
-def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> PythonMatrix:
+def build_python_matrix(
+    names: Iterable[str],
+    libs: Mapping[str, Lib],
+    include_candidates: bool = False,
+) -> PythonMatrix:
     """Fan each library in ``names`` out over the versions in its ``python_versions.json``.
 
-    Each library also gets a non-gating ``experimental`` entry for every version
-    in its :attr:`~.models.Lib.candidates`; these are python versions being
-    soaked in CI without blocking the builds if they fail.
+    With ``include_candidates``, each library also gets a non-gating ``experimental``
+    entry for every version in its :attr:`~.models.Lib.candidates`; these are python
+    versions being soaked in CI without blocking the builds if they fail.
 
     Parameters
     ----------
@@ -108,6 +112,11 @@ def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> Python
         Library ``name``s to build matrix entries for.
     libs
         The full set of parsed libraries.
+    include_candidates
+        Whether to emit the non-gating candidate entries. Off by default so a caller
+        gets only gating jobs unless it opts in: candidate failures are a standing
+        property of the toolchain rather than of any one diff, so surfacing them on
+        every pull request is noise.
 
     Returns
     -------
@@ -142,7 +151,9 @@ def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> Python
         If a library's ``python_versions.json`` is absent or empty. This fails the
         build rather than silently dropping the library from the matrix.
     CandidateVersionConflictError
-        If a library declares a candidate it already supports.
+        If a library declares a candidate it already supports. Checked even when
+        ``include_candidates`` is off, so a stale declaration still fails the build
+        that introduces it rather than waiting for a run that emits candidate jobs.
     """
     include: list[PythonMatrixEntry] = []
     for name in sorted(names):
@@ -165,10 +176,11 @@ def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> Python
             include.append(
                 {"library": name, "python-version": version, "experimental": False}
             )
-        for candidate in candidates:
-            include.append(
-                {"library": name, "python-version": candidate, "experimental": True}
-            )
+        if include_candidates:
+            for candidate in candidates:
+                include.append(
+                    {"library": name, "python-version": candidate, "experimental": True}
+                )
     return {"include": include}
 
 

@@ -1055,7 +1055,7 @@ class TestBuildPythonMatrix:
                 {"a": {"python_versions": ["3.11", "3.12"], "candidates": ["3.13"]}}
             )
         )
-        assert build_python_matrix(["a"], libs) == {
+        assert build_python_matrix(["a"], libs, include_candidates=True) == {
             "include": [
                 {"library": "a", "python-version": "3.11", "experimental": False},
                 {"library": "a", "python-version": "3.12", "experimental": False},
@@ -1076,7 +1076,7 @@ class TestBuildPythonMatrix:
                 }
             )
         )
-        matrix = build_python_matrix(["a", "b"], libs)
+        matrix = build_python_matrix(["a", "b"], libs, include_candidates=True)
         assert matrix["include"] == [
             {"library": "a", "python-version": "3.11", "experimental": False},
             {"library": "a", "python-version": "3.12", "experimental": False},
@@ -1103,7 +1103,7 @@ class TestBuildPythonMatrix:
                 }
             )
         )
-        matrix = build_python_matrix(["a", "b"], libs)
+        matrix = build_python_matrix(["a", "b"], libs, include_candidates=True)
         assert matrix["include"] == [
             {"library": "a", "python-version": "3.11", "experimental": False},
             {"library": "a", "python-version": "3.12", "experimental": False},
@@ -1122,7 +1122,7 @@ class TestBuildPythonMatrix:
                 {"a": {"python_versions": ["3.13"], "candidates": ["3.14", "3.14"]}}
             )
         )
-        matrix = build_python_matrix(["a"], libs)
+        matrix = build_python_matrix(["a"], libs, include_candidates=True)
         assert [entry["python-version"] for entry in matrix["include"]] == ["3.13", "3.14"]
 
     def test_no_candidates_yields_no_experimental_entries(
@@ -1130,8 +1130,29 @@ class TestBuildPythonMatrix:
     ) -> None:
         """A lib declaring no candidates gets nothing marked experimental."""
         libs = load_libs(make_monorepo({"a": {"python_versions": ["3.11", "3.12"]}}))
-        matrix = build_python_matrix(["a"], libs)
+        matrix = build_python_matrix(["a"], libs, include_candidates=True)
         assert not any(entry["experimental"] for entry in matrix["include"])
+
+    def test_candidates_are_omitted_by_default(self, make_monorepo: MonorepoFactory) -> None:
+        """A caller that does not opt in gets only gating entries."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.11", "3.12"], "candidates": ["3.13"]}}
+            )
+        )
+        matrix = build_python_matrix(["a"], libs)
+        assert [entry["python-version"] for entry in matrix["include"]] == ["3.11", "3.12"]
+        assert not any(entry["experimental"] for entry in matrix["include"])
+
+    def test_conflict_is_caught_even_without_candidates(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A stale declaration fails the build that introduces it, opted in or not."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.11"]}})
+        )
+        with pytest.raises(CandidateVersionConflictError, match="3.11"):
+            build_python_matrix(["a"], libs)
 
     def test_candidates_are_emitted_in_numeric_order(
         self, make_monorepo: MonorepoFactory
@@ -1140,7 +1161,7 @@ class TestBuildPythonMatrix:
         libs = load_libs(
             make_monorepo({"a": {"python_versions": ["3.8"], "candidates": ["3.10", "3.9"]}})
         )
-        matrix = build_python_matrix(["a"], libs)
+        matrix = build_python_matrix(["a"], libs, include_candidates=True)
         assert [entry["python-version"] for entry in matrix["include"]] == [
             "3.8",
             "3.9",
@@ -1569,6 +1590,65 @@ class TestCLIBuildDownstreamMatrix:
             ]
         }
 
+    def test_omits_candidates_unless_asked(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A dependent's candidates stay out of the matrix by default."""
+        libs_dir = make_monorepo(
+            {
+                "a": {
+                    "deps": ["vivarium-b"],
+                    "python_versions": ["3.11"],
+                    "candidates": ["3.12"],
+                },
+                "b": {},
+            }
+        )
+        exit_code = main_with(
+            ["build-downstream-matrix", "--released", "b", "--libs-dir", str(libs_dir)]
+        )
+        assert exit_code == 0
+        out = json.loads(capsys.readouterr().out)
+        assert [entry["python-version"] for entry in out["include"]] == ["3.11"]
+        assert not any(entry["experimental"] for entry in out["include"])
+
+    def test_includes_candidates_when_asked(
+        self,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """--include-candidates soaks a dependent's candidates, flagged experimental."""
+        libs_dir = make_monorepo(
+            {
+                "a": {
+                    "deps": ["vivarium-b"],
+                    "python_versions": ["3.11"],
+                    "candidates": ["3.12"],
+                },
+                "b": {},
+            }
+        )
+        exit_code = main_with(
+            [
+                "build-downstream-matrix",
+                "--released",
+                "b",
+                "--libs-dir",
+                str(libs_dir),
+                "--include-candidates",
+            ]
+        )
+        assert exit_code == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {
+            "include": [
+                {"library": "a", "python-version": "3.11", "experimental": False},
+                {"library": "a", "python-version": "3.12", "experimental": True},
+            ]
+        }
+
     def test_errors_on_missing_python_versions(
         self,
         make_monorepo: MonorepoFactory,
@@ -1647,7 +1727,12 @@ class TestCLIClassifyChanges:
     """Tests for the ``classify-changes`` CLI subcommand."""
 
     @staticmethod
-    def _classify(tmp_path: Path, libs_dir: Path, changed_files: Sequence[str]) -> int:
+    def _classify(
+        tmp_path: Path,
+        libs_dir: Path,
+        changed_files: Sequence[str],
+        extra_args: Sequence[str] = (),
+    ) -> int:
         """Write ``changed_files`` to a diff file and run ``classify-changes`` over it."""
         changed_file = tmp_path / "changed-files.txt"
         changed_file.write_text("\n".join(changed_files) + "\n")
@@ -1658,6 +1743,7 @@ class TestCLIClassifyChanges:
                 str(changed_file),
                 "--libs-dir",
                 str(libs_dir),
+                *extra_args,
             ]
         )
 
@@ -1741,6 +1827,41 @@ class TestCLIClassifyChanges:
         exit_code = self._classify(tmp_path, libs_dir, ["libs/a/x.py"])
         assert exit_code == 1
         assert "both a supported and a candidate" in capsys.readouterr().err
+
+    def test_omits_candidates_unless_asked(
+        self,
+        tmp_path: Path,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Without --include-candidates the matrix carries only gating entries.
+
+        This is what keeps the non-gating jobs off pull requests, where a candidate
+        failure would be repeated noise rather than news.
+        """
+        libs_dir = make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.12"]}})
+        assert self._classify(tmp_path, libs_dir, ["libs/a/x.py"]) == 0
+        matrix = json.loads(capsys.readouterr().out)["matrix"]
+        assert [entry["python-version"] for entry in matrix["include"]] == ["3.11"]
+        assert not any(entry["experimental"] for entry in matrix["include"])
+
+    def test_includes_candidates_when_asked(
+        self,
+        tmp_path: Path,
+        make_monorepo: MonorepoFactory,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """--include-candidates adds the non-gating entries, flagged experimental."""
+        libs_dir = make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.12"]}})
+        exit_code = self._classify(
+            tmp_path, libs_dir, ["libs/a/x.py"], ["--include-candidates"]
+        )
+        assert exit_code == 0
+        matrix = json.loads(capsys.readouterr().out)["matrix"]
+        assert matrix["include"] == [
+            {"library": "a", "python-version": "3.11", "experimental": False},
+            {"library": "a", "python-version": "3.12", "experimental": True},
+        ]
 
     def test_errors_on_missing_changed_files(
         self, tmp_path: Path, make_monorepo: MonorepoFactory
