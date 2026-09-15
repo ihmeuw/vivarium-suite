@@ -77,15 +77,15 @@ jobs:
           # dependent nobody touched is never exercised until the candidate is promoted
           # and its job starts gating.
           CANDIDATES_REQUESTED="${{ contains(github.event.pull_request.labels.*.name, 'run-candidates') }}"
-          CANDIDATES=""
+          INCLUDE_CANDIDATES=""
           if [ "${{ github.event_name }}" != "pull_request" ] || [ "$CANDIDATES_REQUESTED" = "true" ]; then
-            CANDIDATES="--include-candidates"
+            INCLUDE_CANDIDATES="--include-candidates"
           fi
 
           # An empty --released yields an empty include, so no short-circuit is needed.
           # has-downstream gates the fan-out job: an empty matrix would fail it, not skip it.
           DOWNSTREAM_MATRIX=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
-            build-downstream-matrix --released "$PENDING_RELEASE_LIBS" $CANDIDATES)
+            build-downstream-matrix --released "$PENDING_RELEASE_LIBS" $INCLUDE_CANDIDATES)
           echo "Downstream matrix: ${DOWNSTREAM_MATRIX}"
           echo "downstream-matrix=${DOWNSTREAM_MATRIX}" >> $GITHUB_OUTPUT
           echo "has-downstream=$(jq -r '.include | length > 0' <<< "$DOWNSTREAM_MATRIX")" >> $GITHUB_OUTPUT
