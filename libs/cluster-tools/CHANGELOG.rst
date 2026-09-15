@@ -1,3 +1,8 @@
+**4.7.0 - 09/03/26**
+
+- DRY up simulation-task creation shared by ``psimulate`` and ``dagger``. A ``dagger``
+  simulation step now behaves like ``psimulate run``
+
 **4.6.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10

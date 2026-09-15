@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 pytest.importorskip("jobmon")
 
+from jobmon.client.task import Task
 from pytest_mock import MockerFixture
 
 from tests.psimulate.conftest import make_job_parameters
+from vivarium.cluster_tools.core.jobmon import client
 from vivarium.cluster_tools.psimulate import TASK_RUNNER_MODULE
 from vivarium.cluster_tools.psimulate.jobmon_workflow import build_workflow, get_task_list
 from vivarium.cluster_tools.psimulate.jobs import BackupConfiguration, JobParameters
@@ -67,26 +70,31 @@ def two_jobs() -> list[JobParameters]:
     ]
 
 
-class TestBuildWorkflow:
-    """Verify that ``build_workflow`` passes its arguments into the Jobmon API correctly."""
+def _get_task_list(
+    tool: MagicMock,
+    output_paths: OutputPaths,
+    native_spec: MagicMock,
+    job_parameters_list: list[JobParameters],
+    **overrides: Any,
+) -> list[Task]:
+    return get_task_list(
+        tool=tool,
+        command="run",
+        job_parameters_list=job_parameters_list,
+        metadata_dir=output_paths.metadata_dir,
+        results_dir=output_paths.results_dir,
+        worker_logging_root=output_paths.worker_logging_root,
+        native_specification=native_spec,
+        **overrides,
+    )
 
-    def test_tool_created_with_correct_name(
-        self,
-        mock_tool_cls: MagicMock,
-        mock_write_metadata: MagicMock,
-        output_paths: OutputPaths,
-        native_spec: MagicMock,
-        two_jobs: list[JobParameters],
-    ) -> None:
+
+class TestGetTaskList:
+    """Verify that ``get_task_list`` passes its arguments into the Jobmon API correctly."""
+
+    def test_tool_created_with_correct_name(self, mock_tool_cls: MagicMock) -> None:
         """The Jobmon Tool is instantiated with the expected name."""
-        build_workflow(
-            workflow_name="test_workflow",
-            command="run",
-            job_parameters_list=two_jobs,
-            output_paths=output_paths,
-            native_specification=native_spec,
-            max_workers=10,
-        )
+        client.make_tool()
         mock_tool_cls.assert_called_once_with(name="vivarium.cluster_tools")
 
     def test_task_template_args(
@@ -98,14 +106,7 @@ class TestBuildWorkflow:
         two_jobs: list[JobParameters],
     ) -> None:
         """``get_task_template`` receives the expected arguments."""
-        build_workflow(
-            workflow_name="test_workflow",
-            command="run",
-            job_parameters_list=two_jobs,
-            output_paths=output_paths,
-            native_specification=native_spec,
-            max_workers=10,
-        )
+        _get_task_list(mock_tool_cls.return_value, output_paths, native_spec, two_jobs)
         tool_instance = mock_tool_cls.return_value
         tool_instance.get_task_template.assert_called_once()
         kwargs = tool_instance.get_task_template.call_args.kwargs
@@ -132,14 +133,7 @@ class TestBuildWorkflow:
         resources dict (see ``NativeSpecification.to_jobmon_spec``), so no
         in-Python wrapper is needed.
         """
-        build_workflow(
-            workflow_name="test_workflow",
-            command="run",
-            job_parameters_list=two_jobs,
-            output_paths=output_paths,
-            native_specification=native_spec,
-            max_workers=10,
-        )
+        _get_task_list(mock_tool_cls.return_value, output_paths, native_spec, two_jobs)
         kwargs = mock_tool_cls.return_value.get_task_template.call_args.kwargs
         command_template = kwargs["command_template"]
         assert f"python -m {TASK_RUNNER_MODULE} " in command_template
@@ -153,14 +147,7 @@ class TestBuildWorkflow:
         two_jobs: list[JobParameters],
     ) -> None:
         """``write_metadata`` is called once per job with the right args."""
-        build_workflow(
-            workflow_name="test_workflow",
-            command="run",
-            job_parameters_list=two_jobs,
-            output_paths=output_paths,
-            native_specification=native_spec,
-            max_workers=10,
-        )
+        _get_task_list(mock_tool_cls.return_value, output_paths, native_spec, two_jobs)
         assert mock_write_metadata.call_count == len(two_jobs)
         mock_write_metadata.assert_has_calls(
             [
@@ -172,7 +159,7 @@ class TestBuildWorkflow:
             ]
         )
 
-    def test_tasks_added_to_workflow(
+    def test_create_tasks_args(
         self,
         mock_tool_cls: MagicMock,
         mock_write_metadata: MagicMock,
@@ -180,17 +167,9 @@ class TestBuildWorkflow:
         native_spec: MagicMock,
         two_jobs: list[JobParameters],
     ) -> None:
-        """All created tasks are added to the workflow."""
-        build_workflow(
-            workflow_name="test_workflow",
-            command="run",
-            job_parameters_list=two_jobs,
-            output_paths=output_paths,
-            native_specification=native_spec,
-            max_workers=10,
-        )
+        """One batched ``create_tasks`` call carries every task's arguments."""
+        _get_task_list(mock_tool_cls.return_value, output_paths, native_spec, two_jobs)
         task_template = mock_tool_cls.return_value.get_task_template.return_value
-        workflow = mock_tool_cls.return_value.create_workflow.return_value
 
         # create_tasks (plural) is called once with a list of task_ids
         task_template.create_tasks.assert_called_once()
@@ -201,8 +180,56 @@ class TestBuildWorkflow:
         assert kwargs["results_dir"] == str(output_paths.results_dir)
         assert kwargs["command"] == "run"
 
-        expected_tasks = task_template.create_tasks.return_value
-        workflow.add_tasks.assert_called_once_with(expected_tasks)
+    def test_non_default_max_attempts_reaches_create_tasks(
+        self,
+        mock_tool_cls: MagicMock,
+        mock_write_metadata: MagicMock,
+        output_paths: OutputPaths,
+        native_spec: MagicMock,
+        two_jobs: list[JobParameters],
+    ) -> None:
+        """A caller's attempt cap is not silently replaced by the default."""
+        _get_task_list(
+            mock_tool_cls.return_value,
+            output_paths,
+            native_spec,
+            two_jobs,
+            max_attempts=7,
+        )
+        task_template = mock_tool_cls.return_value.get_task_template.return_value
+        assert task_template.create_tasks.call_args.kwargs["max_attempts"] == 7
+
+
+class TestBuildWorkflow:
+    """Verify that ``build_workflow`` wraps a task list in one Jobmon workflow."""
+
+    def test_workflow_created_with_concurrency_limits(self, mock_tool_cls: MagicMock) -> None:
+        """The workflow carries the run's name, attempt cap, and worker cap."""
+        tasks: list[Task] = [MagicMock(), MagicMock()]
+        build_workflow(
+            mock_tool_cls.return_value,
+            workflow_name="test_workflow",
+            tasks=tasks,
+            max_workers=10,
+            max_attempts=5,
+        )
+        kwargs = mock_tool_cls.return_value.create_workflow.call_args.kwargs
+        assert kwargs["workflow_args"] == "test_workflow"
+        assert kwargs["name"] == "test_workflow"
+        assert kwargs["default_max_attempts"] == 5
+        assert kwargs["max_concurrently_running"] == 10
+
+    def test_tasks_added_to_workflow(self, mock_tool_cls: MagicMock) -> None:
+        """Every task handed in is added to the workflow."""
+        tasks: list[Task] = [MagicMock(), MagicMock()]
+        build_workflow(
+            mock_tool_cls.return_value,
+            workflow_name="test_workflow",
+            tasks=tasks,
+            max_workers=10,
+        )
+        workflow = mock_tool_cls.return_value.create_workflow.return_value
+        workflow.add_tasks.assert_called_once_with(tasks)
 
 
 class TestGetTaskListEnvPrefix:

@@ -10,6 +10,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import NamedTuple
 
+from loguru import logger
 from vivarium.engine.interface.utilities import get_output_model_name_string
 
 from vivarium.cluster_tools import utilities as vct_utils
@@ -19,6 +20,52 @@ DEFAULT_LOAD_TESTS_DIR = "/mnt/team/simulation_science/priv/engineering/load_tes
 CENTRAL_PERFORMANCE_LOGS_DIRECTORY = Path(
     "/mnt/team/simulation_science/pub/performance_logs/"
 )
+
+
+def resolve_run_root(
+    *,
+    command: str,
+    result_directory: Path,
+    input_artifact_path: Path | None,
+    input_model_spec_path: Path | None,
+    launch_time: str,
+) -> Path:
+    """Return the timestamped root directory for a simulation run.
+
+    ``run`` and ``load_test`` derive the root as a
+    ``<name>/<launch_time>`` subdirectory of ``result_directory``;
+    ``restart`` and ``expand`` are handed the root directly.
+
+    Parameters
+    ----------
+    command
+        The specific ``psimulate`` command being run.
+    result_directory
+        The path to the results directory.
+    input_artifact_path
+        The path to the data artifact.
+    input_model_spec_path
+        The path to the model specification file.
+    launch_time
+        Timestamp string (``YYYY_MM_DD_HH_MM_SS``) naming the run.
+
+    Returns
+    -------
+        The root directory for the run's output.
+
+    Raises
+    ------
+    ValueError
+        If ``command`` is ``run`` and no model specification path is given.
+    """
+    if command == COMMANDS.run:
+        if input_model_spec_path is None:
+            raise ValueError("Model specification path must be provided for 'run' command.")
+        model_name = get_output_model_name_string(input_artifact_path, input_model_spec_path)
+        return result_directory / model_name / launch_time
+    if command == COMMANDS.load_test:
+        return result_directory / "load_test" / launch_time
+    return result_directory
 
 
 def build_perf_log_filename(
@@ -190,7 +237,6 @@ class OutputPaths(NamedTuple):
         result_directory: Path,
         input_model_spec_path: Path | None,
         launch_time: str | None = None,
-        is_resume: bool = False,
     ) -> "OutputPaths":
         """Create an instance of OutputPaths from the arguments passed to the entry point.
 
@@ -206,14 +252,9 @@ class OutputPaths(NamedTuple):
             The path to the model specification file.
         launch_time
             Optional timestamp string (``YYYY_MM_DD_HH_MM_SS``). When provided,
-            this timestamp is used for directory naming instead of generating a
-            new one from ``datetime.now()``. This ensures that all steps in a
-            workflow share the same timestamp, and that resume builds produce
-            identical paths.
-        is_resume
-            If True, generates a fresh timestamp for the logging directory so
-            that each resume attempt gets its own logs, mirroring ``psimulate
-            restart`` behavior. The output root still uses ``launch_time``.
+            this timestamp names the run's directories instead of a fresh one
+            from ``datetime.now()``, so that all steps in a workflow share the
+            same timestamp and resume builds produce identical paths.
 
         Returns
         -------
@@ -222,23 +263,14 @@ class OutputPaths(NamedTuple):
         """
         launch_time = launch_time or datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
-        output_directory = result_directory
-        if command == COMMANDS.run:
-            if input_model_spec_path is None:
-                raise ValueError(
-                    "Model specification path must be provided for 'run' command."
-                )
-            model_name = get_output_model_name_string(
-                input_artifact_path, input_model_spec_path
-            )
-            output_directory = output_directory / model_name / launch_time
-        elif command == COMMANDS.load_test:
-            output_directory = output_directory / "load_test" / launch_time
-
-        logging_timestamp = (
-            datetime.now().strftime("%Y_%m_%d_%H_%M_%S") if is_resume else launch_time
+        output_directory = resolve_run_root(
+            command=command,
+            result_directory=result_directory,
+            input_artifact_path=input_artifact_path,
+            input_model_spec_path=input_model_spec_path,
+            launch_time=launch_time,
         )
-        logging_directory = output_directory / "logs" / f"{logging_timestamp}_{command}"
+        logging_directory = output_directory / "logs" / f"{launch_time}_{command}"
         logging_dirs = {
             "logging_root": logging_directory,
             "worker_logging_root": logging_directory / "worker_logs",
@@ -269,3 +301,37 @@ class OutputPaths(NamedTuple):
             vct_utils.mkdir(dir, exists_ok=True, parents=True)
         for dir in [self.logging_root, self.worker_logging_root]:
             vct_utils.mkdir(dir, parents=True)
+
+
+def resolve_output_paths(
+    *,
+    command: str,
+    input_paths: InputPaths,
+    launch_time: str | None = None,
+) -> OutputPaths:
+    """Lay out a run's output directory tree and create it.
+
+    Parameters
+    ----------
+    command
+        The specific ``psimulate`` command being run.
+    input_paths
+        The resolved input file paths.
+    launch_time
+        Optional timestamp (``YYYY_MM_DD_HH_MM_SS``) naming the run's
+        directories. Defaults to the current time.
+
+    Returns
+    -------
+        The run's output directory layout.
+    """
+    output_paths = OutputPaths.from_entry_point_args(
+        command=command,
+        input_artifact_path=input_paths.artifact,
+        result_directory=input_paths.result_directory,
+        input_model_spec_path=input_paths.model_specification,
+        launch_time=launch_time,
+    )
+    logger.debug("Setting up output directory and all subdirectories.")
+    output_paths.touch()
+    return output_paths

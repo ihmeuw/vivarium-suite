@@ -9,12 +9,12 @@
     {
       "name": "simsci",
       "source": "./tools/ai-tools-public",
-      "description": "Generic AI developer workflows for any IHME team, any repo: multi-agent code review and review-to-PR prep, git rescue, commit splitting, type hinting, regression debugging, change propagation, workflow assessment, and a guided TDD loop."
+      "description": "Generic AI developer workflows for any IHME team, any repo: review-to-PR prep (a multi-agent code review that carries the fixes through to a draft PR), git rescue, commit splitting, type hinting, regression debugging, change propagation, workflow assessment, and a guided TDD loop."
     },
     {
       "name": "simsci-internal",
       "source": "./tools/ai-tools",
-      "description": "SimSci/vivarium-specific workflows (model development, team conventions, vivarium references). Depends on simsci — installing simsci-internal brings in both."
+      "description": "For the IHME Simulation Science team only: vivarium model development and SimSci conventions (Jira, hub, Jenkins, Slack) layered on simsci; its conventions skills take over simsci's branch, ticket, and PR seams. Depends on simsci and also installs the slack plugin. Other teams: install simsci alone."
     }
   ]
 }

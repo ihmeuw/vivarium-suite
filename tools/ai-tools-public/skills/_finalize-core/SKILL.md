@@ -73,9 +73,11 @@ committed its first fix — not a commit message. If this run didn't commit any
 fixes, there's no pre-apply ref and nothing to collapse.
 
 If there is a pre-apply ref, collapse everything above it: `git branch
-finalize-core-backup` at HEAD, then `git reset --soft <pre-apply-ref>`. That
-series is per-finding fix scaffolding, not shipping history. `--soft` leaves the
-working tree alone, so the collapsed fixes join anything already uncommitted.
+finalize-core-backup-$(date +%Y%m%d-%H%M%S)` at HEAD, then
+`git reset --soft <pre-apply-ref>`. If the branch command fails, stop and resolve
+it first; never reset without a fresh backup ref. That series is per-finding fix
+scaffolding, not shipping history. `--soft` leaves the working tree alone, so the
+collapsed fixes join anything already uncommitted.
 
 Then invoke `simsci:commit-splitter` **once** over whatever is uncommitted, naming
 hold-out paths as excluded and passing the partition rule. Clean tree and no
@@ -102,6 +104,11 @@ Either way, put Step 1's summary and the validation verdict, residuals included,
 the body. Prefer the GitHub MCP's pull-request tools over the `gh` CLI when both are
 available: the MCP needs no shell access and works in sandboxed environments where
 `gh` cannot read its credentials.
+
+If neither the MCP nor a logged-in `gh` is available, do not stop silently: push
+if `git push` works, then print the PR title, base, draft flag, full body, and the
+Step 6 comment, and ask the user to open the PR in the GitHub web UI and paste
+them. Report it as a residual in Step 6.
 
 Note the PR number — Step 6 needs it, and so does a caller with something
 domain-specific to attach once the PR exists.

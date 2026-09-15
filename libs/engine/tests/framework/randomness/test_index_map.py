@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime
 from itertools import chain, combinations, product
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -80,22 +80,45 @@ def test_digit_series() -> None:
         assert m._digit(k, i)[0] == 10 - (i + 1)
 
 
+DatetimeUnit = Literal["ns", "us", "ms", "s"]
+DATETIME_UNITS: list[DatetimeUnit] = ["ns", "us", "ms", "s"]
+# How many distinct timestamps a unit can represent within one second. Caps the
+# number of periods so a series stays inside a single second at every unit.
+TIMESTAMPS_PER_SECOND: dict[DatetimeUnit, int] = {
+    "ns": 10**9,
+    "us": 10**6,
+    "ms": 10**3,
+    "s": 1,
+}
+
+
 def test_clip_to_seconds_scalar() -> None:
     m = IndexMap()
     k = pd.to_datetime("2010-01-25 06:25:31.123456789")
-    assert (m._clip_to_seconds(pd.Series(k.value)) == int(str(k.value)[:10])).all()
+    assert (m._clip_to_seconds(pd.Series(k)) == 1264400731).all()
 
 
-def test_clip_to_seconds_series() -> None:
+@pytest.mark.parametrize("unit", DATETIME_UNITS)
+def test_clip_to_seconds_series(unit: DatetimeUnit) -> None:
     m = IndexMap()
     stamp = 1234567890
-    k = (
-        pd.date_range(pd.to_datetime(stamp, unit="s"), periods=10000, freq="ns")
-        .to_series()
-        .astype(np.int64)
-    )
+    periods = min(10000, TIMESTAMPS_PER_SECOND[unit])
+    k = pd.date_range(
+        pd.to_datetime(stamp, unit="s"), periods=periods, freq=unit, unit=unit
+    ).to_series()
     assert len(m._clip_to_seconds(k).unique()) == 1
     assert m._clip_to_seconds(k).unique()[0] == stamp
+
+
+def test_clip_to_seconds_is_unit_independent() -> None:
+    """The same instant must hash identically however pandas stored it."""
+    m = IndexMap()
+    k = pd.Series(pd.to_datetime(["2010-01-25 06:25:31"]))
+    results = {
+        unit: m._clip_to_seconds(k.astype(np.dtype(f"datetime64[{unit}]"))).iloc[0]
+        for unit in DATETIME_UNITS
+    }
+    assert set(results.values()) == {1264400731}, results
 
 
 def test_spread_series() -> None:
@@ -112,11 +135,13 @@ def test_shift_series() -> None:
     assert m._shift(s).unique()[0] == 1234567890
 
 
-def test_convert_to_ten_digit_int() -> None:
+@pytest.mark.parametrize("unit", DATETIME_UNITS)
+def test_convert_to_ten_digit_int(unit: DatetimeUnit) -> None:
     m = IndexMap()
     v = 1234567890
+    periods = min(10000, TIMESTAMPS_PER_SECOND[unit])
     date_col = pd.date_range(
-        pd.to_datetime(v, unit="s"), periods=10000, freq="ns"
+        pd.to_datetime(v, unit="s"), periods=periods, freq=unit, unit=unit
     ).to_series()
     int_col = pd.Series(v, index=range(10000))
     float_col = pd.Series(1.1234567890, index=range(10000))

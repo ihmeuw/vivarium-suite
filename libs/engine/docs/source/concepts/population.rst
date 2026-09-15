@@ -214,10 +214,23 @@ such as a fertility component that models births. This means there are two
 distinct execution states in which simulants can be created: The population
 initialization state during the setup phase, and the main event loop.
 
-The simulant creator function first adds rows to the state table. It then loops
+The simulant creator function stages the new simulants in a separate frame rather
+than adding rows to the state table right away. It then loops
 through a set of functions that have been registered to it as population
 initializers via :meth:`~vivarium.engine.framework.population.interface.PopulationInterface.register_initializer`,
 passing in the index of the newly created simulants. These functions generally proceed
 by using population views to dictate the state of the newly created simulants they
 are responsible for. It is the only time creating columns in the state table is
 acceptable.
+
+Only once every initializer has run is the staged frame appended to the state table.
+Deferring the append keeps the existing simulants' columns untouched while the new
+ones are being filled in, so a column is never appended with null rows for simulants
+whose values have not been computed yet. The append also may not change a committed
+column's dtype; an initializer that hands back values of a different type raises
+rather than quietly retyping the column for the simulants already in the table.
+
+Reading a column that has not been created yet raises a
+:class:`~vivarium.engine.framework.population.exceptions.PopulationError`, so an
+initializer that needs another component's column must require it, so it will then
+run afterwards.

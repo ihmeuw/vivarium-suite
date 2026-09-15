@@ -171,7 +171,7 @@ def build_job_list(
     output_root: Path,
     keyspace: branches.Keyspace,
     finished_sim_metadata: pd.DataFrame,
-    backup_freq: int | None,
+    backup_freq: float | None,
     backup_dir: Path,
     backup_metadata_path: Path,
     worker_logging_root: Path,

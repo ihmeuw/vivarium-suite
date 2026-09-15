@@ -502,6 +502,10 @@ returns the updated values. The ``update`` method handles reading the current
 data from the component's private columns and writing the result back to the
 state table.
 
+Here we also pass an ``index``, which scopes the update to the living simulants:
+the modifier is given only their rows, and no one else is read or written. Without
+it the modifier would receive the whole population and would have to filter itself.
+
 .. note::
 
    **Private Columns vs. Attributes**
@@ -731,7 +735,8 @@ and using the inverse distribution function. We then draw a uniformly distribute
 random number for each person and determine who died by comparing that number to 
 the computed probability of death for the individual.
 
-Finally, we update the state table ``is_alive`` column with the newly dead simulants.
+Finally, we update the state table ``is_alive`` column with the newly dead simulants,
+again scoping the update with an ``index`` so that only those simulants are touched.
 
 
 Supplying a base mortality rate
@@ -921,8 +926,10 @@ In an interactive setting, we can access these observations via the
 ``sim.get_results()`` command. This will return a dictionary of all  
 observations up to this point in the simulation.
 
-An :class:`~vivarium.engine.interface.interactive.InteractiveContext` does not
-include observers by default; pass ``observe=True`` to include them.
+Note that the ``observe=True`` below is required: an
+:class:`~vivarium.engine.interface.interactive.InteractiveContext` does not
+observe results by default. See :ref:`getting results <interactive_results>`
+for what that means and why.
 
 .. code-block:: python
 

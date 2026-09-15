@@ -47,10 +47,10 @@ Run the commits in the main thread so the user sees each one happen.
 First, **create a backup branch** at the current `HEAD` so the entire pre-split state is recoverable:
 
 ```bash
-git branch commit-splitter-backup        # marker at HEAD before any commits
+git branch commit-splitter-backup-$(date +%Y%m%d-%H%M%S)   # marker at HEAD before any commits
 ```
 
-Because the splitting steps below only *add* and *commit* (never discard), `git reset --soft commit-splitter-backup` collapses every new commit back into the working tree, restoring the exact original diff if anything goes wrong. Delete the branch in step 6 once the user has signed off.
+Because the splitting steps below only *add* and *commit* (never discard), `git reset --soft <backup branch>` collapses every new commit back into the working tree, restoring the exact original diff if anything goes wrong. Delete the branch in step 6 once the user has signed off.
 
 - **File-aligned groups** (most common): `git reset HEAD` to unstage everything, then for each group: `git add <files>` → `git commit -m "<subject>" -m "<body>"`. Leftover changes stay in the working tree until the next group claims them.
 - **Hunk-aligned groups within a file**: `git add -p <file>` for the user to walk through interactively, *or* draft the hunks into a patch and `git apply --cached`. Hunk splits are fiddly; prefer file-aligned splits when possible.
@@ -67,7 +67,7 @@ When the plan calls for multiple PRs, each PR needs its own branch. Follow your 
 
 ### 6. Clean up
 
-Once the user has confirmed the commits and PRs look right, delete the safety branch: `git branch -D commit-splitter-backup`. Don't delete it earlier — it's the recovery path if a split needs to be unwound. If the user is unsure, leave it in place and tell them the command to remove it later.
+Once the user has confirmed the commits and PRs look right, delete the safety branch: `git branch -D <backup branch>`. Don't delete it earlier — it's the recovery path if a split needs to be unwound. If the user is unsure, leave it in place and tell them the command to remove it later.
 
 ## Safety constraints
 
@@ -75,4 +75,4 @@ Once the user has confirmed the commits and PRs look right, delete the safety br
 - Never force-push. Never skip hooks.
 - If something looks wrong mid-flow (commits not landing, hooks failing, hunks not applying), stop and ask. The user's working state is the source of truth.
 - Do not edit code as part of splitting. The skill rearranges history; it does not change behavior. The commits and branches you produce must, taken together, reproduce the original working tree exactly — nothing dropped, duplicated, or modified.
-- Keep the `commit-splitter-backup` branch until the user signs off (step 6). It is the recovery path: `git reset --soft commit-splitter-backup` restores the full pre-split diff.
+- Keep the backup branch until the user signs off (step 6). It is the recovery path: `git reset --soft <backup branch>` restores the full pre-split diff.

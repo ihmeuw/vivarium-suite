@@ -447,6 +447,9 @@ step**. Other step types write their worker logs and outputs directly under
    ├── .build_timestamp            # shared run timestamp (simulation steps only)
    └── <model_name>/               # simulation steps only
        └── <timestamp>/            # one simulation step's results
+           ├── model_specification.yaml  # the resolved spec the workers run
+           ├── keyspace.yaml       # the parameter space (for restart)
+           ├── branches.yaml       # that space with the product expanded out
            ├── results/
            ├── sim_backups/
            ├── metadata/

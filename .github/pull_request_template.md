@@ -6,6 +6,7 @@
 - *Category*: <!-- one of bugfix, feature, refactor, POC, CI/infrastructure, documentation, 
                    revert, test, release, other/misc -->
 - *JIRA issue*: https://jira.ihme.washington.edu/browse/MIC-XYZ
+<!-- Not on the Simulation Science team? Link the GitHub issue instead, or delete the line above. -->
 
 ### Changes and notes
 <!-- 

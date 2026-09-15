@@ -15,7 +15,7 @@ from vivarium.config_tree.exceptions import ConfigurationError, ConfigurationKey
 from vivarium.engine.framework.artifact import parse_artifact_path_config
 from vivarium.engine.framework.configuration import build_model_specification
 
-from vivarium.cluster_tools.psimulate import COMMANDS
+from vivarium.cluster_tools.psimulate import COMMANDS, RESUME_COMMANDS
 
 if typing.TYPE_CHECKING:
     from vivarium.cluster_tools.psimulate.branches import Keyspace
@@ -37,7 +37,7 @@ def parse(
     results_root: Path,
     keyspace: "Keyspace",
 ) -> ConfigTree:
-    if command in [COMMANDS.restart, COMMANDS.expand]:
+    if command in RESUME_COMMANDS:
         return build_model_specification(model_specification_path)
     if command == COMMANDS.load_test:
         return build_model_specification()

@@ -1,8 +1,11 @@
 {
     "name": "simsci",
     "displayName": "Simulation Science Dev AI Tools",
-    "description": "Generic AI-assisted developer workflows for any IHME team: multi-agent code review and review-to-PR prep, git rescue, commit splitting, type hinting, cross-repo regression debugging, change propagation, workflow assessment, and a guided TDD development loop.",
-    "publisher": "ihmeuw",
+    "description": "Generic AI-assisted developer workflows for any IHME team: review-to-PR prep (a multi-agent code review that carries the fixes through to a draft PR), git rescue, commit splitting, type hinting, cross-repo regression debugging, change propagation, workflow assessment, and a guided TDD development loop.",
+    "author": { "name": "IHME Simulation Science" },
+    "homepage": "https://github.com/ihmeuw/vivarium-suite/blob/main/tools/ai-tools-public/README.rst",
+    "repository": "https://github.com/ihmeuw/vivarium-suite",
+    "license": "BSD-3-Clause",
     "dependencies": [
         { "name": "github", "marketplace": "claude-plugins-official" }
     ]

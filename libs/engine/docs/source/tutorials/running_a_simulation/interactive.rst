@@ -13,15 +13,18 @@ for debugging and validation work. It allows for changing simulation
 simulation in a controlled fashion, and examining the
 :term:`state <Population State Table>` of the simulation itself.
 
+This tutorial covers building a context and advancing it. Refer to
+:ref:`Exploring a Simulation in an Interactive Setting <exploration_tutorial>`
+for details on how to examine the internal state and properties of a simulation.
 
 For the following tutorial, we will assume you have set up an environment and
-installed ``vivarium``. If you have not, please see the
-:ref:`Getting Started <getting_started_tutorial>` section.  We'll be using
+installed ``vivarium-engine``. If you have not, please see the
+:ref:`Getting Started <getting_started_tutorial>` section. We'll be using
 the :ref:`disease model <disease_model_tutorial>` constructed
 in a separate tutorial here, though no background knowledge of population
 health is necessary to follow along. The :ref:`components <components_concept>`
-constructed in that tutorial are available in the ``vivarium`` package, so you
-don't need to build them yourself before starting this tutorial.
+constructed in that tutorial ship with ``vivarium-engine``, so you don't need to
+build them yourself before starting this tutorial.
 
 .. contents::
    :depth: 2
@@ -30,39 +33,82 @@ don't need to build them yourself before starting this tutorial.
 
 .. _interactive_setup_tutorial:
 
-Setting up a Simulation
+Setting up a simulation
 -----------------------
 
-To run a simulation interactively, we will need to create a
-:class:`simulation context <vivarium.engine.interface.interactive.InteractiveContext>`.
-At a bare minimum, we need to provide the context with a set of
-:ref:`components <components_concept>` that encode all the behavior of
-the simulation model. Frequently, we'll also provide some
-:ref:`configuration <configuration_concept>` data that is used to parameterize
-those components.
+To run a simulation interactively, we will need to create an
+:class:`~vivarium.engine.interface.interactive.InteractiveContext`. There are
+several (optional) arguments available for construction, but at a bare minimum
+we need to provide the context with a set of :ref:`components <components_concept>`
+that encode all the behavior of the simulation model. Frequently, we'll also
+provide some :ref:`configuration <configuration_concept>` data that is used to
+parameterize those components.
 
-.. note::
+All arguments fall into two groups. The first four describe *what the simulation
+is made of*. The combination of components, configuration, and plugins forms a
+complete description of a ``vivarium`` model, which we refer to as a
+:term:`model specification <Model Specification>`; you will usually provide
+either a model specification or some combination of the other three.
 
-   We can also optionally provide a set of :term:`plugins <Plugin>` to the
-   simulation framework. Plugins are special components that add new
-   functionality to the framework itself.  This is an advanced feature
-   for building tools to adapt ``vivarium`` to models in a particular problem
-   domain and not important for most users.
+.. list-table:: **Describing the model**
+   :header-rows: 1
+   :widths: 25, 55
 
-The combination of components, configuration, and plugins forms a
-:term:`model specification <Model Specification>`, a complete description
-of a ``vivarium`` model.
+   *   - Argument
+       - Description
+   *   - | ``model_specification``
+       - | Path to a model specification yaml or an already-instantiated
+         | ``ConfigTree``. A path must exist, end in ``.yaml`` or ``.yml``, and
+         | use only the top-level keys ``plugins``, ``components``, and
+         | ``configuration``. Omit it to build the simulation from the other
+         | arguments alone.
+   *   - | ``components``
+       - | Components to include *in addition to* the specification's. While a
+         | list is purely additive, a dict or ``ConfigTree`` merges into the
+         | specification's ``components`` block and replaces the keys it names.
+   *   - | ``configuration``
+       - | Values overriding the specification's ``configuration`` block.
+   *   - | ``plugin_configuration``
+       - | Managers overriding the specification's ``plugins`` block. An advanced
+         | feature for adapting the framework itself; most models never need it.
 
-The :class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
-can be generated from several different kinds of data and may be generated
-at two separate :ref:`lifecycle <lifecycle_concept>` stages.  We'll explore
-several examples of generating simulation objects here.
+The remaining four control *how the context behaves* rather than what it
+contains.
 
-With a Model Specification File - The Automatic Way
+.. list-table:: **Controlling the context**
+   :header-rows: 1
+   :widths: 25, 55
+
+   *   - Argument
+       - Description
+   *   - | ``sim_name``
+       - | Name for this context, used to label its log records. Must be unique
+         | within the process. Defaults to ``simulation_<n>``, numbered by how
+         | many contexts have been created so far.
+   *   - | ``logging_verbosity``
+       - | How much to log. 0 (the default) logs warnings and errors, 1 adds
+         | INFO, 2 or more adds DEBUG. Note that only the *first* context built
+         | in a process configures logging; later ones inherit it.
+   *   - | ``observe``
+       - | Whether to observe results. False (the default) means no observations
+         | are recorded and no results generated.
+   *   - | ``setup``
+       - | Whether to set the simulation up on construction. True (the default)
+         | freezes the configuration; pass False to change configuration first,
+         | then call :meth:`~vivarium.engine.interface.interactive.InteractiveContext.setup`
+         | yourself.
+
+``observe`` and ``setup`` must be passed by keyword. The other six may be passed
+positionally, in the order shown above.
+
+The interactive context can be generated from several different kinds of data;
+we'll explore several examples of generating simulation objects here.
+
+With a model specification file (the automatic way)
 +++++++++++++++++++++++++++++++++++++++++++++++++++
 
 A :term:`model specification <Model Specification>` file contains all the
-information needed to prepare and run a simulation, so to get up and running
+information needed to prepare and run a simulation; to get up and running
 quickly, we need only provide this file. You typically find yourself in this
 use case if you already have a well-developed model and you're looking
 to explore its behavior in more detail than you'd be able to using the
@@ -82,12 +128,13 @@ as it is the primary use case.
 .. code-block:: python
 
    from vivarium.engine import InteractiveContext
+
    p = "/path/to/disease_model.yaml"
    sim = InteractiveContext(p)
 
 In order to make it easier to follow along with this tutorial, we've provided
 a convenience function to get the path to the disease model specification
-distributed with ``vivarium``.
+distributed with ``vivarium-engine``.
 
 .. testcode::
 
@@ -101,7 +148,7 @@ The ``sim`` object produced here is all set up and ready to run if you want
 to jump directly to the :ref:`running the simulation <interactive_run>`
 section.
 
-Without a Model Specification File - The Manual Way
+The manual way (without a model specification file)
 +++++++++++++++++++++++++++++++++++++++++++++++++++
 
 It is possible to prepare a simulation by explicitly passing in the
@@ -122,19 +169,35 @@ We will first instantiate the :term:`components <Component>` necessary for the
 simulation. In this case, we will get them directly from the disease model
 example and we will place them in a normal Python list.
 
-.. code-block:: python
+.. testcode::
 
-   from vivarium.engine.examples.disease_model import (BasePopulation, Mortality, DeathsObserver,
-                                                YllsObserver, SISDiseaseModel, Risk,
-                                                RiskEffect, TreatmentIntervention)
+    from vivarium.engine.examples.disease_model import (
+        BasePopulation,
+        DeathsObserver,
+        Risk,
+        RiskEffect,
+        SISDiseaseModel,
+        TreatmentIntervention,
+        YllsObserver,
+    )
 
-   components = [BasePopulation(),
-                 Mortality(),
-                 SISDiseaseModel('diarrhea'),
-                 Risk('child_growth_failure'),
-                 RiskEffect('child_growth_failure', 'infected_with_diarrhea.incidence_rate'),
-                 RiskEffect('child_growth_failure', 'infected_with_diarrhea.excess_mortality_rate'),
-                 TreatmentIntervention('breastfeeding_promotion', 'child_growth_failure.proportion_exposed'), ]
+    components = [
+        BasePopulation(),
+        DeathsObserver(),
+        YllsObserver(),
+        SISDiseaseModel("diarrhea"),
+        Risk("child_growth_failure"),
+        RiskEffect("child_growth_failure", "infected_with_diarrhea.incidence_rate"),
+        RiskEffect("child_growth_failure", "infected_with_diarrhea.excess_mortality_rate"),
+        TreatmentIntervention(
+            "breastfeeding_promotion", "child_growth_failure.proportion_exposed"
+        ),
+    ]
+
+.. note::
+
+   ``SISDiseaseModel`` supplies its own ``Mortality`` component, so adding one
+   explicitly raises a duplicate-configuration error.
 
 
 Configurations
@@ -146,7 +209,7 @@ Components will typically have defaults for many of these parameters, so
 this dictionary will contain all the parameters we want to change (or that
 we want to show are available to change).
 
-.. code-block:: python
+.. testcode::
 
    config = {
       'randomness': {
@@ -180,7 +243,7 @@ Setting up
 With our components and configuration in hand, we can then set up the
 simulation in a very similar manner as before.
 
-.. code-block:: python
+.. testcode::
 
    from vivarium.engine import InteractiveContext
    sim = InteractiveContext(components=components, configuration=config)
@@ -194,50 +257,8 @@ With this final step, you can proceed directly to
 :ref:`running the simulation <interactive_run>`, or stick around to see
 one last way to set up the simulation in an interactive setting.
 
-.. testcode::
-   :hide:
 
-   from vivarium.engine.examples.disease_model import (BasePopulation, DeathsObserver,
-                                                YllsObserver, SISDiseaseModel, Risk,
-                                                RiskEffect, TreatmentIntervention)
-   from vivarium.engine import InteractiveContext
-
-   config = {
-       'randomness': {
-           'key_columns': ['entrance_time', 'age'],
-       },
-       'population': {
-           'population_size': 10_000,
-       },
-       'diarrhea': {
-           'incidence_rate': 2.5,        # Approximately 2.5 cases per person per year.
-           'remission_rate': 42,         # Approximately 6 day median recovery time
-           'excess_mortality_rate': 12,  # Approximately 22 % of cases result in death
-       },
-       'child_growth_failure': {
-           'proportion_exposed': 0.5,
-       },
-       'effect_of_child_growth_failure_on_infected_with_diarrhea.incidence_rate': {
-           'relative_risk': 5,
-       },
-       'effect_of_child_growth_failure_on_infected_with_diarrhea.excess_mortality_rate': {
-           'relative_risk': 5,
-       },
-       'breastfeeding_promotion': {
-           'effect_size': 0.5,
-       },
-   }
-
-   components = [BasePopulation(),
-                 SISDiseaseModel('diarrhea'),
-                 Risk('child_growth_failure'),
-                 RiskEffect('child_growth_failure', 'infected_with_diarrhea.incidence_rate'),
-                 RiskEffect('child_growth_failure', 'infected_with_diarrhea.excess_mortality_rate'),
-                 TreatmentIntervention('breastfeeding_promotion', 'child_growth_failure.proportion_exposed'),]
-
-   sim = InteractiveContext(components=components, configuration=config)
-
-Modifying an Existing Simulation
+Modifying an existing simulation
 ++++++++++++++++++++++++++++++++
 
 Another frequent use case is when you're trying to modify an already
@@ -254,7 +275,7 @@ yourself.
 To do this we'll set the ``setup`` flag in the
 :class:`~vivarium.engine.interface.interactive.InteractiveContext` to ``False``.
 
-.. code-block:: python
+.. testcode::
 
    from vivarium.engine import InteractiveContext
    from vivarium.engine.examples.disease_model import get_model_specification_path
@@ -267,7 +288,7 @@ This function returns a simulation object that has not been setup yet so we can
 alter the configuration programmatically, if we wish. Let's alter the
 population size to be smaller so the simulation takes less time to run.
 
-.. code-block:: python
+.. testcode::
 
     # Setting attributes ensures you are updating existing keys, rather than
     # creating new ones
@@ -277,16 +298,20 @@ population size to be smaller so the simulation takes less time to run.
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
 We then need to call the
-:meth:`vivarium.engine.framework.engine.SimulationContext.setup` method on the
+:meth:`~vivarium.engine.framework.engine.SimulationContext.setup` method on the
 simulation context to prepare it to run.
 
-.. code-block:: python
+.. testcode::
 
    sim.setup()
 
 After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 
 .. note::
+
+   **Once a simulation has been set up, the configuration has been "frozen" and
+   cannot be changed!** See :ref:`frozen configuration <frozen_configuration>`
+   for what that looks like.
 
    While this is a kind of trivial example, this last use case is extremely
    important. Practically speaking, the utility of initializing the simulation
@@ -295,16 +320,6 @@ After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
    frequently useful for setting up specific configurations for validating the
    simulation from a notebook or for reproducing a particular set of
    configuration parameters that produce unexpected outputs.
-
-.. testcode::
-
-   from vivarium.engine import InteractiveContext
-   from vivarium.engine.examples.disease_model import get_model_specification_path
-
-   p = get_model_specification_path()
-   sim = InteractiveContext(p, setup=False)
-   sim.configuration.population.population_size = 1_000
-   sim.setup()
 
 Adding additional components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -318,25 +333,31 @@ into our disease model. We could do the following.
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
-   from vivarium.engine.examples.disease_model import get_model_specification_path, Risk, RiskEffect
+    from vivarium.engine import InteractiveContext
+    from vivarium.engine.examples.disease_model import get_model_specification_path, Risk, RiskEffect
 
-   p = get_model_specification_path()
-   sim = InteractiveContext(p, setup=False)
+    p = get_model_specification_path()
+    sim = InteractiveContext(p, setup=False)
 
-   sim.add_components([Risk('unsafe_water_source'),
-                       RiskEffect('unsafe_water_source', 'infected_with_lower_respiratory_infections.incidence_rate')])
+    sim.add_components(
+        [
+            Risk("unsafe_water_source"),
+            RiskEffect(
+                "unsafe_water_source",
+                "infected_with_lower_respiratory_infections.incidence_rate",
+            ),
+        ]
+    )
+    sim.configuration.update({
+        'unsafe_water_source': {
+            'proportion_exposed': 0.3
+        },
+        'effect_of_unsafe_water_source_on_infected_with_lower_respiratory_infections.incidence_rate': {
+            'relative_risk': 8,
+        },
+    })
 
-   sim.configuration.update({
-       'unsafe_water_source': {
-           'proportion_exposed': 0.3
-       },
-       'effect_of_unsafe_water_source_on_infected_with_lower_respiratory_infections.incidence_rate': {
-           'relative_risk': 8,
-       },
-   })
-
-   sim.setup()
+    sim.setup()
 
 This is an easy way to take an old model and toy around with new components
 to immediately see their effects.
@@ -362,8 +383,8 @@ the InteractiveContext:
     p = get_model_specification_path()
     model_spec = build_model_specification(p)
 
-    # Remove all observer components
-    del model_spec.components['vivarium.engine.examples.disease_model'].observer
+    # Remove all Intervention components
+    del model_spec.components['vivarium.engine.examples.disease_model'].intervention
     # Remove all RiskEffect components
     model_spec.components['vivarium.engine.examples.disease_model'].risk = [
         c for c in model_spec.components['vivarium.engine.examples.disease_model'].risk
@@ -375,18 +396,18 @@ the InteractiveContext:
 
 .. _interactive_run:
 
-Running the Simulation
+Running the simulation
 ----------------------
 
 A simulation can be run in several ways once it is set up. The simplest way to
 advance a simulation is to call
-:meth:`sim.run() <vivarium.engine.interface.interactive.InteractiveContext.run>` on
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.run` on
 it, which will advance it from its current time to the end time specified in
-the simulation :term:`configuration <Configuration>`.  If you need finer
+the simulation :term:`configuration <Configuration>`. If you need finer
 control, there are a set of methods on the context that allow you to run
 the simulation for specified spans of time or numbers of simulation steps.
 Below is a table of the functions that can be called on an
-:class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
+:class:`~vivarium.engine.interface.interactive.InteractiveContext`
 to advance a simulation in different ways.
 
 .. list-table:: **InteractiveContext methods for advancing simulations**
@@ -395,18 +416,76 @@ to advance a simulation in different ways.
 
    *   - Method
        - Description
-   *   - | :meth:`run <vivarium.engine.interface.interactive.InteractiveContext.run>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run`
        - | Run the simulation for its entire duration, from its current time
          | to its end time. The start time and end time are specified in the
          | ``time`` block of the configuration.
-   *   - | :meth:`step <vivarium.engine.interface.interactive.InteractiveContext.step>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.step`
        - | Advance the simulation one step. The step size is taken from the
          | ``time`` block of the configuration.
-   *   - | :meth:`take_steps <vivarium.engine.interface.interactive.InteractiveContext.take_steps>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.take_steps`
        - | Advance the simulation ``n`` steps.
-   *   - | :meth:`run_until <vivarium.engine.interface.interactive.InteractiveContext.run_until>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_until`
        - | Advance the simulation to a specific time. This time should make
          | sense given the simulation's clock type.
-   *   - | :meth:`run_for <vivarium.engine.interface.interactive.InteractiveContext.run_for>`
+   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_for`
        - | Advance the simulation for a duration. This duration should make
          | sense given the simulation's clock type.
+
+Each of these is easiest to see against the simulation clock, which
+:attr:`current_time <vivarium.engine.interface.interactive.InteractiveContext.current_time>`
+reports. We use a small, short-running configuration here so the whole
+simulation finishes quickly.
+
+.. testcode::
+
+   import pandas as pd
+
+   from vivarium.engine import InteractiveContext
+   from vivarium.engine.examples.disease_model import get_model_specification_path
+
+   sim = InteractiveContext(get_model_specification_path(), setup=False)
+   sim.configuration.population.population_size = 100
+   sim.configuration.time.end.year = 2022
+   sim.configuration.time.end.month = 2
+   sim.configuration.time.end.day = 1
+   sim.setup()
+
+   print(sim.current_time)
+
+   sim.step()
+   print(sim.current_time)
+
+   sim.take_steps(2)
+   print(sim.current_time)
+
+   sim.run_for(pd.Timedelta(days=5))
+   print(sim.current_time)
+
+   sim.run_until(pd.Timestamp("2022-01-15"))
+   print(sim.current_time)
+
+   sim.run()
+   print(sim.current_time)
+
+.. testoutput::
+
+   2022-01-01 00:00:00
+   2022-01-01 12:00:00
+   2022-01-02 12:00:00
+   Simulation complete after 10 iterations
+   2022-01-07 12:00:00
+   Simulation complete after 15 iterations
+   2022-01-15 00:00:00
+   Simulation complete after 34 iterations
+   2022-02-01 00:00:00
+
+Note that ``run_for``, ``run_until`` and ``run`` each report how many iterations
+they took, while ``step`` and ``take_steps`` do not. Note also that ``run``
+stops at the end time from the ``time`` block of the configuration, so it is
+the end time - not a number of steps - that decides where it stops.
+
+Advancing a simulation does not, on its own, produce any results - an
+``InteractiveContext`` does not observe them by default. See
+:ref:`getting results <interactive_results>` for what that means and how to
+turn it on.

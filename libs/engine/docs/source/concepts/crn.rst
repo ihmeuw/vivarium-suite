@@ -214,7 +214,8 @@ for this decision point of whether to move left or not. Here's how we'd do it:
             to_move_index = self.randomness.filter_for_probability(event.index, pd.Series(0.5, index=event.index))
             self.population_view.update(
                 "location",
-                lambda location: location.loc[to_move_index] - 1,
+                lambda location: location - 1,
+                index=to_move_index,
             )
 
 

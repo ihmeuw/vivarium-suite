@@ -26,7 +26,7 @@ pipeline {
     parameters {
         string(
             name: 'ACTIVE_MODELS',
-            defaultValue: 'vivarium_gates_mncnh',
+            defaultValue: 'vivarium_gates_mncnh,vivarium_gates_lsff_2026',
             description: 'Comma-separated list of model repositories to build environments for'
         )
         string(

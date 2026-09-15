@@ -98,7 +98,9 @@ class Mortality(Component):
         draw = self.randomness.get_draw(event.index)
         affected_simulants = draw < effective_probability
         self.population_view.update(
-            "is_alive", lambda _: pd.Series(False, index=event.index[affected_simulants])
+            "is_alive",
+            lambda is_alive: pd.Series(False, index=is_alive.index),
+            index=event.index[affected_simulants],
         )
 
     # docs-end: on_time_step

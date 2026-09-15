@@ -77,9 +77,12 @@ def build_workflow_from_config(
         kwargs = parsed_step.api_kwargs
         if kwargs.get("environment") is None:
             kwargs = {**kwargs, "environment": config.default_environment}
-        # Only the simulation step varies its behavior on resume.
+        # The simulation step is the only one whose tasks carry their own
+        # max_attempts, and the only one that varies its behavior on resume.
         if parsed_step.step_type == "simulation":
-            step_tasks = api_fn(**kwargs, tool=tool, is_resume=resume)
+            step_tasks = api_fn(
+                **kwargs, tool=tool, is_resume=resume, max_attempts=config.max_attempts
+            )
         else:
             step_tasks = api_fn(**kwargs, tool=tool)
 

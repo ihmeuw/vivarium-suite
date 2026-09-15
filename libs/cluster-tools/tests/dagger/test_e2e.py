@@ -32,6 +32,7 @@ from tests.psimulate.test_e2e import (
     _BRANCHES,
     _EXPECTED_TOTAL_JOBS,
     _MODEL_SPEC,
+    _MODEL_SPEC_FAIL_ONCE,
     _assert_result_task_counts,
     _read_metadata,
 )
@@ -168,9 +169,21 @@ def _write_workflow_config(
     return config_path
 
 
-def _run_dagger(args: list[str]) -> subprocess.CompletedProcess[str]:
+def _run_dagger(
+    args: list[str], env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run a dagger CLI command as a subprocess."""
-    return subprocess.run(["dagger", *args], capture_output=True, text=True)
+    return subprocess.run(["dagger", *args], capture_output=True, text=True, env=env)
+
+
+def _single_run_root(step_output_root: Path) -> Path:
+    """Return the one timestamped run directory beneath a simulation step's root."""
+    timestamp_dirs = [d for d in step_output_root.iterdir() if d.is_dir()]
+    assert len(timestamp_dirs) == 1, (
+        f"Expected exactly 1 timestamp directory in {step_output_root}, "
+        f"found {len(timestamp_dirs)}: {timestamp_dirs}"
+    )
+    return timestamp_dirs[0]
 
 
 class TestDaggerRun:
@@ -371,6 +384,40 @@ def _write_flaky_workflow_config(output_dir: Path, config_path: Path, project: s
     config_path.write_text(yaml.dump(config))
 
 
+def _write_failing_simulation_workflow_config(
+    output_dir: Path, config_path: Path, project: str, model_spec: Path
+) -> None:
+    """Write a single-simulation-step workflow whose tasks fail on first attempt.
+
+    The step runs the fail-once model specification, so every task crashes
+    the first time a given ``(input_draw, random_seed)`` pair executes and
+    succeeds once its sentinel exists. ``max_attempts: 1`` disables Jobmon
+    retries, so that first round of failures fails the whole workflow and
+    leaves it for ``dagger restart`` to resume.
+    """
+    config = {
+        "workflow": {
+            "name": "e2e_simulation_restart_test",
+            "project": project,
+            "queue": "all.q",
+            "output_directory": str(output_dir),
+            "max_attempts": 1,
+            "steps": [
+                {
+                    "name": "sim",
+                    "type": "simulation",
+                    "resources": {"memory_gb": 1, "runtime": "00:10:00"},
+                    "args": {
+                        "model_specification": str(model_spec),
+                        "branch_configuration": str(_BRANCHES),
+                    },
+                },
+            ],
+        }
+    }
+    config_path.write_text(yaml.dump(config))
+
+
 class TestDaggerRestart:
     """E2E tests for ``dagger restart``."""
 
@@ -421,3 +468,72 @@ class TestDaggerRestart:
         assert (output_dir / "step_1_runs.txt").read_text().count(
             "ran"
         ) == 1, "init was re-run on restart instead of being skipped"
+
+    def test_restart_resumes_a_failed_simulation_step(
+        self, shared_tmp_path: Path, slurm_project: str
+    ) -> None:
+        """A simulation step that fails outright is resumed to completion.
+
+        Unlike the bash-step case above, a resumed simulation step has to
+        rebuild its own state: it reconstructs the run root the first build
+        derived, then reads back the keyspace and model specification that
+        build persisted rather than re-parsing the step's inputs. This is the
+        only test that exercises that path against a real cluster.
+
+        ``FAIL_ONCE_SENTINEL_DIR`` makes every task crash on its first
+        execution and succeed on its second; it travels by environment
+        variable precisely so it does not perturb Jobmon's task hashes and
+        break the resume it is meant to test.
+        """
+        output_dir = shared_tmp_path / "workflow_output"
+        output_dir.mkdir()
+        sentinel_dir = shared_tmp_path / "fail_sentinels"
+        sentinel_dir.mkdir()
+
+        # The run root is named after the spec file, so give it its own copy.
+        spec_dir = shared_tmp_path / "specs"
+        spec_dir.mkdir()
+        model_spec = spec_dir / "sim_restart.yaml"
+        model_spec.write_text(_MODEL_SPEC_FAIL_ONCE.read_text())
+
+        config_path = shared_tmp_path / "workflow_config.yaml"
+        _write_failing_simulation_workflow_config(
+            output_dir, config_path, slurm_project, model_spec
+        )
+        env = {**os.environ, "FAIL_ONCE_SENTINEL_DIR": str(sentinel_dir)}
+
+        first = _run_dagger(
+            ["run", "--config", str(config_path), "-P", slurm_project, "-o", str(output_dir)],
+            env=env,
+        )
+        assert first.returncode != 0, (
+            f"Expected the first run to fail: every simulation task should crash "
+            f"on its first attempt.\nSTDOUT:\n{first.stdout}\nSTDERR:\n{first.stderr}"
+        )
+
+        run_root = _single_run_root(output_dir / model_spec.stem)
+        for name in ("keyspace.yaml", "branches.yaml", "model_specification.yaml"):
+            assert (
+                run_root / name
+            ).exists(), f"{name} was not persisted, so the restart has nothing to read back"
+
+        restart = _run_dagger(["restart", str(output_dir), "-P", slurm_project], env=env)
+        assert restart.returncode == 0, (
+            f"Expected restart to complete the simulation step.\n"
+            f"STDOUT:\n{restart.stdout}\nSTDERR:\n{restart.stderr}"
+        )
+
+        # The resume must land in the original run root, not derive a new one.
+        assert _single_run_root(output_dir / model_spec.stem) == run_root
+
+        metadata = _read_metadata(run_root)
+        assert (
+            len(metadata) == _EXPECTED_TOTAL_JOBS
+        ), f"Expected {_EXPECTED_TOTAL_JOBS} completed tasks, got {len(metadata)}"
+        _assert_result_task_counts(run_root / "results", _EXPECTED_TOTAL_JOBS)
+
+        # Each attempt logs to its own directory, tagged with its command.
+        log_dirs = sorted(d.name for d in (run_root / "logs").iterdir() if d.is_dir())
+        assert len(log_dirs) == 2, f"Expected one logs directory per attempt, got {log_dirs}"
+        assert any(name.endswith("_run") for name in log_dirs), log_dirs
+        assert any(name.endswith("_restart") for name in log_dirs), log_dirs

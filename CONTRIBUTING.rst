@@ -36,6 +36,8 @@ Submitting Changes
 - Patches should be small to facilitate easier review. Sometimes this will result in many small
   PRs to land a single large feature.
 - Larger changes should be discussed in the project's GitHub issues page.
+- The PR template asks for a Jira (MIC) ticket link. Contributors outside the Simulation Science
+  team can link the GitHub issue they opened instead.
 - New features and significant bug fixes should be documented in the changelog.
 - You must have legal permission to distribute any code you contribute to ``vivarium-suite``, and it
   must be available under the BSD-3-Clause license.
@@ -43,15 +45,18 @@ Submitting Changes
 Changelog Format
 ----------------
 
-Each package under ``libs/`` maintains its own ``CHANGELOG.rst``. The release workflow parses the
-first line of this file to determine the version and date. The expected format is::
+Each package under ``libs/`` and each Claude Code plugin under ``tools/`` maintains its own
+``CHANGELOG.rst``. The release workflows parse the first line of this file to determine the
+version and date. The expected format, with a two-digit year, is::
 
-    **X.Y.Z - MM/DD/YYYY**
+    **X.Y.Z - MM/DD/YY**
 
 For example::
 
-    **4.1.0 - 04/28/2024**
+    **4.1.0 - 04/28/26**
 
-A release is triggered automatically when a ``CHANGELOG.rst`` is updated on ``main`` and the
-parsed tag does not already exist. The date must match the day of the push (Pacific time). See
-``.github/workflows/release.yml`` for details.
+A four-digit year fails the workflow's date check. A release is triggered automatically when a
+``CHANGELOG.rst`` is updated on ``main`` and the parsed tag does not already exist. The date must
+match the day the change lands on ``main`` (Pacific time), not the day the PR was opened. See
+``.github/workflows/release.yml`` (libraries) and ``.github/workflows/release-ai-tools*.yml``
+(plugins) for details.
