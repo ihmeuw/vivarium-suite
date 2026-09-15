@@ -43,8 +43,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ``--changed-files`` and print the JSON classification of which
         libraries the diff touched, plus the GitHub Actions matrix to build. Used by
         the CI and Downstream Check workflows' detect jobs. ``--include-candidates``
-        adds the non-gating candidate Python entries; CI passes it only for pull
-        requests to long-running branches rather than on every PR.
+        adds the non-gating candidate Python entries; CI passes it on pushes to the
+        long-running branches in its trigger and on pull requests with the 
+        ``run-candidates`` label.
 
     ``build-release-matrix --versions <file> [--libs-dir <path>]``
         Read ``"<name> <version>"`` lines from the ``--versions`` file and print
@@ -57,8 +58,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         set), one entry per dependent per Python version in its
         ``python_versions.json``. Used by the Downstream Check workflow to test
         dependents against the releasing libs' pending versions.
-        ``--include-candidates`` adds the non-gating candidate Python entries; CI
-        passes it only for pull requests to long-running branches rather than on every PR.
+        ``--include-candidates`` adds the non-gating candidate Python entries; the
+        Downstream Check workflow passes it on a manual dispatch and on pull
+        requests with the ``run-candidates`` label.
 
     ``verify-editable <target> --changed "<names>" [--libs-dir <path>]``
         Recompute the editable upstreams selected of ``target`` and assert each
