@@ -33,7 +33,7 @@ from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
-from vivarium.engine.framework.values import Pipeline
+from vivarium.engine.framework.values import AttributePipeline, Pipeline
 
 
 def test_list_values() -> None:
@@ -45,6 +45,28 @@ def test_list_values() -> None:
         sim.get_value("foo")
     # ensure that 'foo' did not get added to the list of values
     assert sim.list_values() == ["simulant_step_size"]
+
+
+def test_get_attribute() -> None:
+    sim = InteractiveContext(components=[ColumnCreator()])
+    attribute_names = sim.get_attribute_names()
+    assert "test_column_1" in attribute_names
+    assert isinstance(sim.get_attribute("test_column_1"), AttributePipeline)
+    with pytest.raises(ValueError, match="No attribute pipeline 'foo' registered."):
+        sim.get_attribute("foo")
+    # The values manager creates a pipeline for an unknown name, so the guard on
+    # get_attribute is what keeps a typo from polluting the simulation.
+    assert sim.get_attribute_names() == attribute_names
+
+
+def test_get_value_and_get_attribute_point_at_each_other() -> None:
+    """A name looked up on the wrong getter says which one to use instead."""
+    sim = InteractiveContext(components=[ColumnCreator()])
+
+    with pytest.raises(ValueError, match="Try get_attribute\\(\\)"):
+        sim.get_value("test_column_1")
+    with pytest.raises(ValueError, match="Try get_value\\(\\)"):
+        sim.get_attribute("simulant_step_size")
 
 
 def test_run_for_duration() -> None:
