@@ -67,7 +67,12 @@ class NamedCallable:
         _require_pretty_hook_alongside_repr(cls)
 
     def __init__(self, callable_: Callable[..., Any]) -> None:
-        self._callable = callable_
+        # Unwrap rather than nest. Wrapping a wrapper would leave the display
+        # reporting this class's name in place of the original callable's, and
+        # the type annotations let an already-wrapped list be registered again.
+        self._callable: Callable[..., Any] = (
+            callable_._callable if isinstance(callable_, NamedCallable) else callable_
+        )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self._callable(*args, **kwargs)

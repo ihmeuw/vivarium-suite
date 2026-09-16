@@ -31,6 +31,7 @@ from vivarium.engine.framework.values.interface import ValuesInterface
 from vivarium.engine.framework.values.pipeline import (
     AttributesValueSource,
     MissingValueSource,
+    NamedCallable,
     NamedCombiner,
     NamedPostProcessor,
     PrivateColumnValueSource,
@@ -1526,3 +1527,36 @@ class TestNamedCallable:
     def test_str_is_the_bare_name(self) -> None:
         """The description block wants a name, not a signature."""
         assert str(NamedCombiner(replace_combiner)) == "replace_combiner"
+
+    @pytest.mark.parametrize(
+        "wrapper",
+        [NamedCallable, NamedCombiner, NamedPostProcessor],
+        ids=["base", "combiner", "post_processor"],
+    )
+    def test_wrapping_a_wrapper_unwraps_instead_of_nesting(
+        self, wrapper: type[NamedCallable]
+    ) -> None:
+        """A re-registered callable keeps naming the original, not the wrapper.
+
+        Both entry points are reachable and type-check: ``post_processor`` is a
+        ``list[PostProcessor]`` and ``combiner`` is a ``ValueCombiner``, so a
+        configured pipeline's own can be passed to another registration. The
+        unwrap lives on the base, and every class is covered so that giving one
+        of them its own ``__init__`` cannot silently drop it.
+        """
+        once = wrapper(rescale_post_processor)
+        twice = wrapper(once)
+
+        assert str(twice) == "rescale_post_processor"
+        assert twice == rescale_post_processor
+
+    def test_the_two_wrapper_classes_name_their_role(self) -> None:
+        """The subclasses exist only so a repr says which slot it came from."""
+        combiner = NamedCombiner(replace_combiner)
+        post_processor = NamedPostProcessor(rescale_post_processor)
+
+        assert repr(combiner) == "<NamedCombiner 'replace_combiner'>"
+        assert repr(post_processor) == "<NamedPostProcessor 'rescale_post_processor'>"
+        # The description drops the role; only the repr carries it.
+        assert str(combiner) == "replace_combiner"
+        assert str(post_processor) == "rescale_post_processor"
