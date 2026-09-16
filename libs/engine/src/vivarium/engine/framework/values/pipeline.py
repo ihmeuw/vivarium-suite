@@ -62,6 +62,7 @@ class NamedCallable:
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Require subclasses to define a rich display hook if they define __repr__."""
         super().__init_subclass__(**kwargs)
         _require_pretty_hook_alongside_repr(cls)
 
@@ -109,6 +110,7 @@ class ValueSource:
     """A wrapper for the source of a value pipeline."""
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Require subclasses to define a rich display hook if they define __repr__."""
         super().__init_subclass__(**kwargs)
         _require_pretty_hook_alongside_repr(cls)
 
@@ -301,6 +303,7 @@ class Pipeline(Resource):
     """The type of the resource."""
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Require subclasses to define a rich display hook if they define __repr__."""
         super().__init_subclass__(**kwargs)
         _require_pretty_hook_alongside_repr(cls)
 
