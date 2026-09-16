@@ -1199,6 +1199,19 @@ class TestConfigurePipeline:
             )
 
 
+class UnusablePopulationView:
+    """A population view that fails loudly if anything touches it.
+
+    Rendering a value source must not read the view, so a test passes this in
+    place of a real one: an attribute access means the invariant has broken.
+    """
+
+    def __getattr__(self, name: str) -> object:
+        raise AssertionError(
+            f"rendering must not touch the population view, but read .{name}"
+        )
+
+
 class TestStringRepresentations:
     """Tests for the pipeline description and the short reprs around it.
 
@@ -1248,8 +1261,8 @@ class TestStringRepresentations:
         assert "from modifier" in text
         assert "some_post_processor" in text
 
-    def test_str_of_unconfigured_pipeline_does_not_raise(self) -> None:
-        """A pipeline with no source, combiner, or component still renders."""
+    def test_str_of_unconfigured_pipeline_renders_the_whole_block(self) -> None:
+        """Pin the whole description for a pipeline with no source or component."""
         text = str(Pipeline("nascent"))
 
         assert (
@@ -1289,8 +1302,8 @@ class TestStringRepresentations:
     def test_str_renders_source_kinds(self, kind: str, expected: str) -> None:
         """Every kind of value source is rendered with its kind.
 
-        The five ``ValueSource`` shapes reachable through registration, so that a
-        new one cannot be added without a rendering.
+        Covers every source shape reachable through registration, so a new one
+        cannot be added without a rendering.
         """
 
         class SourceProducer(Component):
@@ -1340,12 +1353,10 @@ class TestStringRepresentations:
     def test_every_value_source_subclass_has_a_rendering(self) -> None:
         """Guard against a new source kind slipping in without a rendering.
 
-        ``PrivateColumnValueSource`` and ``AttributesValueSource`` are rendered by
-        ``test_str_renders_source_kinds``, as is the ``ValueSource`` base, which
-        backs callable and lookup-table sources. ``MissingValueSource`` cannot be
-        registered - it is what a pipeline holds before configuration - so its
-        rendering is covered by ``test_str_of_unconfigured_pipeline_does_not_raise``
-        instead. A new subclass needs a case in whichever of those two it can reach.
+        Every subclass is rendered by ``test_str_describes_and_repr_identifies``,
+        and the kinds reachable through real registration are additionally covered
+        end to end by ``test_str_renders_source_kinds``. A new subclass needs a
+        case in the first, and in the second if it can be registered.
         """
         subclasses = {cls.__name__ for cls in ValueSource.__subclasses__()}
 
@@ -1429,17 +1440,51 @@ class TestStringRepresentations:
         assert "0x" not in repr(pipeline)
 
     @pytest.mark.parametrize(
-        "source_class, expected_str, expected_repr",
+        "build_source, expected_str, expected_repr",
         [
-            (Pipeline, "upstream (value)", "<ValueSource 'upstream'>"),
-            (AttributePipeline, "upstream (attribute)", "<ValueSource 'upstream'>"),
-            (None, "<no source>", "<MissingValueSource>"),
+            (
+                lambda host, view: ValueSource(host, Pipeline("upstream")),
+                "upstream (value)",
+                "<ValueSource 'upstream'>",
+            ),
+            (
+                lambda host, view: ValueSource(host, AttributePipeline("upstream")),
+                "upstream (attribute)",
+                "<ValueSource 'upstream'>",
+            ),
+            (
+                lambda host, view: MissingValueSource(host),
+                "<no source>",
+                "<MissingValueSource>",
+            ),
+            (
+                lambda host, view: PrivateColumnValueSource(host, "owned", view),
+                "owned (private_column)",
+                "<PrivateColumnValueSource 'owned'>",
+            ),
+            (
+                lambda host, view: AttributesValueSource(host, ["solo"], view),
+                "solo (attributes)",
+                "<AttributesValueSource 'solo'>",
+            ),
+            (
+                lambda host, view: AttributesValueSource(host, ["a", "b"], view),
+                "['a', 'b'] (attributes)",
+                "<AttributesValueSource ['a', 'b']>",
+            ),
         ],
-        ids=["value_pipeline", "attribute_pipeline", "missing"],
+        ids=[
+            "value_pipeline",
+            "attribute_pipeline",
+            "missing",
+            "private_column",
+            "one_attribute",
+            "several_attributes",
+        ],
     )
     def test_str_describes_and_repr_identifies(
         self,
-        source_class: type[Pipeline] | None,
+        build_source: Callable[[Pipeline, Any], ValueSource],
         expected_str: str,
         expected_repr: str,
     ) -> None:
@@ -1448,14 +1493,10 @@ class TestStringRepresentations:
         ``str`` reads as prose for the description block and takes its label from
         the source's ``RESOURCE_TYPE``. ``repr`` stays short, because a source
         cannot be reconstructed from one - its constructor needs the pipeline and
-        a population view.
+        a population view. The view is passed as an ``UnusablePopulationView`` so
+        that rendering cannot come to depend on it unnoticed.
         """
-        host = Pipeline("host")
-        source = (
-            MissingValueSource(host)
-            if source_class is None
-            else ValueSource(host, source_class("upstream"))
-        )
+        source = build_source(Pipeline("host"), UnusablePopulationView())
 
         assert str(source) == expected_str
         assert repr(source) == expected_repr

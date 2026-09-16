@@ -137,11 +137,7 @@ class ValueSource:
         return self._source(*args, **kwargs)
 
     def __str__(self) -> str:
-        # A source that is itself a Resource names its own kind, so the label does
-        # not have to be inferred.
-        if isinstance(self._source, Resource):
-            return f"{self._source.name} ({self._source.RESOURCE_TYPE})"
-        return f"{_callable_display_name(self._source)} (callable)"
+        return f"{self._identifier} ({self._kind})"
 
     def __repr__(self) -> str:
         # Defined only here: a subclass __repr__ would shadow _repr_pretty_ in
@@ -162,10 +158,21 @@ class ValueSource:
 
     @property
     def _identifier(self) -> Any:
-        """What this source reads from, for the repr. None when there is nothing."""
+        """What this source reads from. None when there is nothing to name."""
         if isinstance(self._source, Resource):
             return self._source.name
         return _callable_display_name(self._source)
+
+    @property
+    def _kind(self) -> str:
+        """The label for what kind of source this is.
+
+        A source that is itself a resource names its own kind, so the label does
+        not have to be inferred.
+        """
+        if isinstance(self._source, Resource):
+            return str(self._source.RESOURCE_TYPE)
+        return "callable"
 
 
 class MissingValueSource(ValueSource):
@@ -183,6 +190,8 @@ class MissingValueSource(ValueSource):
         return False
 
     def __str__(self) -> str:
+        # Not composed from _identifier and _kind like its siblings: there is
+        # nothing to name, and "None (missing)" reads worse than this.
         return "<no source>"
 
     @property
@@ -208,12 +217,13 @@ class PrivateColumnValueSource(ValueSource):
         self._population_view = population_view
         """A population view that can be used to access the private column source of this pipeline."""
 
-    def __str__(self) -> str:
-        return f"{self.column_name} (private_column)"
-
     @property
     def _identifier(self) -> str:
         return self.column_name
+
+    @property
+    def _kind(self) -> str:
+        return "private_column"
 
     def _source(self, index: pd.Index[int]) -> pd.Series[Any]:
         return self._population_view._manager.get_private_columns(
@@ -233,12 +243,13 @@ class AttributesValueSource(ValueSource):
         self._population_view = population_view
         """A population view that can be used to access the attribute source of this pipeline."""
 
-    def __str__(self) -> str:
-        return f"{self.attributes} (attributes)"
-
     @property
     def _identifier(self) -> str | list[str]:
         return self.attributes
+
+    @property
+    def _kind(self) -> str:
+        return "attributes"
 
     def _source(self, index: pd.Index[int]) -> pd.Series[Any] | pd.DataFrame:
         return self._population_view.get(index=index, attributes=self.attributes)
