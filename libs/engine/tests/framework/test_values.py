@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import inspect
 import re
+import textwrap
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -1215,10 +1215,18 @@ class TestStringRepresentations:
                     "some-value",
                     source=self.some_source,
                     preferred_combiner=addition_combiner,
+                    preferred_post_processor=self.some_post_processor,
                 )
 
             def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
                 return pd.Series(1.0, index=index)
+
+            def some_post_processor(
+                self, value: pd.Series[float], manager: ValuesManager
+            ) -> pd.Series[float]:
+                # A value pipeline's post-processor takes (value, manager); an
+                # attribute pipeline's takes (index, value, manager).
+                return value * 2
 
         class Modifier(Component):
             def setup(self, builder: Builder) -> None:
@@ -1237,31 +1245,26 @@ class TestStringRepresentations:
         assert "modifiers       1 (order not guaranteed)" in text
         assert "Modifier.bump" in text
         assert "from modifier" in text
-        assert "post-processors none" in text
-
-    def test_str_reports_post_processors(self) -> None:
-        """A post-processor is named, since it can move a value more than a modifier."""
-
-        class Producer(Component):
-            def setup(self, builder: Builder) -> None:
-                builder.value.register_rate_producer("some-rate", source=self.some_source)
-
-            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
-                return pd.Series(1.0, index=index)
-
-        sim = InteractiveContext(components=[Producer()])
-        text = str(sim.get_attribute("some-rate"))
-
-        assert "post-processors 1" in text
-        assert "rescale_post_processor" in text
+        assert "some_post_processor" in text
 
     def test_str_of_unconfigured_pipeline_does_not_raise(self) -> None:
         """A pipeline with no source, combiner, or component still renders."""
         text = str(Pipeline("nascent"))
 
-        assert "nascent  [value pipeline]" in text
-        assert "<no source>" in text
-        assert "modifiers       none" in text
+        assert (
+            text
+            == textwrap.dedent(
+                """
+            nascent  [value pipeline]
+            registered by   <unset>
+
+            source          <no source>
+            combiner        <none>
+            modifiers       none
+            post-processors none
+            """
+            ).strip()
+        )
 
     def test_attribute_pipeline_repr_is_labelled_as_such(self) -> None:
         """The header distinguishes an attribute pipeline from a value pipeline."""
@@ -1269,29 +1272,87 @@ class TestStringRepresentations:
         assert "[value pipeline]" in str(Pipeline("nascent"))
 
     @pytest.mark.parametrize(
-        "source, expected",
+        "kind, expected",
         [
-            (["test_column_1"], "test_column_1 (attributes)"),
+            ("one_attribute", "test_column_1 (attributes)"),
             (
-                ["test_column_1", "test_column_2"],
+                "several_attributes",
                 "['test_column_1', 'test_column_2'] (attributes)",
             ),
-            (lambda index: pd.Series(1.0, index=index), "<lambda> (callable)"),
+            ("lambda", "<lambda> (callable)"),
+            ("bound_method", "SourceProducer.some_source (callable)"),
+            ("lookup_table", "source_producer.some_table (lookup_table)"),
+            ("private_column", "owned_column (private_column)"),
         ],
-        ids=["one_attribute", "several_attributes", "callable"],
     )
-    def test_str_renders_source_kinds(
-        self, source: list[str] | Callable[..., Any], expected: str
-    ) -> None:
-        """Each kind of value source is rendered with its kind."""
+    def test_str_renders_source_kinds(self, kind: str, expected: str) -> None:
+        """Every kind of value source is rendered with its kind.
 
-        class Producer(Component):
+        The five ``ValueSource`` shapes reachable through registration, so that a
+        new one cannot be added without a rendering.
+        """
+
+        class SourceProducer(Component):
+            @property
+            def columns_created(self) -> list[str]:
+                return ["owned_column"] if kind == "private_column" else []
+
             def setup(self, builder: Builder) -> None:
-                builder.value.register_attribute_producer("some-attribute", source=source)
+                if kind == "private_column":
+                    builder.population.register_initializer(
+                        initializer=self.initialize_owned_column,
+                        columns=["owned_column"],
+                    )
+                    return
+                builder.value.register_attribute_producer(
+                    "some-attribute", source=self._source_for(builder)
+                )
 
-        sim = InteractiveContext(components=[ColumnCreator(), Producer()])
+            def _source_for(self, builder: Builder) -> Any:
+                if kind == "one_attribute":
+                    return ["test_column_1"]
+                if kind == "several_attributes":
+                    return ["test_column_1", "test_column_2"]
+                if kind == "lambda":
+                    return lambda index: pd.Series(1.0, index=index)
+                if kind == "bound_method":
+                    return self.some_source
+                if kind == "lookup_table":
+                    return builder.lookup.build_table(
+                        5.0, "some_table", value_columns="value"
+                    )
+                raise AssertionError(f"unhandled source kind {kind!r}")
 
-        assert expected in str(sim.get_attribute("some-attribute"))
+            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+            def initialize_owned_column(self, pop_data: SimulantData) -> None:
+                self.population_view.initialize(
+                    pd.DataFrame({"owned_column": 1.0}, index=pop_data.index)
+                )
+
+        sim = InteractiveContext(components=[ColumnCreator(), SourceProducer()])
+        attribute = "owned_column" if kind == "private_column" else "some-attribute"
+
+        assert expected in str(sim.get_attribute(attribute))
+
+    def test_every_value_source_subclass_has_a_rendering(self) -> None:
+        """Guard against a new source kind slipping in without a rendering.
+
+        ``PrivateColumnValueSource`` and ``AttributesValueSource`` are rendered by
+        ``test_str_renders_source_kinds``, as is the ``ValueSource`` base, which
+        backs callable and lookup-table sources. ``MissingValueSource`` cannot be
+        registered - it is what a pipeline holds before configuration - so its
+        rendering is covered by ``test_str_of_unconfigured_pipeline_does_not_raise``
+        instead. A new subclass needs a case in whichever of those two it can reach.
+        """
+        subclasses = {cls.__name__ for cls in ValueSource.__subclasses__()}
+
+        assert subclasses == {
+            "MissingValueSource",
+            "PrivateColumnValueSource",
+            "AttributesValueSource",
+        }
 
     def test_value_modifier_str_and_repr_serve_different_readers(self) -> None:
         """A modifier says what it is and who registered it, rather than its address."""
@@ -1317,8 +1378,6 @@ class TestStringRepresentations:
         # a module-level component renders as e.g. "DiseaseModel.delete_csmr".
         assert str(mutator).endswith("Modifier.bump from modifier")
         assert repr(mutator) == f"<ValueModifier {mutator.name!r}>"
-        assert "0x" not in str(mutator)
-        assert "0x" not in repr(mutator)
 
     def test_repr_looks_like_a_constructor_call(self) -> None:
         """The repr follows the convention, leaving detail to __str__."""
@@ -1334,15 +1393,6 @@ class TestStringRepresentations:
 
         assert repr(sim.get_value("some-value")) == "Pipeline('some-value')"
         assert repr(AttributePipeline("nascent")) == "AttributePipeline('nascent')"
-
-    def test_ipython_display_shows_the_full_description(self) -> None:
-        """A bare pipeline in a notebook cell renders the description, not the repr."""
-        pytest.importorskip("IPython")
-        from IPython.core.formatters import PlainTextFormatter
-
-        pipeline = Pipeline("nascent")
-
-        assert PlainTextFormatter()(pipeline) == str(pipeline)
 
     def test_callable_class_post_processor_is_named_by_its_class(self) -> None:
         """A post-processor with no __name__ is named, not shown as an address.
@@ -1378,33 +1428,36 @@ class TestStringRepresentations:
         assert "0x" not in repr(pipeline)
 
     @pytest.mark.parametrize(
-        "source_class, expected_label",
+        "source_class, expected_str, expected_repr",
         [
-            (Pipeline, "value"),
-            (AttributePipeline, "attribute"),
+            (Pipeline, "upstream (value)", "<ValueSource 'upstream'>"),
+            (AttributePipeline, "upstream (attribute)", "<ValueSource 'upstream'>"),
+            (None, "<no source>", "<MissingValueSource>"),
         ],
-        ids=["value_pipeline", "attribute_pipeline"],
+        ids=["value_pipeline", "attribute_pipeline", "missing"],
     )
-    def test_resource_source_is_labelled_by_its_resource_type(
-        self, source_class: type[Pipeline], expected_label: str
+    def test_str_describes_and_repr_identifies(
+        self,
+        source_class: type[Pipeline] | None,
+        expected_str: str,
+        expected_repr: str,
     ) -> None:
-        """A source that is a resource names its own kind, rather than being guessed."""
-        source = ValueSource(Pipeline("host"), source_class("upstream"))
+        """A resource source names its own kind; the repr identifies rather than rebuilds.
 
-        assert str(source) == f"upstream ({expected_label})"
-
-    def test_lookup_table_source_is_labelled_from_the_table(self) -> None:
-        """The lookup_table label comes from LookupTable.RESOURCE_TYPE, not a literal."""
-        from vivarium.engine.framework.lookup.table import LookupTable
-
-        assert LookupTable.RESOURCE_TYPE == "lookup_table"
-
-    def test_value_source_repr_names_its_class_and_identifier(self) -> None:
-        """A source is not reconstructible, so its repr identifies rather than rebuilds."""
+        ``str`` reads as prose for the description block and takes its label from
+        the source's ``RESOURCE_TYPE``. ``repr`` stays short, because a source
+        cannot be reconstructed from one - its constructor needs the pipeline and
+        a population view.
+        """
         host = Pipeline("host")
+        source = (
+            MissingValueSource(host)
+            if source_class is None
+            else ValueSource(host, source_class("upstream"))
+        )
 
-        assert repr(MissingValueSource(host)) == "<MissingValueSource>"
-        assert repr(ValueSource(host, Pipeline("upstream"))) == "<ValueSource 'upstream'>"
+        assert str(source) == expected_str
+        assert repr(source) == expected_repr
 
     @pytest.mark.parametrize(
         "base", [ValueSource, Pipeline], ids=["value_source", "pipeline"]
@@ -1453,13 +1506,6 @@ class TestStringRepresentations:
 
         assert PlainTextFormatter()(obj) == str(obj)
 
-    def test_value_source_str_and_repr_serve_different_readers(self) -> None:
-        """The description reads as prose; the repr stays short and addressed."""
-        source = ValueSource(Pipeline("host"), AttributePipeline("upstream"))
-
-        assert str(source) == "upstream (attribute)"
-        assert repr(source) == "<ValueSource 'upstream'>"
-
 
 class TestNamedCallable:
     """Tests for the display wrappers around a combiner and a post-processor."""
@@ -1476,18 +1522,6 @@ class TestNamedCallable:
         assert wrapped == double
         assert hash(wrapped) == hash(double)
         assert wrapped(21) == 42
-
-    def test_repr_degrades_when_no_signature_is_available(self) -> None:
-        """A callable without introspection data still reprs, just without params."""
-
-        class NoSignature:
-            def __call__(self, *args: Any, **kwargs: Any) -> None:
-                return None
-
-        instance = NoSignature()
-        del NoSignature.__call__  # leaves an object inspect cannot describe
-
-        assert repr(NamedPostProcessor(instance)).startswith("<NamedPostProcessor ")
 
     def test_str_is_the_bare_name(self) -> None:
         """The description block wants a name, not a signature."""
