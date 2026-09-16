@@ -1,3 +1,11 @@
+**5.10.0 - 09/17/26**
+
+- Add ``InteractiveContext.get_attribute()`` to retrieve an attribute pipeline by name
+- Describe a pipeline's source, modifiers, combiner, and post-processors via ``str()``
+  and show that description when a pipeline is echoed in a notebook cell
+- Change ``Pipeline`` ``repr()`` from ``_Pipeline(name)`` to ``Pipeline('name')``
+- Wrap a pipeline's combiner and post-processors for display
+
 **5.9.0 - 09/04/26**
 
 - Add an ``index`` parameter to ``PopulationView.update()`` to scope an update to a
