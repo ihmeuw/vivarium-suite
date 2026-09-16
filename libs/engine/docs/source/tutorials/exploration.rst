@@ -302,11 +302,11 @@ adjust it, and the post-processors applied.
 
 .. warning::
 
-    The order of modifiers and post-processors are determined by the order in which
-    components are registered **and are not guaranteed to be stable**. Adding a
-    component or reordering them in the model specification can change it. Read
-    the order to understand what a simulation is doing but do not write code that
-    depends on it.
+    The order of the modifiers is determined by the order in which components are
+    registered **and is not guaranteed to be stable**. Adding a component or
+    reordering them in the model specification can change it. Post-processor order,
+    on the other hand, is guaranteed since only a single component can register a
+    post-processor for a given attribute.
 
 An attribute pipeline (which produces attributes) is a specific type of the more
 generic :term:`Pipeline`, which produces :term:`values <Value>`. While attributes
