@@ -53,6 +53,58 @@ def _callable_display_name(callable_: Callable[..., Any]) -> str:
     return type(callable_).__qualname__
 
 
+class NamedCallable:
+    """Wrap a plain callable so it prints like the other parts of a pipeline.
+
+    A combiner and a post-processor are ordinary functions, so their reprs are
+    module paths and signatures. Wrapping them keeps every part of a pipeline
+    description consistent, and forwards calls and equality to the original.
+    """
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        _require_pretty_hook_alongside_repr(cls)
+
+    def __init__(self, callable_: Callable[..., Any]) -> None:
+        self._callable = callable_
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self._callable(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return _callable_display_name(self._callable)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {str(self)!r}>"
+
+    def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
+        """Render the full description for a bare pipeline in an IPython cell.
+
+        IPython's display machinery prefers this hook over ``__repr__``, which
+        lets the full description show up in a notebook while ``__repr__`` stays
+        short enough for tracebacks and collections.
+        """
+        printer.text(str(self))
+
+    def __eq__(self, other: object) -> bool:
+        # Equal to the callable it wraps, so a comparison against the bare
+        # function keeps working after wrapping.
+        if isinstance(other, NamedCallable):
+            return bool(self._callable == other._callable)
+        return bool(self._callable == other)
+
+    def __hash__(self) -> int:
+        return hash(self._callable)
+
+
+class NamedCombiner(NamedCallable):
+    """A pipeline's combiner, wrapped for display."""
+
+
+class NamedPostProcessor(NamedCallable):
+    """One of a pipeline's post-processors, wrapped for display."""
+
+
 class ValueSource:
     """A wrapper for the source of a value pipeline."""
 
@@ -370,9 +422,7 @@ class Pipeline(Resource):
         component_name = (
             self._component.name if self._component is not None else _UNSET_COMPONENT
         )
-        combiner = (
-            _callable_display_name(self._combiner) if self._combiner is not None else "<none>"
-        )
+        combiner = str(self._combiner) if self._combiner is not None else "<none>"
 
         lines = [
             f"{self.name}  [{self.RESOURCE_TYPE} pipeline]",
@@ -394,9 +444,7 @@ class Pipeline(Resource):
         if self.post_processor:
             lines.append(f"post-processors {len(self.post_processor)}")
             for order, post_processor in enumerate(self.post_processor, start=1):
-                lines.append(
-                    f"                  {order}. {_callable_display_name(post_processor)}"
-                )
+                lines.append(f"                  {order}. {post_processor}")
         else:
             lines.append("post-processors none")
 
@@ -474,8 +522,8 @@ class Pipeline(Resource):
 
         self._component = component
         self.source = source
-        self._combiner = combiner
-        self.post_processor = post_processor
+        self._combiner = NamedCombiner(combiner)
+        self.post_processor = [NamedPostProcessor(p) for p in post_processor]
         self._required_resources = [*self._required_resources, *required_resources]
         self._manager = manager
 

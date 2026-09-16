@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import re
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
@@ -22,6 +23,7 @@ from vivarium.engine.framework.values import (
     addition_combiner,
     list_combiner,
     multiplication_combiner,
+    replace_combiner,
     rescale_post_processor,
     union_post_processor,
 )
@@ -29,6 +31,8 @@ from vivarium.engine.framework.values.interface import ValuesInterface
 from vivarium.engine.framework.values.pipeline import (
     AttributesValueSource,
     MissingValueSource,
+    NamedCombiner,
+    NamedPostProcessor,
     PrivateColumnValueSource,
     ValueModifier,
     ValueSource,
@@ -1248,7 +1252,7 @@ class TestStringRepresentations:
         sim = InteractiveContext(components=[Producer()])
         text = str(sim.get_attribute("some-rate"))
 
-        assert "post-processors 1 (order not guaranteed)" in text
+        assert "post-processors 1" in text
         assert "rescale_post_processor" in text
 
     def test_str_of_unconfigured_pipeline_does_not_raise(self) -> None:
@@ -1455,3 +1459,36 @@ class TestStringRepresentations:
 
         assert str(source) == "upstream (attribute)"
         assert repr(source) == "<ValueSource 'upstream'>"
+
+
+class TestNamedCallable:
+    """Tests for the display wrappers around a combiner and a post-processor."""
+
+    def test_call_and_equality_forward_to_the_wrapped_callable(self) -> None:
+        """Wrapping must not change how a callable behaves or compares."""
+
+        def double(value: int) -> int:
+            return value * 2
+
+        wrapped = NamedCombiner(double)
+
+        assert wrapped is not double
+        assert wrapped == double
+        assert hash(wrapped) == hash(double)
+        assert wrapped(21) == 42
+
+    def test_repr_degrades_when_no_signature_is_available(self) -> None:
+        """A callable without introspection data still reprs, just without params."""
+
+        class NoSignature:
+            def __call__(self, *args: Any, **kwargs: Any) -> None:
+                return None
+
+        instance = NoSignature()
+        del NoSignature.__call__  # leaves an object inspect cannot describe
+
+        assert repr(NamedPostProcessor(instance)).startswith("<NamedPostProcessor ")
+
+    def test_str_is_the_bare_name(self) -> None:
+        """The description block wants a name, not a signature."""
+        assert str(NamedCombiner(replace_combiner)) == "replace_combiner"

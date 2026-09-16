@@ -285,13 +285,13 @@ adjust it, and the post-processors applied.
    source          mortality.mortality_rate (lookup_table)
    combiner        replace_combiner
    modifiers       3 (order not guaranteed)
-                     1. DiseaseModel.delete_cause_specific_mortality
+                     - DiseaseModel.delete_cause_specific_mortality
                         from disease_model.lower_respiratory_infections
-                     2. DiseaseState.add_in_excess_mortality
+                     - DiseaseState.add_in_excess_mortality
                         from disease_state.susceptible_to_lower_respiratory_infections
-                     3. DiseaseState.add_in_excess_mortality
+                     - DiseaseState.add_in_excess_mortality
                         from disease_state.infected_with_lower_respiratory_infections
-   post-processors 1 (order not guaranteed)
+   post-processors 1
                      1. rescale_post_processor
 
 .. note::
