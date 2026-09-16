@@ -37,6 +37,11 @@ def _require_pretty_hook_alongside_repr(cls: type) -> None:
     IPython walks the mro and uses whichever of ``_repr_pretty_`` or ``__repr__``
     it finds first in a class's own ``__dict__``, so a subclass defining only
     ``__repr__`` silently disables the rich display it would have inherited.
+
+    The same rule is why ``_repr_pretty_`` is repeated on every class here rather
+    than factored into a shared base: a class that defines ``__repr__`` stops the
+    walk before an inherited hook is reached, so an inherited hook would never
+    run. The repetition is load-bearing, not an oversight.
     """
     if "__repr__" in vars(cls) and "_repr_pretty_" not in vars(cls):
         raise TypeError(
@@ -49,7 +54,11 @@ def _callable_display_name(callable_: Callable[..., Any]) -> str:
     """Return the most readable name available for a callable.
 
     Prefers ``__qualname__`` so bound methods carry their class, which is what
-    makes a modifier identifiable in a pipeline description.
+    makes a modifier identifiable in a pipeline description. This deliberately
+    differs from :meth:`~vivarium.engine.framework.resource.Resource.get_callable_name`,
+    which prefers the bare ``__name__``: that one builds resource ids, where the
+    component name already supplies the owner and a dotted class name would make
+    the id harder to read.
     """
     for attribute in ("__qualname__", "__name__"):
         name = getattr(callable_, attribute, None)
@@ -91,11 +100,11 @@ class NamedCallable:
         return f"<{type(self).__name__} {str(self)!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Render the full description for a bare pipeline in an IPython cell.
+        """Show this object's description when it is echoed bare in an IPython cell.
 
-        IPython's display machinery prefers this hook over ``__repr__``, which
-        lets the full description show up in a notebook while ``__repr__`` stays
-        short enough for tracebacks and collections.
+        IPython's display machinery prefers this hook over ``__repr__``, so the
+        description shows up in a notebook while ``__repr__`` stays short enough
+        for tracebacks and collections.
         """
         printer.text(str(self))
 
@@ -148,11 +157,11 @@ class ValueSource:
         return f"<{type(self).__name__} {identifier!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Render the full description for a bare pipeline in an IPython cell.
+        """Show this object's description when it is echoed bare in an IPython cell.
 
-        IPython's display machinery prefers this hook over ``__repr__``, which
-        lets the full description show up in a notebook while ``__repr__`` stays
-        short enough for tracebacks and collections.
+        IPython's display machinery prefers this hook over ``__repr__``, so the
+        description shows up in a notebook while ``__repr__`` stays short enough
+        for tracebacks and collections.
         """
         printer.text(str(self))
 
@@ -291,11 +300,11 @@ class ValueModifier(Resource):
         return f"<{type(self).__name__} {self.name!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Render the full description for a bare pipeline in an IPython cell.
+        """Show this object's description when it is echoed bare in an IPython cell.
 
-        IPython's display machinery prefers this hook over ``__repr__``, which
-        lets the full description show up in a notebook while ``__repr__`` stays
-        short enough for tracebacks and collections.
+        IPython's display machinery prefers this hook over ``__repr__``, so the
+        description shows up in a notebook while ``__repr__`` stays short enough
+        for tracebacks and collections.
         """
         printer.text(str(self))
 
@@ -346,7 +355,10 @@ class Pipeline(Resource):
         self._combiner: ValueCombiner | None = None
         self.post_processor: list[PostProcessor] = []
         """A list of the transformations to perform in order on the combined output of
-        the source and mutators."""
+        the source and mutators.
+
+        Wrapped for display, so calling, equality and hashing forward to the
+        registered callables but their type does not."""
         self._manager: ValuesManager | None = None
 
     def _get_attr_error(self, attribute: str) -> str:
@@ -370,7 +382,11 @@ class Pipeline(Resource):
     @property
     def combiner(self) -> ValueCombiner:
         """A strategy for combining the source and mutator values into the
-        final value represented by the pipeline."""
+        final value represented by the pipeline.
+
+        Wrapped for display, so calling, equality and hashing forward to the
+        registered callable but its type does not.
+        """
         return self._get_property(self._combiner, "combiner")
 
     @property
@@ -433,11 +449,11 @@ class Pipeline(Resource):
         return f"{type(self).__name__}({self.name!r})"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Render the full description for a bare pipeline in an IPython cell.
+        """Show the full description when the pipeline is echoed in an IPython cell.
 
-        IPython's display machinery prefers this hook over ``__repr__``, which
-        lets the full description show up in a notebook while ``__repr__`` stays
-        short enough for tracebacks and collections.
+        IPython's display machinery prefers this hook over ``__repr__``, so the
+        description shows up in a notebook while ``__repr__`` stays short enough
+        for tracebacks and collections.
         """
         printer.text(str(self))
 
