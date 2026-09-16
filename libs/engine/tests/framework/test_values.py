@@ -1389,7 +1389,16 @@ class TestStringRepresentations:
         # The qualname of a class defined inside a test carries a <locals> chain;
         # a module-level component renders as e.g. "DiseaseModel.delete_csmr".
         assert str(mutator).endswith("Modifier.bump from modifier")
+        # The name is pinned to a literal rather than derived from mutator.name,
+        # so a regression in how the name is built cannot pass unnoticed.
+        assert mutator.name.endswith("some-value.1.modifier.bump")
         assert repr(mutator) == f"<ValueModifier {mutator.name!r}>"
+
+        # Test that the IPython display hook is present and returns the same as str().
+        pytest.importorskip("IPython")
+        from IPython.core.formatters import PlainTextFormatter
+
+        assert PlainTextFormatter()(mutator) == str(mutator)
 
     def test_repr_looks_like_a_constructor_call(self) -> None:
         """The repr follows the convention, leaving detail to __str__."""
@@ -1530,8 +1539,9 @@ class TestStringRepresentations:
         )
         neither = type("Neither", (base,), {"__str__": lambda self: "x"})
 
-        assert issubclass(both, base)
-        assert issubclass(neither, base)
+        # issubclass() would be tautological here; exercise the classes instead.
+        assert "_repr_pretty_" in vars(both)
+        assert "__repr__" not in vars(neither)
 
     @pytest.mark.parametrize(
         "build",
@@ -1540,8 +1550,17 @@ class TestStringRepresentations:
             lambda: AttributePipeline("nascent"),
             lambda: ValueSource(Pipeline("host"), Pipeline("upstream")),
             lambda: MissingValueSource(Pipeline("host")),
+            lambda: NamedCombiner(replace_combiner),
+            lambda: NamedPostProcessor(rescale_post_processor),
         ],
-        ids=["pipeline", "attribute_pipeline", "value_source", "missing_source"],
+        ids=[
+            "pipeline",
+            "attribute_pipeline",
+            "value_source",
+            "missing_source",
+            "combiner",
+            "post_processor",
+        ],
     )
     def test_ipython_display_matches_str(self, build: Callable[[], object]) -> None:
         """A bare object in a notebook cell shows its description, not its repr."""
