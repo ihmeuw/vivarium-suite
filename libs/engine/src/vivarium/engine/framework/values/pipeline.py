@@ -242,6 +242,11 @@ class ValueModifier(Resource):
 
     RESOURCE_TYPE = "value_modifier"
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Require subclasses to define a rich display hook if they define __repr__."""
+        super().__init_subclass__(**kwargs)
+        _require_pretty_hook_alongside_repr(cls)
+
     def __init__(
         self,
         pipeline: Pipeline,

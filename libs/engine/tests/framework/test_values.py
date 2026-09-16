@@ -1461,7 +1461,9 @@ class TestStringRepresentations:
         assert repr(source) == expected_repr
 
     @pytest.mark.parametrize(
-        "base", [ValueSource, Pipeline], ids=["value_source", "pipeline"]
+        "base",
+        [ValueSource, Pipeline, ValueModifier, NamedCallable],
+        ids=["value_source", "pipeline", "value_modifier", "named_callable"],
     )
     def test_subclass_defining_only_repr_is_rejected(self, base: type) -> None:
         """A subclass cannot silently disable the display hook it inherits.
@@ -1474,7 +1476,9 @@ class TestStringRepresentations:
             type("OnlyRepr", (base,), {"__repr__": lambda self: "x"})
 
     @pytest.mark.parametrize(
-        "base", [ValueSource, Pipeline], ids=["value_source", "pipeline"]
+        "base",
+        [ValueSource, Pipeline, ValueModifier, NamedCallable],
+        ids=["value_source", "pipeline", "value_modifier", "named_callable"],
     )
     def test_subclass_defining_both_or_neither_is_allowed(self, base: type) -> None:
         """The guard forbids only the shadowing combination."""
