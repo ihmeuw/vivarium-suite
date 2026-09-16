@@ -1511,6 +1511,67 @@ class TestStringRepresentations:
 
         assert PlainTextFormatter()(obj) == str(obj)
 
+    def test_str_numbers_several_post_processors_and_bullets_several_modifiers(
+        self,
+    ) -> None:
+        """Two of each, asserted as the emitted lines rather than as substrings.
+
+        Modifiers are bulleted because their order is not guaranteed;
+        post-processors are numbered because one registration fixes theirs.
+        """
+
+        class Producer(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_attribute_producer(
+                    "some-attribute",
+                    source=self.some_source,
+                    preferred_post_processor=[self.double, self.add_ten],
+                )
+
+            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+            def double(
+                self, index: pd.Index[int], value: pd.Series[float], manager: ValuesManager
+            ) -> pd.Series[float]:
+                return value * 2
+
+            def add_ten(
+                self, index: pd.Index[int], value: pd.Series[float], manager: ValuesManager
+            ) -> pd.Series[float]:
+                return value + 10
+
+        class FirstModifier(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_attribute_modifier(
+                    "some-attribute", modifier=self.bump
+                )
+
+            def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
+                return value + 1
+
+        class SecondModifier(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_attribute_modifier(
+                    "some-attribute", modifier=self.halve
+                )
+
+            def halve(
+                self, index: pd.Index[int], value: pd.Series[float]
+            ) -> pd.Series[float]:
+                return value / 2
+
+        sim = InteractiveContext(components=[Producer(), FirstModifier(), SecondModifier()])
+        lines = str(sim.get_attribute("some-attribute")).splitlines()
+
+        assert "modifiers       2 (order not guaranteed)" in lines
+        assert sum(line.strip().startswith("- ") for line in lines) == 2
+        assert "post-processors 2" in lines
+        numbered = [line.strip() for line in lines if line.strip().startswith(("1.", "2."))]
+        assert len(numbered) == 2
+        assert numbered[0].endswith("Producer.double")
+        assert numbered[1].endswith("Producer.add_ten")
+
 
 class TestNamedCallable:
     """Tests for the display wrappers around a combiner and a post-processor."""

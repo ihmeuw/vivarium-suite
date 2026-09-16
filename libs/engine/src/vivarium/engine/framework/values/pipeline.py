@@ -23,6 +23,13 @@ T = TypeVar("T")
 
 _UNSET_COMPONENT = "<unset>"
 
+_LABEL_WIDTH = 16
+"""Column the values in a pipeline description are aligned to."""
+_ENTRY_INDENT = 18
+"""Indent for a modifier or post-processor entry."""
+_DETAIL_INDENT = 21
+"""Indent for the continuation line under an entry."""
+
 
 def _require_pretty_hook_alongside_repr(cls: type) -> None:
     """Reject a subclass that would shadow the inherited IPython display hook.
@@ -437,29 +444,34 @@ class Pipeline(Resource):
         )
         combiner = str(self._combiner) if self._combiner is not None else "<none>"
 
+        def labelled(label: str, value: str) -> str:
+            return f"{label:<{_LABEL_WIDTH}}{value}"
+
         lines = [
             f"{self.name}  [{self.RESOURCE_TYPE} pipeline]",
-            f"registered by   {component_name}",
+            labelled("registered by", component_name),
             "",
-            f"source          {self.source}",
-            f"combiner        {combiner}",
+            labelled("source", str(self.source)),
+            labelled("combiner", combiner),
         ]
 
         if self.mutators:
-            lines.append(f"modifiers       {len(self.mutators)} (order not guaranteed)")
+            lines.append(
+                labelled("modifiers", f"{len(self.mutators)} (order not guaranteed)")
+            )
             for mutator in self.mutators:
                 callable_name, modifier_component = mutator._describe()
-                lines.append(f"                  - {callable_name}")
-                lines.append(f"                     from {modifier_component}")
+                lines.append(f"{'':<{_ENTRY_INDENT}}- {callable_name}")
+                lines.append(f"{'':<{_DETAIL_INDENT}}from {modifier_component}")
         else:
-            lines.append("modifiers       none")
+            lines.append(labelled("modifiers", "none"))
 
         if self.post_processor:
-            lines.append(f"post-processors {len(self.post_processor)}")
+            lines.append(labelled("post-processors", str(len(self.post_processor))))
             for order, post_processor in enumerate(self.post_processor, start=1):
-                lines.append(f"                  {order}. {post_processor}")
+                lines.append(f"{'':<{_ENTRY_INDENT}}{order}. {post_processor}")
         else:
-            lines.append("post-processors none")
+            lines.append(labelled("post-processors", "none"))
 
         return "\n".join(lines)
 
