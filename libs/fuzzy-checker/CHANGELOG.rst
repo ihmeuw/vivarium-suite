@@ -1,4 +1,4 @@
-**0.5.1 - 09/16/26**
+**0.5.1 - 09/17/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built
   environment, unless ``keep_env=yes`` is passed.

@@ -165,9 +165,7 @@ build-env: # Create a new environment with installed packages
 		fi \
 	fi
 
-#	Build in a sub-make so each step is its own recipe line and the first failure
-#	stops the build, then remove the env unless keep_env=yes. The force check above
-#	guarantees we only ever tear down an env this invocation created.
+#	The force check above guarantees we only tear down an env this invocation created.
 	@if ! $(MAKE) --no-print-directory _build-env \
 			name=$(name) path=$(path) py=$(py) type=$(type) lfs=$(lfs); then \
 		echo >&2; \
@@ -193,26 +191,25 @@ build-env: # Create a new environment with installed packages
 	@echo "  2. Run 'make help' again to see all newly available targets"
 	@echo
 
-# The steps of `build-env`, split out so make's own fail-fast applies to each one.
-# Not meant to be called directly; `build-env` owns argument handling and cleanup.
+# Private: `build-env`'s steps, one per recipe line so make's fail-fast applies to each.
 .PHONY: _build-env
 _build-env:
 	conda create $(CONDA_ENV_FLAG) python=$(py) --yes
 # 	Bootstrap vivarium_build_utils into the new environment.
-# 	--no-capture-output streams output as it happens instead of buffering it until
-# 	the step ends, so a failure isn't hidden behind a long silence.
+# 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
 	conda run --no-capture-output $(CONDA_ENV_FLAG) pip install "vivarium_build_utils>=4.0.0,<5.0.0"
 	conda run --no-capture-output $(CONDA_ENV_FLAG) make install ENV_REQS=$(ENV_REQS_FOR_TYPE)
 	@if [ "$(type)" = "simulation" ]; then \
-		set -e; conda install $(CONDA_ENV_FLAG) redis -c anaconda -y; \
+		conda install $(CONDA_ENV_FLAG) redis -c anaconda -y; \
 	fi
+# 	`set -e` is load-bearing: a multi-command recipe line reports only its LAST
+# 	command's status, which is what masked the failing install before.
 	@if [ "$(lfs)" = "yes" ]; then \
 		set -e; \
 		conda run --no-capture-output $(CONDA_ENV_FLAG) conda install -c conda-forge git-lfs --yes; \
 		conda run --no-capture-output $(CONDA_ENV_FLAG) git lfs install; \
 	fi
-# 	The only editable install in a fresh env is this checkout, so an empty list means
-# 	the install resolved nothing despite reporting success.
+# 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
 	@conda run --no-capture-output $(CONDA_ENV_FLAG) pip list --editable --format=freeze | grep -q . \
 		|| { echo "Error: nothing was installed into $(if $(path),$(path),$(name)) from $(CURDIR)." >&2; exit 1; }
 

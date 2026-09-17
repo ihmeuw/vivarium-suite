@@ -102,8 +102,8 @@ build-env: # Create a new environment with installed packages
 	@$(eval keep_env ?= no)
 	@$(call validate_arg,$(keep_env),yes no,keep_env)
 
-#	Build in a sub-make so each step is its own recipe line and the first failure
-#	stops the build, then remove the env unless keep_env=yes.
+#	Tear down on failure rather than leave behind an env that activates but has
+#	nothing installed.
 	@if ! $(MAKE) --no-print-directory _build-env \
 			name=$(name) py=$(py) type=$(type) lfs=$(lfs) \
 			artifactory_access=$(artifactory_access); then \
@@ -130,26 +130,25 @@ build-env: # Create a new environment with installed packages
 # Extras group that `type` selects from base.mk's `install` target.
 ENV_REQS_FOR_TYPE = $(if $(filter artifact,$(type)),data,dev)
 
-# The steps of `build-env`, split out so make's own fail-fast applies to each one.
-# Not meant to be called directly; `build-env` owns argument handling and cleanup.
+# Private: `build-env`'s steps, one per recipe line so make's fail-fast applies to each.
 .PHONY: _build-env
 _build-env:
 	conda create -n $(name) python=$(py) --yes
 # 	Bootstrap vivarium.build_utils into the new environment.
-# 	--no-capture-output streams output as it happens instead of buffering it until
-# 	the step ends, so a failure isn't hidden behind a long silence.
+# 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
 	conda run --no-capture-output -n $(name) pip install vivarium-build-utils
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
 	conda run --no-capture-output -n $(name) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 	@if [ "$(type)" = "simulation" ]; then \
-		set -e; conda install -n $(name) redis -c anaconda -y; \
+		conda install -n $(name) redis -c anaconda -y; \
 	fi
+# 	`set -e` is load-bearing: a multi-command recipe line reports only its LAST
+# 	command's status, which is what masked the failing install before.
 	@if [ "$(lfs)" = "yes" ]; then \
 		set -e; \
 		conda run --no-capture-output -n $(name) conda install -c conda-forge git-lfs --yes; \
 		conda run --no-capture-output -n $(name) git lfs install; \
 	fi
-# 	The only editable install in a fresh env is this checkout, so an empty list means
-# 	the install resolved nothing despite reporting success.
+# 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
 	@conda run --no-capture-output -n $(name) pip list --editable --format=freeze | grep -q . \
 		|| { echo "Error: nothing was installed into '$(name)' from $(CURDIR)." >&2; exit 1; }

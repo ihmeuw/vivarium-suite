@@ -94,8 +94,8 @@ build-env: # Create a new environment with installed packages
 		*) echo "Error: 'keep_env' must be 'yes' or 'no', got '$(keep_env)'" >&2; exit 1 ;; \
 	esac
 
-#	Build in a sub-make so each step is its own recipe line and the first failure
-#	stops the build, then remove the env unless keep_env=yes.
+#	Tear down on failure rather than leave behind an env that activates but has
+#	nothing installed.
 	@if ! $(MAKE) --no-print-directory _build-env \
 			name=$(name) py=$(py) artifactory_access=$(artifactory_access); then \
 		echo >&2; \
@@ -117,8 +117,7 @@ build-env: # Create a new environment with installed packages
 	@echo "conda activate $(name)"
 	@echo
 
-# The steps of `build-env`, split out so make's own fail-fast applies to each one.
-# Not meant to be called directly; `build-env` owns argument handling and cleanup.
+# Private: `build-env`'s steps, one per recipe line so make's fail-fast applies to each.
 .PHONY: _build-env
 _build-env:
 	conda create -n $(name) python=$(py) --yes
@@ -127,12 +126,10 @@ _build-env:
 # 	PyPI so the env matches the source we're about to build/test. This also
 # 	avoids "PyPI version is stale relative to local source" during major
 # 	version bumps.
-# 	--no-capture-output streams output as it happens instead of buffering it until
-# 	the step ends, so a failure isn't hidden behind a long silence.
+# 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
 	conda run --no-capture-output -n $(name) pip install -e .
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
 	conda run --no-capture-output -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
-# 	The only editable install in a fresh env is this checkout, so an empty list means
-# 	the install resolved nothing despite reporting success.
+# 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
 	@conda run --no-capture-output -n $(name) pip list --editable --format=freeze | grep -q . \
 		|| { echo "Error: nothing was installed into '$(name)' from $(CURDIR)." >&2; exit 1; }
