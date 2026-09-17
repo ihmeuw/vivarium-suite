@@ -680,6 +680,9 @@ method. The source for a value is always a callable which typically takes in a
 which is callable, so meets this requirement. Other things are possible, but not 
 necessary for our current use case.
 
+We also pass an optional ``description``, a short phrase saying what the rate
+represents. It is shown whenever the pipeline is printed.
+
 The ``'mortality_rate'`` source is then responsible for returning a
 ``pandas.Series`` containing a base mortality rate for each simulant
 in the index to the values system. Other components may register themselves

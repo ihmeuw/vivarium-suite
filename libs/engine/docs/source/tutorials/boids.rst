@@ -261,6 +261,9 @@ method to register a new attribute pipeline as the producer of some attribute.
    :end-before: # docs-end: register_attribute_producer
    :dedent: 4
 
+The optional ``description`` is a short phrase saying what the attribute represents;
+it is shown whenever the pipeline is printed.
+
 This call provides a ``source`` function for our pipeline which initializes the values.
 In this case, the default is zero acceleration:
 
@@ -530,6 +533,9 @@ We register that the ``apply_force`` method as the modifier like so:
    :start-after: # docs-start: register_acceleration_modifier
    :end-before: # docs-end: register_acceleration_modifier
    :dedent: 4
+
+The optional ``description`` here says what the modifier *does* to the attribute,
+rather than what the attribute is.
 
 Once we start adding components with these modifiers into our simulation, acceleration
 won't always be zero anymore!
