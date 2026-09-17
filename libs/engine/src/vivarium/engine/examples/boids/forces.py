@@ -35,6 +35,7 @@ class Force(Component, ABC):
             "acceleration",
             modifier=self.apply_force,
             required_resources=["x", "y", "vx", "vy", "neighbors"],
+            description="Add this force's contribution to each simulant's acceleration",
         )
         # docs-end: register_acceleration_modifier
 

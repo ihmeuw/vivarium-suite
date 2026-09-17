@@ -39,11 +39,13 @@ class TreatmentIntervention(Component):
         builder.value.register_attribute_producer(
             self.effect_size_pipeline,
             source=lambda index: pd.Series(effect_size, index=index),
+            description="The proportion by which this intervention reduces its target",
         )
         builder.value.register_attribute_modifier(
             self.affected_value,
             modifier=self.intervention_effect,
             required_resources=[self.effect_size_pipeline],
+            description="Reduce the affected value by this intervention's effect size",
         )
 
     ##################################

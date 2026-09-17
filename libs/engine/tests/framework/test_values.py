@@ -1670,17 +1670,17 @@ class DescribedProducer(Component):
         builder.value.register_value_producer(
             "a-value",
             source=self.some_source,
-            description="a value that means something",
+            description="A value that means something",
         )
         builder.value.register_attribute_producer(
             "an-attribute",
             source=self.some_source,
-            description="an attribute that means something",
+            description="An attribute that means something",
         )
         builder.value.register_rate_producer(
             "a-rate",
             source=self.some_source,
-            description="a rate that means something",
+            description="A rate that means something",
         )
         builder.value.register_value_producer("an-undescribed-value", source=self.some_source)
         builder.value.register_attribute_producer(
@@ -1697,12 +1697,12 @@ class DescribedModifier(Component):
 
     def setup(self, builder: Builder) -> None:
         builder.value.register_value_modifier(
-            "a-value", modifier=self.bump, description="bump the value by one"
+            "a-value", modifier=self.bump, description="Bump the value by one"
         )
         builder.value.register_attribute_modifier(
             "an-attribute",
             modifier=self.bump,
-            description="bump the attribute by one",
+            description="Bump the attribute by one",
         )
         builder.value.register_value_modifier("an-undescribed-value", modifier=self.bump)
         builder.value.register_attribute_modifier(
@@ -1724,16 +1724,16 @@ class TestRegistrationDescriptions:
         """All five registration functions accept a description and keep it."""
         sim = self._simulation()
 
-        assert sim.get_value("a-value").description == "a value that means something"
+        assert sim.get_value("a-value").description == "A value that means something"
         assert (
             sim.get_attribute("an-attribute").description
-            == "an attribute that means something"
+            == "An attribute that means something"
         )
-        assert sim.get_attribute("a-rate").description == "a rate that means something"
-        assert sim.get_value("a-value").mutators[0].description == "bump the value by one"
+        assert sim.get_attribute("a-rate").description == "A rate that means something"
+        assert sim.get_value("a-value").mutators[0].description == "Bump the value by one"
         assert (
             sim.get_attribute("an-attribute").mutators[0].description
-            == "bump the attribute by one"
+            == "Bump the attribute by one"
         )
 
     def test_omitting_the_description_leaves_it_unset(self) -> None:
@@ -1761,14 +1761,14 @@ class TestRegistrationDescriptions:
                 """
             a-value  [value pipeline]
             registered by   described_producer
-            description     a value that means something
+            description     A value that means something
 
             source          DescribedProducer.some_source (callable)
             combiner        replace_combiner
             modifiers       1 (order not guaranteed)
                               - DescribedModifier.bump
                                  from described_modifier
-                                 bump the value by one
+                                 Bump the value by one
             post-processors none
             """
             ).strip()
@@ -1804,7 +1804,7 @@ class TestRegistrationDescriptions:
 
         assert (
             str(described)
-            == "DescribedModifier.bump from described_modifier\nbump the value by one"
+            == "DescribedModifier.bump from described_modifier\nBump the value by one"
         )
         assert str(undescribed) == "DescribedModifier.bump from described_modifier"
 

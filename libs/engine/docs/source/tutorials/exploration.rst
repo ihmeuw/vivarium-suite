@@ -270,8 +270,8 @@ gets their current values.
 
 Should you need the actual AttributePipeline object itself, use
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`.
-Printing one reports where its value comes from: the source, the modifiers that
-adjust it, and the post-processors applied.
+Printing one reports what it represents and where its value comes from: the
+source, the modifiers that adjust it, and the post-processors applied.
 
 .. testcode::
 
@@ -281,16 +281,20 @@ adjust it, and the post-processors applied.
 
    mortality_rate  [attribute pipeline]
    registered by   mortality
+   description     The rate at which simulants die of any cause
 
    source          mortality.mortality_rate (lookup_table)
    combiner        replace_combiner
    modifiers       3 (order not guaranteed)
                      - DiseaseModel.delete_cause_specific_mortality
                         from disease_model.lower_respiratory_infections
+                        Subtract this cause's mortality so each state can add its own
                      - DiseaseState.add_in_excess_mortality
                         from disease_state.susceptible_to_lower_respiratory_infections
+                        Add this state's excess mortality to the all-cause rate
                      - DiseaseState.add_in_excess_mortality
                         from disease_state.infected_with_lower_respiratory_infections
+                        Add this state's excess mortality to the all-cause rate
    post-processors 1
                      1. rescale_post_processor
 

@@ -109,6 +109,7 @@ class SimulationClock(Manager):
             source=lambda idx: [pd.Series(np.nan, index=idx).astype("timedelta64[ns]")],
             preferred_combiner=list_combiner,
             preferred_post_processor=self.step_size_post_processor,
+            description="Each simulant's time step size, which any component may shorten",
         )
         self.register_step_modifier = partial(
             builder.value.register_value_modifier,
