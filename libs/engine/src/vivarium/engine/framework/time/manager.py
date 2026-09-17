@@ -193,9 +193,9 @@ class SimulationClock(Manager):
     def step_size_post_processor(self, value: Any, manager: ValuesManager) -> Any:
         """Computes the largest feasible step size for each simulant.
 
-        This is the smallest component-modified step size (rounded down to increments
-        of the minimum step size), or the global step size, whichever is larger.
-        If no components modify the step size, we default to the global step size.
+        This is the smallest step size any component requested, rounded down to a
+        multiple of the minimum step size and never smaller than one such multiple.
+        If no component modifies the step size, we default to the standard step size.
 
         Parameters
         ----------
