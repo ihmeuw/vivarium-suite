@@ -119,7 +119,7 @@ class DiseaseState(State):
             self.emr_pipeline,
             source=self.risk_deleted_excess_mortality_rate,
             required_resources=[self.emr_paf_pipeline],
-            description="The rate at which simulants in this state die of this cause",
+            description="This state's excess mortality with its risk burden removed",
         )
 
         builder.value.register_attribute_modifier(
@@ -190,7 +190,7 @@ class DiseaseModel(Machine):
         builder.value.register_rate_producer(
             self.csmr_pipeline,
             source=lambda index: pd.Series(cause_specific_mortality_rate, index=index),
-            description="The share of all-cause mortality attributed to this cause",
+            description="This cause's contribution to the all-cause mortality rate",
         )
         builder.value.register_attribute_modifier(
             "mortality_rate",

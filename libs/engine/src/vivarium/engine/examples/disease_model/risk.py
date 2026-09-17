@@ -116,7 +116,7 @@ class RiskEffect(Component):
         builder.value.register_attribute_producer(
             self.relative_risk_pipeline,
             source=lambda index: pd.Series(relative_risk, index=index),
-            description="How much this risk raises the affected rate when exposed",
+            description="How much this risk changes the affected rate when exposed",
         )
 
         builder.value.register_attribute_modifier(

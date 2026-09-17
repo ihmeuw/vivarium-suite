@@ -45,7 +45,7 @@ class TreatmentIntervention(Component):
             self.affected_value,
             modifier=self.intervention_effect,
             required_resources=[self.effect_size_pipeline],
-            description="Reduce the affected value by this intervention's effect size",
+            description="Scale down the affected value by this intervention's effect size",
         )
 
     ##################################
