@@ -1,3 +1,8 @@
+**0.5.1 - 09/16/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **0.5.0 - 08/28/26**
 
 - added a new ``evaluated`` property to distinguish tests that did not generate

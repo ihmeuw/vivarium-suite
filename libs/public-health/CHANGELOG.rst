@@ -1,3 +1,8 @@
+**6.6.2 - 09/16/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **6.6.1 - 08/31/26**
 
 - Support multiple ``MicrodataObserver`` instances in one simulation via an optional ``label``
