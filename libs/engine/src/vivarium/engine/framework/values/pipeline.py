@@ -89,6 +89,13 @@ class NamedCallable:
         self._callable: Callable[..., Any] = (
             callable_._callable if isinstance(callable_, NamedCallable) else callable_
         )
+        # Let inspect see through to the wrapped callable, so signature() and
+        # getdoc() describe it rather than this wrapper's forwarding __call__.
+        # Only forward a docstring that exists: most callables passed here have
+        # none, and this class's own description is more useful than None.
+        self.__wrapped__ = self._callable
+        if self._callable.__doc__ is not None:
+            self.__doc__ = self._callable.__doc__
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self._callable(*args, **kwargs)

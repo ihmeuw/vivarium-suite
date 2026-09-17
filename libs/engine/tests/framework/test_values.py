@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import re
 import textwrap
 from collections.abc import Callable, Sequence
@@ -1685,3 +1686,31 @@ class TestNamedCallable:
         # The description drops the role; only the repr carries it.
         assert str(combiner) == "replace_combiner"
         assert str(post_processor) == "rescale_post_processor"
+
+    def test_inspect_sees_through_to_the_wrapped_callable(self) -> None:
+        """Wrapping must not cost a caller the signature or the docstring."""
+        wrapped = NamedPostProcessor(rescale_post_processor)
+
+        assert inspect.unwrap(wrapped) is rescale_post_processor
+        assert list(inspect.signature(wrapped).parameters) == [
+            "index",
+            "value",
+            "manager",
+        ]
+        assert inspect.getdoc(wrapped) == inspect.getdoc(rescale_post_processor)
+
+    def test_an_undocumented_callable_keeps_the_wrapper_docstring(self) -> None:
+        """Forwarding a docstring must not replace a real one with None."""
+
+        def undocumented(value: int, manager: ValuesManager) -> int:
+            return value
+
+        assert undocumented.__doc__ is None
+        assert NamedPostProcessor(undocumented).__doc__ == NamedPostProcessor.__doc__
+
+    def test_display_is_unchanged_by_the_introspection_forwarding(self) -> None:
+        """str and repr still name the callable, with no signature bolted on."""
+        wrapped = NamedCombiner(replace_combiner)
+
+        assert str(wrapped) == "replace_combiner"
+        assert repr(wrapped) == "<NamedCombiner 'replace_combiner'>"
