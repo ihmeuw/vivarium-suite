@@ -1795,6 +1795,42 @@ class TestRegistrationDescriptions:
             ).strip()
         )
 
+    def test_a_rejected_second_registration_keeps_the_first_description(
+        self, manager: ValuesManager
+    ) -> None:
+        """A refused re-registration leaves the description already set alone.
+
+        ``set_attributes`` raises before it assigns, so the order of those two
+        statements is the only thing making this true.
+        """
+        manager.register_value_producer(
+            "a-value", source=lambda index: None, description="The first description"
+        )
+
+        with pytest.raises(DynamicValueError):
+            manager.register_value_producer(
+                "a-value", source=lambda index: None, description="The second description"
+            )
+
+        assert manager.get_value("a-value").description == "The first description"
+
+    def test_an_empty_description_renders_like_no_description(self) -> None:
+        """An empty description is treated as absent, not rendered as a blank row.
+
+        Covers both rendering sites: the pipeline's labelled row, and a modifier's
+        unlabelled continuation line, which would otherwise be pure whitespace.
+        """
+        pipeline = self._simulation().get_value("an-undescribed-value")
+        assert pipeline.mutators, "this test needs a modifier to cover the second site"
+        assert pipeline.description is None
+        assert pipeline.mutators[0].description is None
+        undescribed = str(pipeline)
+
+        pipeline.description = ""
+        pipeline.mutators[0].description = ""
+
+        assert str(pipeline) == undescribed
+
     def test_modifier_str_appends_its_description(self) -> None:
         """A modifier reached directly still reports what it does."""
         sim = self._simulation()

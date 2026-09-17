@@ -305,7 +305,7 @@ class ValueModifier(Resource):
     def __str__(self) -> str:
         callable_name, component_name = self._describe()
         entry = f"{callable_name} from {component_name}"
-        if self.description is not None:
+        if self.description:
             entry = f"{entry}\n{self.description}"
         return entry
 
@@ -493,7 +493,7 @@ class Pipeline(Resource):
             f"{self.name}  [{self.RESOURCE_TYPE} pipeline]",
             labelled("registered by", component_name),
         ]
-        if self.description is not None:
+        if self.description:
             lines.append(labelled("description", self.description))
         lines += [
             "",
@@ -509,7 +509,7 @@ class Pipeline(Resource):
                 callable_name, modifier_component = mutator._describe()
                 lines.append(f"{'':<{_ENTRY_INDENT}}- {callable_name}")
                 lines.append(f"{'':<{_DETAIL_INDENT}}from {modifier_component}")
-                if mutator.description is not None:
+                if mutator.description:
                     lines.append(f"{'':<{_DETAIL_INDENT}}{mutator.description}")
         else:
             lines.append(labelled("modifiers", "none"))
