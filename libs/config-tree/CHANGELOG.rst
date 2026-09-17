@@ -1,3 +1,8 @@
+**5.2.1 - 09/17/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **5.2.0 - 08/28/26**
 
 - ``get()`` returns ``default_value`` when any key in the path is missing

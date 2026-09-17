@@ -16,7 +16,7 @@ include $(MAKE_INCLUDES)/test.mk
 
 Both files live at `vivarium/build_utils/resources/makefiles/`. That means **the same set of `make` targets is available in essentially every vivarium library**. When you see `make <target>` in a vivarium context, look here.
 
-The only target that lives in the *downstream* `Makefile` itself is `build-env`, because it has to bootstrap `vivarium_build_utils` into a fresh conda env before the shared `base.mk` can be loaded. Under Jenkins (`$JENKINS_URL` set), the makefiles are pulled from the workspace instead of from an installed package.
+The only target that lives in the *downstream* `Makefile` itself is `build-env` (plus its private `_build-env` helper), because it has to bootstrap `vivarium_build_utils` into a fresh conda env before the shared `base.mk` can be loaded. Under Jenkins (`$JENKINS_URL` set), the makefiles are pulled from the workspace instead of from an installed package.
 
 `PACKAGE_NAME` is automatically set to the current directory's basename, so the targets reorient themselves correctly per-repo.
 
@@ -31,6 +31,9 @@ The only target that lives in the *downstream* `Makefile` itself is `build-env`,
 - **`lint` doesn't fix anything.** It checks. To actually format, run `format`.
 - **`make` with no args runs `list`**, not `help`. `.DEFAULT_GOAL := list` is set in `base.mk`.
 - **`make install` re-runs `setup-slack` every time.** Idempotent, but expect to see Slack bot config output.
+- **`build-env` deletes the env if any step fails.** It runs the create/bootstrap/install steps through the `_build-env` sub-make, then `conda env remove`s the env on failure, so a broken dependency pin leaves you with no env rather than one that activates with nothing installed. Pass `keep_env=yes` when you need the partial env left behind to poke at.
+- **`build-env` on a name that already exists silently wipes that env.** `conda create` installs into an existing prefix instead of erroring, clearing its pip- and conda-installed packages before the rebuild starts. Pre-existing behavior, not something the fail-fast change introduced — but worth knowing before you re-run `build-env` to "refresh" an env you've added anything to by hand. The model-template refuses unless `force=yes`.
+- **Don't run `make -q build-env`.** `-n` and `-t` are safe, but GNU Make exempts recipe lines containing `$(MAKE)` from query mode, so under `-q` the sub-make reports the `.PHONY` target as out of date, the parent reads that as a build failure, and the teardown branch runs for real.
 - **`test-*` targets read `RUNSLOW`/`RUNWEEKLY` as `make` variables**, not pytest CLI flags. `make test-all --runslow` will not work; `make test-all RUNSLOW=true` will.
 - **Under Jenkins**, `MAKE_INCLUDES := .` — Jenkins copies `base.mk`/`test.mk` into the workspace ahead of time. In local dev, they're loaded from the installed `vivarium.build_utils` Python package via `get_makefiles_path()`.
 - **`make help` and `make --help` are different.** The latter is the built-in GNU Make help, which just lists global options and variables. The former is a custom target that prints a curated message about the available targets in this ecosystem.

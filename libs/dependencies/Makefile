@@ -39,7 +39,7 @@ help:
 	@echo "make build-env"
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env [name=<environment name>] [py=<python version>] [artifactory_access=<yes|no>]"
+	@echo "  make build-env [name=<environment name>] [py=<python version>] [artifactory_access=<yes|no>] [keep_env=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
 	@echo "  name [optional]"
@@ -49,6 +49,9 @@ help:
 	@echo "  artifactory_access [optional]"
 	@echo "      Whether the build host can reach the IHME artifactory. Either 'yes'"
 	@echo "      (default) or 'no'; use 'no' to build off-VPN without artifactory."
+	@echo "  keep_env [optional]"
+	@echo "      Whether to keep a failed build's partial environment for debugging."
+	@echo "      Either 'yes' or 'no' (default, i.e. tear it down)."
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -58,7 +61,7 @@ endif
 
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
-	@allowed="name py artifactory_access"; \
+	@allowed="name py artifactory_access keep_env"; \
 	for arg in $(filter-out build-env,$(MAKECMDGOALS)) $(MAKEFLAGS); do \
 		case $$arg in \
 			*=*) \
@@ -88,12 +91,26 @@ build-env: # Create a new environment with installed packages
 		yes|no) ;; \
 		*) echo "Error: 'artifactory_access' must be 'yes' or 'no', got '$(artifactory_access)'" >&2; exit 1 ;; \
 	esac
+#	keep_env
+	@$(eval keep_env ?= no)
+	@case "$(keep_env)" in \
+		yes|no) ;; \
+		*) echo "Error: 'keep_env' must be 'yes' or 'no', got '$(keep_env)'" >&2; exit 1 ;; \
+	esac
 
-	conda create -n $(name) python=$(py) --yes
-# 	Bootstrap vivarium.build_utils into the new environment
-	conda run -n $(name) pip install vivarium-build-utils
-# 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
-	conda run -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
+#	Tear down on failure rather than leave behind an env that activates but has
+#	nothing installed.
+	@if ! $(MAKE) --no-print-directory _build-env \
+			name=$(name) py=$(py) artifactory_access=$(artifactory_access); then \
+		echo >&2; \
+		if [ "$(keep_env)" = "yes" ]; then \
+			echo "Error: failed to build environment '$(name)'. Keeping it (keep_env=yes)." >&2; \
+		else \
+			echo "Error: failed to build environment '$(name)'. Removing it; pass keep_env=yes to inspect it instead." >&2; \
+			conda env remove -n $(name) --yes; \
+		fi; \
+		exit 1; \
+	fi
 
 	@echo
 	@echo "Finished building environment"
@@ -103,3 +120,16 @@ build-env: # Create a new environment with installed packages
 	@echo "Don't forget to activate it with:"
 	@echo "conda activate $(name)"
 	@echo
+
+# Private: `build-env`'s steps, one per recipe line so make's fail-fast applies to each.
+.PHONY: _build-env
+_build-env:
+	conda create -n $(name) python=$(py) --yes
+# 	Bootstrap vivarium.build_utils into the new environment.
+# 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
+	conda run --no-capture-output -n $(name) pip install vivarium-build-utils
+# 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
+	conda run --no-capture-output -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
+# 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
+	@conda run --no-capture-output -n $(name) pip list --editable --format=freeze | grep -q . \
+		|| { echo "Error: nothing was installed into '$(name)' from $(CURDIR)." >&2; exit 1; }

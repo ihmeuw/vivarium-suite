@@ -1,3 +1,8 @@
+**5.9.1 - 09/17/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **5.9.0 - 09/04/26**
 
 - Add an ``index`` parameter to ``PopulationView.update()`` to scope an update to a

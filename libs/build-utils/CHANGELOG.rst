@@ -1,3 +1,8 @@
+**4.7.1 - 09/17/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **4.7.0 - 09/09/26**
 
 - Only builds started from a push deploy on their own
