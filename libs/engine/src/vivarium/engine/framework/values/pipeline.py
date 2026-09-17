@@ -287,6 +287,7 @@ class ValueModifier(Resource):
         modifier: Callable[..., Any],
         component: Component | Manager,
         required_resources: Iterable[str | Resource] = (),
+        description: str | None = None,
     ) -> None:
         mutator_name = self.get_callable_name(modifier)
         mutator_index = len(pipeline.mutators) + 1
@@ -295,13 +296,18 @@ class ValueModifier(Resource):
 
         self._pipeline = pipeline
         self._source = modifier
+        self.description = description
+        """A description of what this modifier does to the value."""
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self._source(*args, **kwargs)
 
     def __str__(self) -> str:
         callable_name, component_name = self._describe()
-        return f"{callable_name} from {component_name}"
+        entry = f"{callable_name} from {component_name}"
+        if self.description is not None:
+            entry = f"{entry}\n{self.description}"
+        return entry
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.name!r}>"
@@ -354,6 +360,8 @@ class Pipeline(Resource):
     def __init__(self, name: str, component: Component | None = None) -> None:
         super().__init__(name, component=component)
 
+        self.description: str | None = None
+        """A description of the value this pipeline represents."""
         self.source: ValueSource = MissingValueSource(self)
         """The callable source of the value represented by the pipeline."""
         self.mutators: list[ValueModifier] = []
@@ -484,6 +492,10 @@ class Pipeline(Resource):
         lines = [
             f"{self.name}  [{self.RESOURCE_TYPE} pipeline]",
             labelled("registered by", component_name),
+        ]
+        if self.description is not None:
+            lines.append(labelled("description", self.description))
+        lines += [
             "",
             labelled("source", str(self.source)),
             labelled("combiner", combiner),
@@ -497,6 +509,8 @@ class Pipeline(Resource):
                 callable_name, modifier_component = mutator._describe()
                 lines.append(f"{'':<{_ENTRY_INDENT}}- {callable_name}")
                 lines.append(f"{'':<{_DETAIL_INDENT}}from {modifier_component}")
+                if mutator.description is not None:
+                    lines.append(f"{'':<{_DETAIL_INDENT}}{mutator.description}")
         else:
             lines.append(labelled("modifiers", "none"))
 
@@ -517,6 +531,7 @@ class Pipeline(Resource):
         modifier: Callable[..., Any],
         component: Component | Manager,
         required_resources: Iterable[str | Resource],
+        description: str | None = None,
     ) -> ValueModifier:
         """Adds a value modifier to the pipeline and returns it.
 
@@ -528,8 +543,12 @@ class Pipeline(Resource):
             The component that creates the value modifier.
         required_resources
             A list of resources required by the modifier. A string represents a population attribute.
+        description
+            An optional description of what the modifier does to the value.
         """
-        value_modifier = ValueModifier(self, modifier, component, required_resources)
+        value_modifier = ValueModifier(
+            self, modifier, component, required_resources, description
+        )
         self.mutators.append(value_modifier)
         self._required_resources = [*self._required_resources, value_modifier]
         return value_modifier
@@ -542,6 +561,7 @@ class Pipeline(Resource):
         post_processor: list[PostProcessor],
         required_resources: Iterable[str | Resource],
         manager: ValuesManager,
+        description: str | None = None,
     ) -> None:
         """
         Adds a source, combiner, post-processor, and manager to a pipeline.
@@ -566,6 +586,8 @@ class Pipeline(Resource):
             post-processor. A string represents a population attribute.
         manager
             The simulation values manager.
+        description
+            An optional description of the value this pipeline represents.
 
         Raises
         ------
@@ -585,6 +607,7 @@ class Pipeline(Resource):
         self.post_processor = [NamedPostProcessor(p) for p in post_processor]
         self._required_resources = [*self._required_resources, *required_resources]
         self._manager = manager
+        self.description = description
 
 
 class AttributePipeline(Pipeline):

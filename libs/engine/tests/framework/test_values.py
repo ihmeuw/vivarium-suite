@@ -134,7 +134,7 @@ def test_configure_modifier_calls_methods_correctly(mocker: MockerFixture) -> No
 
     # Assert pipeline.get_value_modifier was called with correct arguments
     test_pipeline.get_value_modifier.assert_called_once_with(
-        test_modifier, test_component, test_required_resources
+        test_modifier, test_component, test_required_resources, None
     )
 
     # Assert _add_resources was called with correct arguments
@@ -1661,6 +1661,152 @@ class TestStringRepresentations:
             f"{shadowing} define __repr__ without _repr_pretty_, so IPython will "
             "use the repr and the description will not render"
         )
+
+
+class DescribedProducer(Component):
+    """Registers one of every kind of producer, with and without a description."""
+
+    def setup(self, builder: Builder) -> None:
+        builder.value.register_value_producer(
+            "a-value",
+            source=self.some_source,
+            description="a value that means something",
+        )
+        builder.value.register_attribute_producer(
+            "an-attribute",
+            source=self.some_source,
+            description="an attribute that means something",
+        )
+        builder.value.register_rate_producer(
+            "a-rate",
+            source=self.some_source,
+            description="a rate that means something",
+        )
+        builder.value.register_value_producer("an-undescribed-value", source=self.some_source)
+        builder.value.register_attribute_producer(
+            "an-undescribed-attribute", source=self.some_source
+        )
+        builder.value.register_rate_producer("an-undescribed-rate", source=self.some_source)
+
+    def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+        return pd.Series(1.0, index=index)
+
+
+class DescribedModifier(Component):
+    """Modifies what ``DescribedProducer`` registers, with and without a description."""
+
+    def setup(self, builder: Builder) -> None:
+        builder.value.register_value_modifier(
+            "a-value", modifier=self.bump, description="bump the value by one"
+        )
+        builder.value.register_attribute_modifier(
+            "an-attribute",
+            modifier=self.bump,
+            description="bump the attribute by one",
+        )
+        builder.value.register_value_modifier("an-undescribed-value", modifier=self.bump)
+        builder.value.register_attribute_modifier(
+            "an-undescribed-attribute", modifier=self.bump
+        )
+
+    def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
+        return value + 1
+
+
+class TestRegistrationDescriptions:
+    """Tests for the optional description accepted when registering a value."""
+
+    @staticmethod
+    def _simulation() -> InteractiveContext:
+        return InteractiveContext(components=[DescribedProducer(), DescribedModifier()])
+
+    def test_every_registration_entry_point_stores_its_description(self) -> None:
+        """All five registration functions accept a description and keep it."""
+        sim = self._simulation()
+
+        assert sim.get_value("a-value").description == "a value that means something"
+        assert (
+            sim.get_attribute("an-attribute").description
+            == "an attribute that means something"
+        )
+        assert sim.get_attribute("a-rate").description == "a rate that means something"
+        assert sim.get_value("a-value").mutators[0].description == "bump the value by one"
+        assert (
+            sim.get_attribute("an-attribute").mutators[0].description
+            == "bump the attribute by one"
+        )
+
+    def test_omitting_the_description_leaves_it_unset(self) -> None:
+        """Every entry point defaults to None rather than a derived string."""
+        sim = self._simulation()
+        value = sim.get_value("an-undescribed-value")
+        attribute = sim.get_attribute("an-undescribed-attribute")
+        rate = sim.get_attribute("an-undescribed-rate")
+
+        assert value.description is None
+        assert attribute.description is None
+        assert rate.description is None
+        assert value.mutators[0].description is None
+        assert attribute.mutators[0].description is None
+
+    def test_str_labels_the_pipeline_description_and_indents_the_modifier_one(
+        self,
+    ) -> None:
+        """Pin both description positions: a labelled row, and a modifier sub-line."""
+        text = str(self._simulation().get_value("a-value"))
+
+        assert (
+            text
+            == textwrap.dedent(
+                """
+            a-value  [value pipeline]
+            registered by   described_producer
+            description     a value that means something
+
+            source          DescribedProducer.some_source (callable)
+            combiner        replace_combiner
+            modifiers       1 (order not guaranteed)
+                              - DescribedModifier.bump
+                                 from described_modifier
+                                 bump the value by one
+            post-processors none
+            """
+            ).strip()
+        )
+
+    def test_str_of_an_undescribed_pipeline_is_unchanged(self) -> None:
+        """No description anywhere means no extra row and no extra sub-line."""
+        text = str(self._simulation().get_value("an-undescribed-value"))
+
+        assert (
+            text
+            == textwrap.dedent(
+                """
+            an-undescribed-value  [value pipeline]
+            registered by   described_producer
+
+            source          DescribedProducer.some_source (callable)
+            combiner        replace_combiner
+            modifiers       1 (order not guaranteed)
+                              - DescribedModifier.bump
+                                 from described_modifier
+            post-processors none
+            """
+            ).strip()
+        )
+
+    def test_modifier_str_appends_its_description(self) -> None:
+        """A modifier reached directly still reports what it does."""
+        sim = self._simulation()
+
+        described = sim.get_value("a-value").mutators[0]
+        undescribed = sim.get_value("an-undescribed-value").mutators[0]
+
+        assert (
+            str(described)
+            == "DescribedModifier.bump from described_modifier\nbump the value by one"
+        )
+        assert str(undescribed) == "DescribedModifier.bump from described_modifier"
 
 
 class TestNamedCallable:

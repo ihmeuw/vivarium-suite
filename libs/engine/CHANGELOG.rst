@@ -1,3 +1,9 @@
+**5.11.0 - 09/19/26**
+
+- Accept an optional ``description`` when registering a value, rate, or attribute
+  producer or modifier and assign it as ``Pipeline.description`` and ``ValueModifier.description``
+- Add the descriptions to the pipeline and modifier ``repr()`` and ``str()`` outputs
+
 **5.10.0 - 09/17/26**
 
 - Add ``InteractiveContext.get_attribute()`` to retrieve an attribute pipeline by name

@@ -54,6 +54,7 @@ class ValuesInterface(Interface):
         required_resources: Sequence[str | Resource] = (),
         preferred_combiner: ValueCombiner = replace_combiner,
         preferred_post_processor: PostProcessor | Sequence[PostProcessor] = (),
+        description: str | None = None,
     ) -> Pipeline:
         """Registers a ``Pipeline`` as the producer of a named value.
 
@@ -79,17 +80,20 @@ class ValuesInterface(Interface):
             ``vivarium.engine.framework.values``. Client code may define additional
             strategies as necessary. If a sequence of post processors is provided,
             they will be applied in the order they are provided.
+        description
+            An optional description of the value this pipeline represents.
 
         Returns
         -------
             The ``Pipeline`` that is registered as the producer of the named value.
         """
         return self._manager.register_value_producer(
-            value_name,
-            source,
-            required_resources,
-            preferred_combiner,
-            preferred_post_processor,
+            value_name=value_name,
+            source=source,
+            required_resources=required_resources,
+            preferred_combiner=preferred_combiner,
+            preferred_post_processor=preferred_post_processor,
+            description=description,
         )
 
     def register_attribute_producer(
@@ -101,6 +105,7 @@ class ValuesInterface(Interface):
         preferred_post_processor: AttributePostProcessor
         | Sequence[AttributePostProcessor] = (),
         source_is_private_column: bool = False,
+        description: str | None = None,
     ) -> None:
         """Registers an ``AttributePipeline`` as the producer of a named attribute.
 
@@ -132,14 +137,17 @@ class ValuesInterface(Interface):
         source_is_private_column
             Whether or not the source is the name of a private column created by
             this component.
+        description
+            An optional description of the value this pipeline represents.
         """
         self._manager.register_attribute_producer(
-            value_name,
-            source,
-            required_resources,
-            preferred_combiner,
-            preferred_post_processor,
-            source_is_private_column,
+            value_name=value_name,
+            source=source,
+            required_resources=required_resources,
+            preferred_combiner=preferred_combiner,
+            preferred_post_processor=preferred_post_processor,
+            source_is_private_column=source_is_private_column,
+            description=description,
         )
 
     def register_rate_producer(
@@ -150,6 +158,7 @@ class ValuesInterface(Interface):
         preferred_combiner: ValueCombiner = replace_combiner,
         preferred_post_processor: AttributePostProcessor
         | Sequence[AttributePostProcessor] = (),
+        description: str | None = None,
     ) -> None:
         """Registers an ``AttributePipeline`` as the producer of a named rate.
 
@@ -183,6 +192,8 @@ class ValuesInterface(Interface):
             importable from ``vivarium.engine.framework.values``. Client code may define additional
             strategies as necessary. If a sequence of post processors is provided,
             they will be applied in the order they are provided.
+        description
+            An optional description of the rate this pipeline represents.
         """
         preferred_post_processor_list = (
             preferred_post_processor
@@ -190,11 +201,12 @@ class ValuesInterface(Interface):
             else [preferred_post_processor]
         )
         self.register_attribute_producer(
-            rate_name,
-            source,
-            required_resources,
+            value_name=rate_name,
+            source=source,
+            required_resources=required_resources,
             preferred_combiner=preferred_combiner,
             preferred_post_processor=[rescale_post_processor, *preferred_post_processor_list],
+            description=description,
         )
 
     def register_value_modifier(
@@ -202,6 +214,7 @@ class ValuesInterface(Interface):
         value_name: str,
         modifier: Callable[..., Any],
         required_resources: Sequence[str | Resource] = (),
+        description: str | None = None,
     ) -> None:
         """Marks a ``Callable`` as the modifier of a named value.
 
@@ -220,14 +233,22 @@ class ValuesInterface(Interface):
         required_resources
             A list of resources that the producer requires. A string represents
             a population attribute.
+        description
+            An optional description of what this modifier does to the value.
         """
-        self._manager.register_value_modifier(value_name, modifier, required_resources)
+        self._manager.register_value_modifier(
+            value_name=value_name,
+            modifier=modifier,
+            required_resources=required_resources,
+            description=description,
+        )
 
     def register_attribute_modifier(
         self,
         value_name: str,
         modifier: Callable[..., Any] | str,
         required_resources: Sequence[str | Resource] = (),
+        description: str | None = None,
     ) -> None:
         """Marks a ``Callable`` as the modifier of a named attribute.
 
@@ -246,11 +267,14 @@ class ValuesInterface(Interface):
         required_resources
             A list of resources that the producer requires. A string represents
             a population attribute.
+        description
+            An optional description of what this modifier does to the value.
         """
         self._manager.register_attribute_modifier(
-            value_name,
-            modifier,
+            value_name=value_name,
+            modifier=modifier,
             required_resources=required_resources,
+            description=description,
         )
 
     def get_value(self, name: str) -> Pipeline:
