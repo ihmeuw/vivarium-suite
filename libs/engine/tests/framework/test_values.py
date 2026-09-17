@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture, MockFixture
 
+import vivarium.engine.framework.values.pipeline as pipeline_module
 from tests.helpers import ColumnCreator
 from vivarium.engine import Component
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -1632,6 +1633,34 @@ class TestStringRepresentations:
         assert len(numbered) == 2
         assert numbered[0].endswith("Producer.double")
         assert numbered[1].endswith("Producer.add_ten")
+
+    def test_no_display_class_shadows_its_own_hook(self) -> None:
+        """Every class in the display hierarchy defines both hooks or neither.
+
+        The ``__init_subclass__`` guard cannot see this: it never fires for the
+        class that *defines* it, so a base losing its own ``_repr_pretty_``
+        passes the guard silently. Scoped to the classes ``pipeline.py`` defines,
+        because ``__subclasses__()`` also returns throwaway classes built by
+        other tests.
+        """
+        module = vars(pipeline_module)
+        defined_here = [
+            value
+            for value in module.values()
+            if isinstance(value, type) and value.__module__ == pipeline_module.__name__
+        ]
+        assert defined_here, "expected to find the display classes"
+
+        shadowing = [
+            cls.__name__
+            for cls in defined_here
+            if "__repr__" in vars(cls) and "_repr_pretty_" not in vars(cls)
+        ]
+
+        assert not shadowing, (
+            f"{shadowing} define __repr__ without _repr_pretty_, so IPython will "
+            "use the repr and the description will not render"
+        )
 
 
 class TestNamedCallable:
