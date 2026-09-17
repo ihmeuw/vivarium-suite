@@ -134,7 +134,7 @@ def test_configure_modifier_calls_methods_correctly(mocker: MockerFixture) -> No
 
     # Assert pipeline.get_value_modifier was called with correct arguments
     test_pipeline.get_value_modifier.assert_called_once_with(
-        test_modifier, test_component, test_required_resources, None
+        test_modifier, test_component, test_required_resources, description=None
     )
 
     # Assert _add_resources was called with correct arguments

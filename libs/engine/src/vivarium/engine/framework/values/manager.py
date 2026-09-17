@@ -472,7 +472,7 @@ class ValuesManager(Manager):
             )
             required_resources = [modifier]
         value_modifier = pipeline.get_value_modifier(
-            modifier, component, required_resources, description
+            modifier, component, required_resources, description=description
         )
         self.logger.debug(f"Registering {value_modifier.name} as modifier to {pipeline.name}")
         self._add_resource(value_modifier)

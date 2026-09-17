@@ -547,7 +547,7 @@ class Pipeline(Resource):
             An optional description of what the modifier does to the value.
         """
         value_modifier = ValueModifier(
-            self, modifier, component, required_resources, description
+            self, modifier, component, required_resources, description=description
         )
         self.mutators.append(value_modifier)
         self._required_resources = [*self._required_resources, value_modifier]
