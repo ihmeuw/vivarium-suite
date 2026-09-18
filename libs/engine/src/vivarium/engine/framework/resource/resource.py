@@ -96,18 +96,16 @@ class Resource:
     @staticmethod
     def get_callable_name(callable_: Callable[..., Any]) -> str:
         """Get reproducible names based on the callable type."""
-        if hasattr(callable_, "name"):
-            # This is Pipeline or lookup table or something similar
-            modifier_name: str = callable_.name
-        elif hasattr(callable_, "__name__"):
+        if isinstance(callable_, Resource):
+            return callable_.name
+        if hasattr(callable_, "__name__"):
             # This is a method or a function
-            modifier_name = callable_.__name__
-        elif hasattr(callable_, "__call__"):
+            name: str = callable_.__name__
+            return name
+        if callable(callable_):
             # Some anonymous callable
-            modifier_name = f"{callable_.__class__.__name__}.__call__"
-        else:  # I don't know what this is.
-            raise ValueError(f"Unknown callable type: {type(callable_)}")
-        return modifier_name
+            return f"{type(callable_).__qualname__}.__call__"
+        raise ValueError(f"Unknown callable type: {type(callable_)}")
 
     @classmethod
     def get_resource_id(cls, name: str) -> ResourceId:

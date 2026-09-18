@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import inspect
 import re
+import textwrap
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -9,6 +11,7 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture, MockFixture
 
+import vivarium.engine.framework.values.pipeline as pipeline_module
 from tests.helpers import ColumnCreator
 from vivarium.engine import Component
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -22,13 +25,19 @@ from vivarium.engine.framework.values import (
     addition_combiner,
     list_combiner,
     multiplication_combiner,
+    replace_combiner,
     rescale_post_processor,
     union_post_processor,
 )
 from vivarium.engine.framework.values.interface import ValuesInterface
 from vivarium.engine.framework.values.pipeline import (
     AttributesValueSource,
+    MissingValueSource,
+    NamedCallable,
+    NamedCombiner,
+    NamedPostProcessor,
     PrivateColumnValueSource,
+    ValueModifier,
     ValueSource,
 )
 from vivarium.engine.interface import InteractiveContext
@@ -1190,3 +1199,547 @@ class TestConfigurePipeline:
                 source=source,
                 source_is_private_column=True,
             )
+
+
+class UnusablePopulationView:
+    """A population view that fails loudly if anything touches it.
+
+    Rendering a value source must not read the view, so a test passes this in
+    place of a real one: an attribute access means the invariant has broken.
+    """
+
+    def __getattr__(self, name: str) -> object:
+        raise AssertionError(
+            f"rendering must not touch the population view, but read .{name}"
+        )
+
+
+class TestStringRepresentations:
+    """Tests for the pipeline description and the short reprs around it.
+
+    ``__str__`` carries the human-readable description and ``__repr__`` stays
+    short enough for tracebacks and collections; ``_repr_pretty_`` is what makes
+    a bare object in an IPython cell show the description rather than the repr.
+    """
+
+    def test_str_reports_every_registered_stage(self) -> None:
+        """The description names source, combiner, modifiers, and post-processors."""
+
+        class Producer(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_value_producer(
+                    "some-value",
+                    source=self.some_source,
+                    preferred_combiner=addition_combiner,
+                    preferred_post_processor=self.some_post_processor,
+                )
+
+            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+            def some_post_processor(
+                self, value: pd.Series[float], manager: ValuesManager
+            ) -> pd.Series[float]:
+                # A value pipeline's post-processor takes (value, manager); an
+                # attribute pipeline's takes (index, value, manager).
+                return value * 2
+
+        class Modifier(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_value_modifier("some-value", modifier=self.bump)
+
+            def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
+                return value + 1
+
+        sim = InteractiveContext(components=[Producer(), Modifier()])
+        text = str(sim.get_value("some-value"))
+
+        assert "some-value  [value pipeline]" in text
+        assert "registered by   producer" in text
+        assert "Producer.some_source (callable)" in text
+        assert "addition_combiner" in text
+        assert "modifiers       1 (order not guaranteed)" in text
+        assert "Modifier.bump" in text
+        assert "from modifier" in text
+        assert "some_post_processor" in text
+
+    def test_str_of_unconfigured_pipeline_renders_the_whole_block(self) -> None:
+        """Pin the whole description for a pipeline with no source or component."""
+        text = str(Pipeline("nascent"))
+
+        assert (
+            text
+            == textwrap.dedent(
+                """
+            nascent  [value pipeline]
+            registered by   <unset>
+
+            source          <no source>
+            combiner        <none>
+            modifiers       none
+            post-processors none
+            """
+            ).strip()
+        )
+
+    def test_attribute_pipeline_repr_is_labelled_as_such(self) -> None:
+        """The header distinguishes an attribute pipeline from a value pipeline."""
+        assert "[attribute pipeline]" in str(AttributePipeline("nascent"))
+        assert "[value pipeline]" in str(Pipeline("nascent"))
+
+    @pytest.mark.parametrize(
+        "kind, expected",
+        [
+            ("one_attribute", "test_column_1 (attributes)"),
+            (
+                "several_attributes",
+                "['test_column_1', 'test_column_2'] (attributes)",
+            ),
+            ("lambda", "<lambda> (callable)"),
+            ("bound_method", "SourceProducer.some_source (callable)"),
+            ("lookup_table", "source_producer.some_table (lookup_table)"),
+            ("private_column", "owned_column (private_column)"),
+        ],
+    )
+    def test_str_renders_source_kinds(self, kind: str, expected: str) -> None:
+        """Every kind of value source is rendered with its kind.
+
+        Covers every source shape reachable through registration, so a new one
+        cannot be added without a rendering.
+        """
+
+        class SourceProducer(Component):
+            @property
+            def columns_created(self) -> list[str]:
+                return ["owned_column"] if kind == "private_column" else []
+
+            def setup(self, builder: Builder) -> None:
+                if kind == "private_column":
+                    builder.population.register_initializer(
+                        initializer=self.initialize_owned_column,
+                        columns=["owned_column"],
+                    )
+                    return
+                builder.value.register_attribute_producer(
+                    "some-attribute", source=self._source_for(builder)
+                )
+
+            def _source_for(self, builder: Builder) -> Any:
+                if kind == "one_attribute":
+                    return ["test_column_1"]
+                if kind == "several_attributes":
+                    return ["test_column_1", "test_column_2"]
+                if kind == "lambda":
+                    return lambda index: pd.Series(1.0, index=index)
+                if kind == "bound_method":
+                    return self.some_source
+                if kind == "lookup_table":
+                    return builder.lookup.build_table(
+                        5.0, "some_table", value_columns="value"
+                    )
+                raise AssertionError(f"unhandled source kind {kind!r}")
+
+            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+            def initialize_owned_column(self, pop_data: SimulantData) -> None:
+                self.population_view.initialize(
+                    pd.DataFrame({"owned_column": 1.0}, index=pop_data.index)
+                )
+
+        sim = InteractiveContext(components=[ColumnCreator(), SourceProducer()])
+        attribute = "owned_column" if kind == "private_column" else "some-attribute"
+
+        assert expected in str(sim.get_attribute(attribute))
+
+    def test_every_value_source_subclass_has_a_rendering(self) -> None:
+        """Guard against a new source kind slipping in without a rendering.
+
+        Every subclass is rendered by ``test_str_describes_and_repr_identifies``,
+        and the kinds reachable through real registration are additionally covered
+        end to end by ``test_str_renders_source_kinds``. A new subclass needs a
+        case in the first, and in the second if it can be registered.
+        """
+        subclasses = {cls.__name__ for cls in ValueSource.__subclasses__()}
+
+        assert subclasses == {
+            "MissingValueSource",
+            "PrivateColumnValueSource",
+            "AttributesValueSource",
+        }
+
+    def test_value_modifier_str_and_repr_serve_different_readers(self) -> None:
+        """A modifier says what it is and who registered it, rather than its address."""
+
+        class Producer(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_value_producer("some-value", source=self.some_source)
+
+            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+        class Modifier(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_value_modifier("some-value", modifier=self.bump)
+
+            def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
+                return value + 1
+
+        sim = InteractiveContext(components=[Producer(), Modifier()])
+        (mutator,) = sim.get_value("some-value").mutators
+
+        # The qualname of a class defined inside a test carries a <locals> chain;
+        # a module-level component renders as e.g. "DiseaseModel.delete_csmr".
+        assert str(mutator).endswith("Modifier.bump from modifier")
+        # The name is pinned to a literal rather than derived from mutator.name,
+        # so a regression in how the name is built cannot pass unnoticed.
+        assert mutator.name.endswith("some-value.1.modifier.bump")
+        assert repr(mutator) == f"<ValueModifier {mutator.name!r}>"
+
+        # Test that the IPython display hook is present and returns the same as str().
+        pytest.importorskip("IPython")
+        from IPython.core.formatters import PlainTextFormatter
+
+        assert PlainTextFormatter()(mutator) == str(mutator)
+
+    def test_repr_looks_like_a_constructor_call(self) -> None:
+        """The repr follows the convention, leaving detail to __str__."""
+
+        class Producer(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_value_producer("some-value", source=self.some_source)
+
+            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+        sim = InteractiveContext(components=[Producer()])
+
+        assert repr(sim.get_value("some-value")) == "Pipeline('some-value')"
+        assert repr(AttributePipeline("nascent")) == "AttributePipeline('nascent')"
+
+    def test_callable_class_post_processor_is_named_by_its_class(self) -> None:
+        """A post-processor with no __name__ is named, not shown as an address.
+
+        ``PostProcessor`` is a Protocol, so a post-processor may be a callable class
+        instance rather than a function.
+        """
+
+        class ScaleBy:
+            def __call__(
+                self, index: pd.Index[int], value: pd.Series[float], manager: ValuesManager
+            ) -> pd.Series[float]:
+                return value * 2
+
+        class Producer(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_attribute_producer(
+                    "some-attribute",
+                    source=self.some_source,
+                    preferred_post_processor=ScaleBy(),
+                )
+
+            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+        sim = InteractiveContext(components=[Producer()])
+        pipeline = sim.get_attribute("some-attribute")
+
+        # A class defined inside a test carries a <locals> qualname; one defined at
+        # module scope, as a real post-processor would be, renders as "ScaleBy".
+        assert str(pipeline).splitlines()[-1].strip().endswith("ScaleBy")
+        assert "0x" not in str(pipeline)
+        assert "0x" not in repr(pipeline)
+
+    @pytest.mark.parametrize(
+        "build_source, expected_str, expected_repr",
+        [
+            (
+                lambda host, view: ValueSource(host, Pipeline("upstream")),
+                "upstream (value)",
+                "<ValueSource 'upstream'>",
+            ),
+            (
+                lambda host, view: ValueSource(host, AttributePipeline("upstream")),
+                "upstream (attribute)",
+                "<ValueSource 'upstream'>",
+            ),
+            (
+                lambda host, view: MissingValueSource(host),
+                "<no source>",
+                "<MissingValueSource>",
+            ),
+            (
+                lambda host, view: PrivateColumnValueSource(host, "owned", view),
+                "owned (private_column)",
+                "<PrivateColumnValueSource 'owned'>",
+            ),
+            (
+                lambda host, view: AttributesValueSource(host, ["solo"], view),
+                "solo (attributes)",
+                "<AttributesValueSource 'solo'>",
+            ),
+            (
+                lambda host, view: AttributesValueSource(host, ["a", "b"], view),
+                "['a', 'b'] (attributes)",
+                "<AttributesValueSource ['a', 'b']>",
+            ),
+        ],
+        ids=[
+            "value_pipeline",
+            "attribute_pipeline",
+            "missing",
+            "private_column",
+            "one_attribute",
+            "several_attributes",
+        ],
+    )
+    def test_str_describes_and_repr_identifies(
+        self,
+        build_source: Callable[[Pipeline, Any], ValueSource],
+        expected_str: str,
+        expected_repr: str,
+    ) -> None:
+        """A resource source names its own kind; the repr identifies rather than rebuilds.
+
+        ``str`` reads as prose for the description block and takes its label from
+        the source's ``RESOURCE_TYPE``. ``repr`` stays short, because a source
+        cannot be reconstructed from one - its constructor needs the pipeline and
+        a population view. The view is passed as an ``UnusablePopulationView`` so
+        that rendering cannot come to depend on it unnoticed.
+        """
+        source = build_source(Pipeline("host"), UnusablePopulationView())
+
+        assert str(source) == expected_str
+        assert repr(source) == expected_repr
+
+    @pytest.mark.parametrize(
+        "base",
+        [ValueSource, Pipeline, ValueModifier, NamedCallable],
+        ids=["value_source", "pipeline", "value_modifier", "named_callable"],
+    )
+    def test_subclass_defining_only_repr_is_rejected(self, base: type) -> None:
+        """A subclass cannot silently disable the display hook it inherits.
+
+        IPython walks the mro and uses whichever of ``_repr_pretty_`` or
+        ``__repr__`` it finds first in a class's own ``__dict__``, so defining
+        only ``__repr__`` would degrade the notebook display with no error.
+        """
+        with pytest.raises(TypeError, match="shadows the inherited IPython display hook"):
+            type("OnlyRepr", (base,), {"__repr__": lambda self: "x"})
+
+    @pytest.mark.parametrize(
+        "base",
+        [ValueSource, Pipeline, ValueModifier, NamedCallable],
+        ids=["value_source", "pipeline", "value_modifier", "named_callable"],
+    )
+    def test_subclass_defining_both_or_neither_is_allowed(self, base: type) -> None:
+        """The guard forbids only the shadowing combination."""
+        both = type(
+            "Both",
+            (base,),
+            {"__repr__": lambda self: "x", "_repr_pretty_": lambda self, p, c: p.text("x")},
+        )
+        neither = type("Neither", (base,), {"__str__": lambda self: "x"})
+
+        # issubclass() would be tautological here; exercise the classes instead.
+        assert "_repr_pretty_" in vars(both)
+        assert "__repr__" not in vars(neither)
+
+    @pytest.mark.parametrize(
+        "build",
+        [
+            lambda: Pipeline("nascent"),
+            lambda: AttributePipeline("nascent"),
+            lambda: ValueSource(Pipeline("host"), Pipeline("upstream")),
+            lambda: MissingValueSource(Pipeline("host")),
+            lambda: NamedCombiner(replace_combiner),
+            lambda: NamedPostProcessor(rescale_post_processor),
+        ],
+        ids=[
+            "pipeline",
+            "attribute_pipeline",
+            "value_source",
+            "missing_source",
+            "combiner",
+            "post_processor",
+        ],
+    )
+    def test_ipython_display_matches_str(self, build: Callable[[], object]) -> None:
+        """A bare object in a notebook cell shows its description, not its repr."""
+        pytest.importorskip("IPython")
+        from IPython.core.formatters import PlainTextFormatter
+
+        obj = build()
+
+        assert PlainTextFormatter()(obj) == str(obj)
+
+    def test_str_numbers_several_post_processors_and_bullets_several_modifiers(
+        self,
+    ) -> None:
+        """Two of each, asserted as the emitted lines rather than as substrings.
+
+        Modifiers are bulleted because their order is not guaranteed;
+        post-processors are numbered because one registration fixes theirs.
+        """
+
+        class Producer(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_attribute_producer(
+                    "some-attribute",
+                    source=self.some_source,
+                    preferred_post_processor=[self.double, self.add_ten],
+                )
+
+            def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+            def double(
+                self, index: pd.Index[int], value: pd.Series[float], manager: ValuesManager
+            ) -> pd.Series[float]:
+                return value * 2
+
+            def add_ten(
+                self, index: pd.Index[int], value: pd.Series[float], manager: ValuesManager
+            ) -> pd.Series[float]:
+                return value + 10
+
+        class FirstModifier(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_attribute_modifier(
+                    "some-attribute", modifier=self.bump
+                )
+
+            def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
+                return value + 1
+
+        class SecondModifier(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_attribute_modifier(
+                    "some-attribute", modifier=self.halve
+                )
+
+            def halve(
+                self, index: pd.Index[int], value: pd.Series[float]
+            ) -> pd.Series[float]:
+                return value / 2
+
+        sim = InteractiveContext(components=[Producer(), FirstModifier(), SecondModifier()])
+        lines = str(sim.get_attribute("some-attribute")).splitlines()
+
+        assert "modifiers       2 (order not guaranteed)" in lines
+        assert sum(line.strip().startswith("- ") for line in lines) == 2
+        assert "post-processors 2" in lines
+        numbered = [line.strip() for line in lines if line.strip().startswith(("1.", "2."))]
+        assert len(numbered) == 2
+        assert numbered[0].endswith("Producer.double")
+        assert numbered[1].endswith("Producer.add_ten")
+
+    def test_no_display_class_shadows_its_own_hook(self) -> None:
+        """Every class in the display hierarchy defines both hooks or neither.
+
+        The ``__init_subclass__`` guard cannot see this: it never fires for the
+        class that *defines* it, so a base losing its own ``_repr_pretty_``
+        passes the guard silently. Scoped to the classes ``pipeline.py`` defines,
+        because ``__subclasses__()`` also returns throwaway classes built by
+        other tests.
+        """
+        module = vars(pipeline_module)
+        defined_here = [
+            value
+            for value in module.values()
+            if isinstance(value, type) and value.__module__ == pipeline_module.__name__
+        ]
+        assert defined_here, "expected to find the display classes"
+
+        shadowing = [
+            cls.__name__
+            for cls in defined_here
+            if "__repr__" in vars(cls) and "_repr_pretty_" not in vars(cls)
+        ]
+
+        assert not shadowing, (
+            f"{shadowing} define __repr__ without _repr_pretty_, so IPython will "
+            "use the repr and the description will not render"
+        )
+
+
+class TestNamedCallable:
+    """Tests for the display wrappers around a combiner and a post-processor."""
+
+    def test_call_and_equality_forward_to_the_wrapped_callable(self) -> None:
+        """Wrapping must not change how a callable behaves or compares."""
+
+        def double(value: int) -> int:
+            return value * 2
+
+        wrapped = NamedCombiner(double)
+
+        assert wrapped is not double
+        assert wrapped == double
+        assert hash(wrapped) == hash(double)
+        assert wrapped(21) == 42
+
+    def test_str_is_the_bare_name(self) -> None:
+        """The description block wants a name, not a signature."""
+        assert str(NamedCombiner(replace_combiner)) == "replace_combiner"
+
+    @pytest.mark.parametrize(
+        "wrapper",
+        [NamedCallable, NamedCombiner, NamedPostProcessor],
+        ids=["base", "combiner", "post_processor"],
+    )
+    def test_wrapping_a_wrapper_unwraps_instead_of_nesting(
+        self, wrapper: type[NamedCallable]
+    ) -> None:
+        """A re-registered callable keeps naming the original, not the wrapper.
+
+        Both entry points are reachable and type-check: ``post_processor`` is a
+        ``list[PostProcessor]`` and ``combiner`` is a ``ValueCombiner``, so a
+        configured pipeline's own can be passed to another registration. The
+        unwrap lives on the base, and every class is covered so that giving one
+        of them its own ``__init__`` cannot silently drop it.
+        """
+        once = wrapper(rescale_post_processor)
+        twice = wrapper(once)
+
+        assert str(twice) == "rescale_post_processor"
+        assert twice == rescale_post_processor
+
+    def test_the_two_wrapper_classes_name_their_role(self) -> None:
+        """The subclasses exist only so a repr says which slot it came from."""
+        combiner = NamedCombiner(replace_combiner)
+        post_processor = NamedPostProcessor(rescale_post_processor)
+
+        assert repr(combiner) == "<NamedCombiner 'replace_combiner'>"
+        assert repr(post_processor) == "<NamedPostProcessor 'rescale_post_processor'>"
+        # The description drops the role; only the repr carries it.
+        assert str(combiner) == "replace_combiner"
+        assert str(post_processor) == "rescale_post_processor"
+
+    def test_inspect_sees_through_to_the_wrapped_callable(self) -> None:
+        """Wrapping must not cost a caller the signature or the docstring."""
+        wrapped = NamedPostProcessor(rescale_post_processor)
+
+        assert inspect.unwrap(wrapped) is rescale_post_processor
+        assert list(inspect.signature(wrapped).parameters) == [
+            "index",
+            "value",
+            "manager",
+        ]
+        assert inspect.getdoc(wrapped) == inspect.getdoc(rescale_post_processor)
+
+    def test_an_undocumented_callable_keeps_the_wrapper_docstring(self) -> None:
+        """Forwarding a docstring must not replace a real one with None."""
+
+        def undocumented(value: int, manager: ValuesManager) -> int:
+            return value
+
+        assert undocumented.__doc__ is None
+        assert NamedPostProcessor(undocumented).__doc__ == NamedPostProcessor.__doc__
+
+    def test_display_is_unchanged_by_the_introspection_forwarding(self) -> None:
+        """str and repr still name the callable, with no signature bolted on."""
+        wrapped = NamedCombiner(replace_combiner)
+
+        assert str(wrapped) == "replace_combiner"
+        assert repr(wrapped) == "<NamedCombiner 'replace_combiner'>"
