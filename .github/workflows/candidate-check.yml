@@ -24,6 +24,14 @@ on:
     # hour later (05:00) while Pacific is on PDT.
     - cron: "0 12 * * 1"
   workflow_dispatch:
+  # TEMPORARY - REMOVE BEFORE MERGING (MIC-7441).
+  # schedule and workflow_dispatch are read only from the default branch, so this
+  # workflow cannot run until it lands on main. This trigger proves the job wiring
+  # on the PR. Scoped to this file so iterating on the rest of the branch does not
+  # re-run the fan-out.
+  pull_request:
+    paths:
+      - '.github/workflows/candidate-check.yml'
 
 # Only one run per ref at a time, so a second dispatch cancels the first
 concurrency:
