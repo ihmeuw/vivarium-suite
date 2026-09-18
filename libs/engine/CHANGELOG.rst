@@ -9,7 +9,7 @@
 - Change ``Pipeline`` ``repr()`` from ``_Pipeline(name)`` to ``Pipeline('name')``
 - Wrap a pipeline's combiner and post-processors for display
 
-**5.9.0 - 09/04/26**
+**5.9.0 - 09/18/26**
 
 - Add an ``index`` parameter to ``PopulationView.update()`` to scope an update to a
   subset of simulants
