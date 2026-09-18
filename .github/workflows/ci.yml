@@ -34,6 +34,12 @@ jobs:
         # own runtime dependency has to be installed by hand.
         run: pip install packaging
 
+      - name: Validate candidate python declarations
+        # Catches a promotion that added a version to python_versions.json but left it
+        # in [tool.vivarium.python-support] candidates. Candidates themselves run only
+        # in the Candidate Check workflow; this is the one place they touch a PR.
+        run: PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph validate-candidates
+
       - name: Validate dependency graph is acyclic
         # Full-graph pre-merge guard: fails the PR if libs/*/pyproject runtime deps
         # form a cycle (the release workflow orders the graph too, but only post-merge).
