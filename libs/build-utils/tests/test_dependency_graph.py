@@ -23,6 +23,7 @@ from vivarium.build_utils.dependency_graph import (
     build_python_matrix,
     classify_changed_libs,
     find_candidate_conflicts,
+    format_candidate_conflicts,
     get_editable_upstreams,
     get_release_matrix,
     get_transitive_downstreams,
@@ -1702,6 +1703,20 @@ class TestBuildCandidateMatrix:
         ):
             build_candidate_matrix(libs)
 
+    def test_raises_even_when_some_candidates_are_clean(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """One stale candidate fails the whole matrix rather than emitting the rest."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.11"], "candidates": ["3.11", "3.14"]}}
+            )
+        )
+        with pytest.raises(
+            CandidateVersionConflictError, match="both a supported and a candidate"
+        ):
+            build_candidate_matrix(libs)
+
     def test_does_not_need_python_versions_json(self, make_monorepo: MonorepoFactory) -> None:
         """A lib missing the file is still checked: the candidate is the version under test."""
         libs = load_libs(
@@ -1748,6 +1763,19 @@ class TestFindCandidateConflicts:
             )
         )
         assert find_candidate_conflicts(libs) == {"a": ["3.11"], "c": ["3.12"]}
+
+    def test_message_lists_libs_alphabetically(self, make_monorepo: MonorepoFactory) -> None:
+        """A bulk promotion conflicts in many libs at once; the order must be stable."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "z": {"python_versions": ["3.14"], "candidates": ["3.14"]},
+                    "a": {"python_versions": ["3.14"], "candidates": ["3.14"]},
+                }
+            )
+        )
+        message = format_candidate_conflicts(find_candidate_conflicts(libs))
+        assert message.index("libs/a") < message.index("libs/z")
 
 
 class TestCLIBuildCandidateMatrix:
