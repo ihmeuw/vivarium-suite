@@ -19,9 +19,9 @@ name: Candidate Check
 
 on:
   schedule:
-    # Mondays 05:00 PST, so a week's results are waiting at the start of the week.
+    # Mondays 04:00 PST, so a week's results are waiting at the start of the week.
     # GitHub cron is UTC only and does not follow daylight saving, so this lands an
-    # hour later (06:00) while Pacific is on PDT.
+    # hour later (05:00) while Pacific is on PDT.
     - cron: "0 12 * * 1"
   workflow_dispatch:
 
@@ -107,6 +107,15 @@ jobs:
           if [ "$CANDIDATE_RESULT" = "success" ]; then
             echo "Every declared candidate passed."
             exit 0
+          fi
+          # A cancellation says nothing about whether a candidate is ready, but it must
+          # not pass either: this job's conclusion is what someone reads before deciding
+          # to promote, and a green check is indistinguishable from "everything passed".
+          # Red-but-accurate costs a click; a false green could green-light a promotion
+          # on no evidence.
+          if [ "$CANDIDATE_RESULT" = "cancelled" ]; then
+            echo "::error::Run was cancelled before the candidates finished, so there is no verdict. Re-run to get one."
+            exit 1
           fi
           echo "::error::At least one candidate is failing (candidate job: ${CANDIDATE_RESULT}). This does not block any merge; see the matrix for which library and version."
           exit 1

@@ -224,7 +224,7 @@ def _run_check_acyclic(args: argparse.Namespace) -> int:
 def _run_build_candidate_matrix(args: argparse.Namespace) -> int:
     """Handle the ``build-candidate-matrix`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
-    libs = load_libs(libs_dir, extras=())
+    libs = load_libs(libs_dir)
     try:
         matrix = build_candidate_matrix(libs)
     except CandidateVersionConflictError as error:
@@ -237,7 +237,7 @@ def _run_build_candidate_matrix(args: argparse.Namespace) -> int:
 def _run_validate_candidates(args: argparse.Namespace) -> int:
     """Handle the ``validate-candidates`` subcommand."""
     libs_dir = _discover_libs_dir(args.libs_dir)
-    libs = load_libs(libs_dir, extras=())
+    libs = load_libs(libs_dir)
     conflicts = find_candidate_conflicts(libs)
     if conflicts:
         print(f"::error::{format_candidate_conflicts(conflicts)}", file=sys.stderr)

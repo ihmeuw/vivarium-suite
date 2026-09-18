@@ -99,9 +99,12 @@ def build_candidate_matrix(libs: Mapping[str, Lib]) -> PythonMatrix:
 
 def format_candidate_conflicts(conflicts: Mapping[str, list[str]]) -> str:
     """Render :func:`find_candidate_conflicts` output as one error message."""
-    return "; ".join(
-        f"libs/{name} declares {', '.join(versions)} as both a supported and a "
-        "candidate Python version - a promoted candidate must be removed from "
-        "[tool.vivarium.python-support] candidates"
+    declarations = ", ".join(
+        f"libs/{name} declares {', '.join(versions)}"
         for name, versions in sorted(conflicts.items())
+    )
+    return (
+        f"{declarations} as both a supported and a candidate Python version; a "
+        "promoted candidate must be removed from [tool.vivarium.python-support] "
+        "candidates"
     )
