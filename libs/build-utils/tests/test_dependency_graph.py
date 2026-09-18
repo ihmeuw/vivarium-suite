@@ -12,14 +12,17 @@ from packaging.specifiers import SpecifierSet
 
 from vivarium.build_utils import dependency_graph
 from vivarium.build_utils.dependency_graph import (
+    CandidateVersionConflictError,
     DependencyConflictError,
     DependencyCycleError,
     InstallPlan,
     Lib,
     MissingPythonVersionsError,
+    build_candidate_matrix,
     build_install_plan,
     build_python_matrix,
     classify_changed_libs,
+    find_candidate_conflicts,
     get_editable_upstreams,
     get_release_matrix,
     get_transitive_downstreams,
@@ -1628,6 +1631,170 @@ class TestCLICheckAcyclic:
         exit_code = main_with(["check-acyclic", "--libs-dir", str(libs_dir)])
         assert exit_code != 0
         captured = capsys.readouterr()
+        assert "Traceback" not in (captured.out + captured.err)
+
+
+class TestBuildCandidateMatrix:
+    """Tests for the candidate Python check matrix."""
+
+    def test_emits_one_entry_per_candidate(self, make_monorepo: MonorepoFactory) -> None:
+        """Each lib is paired with every candidate it declares."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {"python_versions": ["3.11"], "candidates": ["3.13", "3.14"]},
+                    "b": {"python_versions": ["3.11"], "candidates": ["3.14"]},
+                }
+            )
+        )
+        assert build_candidate_matrix(libs) == {
+            "include": [
+                {"library": "a", "python-version": "3.13"},
+                {"library": "a", "python-version": "3.14"},
+                {"library": "b", "python-version": "3.14"},
+            ]
+        }
+
+    def test_omits_libs_declaring_none(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib with no candidates contributes no jobs, rather than an empty one."""
+        libs = load_libs(
+            make_monorepo({"a": {"candidates": ["3.14"]}, "b": {}, "c": {"candidates": []}})
+        )
+        assert build_candidate_matrix(libs) == {
+            "include": [{"library": "a", "python-version": "3.14"}]
+        }
+
+    def test_is_empty_when_nothing_declared(self, make_monorepo: MonorepoFactory) -> None:
+        """With no declarations anywhere the weekly run has nothing to do."""
+        libs = load_libs(make_monorepo({"a": {}, "b": {"candidates": []}}))
+        assert build_candidate_matrix(libs) == {"include": []}
+
+    def test_candidates_are_emitted_in_numeric_order(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """Candidates sort numerically, so declared order and 3.9 vs 3.10 both hold."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.8"], "candidates": ["3.10", "3.9"]}})
+        )
+        versions = [
+            entry["python-version"] for entry in build_candidate_matrix(libs)["include"]
+        ]
+        assert versions == ["3.9", "3.10"]
+
+    def test_repeated_candidate_is_emitted_once(self, make_monorepo: MonorepoFactory) -> None:
+        """A duplicated declaration cannot fan out into two identical jobs."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.13"], "candidates": ["3.14", "3.14"]}}
+            )
+        )
+        assert build_candidate_matrix(libs) == {
+            "include": [{"library": "a", "python-version": "3.14"}]
+        }
+
+    def test_raises_on_a_promoted_candidate(self, make_monorepo: MonorepoFactory) -> None:
+        """Checking a version that already gates means a promotion was left half-done."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.11"]}})
+        )
+        with pytest.raises(
+            CandidateVersionConflictError, match="both a supported and a candidate"
+        ):
+            build_candidate_matrix(libs)
+
+    def test_does_not_need_python_versions_json(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib missing the file is still checked: the candidate is the version under test."""
+        libs = load_libs(
+            make_monorepo({"a": {"omit_python_versions": True, "candidates": ["3.14"]}})
+        )
+        assert build_candidate_matrix(libs) == {
+            "include": [{"library": "a", "python-version": "3.14"}]
+        }
+
+
+class TestFindCandidateConflicts:
+    """Tests for the candidate declaration guard."""
+
+    def test_clean_tree_yields_nothing(self, make_monorepo: MonorepoFactory) -> None:
+        """No conflict means an empty mapping, not a falsy sentinel."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.14"]}})
+        )
+        assert find_candidate_conflicts(libs) == {}
+
+    def test_reports_each_conflicting_version(self, make_monorepo: MonorepoFactory) -> None:
+        """Every overlapping version is named, ascending, so one pass fixes them all."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {
+                        "python_versions": ["3.11", "3.12", "3.13"],
+                        "candidates": ["3.13", "3.11"],
+                    }
+                }
+            )
+        )
+        assert find_candidate_conflicts(libs) == {"a": ["3.11", "3.13"]}
+
+    def test_reports_every_offending_lib(self, make_monorepo: MonorepoFactory) -> None:
+        """A sweep across libs reports all of them rather than stopping at the first."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {"python_versions": ["3.11"], "candidates": ["3.11"]},
+                    "b": {"python_versions": ["3.11"], "candidates": ["3.14"]},
+                    "c": {"python_versions": ["3.12"], "candidates": ["3.12"]},
+                }
+            )
+        )
+        assert find_candidate_conflicts(libs) == {"a": ["3.11"], "c": ["3.12"]}
+
+
+class TestCLIBuildCandidateMatrix:
+    """Tests for the ``build-candidate-matrix`` CLI subcommand."""
+
+    def test_prints_the_matrix(
+        self, make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`build-candidate-matrix` prints the check matrix as JSON on stdout."""
+        libs_dir = make_monorepo({"a": {"candidates": ["3.14"]}, "b": {}})
+        exit_code = main_with(["build-candidate-matrix", "--libs-dir", str(libs_dir)])
+        assert exit_code == 0
+        assert json.loads(capsys.readouterr().out) == {
+            "include": [{"library": "a", "python-version": "3.14"}]
+        }
+
+    def test_errors_on_a_promoted_candidate(
+        self, make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A half-done promotion fails the run rather than checking a gating version."""
+        libs_dir = make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.11"]}})
+        exit_code = main_with(["build-candidate-matrix", "--libs-dir", str(libs_dir)])
+        assert exit_code == 1
+        assert "both a supported and a candidate" in capsys.readouterr().err
+
+
+class TestCLIValidateCandidates:
+    """Tests for the ``validate-candidates`` CLI subcommand."""
+
+    def test_passes_on_consistent_declarations(self, make_monorepo: MonorepoFactory) -> None:
+        """`validate-candidates` exits 0 when no candidate is already supported."""
+        libs_dir = make_monorepo(
+            {"a": {"python_versions": ["3.11"], "candidates": ["3.14"]}, "b": {}}
+        )
+        assert main_with(["validate-candidates", "--libs-dir", str(libs_dir)]) == 0
+
+    def test_fails_on_a_promoted_candidate(
+        self, make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The guard names the lib and version, with no traceback."""
+        libs_dir = make_monorepo(
+            {"a": {"python_versions": ["3.11", "3.12"], "candidates": ["3.12"]}}
+        )
+        exit_code = main_with(["validate-candidates", "--libs-dir", str(libs_dir)])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "libs/a declares 3.12" in captured.err
         assert "Traceback" not in (captured.out + captured.err)
 
 
