@@ -58,6 +58,9 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
       ``[project].name`` line (for the unparseable-dist-name error path).
     - ``python_versions`` (Sequence[str], default ``["3.11"]``): contents of
       ``python_versions.json``.
+    - ``candidates`` (Sequence[str]): written as
+      ``[tool.vivarium.python-support] candidates``. Omit the key to write no
+      section at all, which is the common case.
     - ``omit_python_versions`` (bool, default ``False``): write no
       ``python_versions.json`` (for the missing-file error path).
 
@@ -93,6 +96,12 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
                 lines.append("[project.optional-dependencies]")
                 for extra_name, extra_deps in extras.items():
                     lines.append(f"{extra_name} = [{_render_dep_array(extra_deps)}]")
+            if "candidates" in cfg:
+                lines += [
+                    "",
+                    "[tool.vivarium.python-support]",
+                    f"candidates = [{_render_dep_array(cfg['candidates'])}]",
+                ]
             (pkg_dir / "pyproject.toml").write_text("\n".join(lines) + "\n")
 
             if "changelog_first_line" in cfg:
@@ -1055,6 +1064,54 @@ class TestBuildPythonMatrix:
         libs = load_libs(make_monorepo({"a": {}}))
         with pytest.raises(KeyError):
             build_python_matrix(["ghost"], libs)
+
+
+class TestLoadLibCandidates:
+    """Tests for the ``candidates`` field ``load_libs`` puts on each ``Lib``."""
+
+    def test_reads_declared_candidates(self, make_monorepo: MonorepoFactory) -> None:
+        """Candidates come off the lib's [tool.vivarium.python-support]."""
+        libs = load_libs(make_monorepo({"a": {"candidates": ["3.13", "3.14"]}}))
+        assert libs["a"].candidates == ("3.13", "3.14")
+
+    def test_missing_section_yields_empty(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib without the section declares no candidates."""
+        libs = load_libs(make_monorepo({"a": {}}))
+        assert libs["a"].candidates == ()
+
+    def test_empty_list_yields_empty(self, make_monorepo: MonorepoFactory) -> None:
+        """An emptied-out list turns the lib's candidate jobs off."""
+        libs = load_libs(make_monorepo({"a": {"candidates": []}}))
+        assert libs["a"].candidates == ()
+
+    def test_rejects_unquoted_numeric_candidate(self, make_monorepo: MonorepoFactory) -> None:
+        """An unquoted 3.10 is a TOML float that would coerce to the wrong version."""
+        libs_dir = make_monorepo({"a": {}})
+        pyproject = libs_dir / "a" / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + "\n[tool.vivarium.python-support]\ncandidates = [3.10]\n"
+        )
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+    def test_rejects_a_bare_string(self, make_monorepo: MonorepoFactory) -> None:
+        """A bare string would otherwise iterate into one entry per character."""
+        libs_dir = make_monorepo({"a": {}})
+        pyproject = libs_dir / "a" / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + '\n[tool.vivarium.python-support]\ncandidates = "3.14"\n'
+        )
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+    @pytest.mark.parametrize("version", ["3", "3.12.1"])
+    def test_rejects_an_unparseable_version(
+        self, version: str, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A version with no minor component or with a patch component fails at load."""
+        libs_dir = make_monorepo({"a": {"candidates": [version]}})
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
 
 
 class TestCLIInstallEditable:

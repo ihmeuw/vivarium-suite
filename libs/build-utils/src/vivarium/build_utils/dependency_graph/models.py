@@ -29,6 +29,10 @@ class MissingPythonVersionsError(Exception):
     """A library has no ``python_versions.json``, so its CI matrix cannot be built."""
 
 
+class CandidateVersionConflictError(Exception):
+    """A library declares a Python version as both supported and a candidate."""
+
+
 @dataclass(frozen=True)
 class Lib:
     """A single independently-released library under ``libs/``.
@@ -55,6 +59,10 @@ class Lib:
         over the runtime dependencies plus whichever extras :func:`load_libs`
         resolved; if a upstream is constrained in more than one of those places,
         the constraints are intersected into a single :class:`SpecifierSet`.
+    candidates
+        Python versions from ``[tool.vivarium.python-support] candidates`` - ones
+        checked on a schedule on ``main`` ahead of being supported, which never
+        gate a build. Empty when the library declares none.
     """
 
     name: str
@@ -62,6 +70,7 @@ class Lib:
     path: Path
     version: str
     upstreams: Mapping[str, SpecifierSet]
+    candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
