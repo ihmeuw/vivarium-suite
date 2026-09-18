@@ -49,6 +49,9 @@ ci_jenkins = ["vivarium-gbd-mapping[ci_github,cluster]"]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/gbd-mapping"
 
+[tool.vivarium.python-support]
+candidates = ["3.14"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Enumerate the gbd_mapping package and its subpackages explicitly. A loose glob
