@@ -21,8 +21,113 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+_UNSET_COMPONENT = "<unset>"
 
-class ValueSource:
+_LABEL_WIDTH = 16
+"""Column the values in a pipeline description are aligned to."""
+_ENTRY_INDENT = 18
+"""Indent for a modifier or post-processor entry."""
+_DETAIL_INDENT = 21
+"""Indent for the continuation line under an entry."""
+
+
+class RequiresPrettyHook:
+    """Reject subclasses that would shadow the inherited IPython display hook.
+
+    IPython walks the mro and uses whichever of ``_repr_pretty_`` or ``__repr__``
+    it finds first in a class's own ``__dict__``, so a subclass defining only
+    ``__repr__`` silently disables the rich display it would have inherited.
+
+    That same rule is why ``_repr_pretty_`` is repeated on each class below rather
+    than inherited from here: a class defining ``__repr__`` stops the walk before
+    an inherited hook is reached, so a hook defined here would never run. Only the
+    check is shared; the repetition of the hook itself is load-bearing.
+    """
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "__repr__" in vars(cls) and "_repr_pretty_" not in vars(cls):
+            raise TypeError(
+                f"{cls.__name__} defines __repr__ without _repr_pretty_, which shadows the "
+                "inherited IPython display hook. Define both, or neither."
+            )
+
+
+def _callable_display_name(callable_: Callable[..., Any]) -> str:
+    """Return the most readable name available for a callable.
+
+    Prefers ``__qualname__`` so bound methods carry their class, which is what
+    makes a modifier identifiable in a pipeline description. This deliberately
+    differs from :meth:`~vivarium.engine.framework.resource.Resource.get_callable_name`,
+    which prefers the bare ``__name__``: that one builds resource ids, where the
+    component name already supplies the owner and a dotted class name would make
+    the id harder to read.
+    """
+    for attribute in ("__qualname__", "__name__"):
+        name = getattr(callable_, attribute, None)
+        if name is not None:
+            return str(name)
+    # A callable class instance has neither, and its repr is an address; name it
+    # by its class so post-processors registered that way stay identifiable.
+    return type(callable_).__qualname__
+
+
+class NamedCallable(RequiresPrettyHook):
+    """Wrap a plain callable so it prints like the other parts of a pipeline."""
+
+    def __init__(self, callable_: Callable[..., Any]) -> None:
+        # Unwrap rather than nest. Wrapping a wrapper would leave the display
+        # reporting this class's name in place of the original callable's, and
+        # the type annotations let an already-wrapped list be registered again.
+        self._callable: Callable[..., Any] = (
+            callable_._callable if isinstance(callable_, NamedCallable) else callable_
+        )
+        # Let inspect see through to the wrapped callable, so signature() and
+        # getdoc() describe it rather than this wrapper's forwarding __call__.
+        # Only forward a docstring that exists: most callables passed here have
+        # none, and this class's own description is more useful than None.
+        self.__wrapped__ = self._callable
+        if self._callable.__doc__ is not None:
+            self.__doc__ = self._callable.__doc__
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self._callable(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return _callable_display_name(self._callable)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {str(self)!r}>"
+
+    def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
+        """Show this object's description when it is echoed bare in an IPython cell.
+
+        IPython's display machinery prefers this hook over ``__repr__``, so the
+        description shows up in a notebook while ``__repr__`` stays short enough
+        for tracebacks and collections.
+        """
+        printer.text(str(self))
+
+    def __eq__(self, other: object) -> bool:
+        # Equal to the callable it wraps, so a comparison against the bare
+        # function keeps working after wrapping.
+        if isinstance(other, NamedCallable):
+            return bool(self._callable == other._callable)
+        return bool(self._callable == other)
+
+    def __hash__(self) -> int:
+        return hash(self._callable)
+
+
+class NamedCombiner(NamedCallable):
+    """A pipeline's combiner, wrapped for display."""
+
+
+class NamedPostProcessor(NamedCallable):
+    """One of a pipeline's post-processors, wrapped for display."""
+
+
+class ValueSource(RequiresPrettyHook):
     """A wrapper for the source of a value pipeline."""
 
     def __init__(self, pipeline: Pipeline, source: Callable[..., Any]) -> None:
@@ -34,6 +139,44 @@ class ValueSource:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self._source(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self._identifier} ({self._kind})"
+
+    def __repr__(self) -> str:
+        # Defined only here: a subclass __repr__ would shadow _repr_pretty_ in
+        # IPython, which walks the mro and takes the first of the two it finds.
+        identifier = self._identifier
+        if identifier is None:
+            return f"<{type(self).__name__}>"
+        return f"<{type(self).__name__} {identifier!r}>"
+
+    def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
+        """Show this object's description when it is echoed bare in an IPython cell.
+
+        IPython's display machinery prefers this hook over ``__repr__``, so the
+        description shows up in a notebook while ``__repr__`` stays short enough
+        for tracebacks and collections.
+        """
+        printer.text(str(self))
+
+    @property
+    def _identifier(self) -> Any:
+        """What this source reads from. None when there is nothing to name."""
+        if isinstance(self._source, Resource):
+            return self._source.name
+        return _callable_display_name(self._source)
+
+    @property
+    def _kind(self) -> str:
+        """The label for what kind of source this is.
+
+        A source that is itself a resource names its own kind, so the label does
+        not have to be inferred.
+        """
+        if isinstance(self._source, Resource):
+            return str(self._source.RESOURCE_TYPE)
+        return "callable"
 
 
 class MissingValueSource(ValueSource):
@@ -49,6 +192,15 @@ class MissingValueSource(ValueSource):
 
     def __bool__(self) -> bool:
         return False
+
+    def __str__(self) -> str:
+        # Not composed from _identifier and _kind like its siblings: there is
+        # nothing to name, and "None (missing)" reads worse than this.
+        return "<no source>"
+
+    @property
+    def _identifier(self) -> None:
+        return None
 
     def _source(self, *args: Any, **kwargs: Any) -> Any:
         raise DynamicValueError(
@@ -69,6 +221,14 @@ class PrivateColumnValueSource(ValueSource):
         self._population_view = population_view
         """A population view that can be used to access the private column source of this pipeline."""
 
+    @property
+    def _identifier(self) -> str:
+        return self.column_name
+
+    @property
+    def _kind(self) -> str:
+        return "private_column"
+
     def _source(self, index: pd.Index[int]) -> pd.Series[Any]:
         return self._population_view._manager.get_private_columns(
             component=self._pipeline.component, index=index, columns=self.column_name
@@ -87,11 +247,19 @@ class AttributesValueSource(ValueSource):
         self._population_view = population_view
         """A population view that can be used to access the attribute source of this pipeline."""
 
+    @property
+    def _identifier(self) -> str | list[str]:
+        return self.attributes
+
+    @property
+    def _kind(self) -> str:
+        return "attributes"
+
     def _source(self, index: pd.Index[int]) -> pd.Series[Any] | pd.DataFrame:
         return self._population_view.get(index=index, attributes=self.attributes)
 
 
-class ValueModifier(Resource):
+class ValueModifier(Resource, RequiresPrettyHook):
     """A resource representing a modifier of a value pipeline."""
 
     RESOURCE_TYPE = "value_modifier"
@@ -114,8 +282,31 @@ class ValueModifier(Resource):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self._source(*args, **kwargs)
 
+    def __str__(self) -> str:
+        callable_name, component_name = self._describe()
+        return f"{callable_name} from {component_name}"
 
-class Pipeline(Resource):
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self.name!r}>"
+
+    def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
+        """Show this object's description when it is echoed bare in an IPython cell.
+
+        IPython's display machinery prefers this hook over ``__repr__``, so the
+        description shows up in a notebook while ``__repr__`` stays short enough
+        for tracebacks and collections.
+        """
+        printer.text(str(self))
+
+    def _describe(self) -> tuple[str, str]:
+        """Return this modifier's callable name and the name of its component."""
+        component_name = (
+            self._component.name if self._component is not None else _UNSET_COMPONENT
+        )
+        return _callable_display_name(self._source), component_name
+
+
+class Pipeline(Resource, RequiresPrettyHook):
     """A tool for building up values across several components.
 
     Pipelines are lazily initialized so that we don't have to put constraints
@@ -146,10 +337,13 @@ class Pipeline(Resource):
         self.mutators: list[ValueModifier] = []
         """A list of callables that directly modify the pipeline source or
         contribute portions of the value."""
-        self._combiner: ValueCombiner | None = None
-        self.post_processor: list[PostProcessor] = []
+        self._combiner: NamedCombiner | None = None
+        self.post_processor: list[NamedPostProcessor] = []
         """A list of the transformations to perform in order on the combined output of
-        the source and mutators."""
+        the source and mutators.
+
+        Wrapped for display, so calling, equality and hashing forward to the
+        registered callables but their type does not."""
         self._manager: ValuesManager | None = None
 
     def _get_attr_error(self, attribute: str) -> str:
@@ -173,7 +367,11 @@ class Pipeline(Resource):
     @property
     def combiner(self) -> ValueCombiner:
         """A strategy for combining the source and mutator values into the
-        final value represented by the pipeline."""
+        final value represented by the pipeline.
+
+        Wrapped for display, so calling, equality and hashing forward to the
+        registered callable but its type does not.
+        """
         return self._get_property(self._combiner, "combiner")
 
     @property
@@ -233,7 +431,61 @@ class Pipeline(Resource):
         return value
 
     def __repr__(self) -> str:
-        return f"_Pipeline({self.name})"
+        return f"{type(self).__name__}({self.name!r})"
+
+    def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
+        """Show the full description when the pipeline is echoed in an IPython cell.
+
+        IPython's display machinery prefers this hook over ``__repr__``, so the
+        description shows up in a notebook while ``__repr__`` stays short enough
+        for tracebacks and collections.
+        """
+        printer.text(str(self))
+
+    def __str__(self) -> str:
+        """Render everything registered on this pipeline, in application order.
+
+        The modifier order shown is the order they are applied in, which for an
+        order-dependent combiner such as ``replace_combiner`` determines the
+        result. It reflects the current registration rather than a guarantee:
+        adding or reordering components changes it, so it is not a contract to
+        write code against.
+        """
+        component_name = (
+            self._component.name if self._component is not None else _UNSET_COMPONENT
+        )
+        combiner = str(self._combiner) if self._combiner is not None else "<none>"
+
+        def labelled(label: str, value: str) -> str:
+            return f"{label:<{_LABEL_WIDTH}}{value}"
+
+        lines = [
+            f"{self.name}  [{self.RESOURCE_TYPE} pipeline]",
+            labelled("registered by", component_name),
+            "",
+            labelled("source", str(self.source)),
+            labelled("combiner", combiner),
+        ]
+
+        if self.mutators:
+            lines.append(
+                labelled("modifiers", f"{len(self.mutators)} (order not guaranteed)")
+            )
+            for mutator in self.mutators:
+                callable_name, modifier_component = mutator._describe()
+                lines.append(f"{'':<{_ENTRY_INDENT}}- {callable_name}")
+                lines.append(f"{'':<{_DETAIL_INDENT}}from {modifier_component}")
+        else:
+            lines.append(labelled("modifiers", "none"))
+
+        if self.post_processor:
+            lines.append(labelled("post-processors", str(len(self.post_processor))))
+            for order, post_processor in enumerate(self.post_processor, start=1):
+                lines.append(f"{'':<{_ENTRY_INDENT}}{order}. {post_processor}")
+        else:
+            lines.append(labelled("post-processors", "none"))
+
+        return "\n".join(lines)
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -307,8 +559,8 @@ class Pipeline(Resource):
 
         self._component = component
         self.source = source
-        self._combiner = combiner
-        self.post_processor = post_processor
+        self._combiner = NamedCombiner(combiner)
+        self.post_processor = [NamedPostProcessor(p) for p in post_processor]
         self._required_resources = [*self._required_resources, *required_resources]
         self._manager = manager
 
@@ -390,6 +642,3 @@ class AttributePipeline(Pipeline):
                 f"\nExpected index: {index}"
             )
         return attribute
-
-    def __repr__(self) -> str:
-        return f"_AttributePipeline({self.name})"

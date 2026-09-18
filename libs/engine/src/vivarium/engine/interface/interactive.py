@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from vivarium.engine import Component
     from vivarium.engine.framework.event import Event
-    from vivarium.engine.framework.values import Pipeline
+    from vivarium.engine.framework.values import AttributePipeline, Pipeline
     from vivarium.engine.types import ClockStepSize, ClockTime
 
 
@@ -310,9 +310,39 @@ class InteractiveContext(SimulationContext):
         if value_pipeline_name not in self.list_values():
             raise ValueError(
                 f"No value pipeline '{value_pipeline_name}' registered. "
-                "Are you looking for an attribute pipeline?"
+                "Are you looking for an attribute pipeline? Try get_attribute()."
             )
         return self._values.get_value(value_pipeline_name)
+
+    def get_attribute(self, attribute_pipeline_name: str) -> AttributePipeline:
+        """Get the attribute pipeline associated with the given name.
+
+        Printing the returned pipeline, or echoing it in a notebook cell, reports
+        its source, modifiers, combiner, and post-processors.
+
+        Parameters
+        ----------
+        attribute_pipeline_name
+            Name of the attribute pipeline to return. Available names are given
+            by :meth:`get_attribute_names`.
+
+        Returns
+        -------
+            The requested attribute pipeline.
+
+        Raises
+        ------
+        ValueError
+            If no attribute pipeline of that name is registered.
+        """
+        # Guarded because the values manager creates a pipeline for an unknown
+        # name, which would silently pollute the simulation with an empty one.
+        if attribute_pipeline_name not in self.get_attribute_names():
+            raise ValueError(
+                f"No attribute pipeline '{attribute_pipeline_name}' registered. "
+                "Are you looking for a value pipeline? Try get_value()."
+            )
+        return self._values.get_attribute(attribute_pipeline_name)
 
     def list_events(self) -> list[str]:
         """List all event types registered with the simulation."""
