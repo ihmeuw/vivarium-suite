@@ -1,8 +1,7 @@
 # Shared per-library CI recipe.
 #
 # Single source of truth for "install one library, with the in-tree siblings it should
-# not resolve from PyPI installed editably, then run its checks". Used by ci.yml's
-# build matrix and downstream-check.yml's release gate so both run the same steps.
+# not resolve from PyPI installed editably, then run its checks".
 name: Check Library
 description: Install one library against its editable in-tree siblings and run its checks.
 

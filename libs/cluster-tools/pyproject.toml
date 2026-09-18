@@ -68,6 +68,9 @@ vipin = "vivarium.cluster_tools.vipin.cli:vipin"
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/cluster-tools"
 
+[tool.vivarium.python-support]
+candidates = ["3.14"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only include vivarium.cluster_tools and its subpackages. Excluding vivarium

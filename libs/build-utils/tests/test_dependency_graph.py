@@ -12,14 +12,18 @@ from packaging.specifiers import SpecifierSet
 
 from vivarium.build_utils import dependency_graph
 from vivarium.build_utils.dependency_graph import (
+    CandidateVersionConflictError,
     DependencyConflictError,
     DependencyCycleError,
     InstallPlan,
     Lib,
     MissingPythonVersionsError,
+    build_candidate_matrix,
     build_install_plan,
     build_python_matrix,
     classify_changed_libs,
+    find_candidate_conflicts,
+    format_candidate_conflicts,
     get_editable_upstreams,
     get_release_matrix,
     get_transitive_downstreams,
@@ -58,6 +62,9 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
       ``[project].name`` line (for the unparseable-dist-name error path).
     - ``python_versions`` (Sequence[str], default ``["3.11"]``): contents of
       ``python_versions.json``.
+    - ``candidates`` (Sequence[str]): written as
+      ``[tool.vivarium.python-support] candidates``. Omit the key to write no
+      section at all, which is the common case.
     - ``omit_python_versions`` (bool, default ``False``): write no
       ``python_versions.json`` (for the missing-file error path).
 
@@ -93,6 +100,12 @@ def make_monorepo(tmp_path: Path) -> MonorepoFactory:
                 lines.append("[project.optional-dependencies]")
                 for extra_name, extra_deps in extras.items():
                     lines.append(f"{extra_name} = [{_render_dep_array(extra_deps)}]")
+            if "candidates" in cfg:
+                lines += [
+                    "",
+                    "[tool.vivarium.python-support]",
+                    f"candidates = [{_render_dep_array(cfg['candidates'])}]",
+                ]
             (pkg_dir / "pyproject.toml").write_text("\n".join(lines) + "\n")
 
             if "changelog_first_line" in cfg:
@@ -1057,6 +1070,54 @@ class TestBuildPythonMatrix:
             build_python_matrix(["ghost"], libs)
 
 
+class TestLoadLibCandidates:
+    """Tests for the ``candidates`` field ``load_libs`` puts on each ``Lib``."""
+
+    def test_reads_declared_candidates(self, make_monorepo: MonorepoFactory) -> None:
+        """Candidates come off the lib's [tool.vivarium.python-support]."""
+        libs = load_libs(make_monorepo({"a": {"candidates": ["3.13", "3.14"]}}))
+        assert libs["a"].candidates == ("3.13", "3.14")
+
+    def test_missing_section_yields_empty(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib without the section declares no candidates."""
+        libs = load_libs(make_monorepo({"a": {}}))
+        assert libs["a"].candidates == ()
+
+    def test_empty_list_yields_empty(self, make_monorepo: MonorepoFactory) -> None:
+        """An emptied-out list turns the lib's candidate jobs off."""
+        libs = load_libs(make_monorepo({"a": {"candidates": []}}))
+        assert libs["a"].candidates == ()
+
+    def test_rejects_unquoted_numeric_candidate(self, make_monorepo: MonorepoFactory) -> None:
+        """An unquoted 3.10 is a TOML float that would coerce to the wrong version."""
+        libs_dir = make_monorepo({"a": {}})
+        pyproject = libs_dir / "a" / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + "\n[tool.vivarium.python-support]\ncandidates = [3.10]\n"
+        )
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+    def test_rejects_a_bare_string(self, make_monorepo: MonorepoFactory) -> None:
+        """A bare string would otherwise iterate into one entry per character."""
+        libs_dir = make_monorepo({"a": {}})
+        pyproject = libs_dir / "a" / "pyproject.toml"
+        pyproject.write_text(
+            pyproject.read_text() + '\n[tool.vivarium.python-support]\ncandidates = "3.14"\n'
+        )
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+    @pytest.mark.parametrize("version", ["3", "3.12.1"])
+    def test_rejects_an_unparseable_version(
+        self, version: str, make_monorepo: MonorepoFactory
+    ) -> None:
+        """A version with no minor component or with a patch component fails at load."""
+        libs_dir = make_monorepo({"a": {"candidates": [version]}})
+        with pytest.raises(ValueError, match="must be a list of quoted 'X.Y' strings"):
+            load_libs(libs_dir)
+
+
 class TestCLIInstallEditable:
     """Tests for the ``install-editable`` CLI subcommand."""
 
@@ -1571,6 +1632,197 @@ class TestCLICheckAcyclic:
         exit_code = main_with(["check-acyclic", "--libs-dir", str(libs_dir)])
         assert exit_code != 0
         captured = capsys.readouterr()
+        assert "Traceback" not in (captured.out + captured.err)
+
+
+class TestBuildCandidateMatrix:
+    """Tests for the candidate Python check matrix."""
+
+    def test_emits_one_entry_per_candidate(self, make_monorepo: MonorepoFactory) -> None:
+        """Each lib is paired with every candidate it declares."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {"python_versions": ["3.11"], "candidates": ["3.13", "3.14"]},
+                    "b": {"python_versions": ["3.11"], "candidates": ["3.14"]},
+                }
+            )
+        )
+        assert build_candidate_matrix(libs) == {
+            "include": [
+                {"library": "a", "python-version": "3.13"},
+                {"library": "a", "python-version": "3.14"},
+                {"library": "b", "python-version": "3.14"},
+            ]
+        }
+
+    def test_omits_libs_declaring_none(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib with no candidates contributes no jobs, rather than an empty one."""
+        libs = load_libs(
+            make_monorepo({"a": {"candidates": ["3.14"]}, "b": {}, "c": {"candidates": []}})
+        )
+        assert build_candidate_matrix(libs) == {
+            "include": [{"library": "a", "python-version": "3.14"}]
+        }
+
+    def test_is_empty_when_nothing_declared(self, make_monorepo: MonorepoFactory) -> None:
+        """With no declarations anywhere the weekly run has nothing to do."""
+        libs = load_libs(make_monorepo({"a": {}, "b": {"candidates": []}}))
+        assert build_candidate_matrix(libs) == {"include": []}
+
+    def test_candidates_are_emitted_in_numeric_order(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """Candidates sort numerically, so declared order and 3.9 vs 3.10 both hold."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.8"], "candidates": ["3.10", "3.9"]}})
+        )
+        versions = [
+            entry["python-version"] for entry in build_candidate_matrix(libs)["include"]
+        ]
+        assert versions == ["3.9", "3.10"]
+
+    def test_repeated_candidate_is_emitted_once(self, make_monorepo: MonorepoFactory) -> None:
+        """A duplicated declaration cannot fan out into two identical jobs."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.13"], "candidates": ["3.14", "3.14"]}}
+            )
+        )
+        assert build_candidate_matrix(libs) == {
+            "include": [{"library": "a", "python-version": "3.14"}]
+        }
+
+    def test_raises_on_a_promoted_candidate(self, make_monorepo: MonorepoFactory) -> None:
+        """Checking a version that already gates means a promotion was left half-done."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.11"]}})
+        )
+        with pytest.raises(
+            CandidateVersionConflictError, match="both a supported and a candidate"
+        ):
+            build_candidate_matrix(libs)
+
+    def test_raises_even_when_some_candidates_are_clean(
+        self, make_monorepo: MonorepoFactory
+    ) -> None:
+        """One stale candidate fails the whole matrix rather than emitting the rest."""
+        libs = load_libs(
+            make_monorepo(
+                {"a": {"python_versions": ["3.11"], "candidates": ["3.11", "3.14"]}}
+            )
+        )
+        with pytest.raises(
+            CandidateVersionConflictError, match="both a supported and a candidate"
+        ):
+            build_candidate_matrix(libs)
+
+    def test_does_not_need_python_versions_json(self, make_monorepo: MonorepoFactory) -> None:
+        """A lib missing the file is still checked: the candidate is the version under test."""
+        libs = load_libs(
+            make_monorepo({"a": {"omit_python_versions": True, "candidates": ["3.14"]}})
+        )
+        assert build_candidate_matrix(libs) == {
+            "include": [{"library": "a", "python-version": "3.14"}]
+        }
+
+
+class TestFindCandidateConflicts:
+    """Tests for the candidate declaration guard."""
+
+    def test_clean_tree_yields_nothing(self, make_monorepo: MonorepoFactory) -> None:
+        """No conflict means an empty mapping, not a falsy sentinel."""
+        libs = load_libs(
+            make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.14"]}})
+        )
+        assert find_candidate_conflicts(libs) == {}
+
+    def test_reports_each_conflicting_version(self, make_monorepo: MonorepoFactory) -> None:
+        """Every overlapping version is named, ascending, so one pass fixes them all."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {
+                        "python_versions": ["3.11", "3.12", "3.13"],
+                        "candidates": ["3.13", "3.11"],
+                    }
+                }
+            )
+        )
+        assert find_candidate_conflicts(libs) == {"a": ["3.11", "3.13"]}
+
+    def test_reports_every_offending_lib(self, make_monorepo: MonorepoFactory) -> None:
+        """A sweep across libs reports all of them rather than stopping at the first."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "a": {"python_versions": ["3.11"], "candidates": ["3.11"]},
+                    "b": {"python_versions": ["3.11"], "candidates": ["3.14"]},
+                    "c": {"python_versions": ["3.12"], "candidates": ["3.12"]},
+                }
+            )
+        )
+        assert find_candidate_conflicts(libs) == {"a": ["3.11"], "c": ["3.12"]}
+
+    def test_message_lists_libs_alphabetically(self, make_monorepo: MonorepoFactory) -> None:
+        """A bulk promotion conflicts in many libs at once; the order must be stable."""
+        libs = load_libs(
+            make_monorepo(
+                {
+                    "z": {"python_versions": ["3.14"], "candidates": ["3.14"]},
+                    "a": {"python_versions": ["3.14"], "candidates": ["3.14"]},
+                }
+            )
+        )
+        message = format_candidate_conflicts(find_candidate_conflicts(libs))
+        assert message.index("libs/a") < message.index("libs/z")
+
+
+class TestCLIBuildCandidateMatrix:
+    """Tests for the ``build-candidate-matrix`` CLI subcommand."""
+
+    def test_prints_the_matrix(
+        self, make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`build-candidate-matrix` prints the check matrix as JSON on stdout."""
+        libs_dir = make_monorepo({"a": {"candidates": ["3.14"]}, "b": {}})
+        exit_code = main_with(["build-candidate-matrix", "--libs-dir", str(libs_dir)])
+        assert exit_code == 0
+        assert json.loads(capsys.readouterr().out) == {
+            "include": [{"library": "a", "python-version": "3.14"}]
+        }
+
+    def test_errors_on_a_promoted_candidate(
+        self, make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A half-done promotion fails the run rather than checking a gating version."""
+        libs_dir = make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.11"]}})
+        exit_code = main_with(["build-candidate-matrix", "--libs-dir", str(libs_dir)])
+        assert exit_code == 1
+        assert "both a supported and a candidate" in capsys.readouterr().err
+
+
+class TestCLIValidateCandidates:
+    """Tests for the ``validate-candidates`` CLI subcommand."""
+
+    def test_passes_on_consistent_declarations(self, make_monorepo: MonorepoFactory) -> None:
+        """`validate-candidates` exits 0 when no candidate is already supported."""
+        libs_dir = make_monorepo(
+            {"a": {"python_versions": ["3.11"], "candidates": ["3.14"]}, "b": {}}
+        )
+        assert main_with(["validate-candidates", "--libs-dir", str(libs_dir)]) == 0
+
+    def test_fails_on_a_promoted_candidate(
+        self, make_monorepo: MonorepoFactory, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The guard names the lib and version, with no traceback."""
+        libs_dir = make_monorepo(
+            {"a": {"python_versions": ["3.11", "3.12"], "candidates": ["3.12"]}}
+        )
+        exit_code = main_with(["validate-candidates", "--libs-dir", str(libs_dir)])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "libs/a declares 3.12" in captured.err
         assert "Traceback" not in (captured.out + captured.err)
 
 

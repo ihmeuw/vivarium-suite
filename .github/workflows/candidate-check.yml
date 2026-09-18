@@ -1,0 +1,121 @@
+# Scheduled check of candidate Python versions against main.
+#
+# A library declares versions it wants exercised before committing to support them
+# in its own pyproject.toml, e.g.:
+#
+#     [tool.vivarium.python-support]
+#     candidates = ["3.14"]
+#
+# This workflow runs each declaring library's full check on each of its candidates.
+# Nothing here gates a merge - it is deliberately the only place candidates run, so
+# a version the ecosystem is not ready for shows up here and nowhere else.
+#
+# Promoting a candidate is an ordinary PR: move the version into the library's
+# python_versions.json, drop it from `candidates`, and add whatever fixes this
+# workflow surfaced. It then becomes a normal gating matrix entry, and the
+# `run-downstream` label covers the library's in-tree dependents.
+# `validate-candidates` runs on every PR and fails if a version is left in both files.
+name: Candidate Check
+
+on:
+  schedule:
+    # Mondays 04:00 PST, so a week's results are waiting at the start of the week.
+    # GitHub cron is UTC only and does not follow daylight saving, so this lands an
+    # hour later (05:00) while Pacific is on PDT.
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+
+# Only one run per ref at a time, so a second dispatch cancels the first
+concurrency:
+  group: candidate-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect candidate versions
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has-candidates: ${{ steps.detect.outputs.has-candidates }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependency-graph requirements
+        run: pip install packaging
+
+      - name: Collect declared candidates
+        id: detect
+        run: |
+          MATRIX=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+            build-candidate-matrix)
+          echo "Candidate matrix: ${MATRIX}"
+          echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
+          # has-candidates gates the fan-out in the ``candidate`` step below
+          # an empty matrix would fail it so we detect here and assign 'true' or 'false'
+          echo "has-candidates=$(jq -r '.include | length > 0' <<< "$MATRIX")" >> $GITHUB_OUTPUT
+
+  candidate:
+    name: ${{ matrix.library }} (Python ${{ matrix.python-version }})
+    needs: detect
+    if: needs.detect.outputs.has-candidates == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        # Must precede the local action: `uses: ./...` resolves from the workspace.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check ${{ matrix.library }} on Python ${{ matrix.python-version }}
+        uses: ./.github/actions/check-lib
+        with:
+          library: ${{ matrix.library }}
+          python-version: ${{ matrix.python-version }}
+
+  candidate-status:
+    # Rolls the fan-out up into one conclusion
+    name: Candidate Check Status
+    needs: [detect, candidate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report candidate status
+        run: |
+          DETECT_RESULT="${{ needs.detect.result }}"
+          CANDIDATE_RESULT="${{ needs.candidate.result }}"
+
+          # A failure here means the declarations themselves are broken (a candidate
+          # left in python_versions.json, a malformed version), not that a candidate
+          # is unready - so it is worth distinguishing from a check failure.
+          if [ "$DETECT_RESULT" != "success" ]; then
+            echo "::error::Could not collect candidate versions (detect job: ${DETECT_RESULT})."
+            exit 1
+          fi
+          if [ "${{ needs.detect.outputs.has-candidates }}" != "true" ]; then
+            echo "No library declares a candidate Python version - nothing to check."
+            exit 0
+          fi
+          if [ "$CANDIDATE_RESULT" = "success" ]; then
+            echo "Every declared candidate passed."
+            exit 0
+          fi
+          # A cancellation says nothing about whether a candidate is ready, but it must
+          # not pass either: this job's conclusion is what someone reads before deciding
+          # to promote, and a green check is indistinguishable from "everything passed".
+          # Red-but-accurate costs a click; a false green could green-light a promotion
+          # on no evidence.
+          if [ "$CANDIDATE_RESULT" = "cancelled" ]; then
+            echo "::error::Run was cancelled before the candidates finished, so there is no verdict. Re-run to get one."
+            exit 1
+          fi
+          echo "::error::At least one candidate is failing (candidate job: ${CANDIDATE_RESULT}). This does not block any merge; see the matrix for which library and version."
+          exit 1

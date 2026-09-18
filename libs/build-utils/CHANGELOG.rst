@@ -1,3 +1,10 @@
+**4.8.0 - 09/21/26**
+
+- Add ``build-candidate-matrix``, backing a scheduled workflow that runs every package's
+  declared candidate versions against main
+- Read candidate Python versions from ``[tool.vivarium.python-support] candidates``
+- Add ``validate-candidates`` to reject a version declared as both supported and a candidate
+
 **4.7.0 - 09/09/26**
 
 - Only builds started from a push deploy on their own
