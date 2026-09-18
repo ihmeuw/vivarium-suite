@@ -17,7 +17,9 @@ def read_python_versions(lib_path: Path) -> list[str]:
     Returns
     -------
         The declared versions, or an empty list when the file is absent. Order is
-        the file's, because callers treat the last entry as the canonical version.
+        the file's: consumers outside this package - the Jenkins deploy pipeline and
+        ``make build-env`` - read the last entry as the canonical version, so this
+        must not reorder.
     """
     versions_file = lib_path / "python_versions.json"
     if not versions_file.exists():

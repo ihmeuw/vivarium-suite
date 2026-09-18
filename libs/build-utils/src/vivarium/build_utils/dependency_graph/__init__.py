@@ -36,11 +36,13 @@ release:
    Python versions.
 
 5. **Candidate Python check** (consumed by the Candidate Check workflow via the
-   ``build-candidate-matrix`` CLI subcommand). A library can declare Python versions
-   it wants exercised before supporting them; :func:`build_candidate_matrix` fans every
-   library out over its declared candidates for a scheduled run against ``main``. These
-   never reach a gating matrix, so a version the ecosystem is not ready for cannot block
-   a merge.
+   ``build-candidate-matrix`` CLI subcommand, and by the CI workflow via
+   ``validate-candidates``). A library can declare Python versions it wants exercised
+   before supporting them; :func:`build_candidate_matrix` fans every library out over
+   its declared candidates for a scheduled run against ``main``. These never reach a
+   gating matrix, so a version the ecosystem is not ready for cannot block a merge.
+   :func:`find_candidate_conflicts` backs ``validate-candidates``, which fails a build
+   whose declarations name a version as both supported and a candidate.
 
 Run as ``python -m vivarium.build_utils.dependency_graph <subcommand>``.
 

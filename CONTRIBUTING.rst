@@ -18,7 +18,8 @@ versions to test against, e.g.::
     ["3.11", "3.12"]
 
 Every version in that file gates a merge; they become entries in the package's CI
-matrix and the last entry is the canonical one used for deploys and the docs build.
+matrix and the last entry is the canonical one used for deploys. Note that the docs
+build is separate and only runs on a single hard-coded version of python.
 
 Candidate Versions
 ~~~~~~~~~~~~~~~~~~
@@ -30,7 +31,7 @@ in its own ``pyproject.toml``, e.g.::
     candidates = ["3.14"]
 
 These never run on a pull request. The `Candidate Check
-<../../actions/workflows/candidate-check.yml>`_ workflow is on a schedule and runs each
+<https://github.com/ihmeuw/vivarium-suite/actions/workflows/candidate-check.yml>`_ workflow is on a schedule and runs each
 declaring package's full check against each of its candidates on ``main``, and that is the
 only place they run; a version the ecosystem is not ready for is visible when you look for it
 and cannot fail anyone's build in the meantime.
