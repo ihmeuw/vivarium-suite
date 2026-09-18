@@ -11,6 +11,7 @@ import pytest_mock
 from vivarium.config_tree import ConfigTree
 
 from tests.helpers import Listener, MockComponentA, MockComponentB, MockGenericComponent
+from vivarium.engine import InteractiveContext
 from vivarium.engine.component import Component
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.event import Event
@@ -567,3 +568,27 @@ def test_simple_clock_time_steps_remaining(base_config: ConfigTree, end: int) ->
     assert sim.get_number_of_steps_remaining() == 3
     sim.step()
     assert sim.get_number_of_steps_remaining() == 2
+
+
+def test_step_size_modifier_forwards_its_description() -> None:
+    """A described step size modifier carries its description to the pipeline.
+
+    ``register_step_size_modifier`` reaches ``register_value_modifier`` through a
+    ``functools.partial`` rather than a direct call, so it is the one registration
+    entry point where a dropped argument would not show up as a signature error.
+    """
+
+    class DescribedStepModifier(Component):
+        def setup(self, builder: Builder) -> None:
+            builder.time.register_step_size_modifier(
+                self.modify_step, description="Take a one-day step"
+            )
+
+        def modify_step(self, index: pd.Index[int]) -> pd.Series[ClockStepSize]:
+            step_sizes = pd.Series(pd.Timedelta(days=1), index=index)
+            return step_sizes  # type: ignore [return-value]
+
+    sim = InteractiveContext(components=[DescribedStepModifier()])
+    modifier = sim.get_value("simulant_step_size").mutators[0]
+
+    assert modifier.description == "Take a one-day step"

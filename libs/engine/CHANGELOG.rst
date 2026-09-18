@@ -3,6 +3,9 @@
 - Add ``InteractiveContext.get_attribute()`` to retrieve an attribute pipeline by name
 - Describe a pipeline's source, modifiers, combiner, and post-processors via ``str()``
   and show that description when a pipeline is echoed in a notebook cell
+- Accept an optional ``description`` on every value producer and modifier
+  registration and assign it as ``Pipeline.description`` and ``ValueModifier.description``
+- Add the descriptions to the pipeline and modifier ``str()`` output
 - Change ``Pipeline`` ``repr()`` from ``_Pipeline(name)`` to ``Pipeline('name')``
 - Wrap a pipeline's combiner and post-processors for display
 

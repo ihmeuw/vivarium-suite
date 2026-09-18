@@ -124,30 +124,30 @@ The values system provides a handful of interface methods, available off the
 
    * - Method
      - Description
-   * - | :meth:`register_value_producer <vivarium.engine.framework.values.interface.ValuesInterface.register_value_producer>`
+   * - | :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.register_value_producer`
      - | Registers a new pipeline with the values system. Provide a name for the
        | pipeline and a source. Optionally provide a combiner (defaults to
        | the replace combiner) and a postprocessor. Provide required resources (see note).
-   * - | :meth:`register_value_producer <vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer>`
+   * - | :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer`
      - | Registers a new attribute pipeline with the values system. Provide a name
        | for the attribute pipeline and a source. Optionally provide a combiner
        | (defaults to the replace combiner) and a postprocessor. Provide required
        | resources (see note).
-   * - | :meth:`register_rate_producer <vivarium.engine.framework.values.interface.ValuesInterface.register_rate_producer>`
-     - | A special case of :meth:`register_attribute_producer <vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer>`
+   * - | :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.register_rate_producer`
+     - | A special case of :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_producer`
        | for rates specifically.
        | Provide a name for the pipeline and a source and the values system will
        | automatically use the rescale postprocessor. Provide required resources (see note).
-   * - | :meth:`register_value_modifier <vivarium.engine.framework.values.interface.ValuesInterface.register_value_modifier>`
+   * - | :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.register_value_modifier`
      - | Registers a modifier to a pipeline. Provide a name for the pipeline to
        | modify and a modifier callable. Provide required resources (see note).
-   * - | :meth:`register_value_modifier <vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_modifier>`
+   * - | :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.register_attribute_modifier`
      - | Registers a modifier to an attribute pipeline. Provide a name for the attribute
        | pipeline to modify and a modifier callable or name of an attribute pipeline
        | that does the modifying. Provide required resources (see note).
-   * - | :meth:`get_value <vivarium.engine.framework.values.interface.ValuesInterface.get_value>`
+   * - | :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.get_value`
      - | Retrieves the pipeline with the given name.
-   * - | :meth:`get_value <vivarium.engine.framework.values.interface.ValuesInterface.get_attribute_pipelines>`
+   * - | :meth:`~vivarium.engine.framework.values.interface.ValuesInterface.get_attribute_pipelines`
      - | Retrieves a callable that in turn gets a dictionary of all attribute pipelines
        | registered with the values system. This method is intended to be used only
        | by backend managers as needed. Components should not need direct access
@@ -161,6 +161,10 @@ The values system provides a handful of interface methods, available off the
     and :ref:`lookup tables <lookup_concept>` that the source or modifier callables
     use in producing the value it returns.
 
+.. note::
+    Every registration method above also accepts an optional ``description``: a
+    short, human-readable phrase saying what the value represents, or what a
+    modifier does to it.
 
 For a view of the values system in action, see the
 :ref:`disease model tutorial <disease_model_tutorial>`, specifically the

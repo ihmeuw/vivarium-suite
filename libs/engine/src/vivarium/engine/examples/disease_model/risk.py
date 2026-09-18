@@ -43,16 +43,19 @@ class Risk(Component):
         builder.value.register_attribute_producer(
             self.base_proportion_exposed_pipeline,
             source=lambda index: pd.Series(proportion_exposed, index=index),
+            description="The configured share of the population exposed to this risk",
         )
         builder.value.register_attribute_producer(
             self.exposure_threshold_pipeline,
             source=[self.base_proportion_exposed_pipeline],
+            description="The threshold each simulant's propensity is compared against",
         )
 
         builder.value.register_attribute_producer(
             f"{self.risk}.exposure",
             source=self._exposure,
             required_resources=[self.propensity_column, self.exposure_threshold_pipeline],
+            description="Whether each simulant is exposed to this risk",
         )
         self.randomness = builder.randomness.get_stream(self.risk)
         builder.population.register_initializer(
@@ -113,17 +116,20 @@ class RiskEffect(Component):
         builder.value.register_attribute_producer(
             self.relative_risk_pipeline,
             source=lambda index: pd.Series(relative_risk, index=index),
+            description="How much this risk changes the affected rate when exposed",
         )
 
         builder.value.register_attribute_modifier(
             f"{self.disease_rate}.population_attributable_fraction",
             modifier=self.population_attributable_fraction,
             required_resources=[self.base_exposure_pipeline, self.relative_risk_pipeline],
+            description="Contribute this risk's share of the affected rate",
         )
         builder.value.register_attribute_modifier(
             f"{self.disease_rate}",
             modifier=self.rate_adjustment,
             required_resources=[self.exposure_pipeline, self.relative_risk_pipeline],
+            description="Scale the affected rate for simulants exposed to this risk",
         )
 
     ##################################

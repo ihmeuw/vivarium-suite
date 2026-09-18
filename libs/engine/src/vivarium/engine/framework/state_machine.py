@@ -241,7 +241,9 @@ class State(Component):
             builder, "initialization_weights"
         )
         builder.value.register_attribute_producer(
-            self.initialization_weights_pipeline, self.initialization_weights_table
+            self.initialization_weights_pipeline,
+            self.initialization_weights_table,
+            description="The relative weight for initializing a simulant into this state",
         )
 
     ##################

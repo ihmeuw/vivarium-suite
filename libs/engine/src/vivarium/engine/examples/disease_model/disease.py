@@ -44,11 +44,13 @@ class DiseaseTransition(Transition):
             source=lambda index: [pd.Series(0.0, index=index)],
             preferred_combiner=list_combiner,
             preferred_post_processor=union_post_processor,
+            description="The share of this transition rate attributable to its risks",
         )
         builder.value.register_rate_producer(
             self.rate_name,
             source=self._risk_deleted_rate,
             required_resources=[self.joint_paf_pipeline],
+            description="The transition rate with its attributable risk burden removed",
         )
 
     ##################################
@@ -110,18 +112,21 @@ class DiseaseState(State):
             source=lambda index: [pd.Series(0.0, index=index)],
             preferred_combiner=list_combiner,
             preferred_post_processor=union_post_processor,
+            description="The share of this cause's excess mortality due to its risks",
         )
 
         builder.value.register_rate_producer(
             self.emr_pipeline,
             source=self.risk_deleted_excess_mortality_rate,
             required_resources=[self.emr_paf_pipeline],
+            description="This state's excess mortality with its risk burden removed",
         )
 
         builder.value.register_attribute_modifier(
             "mortality_rate",
             modifier=self.add_in_excess_mortality,
             required_resources=[self.emr_pipeline],
+            description="Add this state's excess mortality to the all-cause rate",
         )
 
     ##################
@@ -185,11 +190,13 @@ class DiseaseModel(Machine):
         builder.value.register_rate_producer(
             self.csmr_pipeline,
             source=lambda index: pd.Series(cause_specific_mortality_rate, index=index),
+            description="This cause's contribution to the all-cause mortality rate",
         )
         builder.value.register_attribute_modifier(
             "mortality_rate",
             modifier=self.delete_cause_specific_mortality,
             required_resources=[self.csmr_pipeline],
+            description="Subtract this cause's mortality so each state can add its own",
         )
 
     ##################################

@@ -49,7 +49,9 @@ class Mortality(Component):
         """
         self.randomness = builder.randomness.get_stream("mortality")
         builder.value.register_rate_producer(
-            "mortality_rate", source=self.build_lookup_table(builder, "mortality_rate")
+            "mortality_rate",
+            source=self.build_lookup_table(builder, "mortality_rate"),
+            description="The rate at which simulants die of any cause",
         )
         builder.population.register_initializer(
             initializer=self.initialize_is_alive, columns="is_alive", required_resources=[]

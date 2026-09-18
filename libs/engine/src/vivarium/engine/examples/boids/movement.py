@@ -32,7 +32,9 @@ class Movement(Component):
 
         # docs-start: register_attribute_producer
         builder.value.register_attribute_producer(
-            "acceleration", source=self.base_acceleration
+            "acceleration",
+            source=self.base_acceleration,
+            description="Each simulant's acceleration in the x and y directions",
         )
         # docs-end: register_attribute_producer
         self.randomness = builder.randomness.get_stream(self.name)

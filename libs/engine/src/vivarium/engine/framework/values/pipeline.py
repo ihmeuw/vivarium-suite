@@ -270,6 +270,7 @@ class ValueModifier(Resource, RequiresPrettyHook):
         modifier: Callable[..., Any],
         component: Component | Manager,
         required_resources: Iterable[str | Resource] = (),
+        description: str | None = None,
     ) -> None:
         mutator_name = self.get_callable_name(modifier)
         mutator_index = len(pipeline.mutators) + 1
@@ -278,13 +279,18 @@ class ValueModifier(Resource, RequiresPrettyHook):
 
         self._pipeline = pipeline
         self._source = modifier
+        self.description = description
+        """A description of what this modifier does to the value."""
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self._source(*args, **kwargs)
 
     def __str__(self) -> str:
         callable_name, component_name = self._describe()
-        return f"{callable_name} from {component_name}"
+        entry = f"{callable_name} from {component_name}"
+        if self.description:
+            entry = f"{entry}\n{self.description}"
+        return entry
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.name!r}>"
@@ -332,6 +338,8 @@ class Pipeline(Resource, RequiresPrettyHook):
     def __init__(self, name: str, component: Component | None = None) -> None:
         super().__init__(name, component=component)
 
+        self.description: str | None = None
+        """A description of the value this pipeline represents."""
         self.source: ValueSource = MissingValueSource(self)
         """The callable source of the value represented by the pipeline."""
         self.mutators: list[ValueModifier] = []
@@ -340,10 +348,7 @@ class Pipeline(Resource, RequiresPrettyHook):
         self._combiner: NamedCombiner | None = None
         self.post_processor: list[NamedPostProcessor] = []
         """A list of the transformations to perform in order on the combined output of
-        the source and mutators.
-
-        Wrapped for display, so calling, equality and hashing forward to the
-        registered callables but their type does not."""
+        the source and mutators."""
         self._manager: ValuesManager | None = None
 
     def _get_attr_error(self, attribute: str) -> str:
@@ -367,11 +372,7 @@ class Pipeline(Resource, RequiresPrettyHook):
     @property
     def combiner(self) -> ValueCombiner:
         """A strategy for combining the source and mutator values into the
-        final value represented by the pipeline.
-
-        Wrapped for display, so calling, equality and hashing forward to the
-        registered callable but its type does not.
-        """
+        final value represented by the pipeline."""
         return self._get_property(self._combiner, "combiner")
 
     @property
@@ -462,6 +463,10 @@ class Pipeline(Resource, RequiresPrettyHook):
         lines = [
             f"{self.name}  [{self.RESOURCE_TYPE} pipeline]",
             labelled("registered by", component_name),
+        ]
+        if self.description:
+            lines.append(labelled("description", self.description))
+        lines += [
             "",
             labelled("source", str(self.source)),
             labelled("combiner", combiner),
@@ -475,6 +480,8 @@ class Pipeline(Resource, RequiresPrettyHook):
                 callable_name, modifier_component = mutator._describe()
                 lines.append(f"{'':<{_ENTRY_INDENT}}- {callable_name}")
                 lines.append(f"{'':<{_DETAIL_INDENT}}from {modifier_component}")
+                if mutator.description:
+                    lines.append(f"{'':<{_DETAIL_INDENT}}{mutator.description}")
         else:
             lines.append(labelled("modifiers", "none"))
 
@@ -495,6 +502,7 @@ class Pipeline(Resource, RequiresPrettyHook):
         modifier: Callable[..., Any],
         component: Component | Manager,
         required_resources: Iterable[str | Resource],
+        description: str | None = None,
     ) -> ValueModifier:
         """Adds a value modifier to the pipeline and returns it.
 
@@ -506,8 +514,12 @@ class Pipeline(Resource, RequiresPrettyHook):
             The component that creates the value modifier.
         required_resources
             A list of resources required by the modifier. A string represents a population attribute.
+        description
+            An optional description of what the modifier does to the value.
         """
-        value_modifier = ValueModifier(self, modifier, component, required_resources)
+        value_modifier = ValueModifier(
+            self, modifier, component, required_resources, description=description
+        )
         self.mutators.append(value_modifier)
         self._required_resources = [*self._required_resources, value_modifier]
         return value_modifier
@@ -520,6 +532,7 @@ class Pipeline(Resource, RequiresPrettyHook):
         post_processor: list[PostProcessor],
         required_resources: Iterable[str | Resource],
         manager: ValuesManager,
+        description: str | None = None,
     ) -> None:
         """
         Adds a source, combiner, post-processor, and manager to a pipeline.
@@ -544,6 +557,8 @@ class Pipeline(Resource, RequiresPrettyHook):
             post-processor. A string represents a population attribute.
         manager
             The simulation values manager.
+        description
+            An optional description of the value this pipeline represents.
 
         Raises
         ------
@@ -563,6 +578,7 @@ class Pipeline(Resource, RequiresPrettyHook):
         self.post_processor = [NamedPostProcessor(p) for p in post_processor]
         self._required_resources = [*self._required_resources, *required_resources]
         self._manager = manager
+        self.description = description
 
 
 class AttributePipeline(Pipeline):
