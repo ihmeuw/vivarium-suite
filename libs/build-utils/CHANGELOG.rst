@@ -1,3 +1,7 @@
+**4.8.0 - 09/21/26**
+
+- Implement candidate-check scheduled workflow to run all candidate versions for each package on main
+
 **4.7.0 - 09/09/26**
 
 - Only builds started from a push deploy on their own
