@@ -58,6 +58,7 @@ class TimeInterface(Interface):
         self,
         modifier: Callable[[pd.Index[int]], pd.Series[ClockStepSize]],
         required_resources: Sequence[str | Resource] = (),
+        description: str | None = None,
     ) -> None:
         """Registers a step size modifier.
 
@@ -69,7 +70,11 @@ class TimeInterface(Interface):
         required_resources
             A list of resources that the producer requires. A string represents
             a population attribute.
+        description
+            An optional description of what this modifier does to the step size.
         """
         return self._manager.register_step_modifier(
-            modifier=modifier, required_resources=required_resources
+            modifier=modifier,
+            required_resources=required_resources,
+            description=description,
         )
