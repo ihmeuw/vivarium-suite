@@ -379,6 +379,7 @@ class CausalFactor(Component, ABC):
             self.exposure_name,
             source=[self.exposure_distribution.exposure_ppf_pipeline],
             preferred_post_processor=get_exposure_post_processor(builder, self.name),
+            description="The simulant's exposure to this risk",
         )
 
     ########################

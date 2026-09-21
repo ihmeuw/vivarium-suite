@@ -42,6 +42,7 @@ def register_risk_affected_attribute_producer(
     required_resources: Sequence[str] = (),
     additional_post_processors: AttributePostProcessor
     | Sequence[AttributePostProcessor] = (),
+    description: str | None = None,
 ) -> None:
     """Helper function to register a pipeline that can be modified by RiskEffect components.
 
@@ -63,6 +64,8 @@ def register_risk_affected_attribute_producer(
         An AttributePostProcessor or list of AttributePostProcessors to apply
         in addition to the calibration constant post-processor. These will be
         applied after the calibration constant post-processor.
+    description
+        An optional description of the value this pipeline represents.
     """
     post_processors = (
         additional_post_processors
@@ -70,7 +73,13 @@ def register_risk_affected_attribute_producer(
         else [additional_post_processors]
     )
     _RiskAffectedPipeline.create(
-        builder, name, source, required_resources, post_processors, is_rate=False
+        builder,
+        name,
+        source,
+        required_resources,
+        post_processors,
+        is_rate=False,
+        description=description,
     )
 
 
@@ -81,6 +90,7 @@ def register_risk_affected_rate_producer(
     required_resources: Sequence[str] = (),
     additional_post_processors: AttributePostProcessor
     | Sequence[AttributePostProcessor] = (),
+    description: str | None = None,
 ) -> None:
     """Helper function to register a rate pipeline that can be modified by RiskEffect components.
 
@@ -102,6 +112,8 @@ def register_risk_affected_rate_producer(
         An AttributePostProcessor or list of AttributePostProcessors to apply
         in addition to the calibration constant post-processor. These will be
         applied after the calibration constant post-processor.
+    description
+        An optional description of the value this pipeline represents.
     """
     post_processors = (
         additional_post_processors
@@ -109,7 +121,13 @@ def register_risk_affected_rate_producer(
         else [additional_post_processors]
     )
     _RiskAffectedPipeline.create(
-        builder, name, source, required_resources, post_processors, is_rate=True
+        builder,
+        name,
+        source,
+        required_resources,
+        post_processors,
+        is_rate=True,
+        description=description,
     )
 
 
@@ -125,10 +143,11 @@ class _RiskAffectedPipeline(Component):
         required_resources: Sequence[str],
         additional_post_processors: Sequence[AttributePostProcessor],
         is_rate: bool,
+        description: str | None = None,
     ) -> None:
         """Factory method to create and set up the class."""
         cls(
-            name, source, required_resources, additional_post_processors, is_rate
+            name, source, required_resources, additional_post_processors, is_rate, description
         ).setup_component(builder)
 
     def __init__(
@@ -138,6 +157,7 @@ class _RiskAffectedPipeline(Component):
         required_resources: Sequence[str | Resource],
         additional_post_processors: Sequence[AttributePostProcessor],
         is_rate: bool,
+        description: str | None = None,
     ):
         super().__init__()
         self._target_pipeline_name = target_pipeline_name
@@ -145,6 +165,7 @@ class _RiskAffectedPipeline(Component):
         self._required_resources = required_resources
         self._additional_post_processors = additional_post_processors
         self._is_rate = is_rate
+        self._description = description
 
     def setup(self, builder: Builder) -> None:
         """Register the calibration constant and target pipelines.
@@ -162,6 +183,7 @@ class _RiskAffectedPipeline(Component):
             source=lambda: [0],
             preferred_combiner=self._calibration_constant_combiner,
             preferred_post_processor=self._calibration_constant_post_processor,
+            description="The joint calibration constant of this pipeline's risks",
         )
 
         register_pipeline = (
@@ -176,12 +198,14 @@ class _RiskAffectedPipeline(Component):
             required_resources=[self._calibration_constant_table, *self._required_resources],
             preferred_combiner=multiplication_combiner,
             preferred_post_processor=[*self._additional_post_processors],
+            description=self._description,
         )
 
         builder.value.register_attribute_modifier(
             self._target_pipeline_name,
             modifier=self._apply_calibration_constant,
             required_resources=[self._calibration_constant_table],
+            description="Return the '1 - calibration_constant' multiplier for the given simulants",
         )
 
     def on_post_setup(self, event: Event) -> None:

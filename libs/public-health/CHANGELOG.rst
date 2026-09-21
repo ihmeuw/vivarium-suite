@@ -1,3 +1,10 @@
+**6.6.2 - 09/22/26**
+
+- Describe every value producer and modifier registered by public health components
+- Accept an optional ``description`` in ``register_risk_affected_attribute_producer``
+  and ``register_risk_affected_rate_producer``
+- Require ``vivarium-engine>=5.10.0``, which introduced the ``description`` argument
+
 **6.6.1 - 08/31/26**
 
 - Support multiple ``MicrodataObserver`` instances in one simulation via an optional ``label``

@@ -548,7 +548,11 @@ class AgeOutSimulants(Component):
             Access point for utilizing framework interfaces during setup.
         """
         self.config = builder.configuration.population
-        builder.value.register_attribute_modifier("exit_time", self.update_exit_times)
+        builder.value.register_attribute_modifier(
+            "exit_time",
+            self.update_exit_times,
+            description="Record the exit time of simulants who have aged out of the simulation",
+        )
         self.clock = builder.time.clock()
         self.step_size = builder.time.step_size()
         builder.population.register_tracked_query("is_aged_out == False")
@@ -932,4 +936,5 @@ class Disability(Component):
             source=lambda index: [pd.Series(0.0, index=index)],
             preferred_combiner=list_combiner,
             preferred_post_processor=union_post_processor,
+            description="The combined disability weight of every cause a simulant has",
         )

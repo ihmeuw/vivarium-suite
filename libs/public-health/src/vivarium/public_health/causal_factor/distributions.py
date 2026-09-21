@@ -288,6 +288,7 @@ class EnsembleDistribution(CausalFactorDistribution):
                 self.causal_factor_propensity,
                 self.ensemble_propensity,
             ],
+            description="The simulant's exposure value at its propensity",
         )
 
     ########################
@@ -441,6 +442,7 @@ class ContinuousDistribution(CausalFactorDistribution):
             name=self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=[self.exposure_params_name, self.causal_factor_propensity],
+            description="The simulant's exposure value at its propensity",
         )
 
     def register_exposure_params_pipeline(self, builder: Builder) -> None:
@@ -452,7 +454,9 @@ class ContinuousDistribution(CausalFactorDistribution):
             Access point for utilizing framework interfaces during setup.
         """
         builder.value.register_attribute_producer(
-            self.exposure_params_name, source=self.parameters_table
+            self.exposure_params_name,
+            source=self.parameters_table,
+            description="The distribution parameters of this risk's exposure",
         )
 
     ##################################
@@ -569,6 +573,7 @@ class PolytomousDistribution(CausalFactorDistribution):
             self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=[self.exposure_params_pipeline, self.causal_factor_propensity],
+            description="The simulant's exposure value at its propensity",
         )
 
     def register_exposure_params_pipeline(self, builder: Builder) -> None:
@@ -580,7 +585,9 @@ class PolytomousDistribution(CausalFactorDistribution):
             Access point for utilizing framework interfaces during setup.
         """
         builder.value.register_attribute_producer(
-            self.exposure_params_pipeline, source=self.exposure_params_table
+            self.exposure_params_pipeline,
+            source=self.exposure_params_table,
+            description="The distribution parameters of this risk's exposure",
         )
 
     def build_exposure_params_table(self, builder: "Builder") -> LookupTable:
@@ -763,6 +770,7 @@ class DichotomousDistribution(CausalFactorDistribution):
             self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=[self.exposure_params_name, self.causal_factor_propensity],
+            description="The simulant's exposure value at its propensity",
         )
 
     def register_exposure_params_pipeline(self, builder: Builder) -> None:
@@ -778,6 +786,7 @@ class DichotomousDistribution(CausalFactorDistribution):
             name=self.exposure_params_name,
             source=self.exposure_parameter_source,
             required_resources=[self.exposure_table],
+            description="The distribution parameters of this risk's exposure",
         )
 
     def build_exposure_table(self, builder: Builder) -> LookupTable[pd.Series]:

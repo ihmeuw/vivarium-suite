@@ -141,14 +141,20 @@ class BaseDiseaseState(State):
 
         self.prevalence_table = self.build_lookup_table(builder, "prevalence")
         builder.value.register_attribute_producer(
-            self.prevalence_pipeline, source=self.prevalence_table
+            self.prevalence_pipeline,
+            source=self.prevalence_table,
+            description="The share of the population in this state at initialization",
         )
         self.birth_prevalence_table = self.build_lookup_table(builder, "birth_prevalence")
         builder.value.register_attribute_producer(
-            self.birth_prevalence_pipeline, source=self.birth_prevalence_table
+            self.birth_prevalence_pipeline,
+            source=self.birth_prevalence_table,
+            description="The share of newborns who start in this state",
         )
         builder.value.register_attribute_producer(
-            self.dwell_time_pipeline, source=self.dwell_time_table
+            self.dwell_time_pipeline,
+            source=self.dwell_time_table,
+            description="The minimum time a simulant must stay in this state",
         )
         builder.population.register_initializer(
             initializer=self.initialize_event_time_and_count,
@@ -709,7 +715,9 @@ class DiseaseState(BaseDiseaseState, ExcessMortalityState):
         self.register_disability_weight_pipeline(builder)
 
         builder.value.register_attribute_modifier(
-            "all_causes.disability_weight", modifier=self.dw_pipeline
+            "all_causes.disability_weight",
+            modifier=self.dw_pipeline,
+            description="Contribute this state's disability weight to the total",
         )
 
         self.register_excess_mortality_rate_pipeline(builder)
@@ -718,6 +726,7 @@ class DiseaseState(BaseDiseaseState, ExcessMortalityState):
             "mortality_rate",
             modifier=self.adjust_mortality_rate,
             required_resources=[self.excess_mortality_rate_pipeline],
+            description="Add this state's excess mortality rate as its own column",
         )
 
     #################
@@ -780,6 +789,7 @@ class DiseaseState(BaseDiseaseState, ExcessMortalityState):
             f"{self.state_id}.disability_weight",
             source=self.compute_disability_weight,
             required_resources=["is_alive", self.model, self.disability_weight_table],
+            description="The disability weight of simulants currently in this state",
         )
 
     def get_excess_mortality_rate_source(
@@ -824,6 +834,7 @@ class DiseaseState(BaseDiseaseState, ExcessMortalityState):
             name=self.excess_mortality_rate_pipeline,
             source=self.compute_excess_mortality_rate,
             required_resources=["is_alive", self.model, self.excess_mortality_rate_table],
+            description="The rate at which simulants in this state die of this cause",
         )
 
     def get_randomness_prevalence(self, builder: Builder) -> RandomnessStream:

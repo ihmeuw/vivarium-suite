@@ -399,7 +399,11 @@ class FertilityAgeSpecificRates(Component):
             Access point for utilizing framework interfaces during setup.
         """
         fertility_rate = self.build_lookup_table(builder, "age_specific_fertility_rate")
-        builder.value.register_rate_producer("fertility_rate", source=fertility_rate)
+        builder.value.register_rate_producer(
+            "fertility_rate",
+            source=fertility_rate,
+            description="The age-specific rate at which simulants give birth",
+        )
 
         self.randomness = builder.randomness.get_stream("fertility")
         self.simulant_creator = builder.population.get_simulant_creator()
