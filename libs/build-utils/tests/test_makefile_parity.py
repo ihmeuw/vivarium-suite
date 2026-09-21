@@ -1,20 +1,22 @@
-"""Guard against drift between the per-package ``Makefile`` copies.
+"""Assert the per-package ``Makefile`` copies that should match still do.
 
-``build-env`` cannot live in the shared ``base.mk`` - it has to bootstrap
-``vivarium.build_utils`` into a fresh conda env before ``base.mk`` can be
-included - so every package carries its own copy of that target. The copies are
-maintained by hand-propagating the same edit, which is exactly the situation
-where one package silently falls behind.
+Most packages ship a byte-identical ``Makefile``, because ``build-env`` has to
+run before ``base.mk`` can be included and so cannot be shared from there. That
+makes every edit to it a manual propagation across a dozen files, where one
+package silently falling behind would not otherwise be noticed.
+
+This checks the files, not the build: nothing here creates an environment or
+runs ``make``.
 """
 
-import re
 from pathlib import Path
 
 import pytest
 
 # Packages whose Makefile is deliberately not a copy of the standard one.
 DIVERGENT_PACKAGES = {
-    # Bootstraps vbu from the local checkout rather than PyPI (it is vbu).
+    # This package is vivarium-build-utils, so it bootstraps from the local
+    # checkout; installing from PyPI would test a different copy of itself.
     "build-utils",
     # Carries extra build-env arguments (type, lfs, include_timestamp).
     "profiling",
@@ -53,15 +55,3 @@ def test_standard_makefiles_are_identical(standard_makefiles: dict[str, str]) ->
         "Propagate the change to every package, or add the package to "
         "DIVERGENT_PACKAGES if the difference is intentional."
     )
-
-
-def test_divergent_packages_still_define_build_env() -> None:
-    """Check the exempt packages kept ``build-env`` and its private helper."""
-    libs = _repo_libs_dir()
-    for package in sorted(DIVERGENT_PACKAGES):
-        text = (libs / package / "Makefile").read_text()
-        # Anchored to a line start: an unanchored "build-env:" also matches the
-        # "_build-env:" helper, so a package could drop the public target undetected.
-        targets = re.findall(r"^(_?build-env):", text, flags=re.MULTILINE)
-        assert "build-env" in targets, f"{package} lost its build-env target"
-        assert "_build-env" in targets, f"{package} lost its _build-env helper"

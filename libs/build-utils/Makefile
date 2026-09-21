@@ -46,7 +46,7 @@ help:
 	@echo "      Whether the build host can reach the IHME artifactory. Either 'yes'"
 	@echo "      (default) or 'no'; use 'no' to build off-VPN without artifactory."
 	@echo "  keep_env [optional]"
-	@echo "      Whether to keep a failed build's partial environment for debugging."
+	@echo "      Whether to keep a failed build's partial environment for inspection."
 	@echo "      Either 'yes' or 'no' (default, i.e. tear it down)."
 	@echo
 	@echo "After creating the environment:"
@@ -94,15 +94,14 @@ build-env: # Create a new environment with installed packages
 		*) echo "Error: 'keep_env' must be 'yes' or 'no', got '$(keep_env)'" >&2; exit 1 ;; \
 	esac
 
-#	Tear down on failure rather than leave behind an env that activates but has
-#	nothing installed.
+#	Tear down on failure rather than leave an env that activates with nothing installed.
 	@if ! $(MAKE) --no-print-directory _build-env \
 			name=$(name) py=$(py) artifactory_access=$(artifactory_access); then \
 		echo >&2; \
 		if [ "$(keep_env)" = "yes" ]; then \
 			echo "Error: failed to build environment '$(name)'. Keeping it (keep_env=yes)." >&2; \
 		else \
-			echo "Error: failed to build environment '$(name)'. Removing it; pass keep_env=yes to inspect it instead." >&2; \
+			echo "Error: failed to build environment '$(name)'. Removing it; pass keep_env=yes to keep it for inspection." >&2; \
 			conda env remove -n $(name) --yes; \
 		fi; \
 		exit 1; \
@@ -117,15 +116,11 @@ build-env: # Create a new environment with installed packages
 	@echo "conda activate $(name)"
 	@echo
 
-# Private: `build-env`'s steps, one per recipe line so make's fail-fast applies to each.
+# Private: the build steps live here so `build-env` can tear down the env if any fails.
 .PHONY: _build-env
 _build-env:
 	conda create -n $(name) python=$(py) --yes
-# 	Bootstrap vivarium.build_utils into the new environment.
-# 	vbu is self-bootstrapping: install from the local checkout instead of
-# 	PyPI so the env matches the source we're about to build/test. This also
-# 	avoids "PyPI version is stale relative to local source" during major
-# 	version bumps.
+# 	Install vbu from the local checkout, not PyPI, so the env matches the source under test.
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
 	conda run --no-capture-output -n $(name) pip install -e .
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS

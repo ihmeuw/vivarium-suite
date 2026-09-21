@@ -55,7 +55,7 @@ help:
 	@echo "      Whether the build host can reach the IHME artifactory. Either 'yes'"
 	@echo "      (default) or 'no'; use 'no' to build off-VPN without artifactory."
 	@echo "  keep_env [optional]"
-	@echo "      Whether to keep a failed build's partial environment for debugging."
+	@echo "      Whether to keep a failed build's partial environment for inspection."
 	@echo "      Either 'yes' or 'no' (default, i.e. tear it down)."
 	@echo
 	@echo "After creating the environment:"
@@ -102,8 +102,7 @@ build-env: # Create a new environment with installed packages
 	@$(eval keep_env ?= no)
 	@$(call validate_arg,$(keep_env),yes no,keep_env)
 
-#	Tear down on failure rather than leave behind an env that activates but has
-#	nothing installed.
+#	Tear down on failure rather than leave an env that activates with nothing installed.
 	@if ! $(MAKE) --no-print-directory _build-env \
 			name=$(name) py=$(py) type=$(type) lfs=$(lfs) \
 			artifactory_access=$(artifactory_access); then \
@@ -111,7 +110,7 @@ build-env: # Create a new environment with installed packages
 		if [ "$(keep_env)" = "yes" ]; then \
 			echo "Error: failed to build environment '$(name)'. Keeping it (keep_env=yes)." >&2; \
 		else \
-			echo "Error: failed to build environment '$(name)'. Removing it; pass keep_env=yes to inspect it instead." >&2; \
+			echo "Error: failed to build environment '$(name)'. Removing it; pass keep_env=yes to keep it for inspection." >&2; \
 			conda env remove -n $(name) --yes; \
 		fi; \
 		exit 1; \
@@ -130,11 +129,10 @@ build-env: # Create a new environment with installed packages
 # Extras group that `type` selects from base.mk's `install` target.
 ENV_REQS_FOR_TYPE = $(if $(filter artifact,$(type)),data,dev)
 
-# Private: `build-env`'s steps, one per recipe line so make's fail-fast applies to each.
+# Private: the build steps live here so `build-env` can tear down the env if any fails.
 .PHONY: _build-env
 _build-env:
 	conda create -n $(name) python=$(py) --yes
-# 	Bootstrap vivarium.build_utils into the new environment.
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
 	conda run --no-capture-output -n $(name) pip install vivarium-build-utils
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
@@ -142,8 +140,7 @@ _build-env:
 	@if [ "$(type)" = "simulation" ]; then \
 		conda install -n $(name) redis -c anaconda -y; \
 	fi
-# 	`set -e` is load-bearing: a multi-command recipe line reports only its LAST
-# 	command's status, which is what masked the failing install before.
+# 	`set -e` is load-bearing: a multi-command line reports only its last command's status.
 	@if [ "$(lfs)" = "yes" ]; then \
 		set -e; \
 		conda run --no-capture-output -n $(name) conda install -c conda-forge git-lfs --yes; \

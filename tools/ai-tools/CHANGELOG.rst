@@ -1,4 +1,4 @@
-**0.27.1 - 09/17/26**
+**0.27.1 - 09/22/26**
 
 - ``make-commands``: document that ``build-env`` fails fast and tears down the
   partially-built environment unless ``keep_env=yes``

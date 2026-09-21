@@ -89,7 +89,7 @@ help:
 	@echo "  force [optional]"
 	@echo "      Whether to remove and recreate an existing environment. Either 'yes' or 'no' (default)"
 	@echo "  keep_env [optional]"
-	@echo "      Whether to keep a failed build's partial environment for debugging."
+	@echo "      Whether to keep a failed build's partial environment for inspection."
 	@echo "      Either 'yes' or 'no' (default, i.e. tear it down)."
 	@echo
 	@echo "After creating the environment:"
@@ -172,7 +172,7 @@ build-env: # Create a new environment with installed packages
 		if [ "$(keep_env)" = "yes" ]; then \
 			echo "Error: failed to build environment $(if $(path),$(path),$(name)). Keeping it (keep_env=yes)." >&2; \
 		else \
-			echo "Error: failed to build environment $(if $(path),$(path),$(name)). Removing it; pass keep_env=yes to inspect it instead." >&2; \
+			echo "Error: failed to build environment $(if $(path),$(path),$(name)). Removing it; pass keep_env=yes to keep it for inspection." >&2; \
 			conda env remove $(CONDA_ENV_FLAG) --yes; \
 		fi; \
 		exit 1; \
@@ -191,19 +191,17 @@ build-env: # Create a new environment with installed packages
 	@echo "  2. Run 'make help' again to see all newly available targets"
 	@echo
 
-# Private: `build-env`'s steps, one per recipe line so make's fail-fast applies to each.
+# Private: the build steps live here so `build-env` can tear down the env if any fails.
 .PHONY: _build-env
 _build-env:
 	conda create $(CONDA_ENV_FLAG) python=$(py) --yes
-# 	Bootstrap vivarium_build_utils into the new environment.
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
-	conda run --no-capture-output $(CONDA_ENV_FLAG) pip install "vivarium_build_utils>=4.0.0,<5.0.0"
+	conda run --no-capture-output $(CONDA_ENV_FLAG) pip install vivarium_build_utils
 	conda run --no-capture-output $(CONDA_ENV_FLAG) make install ENV_REQS=$(ENV_REQS_FOR_TYPE)
 	@if [ "$(type)" = "simulation" ]; then \
 		conda install $(CONDA_ENV_FLAG) redis -c anaconda -y; \
 	fi
-# 	`set -e` is load-bearing: a multi-command recipe line reports only its LAST
-# 	command's status, which is what masked the failing install before.
+# 	`set -e` is load-bearing: a multi-command line reports only its last command's status.
 	@if [ "$(lfs)" = "yes" ]; then \
 		set -e; \
 		conda run --no-capture-output $(CONDA_ENV_FLAG) conda install -c conda-forge git-lfs --yes; \
