@@ -249,7 +249,7 @@ class Mortality(Component):
             self.mortality_rate_pipeline,
             source=self.calculate_mortality_rate,
             required_resources=[self.acmr_table, self.unmodeled_csmr_table],
-            description="The all-cause mortality rate with modeled causes deleted",
+            description="The all-cause rate with modeled and unmodeled causes deleted",
         )
 
     def load_unmodeled_csmr(self, builder: Builder) -> float | pd.DataFrame:

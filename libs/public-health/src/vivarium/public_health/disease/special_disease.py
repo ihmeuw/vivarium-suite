@@ -255,7 +255,7 @@ class RiskAttributableDisease(ExcessMortalityState):
             "mortality_rate",
             modifier=self.adjust_mortality_rate,
             required_resources=[self.excess_mortality_rate_name],
-            description="Add this condition's excess mortality rate as its own column",
+            description="Record this condition's excess mortality rate as its own column",
         )
 
         distribution = self.get_data(

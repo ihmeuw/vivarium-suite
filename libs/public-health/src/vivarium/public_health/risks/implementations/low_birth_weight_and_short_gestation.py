@@ -127,7 +127,7 @@ class LBWSGDistribution(PolytomousDistribution):
             self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=required_resources,
-            description="The simulant's exposure on each LBWSG axis (birth with and gestational age)",
+            description="The simulant's exposure on each LBWSG axis (birth weight and gestational age)",
         )
 
     def register_exposure_params_pipeline(self, builder: Builder) -> None:
