@@ -113,7 +113,7 @@ def register_risk_affected_rate_producer(
         in addition to the calibration constant post-processor. These will be
         applied after the calibration constant post-processor.
     description
-        An optional description of the value this pipeline represents.
+        An optional description of the rate this pipeline represents.
     """
     post_processors = (
         additional_post_processors
@@ -147,7 +147,12 @@ class _RiskAffectedPipeline(Component):
     ) -> None:
         """Factory method to create and set up the class."""
         cls(
-            name, source, required_resources, additional_post_processors, is_rate, description
+            target_pipeline_name=name,
+            target_pipeline_source=source,
+            required_resources=required_resources,
+            additional_post_processors=additional_post_processors,
+            is_rate=is_rate,
+            description=description,
         ).setup_component(builder)
 
     def __init__(
