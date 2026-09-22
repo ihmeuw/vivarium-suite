@@ -4,6 +4,7 @@ import datetime
 import inspect
 import re
 import textwrap
+import warnings
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -1941,11 +1942,27 @@ class TestDeprecatedMutatorsAlias:
 
         assert mutators is pipeline.modifiers
 
-    def test_assigning_mutators_raises(self) -> None:
-        """The alias is read-only: assigning it never bypassed ``get_value_modifier``.
+    def test_reading_mutators_blames_the_caller(self) -> None:
+        """Pin ``stacklevel``, which nothing else here would catch."""
+        pipeline = Pipeline("a-value")
 
-        A wholesale assignment would leave ``_required_resources`` out of step with
-        the modifier list, so the rename is not the place to keep that working.
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            pipeline.mutators
+
+        deprecations = [r for r in records if issubclass(r.category, DeprecationWarning)]
+        assert len(deprecations) == 1
+        # The warning should point at this test file, not at pipeline.py.
+        assert deprecations[0].filename == __file__
+
+    def test_assigning_mutators_raises(self) -> None:
+        """Rebinding the alias raises rather than silently desyncing the pipeline.
+
+        A wholesale assignment would leave ``_required_resources`` out of step
+        with the modifier list, so the rename is not the place to keep that
+        working. This guards the rebind only: the getter hands back the live
+        list, so ``mutators.append(...)`` still bypasses ``get_value_modifier``
+        exactly as ``modifiers.append(...)`` always has.
         """
         pipeline = Pipeline("a-value")
 
