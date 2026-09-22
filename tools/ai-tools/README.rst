@@ -56,6 +56,9 @@ It includes:
   ``update_gbd_round``) available in a standard model-repo env.
 - ``environments`` — discovery-first guidance for picking up the right Python
   environment in a vivarium repo.
+- ``make-commands`` — reference for the shared ``make`` targets centralized in
+  ``vivarium.build_utils``'s ``base.mk`` / ``test.mk``, plus the per-repo
+  ``build-env`` target and its fail-fast / ``keep_env`` behavior.
 - ``vivarium-research`` — connector for the Vivarium Research
   documentation (https://vivarium-research.readthedocs.io). Discovers
   the docs nav tree on demand and searches modelling-strategy content

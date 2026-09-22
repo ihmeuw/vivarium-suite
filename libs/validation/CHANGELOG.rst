@@ -1,3 +1,8 @@
+**0.4.1 - 09/22/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **0.4.0 - 08/28/26**
 
 - Fix a bug in converting rates to probabilities for fuzzy checking
