@@ -1,3 +1,7 @@
+**6.6.3 - 09/23/26**
+
+- Rename the ``mutator`` argument of the calibration constant combiner to ``modifier``
+
 **6.6.2 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built
