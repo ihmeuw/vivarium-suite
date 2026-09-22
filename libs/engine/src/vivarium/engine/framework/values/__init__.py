@@ -24,6 +24,9 @@ from vivarium.engine.framework.values.interface import ValuesInterface
 from vivarium.engine.framework.values.manager import ValuesManager
 from vivarium.engine.framework.values.pipeline import (
     AttributePipeline,
+    NamedCallable,
+    NamedCombiner,
+    NamedPostProcessor,
     Pipeline,
     ValueModifier,
     ValueSource,

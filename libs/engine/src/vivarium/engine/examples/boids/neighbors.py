@@ -25,7 +25,10 @@ class Neighbors(Component):
         self.neighbors_calculated = False
         self._neighbors = pd.Series()
         builder.value.register_attribute_producer(
-            "neighbors", source=self.get_neighbors, required_resources=["x", "y"]
+            "neighbors",
+            source=self.get_neighbors,
+            required_resources=["x", "y"],
+            description="The other simulants within the configured radius of each simulant",
         )
         builder.population.register_initializer(
             initializer=self.initialize_neighbors,

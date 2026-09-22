@@ -33,7 +33,7 @@ from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
-from vivarium.engine.framework.values import Pipeline
+from vivarium.engine.framework.values import AttributePipeline, Pipeline
 
 
 def test_list_values() -> None:
@@ -45,6 +45,51 @@ def test_list_values() -> None:
         sim.get_value("foo")
     # ensure that 'foo' did not get added to the list of values
     assert sim.list_values() == ["simulant_step_size"]
+
+
+class TestGetAttribute:
+    """Tests for retrieving an attribute pipeline from an interactive simulation."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(components=[ColumnCreator()])
+
+    def test_a_created_column_is_an_attribute(self, sim: InteractiveContext) -> None:
+        """A column a component creates is reachable as an attribute."""
+        assert "test_column_1" in sim.get_attribute_names()
+
+    def test_the_pipeline_itself_is_returned(self, sim: InteractiveContext) -> None:
+        """The getter hands back the pipeline, not the value it produces."""
+        assert isinstance(sim.get_attribute("test_column_1"), AttributePipeline)
+
+    def test_an_unregistered_name_raises(self, sim: InteractiveContext) -> None:
+        """An unknown name is rejected rather than quietly accepted."""
+        with pytest.raises(ValueError, match="No attribute pipeline 'foo' registered."):
+            sim.get_attribute("foo")
+
+    def test_a_rejected_lookup_registers_nothing(self, sim: InteractiveContext) -> None:
+        """The guard is what keeps a typo from polluting the simulation.
+
+        ``ValuesManager.get_attribute`` creates a pipeline for an unknown name, so
+        without the guard in ``InteractiveContext.get_attribute`` a misspelling would
+        leave a new pipeline behind.
+        """
+        registered = sim.get_attribute_names()
+
+        with pytest.raises(ValueError):
+            sim.get_attribute("foo")
+
+        assert sim.get_attribute_names() == registered
+
+
+def test_get_value_and_get_attribute_point_at_each_other() -> None:
+    """A name looked up on the wrong getter says which one to use instead."""
+    sim = InteractiveContext(components=[ColumnCreator()])
+
+    with pytest.raises(ValueError, match="Try get_attribute\\(\\)"):
+        sim.get_value("test_column_1")
+    with pytest.raises(ValueError, match="Try get_value\\(\\)"):
+        sim.get_attribute("simulant_step_size")
 
 
 def test_run_for_duration() -> None:

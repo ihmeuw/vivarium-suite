@@ -103,6 +103,7 @@ class ValuesManager(Manager):
         required_resources: Iterable[str | Resource] = (),
         preferred_combiner: ValueCombiner = replace_combiner,
         preferred_post_processor: PostProcessor | Sequence[PostProcessor] = (),
+        description: str | None = None,
     ) -> Pipeline:
         """Registers a ``Pipeline`` as the producer of a named value.
 
@@ -128,6 +129,8 @@ class ValuesManager(Manager):
             ``vivarium.engine.framework.values``. Client code may define additional
             strategies as necessary. If a sequence of post processors is provided,
             they will be applied in the order they are provided.
+        description
+            An optional description of the value this pipeline represents.
 
         Returns
         -------
@@ -136,11 +139,12 @@ class ValuesManager(Manager):
         self.logger.debug(f"Registering value pipeline {value_name}")
         pipeline = self.get_value(value_name)
         self._configure_pipeline(
-            pipeline,
-            source,
-            required_resources,
-            preferred_combiner,
-            preferred_post_processor,
+            pipeline=pipeline,
+            source=source,
+            required_resources=required_resources,
+            preferred_combiner=preferred_combiner,
+            preferred_post_processor=preferred_post_processor,
+            description=description,
         )
         return pipeline
 
@@ -153,6 +157,7 @@ class ValuesManager(Manager):
         preferred_post_processor: AttributePostProcessor
         | Sequence[AttributePostProcessor] = (),
         source_is_private_column: bool = False,
+        description: str | None = None,
     ) -> None:
         """Registers an ``AttributePipeline`` as the producer of a named attribute.
 
@@ -184,16 +189,19 @@ class ValuesManager(Manager):
         source_is_private_column
             Whether or not the source is the name of a private column created by
             this component.
+        description
+            An optional description of the value this pipeline represents.
         """
         self.logger.debug(f"Registering attribute pipeline {value_name}")
         pipeline = self.get_attribute(value_name)
         self._configure_pipeline(
-            pipeline,
-            source,
+            pipeline=pipeline,
+            source=source,
             required_resources=required_resources,
             preferred_combiner=preferred_combiner,
             preferred_post_processor=preferred_post_processor,
             source_is_private_column=source_is_private_column,
+            description=description,
         )
 
     def register_value_modifier(
@@ -201,6 +209,7 @@ class ValuesManager(Manager):
         value_name: str,
         modifier: Callable[..., Any],
         required_resources: Iterable[str | Resource] = (),
+        description: str | None = None,
     ) -> None:
         """Marks a ``Callable`` as the modifier of a named value.
 
@@ -219,11 +228,14 @@ class ValuesManager(Manager):
         required_resources
             A list of resources that the producer requires. A string represents
             a population attribute.
+        description
+            An optional description of what this modifier does to the value.
         """
         self._configure_modifier(
-            self.get_value(value_name),
-            modifier,
-            required_resources,
+            pipeline=self.get_value(value_name),
+            modifier=modifier,
+            required_resources=required_resources,
+            description=description,
         )
 
     def register_attribute_modifier(
@@ -231,6 +243,7 @@ class ValuesManager(Manager):
         value_name: str,
         modifier: Callable[..., Any] | str,
         required_resources: Iterable[str | Resource] = (),
+        description: str | None = None,
     ) -> None:
         """Marks a ``Callable`` as the modifier of a named attribute.
 
@@ -250,12 +263,15 @@ class ValuesManager(Manager):
             A list of resources that need to be properly sourced before the
             pipeline modifier is called. This is a list of attribute names, pipelines,
             or randomness streams.
+        description
+            An optional description of what this modifier does to the value.
         """
         modifier = self.get_attribute(modifier) if isinstance(modifier, str) else modifier
         self._configure_modifier(
-            self.get_attribute(value_name),
-            modifier,
+            pipeline=self.get_attribute(value_name),
+            modifier=modifier,
             required_resources=required_resources,
+            description=description,
         )
 
     def get_value(self, name: str) -> Pipeline:
@@ -349,6 +365,7 @@ class ValuesManager(Manager):
         preferred_combiner: ValueCombiner = replace_combiner,
         preferred_post_processor: PostProcessor | Sequence[PostProcessor] = (),
         source_is_private_column: bool = False,
+        description: str | None = None,
     ) -> None:
         ...
 
@@ -362,6 +379,7 @@ class ValuesManager(Manager):
         preferred_post_processor: AttributePostProcessor
         | Sequence[AttributePostProcessor] = (),
         source_is_private_column: bool = False,
+        description: str | None = None,
     ) -> None:
         ...
 
@@ -376,6 +394,7 @@ class ValuesManager(Manager):
         | Sequence[PostProcessor]
         | Sequence[AttributePostProcessor] = (),
         source_is_private_column: bool = False,
+        description: str | None = None,
     ) -> None:
         component = self._get_current_component()
         value_source: ValueSource
@@ -427,6 +446,7 @@ class ValuesManager(Manager):
             post_processor=preferred_post_processor_list,  # type: ignore[arg-type]
             required_resources=required_resources,
             manager=self,
+            description=description,
         )
 
         self._add_resource(pipeline)
@@ -441,6 +461,7 @@ class ValuesManager(Manager):
         pipeline: Pipeline | AttributePipeline,
         modifier: Callable[..., Any],
         required_resources: Iterable[str | Resource] = (),
+        description: str | None = None,
     ) -> None:
         component = self._get_current_component()
         if isinstance(modifier, Resource):
@@ -450,7 +471,9 @@ class ValuesManager(Manager):
                 f"the `modifier` is of type {type(modifier)}",
             )
             required_resources = [modifier]
-        value_modifier = pipeline.get_value_modifier(modifier, component, required_resources)
+        value_modifier = pipeline.get_value_modifier(
+            modifier, component, required_resources, description=description
+        )
         self.logger.debug(f"Registering {value_modifier.name} as modifier to {pipeline.name}")
         self._add_resource(value_modifier)
 
