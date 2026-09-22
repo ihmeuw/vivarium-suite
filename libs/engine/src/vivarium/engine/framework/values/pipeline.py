@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -29,6 +30,10 @@ _ENTRY_INDENT = 18
 """Indent for a modifier or post-processor entry."""
 _DETAIL_INDENT = 21
 """Indent for the continuation line under an entry."""
+
+_MUTATORS_DEPRECATION_MESSAGE = (
+    "Pipeline.mutators is deprecated and will be removed; use Pipeline.modifiers instead."
+)
 
 
 class RequiresPrettyHook:
@@ -272,9 +277,9 @@ class ValueModifier(Resource, RequiresPrettyHook):
         required_resources: Iterable[str | Resource] = (),
         description: str | None = None,
     ) -> None:
-        mutator_name = self.get_callable_name(modifier)
-        mutator_index = len(pipeline.mutators) + 1
-        name = f"{pipeline.name}.{mutator_index}.{component.name}.{mutator_name}"
+        modifier_name = self.get_callable_name(modifier)
+        modifier_index = len(pipeline.modifiers) + 1
+        name = f"{pipeline.name}.{modifier_index}.{component.name}.{modifier_name}"
         super().__init__(name, component, required_resources)
 
         self._pipeline = pipeline
@@ -342,13 +347,13 @@ class Pipeline(Resource, RequiresPrettyHook):
         """A description of the value this pipeline represents."""
         self.source: ValueSource = MissingValueSource(self)
         """The callable source of the value represented by the pipeline."""
-        self.mutators: list[ValueModifier] = []
+        self.modifiers: list[ValueModifier] = []
         """A list of callables that directly modify the pipeline source or
         contribute portions of the value."""
         self._combiner: NamedCombiner | None = None
         self.post_processor: list[NamedPostProcessor] = []
         """A list of the transformations to perform in order on the combined output of
-        the source and mutators."""
+        the source and modifiers."""
         self._manager: ValuesManager | None = None
 
     def _get_attr_error(self, attribute: str) -> str:
@@ -371,7 +376,7 @@ class Pipeline(Resource, RequiresPrettyHook):
 
     @property
     def combiner(self) -> ValueCombiner:
-        """A strategy for combining the source and mutator values into the
+        """A strategy for combining the source and modifier values into the
         final value represented by the pipeline."""
         return self._get_property(self._combiner, "combiner")
 
@@ -379,6 +384,15 @@ class Pipeline(Resource, RequiresPrettyHook):
     def manager(self) -> ValuesManager:
         """A reference to the simulation values manager."""
         return self._get_property(self._manager, "manager")
+
+    @property
+    def mutators(self) -> list[ValueModifier]:
+        """Deprecated alias for :attr:`modifiers`.
+
+        .. deprecated:: 5.11.0
+        """
+        warnings.warn(_MUTATORS_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+        return self.modifiers
 
     def __call__(
         self,
@@ -421,8 +435,8 @@ class Pipeline(Resource, RequiresPrettyHook):
             )
         value = self.source(*args, **kwargs)
         if mode != "source":
-            for mutator in self.mutators:
-                value = self.combiner(value, mutator, *args, **kwargs)
+            for modifier in self.modifiers:
+                value = self.combiner(value, modifier, *args, **kwargs)
         if mode == "default":
             for processor in self.post_processor:
                 value = processor(value, self.manager)
@@ -472,16 +486,16 @@ class Pipeline(Resource, RequiresPrettyHook):
             labelled("combiner", combiner),
         ]
 
-        if self.mutators:
+        if self.modifiers:
             lines.append(
-                labelled("modifiers", f"{len(self.mutators)} (order not guaranteed)")
+                labelled("modifiers", f"{len(self.modifiers)} (order not guaranteed)")
             )
-            for mutator in self.mutators:
-                callable_name, modifier_component = mutator._describe()
+            for modifier in self.modifiers:
+                callable_name, modifier_component = modifier._describe()
                 lines.append(f"{'':<{_ENTRY_INDENT}}- {callable_name}")
                 lines.append(f"{'':<{_DETAIL_INDENT}}from {modifier_component}")
-                if mutator.description:
-                    lines.append(f"{'':<{_DETAIL_INDENT}}{mutator.description}")
+                if modifier.description:
+                    lines.append(f"{'':<{_DETAIL_INDENT}}{modifier.description}")
         else:
             lines.append(labelled("modifiers", "none"))
 
@@ -520,7 +534,7 @@ class Pipeline(Resource, RequiresPrettyHook):
         value_modifier = ValueModifier(
             self, modifier, component, required_resources, description=description
         )
-        self.mutators.append(value_modifier)
+        self.modifiers.append(value_modifier)
         self._required_resources = [*self._required_resources, value_modifier]
         return value_modifier
 
@@ -547,11 +561,11 @@ class Pipeline(Resource, RequiresPrettyHook):
             the component that is registering this attribute producer must be the
             one that creates those columns.
         combiner
-            A strategy for combining the source and mutator values into the
+            A strategy for combining the source and modifier values into the
             final value represented by the pipeline.
         post_processor
             An optional final transformation to perform on the combined output
-            of the source and mutators.
+            of the source and modifiers.
         required_resources
             A list of resources required by the pipeline source, combiner, and
             post-processor. A string represents a population attribute.
@@ -599,7 +613,7 @@ class AttributePipeline(Pipeline):
         of columns as its source and no modifiers or postprocessors."""
         return (
             isinstance(self.source, PrivateColumnValueSource)
-            and not self.mutators
+            and not self.modifiers
             and not self.post_processor
         )
 
@@ -608,7 +622,7 @@ class AttributePipeline(Pipeline):
         # Re-define the post-processor type to be more specific
         self.post_processor: list[AttributePostProcessor] = []  # type: ignore[assignment]
         """A list of the transformations to perform in order on the combined output of
-        the source and mutators."""
+        the source and modifiers."""
 
     def __call__(  # type: ignore[override]
         self,
@@ -637,7 +651,7 @@ class AttributePipeline(Pipeline):
         """
         # NOTE: must pass index in as arg (NOT kwarg!) to match signature of parent Pipeline._call()
         # Always skip post-processor at _call level; AttributePipeline handles it here.
-        # Pass "source" mode through so _call also skips mutators when needed.
+        # Pass "source" mode through so _call also skips modifiers when needed.
         _call_mode: Literal["source", "no-post-processors"] = (
             "source" if mode == "source" else "no-post-processors"
         )

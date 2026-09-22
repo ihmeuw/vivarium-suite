@@ -1,3 +1,9 @@
+**5.10.2 - 09/23/26**
+
+- Rename ``Pipeline.mutators`` to ``Pipeline.modifiers``
+- Add deprecation warning to ``Pipeline.mutators`` property
+- Rename the ``mutator`` argument of the value combiners to ``modifier``
+
 **5.10.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built

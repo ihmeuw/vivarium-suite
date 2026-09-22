@@ -204,12 +204,12 @@ class _RiskAffectedPipeline(Component):
     @staticmethod
     def _calibration_constant_combiner(
         value: list[Numeric | pd.DataFrame],
-        mutator: Callable[..., Numeric | pd.DataFrame],
+        modifier: Callable[..., Numeric | pd.DataFrame],
         *args: Any,
         **kwargs: Any,
     ) -> list[Numeric | pd.Series]:
-        """Append the mutator result to the calibration constant list."""
-        calibration_constant = mutator(*args, **kwargs)
+        """Append the modifier result to the calibration constant list."""
+        calibration_constant = modifier(*args, **kwargs)
         if isinstance(calibration_constant, pd.DataFrame):
             index_columns = [
                 col for col in calibration_constant.columns if col != DEFAULT_VALUE_COLUMN
