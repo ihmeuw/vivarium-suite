@@ -390,6 +390,8 @@ class Pipeline(Resource, RequiresPrettyHook):
         """Deprecated alias for :attr:`modifiers`.
 
         .. deprecated:: 5.11.0
+            Use :attr:`modifiers` instead. This alias is read-only and will be
+            removed.
         """
         warnings.warn(_MUTATORS_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
         return self.modifiers

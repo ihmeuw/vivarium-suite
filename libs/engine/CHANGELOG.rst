@@ -1,7 +1,9 @@
-**5.10.2 - 09/23/26**
+**5.11.0 - 09/23/26**
 
 - Rename ``Pipeline.mutators`` to ``Pipeline.modifiers``
 - Add deprecation warning to ``Pipeline.mutators`` property
+- Assigning to ``Pipeline.mutators`` now raises ``AttributeError``; it was
+  previously a plain writable attribute
 - Rename the ``mutator`` argument of the value combiners to ``modifier``
 
 **5.10.1 - 09/22/26**
