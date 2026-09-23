@@ -11,6 +11,8 @@ import re
 import sys
 from pathlib import Path
 
+from .versions import version_key
+
 # Capture the invariant prefix in group 1 and match only the version payload, so
 # surrounding RST markup (e.g. ``**bold**``) is preserved. The trailing group
 # repeats with ``*`` (not ``+``) so a single-version list still matches.
@@ -20,11 +22,6 @@ _ENUMERATED = re.compile(
 
 DEFAULT_README = "README.rst"
 DEFAULT_VERSIONS_FILE = "python_versions.json"
-
-
-def _version_key(version: str) -> tuple[int, ...]:
-    """Return a numeric sort key so ``3.9`` orders before ``3.10``."""
-    return tuple(int(part) for part in version.split("."))
 
 
 def load_versions(path: Path) -> list[str]:
@@ -47,7 +44,7 @@ def load_versions(path: Path) -> list[str]:
     data = json.loads(path.read_text())
     if not isinstance(data, list) or not data:
         raise ValueError(f"{path}: expected a non-empty JSON list of 'X.Y' strings")
-    return sorted((str(version) for version in data), key=_version_key)
+    return sorted((str(version) for version in data), key=version_key)
 
 
 def update_readme_text(text: str, versions: list[str]) -> tuple[str, int]:
@@ -67,7 +64,7 @@ def update_readme_text(text: str, versions: list[str]) -> tuple[str, int]:
     -------
         The updated text and the number of substitutions made.
     """
-    enumerated = ", ".join(sorted(versions, key=_version_key))
+    enumerated = ", ".join(sorted(versions, key=version_key))
     return _ENUMERATED.subn(lambda m: f"{m.group(1)}{enumerated}", text)
 
 
