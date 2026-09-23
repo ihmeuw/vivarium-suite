@@ -1,3 +1,8 @@
+**5.10.1 - 09/22/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **5.10.0 - 09/18/26**
 
 - Add ``InteractiveContext.get_attribute()`` to retrieve an attribute pipeline by name

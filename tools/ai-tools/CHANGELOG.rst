@@ -1,3 +1,9 @@
+**0.27.1 - 09/22/26**
+
+- ``make-commands``: document that ``build-env`` fails fast and tears down the
+  partially-built environment unless ``keep_env=yes``
+- ``README``: add the previously-undocumented ``make-commands`` skill
+
 **0.27.0 - 09/03/26**
 
 - ``design-doc``: create new design docs in the ``_ Draft and Exploratory`` Hub

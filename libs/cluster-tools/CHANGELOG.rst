@@ -1,3 +1,8 @@
+**4.7.1 - 09/22/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **4.7.0 - 09/03/26**
 
 - DRY up simulation-task creation shared by ``psimulate`` and ``dagger``. A ``dagger``

@@ -1,3 +1,8 @@
+**1.1.1 - 09/22/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **1.1.0 - 08/25/26**
 
 - **Breaking change.** Correct ``requires-python`` to ``>=3.11`` to match the tested versions

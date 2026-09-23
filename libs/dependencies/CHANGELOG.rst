@@ -1,3 +1,8 @@
+**1.3.1 - 09/22/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
+
 **1.3.0 - 08/25/26**
 
 - **Breaking change.** Drop support for Python 3.10 and add support for Python 3.11 and 3.12
