@@ -95,6 +95,9 @@ class CausalFactor(Component, ABC):
         "ensemble": EnsembleDistribution,
     }
 
+    TYPE: str = "causal factor"
+    """The type of causal factor. Used in descriptions."""
+
     VALID_ENTITY_TYPES = []
 
     ##############
@@ -379,6 +382,7 @@ class CausalFactor(Component, ABC):
             self.exposure_name,
             source=[self.exposure_distribution.exposure_ppf_pipeline],
             preferred_post_processor=get_exposure_post_processor(builder, self.name),
+            description=f"The simulant's exposure to this {self.TYPE}",
         )
 
     ########################

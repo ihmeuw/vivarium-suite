@@ -51,6 +51,9 @@ class CausalFactorEffect(Component, ABC):
 
     """
 
+    TYPE: str = "causal factor"
+    """The type of causal factor. Used in descriptions."""
+
     EXPOSURE_CLASS = CausalFactor
 
     ##############
@@ -573,6 +576,9 @@ class CausalFactorEffect(Component, ABC):
             self.relative_risk_name,
             self._relative_risk_source,
             required_resources=[self.exposure_name],
+            description=(
+                f"How much this {self.TYPE} changes its target at the" " simulant's exposure"
+            ),
         )
 
     def register_target_modifier(self, builder: Builder) -> None:
@@ -584,7 +590,9 @@ class CausalFactorEffect(Component, ABC):
             Access point for utilizing framework interfaces during setup.
         """
         builder.value.register_attribute_modifier(
-            self.target_name, modifier=self.relative_risk_name
+            self.target_name,
+            modifier=self.relative_risk_name,
+            description=f"Scale the target by this {self.TYPE}'s relative risk",
         )
 
     def register_calibration_constant_modifier(self, builder: Builder) -> None:
@@ -598,6 +606,9 @@ class CausalFactorEffect(Component, ABC):
         builder.value.register_value_modifier(
             get_calibration_constant_pipeline_name(self.target_name),
             modifier=lambda: self.paf_data,
+            description=(
+                f"Contribute this {self.TYPE}'s population" " attributable fraction"
+            ),
         )
 
     ##################

@@ -95,6 +95,8 @@ class Risk(CausalFactor):
             f"{self.causal_factor.name}_exposure_for_non_loglinear_riskeffect"
         )
 
+    TYPE = "risk"
+
     VALID_ENTITY_TYPES = ["risk_factor", "alternative_risk_factor"]
 
     #################
