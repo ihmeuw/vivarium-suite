@@ -22,7 +22,7 @@ on:
     # Mondays 04:00 PST, so a week's results are waiting at the start of the week.
     # GitHub cron is UTC only and does not follow daylight saving, so this lands an
     # hour later (05:00) while Pacific is on PDT.
-    - cron: "0 12 * * 1"
+    - cron: "0 12 * * 4"
   workflow_dispatch:
 
 # Only one run per ref at a time, so a second dispatch cancels the first
