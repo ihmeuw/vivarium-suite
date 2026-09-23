@@ -147,7 +147,9 @@ class RateTransition(Transition):
             name=self.transition_rate_pipeline,
             source=self.compute_transition_rate,
             required_resources=["is_alive", self.transition_rate_table],
-            description="The rate at which simulants make this transition",
+            description=(
+                "The rate at which simulants in the source state make this transition"
+            ),
         )
 
         self.rate_conversion_type = self.configuration["rate_conversion_type"]

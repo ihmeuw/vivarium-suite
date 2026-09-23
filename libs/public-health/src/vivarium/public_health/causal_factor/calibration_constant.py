@@ -188,7 +188,7 @@ class _RiskAffectedPipeline(Component):
             source=lambda: [0],
             preferred_combiner=self._calibration_constant_combiner,
             preferred_post_processor=self._calibration_constant_post_processor,
-            description="The joint calibration constant of this pipeline's risks",
+            description="The joint calibration constant of this pipeline's causal factors",
         )
 
         register_pipeline = (
@@ -197,13 +197,20 @@ class _RiskAffectedPipeline(Component):
             else builder.value.register_attribute_producer
         )
 
+        # Anything registered through this class is modifiable by causal factor
+        # effects; say so once here rather than at each of the seven call sites.
+        target_description = (
+            f"{self._description} (modifiable by causal factor effects)"
+            if self._description
+            else None
+        )
         register_pipeline(
             self._target_pipeline_name,
             source=self._target_pipeline_source,
             required_resources=[self._calibration_constant_table, *self._required_resources],
             preferred_combiner=multiplication_combiner,
             preferred_post_processor=[*self._additional_post_processors],
-            description=self._description,
+            description=target_description,
         )
 
         builder.value.register_attribute_modifier(

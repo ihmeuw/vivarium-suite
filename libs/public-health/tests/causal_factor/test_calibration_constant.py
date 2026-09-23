@@ -199,6 +199,9 @@ class TestProducer:
         Both helpers reach the values system through ``_RiskAffectedPipeline``
         rather than registering directly, so an argument dropped along that chain
         would leave the pipeline silently undescribed rather than raise.
+
+        The class appends its own note about modifiability, so this pins that the
+        caller's text survives and that the note is added.
         """
         source = _AttributeSource(
             "described_pipeline", 1.0, is_rate=is_rate, description="A described pipeline"
@@ -211,7 +214,7 @@ class TestProducer:
 
         assert (
             sim._values.get_attribute("described_pipeline").description
-            == "A described pipeline"
+            == "A described pipeline (modifiable by causal factor effects)"
         )
 
     @pytest.mark.parametrize(

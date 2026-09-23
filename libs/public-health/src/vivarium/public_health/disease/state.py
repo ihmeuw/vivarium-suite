@@ -143,13 +143,13 @@ class BaseDiseaseState(State):
         builder.value.register_attribute_producer(
             self.prevalence_pipeline,
             source=self.prevalence_table,
-            description="The share of the population in this state at initialization",
+            description="The proportion of the population in this state at initialization",
         )
         self.birth_prevalence_table = self.build_lookup_table(builder, "birth_prevalence")
         builder.value.register_attribute_producer(
             self.birth_prevalence_pipeline,
             source=self.birth_prevalence_table,
-            description="The share of newborns who start in this state",
+            description="The proportion of newborns who start in this state",
         )
         builder.value.register_attribute_producer(
             self.dwell_time_pipeline,

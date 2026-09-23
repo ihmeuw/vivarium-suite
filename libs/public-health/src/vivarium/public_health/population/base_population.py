@@ -936,5 +936,7 @@ class Disability(Component):
             source=lambda index: [pd.Series(0.0, index=index)],
             preferred_combiner=list_combiner,
             preferred_post_processor=union_post_processor,
-            description="The combined disability weight of every cause a simulant has",
+            description=(
+                "The combined disability weight of every modeled cause a simulant has"
+            ),
         )
