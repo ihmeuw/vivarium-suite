@@ -1,4 +1,4 @@
-**6.6.2 - 09/22/26**
+**6.6.2 - 09/23/26**
 
 - Describe every value producer and modifier registered by public health components
 - Accept an optional ``description`` in ``register_risk_affected_attribute_producer``
