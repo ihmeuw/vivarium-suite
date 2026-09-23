@@ -127,6 +127,7 @@ class LBWSGDistribution(PolytomousDistribution):
             self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=required_resources,
+            description="The simulant's exposure on each LBWSG axis (birth weight and gestational age)",
         )
 
     def register_exposure_params_pipeline(self, builder: Builder) -> None:
@@ -147,6 +148,7 @@ class LBWSGDistribution(PolytomousDistribution):
             self.exposure_params_pipeline,
             source=self.get_exposure_parameters,
             required_resources=lookup_tables,
+            description="The LBWSG exposure distribution parameters",
         )
 
     def build_exposure_params_table(self, builder: Builder) -> LookupTable | None:
@@ -500,6 +502,7 @@ class LBWSGRisk(Risk):
             source=self._get_exposure_source,
             # TODO - MIC-6703: once this is done, we won't needs to specify the required resources here
             required_resources=[self.get_exposure_name(axis) for axis in AXES],
+            description="The simulant's combined LBWSG exposure",
         )
 
     def register_birth_exposure_pipeline(self, builder: Builder) -> None:
@@ -519,6 +522,7 @@ class LBWSGRisk(Risk):
             source=self._get_birth_exposure_source,
             required_resources=[self.exposure_distribution.exposure_ppf_pipeline],
             preferred_post_processor=get_exposure_post_processor(builder, self.name),
+            description="The simulant's LBWSG exposure at birth",
         )
 
     ########################
@@ -751,6 +755,7 @@ class LBWSGRiskEffect(RiskEffect):
             self.relative_risk_name,
             source=self._relative_risk_source,
             required_resources=["age"] + self.rr_column_names,
+            description="How much this simulant's LBWSG exposure changes its target",
         )
 
     def get_interpolator(self, builder: Builder) -> pd.Series:

@@ -38,7 +38,7 @@ help:
 	@echo "make build-env"
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env [type=<environment type>] [name=<environment name>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>] [artifactory_access=<yes|no>]"
+	@echo "  make build-env [type=<environment type>] [name=<environment name>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>] [artifactory_access=<yes|no>] [keep_env=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
 	@echo "  type [optional]"
@@ -54,6 +54,9 @@ help:
 	@echo "  artifactory_access [optional]"
 	@echo "      Whether the build host can reach the IHME artifactory. Either 'yes'"
 	@echo "      (default) or 'no'; use 'no' to build off-VPN without artifactory."
+	@echo "  keep_env [optional]"
+	@echo "      Whether to keep a failed build's partial environment for inspection."
+	@echo "      Either 'yes' or 'no' (default, i.e. tear it down)."
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -63,7 +66,7 @@ endif
 
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
-	@allowed="type name lfs py include_timestamp artifactory_access"; \
+	@allowed="type name lfs py include_timestamp artifactory_access keep_env"; \
 	for arg in $(filter-out build-env,$(MAKECMDGOALS)) $(MAKEFLAGS); do \
 		case $$arg in \
 			*=*) \
@@ -95,21 +98,22 @@ build-env: # Create a new environment with installed packages
 #	artifactory_access
 	@$(eval artifactory_access ?= yes)
 	@$(call validate_arg,$(artifactory_access),yes no,artifactory_access)
+#	keep_env
+	@$(eval keep_env ?= no)
+	@$(call validate_arg,$(keep_env),yes no,keep_env)
 
-	conda create -n $(name) python=$(py) --yes
-# 	Bootstrap vivarium.build_utils into the new environment
-	conda run -n $(name) pip install vivarium-build-utils
-#	Install packages based on type. artifactory_access=no passes an empty IHME_PYPI,
-#	which clears base.mk's EXTRA_INDEX_FLAGS.
-	@if [ "$(type)" = "simulation" ]; then \
-		conda run -n $(name) make install ENV_REQS=dev $(if $(filter no,$(artifactory_access)),IHME_PYPI=); \
-		conda install -n $(name) redis -c anaconda -y; \
-	elif [ "$(type)" = "artifact" ]; then \
-		conda run -n $(name) make install ENV_REQS=data $(if $(filter no,$(artifactory_access)),IHME_PYPI=); \
-	fi
-	@if [ "$(lfs)" = "yes" ]; then \
-		conda run -n $(name) conda install -c conda-forge git-lfs --yes; \
-		conda run -n $(name) git lfs install; \
+#	Tear down on failure rather than leave an env that activates with nothing installed.
+	@if ! $(MAKE) --no-print-directory _build-env \
+			name=$(name) py=$(py) type=$(type) lfs=$(lfs) \
+			artifactory_access=$(artifactory_access); then \
+		echo >&2; \
+		if [ "$(keep_env)" = "yes" ]; then \
+			echo "Error: failed to build environment '$(name)'. Keeping it (keep_env=yes)." >&2; \
+		else \
+			echo "Error: failed to build environment '$(name)'. Removing it; pass keep_env=yes to keep it for inspection." >&2; \
+			conda env remove -n $(name) --yes; \
+		fi; \
+		exit 1; \
 	fi
 
 	@echo
@@ -121,3 +125,27 @@ build-env: # Create a new environment with installed packages
 	@echo
 	@echo "Don't forget to activate it with: 'conda activate $(name)'"
 	@echo
+
+# Extras group that `type` selects from base.mk's `install` target.
+ENV_REQS_FOR_TYPE = $(if $(filter artifact,$(type)),data,dev)
+
+# Private: the build steps live here so `build-env` can tear down the env if any fails.
+.PHONY: _build-env
+_build-env:
+	conda create -n $(name) python=$(py) --yes
+# 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
+	conda run --no-capture-output -n $(name) pip install vivarium-build-utils
+# 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
+	conda run --no-capture-output -n $(name) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
+	@if [ "$(type)" = "simulation" ]; then \
+		conda install -n $(name) redis -c anaconda -y; \
+	fi
+# 	`set -e` is load-bearing: a multi-command line reports only its last command's status.
+	@if [ "$(lfs)" = "yes" ]; then \
+		set -e; \
+		conda run --no-capture-output -n $(name) conda install -c conda-forge git-lfs --yes; \
+		conda run --no-capture-output -n $(name) git lfs install; \
+	fi
+# 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
+	@conda run --no-capture-output -n $(name) pip list --editable --format=freeze | grep -q . \
+		|| { echo "Error: nothing was installed into '$(name)' from $(CURDIR)." >&2; exit 1; }

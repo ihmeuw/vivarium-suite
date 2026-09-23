@@ -1,9 +1,14 @@
-**4.8.0 - 09/21/26**
+**4.9.0 - 09/23/26**
 
 - Add ``build-candidate-matrix``, backing a scheduled workflow that runs every package's
   declared candidate versions against main
 - Read candidate Python versions from ``[tool.vivarium.python-support] candidates``
 - Add ``validate-candidates`` to reject a version declared as both supported and a candidate
+
+**4.8.0 - 09/22/26**
+
+- Fail fast when ``make build-env`` fails and tear down the partially-built
+  environment, unless ``keep_env=yes`` is passed.
 
 **4.7.0 - 09/09/26**
 

@@ -22,6 +22,12 @@ PACKAGE_NAME = $(notdir $(CURDIR))
 # Helper function for validating enum arguments
 validate_arg = $(if $(filter-out $(2),$(1)),$(error Error: '$(3)' must be one of: $(2), got '$(1)'))
 
+# Environment selector for conda: a prefix when `path` is given, otherwise a name.
+CONDA_ENV_FLAG = $(if $(path),-p $(path),-n $(name))
+
+# Extras group that `type` selects from base.mk's `install` target.
+ENV_REQS_FOR_TYPE = $(if $(filter artifact,$(type)),data,dev)
+
 # Macro for validating make target arguments
 # Usage: $(call validate_make_args,target_name,allowed_args)
 # Example: $(call validate_make_args,build-env,type name path)
@@ -65,7 +71,7 @@ help:
 	@echo "particularly if you need non-python packages installed via conda."
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env [type=<environment type>] [name=<environment name>] [path=<environment path>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>] [force=<yes|no>]"
+	@echo "  make build-env [type=<environment type>] [name=<environment name>] [path=<environment path>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>] [force=<yes|no>] [keep_env=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
 	@echo "  type [optional]"
@@ -82,6 +88,9 @@ help:
 	@echo "      Python version (defaults to latest supported)"
 	@echo "  force [optional]"
 	@echo "      Whether to remove and recreate an existing environment. Either 'yes' or 'no' (default)"
+	@echo "  keep_env [optional]"
+	@echo "      Whether to keep a failed build's partial environment for inspection."
+	@echo "      Either 'yes' or 'no' (default, i.e. tear it down)."
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -118,7 +127,7 @@ endif
 
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
-	$(call validate_make_args,build-env,type name path lfs py include_timestamp force)
+	$(call validate_make_args,build-env,type name path lfs py include_timestamp force keep_env)
 	
 #   Handle arguments and set defaults
 #   type
@@ -138,18 +147,17 @@ build-env: # Create a new environment with installed packages
 #	force
 	@$(eval force ?= no)
 	@$(call validate_arg,$(force),yes no,force)
+#	keep_env
+	@$(eval keep_env ?= no)
+	@$(call validate_arg,$(keep_env),yes no,keep_env)
 #	python version
 	@$(eval py ?= $(shell cat python_versions.json | tr -d '[]" ' | tr ',' '\n' | sort -t. -k1,1n -k2,2n | tail -1))
-#	Determine conda create flag: -p for path, -n for name
-	@$(eval CONDA_CREATE_FLAG := $(if $(path),-p $(path),-n $(name)))
-#	Determine conda run flag: -p for path, -n for name
-	@$(eval CONDA_RUN_FLAG := $(if $(path),-p $(path),-n $(name)))
 
 #	Check if environment already exists and handle based on force flag
 	@if conda env list | grep -qE "$(if $(path),^$(path),^$(name))\s"; then \
 		if [ "$(force)" = "yes" ]; then \
 			echo "Removing existing environment..."; \
-			conda remove $(CONDA_CREATE_FLAG) --all --yes; \
+			conda remove $(CONDA_ENV_FLAG) --all --yes; \
 		else \
 			echo "Error: Environment already exists at $(if $(path),$(path),$(name))" >&2; \
 			echo "Use 'force=yes' to remove and recreate it, or specify a different location with 'name=<name>' or 'path=<path>'" >&2; \
@@ -157,19 +165,17 @@ build-env: # Create a new environment with installed packages
 		fi \
 	fi
 
-	conda create $(CONDA_CREATE_FLAG) python=$(py) --yes
-# 	Bootstrap vivarium_build_utils into the new environment.
-	conda run $(CONDA_RUN_FLAG) pip install "vivarium_build_utils>=4.0.0,<5.0.0"
-#	Install packages based on type
-	@if [ "$(type)" = "simulation" ]; then \
-		conda run $(CONDA_RUN_FLAG) make install ENV_REQS=dev; \
-		conda install $(CONDA_RUN_FLAG) redis -c anaconda -y; \
-	elif [ "$(type)" = "artifact" ]; then \
-		conda run $(CONDA_RUN_FLAG) make install ENV_REQS=data; \
-	fi
-	@if [ "$(lfs)" = "yes" ]; then \
-		conda run $(CONDA_RUN_FLAG) conda install -c conda-forge git-lfs --yes; \
-		conda run $(CONDA_RUN_FLAG) git lfs install; \
+#	The force check above guarantees we only tear down an env this invocation created.
+	@if ! $(MAKE) --no-print-directory _build-env \
+			name=$(name) path=$(path) py=$(py) type=$(type) lfs=$(lfs); then \
+		echo >&2; \
+		if [ "$(keep_env)" = "yes" ]; then \
+			echo "Error: failed to build environment $(if $(path),$(path),$(name)). Keeping it (keep_env=yes)." >&2; \
+		else \
+			echo "Error: failed to build environment $(if $(path),$(path),$(name)). Removing it; pass keep_env=yes to keep it for inspection." >&2; \
+			conda env remove $(CONDA_ENV_FLAG) --yes; \
+		fi; \
+		exit 1; \
 	fi
 
 	@echo
@@ -184,6 +190,26 @@ build-env: # Create a new environment with installed packages
 	@$(if $(path),echo "  1. Activate it: 'conda activate $(path)'",echo "  1. Activate it: 'conda activate $(name)'")
 	@echo "  2. Run 'make help' again to see all newly available targets"
 	@echo
+
+# Private: the build steps live here so `build-env` can tear down the env if any fails.
+.PHONY: _build-env
+_build-env:
+	conda create $(CONDA_ENV_FLAG) python=$(py) --yes
+# 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
+	conda run --no-capture-output $(CONDA_ENV_FLAG) pip install vivarium_build_utils
+	conda run --no-capture-output $(CONDA_ENV_FLAG) make install ENV_REQS=$(ENV_REQS_FOR_TYPE)
+	@if [ "$(type)" = "simulation" ]; then \
+		conda install $(CONDA_ENV_FLAG) redis -c anaconda -y; \
+	fi
+# 	`set -e` is load-bearing: a multi-command line reports only its last command's status.
+	@if [ "$(lfs)" = "yes" ]; then \
+		set -e; \
+		conda run --no-capture-output $(CONDA_ENV_FLAG) conda install -c conda-forge git-lfs --yes; \
+		conda run --no-capture-output $(CONDA_ENV_FLAG) git lfs install; \
+	fi
+# 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
+	@conda run --no-capture-output $(CONDA_ENV_FLAG) pip list --editable --format=freeze | grep -q . \
+		|| { echo "Error: nothing was installed into $(if $(path),$(path),$(name)) from $(CURDIR)." >&2; exit 1; }
 
 # Default shared environment directory (set by Jenkins nightly builds)
 SHARED_ENV_DIR ?= /mnt/team/simulation_science/priv/engineering/jenkins/shared_envs
