@@ -231,25 +231,31 @@ class RiskAttributableDisease(ExcessMortalityState):
             self.disability_weight_name,
             source=self.compute_disability_weight,
             required_resources=[self.raw_disability_weight_table],
+            description="The disability weight of simulants with this condition",
         )
         builder.value.register_attribute_modifier(
-            "all_causes.disability_weight", modifier=self.disability_weight_name
+            "all_causes.disability_weight",
+            modifier=self.disability_weight_name,
+            description="Contribute this condition's disability weight to the total",
         )
         builder.value.register_attribute_modifier(
             "cause_specific_mortality_rate",
             self.adjust_cause_specific_mortality_rate,
             required_resources=[self.cause_specific_mortality_rate_table],
+            description="Add this condition's rate to the modeled cause-specific total",
         )
         register_risk_affected_attribute_producer(
             builder=builder,
             name=self.excess_mortality_rate_name,
             source=self.compute_excess_mortality_rate,
             required_resources=[self.excess_mortality_rate_table],
+            description="The rate at which simulants with this condition die of it",
         )
         builder.value.register_attribute_modifier(
             "mortality_rate",
             modifier=self.adjust_mortality_rate,
             required_resources=[self.excess_mortality_rate_name],
+            description="Record this condition's excess mortality rate as its own column",
         )
 
         distribution = self.get_data(

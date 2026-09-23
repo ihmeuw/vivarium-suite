@@ -182,7 +182,11 @@ class Mortality(Component):
         self.register_unmodeled_csmr(builder)
         self.register_mortality_rate(builder)
 
-        builder.value.register_attribute_modifier("exit_time", self.update_exit_times)
+        builder.value.register_attribute_modifier(
+            "exit_time",
+            self.update_exit_times,
+            description="Record the exit time of simulants who have died",
+        )
 
         builder.population.register_initializer(
             initializer=self.initialize_mortality,
@@ -227,6 +231,7 @@ class Mortality(Component):
         builder.value.register_attribute_producer(
             self.cause_specific_mortality_rate_pipeline,
             source=self.build_lookup_table(builder, "csmr", 0),
+            description="The cause-specific mortality rate of the modeled causes",
         )
 
     def register_mortality_rate(self, builder: Builder) -> None:
@@ -244,6 +249,7 @@ class Mortality(Component):
             self.mortality_rate_pipeline,
             source=self.calculate_mortality_rate,
             required_resources=[self.acmr_table, self.unmodeled_csmr_table],
+            description="The all-cause rate with modeled and unmodeled causes deleted",
         )
 
     def load_unmodeled_csmr(self, builder: Builder) -> float | pd.DataFrame:
@@ -289,6 +295,7 @@ class Mortality(Component):
             builder=builder,
             name=self.unmodeled_csmr_pipeline,
             source=self.unmodeled_csmr_table,
+            description="The cause-specific mortality rate of the unmodeled causes",
         )
 
     def update_exit_times(self, index: pd.Index, previous_exit_time: pd.Series) -> pd.Series:

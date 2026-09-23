@@ -96,6 +96,10 @@ class AbsoluteShift(Component):
             f"{self.target.name}.{self.target.measure}",
             modifier=self.intervention_effect,
             required_resources=["age"],
+            description=(
+                "Replace the target with the configured value for simulants in the"
+                " configured age range"
+            ),
         )
 
     ##################################

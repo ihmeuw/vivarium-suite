@@ -57,12 +57,14 @@ class _AttributeSource(Component):
         additional_post_processors: (
             AttributePostProcessor | Sequence[AttributePostProcessor]
         ) = (),
+        description: str | None = None,
     ):
         super().__init__()
         self._pipeline_name = pipeline_name
         self._base_value = base_value
         self._is_rate = is_rate
         self._additional_post_processors = additional_post_processors
+        self._description = description
 
     @property
     def name(self) -> str:
@@ -91,6 +93,7 @@ class _AttributeSource(Component):
             name=self._pipeline_name,
             source=self.base_value_table,
             additional_post_processors=self._additional_post_processors,
+            description=self._description,
         )
 
 
@@ -189,6 +192,30 @@ class TestProducer:
         if is_rate:
             value = from_yearly(value, time_step)
         return transform(value)
+
+    def test_description_reaches_the_pipeline(self, base_config, base_plugins, is_rate):
+        """A description survives the hop from the helper to the pipeline.
+
+        Both helpers reach the values system through ``_RiskAffectedPipeline``
+        rather than registering directly, so an argument dropped along that chain
+        would leave the pipeline silently undescribed rather than raise.
+
+        The class appends its own note about modifiability, so this pins that the
+        caller's text survives and that the note is added.
+        """
+        source = _AttributeSource(
+            "described_pipeline", 1.0, is_rate=is_rate, description="A described pipeline"
+        )
+        sim = InteractiveContext(
+            components=[BasePopulation(), source],
+            configuration=base_config,
+            plugin_configuration=base_plugins,
+        )
+
+        assert (
+            sim._values.get_attribute("described_pipeline").description
+            == "A described pipeline (modifiable by causal factor effects)"
+        )
 
     @pytest.mark.parametrize(
         "calibration_values",

@@ -43,6 +43,9 @@ class CausalFactorDistribution(Component, ABC):
     in a simulation.
     """
 
+    EXPOSURE_PPF_DESCRIPTION = "The simulant's exposure value at its propensity"
+    """Shared by every subclass, which all register the same pipeline."""
+
     #####################
     # Lifecycle methods #
     #####################
@@ -72,6 +75,22 @@ class CausalFactorDistribution(Component, ABC):
 
         self.causal_factor_propensity = f"{self.causal_factor.name}.propensity"
         self.exposure_ppf_pipeline = f"{self.causal_factor.name}.exposure_distribution.ppf"
+
+    @property
+    def causal_factor_type(self) -> str:
+        """The word for this distribution's entity in descriptions.
+
+        A distribution is shared by risks and interventions alike, so unlike
+        ``CausalFactor`` it cannot carry the noun as a class attribute and reads it
+        off the entity type instead. ``Intervention`` accepts only "intervention";
+        ``Risk`` accepts the remaining types.
+        """
+        return "intervention" if self.causal_factor.type == "intervention" else "risk"
+
+    @property
+    def exposure_params_description(self) -> str:
+        """Shared by every subclass that registers an exposure parameters pipeline."""
+        return f"The distribution parameters of this {self.causal_factor_type}'s exposure"
 
     #################
     # Setup methods #
@@ -288,6 +307,7 @@ class EnsembleDistribution(CausalFactorDistribution):
                 self.causal_factor_propensity,
                 self.ensemble_propensity,
             ],
+            description=self.EXPOSURE_PPF_DESCRIPTION,
         )
 
     ########################
@@ -441,6 +461,7 @@ class ContinuousDistribution(CausalFactorDistribution):
             name=self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=[self.exposure_params_name, self.causal_factor_propensity],
+            description=self.EXPOSURE_PPF_DESCRIPTION,
         )
 
     def register_exposure_params_pipeline(self, builder: Builder) -> None:
@@ -452,7 +473,9 @@ class ContinuousDistribution(CausalFactorDistribution):
             Access point for utilizing framework interfaces during setup.
         """
         builder.value.register_attribute_producer(
-            self.exposure_params_name, source=self.parameters_table
+            self.exposure_params_name,
+            source=self.parameters_table,
+            description=self.exposure_params_description,
         )
 
     ##################################
@@ -569,6 +592,7 @@ class PolytomousDistribution(CausalFactorDistribution):
             self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=[self.exposure_params_pipeline, self.causal_factor_propensity],
+            description=self.EXPOSURE_PPF_DESCRIPTION,
         )
 
     def register_exposure_params_pipeline(self, builder: Builder) -> None:
@@ -580,7 +604,9 @@ class PolytomousDistribution(CausalFactorDistribution):
             Access point for utilizing framework interfaces during setup.
         """
         builder.value.register_attribute_producer(
-            self.exposure_params_pipeline, source=self.exposure_params_table
+            self.exposure_params_pipeline,
+            source=self.exposure_params_table,
+            description=self.exposure_params_description,
         )
 
     def build_exposure_params_table(self, builder: "Builder") -> LookupTable:
@@ -763,6 +789,7 @@ class DichotomousDistribution(CausalFactorDistribution):
             self.exposure_ppf_pipeline,
             source=self.exposure_ppf,
             required_resources=[self.exposure_params_name, self.causal_factor_propensity],
+            description=self.EXPOSURE_PPF_DESCRIPTION,
         )
 
     def register_exposure_params_pipeline(self, builder: Builder) -> None:
@@ -778,6 +805,7 @@ class DichotomousDistribution(CausalFactorDistribution):
             name=self.exposure_params_name,
             source=self.exposure_parameter_source,
             required_resources=[self.exposure_table],
+            description=self.exposure_params_description,
         )
 
     def build_exposure_table(self, builder: Builder) -> LookupTable[pd.Series]:
