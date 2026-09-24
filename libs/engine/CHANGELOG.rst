@@ -1,4 +1,4 @@
-**5.11.0 - 09/23/26**
+**5.11.0 - 09/24/26**
 
 - Rename ``Pipeline.mutators`` to ``Pipeline.modifiers``
 - Add a ``FutureWarning`` to the deprecated ``Pipeline.mutators`` property
