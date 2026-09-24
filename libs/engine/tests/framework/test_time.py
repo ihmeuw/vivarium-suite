@@ -589,6 +589,6 @@ def test_step_size_modifier_forwards_its_description() -> None:
             return step_sizes  # type: ignore [return-value]
 
     sim = InteractiveContext(components=[DescribedStepModifier()])
-    modifier = sim.get_value("simulant_step_size").mutators[0]
+    modifier = sim.get_value("simulant_step_size").modifiers[0]
 
     assert modifier.description == "Take a one-day step"

@@ -168,7 +168,7 @@ class PopulationView:
             included if True and always excluded if False.
         skip_post_processor
             Whether we should invoke the post-processor on the combined
-            source and mutator output or return without post-processing.
+            source and modifier output or return without post-processing.
             This is useful when the post-processor acts as some sort of final
             unit conversion (e.g. the rescale post processor).
         mode

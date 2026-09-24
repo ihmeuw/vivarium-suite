@@ -1,3 +1,11 @@
+**5.11.0 - 09/24/26**
+
+- Rename ``Pipeline.mutators`` to ``Pipeline.modifiers``
+- Add a ``FutureWarning`` to the deprecated ``Pipeline.mutators`` property
+- Assigning to ``Pipeline.mutators`` now raises ``AttributeError``; it was
+  previously a plain writable attribute
+- Rename the ``mutator`` argument of the value combiners to ``modifier``
+
 **5.10.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built
