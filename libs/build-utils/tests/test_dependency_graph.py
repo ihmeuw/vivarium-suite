@@ -133,14 +133,18 @@ def _make_lib(
     path: Path | None = None,
     version: str = "1.0.0",
     upstreams: Mapping[str, SpecifierSet] | None = None,
+    python_versions: Sequence[str] = (),
+    candidates: Sequence[str] = (),
 ) -> Lib:
-    """Construct a Lib directly for plan tests."""
+    """Construct a Lib directly without touching disk."""
     return Lib(
         name=name,
         dist_name=dist_name or f"vivarium-{name}",
         path=path or Path("/repo/libs") / name,
         version=version,
         upstreams=upstreams or {},
+        python_versions=tuple(python_versions),
+        candidates=tuple(candidates),
     )
 
 
@@ -274,6 +278,22 @@ class TestLoadLibs:
         libs = load_libs(libs_dir)
         assert set(libs["a"].upstreams) == {"vivarium-b"}
         assert libs["a"].upstreams["vivarium-b"] == SpecifierSet(">=2.0.0")
+
+    def test_reads_python_versions_in_declared_order(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """python_versions.json is carried on the Lib without reordering."""
+        libs = load_libs(make_monorepo({"a": {"python_versions": ["3.12", "3.10", "3.11"]}}))
+        assert libs["a"].python_versions == ("3.12", "3.10", "3.11")
+
+    def test_missing_python_versions_yields_empty(
+        self,
+        make_monorepo: MonorepoFactory,
+    ) -> None:
+        """A lib without python_versions.json loads with no supported versions."""
+        libs = load_libs(make_monorepo({"a": {"omit_python_versions": True}}))
+        assert libs["a"].python_versions == ()
 
 
 class TestGetTransitiveUpstreams:
@@ -1069,6 +1089,32 @@ class TestBuildPythonMatrix:
         with pytest.raises(KeyError):
             build_python_matrix(["ghost"], libs)
 
+    def test_reads_versions_off_the_lib(self) -> None:
+        """A hand-built Lib whose path does not exist still fans out."""
+        libs = {
+            "a": _make_lib("a", path=Path("/nowhere/a"), python_versions=["3.11", "3.12"])
+        }
+        assert build_python_matrix(["a"], libs) == {
+            "include": [
+                {"library": "a", "python-version": "3.11"},
+                {"library": "a", "python-version": "3.12"},
+            ]
+        }
+
+    def test_raises_on_empty_versions_on_the_lib(self) -> None:
+        """A Lib carrying no versions fails loudly, whatever is on disk."""
+        with pytest.raises(MissingPythonVersionsError, match="python_versions.json"):
+            build_python_matrix(["a"], {"a": _make_lib("a")})
+
+    def test_ignores_disk_changes_after_loading(self, make_monorepo: MonorepoFactory) -> None:
+        """The matrix reflects the loaded snapshot, not the file at call time."""
+        libs_dir = make_monorepo({"a": {"python_versions": ["3.11"]}})
+        libs = load_libs(libs_dir)
+        (libs_dir / "a" / "python_versions.json").write_text(json.dumps(["3.13"]))
+        assert build_python_matrix(["a"], libs) == {
+            "include": [{"library": "a", "python-version": "3.11"}]
+        }
+
 
 class TestLoadLibCandidates:
     """Tests for the ``candidates`` field ``load_libs`` puts on each ``Lib``."""
@@ -1776,6 +1822,22 @@ class TestFindCandidateConflicts:
         )
         message = format_candidate_conflicts(find_candidate_conflicts(libs))
         assert message.index("libs/a") < message.index("libs/z")
+
+    def test_reads_versions_off_the_lib(self) -> None:
+        """A hand-built Lib whose path does not exist still reports its conflict."""
+        libs = {
+            "a": _make_lib(
+                "a", path=Path("/nowhere/a"), python_versions=["3.14"], candidates=["3.14"]
+            )
+        }
+        assert find_candidate_conflicts(libs) == {"a": ["3.14"]}
+
+    def test_ignores_disk_changes_after_loading(self, make_monorepo: MonorepoFactory) -> None:
+        """The comparison uses the loaded snapshot, not the file at call time."""
+        libs_dir = make_monorepo({"a": {"python_versions": ["3.11"], "candidates": ["3.14"]}})
+        libs = load_libs(libs_dir)
+        (libs_dir / "a" / "python_versions.json").write_text(json.dumps(["3.11", "3.14"]))
+        assert find_candidate_conflicts(libs) == {}
 
 
 class TestCLIBuildCandidateMatrix:

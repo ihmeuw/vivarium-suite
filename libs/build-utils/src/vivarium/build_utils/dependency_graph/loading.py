@@ -18,6 +18,7 @@ if sys.version_info >= (3, 11):
 else:  # Python < 3.11
     import tomli as tomllib
 
+from ..versions import read_python_versions
 from .models import DEFAULT_EXTRAS, Lib
 
 
@@ -25,8 +26,9 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
     """Parse every library under ``libs_dir`` into a :class:`Lib`.
 
     For each ``libs/<pkg>`` directory, reads the distribution name and the
-    declared dependencies from ``pyproject.toml`` and the pending version from
-    the first line of ``CHANGELOG.rst``. Dependencies are resolved over
+    declared dependencies from ``pyproject.toml``, the pending version from
+    the first line of ``CHANGELOG.rst``, and the tested Python versions from
+    ``python_versions.json``. Dependencies are resolved over
     ``[project].dependencies`` plus the requested ``extras``, transitively
     expanding self-referential extras (e.g. ``ci_github = ["vivarium-foo[test,
     docs]"]`` pulls in the requirements of ``foo``'s ``test`` and ``docs``
@@ -93,6 +95,7 @@ def load_libs(libs_dir: Path, extras: Sequence[str] = DEFAULT_EXTRAS) -> dict[st
             path=lib_dir.resolve(),
             version=versions[name],
             upstreams=upstreams,
+            python_versions=tuple(read_python_versions(lib_dir)),
             candidates=_get_candidates(pyprojects[name], lib_dir),
         )
     return libs

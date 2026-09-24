@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 
-from ..versions import read_python_versions
 from .models import (
     ChangedLibs,
     Lib,
@@ -119,7 +118,7 @@ def build_python_matrix(names: Iterable[str], libs: Mapping[str, Lib]) -> Python
     """
     include: list[PythonMatrixEntry] = []
     for name in sorted(names):
-        versions = read_python_versions(libs[name].path)
+        versions = libs[name].python_versions
         if not versions:
             raise MissingPythonVersionsError(
                 f"libs/{name}/python_versions.json not found or empty"
