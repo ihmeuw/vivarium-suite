@@ -1937,7 +1937,7 @@ class TestDeprecatedMutatorsAlias:
     def test_reading_mutators_warns_and_returns_the_modifiers(self) -> None:
         pipeline = Pipeline("a-value")
 
-        with pytest.warns(DeprecationWarning, match="use Pipeline.modifiers"):
+        with pytest.warns(FutureWarning, match="use Pipeline.modifiers"):
             mutators = pipeline.mutators
 
         assert mutators is pipeline.modifiers
@@ -1950,7 +1950,7 @@ class TestDeprecatedMutatorsAlias:
             warnings.simplefilter("always")
             pipeline.mutators
 
-        deprecations = [r for r in records if issubclass(r.category, DeprecationWarning)]
+        deprecations = [r for r in records if issubclass(r.category, FutureWarning)]
         assert len(deprecations) == 1
         # The warning should point at this test file, not at pipeline.py.
         assert deprecations[0].filename == __file__

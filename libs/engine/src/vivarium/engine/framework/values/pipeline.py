@@ -393,7 +393,7 @@ class Pipeline(Resource, RequiresPrettyHook):
             Use :attr:`modifiers` instead. This alias is read-only and will be
             removed.
         """
-        warnings.warn(_MUTATORS_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+        warnings.warn(_MUTATORS_DEPRECATION_MESSAGE, FutureWarning, stacklevel=2)
         return self.modifiers
 
     def __call__(
