@@ -627,6 +627,7 @@ class ConstantRatePipeline(Component):
         builder.value.register_attribute_producer(
             self._pipeline_name,
             source=self._source,
+            description="A constant rate for the example simulation",
         )
 
     def _source(self, index: pd.Index) -> pd.Series:

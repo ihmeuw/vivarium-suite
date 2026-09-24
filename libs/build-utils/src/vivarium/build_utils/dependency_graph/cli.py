@@ -1,7 +1,8 @@
 """Command-line interface for ``vivarium.build_utils.dependency_graph``.
 
 Exposes the install-editable, classify-changes, build-release-matrix,
-build-downstream-matrix, verify-editable, and check-acyclic subcommands consumed by
+build-downstream-matrix, verify-editable, build-candidate-matrix,
+validate-candidates, and check-acyclic subcommands consumed by
 ``make install`` and the CI/release workflows.
 """
 
@@ -14,12 +15,18 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from .candidates import (
+    build_candidate_matrix,
+    find_candidate_conflicts,
+    format_candidate_conflicts,
+)
 from .changes import build_python_matrix, classify_changed_libs
 from .editable import build_install_plan, get_editable_upstreams, run_install
 from .graph import get_transitive_downstreams, sort_topologically
 from .loading import load_libs
 from .models import (
     DEFAULT_EXTRAS,
+    CandidateVersionConflictError,
     DependencyConflictError,
     DependencyCycleError,
     MissingPythonVersionsError,
@@ -59,6 +66,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         Recompute the editable upstreams selected of ``target`` and assert each
         one is installed editably (not resolved from PyPI). Used by the CI workflow
         after ``make install``.
+
+    ``build-candidate-matrix [--libs-dir <path>]``
+        Print the GitHub Actions matrix JSON of every library paired with each
+        Python version in its ``[tool.vivarium.python-support] candidates``. Used by
+        the Candidate Check workflow's scheduled run against ``main``. Considers
+        every library rather than a changed subset, and emits an empty ``include``
+        when nothing declares a candidate.
+
+    ``validate-candidates [--libs-dir <path>]``
+        Validate that no library declares a Python version as both supported and a
+        candidate. Used by the CI workflow as a pre-merge guard.
 
     ``check-acyclic [--libs-dir <path>]``
         Validate that the whole in-tree dependency graph is acyclic. Used by the
@@ -107,6 +125,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     verify_parser.add_argument("--changed", default="")
     verify_parser.add_argument("--libs-dir", default=None)
 
+    # build-candidate-matrix
+    candidate_parser = subparsers.add_parser("build-candidate-matrix")
+    candidate_parser.add_argument("--libs-dir", default=None)
+
+    # validate-candidates
+    validate_candidates_parser = subparsers.add_parser("validate-candidates")
+    validate_candidates_parser.add_argument("--libs-dir", default=None)
+
     # check-acyclic
     check_parser = subparsers.add_parser("check-acyclic")
     check_parser.add_argument("--libs-dir", default=None)
@@ -119,6 +145,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_verify_editable(args)
     if args.command == "check-acyclic":
         return _run_check_acyclic(args)
+    if args.command == "build-candidate-matrix":
+        return _run_build_candidate_matrix(args)
+    if args.command == "validate-candidates":
+        return _run_validate_candidates(args)
     if args.command == "build-downstream-matrix":
         return _run_build_downstream_matrix(args)
     if args.command == "classify-changes":
@@ -188,6 +218,32 @@ def _run_check_acyclic(args: argparse.Namespace) -> int:
         print(str(error), file=sys.stderr)
         return 1
     print(f"in-tree dependency graph is acyclic ({len(libs)} libraries)")
+    return 0
+
+
+def _run_build_candidate_matrix(args: argparse.Namespace) -> int:
+    """Handle the ``build-candidate-matrix`` subcommand."""
+    libs_dir = _discover_libs_dir(args.libs_dir)
+    libs = load_libs(libs_dir)
+    try:
+        matrix = build_candidate_matrix(libs)
+    except CandidateVersionConflictError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 1
+    print(json.dumps(matrix))
+    return 0
+
+
+def _run_validate_candidates(args: argparse.Namespace) -> int:
+    """Handle the ``validate-candidates`` subcommand."""
+    libs_dir = _discover_libs_dir(args.libs_dir)
+    libs = load_libs(libs_dir)
+    conflicts = find_candidate_conflicts(libs)
+    if conflicts:
+        print(f"::error::{format_candidate_conflicts(conflicts)}", file=sys.stderr)
+        return 1
+    declared = sum(len(lib.candidates) for lib in libs.values())
+    print(f"candidate python declarations are consistent ({declared} declared)")
     return 0
 
 

@@ -35,18 +35,33 @@ release:
    :func:`build_python_matrix` fans the libraries to check out over their supported
    Python versions.
 
+5. **Candidate Python check** (consumed by the Candidate Check workflow via the
+   ``build-candidate-matrix`` CLI subcommand, and by the CI workflow via
+   ``validate-candidates``). A library can declare Python versions it wants exercised
+   before supporting them; :func:`build_candidate_matrix` fans every library out over
+   its declared candidates for a scheduled run against ``main``. These never reach a
+   gating matrix, so a version the ecosystem is not ready for cannot block a merge.
+   :func:`find_candidate_conflicts` backs ``validate-candidates``, which fails a build
+   whose declarations name a version as both supported and a candidate.
+
 Run as ``python -m vivarium.build_utils.dependency_graph <subcommand>``.
 
 The implementation is split across submodules - :mod:`models` (every data type:
 the libraries, the install plan, and the GitHub Actions matrix payloads),
 :mod:`loading` (parse ``libs/`` from disk), :mod:`graph` (reachability and
 topological ordering), :mod:`editable` (editable-upstream install), :mod:`release`
-(release matrix), :mod:`changes` (change detection and per-library matrix), and
+(release matrix), :mod:`changes` (change detection and per-library matrix),
+:mod:`candidates` (candidate Python matrix and its declaration guard), and
 :mod:`cli` (command-line interface) - and the load-bearing names are re-exported here.
 """
 
 from __future__ import annotations
 
+from .candidates import (
+    build_candidate_matrix,
+    find_candidate_conflicts,
+    format_candidate_conflicts,
+)
 from .changes import (
     BUILD_IRRELEVANT_PATTERN,
     build_python_matrix,
@@ -59,6 +74,7 @@ from .graph import get_transitive_downstreams, get_transitive_upstreams, sort_to
 from .loading import load_libs
 from .models import (
     DEFAULT_EXTRAS,
+    CandidateVersionConflictError,
     ChangedLibs,
     DependencyConflictError,
     DependencyCycleError,

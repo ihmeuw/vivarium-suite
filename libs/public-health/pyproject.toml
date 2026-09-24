@@ -33,7 +33,7 @@ classifiers = [
 dependencies = [
     "vivarium-dependencies[pandas,numpy,scipy,tables,loguru,pyarrow]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
-    "vivarium-engine>=5.2.0",
+    "vivarium-engine>=5.10.0",
     "vivarium-config-tree>=5.0.0",
     "vivarium-risk-distributions>=3.0.0,<4.0.0",
 ]
@@ -57,6 +57,9 @@ ci_jenkins = ["vivarium-public-health[ci_github,cluster]"]
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/public-health"
+
+[tool.vivarium.python-support]
+candidates = ["3.14"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

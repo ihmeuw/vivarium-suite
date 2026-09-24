@@ -29,6 +29,8 @@ class Intervention(CausalFactor):
 
     """
 
+    TYPE = "intervention"
+
     VALID_ENTITY_TYPES = ["intervention"]
 
     @property
@@ -71,6 +73,8 @@ class InterventionEffect(CausalFactorEffect):
                     relative_risk: 0.5
 
     """
+
+    TYPE = "intervention"
 
     EXPOSURE_CLASS = Intervention
 

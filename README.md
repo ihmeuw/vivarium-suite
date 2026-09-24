@@ -67,6 +67,7 @@ CI uses [uv](https://docs.astral.sh/uv/) as the package manager.
 
 - **Push/PR builds**: GitHub Actions (`.github/workflows/ci.yml`) — runs only for affected packages
 - **Scheduled builds**: Jenkins — per-package Multibranch Pipelines provisioned by the top-level `Jenkinsfile`
+- **Scheduled candidate check**: GitHub Actions (`.github/workflows/candidate-check.yml`) — weekly run of each package's declared candidate Python versions against `main`; never gates a merge
 
 ## Releasing
 

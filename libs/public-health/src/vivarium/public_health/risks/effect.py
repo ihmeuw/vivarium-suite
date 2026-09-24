@@ -44,6 +44,8 @@ class RiskEffect(CausalFactorEffect):
 
     """
 
+    TYPE = "risk"
+
     EXPOSURE_CLASS = Risk
 
     ##############

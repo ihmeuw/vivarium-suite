@@ -137,6 +137,7 @@ class DiseaseModel(Machine):
             "cause_specific_mortality_rate",
             self.adjust_cause_specific_mortality_rate,
             required_resources=["age", "sex"],
+            description="Add this cause's rate to the modeled cause-specific total",
         )
 
     def on_post_setup(self, event: Event) -> None:

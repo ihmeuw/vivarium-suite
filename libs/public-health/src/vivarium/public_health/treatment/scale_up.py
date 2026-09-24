@@ -264,7 +264,9 @@ class LinearScaleUp(Component):
             Access point for utilizing framework interfaces during setup.
         """
         builder.value.register_attribute_modifier(
-            f"{self.treatment}.exposure_parameters", modifier=self.coverage_effect
+            f"{self.treatment}.exposure_parameters",
+            modifier=self.coverage_effect,
+            description="Adjust coverage to the current point in the scale-up",
         )
 
     ##################################
