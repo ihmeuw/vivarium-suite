@@ -81,10 +81,15 @@ def test_task_rejects_run_that_is_neither_callable_nor_str(run: Any) -> None:
         Task(**_task_kwargs(run=run))
 
 
-def test_task_rejects_empty_name() -> None:
-    """Reject an empty name with an error naming the field."""
-    with pytest.raises(ValueError, match="non-empty"):
-        Task(**_task_kwargs(name=""))
+@pytest.mark.parametrize(
+    "name, error",
+    [("", ValueError), (42, TypeError), (None, TypeError)],
+    ids=["empty", "int", "none"],
+)
+def test_task_rejects_invalid_name(name: Any, error: type[Exception]) -> None:
+    """Reject an empty or non-string name with an error naming the field."""
+    with pytest.raises(error, match="Task name"):
+        Task(**_task_kwargs(name=name))
 
 
 def test_task_accepts_structurally_conforming_nodes() -> None:
@@ -125,6 +130,8 @@ def test_task_accepts_structurally_conforming_nodes() -> None:
         ("inputs", _stub_node_missing_attributes()),
         ("outputs", _stub_node_missing_attributes()),
         ("code_id", _stub_node_missing_attributes()),
+        ("inputs", [_StubNode("raw")]),
+        ("outputs", [_StubNode("clean")]),
     ],
     ids=[
         "inputs_path",
@@ -133,16 +140,21 @@ def test_task_accepts_structurally_conforming_nodes() -> None:
         "inputs_missing_attributes",
         "outputs_missing_attributes",
         "code_id_missing_attributes",
+        "inputs_not_a_mapping",
+        "outputs_not_a_mapping",
     ],
 )
 def test_task_rejects_non_conforming_node_values(field: str, bad_value: Any) -> None:
-    """Reject a bare Path or a node missing a PNode member in inputs, outputs, or code_id.
+    """Reject a non-mapping field, a bare Path, or a node missing a PNode member.
 
-    The bad value sits behind a valid one so the error must name the offending key.
+    The bad node sits behind a valid one so the error must name the offending key.
     """
     if field == "code_id":
         kwargs = _task_kwargs(code_id=bad_value)
         expected = r"Task 'clean_data'.*code_id"
+    elif isinstance(bad_value, list):
+        kwargs = _task_kwargs(**{field: bad_value})
+        expected = rf"Task 'clean_data'.*{field} must be a mapping"
     else:
         nodes = {"good": _StubNode("good"), "bad_key": bad_value}
         kwargs = _task_kwargs(**{field: nodes})
