@@ -118,7 +118,7 @@ class ValuesManager(Manager):
             a population attribute.
         preferred_combiner
             A strategy for combining the source and the results of any calls
-            to mutators in the pipeline. ``vivarium`` provides the strategies
+            to modifiers in the pipeline. ``vivarium`` provides the strategies
             ``replace_combiner`` (the default) and ``list_combiner``, which
             are importable from ``vivarium.engine.framework.values``. Client code
             may define additional strategies as necessary.
@@ -175,7 +175,7 @@ class ValuesManager(Manager):
             a population attribute.
         preferred_combiner
             A strategy for combining the source and the results of any calls
-            to mutators in the pipeline. ``vivarium`` provides the strategies
+            to modifiers in the pipeline. ``vivarium`` provides the strategies
             ``replace_combiner`` (the default) and ``list_combiner``, which
             are importable from ``vivarium.engine.framework.values``. Client code
             may define additional strategies as necessary.

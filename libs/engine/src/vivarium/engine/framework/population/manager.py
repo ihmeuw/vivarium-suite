@@ -779,12 +779,12 @@ class PopulationManager(Manager):
 
         While evaluating attribute pipelines, we increment ``pipeline_evaluation_depth``
         so that nested calls to ``PopulationView.get`` (which may be
-        triggered by pipeline sources or mutators) do not automatically re-apply
+        triggered by pipeline sources or modifiers) do not automatically re-apply
         tracked queries. The index passed to each pipeline has already been filtered
         appropriately by the enclosing ``get_population`` call.
 
         Note that only tracked queries are suppressed. Explicit ``query`` arguments
-        passed by the pipeline source/mutator are supported.
+        passed by the pipeline source/modifier are supported.
         """
 
         self.pipeline_evaluation_depth += 1

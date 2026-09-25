@@ -122,7 +122,7 @@ class SimulationClock(Manager):
         self._individual_clocks = pd.DataFrame()
 
     def on_post_setup(self, event: Event) -> None:
-        if not self._step_size_pipeline.mutators:
+        if not self._step_size_pipeline.modifiers:
             # No components modify the step size, so we use the default
             # and remove the dataframe
             self._individual_clocks = None

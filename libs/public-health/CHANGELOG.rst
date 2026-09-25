@@ -1,5 +1,8 @@
-**6.6.3 - 09/23/26**
+**6.6.4 - 09/24/26**
 
+- Rename the ``mutator`` argument of the calibration constant combiner to ``modifier``
+
+**6.6.3 - 09/23/26**
 - Describe every value producer and modifier registered by public health components
 - Accept an optional ``description`` in ``register_risk_affected_attribute_producer``
   and ``register_risk_affected_rate_producer``

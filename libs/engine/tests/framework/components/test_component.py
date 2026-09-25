@@ -424,7 +424,7 @@ def test_attribute_pipelines_from_private_columns() -> None:
     for column in component.private_columns:
         pipeline = sim._builder.value.get_attribute_pipelines()()[column]
         assert pipeline.name == column
-        assert pipeline.mutators == []
+        assert pipeline.modifiers == []
         attributes = pipeline(idx)
         assert attributes.equals(pd.Series([i % 3 for i in idx], index=idx))
         assert attributes.name == column

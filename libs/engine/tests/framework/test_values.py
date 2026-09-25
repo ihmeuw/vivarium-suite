@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import datetime
 import inspect
 import re
 import textwrap
+import warnings
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -50,6 +52,8 @@ if TYPE_CHECKING:
 
 
 INDEX = pd.Index([4, 8, 15, 16, 23, 42])
+
+MUTATORS_DEPRECATION_DATE = datetime.date(2027, 9, 22)
 
 
 @pytest.mark.parametrize("pipeline_type", [Pipeline, AttributePipeline])
@@ -1386,21 +1390,21 @@ class TestStringRepresentations:
                 return value + 1
 
         sim = InteractiveContext(components=[Producer(), Modifier()])
-        (mutator,) = sim.get_value("some-value").mutators
+        (modifier,) = sim.get_value("some-value").modifiers
 
         # The qualname of a class defined inside a test carries a <locals> chain;
         # a module-level component renders as e.g. "DiseaseModel.delete_csmr".
-        assert str(mutator).endswith("Modifier.bump from modifier")
-        # The name is pinned to a literal rather than derived from mutator.name,
+        assert str(modifier).endswith("Modifier.bump from modifier")
+        # The name is pinned to a literal rather than derived from modifier.name,
         # so a regression in how the name is built cannot pass unnoticed.
-        assert mutator.name.endswith("some-value.1.modifier.bump")
-        assert repr(mutator) == f"<ValueModifier {mutator.name!r}>"
+        assert modifier.name.endswith("some-value.1.modifier.bump")
+        assert repr(modifier) == f"<ValueModifier {modifier.name!r}>"
 
         # Test that the IPython display hook is present and returns the same as str().
         pytest.importorskip("IPython")
         from IPython.core.formatters import PlainTextFormatter
 
-        assert PlainTextFormatter()(mutator) == str(mutator)
+        assert PlainTextFormatter()(modifier) == str(modifier)
 
     def test_repr_looks_like_a_constructor_call(self) -> None:
         """The repr follows the convention, leaving detail to __str__."""
@@ -1730,9 +1734,9 @@ class TestRegistrationDescriptions:
             == "An attribute that means something"
         )
         assert sim.get_attribute("a-rate").description == "A rate that means something"
-        assert sim.get_value("a-value").mutators[0].description == "Bump the value by one"
+        assert sim.get_value("a-value").modifiers[0].description == "Bump the value by one"
         assert (
-            sim.get_attribute("an-attribute").mutators[0].description
+            sim.get_attribute("an-attribute").modifiers[0].description
             == "Bump the attribute by one"
         )
 
@@ -1746,8 +1750,8 @@ class TestRegistrationDescriptions:
         assert value.description is None
         assert attribute.description is None
         assert rate.description is None
-        assert value.mutators[0].description is None
-        assert attribute.mutators[0].description is None
+        assert value.modifiers[0].description is None
+        assert attribute.modifiers[0].description is None
 
     def test_str_labels_the_pipeline_description_and_indents_the_modifier_one(
         self,
@@ -1821,13 +1825,13 @@ class TestRegistrationDescriptions:
         unlabelled continuation line, which would otherwise be pure whitespace.
         """
         pipeline = self._simulation().get_value("an-undescribed-value")
-        assert pipeline.mutators, "this test needs a modifier to cover the second site"
+        assert pipeline.modifiers, "this test needs a modifier to cover the second site"
         assert pipeline.description is None
-        assert pipeline.mutators[0].description is None
+        assert pipeline.modifiers[0].description is None
         undescribed = str(pipeline)
 
         pipeline.description = ""
-        pipeline.mutators[0].description = ""
+        pipeline.modifiers[0].description = ""
 
         assert str(pipeline) == undescribed
 
@@ -1835,8 +1839,8 @@ class TestRegistrationDescriptions:
         """A modifier reached directly still reports what it does."""
         sim = self._simulation()
 
-        described = sim.get_value("a-value").mutators[0]
-        undescribed = sim.get_value("an-undescribed-value").mutators[0]
+        described = sim.get_value("a-value").modifiers[0]
+        undescribed = sim.get_value("an-undescribed-value").modifiers[0]
 
         assert (
             str(described)
@@ -1925,3 +1929,54 @@ class TestNamedCallable:
 
         assert str(wrapped) == "replace_combiner"
         assert repr(wrapped) == "<NamedCombiner 'replace_combiner'>"
+
+
+class TestDeprecatedMutatorsAlias:
+    """Tests for ``Pipeline.mutators``, the old name for ``Pipeline.modifiers``."""
+
+    def test_reading_mutators_warns_and_returns_the_modifiers(self) -> None:
+        pipeline = Pipeline("a-value")
+
+        with pytest.warns(FutureWarning, match="use Pipeline.modifiers"):
+            mutators = pipeline.mutators
+
+        assert mutators is pipeline.modifiers
+
+    def test_reading_mutators_blames_the_caller(self) -> None:
+        """Pin ``stacklevel``, which nothing else here would catch."""
+        pipeline = Pipeline("a-value")
+
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            pipeline.mutators
+
+        deprecations = [r for r in records if issubclass(r.category, FutureWarning)]
+        assert len(deprecations) == 1
+        # The warning should point at this test file, not at pipeline.py.
+        assert deprecations[0].filename == __file__
+
+    def test_assigning_mutators_raises(self) -> None:
+        """Rebinding the alias raises rather than silently desyncing the pipeline.
+
+        A wholesale assignment would leave ``_required_resources`` out of step
+        with the modifier list, so the rename is not the place to keep that
+        working. This guards the rebind only: the getter hands back the live
+        list, so ``mutators.append(...)`` still bypasses ``get_value_modifier``
+        exactly as ``modifiers.append(...)`` always has.
+        """
+        pipeline = Pipeline("a-value")
+
+        with pytest.raises(AttributeError):
+            pipeline.mutators = []  # type: ignore[misc]
+
+    def test_remove_deprecated_mutators_alias(self) -> None:
+        """Reminder to delete the deprecated ``Pipeline.mutators`` alias.
+
+        This fails once the deprecation window closes; when it does, remove the
+        ``mutators`` property from ``Pipeline``, drop
+        ``_MUTATORS_DEPRECATION_MESSAGE``, and delete this class.
+        """
+        assert datetime.date.today() < MUTATORS_DEPRECATION_DATE, (
+            "The deprecation window for 'Pipeline.mutators' has closed. Remove the "
+            "alias and this entire test class."
+        )
