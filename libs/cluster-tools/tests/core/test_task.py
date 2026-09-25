@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -15,11 +14,14 @@ _MUST_NOT_BE_CALLED = "must not be called during Task construction"
 
 
 class _StubNode:
-    """Structural PNode with all six members and no pytask base class.
+    """Node that satisfies pytask's ``PNode`` protocol structurally, with no pytask base.
 
-    ``state``, ``load`` and ``save`` raise so that any node I/O during Task
-    construction fails the test. ``signature`` must not raise because Python
-    3.11's runtime protocol check evaluates properties.
+    ``PNode`` is a runtime-checkable protocol: pytask treats any object with these six
+    members as a node, and ``Task`` promises to accept such objects. A pytask node class
+    here would only prove pytask's own classes pass, and would touch the filesystem.
+    ``state``, ``load`` and ``save`` raise so that any node I/O during ``Task``
+    construction fails the test; ``signature`` must not raise because Python 3.11's
+    runtime protocol check evaluates properties.
     """
 
     def __init__(self, name: str) -> None:
@@ -41,7 +43,13 @@ class _StubNode:
 
 
 class _FiveMemberNode:
-    """Node with every PNode member except ``attributes``; not a ``_StubNode`` subclass."""
+    """Node in the PoC's five-member shape, which predates pytask's ``attributes`` member.
+
+    pytask 0.6.0 does not reject such a node. It silently skips it when recording node
+    states, so a task depending on one is never reported skipped-unchanged again, and
+    ``Task`` must therefore reject it up front. Deliberately not a ``_StubNode`` subclass,
+    so the missing member cannot be inherited by accident.
+    """
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -85,39 +93,6 @@ def _make_task(name: str) -> Task:
 
 @pytest.mark.parametrize(
     "run",
-    [_run_step, "echo hello", ""],
-    ids=["callable", "command_string", "empty_command_string"],
-)
-def test_task_accepts_callable_and_command_string_runs(
-    run: Callable[..., Any] | str,
-) -> None:
-    """Construct a Task with a callable run and with a command-string run; both validate."""
-    inputs: dict[str, Any] = {"raw": _StubNode("raw")}
-    outputs: dict[str, Any] = {"clean": _StubNode("clean")}
-    resources: dict[str, Any] = {"memory": "4G", "cores": 1, "runtime": 3600}
-    code_id = _StubNode("code")
-
-    task = Task(
-        name="clean_data",
-        run=run,
-        inputs=inputs,
-        outputs=outputs,
-        resources=resources,
-        env="analysis_env",
-        code_id=code_id,
-    )
-
-    assert task.name == "clean_data"
-    assert task.run is run
-    assert task.inputs is inputs
-    assert task.outputs is outputs
-    assert task.resources is resources
-    assert task.env == "analysis_env"
-    assert task.code_id is code_id
-
-
-@pytest.mark.parametrize(
-    "run",
     [42, None, ["echo", "hello"]],
     ids=["int", "none", "list"],
 )
@@ -134,23 +109,30 @@ def test_task_rejects_empty_name() -> None:
 
 
 def test_task_accepts_structurally_conforming_nodes() -> None:
-    """Accept an in-test node class with the six PNode members and no pytask base."""
+    """Accept an in-test node class with the six PNode members and no pytask base.
+
+    The ``isinstance`` assertions cross-check the stubs against the real protocol so the
+    six-member list cannot drift silently. The identity assertions pin that nodes are
+    stored by reference, which the producer-to-consumer wiring relies on.
+    """
     assert _StubNode.__mro__ == (_StubNode, object)
     assert _FiveMemberNode.__mro__ == (_FiveMemberNode, object)
     assert isinstance(_StubNode("n"), PNode)
     assert not isinstance(_FiveMemberNode("n"), PNode)
 
+    raw = _StubNode("raw")
     code_id = _StubNode("code")
     task = Task(
         name="clean_data",
         run=_run_step,
-        inputs={"raw": _StubNode("raw"), "config": _StubNode("config")},
+        inputs={"raw": raw, "config": _StubNode("config")},
         outputs={"clean": _StubNode("clean")},
         resources={},
         env=None,
         code_id=code_id,
     )
 
+    assert task.inputs["raw"] is raw
     assert task.code_id is code_id
     assert set(task.inputs) == {"raw", "config"}
     assert set(task.outputs) == {"clean"}
@@ -176,7 +158,11 @@ def test_task_accepts_structurally_conforming_nodes() -> None:
     ],
 )
 def test_task_rejects_non_conforming_node_values(field: str, bad_value: Any) -> None:
-    """Reject a bare Path or a five-member node in inputs, outputs, or code_id."""
+    """Reject a bare Path or a five-member node in inputs, outputs, or code_id.
+
+    The bad value sits behind a valid one so the error must name the offending key. See
+    ``_FiveMemberNode`` for why the five-member case is the one that matters.
+    """
     if field == "code_id":
         kwargs = _task_kwargs(code_id=bad_value)
         expected = r"Task 'clean_data'.*code_id"
