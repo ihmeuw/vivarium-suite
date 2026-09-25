@@ -1,8 +1,9 @@
 """An encapsulation of individual pipeline tasks."""
 
 from collections.abc import Callable
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
+
 from pytask import PNode
 
 
