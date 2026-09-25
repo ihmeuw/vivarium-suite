@@ -1,3 +1,7 @@
+**4.9.1 - 09/25/26**
+
+- Carry each library's supported Python versions on ``Lib``
+
 **4.9.0 - 09/23/26**
 
 - Add ``build-candidate-matrix``, backing a scheduled workflow that runs every package's

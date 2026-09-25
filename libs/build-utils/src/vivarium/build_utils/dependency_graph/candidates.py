@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ..versions import read_python_versions, version_key
+from ..versions import version_key
 from .models import CandidateVersionConflictError, Lib, PythonMatrix, PythonMatrixEntry
 
 
@@ -40,7 +40,7 @@ def find_candidate_conflicts(libs: Mapping[str, Lib]) -> dict[str, list[str]]:
     """
     conflicts: dict[str, list[str]] = {}
     for name, lib in sorted(libs.items()):
-        supported = set(read_python_versions(lib.path))
+        supported = set(lib.python_versions)
         overlap = sorted(set(lib.candidates) & supported, key=version_key)
         if overlap:
             conflicts[name] = overlap
