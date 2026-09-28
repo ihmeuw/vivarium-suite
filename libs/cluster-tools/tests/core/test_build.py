@@ -18,7 +18,7 @@ from vivarium.cluster_tools.core.backend.nodes import file_node
 from vivarium.cluster_tools.core.backend.task import Task
 
 
-class _StubNode:
+class _VersionNode:
     """In-memory node whose state is its settable ``version``."""
 
     def __init__(self, name: str) -> None:
@@ -65,7 +65,7 @@ def _task(
         outputs=outputs or {},
         resources={},
         env=None,
-        code_id=code_id or _StubNode(f"code:{name}"),
+        code_id=code_id or _VersionNode(f"code:{name}"),
     )
 
 
@@ -82,7 +82,7 @@ def _every(tasks: list[Task], outcome: TaskOutcome) -> dict[str, TaskOutcome]:
 
 def test_to_pytask_task_maps_fields() -> None:
     """Map name, inputs plus code_id, outputs, and the task back-reference."""
-    raw, clean, code_id = _StubNode("raw"), _StubNode("clean"), _StubNode("code")
+    raw, clean, code_id = _VersionNode("raw"), _VersionNode("clean"), _VersionNode("code")
     task = _task("clean_data", "true", {"raw": raw}, {"out-file": clean}, code_id)
 
     pytask_task = to_pytask_task(task)
@@ -96,12 +96,12 @@ def test_to_pytask_task_maps_fields() -> None:
 @pytest.mark.parametrize(
     "run, inputs, outputs, name",
     [
-        ("true", {CODE_ID_KEY: _StubNode("code")}, {}, CODE_ID_KEY),
-        ("true", {}, {CODE_ID_KEY: _StubNode("out")}, CODE_ID_KEY),
-        ("true", {}, {"return": _StubNode("out")}, "return"),
-        ("true", {"data": _StubNode("in")}, {"data": _StubNode("out")}, "data"),
-        (_noop, {}, {"out-file": _StubNode("out")}, "out-file"),
-        (_noop, {}, {"class": _StubNode("out")}, "class"),
+        ("true", {CODE_ID_KEY: _VersionNode("code")}, {}, CODE_ID_KEY),
+        ("true", {}, {CODE_ID_KEY: _VersionNode("out")}, CODE_ID_KEY),
+        ("true", {}, {"return": _VersionNode("out")}, "return"),
+        ("true", {"data": _VersionNode("in")}, {"data": _VersionNode("out")}, "data"),
+        (_noop, {}, {"out-file": _VersionNode("out")}, "out-file"),
+        (_noop, {}, {"class": _VersionNode("out")}, "class"),
     ],
     ids=[
         "input_code_id",
@@ -193,7 +193,7 @@ def test_editing_an_input_reruns_its_consumer_cone(tmp_path: Path) -> None:
 def test_code_id_distinguishes_tasks_sharing_the_wrapper(tmp_path: Path) -> None:
     """Re-run only the task whose code_id state changed."""
     src = _write(tmp_path / "src", "x")
-    code_a, code_b = _StubNode("code:a"), _StubNode("code:b")
+    code_a, code_b = _VersionNode("code:a"), _VersionNode("code:b")
     tasks = [
         _copy("a", src, tmp_path / "a", code_a),
         _copy("b", src, tmp_path / "b", code_b),
