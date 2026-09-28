@@ -1,3 +1,12 @@
+**4.9.2 - 09/28/26**
+
+- Build shared environments into timestamped directories and atomically repoint
+  ``<env>_current`` at a build only once it succeeds, so a failed build no longer leaves
+  the shared environment deleted or half-installed
+- Keep previous builds for rollback in place of conda-pack archives
+- Retry failed shared environment builds, and raise uv's HTTP retries, to ride out
+  transient package index outages
+
 **4.9.1 - 09/25/26**
 
 - Carry each library's supported Python versions on ``Lib``

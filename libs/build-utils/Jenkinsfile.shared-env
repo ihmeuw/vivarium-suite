@@ -2,12 +2,17 @@
  * Jenkins Pipeline: Shared Environment Builder
  *
  * This pipeline builds and maintains shared conda environments for model repositories.
- * Each run archives the current environment (via conda-pack), rebuilds it fresh in-place,
- * and notifies Slack if packages changed.
+ * Each run builds every environment fresh into its own timestamped directory and, if the
+ * build succeeds and packages changed, atomically repoints the environment's _current
+ * symlink at it, then notifies Slack. A failed build never touches _current.
  *
- * Environments are stored in a read-only (except by Jenkins) directory accessible to all users.
- * Archives are portable .tar.gz files that can restore a previous environment:
- *   mkdir /tmp/restore && tar xzf <archive>.tar.gz -C /tmp/restore && /tmp/restore/bin/conda-unpack
+ * Environments are stored in a read-only (except by Jenkins) directory accessible to all users:
+ *   <SHARED_ENV_DIR>/<model>_<type>_current                -> builds/<model>_<type>/<model>_<type>_<timestamp>
+ *   <SHARED_ENV_DIR>/builds/<model>_<type>/<model>_<type>_<timestamp>/
+ *
+ * Previous builds are kept side by side for RETENTION_DAYS (and the newest previous build is
+ * always kept), so rolling back is a matter of repointing the symlink:
+ *   cd <SHARED_ENV_DIR> && ln -sfn <previous build dir> <env>_current.tmp && mv -Tf <env>_current.tmp <env>_current
  */
 @Library('vivarium_build_utils') _
 
@@ -19,6 +24,11 @@ import groovy.transform.Field
 
 // Slack channel for environment update notifications
 @Field final String SLACK_CHANNEL = 'simsci-shared-env-updates'
+
+// Attempts per environment build, and the wait before the Nth retry (N * RETRY_WAIT_MINUTES).
+// These cover outages that outlast uv's own request retries (see UV_HTTP_RETRIES).
+@Field final int BUILD_ATTEMPTS = 3
+@Field final int RETRY_WAIT_MINUTES = 5
 
 pipeline {
     agent { node 'simsci-jenkinsagent-ci-p01' }
@@ -42,7 +52,7 @@ pipeline {
         string(
             name: 'RETENTION_DAYS',
             defaultValue: '7',
-            description: 'Number of days to retain conda-pack archives before cleanup'
+            description: 'Number of days to retain previous environment builds before cleanup'
         )
     }
 
@@ -53,6 +63,12 @@ pipeline {
         CONDA_BIN_PATH = "${SHARED_PATH}/miniconda3/bin"
         XDG_CACHE_HOME = "${SHARED_PATH}/pip-cache"
         ACTIVATE_BASE = "source ${CONDA_BIN_PATH}/activate &> /dev/null"
+
+        // uv gives up on an index after 3 retries (~7s) by default, so a brief PyPI 503
+        // fails the install even for packages that only live on artifactory: with
+        // --index-strategy unsafe-best-match every index is queried. 8 retries back off
+        // for ~80s. Reaches uv through `make build-env` -> `conda run make install`.
+        UV_HTTP_RETRIES = '8'
 
         // GitHub organization for model repos
         GITHUB_ORG = 'ihmeuw'
@@ -107,10 +123,10 @@ pipeline {
             }
         }
 
-        stage('Cleanup Old Archives') {
+        stage('Cleanup Old Builds') {
             steps {
                 script {
-                    cleanupOldArchives()
+                    cleanupOldBuilds()
                 }
             }
         }
@@ -156,7 +172,8 @@ pipeline {
         }
         failure {
             script {
-                def archiveHint = "Check ${params.SHARED_ENV_DIR}/archive/ for conda-pack archives to restore a previous environment."
+                def rollbackHint = "Environments whose build failed still point at their previous build. " +
+                    "Earlier builds are kept in ${params.SHARED_ENV_DIR}/builds/ for rollback."
                 def slackMessage = """
                     *Shared Environment Build Failed*
 
@@ -165,7 +182,7 @@ pipeline {
                     Build status: *${currentBuild.result}*
                     Build details: <${env.BUILD_URL}/console|See in web console>
 
-                    ${archiveHint}
+                    ${rollbackHint}
                     """.stripIndent()
 
                 slackSend channel: "#${SLACK_CHANNEL}",
@@ -178,44 +195,38 @@ pipeline {
 }
 
 /**
- * Archive the current environment, rebuild it fresh in-place, and detect changes.
+ * Build an environment into a fresh directory and promote it to _current on success.
  *
  * The workflow is:
- *   1. Snapshot current lock files (conda list --explicit, pip freeze)
- *   2. Archive current env with conda-pack
- *   3. Remove current env
- *   4. Rebuild fresh at the _current path
- *   5. Generate new lock files and diff against step 1
- *   6. If packages changed, track for Slack notification
+ *   1. Snapshot the current env's lock files (conda list --explicit, pip freeze)
+ *   2. Build fresh into builds/<env>/<env>_<timestamp>, retrying failed attempts
+ *   3. Generate new lock files and diff against step 1
+ *   4. If packages changed, atomically repoint _current at the new build and track it
+ *      for the Slack notification; otherwise delete the redundant new build
+ *
+ * _current is only ever changed by the atomic symlink swap in promoteBuild, so a failed
+ * build leaves it pointing at the last good build and venv overlays keep working.
  */
 def buildEnvironment(String model, String envType) {
     def envName = "${model}_${envType}"
     def currentName = "${envName}_current"
     def currentPath = "${params.SHARED_ENV_DIR}/${currentName}"
-    def archiveDir = "${params.SHARED_ENV_DIR}/archive/${envName}"
+    def buildsDir = "${params.SHARED_ENV_DIR}/builds/${envName}"
+    def buildPath = "${buildsDir}/${envName}_${env.BUILD_TIMESTAMP}"
 
-    // Track the archive file path so we can remove it if no packages changed
-    def archiveFile = null
-
-    stage("Archive ${model} - ${envType}") {
+    stage("Snapshot ${model} - ${envType}") {
         script {
-            def currentExists = fileExists(currentPath)
-
-            if (currentExists) {
-                // Snapshot lock files from the current environment before touching it
+            if (fileExists(currentPath)) {
                 snapshotLockFiles(currentPath, envName)
-
-                // Archive with conda-pack, then remove
-                archiveFile = archiveEnvironment(currentPath, archiveDir, envName)
             } else {
-                echo "No current environment at ${currentPath} — first build, skipping archive"
+                echo "No current environment at ${currentPath} — first build, nothing to snapshot"
             }
         }
     }
 
     stage("Build ${model} - ${envType}") {
         echo "=== Building environment: ${envName} ==="
-        echo "Path: ${currentPath}"
+        echo "Path: ${buildPath}"
 
         // Clone the repository
         dir("repos/${model}") {
@@ -231,19 +242,37 @@ def buildEnvironment(String model, String envType) {
             // Load shared makefiles from Jenkins shared library
             load_shared_files()
 
-            // Build the environment directly at the _current path.
-            sh """
-                ${env.ACTIVATE_BASE}
-                make build-env type=${envType} name=${currentName} path=${currentPath}
-            """
+            sh "mkdir -p '${buildsDir}' && chmod 755 '${params.SHARED_ENV_DIR}/builds' '${buildsDir}'"
+
+            for (int attempt = 1; attempt <= BUILD_ATTEMPTS; attempt++) {
+                try {
+                    sh """
+                        rm -rf '${buildPath}'
+                        ${env.ACTIVATE_BASE}
+                        make build-env type=${envType} name=${currentName} path=${buildPath}
+                    """
+                    break
+                } catch (hudson.AbortException e) {
+                    // AbortException is a failing sh step. Anything else, such as the
+                    // build being aborted, propagates without a retry.
+                    if (attempt == BUILD_ATTEMPTS) {
+                        sh "rm -rf '${buildPath}'"
+                        echo "Build failed ${BUILD_ATTEMPTS} times; ${currentPath} is unchanged"
+                        throw e
+                    }
+                    def waitMinutes = RETRY_WAIT_MINUTES * attempt
+                    echo "WARNING: build attempt ${attempt}/${BUILD_ATTEMPTS} failed (${e.message}); retrying in ${waitMinutes} minutes"
+                    sleep(time: waitMinutes, unit: 'MINUTES')
+                }
+            }
         }
 
         // Set permissions - readable by all, writable only by Jenkins
-        sh "chmod -R 755 '${currentPath}'"
+        sh "chmod -R 755 '${buildPath}'"
 
         // Write build metadata
         sh """
-            cat > '${currentPath}/.build_info' << EOF
+            cat > '${buildPath}/.build_info' << EOF
 Environment: ${envName}
 Built: ${env.BUILD_TIMESTAMP}
 Jenkins Build: ${env.BUILD_NUMBER}
@@ -252,19 +281,44 @@ EOF
         """
     }
 
-    stage("Diff ${model} - ${envType}") {
+    stage("Promote ${model} - ${envType}") {
         script {
-            def hasChanges = detectChanges(currentPath, envName)
+            def hasChanges = detectChanges(buildPath, envName)
+            def currentIsLink = sh(script: "test -L '${currentPath}'", returnStatus: true) == 0
 
-            // If the rebuilt env is identical to the archived one, the archive is
-            // redundant — the current env is already an exact copy. Remove it so
-            // we only keep distinct archives.
-            if (!hasChanges && archiveFile) {
-                sh "rm -f '${archiveFile}'"
-                echo "Removed redundant archive (no package changes): ${archiveFile}"
+            // A _current that is still a plain directory is from the old in-place layout
+            // and must be replaced by a symlink even if no packages changed.
+            if (hasChanges || !currentIsLink) {
+                promoteBuild(buildPath, currentPath)
+            } else {
+                sh "rm -rf '${buildPath}'"
+                echo "No package changes; kept ${currentPath} and removed redundant build ${buildPath}"
             }
         }
     }
+}
+
+/**
+ * Atomically point currentPath at buildPath.
+ *
+ * The new symlink is created beside currentPath and renamed over it; rename(2) replaces
+ * the old symlink in one step, so readers see either the old build or the new one.
+ *
+ * On the first run after the switch to side-by-side builds, currentPath is still a plain
+ * directory, which rename cannot replace with a symlink. It is moved aside and deleted
+ * instead. Conda envs are not relocatable, so the moved copy has no rollback value.
+ */
+def promoteBuild(String buildPath, String currentPath) {
+    sh """
+        set -e
+        if [ -e '${currentPath}' ] && [ ! -L '${currentPath}' ]; then
+            mv '${currentPath}' '${currentPath}.legacy'
+        fi
+        ln -sfn '${buildPath}' '${currentPath}.tmp'
+        mv -Tf '${currentPath}.tmp' '${currentPath}'
+        rm -rf '${currentPath}.legacy'
+        echo "Promoted: ${currentPath} -> ${buildPath}"
+    """
 }
 
 /**
@@ -297,64 +351,6 @@ def generateLockFiles(String envPath, String envName, String tag) {
 def snapshotLockFiles(String envPath, String envName) {
     echo "Snapshotting lock files for ${envName}"
     generateLockFiles(envPath, envName, 'old')
-}
-
-/**
- * Archive the current environment using conda-pack, then remove it.
- *
- * conda-pack is installed into the base conda environment and invoked with --prefix
- * so that the archive is a faithful snapshot of the environment as it was running.
- * The --ignore-editable-packages flag handles the editable install of the model
- * package, which is irrelevant in the shared env (the venv overlay re-installs
- * from the user's checkout).
- *
- * If conda-pack fails (e.g. corrupted env), the error is logged but the build
- * continues — the environment was going to be replaced anyway.
- *
- * @return The archive file path if created, or null if archiving was skipped/failed.
- */
-def archiveEnvironment(String currentPath, String archiveDir, String envName) {
-    // Use the environment's original creation timestamp from .build_info (if available)
-    // so the archive filename reflects when the env was built, not when it was archived.
-    def createdTimestamp = sh(
-        script: "grep '^Built:' '${currentPath}/.build_info' 2>/dev/null | awk '{print \$2}'",
-        returnStdout: true
-    ).trim() ?: env.BUILD_TIMESTAMP
-
-    def archiveFile = "${archiveDir}/${envName}_${createdTimestamp}.tar.gz"
-
-    echo "Archiving current environment to ${archiveFile}"
-
-    sh "mkdir -p '${archiveDir}' && chmod 755 '${archiveDir}'"
-
-    try {
-        sh """
-            ${env.ACTIVATE_BASE}
-
-            # Install conda-pack into the base env (not the target) to avoid polluting the archive
-            pip install conda-pack
-
-            # Pack the environment
-            conda-pack \
-                --prefix '${currentPath}' \
-                --ignore-editable-packages \
-                --output '${archiveFile}' \
-                --force
-            echo "Archive created: ${archiveFile}"
-        """
-    } catch (Exception e) {
-        echo "WARNING: conda-pack failed: ${e.message}"
-        echo "Continuing with rebuild — the environment will be replaced anyway."
-        archiveFile = null
-    }
-
-    // Remove the old environment now that it has been archived (or archive was attempted)
-    sh """
-        rm -rf '${currentPath}'
-        echo "Removed old environment at ${currentPath}"
-    """
-
-    return archiveFile
 }
 
 /**
@@ -430,11 +426,10 @@ def detectChanges(String envPath, String envName) {
 }
 
 /**
- * Clean up old conda-pack archives in parallel for all model/type combinations.
- * Removes .tar.gz files older than RETENTION_DAYS.
+ * Clean up old environment builds in parallel for all model/type combinations.
  */
-def cleanupOldArchives() {
-    echo "=== Cleaning up old conda-pack archives ==="
+def cleanupOldBuilds() {
+    echo "=== Cleaning up old environment builds ==="
     echo "Retention period: ${params.RETENTION_DAYS} days"
 
     def models = params.ACTIVE_MODELS.split(',').collect { it.trim() }
@@ -446,7 +441,7 @@ def cleanupOldArchives() {
         types.each { envType ->
             def envName = "${model}_${envType}"
             parallelCleanups["Cleanup ${envName}"] = {
-                cleanupArchivesForType(model, envType)
+                cleanupBuildsForType(model, envType)
             }
         }
     }
@@ -455,19 +450,39 @@ def cleanupOldArchives() {
 }
 
 /**
- * Clean up old conda-pack archives for a specific model and environment type.
- * Uses find with mtime to identify .tar.gz files older than the retention period.
+ * Remove builds of one environment that are older than RETENTION_DAYS.
+ *
+ * Never removes the build _current points at, nor the newest build before it, so there is
+ * always one build to roll back to however long ago it was made. The current build is
+ * matched with `test -ef` (same inode) rather than by comparing path strings, so it is
+ * recognized even if SHARED_ENV_DIR is spelled differently than when it was linked.
+ *
+ * Also expires conda-pack archives left over from before builds were kept side by side.
  */
-def cleanupArchivesForType(String model, String envType) {
+def cleanupBuildsForType(String model, String envType) {
     def envName = "${model}_${envType}"
-    def archiveDir = "${params.SHARED_ENV_DIR}/archive/${envName}"
+    def currentPath = "${params.SHARED_ENV_DIR}/${envName}_current"
+    def buildsDir = "${params.SHARED_ENV_DIR}/builds/${envName}"
+    def legacyArchiveDir = "${params.SHARED_ENV_DIR}/archive/${envName}"
 
-    echo "Cleaning up old archives in: ${archiveDir}"
+    echo "Cleaning up old builds in: ${buildsDir}"
 
     try {
-        def deletedFiles = sh(
+        def deleted = sh(
             script: """
-                find '${archiveDir}' -maxdepth 1 -type f \
+                kept_previous=''
+                for d in \$(ls -1d '${buildsDir}'/${envName}_* 2>/dev/null | sort -r); do
+                    [ -d "\$d" ] || continue
+                    [ "\$d" -ef '${currentPath}' ] && continue
+                    if [ -z "\$kept_previous" ]; then
+                        kept_previous="\$d"
+                        continue
+                    fi
+                    if [ -n "\$(find "\$d" -maxdepth 0 -mtime +${params.RETENTION_DAYS})" ]; then
+                        rm -rf "\$d" && echo "\$d"
+                    fi
+                done
+                find '${legacyArchiveDir}' -maxdepth 1 -type f \
                     -name '${envName}_*.tar.gz' \
                     -mtime +${params.RETENTION_DAYS} \
                     -print -delete 2>/dev/null || true
@@ -475,19 +490,19 @@ def cleanupArchivesForType(String model, String envType) {
             returnStdout: true
         ).trim()
 
-        if (deletedFiles) {
-            def fileList = deletedFiles.split('\n')
-            echo "Removed ${fileList.size()} old archive(s) for ${envName}:"
-            fileList.each { f ->
+        if (deleted) {
+            def removedList = deleted.split('\n')
+            echo "Removed ${removedList.size()} old build(s)/archive(s) for ${envName}:"
+            removedList.each { f ->
                 echo "  - ${f}"
             }
         } else {
-            echo "No old archives found for ${envName}"
+            echo "No old builds found for ${envName}"
         }
 
     } catch (Exception e) {
         // Log warning but don't fail the pipeline
-        echo "WARNING: Failed to cleanup old archives for ${envName}: ${e.message}"
+        echo "WARNING: Failed to cleanup old builds for ${envName}: ${e.message}"
         echo "Continuing with pipeline..."
     }
 }
