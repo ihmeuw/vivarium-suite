@@ -23,7 +23,7 @@
         "url": "https://github.com/ihmeuw/vivarium-research-tools.git",
         "path": "tools/ai-tools"
       },
-      "description": "For the IHME Simulation Science research team: a reviewer-first summary of a session's prompts, human review, and unverified content for a PR's AI-use section. Lives in the vivarium-research-tools repo and depends on simsci."
+      "description": "For the IHME Simulation Science research team: a reviewer-first summary of a session's prompts, human review, and unverified content. Lives in the vivarium-research-tools repo and depends on simsci."
     }
   ]
 }
