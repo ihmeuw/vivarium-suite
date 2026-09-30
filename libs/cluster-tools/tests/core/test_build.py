@@ -9,6 +9,7 @@ from pytask import PNode, TaskOutcome
 
 from vivarium.cluster_tools.core.backend.build import (
     CODE_ID_KEY,
+    COMMAND_KEY,
     TASK_KEY,
     build,
     outcomes,
@@ -81,16 +82,20 @@ def _every(tasks: list[Task], outcome: TaskOutcome) -> dict[str, TaskOutcome]:
 
 
 def test_to_pytask_task_maps_fields() -> None:
-    """Map name, inputs plus code_id, outputs, and the task back-reference."""
+    """Map name, inputs plus code_id and command, outputs, and the task back-reference."""
     raw, clean, code_id = _VersionNode("raw"), _VersionNode("clean"), _VersionNode("code")
     task = _task("clean_data", "true", {"raw": raw}, {"out-file": clean}, code_id)
 
     pytask_task = to_pytask_task(task)
 
     assert pytask_task.name == "clean_data"
-    assert pytask_task.depends_on == {"raw": raw, CODE_ID_KEY: code_id}
+    assert pytask_task.depends_on.keys() == {"raw", CODE_ID_KEY, COMMAND_KEY}
+    assert pytask_task.depends_on["raw"] is raw
+    assert pytask_task.depends_on[CODE_ID_KEY] is code_id
+    assert pytask_task.depends_on[COMMAND_KEY].load() == "true"
     assert pytask_task.produces == {"out-file": clean}
     assert pytask_task.attributes[TASK_KEY] is task
+    assert COMMAND_KEY not in to_pytask_task(_task("fn", _noop)).depends_on
 
 
 @pytest.mark.parametrize(
@@ -98,6 +103,8 @@ def test_to_pytask_task_maps_fields() -> None:
     [
         ("true", {CODE_ID_KEY: _VersionNode("code")}, {}, CODE_ID_KEY),
         ("true", {}, {CODE_ID_KEY: _VersionNode("out")}, CODE_ID_KEY),
+        ("true", {COMMAND_KEY: _VersionNode("in")}, {}, COMMAND_KEY),
+        ("true", {}, {COMMAND_KEY: _VersionNode("out")}, COMMAND_KEY),
         ("true", {}, {"return": _VersionNode("out")}, "return"),
         ("true", {"data": _VersionNode("in")}, {"data": _VersionNode("out")}, "data"),
         (_noop, {}, {"out-file": _VersionNode("out")}, "out-file"),
@@ -106,6 +113,8 @@ def test_to_pytask_task_maps_fields() -> None:
     ids=[
         "input_code_id",
         "output_code_id",
+        "input_command",
+        "output_command",
         "output_return",
         "shared_key",
         "callable_dash",
@@ -190,8 +199,8 @@ def test_editing_an_input_reruns_its_consumer_cone(tmp_path: Path) -> None:
     assert joined.read_text() == "Ab"
 
 
-def test_code_id_distinguishes_tasks_sharing_the_wrapper(tmp_path: Path) -> None:
-    """Re-run only the task whose code_id state changed."""
+def test_code_changes_rerun_only_their_task(tmp_path: Path) -> None:
+    """Re-run only the task whose code_id state or command changed."""
     src = _write(tmp_path / "src", "x")
     code_a, code_b = _VersionNode("code:a"), _VersionNode("code:b")
     tasks = [
@@ -205,6 +214,14 @@ def test_code_id_distinguishes_tasks_sharing_the_wrapper(tmp_path: Path) -> None
     assert outcomes(build(tasks, tmp_path)) == {
         "a": TaskOutcome.SUCCESS,
         "b": TaskOutcome.SKIP_UNCHANGED,
+    }
+
+    b = tasks[1]
+    tasks[1] = _task("b", f"cat {src} > {tmp_path / 'b'}", b.inputs, b.outputs, code_b)
+
+    assert outcomes(build(tasks, tmp_path)) == {
+        "a": TaskOutcome.SKIP_UNCHANGED,
+        "b": TaskOutcome.SUCCESS,
     }
 
 
