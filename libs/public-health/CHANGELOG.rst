@@ -1,3 +1,11 @@
+**6.7.0 - 09/29/26**
+
+- Stop normalizing ``NonLogLinearRiskEffect`` relative risks by the RR at the TMREL
+
+Breaking changes:
+
+- Remove ``NonLogLinearRiskEffect.get_tmrel`` and its ``tmred`` data source
+
 **6.6.4 - 09/24/26**
 
 - Rename the ``mutator`` argument of the calibration constant combiner to ``modifier``
