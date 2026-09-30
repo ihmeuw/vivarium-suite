@@ -110,6 +110,8 @@ def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> Session:
     check_unique_task_names(tasks)
     pytask_tasks = [to_pytask_task(task) for task in tasks]
     root.mkdir(parents=True, exist_ok=True)
+    # pytasks uses whatever .git repo is upstream of root by default,
+    # but will use the true root dir if you pass a pytask.toml config file.
     config = root / "pytask.toml"
     if not config.exists():
         config.write_text("[tool.pytask.ini_options]\n")
