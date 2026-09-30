@@ -371,8 +371,7 @@ Code:
 - ``_trace_extractor`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
   only. It is the one agent that deliberately reads *outside* the working
   tree: Claude Code session transcripts under ``~/.claude/projects/`` (which
-  can contain anything). It returns compact digests, not transcript content,
-  and is spawned only by the ``workflow-assessment`` skill.
+  can contain anything). It returns compact digests, not transcript content.
 - ``_diff_analyzer``, ``_hypothesis_tester``, and ``_split_proposer``
   declare ``Bash`` to run ``git`` commands. In practice, every
   operation they perform is a read-only git command (``git diff``,
