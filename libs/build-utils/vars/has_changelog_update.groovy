@@ -71,7 +71,7 @@ def call() {
         echo "Changelog date validation passed: ${changelogDate}"
         return true
     } else {
-        echo "ERROR: CHANGELOG.rst was not modified in this commit"
+        echo "ERROR: CHANGELOG.rst was not modified since base commit ${previousCommit}"
         return false
     }
 }
