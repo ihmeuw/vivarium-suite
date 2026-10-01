@@ -33,12 +33,11 @@ dependencies = [
     # NOTE: Must import pytest as runtime dep in order to auto-load plugins
     "vivarium-dependencies[pytest,numpy]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
-    "vivarium-config-tree",
 ]
 
 [project.optional-dependencies]
 cluster = []
-test = []
+test = ["vivarium-config-tree"]
 docs = ["vivarium-dependencies[sphinx,docutils]"]
 interactive = []
 lint = ["vivarium-dependencies[lint]"]

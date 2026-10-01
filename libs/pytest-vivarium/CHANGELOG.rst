@@ -2,6 +2,7 @@
 
 - Layer ``no_gbd_cache``'s cache override over ``vivarium_gbd_access``'s configuration
   instead of replacing it
+- Move ``vivarium-config-tree`` from a runtime to a test dependency
 
 **0.2.1 - 09/22/26**
 
