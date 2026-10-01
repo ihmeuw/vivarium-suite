@@ -140,6 +140,6 @@ A deploy requires all of:
 
 - ``deployable: true``
 - the ``main`` branch
-- a deployable change in the tip commit
+- a deployable change since the last successful build
 - a new-commit build or ``FORCE_DEPLOY``
 - a version update in ``CHANGELOG.rst``

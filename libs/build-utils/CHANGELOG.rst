@@ -1,3 +1,8 @@
+**4.9.2 - 10/01/26**
+
+- Check the Jenkins deploy changelog update against the last successful build rather
+  than the previous commit, so a push of several commits deploys
+
 **4.9.1 - 09/25/26**
 
 - Carry each library's supported Python versions on ``Lib``
