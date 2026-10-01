@@ -4,6 +4,7 @@ This module is automatically loaded by pytest when pytest-vivarium is installed,
 via the pytest11 entry point declared in pyproject.toml.
 """
 
+import importlib
 import os
 import shutil
 from datetime import datetime
@@ -13,7 +14,6 @@ import pytest
 from _pytest.config import Config, argparsing
 from _pytest.python import Function
 from pytest_mock import MockerFixture
-from vivarium.config_tree import ConfigTree
 
 SLOW_TEST_DAY = "Sunday"
 
@@ -248,9 +248,12 @@ def is_slow_test_day(slow_test_day: str = SLOW_TEST_DAY) -> bool:
 def no_gbd_cache(mocker: MockerFixture) -> None:
     """Disable vivarium_gbd_access caching for test isolation.
 
-    This fixture mocks ``vivarium_gbd_access.utilities.get_input_config`` to return
-    a configuration with ``cache_data`` set to False, ensuring that tests always
-    pull fresh data rather than using cached results.
+    Mock ``vivarium_gbd_access.utilities.get_input_config`` to return the package's
+    usual configuration with ``input_data.cache_data`` layered to False, so tests
+    always pull fresh data while every other setting (e.g. ``gbd_environment``) keeps
+    its packaged or user-configured value. The configuration is resolved once, when
+    the fixture is set up, so any ``override_config`` a caller passes to the mocked
+    function is ignored. Requires ``vivarium_gbd_access`` to be installed.
 
     Note that this fixture does NOT use ``autouse=True``. If you want it to apply
     to all tests in a module or package, create a wrapper fixture in your conftest.py:
@@ -265,7 +268,8 @@ def no_gbd_cache(mocker: MockerFixture) -> None:
             pass
 
     """
-    mocker.patch(
-        "vivarium_gbd_access.utilities.get_input_config",
-        return_value=ConfigTree({"input_data": {"cache_data": False}}),
-    )
+    # Imported lazily: vivarium_gbd_access is not a dependency of this package, only of
+    # the consumers that request this fixture.
+    utilities = importlib.import_module("vivarium_gbd_access.utilities")
+    input_config = utilities.get_input_config({"input_data": {"cache_data": False}})
+    mocker.patch("vivarium_gbd_access.utilities.get_input_config", return_value=input_config)

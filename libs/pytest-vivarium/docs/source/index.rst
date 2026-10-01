@@ -36,7 +36,8 @@ to it - reading both node free memory and any cgroup (for example a SLURM
 The ``no_gbd_cache`` fixture
 ----------------------------
 
-``no_gbd_cache`` disables ``vivarium_gbd_access`` caching for test isolation. It
+``no_gbd_cache`` disables ``vivarium_gbd_access`` caching for test isolation,
+leaving every other setting of that package's configuration in place. It
 is not ``autouse``; wrap it in an ``autouse`` fixture in your own ``conftest.py``
 to apply it broadly.
 

@@ -1,3 +1,8 @@
+**0.2.2 - 09/30/26**
+
+- Layer ``no_gbd_cache``'s cache override over ``vivarium_gbd_access``'s configuration
+  instead of replacing it
+
 **0.2.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built

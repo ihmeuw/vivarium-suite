@@ -1,6 +1,8 @@
 """Regression tests for the pytest plugin."""
 
 import os
+import sys
+import types
 from pathlib import Path
 from typing import cast
 
@@ -232,3 +234,111 @@ def test_xdist_auto_num_workers_end_to_end(pytester: pytest.Pytester) -> None:
     result = pytester.runpytest_subprocess("-n", "auto")
     assert result.ret == 0
     result.stdout.fnmatch_lines(["*vivarium xdist auto-workers:*"])
+
+
+# Mirrors the real vivarium_gbd_access.utilities.get_input_config and its packaged
+# cache_config.yaml; vivarium_gbd_access is not installable in the test env.
+_PACKAGED_CACHE_PATH = "/share/scratch/users/{username}/cache"
+_PACKAGED_PYTHON_EXECUTABLE = "/ihme/code/central_comp/miniconda/envs/gbd_env/bin/python"
+_PACKAGED_SCRATCH_PATH = "/share/scratch/users/{username}/gbd_access"
+
+# An f-string, so values go in with !r to become quoted literals in the generated
+# source, and dict(...) stands in for {} literals the f-string would read as fields.
+_STAND_IN_UTILITIES_SOURCE = f"""
+from vivarium.config_tree import ConfigTree
+
+PACKAGED_CONFIG = dict(
+    input_data=dict(
+        cache_data=True,
+        intermediary_data_cache_path={_PACKAGED_CACHE_PATH!r},
+    ),
+    gbd_environment=dict(
+        python_executable={_PACKAGED_PYTHON_EXECUTABLE!r},
+        scratch_path={_PACKAGED_SCRATCH_PATH!r},
+    ),
+)
+
+
+def get_input_config(override_config=None):
+    input_config = ConfigTree(layers=["base", "override"])
+    input_config.update(PACKAGED_CONFIG, layer="base", source="cache_config.yaml")
+    if override_config is not None:
+        input_config.update(override_config)
+    return input_config
+"""
+
+
+# In-process tests request no_gbd_cache via getfixturevalue so it is set up only after
+# this stand-in is installed (and, where needed, after an unpatched baseline is captured).
+@pytest.fixture
+def _gbd_access_stand_in(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    """Install a stand-in ``vivarium_gbd_access.utilities`` and return it."""
+    package = types.ModuleType("vivarium_gbd_access")
+    package.__path__ = []
+    utilities = types.ModuleType("vivarium_gbd_access.utilities")
+    exec(_STAND_IN_UTILITIES_SOURCE, utilities.__dict__)
+    package.utilities = utilities  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "vivarium_gbd_access", package)
+    monkeypatch.setitem(sys.modules, "vivarium_gbd_access.utilities", utilities)
+    return utilities
+
+
+def test_no_gbd_cache_disables_cache_data(
+    _gbd_access_stand_in: types.ModuleType, request: pytest.FixtureRequest
+) -> None:
+    """Under no_gbd_cache, get_input_config reports input_data.cache_data as False."""
+    request.getfixturevalue("no_gbd_cache")
+    config = _gbd_access_stand_in.get_input_config()
+    assert config.input_data.cache_data is False
+
+
+def test_no_gbd_cache_preserves_other_input_config_settings(
+    _gbd_access_stand_in: types.ModuleType, request: pytest.FixtureRequest
+) -> None:
+    """Under no_gbd_cache, every setting other than cache_data matches the unpatched config."""
+    expected = _gbd_access_stand_in.get_input_config().to_dict()
+    expected["input_data"]["cache_data"] = False
+
+    request.getfixturevalue("no_gbd_cache")
+    assert _gbd_access_stand_in.get_input_config().to_dict() == expected
+
+
+def test_no_gbd_cache_applies_in_consumer_test_session(pytester: pytest.Pytester) -> None:
+    """A consumer test requesting no_gbd_cache sees caching off and gbd_environment intact."""
+    pytester.mkpydir("vivarium_gbd_access")
+    pytester.makepyfile(**{"vivarium_gbd_access/utilities.py": _STAND_IN_UTILITIES_SOURCE})
+    pytester.makepyfile(
+        test_consumer=f"""
+        from vivarium_gbd_access import utilities
+
+
+        def test_uses_fresh_data(no_gbd_cache):
+            config = utilities.get_input_config()
+            assert config.input_data.cache_data is False
+            assert config.input_data.intermediary_data_cache_path == {_PACKAGED_CACHE_PATH!r}
+            assert config.gbd_environment.python_executable == {_PACKAGED_PYTHON_EXECUTABLE!r}
+            assert config.gbd_environment.scratch_path == {_PACKAGED_SCRATCH_PATH!r}
+        """
+    )
+    # A subprocess keeps the file-based stand-in out of this session's sys.modules.
+    result = pytester.runpytest_subprocess("-v")
+    result.stdout.fnmatch_lines(["*test_uses_fresh_data PASSED*"])
+    assert result.ret == 0
+
+
+def test_no_gbd_cache_ignores_caller_override(
+    _gbd_access_stand_in: types.ModuleType, request: pytest.FixtureRequest
+) -> None:
+    """Under no_gbd_cache, an override_config passed to get_input_config has no effect."""
+    request.getfixturevalue("no_gbd_cache")
+    expected = _gbd_access_stand_in.get_input_config().to_dict()
+
+    config = _gbd_access_stand_in.get_input_config(
+        {"gbd_environment": {"scratch_path": "/elsewhere"}}
+    )
+    assert config.to_dict() == expected
+    assert config.gbd_environment.scratch_path == _PACKAGED_SCRATCH_PATH
+    assert config.input_data.cache_data is False
+
+    reenabled = _gbd_access_stand_in.get_input_config({"input_data": {"cache_data": True}})
+    assert reenabled.input_data.cache_data is False
