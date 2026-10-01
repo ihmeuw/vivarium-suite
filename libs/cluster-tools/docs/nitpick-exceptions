@@ -29,3 +29,5 @@ py:class jobmon.client.task.Task
 py:class jobmon.client.workflow.Workflow
 py:class Tool
 py:class Task
+# pytask
+py:class _pytask.node_protocols.PNode
