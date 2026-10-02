@@ -464,7 +464,7 @@ The relative risk data must contain a numeric ``parameter`` column with
 exposure thresholds (typically 1000 values spanning the plausible range)
 and corresponding ``value`` entries. The relative risks are used as-is
 apart from being clipped up to ``MINIMUM_RELATIVE_RISK`` (1 by default;
-``None`` disables the clip, e.g. for a protective risk), so they must be
+``None`` disables the clip), so they must be
 consistent with the supplied population attributable fraction data: the PAF
 must have been computed from the same clipped relative risks.
 

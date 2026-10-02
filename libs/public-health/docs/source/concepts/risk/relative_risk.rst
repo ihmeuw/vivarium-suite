@@ -92,7 +92,7 @@ can be used instead. This component:
 
 1. Loads RR data points from its configured data source (the artifact by
    default) and clips them to a minimum of ``MINIMUM_RELATIVE_RISK`` (1 by
-   default; ``None`` disables the clip, e.g. for a protective risk). The RRs
+   default; ``None`` disables the clip). The RRs
    are not otherwise rescaled, so they must be consistent with the
    :term:`PAF` data: the PAF must have been computed from the same clipped
    RRs.

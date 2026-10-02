@@ -102,9 +102,8 @@ class NonLogLinearRiskEffect(RiskEffect):
     """
 
     MINIMUM_RELATIVE_RISK: float | None = 1.0
-    """Lower bound applied to the loaded relative risks. Set to
-    ``None`` for a risk that is protective over part of its exposure range and
-    so needs to keep relative risks below 1."""
+    """Lower bound applied to the loaded relative risks. Set to ``None`` to
+    use the relative risks without a lower bound."""
 
     ##############
     # Properties #
