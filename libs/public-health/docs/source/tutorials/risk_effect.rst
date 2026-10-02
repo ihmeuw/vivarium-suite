@@ -462,13 +462,11 @@ individually interpolated RR based on their actual exposure level.
 
 The relative risk data must contain a numeric ``parameter`` column with
 exposure thresholds (typically 1000 values spanning the plausible range)
-and corresponding ``value`` entries. The relative risks are used as-is, so
-they must already equal 1 at the TMREL (Theoretical Minimum-Risk Exposure
-Level); GBD relative risks for risks with a uniform TMRED are normalized
-this way, but not floored, by ``vivarium_inputs``, while those with a
-draw-level TMRED arrive un-rescaled. Relative risks below ``MINIMUM_RELATIVE_RISK`` (1 by
-default) are clipped up to it, matching GBD's floor, so a risk with
-protective effects needs ``MINIMUM_RELATIVE_RISK = None``.
+and corresponding ``value`` entries. The relative risks are used as-is
+apart from being clipped up to ``MINIMUM_RELATIVE_RISK`` (1 by default;
+``None`` disables the clip, e.g. for a protective risk), so they must be
+consistent with the supplied population attributable fraction data: the PAF
+must have been computed from the same clipped relative risks.
 
 
 Building relative risk data

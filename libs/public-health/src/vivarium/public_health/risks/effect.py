@@ -90,14 +90,10 @@ class NonLogLinearRiskEffect(RiskEffect):
     This component:
 
     1. Loads relative risk data defined in the configuration and clips it to
-       :attr:`MINIMUM_RELATIVE_RISK`. The data are used as-is otherwise: GBD
-       relative risks for risks with a uniform TMRED arrive already normalized
-       to 1 at the TMREL, while those with a draw-level TMRED arrive
-       un-rescaled, and custom relative risks needing that step should be
-       normalized by their model.
-       The normalized GBD relative risks are not floored, so the default
-       :attr:`MINIMUM_RELATIVE_RISK` of 1 applies GBD's floor; a risk with
-       protective effects needs it set to ``None``.
+       :attr:`MINIMUM_RELATIVE_RISK`. The relative risks are otherwise used
+       as-is, so they must be consistent with the population attributable
+       fraction data: the PAF must have been computed from these relative
+       risks after the clip.
     2. Builds a ``LookupTable`` that returns the exposure and RR of the left
        and right edges of the RR bin containing a simulant's exposure.
     3. Uses this ``LookupTable`` to modify the target pipeline by linearly
@@ -261,8 +257,8 @@ class NonLogLinearRiskEffect(RiskEffect):
     ) -> str | float | pd.DataFrame:
         """Load relative risk data and clip it to :attr:`MINIMUM_RELATIVE_RISK`.
 
-        The relative risks are not rescaled: they are expected to already be 1
-        at the TMREL.
+        The relative risks are otherwise used as-is, so they must be
+        consistent with the population attributable fraction data.
 
         Parameters
         ----------

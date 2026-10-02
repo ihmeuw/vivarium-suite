@@ -92,13 +92,10 @@ can be used instead. This component:
 
 1. Loads RR data points from its configured data source (the artifact by
    default) and clips them to a minimum of ``MINIMUM_RELATIVE_RISK`` (1 by
-   default). The RRs are not otherwise rescaled: they must already equal 1 at
-   the :term:`TMREL`, as GBD relative risks do once processed by
-   ``vivarium_inputs`` for risks with a uniform :term:`TMRED`; those with a
-   draw-level TMRED arrive un-rescaled. ``vivarium_inputs`` does not floor
-   them, so the
-   default minimum of 1 applies GBD's floor; a risk with protective effects
-   needs ``MINIMUM_RELATIVE_RISK = None``.
+   default; ``None`` disables the clip, e.g. for a protective risk). The RRs
+   are not otherwise rescaled, so they must be consistent with the
+   :term:`PAF` data: the PAF must have been computed from the same clipped
+   RRs.
 2. Constructs a lookup table of piecewise-linear intervals from the RR data.
    Each interval has a left and right exposure boundary and corresponding left
    and right RR values.
