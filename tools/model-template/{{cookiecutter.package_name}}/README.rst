@@ -53,8 +53,8 @@ Installation
 .. necessary requirements as follows:
 .. 
 ..    cd <path/to/model/repo/> 
-..    conda create --name {{ cookiecutter.package_name }}
-..  --file {{ cookiecutter.package_name }}_lock_conda.txt
+..    conda create --name {{ cookiecutter.package_name }} \
+..    --file {{ cookiecutter.package_name }}_lock_conda.txt
 ..    conda activate {{ cookiecutter.package_name }}
 ..    pip install -r {{ cookiecutter.package_name }}_lock_pip.txt
 ..    pip install -e . 
