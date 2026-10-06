@@ -75,10 +75,11 @@ Exit with a short written design summary the user has agreed to. End it with a
 **short testing strategy** — a few lines on what must be tested to be confident the
 feature works as expected:
 
-- **Use cases** — the important behaviors, with their expected outcomes.
-- **Edge cases** — boundaries and failure paths worth worrying about.
-- **Feature requirements** — anything else the tests must hold the feature to, such as
-  existing behavior that must not change.
+- **Feature requirements** — what the feature must do.
+- **Use cases** — the important behaviors that show each requirement is met, with
+  their expected outcomes.
+- **Edge cases** — the boundaries and failure paths that test each requirement's
+  limits.
 
 It says *what* to test, not how; no test code.
 
