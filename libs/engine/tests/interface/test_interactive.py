@@ -114,11 +114,7 @@ FIRST_STEP_AT_OR_AFTER_END = pd.Timestamp("2020-02-05")
 
 @pytest.fixture
 def short_sim() -> InteractiveContext:
-    """A sim configured from Jan 1 to Jan 31 in 7-day steps.
-
-    The clock steps Jan 1, 8, 15, 22, 29 and then Feb 5, the first step at or after the configured
-    end, so the configured end is 5 steps away.
-    """
+    """A sim configured from Jan 1 to Jan 31 in 7-day steps."""
     return InteractiveContext(
         configuration={
             "time": {
@@ -139,7 +135,7 @@ def info_messages(caplog: LogCaptureFixture) -> list[str]:
 
 
 class TestRunUntilTime:
-    """run_until with a clock time."""
+    """Tests for run_until with a clock time as the target."""
 
     def test_returns_true(self, short_sim: InteractiveContext) -> None:
         """A time target is always reached."""
@@ -180,7 +176,7 @@ class TestRunUntilTime:
 
 
 class TestRunUntilCondition:
-    """run_until with a condition."""
+    """Tests for run_until with a condition (callable) as the target."""
 
     def test_stops_at_the_first_step_where_the_condition_holds(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture
