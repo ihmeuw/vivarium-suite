@@ -33,7 +33,8 @@ reproduce the results of a specific analysis.
 Installation
 ------------
 ..
-.. TODO: remove '..'s prior to archival to unhide this section
+.. TODO: remove '..'s prior to archival to unhide this section, and replace
+.. <X.Y.Z> below with the Python version recorded in the conda lock file
 ..
 .. Installation via Zenodo for archival access
 .. +++++++++++++++++++++++++++++++++++++++++++
@@ -49,18 +50,22 @@ Installation
 .. Within this shell, navigate to the simulation directory. The simulation directory
 .. is where this README file is located and will be titled something
 .. like `ihmeuw-{{ cookiecutter.package_name }}-{hash}`. 
-.. You will then then make an environment and install
-.. necessary requirements as follows:
-.. 
-..    cd <path/to/model/repo/> 
-..    conda create --name {{ cookiecutter.package_name }} \
-..    --file {{ cookiecutter.package_name }}_lock_conda.txt
+.. You will then make an environment and install
+.. necessary requirements as follows::
+..
+..    cd <path/to/model/repo/>
+..    conda create --name {{ cookiecutter.package_name }} -c conda-forge python=<X.Y.Z> git-lfs
 ..    conda activate {{ cookiecutter.package_name }}
-..    pip install -r {{ cookiecutter.package_name }}_lock_pip.txt
-..    pip install -e . 
-.. 
+..    python -m pip install -r {{ cookiecutter.package_name }}_lock_pip.txt
+..    python -m pip install -e .
+..
 .. Note the ``-e`` flag that follows pip install. This will install the python
 .. package in-place, which is important for making the model specifications later.
+..
+.. On 64-bit Linux you may replace the ``conda create`` command above with
+.. ``conda create --name {{ cookiecutter.package_name }} --file {{ cookiecutter.package_name }}_lock_conda.txt``
+.. to match the environment the model was archived with exactly. The conda lock
+.. file is specific to that platform and will not work on others.
 
 Installation using GitHub for development
 +++++++++++++++++++++++++++++++++++++++++
