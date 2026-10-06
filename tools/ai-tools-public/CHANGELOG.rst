@@ -1,3 +1,8 @@
+**0.3.0 - 10/06/26**
+
+- Add a short testing strategy section to the design ``/simsci:framework-development``
+  agrees with the user
+
 **0.2.1 - 09/16/26**
 
 - Update documentation and skills for public release

@@ -71,7 +71,16 @@ finalize & PR = finalize_core        # Phase 5: user-gated; residuals -> tickets
   criterion's literal wording and the actual need to the user rather than
   building the wording.
 
-Exit with a short written design summary the user has agreed to.
+Exit with a short written design summary the user has agreed to. End it with a
+**short testing strategy** — a few lines on what must be tested to be confident the
+feature works as expected:
+
+- **Use cases** — the important behaviors, with their expected outcomes.
+- **Edge cases** — boundaries and failure paths worth worrying about.
+- **Feature requirements** — anything else the tests must hold the feature to, such as
+  existing behavior that must not change.
+
+It says *what* to test, not how; no test code.
 
 ## Phase 2 — Stub the interface and the tests (inline)
 
