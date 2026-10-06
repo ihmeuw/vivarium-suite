@@ -14,6 +14,7 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 """
 from __future__ import annotations
 
+import re
 from math import ceil
 from typing import TYPE_CHECKING, overload
 
@@ -343,6 +344,62 @@ class InteractiveContext(SimulationContext):
                 "Are you looking for a value pipeline? Try get_value()."
             )
         return self._values.get_attribute(attribute_pipeline_name)
+
+    def find_resources(self, pattern: str, *, regex: bool = False) -> pd.DataFrame:
+        """Find simulation resources whose name or component matches a pattern.
+
+        Use this to locate a value when you know roughly what it is called but not
+        what kind of thing holds it. A name can exist as more than one kind, e.g.
+        every column also exists as an attribute; each match reports its own kind
+        so they are distinguishable.
+
+        Parameters
+        ----------
+        pattern
+            The text to look for, matched case-insensitively against both a
+            resource's name and the name of the component that registered it. It
+            may appear anywhere in either name.
+        regex
+            Whether to treat the pattern as a regular expression. It is matched
+            literally by default, so a name copied out of an earlier result always
+            finds itself even when it contains characters a regular expression
+            would read as syntax.
+
+        Returns
+        -------
+            A frame of matching resources with columns ``name``, ``kind`` and
+            ``component``, one row per resource, sorted by name and then kind so
+            that a name registered as more than one kind reads as a group.
+
+        Raises
+        ------
+        ValueError
+            If ``regex`` is True and the pattern is not a valid regular expression.
+
+        Notes
+        -----
+        The resource graph holds no combiners or post-processors, so this cannot
+        find those. :meth:`get_attribute` reports them for a pipeline you have
+        already found.
+        """
+        try:
+            matcher = re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE)
+        except re.error as error:
+            raise ValueError(
+                f"Invalid regular expression '{pattern}': {error}. Drop regex=True to"
+                " search for this text literally."
+            ) from error
+
+        rows = []
+        for resource in self._resource.get_graph().nodes:
+            resource_name = str(resource.name)
+            component_name = resource.component.name
+            if matcher.search(resource_name) or matcher.search(component_name):
+                rows.append((resource_name, resource.RESOURCE_TYPE, component_name))
+
+        return pd.DataFrame(rows, columns=["name", "kind", "component"]).sort_values(
+            ["name", "kind"], ignore_index=True
+        )
 
     def list_events(self) -> list[str]:
         """List all event types registered with the simulation."""

@@ -347,6 +347,79 @@ and its error message will point you back at attributes (and vice versa).
 
    No value pipeline 'mortality_rate' registered. Are you looking for an attribute pipeline? Try get_attribute().
 
+Finding something by name
+-------------------------
+
+Everything above assumes you already know what the thing you want is called, and
+which kind of thing it is; you might not know either.
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+takes a fragment of a name and reports every resource that matches it, along with
+the kind of each one.
+
+.. testcode::
+
+   found = sim.find_resources("age")
+   print(found.to_string(index=False))
+
+.. testoutput::
+
+                                                 name        kind       component
+   1.base_population.initialize_entrance_time_and_age initializer base_population
+                                                  age   attribute base_population
+                                                  age      column base_population
+                                   age_initialization      stream base_population
+
+Note that ``age`` appears twice. It is both a column and an attribute, and the
+``kind`` is what tells them apart - which is the point of the method. Registering a
+column automatically registers an attribute of the same name that reads it, so this
+pairing is the normal case rather than a quirk of this model. The reverse does not
+hold; most attributes are computed rather than stored and have no column behind them.
+
+.. note::
+
+    The pattern provided is matched against the name of each resource *and* the name
+    of the component that registered it, so searching for a component reports everything
+    it owns, whatever those things are called.
+    
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+by default performs a literal substring match; to search with regex, pass ``regex=True``.
+For example, we can search for the ``mortality`` component exactly using anchors
+which will match the component name exactly rather than every name containing the
+word "mortality".
+
+.. testcode::
+
+    found = sim.find_resources("^mortality$", regex=True)
+    print(found.to_string(index=False))
+    # There are many other resources that include the word "mortality"
+    assert len(sim.find_resources("mortality")) > len(found)
+
+.. testoutput::
+
+                              name         kind component
+   3.mortality.initialize_is_alive  initializer mortality
+                          is_alive    attribute mortality
+                          is_alive       column mortality
+                         mortality       stream mortality
+          mortality.mortality_rate lookup_table mortality
+                    mortality_rate    attribute mortality
+
+``is_alive`` is in that list because the ``mortality`` component registered it,
+even though its name contains no "mortality" at all.
+
+.. note::
+
+    Matching is case-insensitive, and the pattern is matched *literally* unless
+    you pass ``regex=True``. This default is the safe one for the common move of
+    copying a name out of an earlier result; such a name finds itself even when it
+    contains characters - brackets, parentheses, a dot - that a regular expression
+    would otherwise read as syntax.
+
+The resource graph holds no combiners or post-processors, so
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+cannot find those. Once you have located a pipeline, printing it reports them, as
+shown above.
+
 .. _interactive_results:
 
 Observed results
