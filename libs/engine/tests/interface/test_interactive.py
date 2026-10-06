@@ -141,13 +141,11 @@ def info_messages(caplog: LogCaptureFixture) -> list[str]:
 class TestRunUntilTime:
     """run_until with a clock time."""
 
-    @pytest.mark.xfail(reason="not implemented: bool return")
     def test_returns_true(self, short_sim: InteractiveContext) -> None:
         """A time target is always reached."""
         assert short_sim.run_until(JAN_15) is True
         assert short_sim.current_time == JAN_15
 
-    @pytest.mark.xfail(reason="not implemented: log instead of print")
     def test_logs_the_number_of_steps(
         self,
         short_sim: InteractiveContext,
@@ -160,7 +158,6 @@ class TestRunUntilTime:
         assert "Simulation complete after 2 iterations" in info_messages(caplog)
         assert capsys.readouterr().out == ""
 
-    @pytest.mark.xfail(reason="not implemented: zero steps for a past time")
     @pytest.mark.parametrize("days_back", [0, 1, 8])
     def test_a_time_at_or_before_now_takes_zero_steps(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture, days_back: int
@@ -175,7 +172,6 @@ class TestRunUntilTime:
         assert "Simulation complete after 0 iterations" in info_messages(caplog)
         assert short_sim.current_time == JAN_8
 
-    @pytest.mark.xfail(reason="not implemented: max_steps with a time")
     def test_max_steps_with_a_time_raises(self, short_sim: InteractiveContext) -> None:
         """max_steps only applies to conditions."""
         with pytest.raises(ValueError, match="condition"):
@@ -186,7 +182,6 @@ class TestRunUntilTime:
 class TestRunUntilCondition:
     """run_until with a condition."""
 
-    @pytest.mark.xfail(reason="not implemented: condition loop")
     def test_stops_at_the_first_step_where_the_condition_holds(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture
     ) -> None:
@@ -195,7 +190,6 @@ class TestRunUntilCondition:
         assert short_sim.current_time == JAN_15
         assert "Condition met after 2 iterations" in info_messages(caplog)
 
-    @pytest.mark.xfail(reason="not implemented: check before the first step")
     @pytest.mark.parametrize("value", [True, np.True_], ids=["bool", "numpy_bool"])
     def test_a_condition_already_true_takes_zero_steps(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture, value: bool
@@ -205,7 +199,6 @@ class TestRunUntilCondition:
         assert short_sim.current_time == JAN_1
         assert "Condition met after 0 iterations" in info_messages(caplog)
 
-    @pytest.mark.xfail(reason="not implemented: default bound")
     def test_a_condition_never_true_stops_at_the_configured_end(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture
     ) -> None:
@@ -216,7 +209,6 @@ class TestRunUntilCondition:
             caplog
         )
 
-    @pytest.mark.xfail(reason="not implemented: explicit max_steps")
     @pytest.mark.parametrize("max_steps", [2, 7])
     def test_max_steps_replaces_the_default_bound(
         self, short_sim: InteractiveContext, max_steps: int
@@ -225,7 +217,6 @@ class TestRunUntilCondition:
         assert short_sim.run_until(lambda sim: False, max_steps=max_steps) is False
         assert short_sim.current_time == JAN_1 + pd.Timedelta(days=7 * max_steps)
 
-    @pytest.mark.xfail(reason="not implemented: no steps remaining")
     def test_no_steps_remaining_takes_zero_steps(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture
     ) -> None:
@@ -238,7 +229,6 @@ class TestRunUntilCondition:
             caplog
         )
 
-    @pytest.mark.xfail(reason="not implemented: condition return type")
     @pytest.mark.parametrize(
         "condition, match",
         [
