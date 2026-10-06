@@ -109,6 +109,7 @@ JAN_1 = pd.Timestamp("2020-01-01")
 JAN_8 = pd.Timestamp("2020-01-08")
 JAN_15 = pd.Timestamp("2020-01-15")
 JAN_31 = pd.Timestamp("2020-01-31")
+STEP_SIZE = pd.Timedelta(days=7)
 FIRST_STEP_AT_OR_AFTER_END = pd.Timestamp("2020-02-05")
 
 
@@ -120,7 +121,7 @@ def short_sim() -> InteractiveContext:
             "time": {
                 "start": {"year": JAN_1.year, "month": JAN_1.month, "day": JAN_1.day},
                 "end": {"year": JAN_31.year, "month": JAN_31.month, "day": JAN_31.day},
-                "step_size": 7,
+                "step_size": STEP_SIZE.days,
             }
         }
     )
@@ -158,10 +159,7 @@ class TestRunUntilTime:
     def test_a_time_at_or_before_now_takes_zero_steps(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture, days_back: int
     ) -> None:
-        """A time that has already passed is reached without stepping.
-
-        Today 0 and 1 days back already take zero steps, and 8 days back fails on an assert.
-        """
+        """A time that has already passed is reached without stepping."""
         short_sim.step()
 
         assert short_sim.run_until(JAN_8 - pd.Timedelta(days=days_back)) is True
@@ -211,7 +209,13 @@ class TestRunUntilCondition:
     ) -> None:
         """An explicit bound is used as given, even past the configured end."""
         assert short_sim.run_until(lambda sim: False, max_steps=max_steps) is False
-        assert short_sim.current_time == JAN_1 + pd.Timedelta(days=7 * max_steps)
+        assert short_sim.current_time == JAN_1 + STEP_SIZE * max_steps
+
+    def test_a_negative_max_steps_raises(self, short_sim: InteractiveContext) -> None:
+        """A negative bound is a mistake, not zero steps."""
+        with pytest.raises(ValueError, match="max_steps"):
+            short_sim.run_until(lambda sim: False, max_steps=-1)
+        assert short_sim.current_time == JAN_1
 
     def test_no_steps_remaining_takes_zero_steps(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture
@@ -229,7 +233,7 @@ class TestRunUntilCondition:
         "condition, match",
         [
             (lambda sim: pd.Series([True, False]), r"\.any\(\)"),
-            (lambda sim: 1, "bool"),
+            (lambda sim: 1, r"type int\.$"),
         ],
         ids=["series", "int"],
     )

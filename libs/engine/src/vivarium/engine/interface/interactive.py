@@ -208,8 +208,8 @@ class InteractiveContext(SimulationContext):
         Raises
         ------
         ValueError
-            If ``max_steps`` is given with a time, or the time is not compatible
-            with the simulation clock.
+            If ``max_steps`` is given with a time or is negative, or the time is
+            not compatible with the simulation clock.
         TypeError
             If a condition returns something other than a bool.
         """
@@ -243,6 +243,8 @@ class InteractiveContext(SimulationContext):
         with_logging: bool,
     ) -> bool:
         """Step until the condition is true or max_steps runs out, and return whether it was met."""
+        if max_steps is not None and max_steps < 0:
+            raise ValueError(f"max_steps must be zero or greater, but got {max_steps}.")
         if max_steps is None:
             max_steps = max(0, self._clock.time_steps_remaining)
 
