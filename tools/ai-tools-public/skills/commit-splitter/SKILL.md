@@ -55,6 +55,7 @@ Because the splitting steps below only *add* and *commit* (never discard), `git 
 - **File-aligned groups** (most common): `git reset HEAD` to unstage everything, then for each group: `git add <files>` → `git commit -m "<subject>" -m "<body>"`. Leftover changes stay in the working tree until the next group claims them.
 - **Hunk-aligned groups within a file**: `git add -p <file>` for the user to walk through interactively, *or* draft the hunks into a patch and `git apply --cached`. Hunk splits are fiddly; prefer file-aligned splits when possible.
 - After each commit: `git --no-pager log -1 --stat` so the user can verify before the next group lands.
+- Write each commit body with `simsci:writing-style` and run its checker with `--kind plain` before you commit. The subject keeps the format that the repository uses.
 
 If a commit fails (lint hook, type check), stop and surface the failure. Do not `--no-verify`. Either fix in place and amend with explicit user consent, or roll the commit back with `git reset --soft HEAD~1` and re-plan.
 
@@ -64,6 +65,8 @@ When the plan calls for multiple PRs, each PR needs its own branch. Follow your 
 
 - **One PR, many commits:** stay on the current branch; push and open a single PR.
 - **Multiple PRs:** for each group, create a branch off the appropriate base (usually `main`; sometimes the prior PR's branch if there's a hard dependency), cherry-pick the relevant commits onto it, push, and open the PR. Call out the dependency chain in each PR body so reviewers know the merge order.
+
+Write each PR body with `simsci:writing-style` and run its checker before you open the PR.
 
 ### 6. Clean up
 

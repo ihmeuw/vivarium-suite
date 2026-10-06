@@ -1,3 +1,12 @@
+**0.3.0 - 10/06/26**
+
+- Add the ``writing-style`` skill: rules for prose that people read, based on
+  ASD-STE100 Simplified Technical English, with a bundled ``ste_check.py`` checker
+  and before-and-after examples
+- Invoke ``writing-style`` from ``_finalize-core``, ``commit-splitter``, and
+  ``change-propagation`` before they post PR, commit, or comment text
+- Add a plain-English prose line to the ``_review_*`` agents and ``_split_proposer``
+
 **0.2.1 - 09/16/26**
 
 - Update documentation and skills for public release

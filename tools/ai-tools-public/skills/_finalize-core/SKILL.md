@@ -24,6 +24,10 @@ some runs — **hold-out paths** that must stay uncommitted, and a PR partition 
 if this ships as a stack rather than one PR. Ask for anything missing rather than
 inferring it.
 
+Invoke `simsci:writing-style` before you draft any text in the steps below. The PR
+title, the PR body, and the Step 6 comment are artifact text. The Step 1 summary and
+the final report are conversation text.
+
 ## Step 1 — Summarize and read the branch
 
 State what was built or changed, the validation verdict, and anything carried out
@@ -60,9 +64,10 @@ filed", or "unresolved" — because that is what Step 6 reports.
 
 **Gate — approve the PR.** Show in one place: Step 1's summary, the commit
 organization you intend (Step 4), the PR title/base/draft status, and **the exact
-body of the Step 6 comment**. Take one approval covering that whole write set —
-commits, push, PR, and comment. The comment is a public write, so it gets seen
-before it lands rather than after. Without approval, stop and leave the branch in
+body of the Step 6 comment**, after you run the `simsci:writing-style` checker on
+it. Take one approval covering that whole write set — commits, push, PR, and
+comment. The comment is a public write, so it gets seen before it lands rather than
+after. Without approval, stop and leave the branch in
 place, saying what would have happened.
 
 ## Step 4 — Shape a reviewable history
@@ -101,9 +106,10 @@ PR template from the actual diff if one exists. A **draft** is the safe default 
 a PR you open.
 
 Either way, put Step 1's summary and the validation verdict, residuals included, in
-the body. Prefer the GitHub MCP's pull-request tools over the `gh` CLI when both are
-available: the MCP needs no shell access and works in sandboxed environments where
-`gh` cannot read its credentials.
+the body. Run the `simsci:writing-style` checker on the body before you post it, and
+fix every hard finding. Prefer the GitHub MCP's pull-request tools over the `gh` CLI
+when both are available: the MCP needs no shell access and works in sandboxed
+environments where `gh` cannot read its credentials.
 
 If neither the MCP nor a logged-in `gh` is available, do not stop silently: push
 if `git push` works, then print the PR title, base, draft flag, full body, and the
@@ -129,8 +135,8 @@ Include, omitting any empty section:
   because it could not go green, a finding whose fix was blocked. Say what it was
   and what stopped it.
 
-Write it for a reviewer arriving cold. Don't restate the change, don't repeat the
-PR body, and don't soften a leftover into sounding done.
+Write it for a reviewer who arrives cold. Do not restate the change, do not repeat
+the PR body, and do not make a leftover sound done.
 
 Then report: the PR number and URL, the commits as they landed, any tickets filed,
 and any hold-out paths still uncommitted. If the PR is still a draft, **offer** to
