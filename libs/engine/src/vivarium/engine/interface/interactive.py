@@ -182,36 +182,29 @@ class InteractiveContext(SimulationContext):
             duration = pd.Timedelta(duration)
         self.run_until(self._clock.time + duration, with_logging=with_logging)  # type: ignore [operator]
 
-    def run_until(self, end_time: ClockTime, with_logging: bool = True) -> None:
-        """Run the simulation until the provided end time.
-
-        Parameters
-        ----------
-        end_time
-            The time to run the simulation until. The simulation will run until
-            its clock is greater than or equal to the provided end time. Must be
-            compatible with the simulation clock's step size (usually a pandas.Timestamp)
-
-        with_logging
-            Whether or not to log the simulation steps. Only works in an ipython
-            environment.
-
-        Returns
-        -------
-            The number of steps the simulation took.
-        """
+    def run_until(
+        self,
+        target: ClockTime | Callable[[InteractiveContext], bool],
+        with_logging: bool = True,
+        *,
+        max_steps: int | None = None,
+    ) -> bool:
+        """[stub] Implement in Phase 2. Until then, only the existing time form works."""
+        if callable(target) or max_steps is not None:
+            raise NotImplementedError
         if not (
-            isinstance(end_time, type(self._clock.time))
-            or isinstance(self._clock.time, type(end_time))
+            isinstance(target, type(self._clock.time))
+            or isinstance(self._clock.time, type(target))
         ):
             raise ValueError(
                 f"Provided time must be compatible with {type(self._clock.time)}"
             )
 
-        iterations = int(ceil((end_time - self._clock.time) / self._clock.step_size))  # type: ignore [operator, arg-type]
+        iterations = int(ceil((target - self._clock.time) / self._clock.step_size))  # type: ignore [operator, arg-type]
         self.take_steps(number_of_steps=iterations, with_logging=with_logging)
-        assert self._clock.time - self._clock.step_size < end_time <= self._clock.time  # type: ignore [operator]
+        assert self._clock.time - self._clock.step_size < target <= self._clock.time  # type: ignore [operator]
         print("Simulation complete after", iterations, "iterations")
+        return None  # type: ignore [return-value]
 
     def take_steps(
         self,
