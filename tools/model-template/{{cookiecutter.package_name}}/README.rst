@@ -56,8 +56,8 @@ Installation
 ..    cd <path/to/model/repo/>
 ..    conda create --name {{ cookiecutter.package_name }} -c conda-forge python=<X.Y.Z> git-lfs
 ..    conda activate {{ cookiecutter.package_name }}
-..    python -m pip install -r {{ cookiecutter.package_name }}_lock_pip.txt
-..    python -m pip install -e .
+..    pip install -r {{ cookiecutter.package_name }}_lock_pip.txt
+..    pip install -e .
 ..
 .. Note the ``-e`` flag that follows pip install. This will install the python
 .. package in-place, which is important for making the model specifications later.
