@@ -70,8 +70,9 @@ Glossary
         
     Resource
         Anything the framework tracks in its dependency graph so that it is produced
-        before whatever reads it. Two resources may share a name when their typesdiffer, which is why a column and the attribute pipeline paired
-        with it can both be called ``age``.
+        before whatever reads it. Two resources may share a name when their types
+        differ, which is why a column and the attribute pipeline paired with it
+        can both be called ``age``.
 
     Simulant
         An individual or agent. One member of the population being simulated.

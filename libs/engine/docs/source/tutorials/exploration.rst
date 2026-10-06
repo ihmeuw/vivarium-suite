@@ -353,8 +353,9 @@ Finding something by name
 Everything above assumes you already know what the thing you want is called, and
 which kind of thing it is; you might not know either.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
-takes a fragment of a name and reports every resource that matches it in its name
-or the name of the component that registered it as well as the type of each resource.
+takes a fragment of a name and reports every :term:`resource <Resource>` that matches
+it in its name or the name of the component that registered it as well as the type
+of each resource.
 
 .. testcode::
 
