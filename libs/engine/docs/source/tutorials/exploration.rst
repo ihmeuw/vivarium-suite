@@ -353,34 +353,57 @@ Finding something by name
 Everything above assumes you already know what the thing you want is called, and
 which kind of thing it is; you might not know either.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
-takes a fragment of a name and reports every resource that matches it, along with
-the kind of each one.
+takes a fragment of a name and reports every resource that matches it in its name
+or the name of the component that registered it as well as the type of each resource.
 
 .. testcode::
 
-   found = sim.find_resources("age")
+   found = sim.find_resources("mortality")
    print(found.to_string(index=False))
 
 .. testoutput::
 
-                                                 name        kind       component
-   1.base_population.initialize_entrance_time_and_age initializer base_population
-                                                  age   attribute base_population
-                                                  age      column base_population
-                                   age_initialization      stream base_population
+                                                                                                 name  resource_type                                                 component
+                                                                      3.mortality.initialize_is_alive    initializer                                                 mortality
+                       disease_state.infected_with_lower_respiratory_infections.excess_mortality_rate   lookup_table  disease_state.infected_with_lower_respiratory_infections
+                      disease_state.susceptible_to_lower_respiratory_infections.excess_mortality_rate   lookup_table disease_state.susceptible_to_lower_respiratory_infections
+                                     infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
+    infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
+                                                                                             is_alive      attribute                                                 mortality
+                                           lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
+                                                                             mortality.mortality_rate   lookup_table                                                 mortality
+                                                                                       mortality_rate      attribute                                                 mortality
+          mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality value_modifier                disease_model.lower_respiratory_infections
+   mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality value_modifier disease_state.susceptible_to_lower_respiratory_infections
+    mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality value_modifier  disease_state.infected_with_lower_respiratory_infections
+                                    susceptible_to_lower_respiratory_infections.excess_mortality_rate      attribute disease_state.susceptible_to_lower_respiratory_infections
+   susceptible_to_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute disease_state.susceptible_to_lower_respiratory_infections
 
-Note that ``age`` appears twice. It is both a column and an attribute, and the
-``kind`` is what tells them apart - which is the point of the method. Registering a
-column automatically registers an attribute of the same name that reads it, so this
-pairing is the normal case rather than a quirk of this model. The reverse does not
-hold; most attributes are computed rather than stored and have no column behind them.
+Notice that the ``is_alive`` resource is included in the output even though its
+name does not contain "mortality". This is because the ``mortality`` component
+registered it.
 
 .. note::
 
     The pattern provided is matched against the name of each resource *and* the name
     of the component that registered it, so searching for a component reports everything
     it owns, whatever those things are called.
-    
+
+.. note::
+
+    Columns and randomness streams are deliberately left out. A column contains the
+    backing data of an attribute of the same name, so reporting it adds a near-duplicate
+    row without adding information. Meanwhile, a randomness stream is upstream of
+    the values it randomizes rather than one of them and there's not much to gain
+    from reporting it.
+
+.. note::
+
+    The resource graph holds no combiners or post-processors, so
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+    cannot find those. Once you have located a pipeline, printing it reports them,
+    as shown above.
+
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
 by default performs a literal substring match; to search with regex, pass ``regex=True``.
 For example, we can search for the ``mortality`` component exactly using anchors
@@ -396,16 +419,11 @@ word "mortality".
 
 .. testoutput::
 
-                              name         kind component
-   3.mortality.initialize_is_alive  initializer mortality
-                          is_alive    attribute mortality
-                          is_alive       column mortality
-                         mortality       stream mortality
-          mortality.mortality_rate lookup_table mortality
-                    mortality_rate    attribute mortality
-
-``is_alive`` is in that list because the ``mortality`` component registered it,
-even though its name contains no "mortality" at all.
+                              name resource_type component
+   3.mortality.initialize_is_alive   initializer mortality
+                          is_alive     attribute mortality
+          mortality.mortality_rate  lookup_table mortality
+                    mortality_rate     attribute mortality
 
 .. note::
 
@@ -414,11 +432,6 @@ even though its name contains no "mortality" at all.
     copying a name out of an earlier result; such a name finds itself even when it
     contains characters - brackets, parentheses, a dot - that a regular expression
     would otherwise read as syntax.
-
-The resource graph holds no combiners or post-processors, so
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
-cannot find those. Once you have located a pipeline, printing it reports them, as
-shown above.
 
 .. _interactive_results:
 

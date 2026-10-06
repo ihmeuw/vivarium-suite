@@ -120,16 +120,21 @@ class TestFindResources:
     def test_the_frame_has_the_conventional_columns(self, sim: InteractiveContext) -> None:
         """This shape is the convention the other introspection tools follow."""
         found = sim.find_resources("test_column_1")
-        assert list(found.columns) == ["name", "kind", "component"]
+        assert list(found.columns) == ["name", "resource_type", "component"]
 
     def test_a_fragment_need_not_be_the_whole_name(self, sim: InteractiveContext) -> None:
         assert "test_column_1" in set(sim.find_resources("column_1")["name"])
 
-    def test_a_name_that_is_several_kinds_returns_all_of_them(
-        self, sim: InteractiveContext
-    ) -> None:
-        """A column and the attribute backed by it share a name; both come back."""
-        assert set(sim.find_resources("test_column_1")["kind"]) == {"attribute", "column"}
+    def test_columns_and_streams_are_not_reported(self, sim: InteractiveContext) -> None:
+        """A column's public face is its attribute, so reporting it adds a
+        near-duplicate row; a stream is upstream of the values it randomizes."""
+        assert not {"column", "stream"} & set(sim.find_resources("")["resource_type"])
+
+    def test_lookup_tables_are_reported(self) -> None:
+        """The shared fixture registers none, so this one needs its own sim."""
+        sim = InteractiveContext(components=[NestedLookupCaller()])
+        found = sim.find_resources("inner_lookup")
+        assert set(found["resource_type"]) == {"lookup_table"}
 
     def test_matching_is_case_insensitive(self, sim: InteractiveContext) -> None:
         assert sim.find_resources("TEST_COLUMN_1").equals(sim.find_resources("test_column_1"))
@@ -160,15 +165,24 @@ class TestFindResources:
         found = sim.find_resources("^column_creator_and_requirer$", regex=True)
         assert set(found["component"]) == {"column_creator_and_requirer"}
 
-    def test_results_are_sorted_by_name_then_kind(self, sim: InteractiveContext) -> None:
-        """Name first, so the kinds sharing a name read as one group."""
+    def test_results_are_sorted_by_name_then_resource_type(
+        self, sim: InteractiveContext
+    ) -> None:
+        """Name first, for a stable order a reader can scan."""
         found = sim.find_resources("test")
-        expected = found.sort_values(["name", "kind"], ignore_index=True)
+        expected = found.sort_values(["name", "resource_type"], ignore_index=True)
         assert found.equals(expected)
 
-    def test_every_resource_in_the_graph_is_reachable(self, sim: InteractiveContext) -> None:
-        """Nothing is filtered out, including streams and columns."""
-        assert len(sim.find_resources("")) == len(sim._resource.get_graph().nodes)
+    def test_every_other_resource_in_the_graph_is_reachable(
+        self, sim: InteractiveContext
+    ) -> None:
+        """Only columns and streams are withheld; nothing else is."""
+        expected = {
+            (str(node.name), node.RESOURCE_TYPE, node.component.name)
+            for node in sim._resource.get_graph().nodes
+            if node.RESOURCE_TYPE not in ("column", "stream")
+        }
+        assert set(sim.find_resources("").itertuples(index=False)) == expected
 
     def test_no_match_returns_an_empty_frame(self, sim: InteractiveContext) -> None:
         assert sim.find_resources("no_such_resource").empty
@@ -177,7 +191,7 @@ class TestFindResources:
         self, sim: InteractiveContext
     ) -> None:
         found = sim.find_resources("no_such_resource")
-        assert list(found.columns) == ["name", "kind", "component"]
+        assert list(found.columns) == ["name", "resource_type", "component"]
 
     def test_an_invalid_regex_raises_a_useful_error(self, sim: InteractiveContext) -> None:
         with pytest.raises(ValueError, match="Invalid regular expression 'test_column_\\['"):
