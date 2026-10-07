@@ -1,3 +1,11 @@
+**5.13.0 - 10/07/26**
+
+- **Breaking change.** Rename the ``end_time`` argument of ``InteractiveContext.run_until`` to
+  ``target``
+- Allow ``InteractiveContext.run_until`` to take a callable condition and return whether its
+  target was reached
+- Log the ``run_until`` completion message at the INFO level instead of printing it
+
 **5.12.0 - 10/07/26**
 
 - Add ``InteractiveContext.find_resources()`` to search the simulation's resources
