@@ -1,3 +1,12 @@
+**5.14.0 - 10/07/26**
+
+- Add ``InteractiveContext.watch()`` to register named expressions that are evaluated at
+  registration and after every step
+- Add ``InteractiveContext.watches`` to read the recorded values, keyed by watch name and
+  then clock time
+- Add ``InteractiveContext.unwatch()`` to remove watches and their recorded values
+- Add ``WatchError``, raised when a watch expression fails
+
 **5.13.0 - 10/07/26**
 
 - **Breaking change.** Rename the ``end_time`` argument of ``InteractiveContext.run_until`` to

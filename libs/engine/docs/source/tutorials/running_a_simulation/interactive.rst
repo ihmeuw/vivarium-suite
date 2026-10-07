@@ -500,6 +500,63 @@ limit, which may go past the end time.
 
    True 2022-02-10 00:00:00
 
+Watching values as the simulation runs
+++++++++++++++++++++++++++++++++++++++
+
+To follow a quantity over time without changing the model, register it with
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.watch`. Each
+keyword names a callable that takes the simulation and returns the value to
+record. Every watch is evaluated once when it is registered and again after
+every step, whichever method takes the step, and its values are recorded under
+the clock time.
+:attr:`~vivarium.engine.interface.interactive.InteractiveContext.watches`
+returns what has been recorded as a dict keyed by watch name and then by time,
+which converts directly to a ``pandas`` object. Values are stored exactly as
+returned, so a watch may return a scalar, a Series, a DataFrame, or anything
+else.
+
+.. testcode::
+
+   sim.watch(
+       mean_age=lambda s: s.get_population("age").mean(),
+       n_infected=lambda s: (
+           s.get_population("lower_respiratory_infections")
+           == "infected_with_lower_respiratory_infections"
+       ).sum(),
+   )
+   sim.take_steps(3)
+
+   mean_age = pd.Series(sim.watches["mean_age"])
+   for time in mean_age.index:
+       print(time)
+
+   watched = pd.DataFrame(sim.watches)
+   print(list(watched.columns), len(watched))
+
+.. testoutput::
+
+   2022-02-10 00:00:00
+   2022-02-10 12:00:00
+   2022-02-11 00:00:00
+   2022-02-11 12:00:00
+   ['mean_age', 'n_infected'] 4
+
+The first entry is the value at registration and each later one follows a step.
+If a watch raises, the run stops with a
+:class:`~vivarium.engine.interface.interactive.WatchError` that names the watch
+and the time, and nothing is recorded for that step. Use
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.unwatch` to
+stop watching an expression and drop its recorded values.
+
+.. testcode::
+
+   sim.unwatch("n_infected")
+   print(list(sim.watches))
+
+.. testoutput::
+
+   ['mean_age']
+
 Advancing a simulation does not, on its own, produce any results - an
 ``InteractiveContext`` does not observe them by default. See
 :ref:`getting results <interactive_results>` for what that means and how to
