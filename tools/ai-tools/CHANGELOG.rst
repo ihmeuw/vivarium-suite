@@ -1,3 +1,8 @@
+**0.29.0 - 10/07/26**
+
+- Add a ``SessionStart`` hook that adds a short plain-English writing text to each
+  session. Set ``SIMSCI_WRITING_STYLE=off`` to disable it (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
+
 **0.28.0 - 10/07/26**
 
 - Add the one-line plain-English writing rule from ``simsci`` 0.3.0 to

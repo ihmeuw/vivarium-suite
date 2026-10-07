@@ -21,6 +21,15 @@ team skills below when both plugins are enabled.
 The ``_vv_writer``, ``_claim_auditor``, and ``_duplicate_finder`` agents carry the
 same one-line plain-English writing rule as the ``simsci`` review agents.
 
+A ``SessionStart`` hook adds a short plain-English writing text
+(``hooks/writing-style.txt``) to the start of each session. Replies, PR text,
+tickets, and commit messages from the main session then follow it. The hook runs
+again after ``/clear`` and after compaction. Subagents do not get the text, so the
+agents above carry their own one-line rule. The hook runs through ``bash``, which
+on Windows means Git Bash. To disable the hook, set ``SIMSCI_WRITING_STYLE=off`` in
+the environment that starts Claude Code, or under ``env`` in
+``~/.claude/settings.json``.
+
 It includes:
 
 **Model Development**
@@ -101,6 +110,8 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives unde
 - ``tools/ai-tools/agents/``: specialist sub-agents spawned by the skills.
 - ``tools/ai-tools/skills/``: Claude Code skills (workflow entry points and
   model-loaded reference material).
+- ``tools/ai-tools/hooks/``: the ``SessionStart`` hook that adds the writing-style
+  text to each session.
 - ``tools/ai-tools/CHANGELOG.rst``: history of plugin changes.
 
 Top-level project metadata (license, code of conduct, contributing guide) lives at the
