@@ -24,7 +24,7 @@ from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable
     from pathlib import Path
     from typing import Any
 
@@ -180,26 +180,28 @@ class InteractiveContext(SimulationContext):
         *,
         max_steps: int | None = None,
     ) -> bool:
-        """Run the simulation until a time is reached or a condition becomes true.
+        """Run the simulation until a time is reached or a callable evaluates to True.
 
-        A time target steps until the clock is at or past it, rounding up to the
-        next step boundary; a time at or before the current time takes no steps.
-        A condition is checked before the first step and after every step, and
-        the run stops on the first step where it is true. Either way, how many
-        steps were taken is logged at the INFO level.
+        A time target is treated as a callable that is True once the clock is at
+        or past it, bounded by the steps needed to get there, so a time at or
+        before the current time takes no steps; a time before it also logs a
+        warning. A callable is called before the
+        first step and after every step, and the run stops on the first step
+        where it returns True. Either way, how many steps were taken is logged at
+        the INFO level.
 
         Parameters
         ----------
         target
             The time to run until, compatible with the simulation clock (usually
-            a pandas.Timestamp), or a condition that takes this context and
+            a pandas.Timestamp), or a callable that takes this context and
             returns a bool.
         with_logging
             Whether to show a progress bar. Only works in an IPython environment.
         max_steps
-            The most steps a condition run may take, which may go past the
+            The most steps a callable run may take, which may go past the
             configured end time. A value of None (the default) allows the steps
-            remaining until the configured end time. Only valid with a condition.
+            remaining until the configured end time. Only valid with a callable.
 
         Returns
         -------
@@ -211,75 +213,67 @@ class InteractiveContext(SimulationContext):
             If ``max_steps`` is given with a time or is negative, or the time is
             not compatible with the simulation clock.
         TypeError
-            If a condition returns something other than a bool.
+            If a callable returns something other than a bool.
         """
         if callable(target):
-            reached = self._run_until_condition(target, max_steps, with_logging)
+            condition = target
+            if max_steps is None:
+                max_steps = max(0, self._clock.time_steps_remaining)
+            elif max_steps < 0:
+                raise ValueError(f"max_steps must be zero or greater, but got {max_steps}.")
         else:
             if max_steps is not None:
-                raise ValueError("max_steps only applies when the target is a condition.")
-            self._run_until_time(target, with_logging)
-            reached = True
+                raise ValueError("max_steps only applies when the target is a callable.")
+            if not (
+                isinstance(target, type(self._clock.time))
+                or isinstance(self._clock.time, type(target))
+            ):
+                raise ValueError(
+                    f"Provided time must be compatible with {type(self._clock.time)}"
+                )
+            if target < self._clock.time:  # type: ignore [operator]
+                self._logger.warning(
+                    f"Target time {target} is before the current time "
+                    f"{self._clock.time}; not stepping."
+                )
+            end_time = target
+            condition = lambda sim: sim.current_time >= end_time  # type: ignore [operator]
+            max_steps = max(0, int(ceil((end_time - self._clock.time) / self._clock.step_size)))  # type: ignore [operator, arg-type]
+
+        reached = self._run_until_condition(condition, max_steps, with_logging)
         return reached
-
-    def _run_until_time(self, end_time: ClockTime, with_logging: bool) -> None:
-        """Step until the clock is at or past end_time, taking no steps if it already is."""
-        if not (
-            isinstance(end_time, type(self._clock.time))
-            or isinstance(self._clock.time, type(end_time))
-        ):
-            raise ValueError(
-                f"Provided time must be compatible with {type(self._clock.time)}"
-            )
-
-        iterations = max(0, int(ceil((end_time - self._clock.time) / self._clock.step_size)))  # type: ignore [operator, arg-type]
-        self.take_steps(number_of_steps=iterations, with_logging=with_logging)
-        self._logger.info(f"Simulation complete after {iterations} iterations")
 
     def _run_until_condition(
         self,
         condition: Callable[[InteractiveContext], bool],
-        max_steps: int | None,
+        max_steps: int,
         with_logging: bool,
     ) -> bool:
         """Step until the condition is true or max_steps runs out, and return whether it was met."""
-        if max_steps is not None and max_steps < 0:
-            raise ValueError(f"max_steps must be zero or greater, but got {max_steps}.")
-        if max_steps is None:
-            max_steps = max(0, self._clock.time_steps_remaining)
-
-        if self._check_condition(condition):
-            steps_taken, met = 0, True
-        else:
-            steps_taken, met = self._step_loop(
-                max_steps,
-                step_size=None,
-                with_logging=with_logging,
-                stop_when=lambda: self._check_condition(condition),
-            )
+        steps_taken, met = self._step_loop(
+            max_steps,
+            step_size=None,
+            with_logging=with_logging,
+            stop_when=lambda: self._check_condition(condition),
+        )
 
         if met:
-            self._logger.info(f"Condition met after {steps_taken} iterations")
+            self._logger.info(f"Target reached after {steps_taken} iterations")
         else:
             self._logger.info(
-                f"Condition not met after {steps_taken} iterations (reached max_steps)"
+                f"Target not reached after {steps_taken} iterations (reached max_steps)"
             )
         return met
 
     def _check_condition(self, condition: Callable[[InteractiveContext], bool]) -> bool:
         """Evaluate a run_until condition, requiring that it return a bool."""
         result = condition(self)
-        if isinstance(result, (bool, np.bool_)):
-            return bool(result)
-        if isinstance(result, (pd.Series, pd.DataFrame, np.ndarray)):
+        if not isinstance(result, (bool, np.bool_)):
             raise TypeError(
-                f"A run_until condition must return a bool, but it returned a value of "
-                f"type {type(result).__name__}. Reduce it with .any() or .all()."
+                f"A run_until condition must return a bool, but it returned "
+                f"{type(result).__name__}."
             )
-        raise TypeError(
-            f"A run_until condition must return a bool, but it returned a value of "
-            f"type {type(result).__name__}."
-        )
+        return bool(result)
 
     def take_steps(
         self,
@@ -310,21 +304,34 @@ class InteractiveContext(SimulationContext):
         with_logging: bool,
         stop_when: Callable[[], bool] | None = None,
     ) -> tuple[int, bool]:
-        """Take up to number_of_steps steps, stopping after any step where stop_when is true.
+        """Take up to number_of_steps steps, stopping as soon as stop_when is true.
 
-        Return the number of steps taken and whether stop_when ended the loop.
+        stop_when is checked before the first step and after each step. Return the
+        number of steps taken and whether stop_when was true.
         """
-        steps: Iterable[int] = range(number_of_steps)
+        progress = None
         if run_from_ipython() and with_logging:
-            steps = log_progress(range(number_of_steps), name="Step")
+            progress = log_progress(range(number_of_steps), name="Step")
 
+        stopper = stop_when if callable(stop_when) else lambda: False
         steps_taken = 0
-        for _ in steps:
-            self.step(step_size)
-            steps_taken += 1
-            if stop_when is not None and stop_when():
-                return steps_taken, True
-        return steps_taken, False
+        stopped = stopper()
+        try:
+            while not stopped and steps_taken < number_of_steps:
+                self.step(step_size)
+                steps_taken += 1
+                # Advance the bar only after the step, so it shows steps taken.
+                if progress is not None:
+                    next(progress)
+                stopped = stopper()
+        except Exception as error:
+            if progress is not None:
+                # Lets log_progress mark the bar as failed; it re-raises the error.
+                progress.throw(error)
+            raise
+        if progress is not None:
+            progress.close()
+        return steps_taken, stopped
 
     @overload
     def get_population(

@@ -426,8 +426,8 @@ to advance a simulation in different ways.
    *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.take_steps`
        - | Advance the simulation ``n`` steps.
    *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_until`
-       - | Advance the simulation to a specific time, or until a condition
-         | becomes true. The time should make sense given the simulation's
+       - | Advance the simulation to a specific time, or until a callable
+         | returns ``True``. The time should make sense given the simulation's
          | clock type.
    *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_for`
        - | Advance the simulation for a duration. This duration should make
@@ -478,19 +478,16 @@ simulation finishes quickly.
    2022-01-15 00:00:00
    2022-02-01 00:00:00
 
-Note that ``run_for``, ``run_until`` and ``run`` each log how many iterations
-they took at the INFO level, so the message appears only when the context was
-created with ``logging_verbosity=1`` or higher. ``step`` and ``take_steps`` do
-not report anything. Note also that ``run`` stops at the end time from the
-``time`` block of the configuration, so it is the end time - not a number of
-steps - that decides where it stops.
+Note that ``run`` stops at the end time from the ``time`` block of the
+configuration, so it is the end time - not a number of steps - that decides
+where it stops.
 
-``run_until`` also accepts a condition: a function that takes the simulation
-and returns ``True`` or ``False``. The condition is checked before the first
-step and after every step, and the run stops on the first step where it is
-true. ``run_until`` returns whether its target was reached. By default a
-condition run stops at the configured end time if the condition is never true;
-pass ``max_steps`` to set a different limit, which may go past the end time.
+``run_until`` also accepts a callable that takes the simulation and returns a
+bool. It is called before the first step and after every step, and the run
+stops on the first step where it returns ``True``. ``run_until`` returns
+whether its target was reached. By default it stops at the configured end time
+if the callable never returns ``True``; pass ``max_steps`` to set a different
+limit, which may go past the end time.
 
 .. testcode::
 

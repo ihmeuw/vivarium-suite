@@ -31,6 +31,7 @@ from tests.helpers import (
     NestedLookupCaller,
     SingleColumnCreator,
 )
+from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.results import Observer
@@ -152,7 +153,7 @@ class TestRunUntilTime:
         """The completion message is logged at INFO, not printed."""
         short_sim.run_until(JAN_15)
 
-        assert "Simulation complete after 2 iterations" in info_messages(caplog)
+        assert "Target reached after 2 iterations" in info_messages(caplog)
         assert capsys.readouterr().out == ""
 
     @pytest.mark.parametrize("days_back", [0, 1, 8])
@@ -163,12 +164,28 @@ class TestRunUntilTime:
         short_sim.step()
 
         assert short_sim.run_until(JAN_8 - pd.Timedelta(days=days_back)) is True
-        assert "Simulation complete after 0 iterations" in info_messages(caplog)
+        assert "Target reached after 0 iterations" in info_messages(caplog)
         assert short_sim.current_time == JAN_8
 
+    @pytest.mark.parametrize("days_back, warns", [(0, False), (1, True), (8, True)])
+    def test_a_time_in_the_past_warns(
+        self,
+        short_sim: InteractiveContext,
+        caplog: LogCaptureFixture,
+        days_back: int,
+        warns: bool,
+    ) -> None:
+        """A time before now is likely a mistake, so it warns; the current time does not."""
+        short_sim.step()
+
+        short_sim.run_until(JAN_8 - pd.Timedelta(days=days_back))
+
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any("before the current time" in message for message in warnings) is warns
+
     def test_max_steps_with_a_time_raises(self, short_sim: InteractiveContext) -> None:
-        """max_steps only applies to conditions."""
-        with pytest.raises(ValueError, match="condition"):
+        """max_steps only applies to callables."""
+        with pytest.raises(ValueError, match="callable"):
             short_sim.run_until(JAN_15, max_steps=3)
         assert short_sim.current_time == JAN_1
 
@@ -182,7 +199,7 @@ class TestRunUntilCondition:
         """The run stops on the first step where the condition is true and stays there."""
         assert short_sim.run_until(reached(JAN_15)) is True
         assert short_sim.current_time == JAN_15
-        assert "Condition met after 2 iterations" in info_messages(caplog)
+        assert "Target reached after 2 iterations" in info_messages(caplog)
 
     @pytest.mark.parametrize("value", [True, np.True_], ids=["bool", "numpy_bool"])
     def test_a_condition_already_true_takes_zero_steps(
@@ -191,7 +208,7 @@ class TestRunUntilCondition:
         """A condition that is already true stops before stepping."""
         assert short_sim.run_until(lambda sim: value) is True
         assert short_sim.current_time == JAN_1
-        assert "Condition met after 0 iterations" in info_messages(caplog)
+        assert "Target reached after 0 iterations" in info_messages(caplog)
 
     def test_a_condition_never_true_stops_at_the_configured_end(
         self, short_sim: InteractiveContext, caplog: LogCaptureFixture
@@ -199,17 +216,24 @@ class TestRunUntilCondition:
         """The default bound is the configured stop time."""
         assert short_sim.run_until(lambda sim: False) is False
         assert short_sim.current_time == FIRST_STEP_AT_OR_AFTER_END
-        assert "Condition not met after 5 iterations (reached max_steps)" in info_messages(
+        assert "Target not reached after 5 iterations (reached max_steps)" in info_messages(
             caplog
         )
 
-    @pytest.mark.parametrize("max_steps", [2, 7])
-    def test_max_steps_replaces_the_default_bound(
-        self, short_sim: InteractiveContext, max_steps: int
+    def test_max_steps_can_stop_before_the_configured_end(
+        self, short_sim: InteractiveContext
     ) -> None:
-        """An explicit bound is used as given, even past the configured end."""
-        assert short_sim.run_until(lambda sim: False, max_steps=max_steps) is False
-        assert short_sim.current_time == JAN_1 + STEP_SIZE * max_steps
+        """A small bound stops the run early."""
+        assert short_sim.run_until(lambda sim: False, max_steps=2) is False
+        assert short_sim.current_time == JAN_1 + STEP_SIZE * 2
+
+    def test_max_steps_can_run_past_the_configured_end(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """A large bound runs further than the default bound would."""
+        assert short_sim.run_until(lambda sim: False, max_steps=7) is False
+        assert short_sim.current_time == JAN_1 + STEP_SIZE * 7
+        assert short_sim.current_time > FIRST_STEP_AT_OR_AFTER_END  # type: ignore [operator]
 
     def test_a_negative_max_steps_raises(self, short_sim: InteractiveContext) -> None:
         """A negative bound is a mistake, not zero steps."""
@@ -225,15 +249,15 @@ class TestRunUntilCondition:
 
         assert short_sim.run_until(lambda sim: False) is False
         assert short_sim.current_time == FIRST_STEP_AT_OR_AFTER_END
-        assert "Condition not met after 0 iterations (reached max_steps)" in info_messages(
+        assert "Target not reached after 0 iterations (reached max_steps)" in info_messages(
             caplog
         )
 
     @pytest.mark.parametrize(
         "condition, match",
         [
-            (lambda sim: pd.Series([True, False]), r"\.any\(\)"),
-            (lambda sim: 1, r"type int\.$"),
+            (lambda sim: pd.Series([True, False]), r"returned Series\.$"),
+            (lambda sim: 1, r"returned int\.$"),
         ],
         ids=["series", "int"],
     )
@@ -243,9 +267,61 @@ class TestRunUntilCondition:
         condition: Callable[[InteractiveContext], Any],
         match: str,
     ) -> None:
-        """A condition must return a bool; a Series gets a hint to reduce it."""
+        """A condition must return a bool, not a value that is merely truthy or falsy."""
         with pytest.raises(TypeError, match=match):
             short_sim.run_until(condition)
+
+
+class TestRunUntilProgressBar:
+    """The notebook progress bar counts the steps run_until actually takes."""
+
+    @pytest.fixture
+    def in_notebook(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "vivarium.engine.interface.interactive.run_from_ipython", lambda: True
+        )
+
+    def test_counts_the_steps_taken(
+        self,
+        short_sim: InteractiveContext,
+        in_notebook: None,
+        progress_widgets: list[FakeWidget],
+    ) -> None:
+        """A run that stops early shows its step count and finishes the bar."""
+        short_sim.run_until(reached(JAN_15))
+
+        progress = progress_widgets[0]
+        assert progress.value == 2
+        assert progress.bar_style == "success"
+
+    def test_no_bar_when_already_reached(
+        self,
+        short_sim: InteractiveContext,
+        in_notebook: None,
+        progress_widgets: list[FakeWidget],
+    ) -> None:
+        """A run that takes no steps draws no bar."""
+        short_sim.run_until(lambda sim: True)
+
+        assert progress_widgets == []
+
+    def test_marks_the_bar_failed_when_a_callable_raises(
+        self,
+        short_sim: InteractiveContext,
+        in_notebook: None,
+        progress_widgets: list[FakeWidget],
+    ) -> None:
+        """An error mid-run leaves the bar marked as failed, not finished."""
+
+        def breaks_on_jan_15(sim: InteractiveContext) -> bool:
+            if reached(JAN_15)(sim):
+                raise KeyError("no such column")
+            return False
+
+        with pytest.raises(KeyError):
+            short_sim.run_until(breaks_on_jan_15)
+
+        assert progress_widgets[0].bar_style == "danger"
 
 
 def test_get_attribute_names() -> None:

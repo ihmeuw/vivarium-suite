@@ -1,9 +1,9 @@
-**5.12.0 - 10/06/26**
+**5.12.0 - 10/07/26**
 
-- Allow ``InteractiveContext.run_until`` to take a callable condition and return whether its
-  target was reached
 - **Breaking change.** Rename the ``end_time`` argument of ``InteractiveContext.run_until`` to
   ``target``
+- Allow ``InteractiveContext.run_until`` to take a callable condition and return whether its
+  target was reached
 - Log the ``run_until`` completion message at the INFO level instead of printing it
 
 **5.11.0 - 09/24/26**
