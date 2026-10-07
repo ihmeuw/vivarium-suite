@@ -1,4 +1,4 @@
-**5.12.0 - 10/05/26**
+**5.12.0 - 10/07/26**
 
 - Add ``InteractiveContext.find_resources()`` to search the simulation's resources
   by name or registering component and report the kind of each match
