@@ -74,7 +74,8 @@ In more detail:
   dropped — so only verified issues reach the report, each shown with its score.
   The review agents and ``_split_proposer`` carry a one-line rule to write their
   prose in plain technical English, based on ASD-STE100 Simplified Technical
-  English.
+  English. The rule does not name the standard. In evals, naming it in the text
+  that agents see made their output less clear and less complete.
 
   It then proposes a **disposition per finding** (fix now / ticket / drop, each
   with a one-line why), bucketing by scope and using the confidence score only to
