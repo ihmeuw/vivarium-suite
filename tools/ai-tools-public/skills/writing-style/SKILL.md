@@ -154,9 +154,10 @@ necessary but not sufficient. Read the draft once more as a reader who arrives c
 
 ## Maintenance
 
-Agents cannot load this skill, so some agents carry a one-line copy of the rules. The
-canonical line is in `references/agent-block.md`. Run `scripts/check_agent_blocks.py`
-after you change the line or add an agent that needs it.
+Some agents in this plugin do not have the Skill tool, so they carry a one-line copy
+of the rules instead of this skill. The canonical line is in
+`references/agent-block.md`. Run `scripts/check_agent_blocks.py` after you change the
+line or add an agent that needs it.
 
 ## Attribution
 
