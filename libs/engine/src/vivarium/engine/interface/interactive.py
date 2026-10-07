@@ -14,6 +14,7 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 """
 from __future__ import annotations
 
+import re
 from math import ceil
 from typing import TYPE_CHECKING, overload
 
@@ -21,7 +22,14 @@ import numpy as np
 import pandas as pd
 
 from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.randomness.stream import RandomnessStream
+from vivarium.engine.framework.resource.resource import Column
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
+
+_UNSEARCHABLE_RESOURCE_TYPES = frozenset(
+    {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE}
+)
+"""Resource types :meth:`InteractiveContext.find_resources` does not report."""
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -434,6 +442,71 @@ class InteractiveContext(SimulationContext):
                 "Are you looking for a value pipeline? Try get_value()."
             )
         return self._values.get_attribute(attribute_pipeline_name)
+
+    def find_resources(self, pattern: str, *, regex: bool = False) -> pd.DataFrame:
+        """Find simulation resources whose name or component matches a pattern.
+
+        Use this to locate a value when you know roughly what it is called but not
+        what kind of thing holds it. Each match reports its kind, which is what
+        says how to reach it.
+
+        Parameters
+        ----------
+        pattern
+            The text to look for, matched case-insensitively against both a
+            resource's name and the name of the component that registered it. It
+            may appear anywhere in either name. An empty pattern matches everything.
+        regex
+            Whether to treat the pattern as a regular expression. It is matched
+            literally by default, so a name copied out of an earlier result always
+            finds itself even when it contains characters a regular expression
+            would read as syntax.
+
+        Returns
+        -------
+            A frame of matching resources with columns ``name``, ``resource_type``
+            and ``component``, one row per resource, sorted by name and then
+            resource type.
+
+        Raises
+        ------
+        ValueError
+            If ``regex`` is True and the pattern is not a valid regular expression.
+
+        Notes
+        -----
+        Columns and randomness streams are left out. A column is a component's
+        private store whose public face is an attribute of the same name, so
+        reporting it adds a near-duplicate row without adding information, and a
+        stream is upstream of the values it randomizes rather than one of them.
+
+        Modifiers of both attribute and value pipelines appear under the resource
+        type ``value_modifier``. There is no accessor for one; read it by printing
+        the pipeline it modifies.
+
+        The resource graph holds no combiners or post-processors, so this cannot
+        find those; printing a pipeline you have already found reports them.
+        """
+        try:
+            matcher = re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE)
+        except re.error as error:
+            raise ValueError(
+                f"Invalid regular expression '{pattern}': {error}. Drop regex=True to"
+                " search for this text literally."
+            ) from error
+
+        rows = []
+        for resource in self._resource.get_graph().nodes:
+            if resource.RESOURCE_TYPE in _UNSEARCHABLE_RESOURCE_TYPES:
+                continue
+            resource_name = str(resource.name)
+            component_name = resource.component.name
+            if matcher.search(resource_name) or matcher.search(component_name):
+                rows.append((resource_name, resource.RESOURCE_TYPE, component_name))
+
+        return pd.DataFrame(rows, columns=["name", "resource_type", "component"]).sort_values(
+            ["name", "resource_type"], ignore_index=True
+        )
 
     def list_events(self) -> list[str]:
         """List all event types registered with the simulation."""

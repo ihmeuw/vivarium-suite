@@ -347,6 +347,93 @@ and its error message will point you back at attributes (and vice versa).
 
    No value pipeline 'mortality_rate' registered. Are you looking for an attribute pipeline? Try get_attribute().
 
+Finding something by name
+-------------------------
+
+Everything above assumes you already know what the thing you want is called, and
+which kind of thing it is; you might not know either.
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+takes a fragment of a name and reports every :term:`resource <Resource>` that matches
+it in its name or the name of the component that registered it as well as the type
+of each resource.
+
+.. testcode::
+
+   found = sim.find_resources("mortality")
+   print(found.to_string(index=False))
+
+.. testoutput::
+
+                                                                                                 name  resource_type                                                 component
+                                                                      3.mortality.initialize_is_alive    initializer                                                 mortality
+                       disease_state.infected_with_lower_respiratory_infections.excess_mortality_rate   lookup_table  disease_state.infected_with_lower_respiratory_infections
+                      disease_state.susceptible_to_lower_respiratory_infections.excess_mortality_rate   lookup_table disease_state.susceptible_to_lower_respiratory_infections
+                                     infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
+    infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
+                                                                                             is_alive      attribute                                                 mortality
+                                           lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
+                                                                             mortality.mortality_rate   lookup_table                                                 mortality
+                                                                                       mortality_rate      attribute                                                 mortality
+          mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality value_modifier                disease_model.lower_respiratory_infections
+   mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality value_modifier disease_state.susceptible_to_lower_respiratory_infections
+    mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality value_modifier  disease_state.infected_with_lower_respiratory_infections
+                                    susceptible_to_lower_respiratory_infections.excess_mortality_rate      attribute disease_state.susceptible_to_lower_respiratory_infections
+   susceptible_to_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute disease_state.susceptible_to_lower_respiratory_infections
+
+Notice that the ``is_alive`` resource is included in the output even though its
+name does not contain "mortality". This is because the ``mortality`` component
+registered it.
+
+.. note::
+
+    The pattern provided is matched against the name of each resource *and* the name
+    of the component that registered it, so searching for a component reports everything
+    it owns, whatever those things are called.
+
+.. note::
+
+    Columns and randomness streams are deliberately left out. A column contains the
+    backing data of an attribute of the same name, so reporting it adds a near-duplicate
+    row without adding information. Meanwhile, a randomness stream is upstream of
+    the values it randomizes rather than one of them and there's not much to gain
+    from reporting it.
+
+.. note::
+
+    The resource graph holds no combiners or post-processors, so
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+    cannot find those. Once you have located a pipeline, printing it reports them,
+    as shown above.
+
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+by default performs a literal substring match; to search with regex, pass ``regex=True``.
+For example, we can search for the ``mortality`` component exactly using anchors
+which will match the component name exactly rather than every name containing the
+word "mortality".
+
+.. testcode::
+
+    found = sim.find_resources("^mortality$", regex=True)
+    print(found.to_string(index=False))
+    # There are many other resources that include the word "mortality"
+    assert len(sim.find_resources("mortality")) > len(found)
+
+.. testoutput::
+
+                              name resource_type component
+   3.mortality.initialize_is_alive   initializer mortality
+                          is_alive     attribute mortality
+          mortality.mortality_rate  lookup_table mortality
+                    mortality_rate     attribute mortality
+
+.. note::
+
+    Matching is case-insensitive, and the pattern is matched *literally* unless
+    you pass ``regex=True``. This default is the safe one for the common move of
+    copying a name out of an earlier result; such a name finds itself even when it
+    contains characters - brackets, parentheses, a dot - that a regular expression
+    would otherwise read as syntax.
+
 .. _interactive_results:
 
 Observed results
