@@ -1,13 +1,10 @@
-**0.29.0 - 10/07/26**
+**0.28.0 - 10/07/26**
 
 - Add a ``SessionStart`` hook that adds a short plain-English writing text, based
   on ASD-STE100 Simplified Technical English, to each session. Set
   ``SIMSCI_WRITING_STYLE=off`` to disable it (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
-
-**0.28.0 - 10/07/26**
-
 - Add the one-line plain-English writing rule from ``simsci`` 0.3.0 to
-  ``_vv_writer``, ``_claim_auditor``, and ``_duplicate_finder`` (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
+  ``_vv_writer``, ``_claim_auditor``, and ``_duplicate_finder``
 
 **0.27.1 - 09/22/26**
 
