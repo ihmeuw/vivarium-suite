@@ -426,8 +426,9 @@ to advance a simulation in different ways.
    *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.take_steps`
        - | Advance the simulation ``n`` steps.
    *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_until`
-       - | Advance the simulation to a specific time. This time should make
-         | sense given the simulation's clock type.
+       - | Advance the simulation to a specific time, or until a callable
+         | returns ``True``. The time should make sense given the simulation's
+         | clock type.
    *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_for`
        - | Advance the simulation for a duration. This duration should make
          | sense given the simulation's clock type.
@@ -473,17 +474,31 @@ simulation finishes quickly.
    2022-01-01 00:00:00
    2022-01-01 12:00:00
    2022-01-02 12:00:00
-   Simulation complete after 10 iterations
    2022-01-07 12:00:00
-   Simulation complete after 15 iterations
    2022-01-15 00:00:00
-   Simulation complete after 34 iterations
    2022-02-01 00:00:00
 
-Note that ``run_for``, ``run_until`` and ``run`` each report how many iterations
-they took, while ``step`` and ``take_steps`` do not. Note also that ``run``
-stops at the end time from the ``time`` block of the configuration, so it is
-the end time - not a number of steps - that decides where it stops.
+Note that ``run`` stops at the end time from the ``time`` block of the
+configuration, so it is the end time - not a number of steps - that decides
+where it stops.
+
+``run_until`` also accepts a callable that takes the simulation and returns a
+bool. It is called before the first step and after every step, and the run
+stops on the first step where it returns ``True``. ``run_until`` returns
+whether its target was reached. By default it stops at the configured end time
+if the callable never returns ``True``; pass ``max_steps`` to set a different
+limit, which may go past the end time.
+
+.. testcode::
+
+   reached = sim.run_until(
+       lambda s: s.current_time >= pd.Timestamp("2022-02-10"), max_steps=20
+   )
+   print(reached, sim.current_time)
+
+.. testoutput::
+
+   True 2022-02-10 00:00:00
 
 Advancing a simulation does not, on its own, produce any results - an
 ``InteractiveContext`` does not observe them by default. See

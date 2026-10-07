@@ -14,13 +14,22 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 """
 from __future__ import annotations
 
+import re
 from math import ceil
 from typing import TYPE_CHECKING, overload
 
+import numpy as np
 import pandas as pd
 
 from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.randomness.stream import RandomnessStream
+from vivarium.engine.framework.resource.resource import Column
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
+
+_UNSEARCHABLE_RESOURCE_TYPES = frozenset(
+    {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE}
+)
+"""Resource types :meth:`InteractiveContext.find_resources` does not report."""
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -151,12 +160,7 @@ class InteractiveContext(SimulationContext):
         Parameters
         ----------
         with_logging
-            Whether or not to log the simulation steps. Only works in an ipython
-            environment.
-
-        Returns
-        -------
-            The number of steps the simulation took.
+            Whether to show a progress bar. Only works in an IPython environment.
         """
         self.run_until(self._clock.stop_time, with_logging=with_logging)
 
@@ -171,47 +175,113 @@ class InteractiveContext(SimulationContext):
             Timedelta). If a string is provided, it will be passed to
             `pandas.Timedelta` to be converted.
         with_logging
-            Whether or not to log the simulation steps. Only works in an ipython
-            environment.
-
-        Returns
-        -------
-            The number of steps the simulation took.
+            Whether to show a progress bar. Only works in an IPython environment.
         """
         if isinstance(duration, str):
             duration = pd.Timedelta(duration)
         self.run_until(self._clock.time + duration, with_logging=with_logging)  # type: ignore [operator]
 
-    def run_until(self, end_time: ClockTime, with_logging: bool = True) -> None:
-        """Run the simulation until the provided end time.
+    def run_until(
+        self,
+        target: ClockTime | Callable[[InteractiveContext], bool],
+        with_logging: bool = True,
+        *,
+        max_steps: int | None = None,
+    ) -> bool:
+        """Run the simulation until a time is reached or a callable evaluates to True.
+
+        A time target is treated as a callable that is True once the clock is at
+        or past it, bounded by the steps needed to get there, so a time at or
+        before the current time takes no steps; a time before it also logs a
+        warning. A callable is called before the
+        first step and after every step, and the run stops on the first step
+        where it returns True. Either way, how many steps were taken is logged at
+        the INFO level.
 
         Parameters
         ----------
-        end_time
-            The time to run the simulation until. The simulation will run until
-            its clock is greater than or equal to the provided end time. Must be
-            compatible with the simulation clock's step size (usually a pandas.Timestamp)
-
+        target
+            The time to run until, compatible with the simulation clock (usually
+            a pandas.Timestamp), or a callable that takes this context and
+            returns a bool.
         with_logging
-            Whether or not to log the simulation steps. Only works in an ipython
-            environment.
+            Whether to show a progress bar. Only works in an IPython environment.
+        max_steps
+            The most steps a callable run may take, which may go past the
+            configured end time. A value of None (the default) allows the steps
+            remaining until the configured end time. Only valid with a callable.
 
         Returns
         -------
-            The number of steps the simulation took.
-        """
-        if not (
-            isinstance(end_time, type(self._clock.time))
-            or isinstance(self._clock.time, type(end_time))
-        ):
-            raise ValueError(
-                f"Provided time must be compatible with {type(self._clock.time)}"
-            )
+            Bool for whether the target was reached. A time target is always reached.
 
-        iterations = int(ceil((end_time - self._clock.time) / self._clock.step_size))  # type: ignore [operator, arg-type]
-        self.take_steps(number_of_steps=iterations, with_logging=with_logging)
-        assert self._clock.time - self._clock.step_size < end_time <= self._clock.time  # type: ignore [operator]
-        print("Simulation complete after", iterations, "iterations")
+        Raises
+        ------
+        ValueError
+            If ``max_steps`` is given with a time or is negative, or the time is
+            not compatible with the simulation clock.
+        TypeError
+            If a callable returns something other than a bool.
+        """
+        if callable(target):
+            condition = target
+            if max_steps is None:
+                max_steps = max(0, self._clock.time_steps_remaining)
+            elif max_steps < 0:
+                raise ValueError(f"max_steps must be zero or greater, but got {max_steps}.")
+        else:
+            if max_steps is not None:
+                raise ValueError("max_steps only applies when the target is a callable.")
+            if not (
+                isinstance(target, type(self._clock.time))
+                or isinstance(self._clock.time, type(target))
+            ):
+                raise ValueError(
+                    f"Provided time must be compatible with {type(self._clock.time)}"
+                )
+            if target < self._clock.time:  # type: ignore [operator]
+                self._logger.warning(
+                    f"Target time {target} is before the current time "
+                    f"{self._clock.time}; not stepping."
+                )
+            end_time = target
+            condition = lambda sim: sim.current_time >= end_time  # type: ignore [operator]
+            max_steps = max(0, int(ceil((end_time - self._clock.time) / self._clock.step_size)))  # type: ignore [operator, arg-type]
+
+        reached = self._run_until_condition(condition, max_steps, with_logging)
+        return reached
+
+    def _run_until_condition(
+        self,
+        condition: Callable[[InteractiveContext], bool],
+        max_steps: int,
+        with_logging: bool,
+    ) -> bool:
+        """Step until the condition is true or max_steps runs out, and return whether it was met."""
+        steps_taken, met = self._step_loop(
+            max_steps,
+            step_size=None,
+            with_logging=with_logging,
+            stop_when=lambda: self._check_condition(condition),
+        )
+
+        if met:
+            self._logger.info(f"Target reached after {steps_taken} iterations")
+        else:
+            self._logger.info(
+                f"Target not reached after {steps_taken} iterations (reached max_steps)"
+            )
+        return met
+
+    def _check_condition(self, condition: Callable[[InteractiveContext], bool]) -> bool:
+        """Evaluate a run_until condition, requiring that it return a bool."""
+        result = condition(self)
+        if not isinstance(result, (bool, np.bool_)):
+            raise TypeError(
+                f"A run_until condition must return a bool, but it returned "
+                f"{type(result).__name__}."
+            )
+        return bool(result)
 
     def take_steps(
         self,
@@ -229,18 +299,47 @@ class InteractiveContext(SimulationContext):
             An optional size of step to take. Must be compatible with the
             simulation clock's step size (usually a pandas.Timedelta).
         with_logging
-            Whether or not to log the simulation steps. Only works in an ipython
-            environment.
+            Whether to show a progress bar. Only works in an IPython environment.
         """
         if not isinstance(number_of_steps, int):
             raise ValueError("Number of steps must be an integer.")
+        self._step_loop(number_of_steps, step_size, with_logging)
 
+    def _step_loop(
+        self,
+        number_of_steps: int,
+        step_size: ClockStepSize | None,
+        with_logging: bool,
+        stop_when: Callable[[], bool] | None = None,
+    ) -> tuple[int, bool]:
+        """Take up to number_of_steps steps, stopping as soon as stop_when is true.
+
+        stop_when is checked before the first step and after each step. Return the
+        number of steps taken and whether stop_when was true.
+        """
+        progress = None
         if run_from_ipython() and with_logging:
-            for _ in log_progress(range(number_of_steps), name="Step"):
+            progress = log_progress(range(number_of_steps), name="Step")
+
+        stopper = stop_when if callable(stop_when) else lambda: False
+        steps_taken = 0
+        stopped = stopper()
+        try:
+            while not stopped and steps_taken < number_of_steps:
                 self.step(step_size)
-        else:
-            for _ in range(number_of_steps):
-                self.step(step_size)
+                steps_taken += 1
+                # Advance the bar only after the step, so it shows steps taken.
+                if progress is not None:
+                    next(progress)
+                stopped = stopper()
+        except Exception as error:
+            if progress is not None:
+                # Lets log_progress mark the bar as failed; it re-raises the error.
+                progress.throw(error)
+            raise
+        if progress is not None:
+            progress.close()
+        return steps_taken, stopped
 
     @overload
     def get_population(
@@ -343,6 +442,71 @@ class InteractiveContext(SimulationContext):
                 "Are you looking for a value pipeline? Try get_value()."
             )
         return self._values.get_attribute(attribute_pipeline_name)
+
+    def find_resources(self, pattern: str, *, regex: bool = False) -> pd.DataFrame:
+        """Find simulation resources whose name or component matches a pattern.
+
+        Use this to locate a value when you know roughly what it is called but not
+        what kind of thing holds it. Each match reports its kind, which is what
+        says how to reach it.
+
+        Parameters
+        ----------
+        pattern
+            The text to look for, matched case-insensitively against both a
+            resource's name and the name of the component that registered it. It
+            may appear anywhere in either name. An empty pattern matches everything.
+        regex
+            Whether to treat the pattern as a regular expression. It is matched
+            literally by default, so a name copied out of an earlier result always
+            finds itself even when it contains characters a regular expression
+            would read as syntax.
+
+        Returns
+        -------
+            A frame of matching resources with columns ``name``, ``resource_type``
+            and ``component``, one row per resource, sorted by name and then
+            resource type.
+
+        Raises
+        ------
+        ValueError
+            If ``regex`` is True and the pattern is not a valid regular expression.
+
+        Notes
+        -----
+        Columns and randomness streams are left out. A column is a component's
+        private store whose public face is an attribute of the same name, so
+        reporting it adds a near-duplicate row without adding information, and a
+        stream is upstream of the values it randomizes rather than one of them.
+
+        Modifiers of both attribute and value pipelines appear under the resource
+        type ``value_modifier``. There is no accessor for one; read it by printing
+        the pipeline it modifies.
+
+        The resource graph holds no combiners or post-processors, so this cannot
+        find those; printing a pipeline you have already found reports them.
+        """
+        try:
+            matcher = re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE)
+        except re.error as error:
+            raise ValueError(
+                f"Invalid regular expression '{pattern}': {error}. Drop regex=True to"
+                " search for this text literally."
+            ) from error
+
+        rows = []
+        for resource in self._resource.get_graph().nodes:
+            if resource.RESOURCE_TYPE in _UNSEARCHABLE_RESOURCE_TYPES:
+                continue
+            resource_name = str(resource.name)
+            component_name = resource.component.name
+            if matcher.search(resource_name) or matcher.search(component_name):
+                rows.append((resource_name, resource.RESOURCE_TYPE, component_name))
+
+        return pd.DataFrame(rows, columns=["name", "resource_type", "component"]).sort_values(
+            ["name", "resource_type"], ignore_index=True
+        )
 
     def list_events(self) -> list[str]:
         """List all event types registered with the simulation."""

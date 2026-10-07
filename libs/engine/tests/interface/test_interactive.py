@@ -3,7 +3,9 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
+import numpy as np
 import pandas as pd
 import pytest
 from _pytest.logging import LogCaptureFixture
@@ -23,12 +25,14 @@ from tests.framework.results.helpers import (
 from tests.helpers import (
     AttributePipelineCreator,
     ColumnCreator,
+    ColumnCreatorAndRequirer,
     MultiLevelMultiColumnCreator,
     MultiLevelSingleColumnCreator,
     NestedAttributeCreator,
     NestedLookupCaller,
     SingleColumnCreator,
 )
+from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.results import Observer
@@ -101,6 +105,324 @@ def test_run_for_duration() -> None:
 
     sim.run_for("5 days")
     assert sim._clock.time == initial_time + pd.Timedelta("15 days")  # type: ignore[operator]
+
+
+JAN_1 = pd.Timestamp("2020-01-01")
+JAN_8 = pd.Timestamp("2020-01-08")
+JAN_15 = pd.Timestamp("2020-01-15")
+JAN_31 = pd.Timestamp("2020-01-31")
+STEP_SIZE = pd.Timedelta(days=7)
+FIRST_STEP_AT_OR_AFTER_END = pd.Timestamp("2020-02-05")
+
+
+@pytest.fixture
+def short_sim() -> InteractiveContext:
+    """A sim configured from Jan 1 to Jan 31 in 7-day steps."""
+    return InteractiveContext(
+        configuration={
+            "time": {
+                "start": {"year": JAN_1.year, "month": JAN_1.month, "day": JAN_1.day},
+                "end": {"year": JAN_31.year, "month": JAN_31.month, "day": JAN_31.day},
+                "step_size": STEP_SIZE.days,
+            }
+        }
+    )
+
+
+def reached(time: pd.Timestamp) -> Callable[[InteractiveContext], bool]:
+    return lambda sim: bool(sim.current_time >= time)  # type: ignore [operator]
+
+
+def info_messages(caplog: LogCaptureFixture) -> list[str]:
+    return [record.getMessage() for record in caplog.records if record.levelname == "INFO"]
+
+
+class TestRunUntilTime:
+    """Tests for run_until with a clock time as the target."""
+
+    def test_returns_true(self, short_sim: InteractiveContext) -> None:
+        """A time target is always reached."""
+        assert short_sim.run_until(JAN_15) is True
+        assert short_sim.current_time == JAN_15
+
+    def test_logs_the_number_of_steps(
+        self,
+        short_sim: InteractiveContext,
+        caplog: LogCaptureFixture,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The completion message is logged at INFO, not printed."""
+        short_sim.run_until(JAN_15)
+
+        assert "Target reached after 2 iterations" in info_messages(caplog)
+        assert capsys.readouterr().out == ""
+
+    @pytest.mark.parametrize("days_back", [0, 1, 8])
+    def test_a_time_at_or_before_now_takes_zero_steps(
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture, days_back: int
+    ) -> None:
+        """A time that has already passed is reached without stepping."""
+        short_sim.step()
+
+        assert short_sim.run_until(JAN_8 - pd.Timedelta(days=days_back)) is True
+        assert "Target reached after 0 iterations" in info_messages(caplog)
+        assert short_sim.current_time == JAN_8
+
+    @pytest.mark.parametrize("days_back, warns", [(0, False), (1, True), (8, True)])
+    def test_a_time_in_the_past_warns(
+        self,
+        short_sim: InteractiveContext,
+        caplog: LogCaptureFixture,
+        days_back: int,
+        warns: bool,
+    ) -> None:
+        """A time before now is likely a mistake, so it warns; the current time does not."""
+        short_sim.step()
+
+        short_sim.run_until(JAN_8 - pd.Timedelta(days=days_back))
+
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any("before the current time" in message for message in warnings) is warns
+
+    def test_max_steps_with_a_time_raises(self, short_sim: InteractiveContext) -> None:
+        """max_steps only applies to callables."""
+        with pytest.raises(ValueError, match="callable"):
+            short_sim.run_until(JAN_15, max_steps=3)
+        assert short_sim.current_time == JAN_1
+
+
+class TestRunUntilCondition:
+    """Tests for run_until with a condition (callable) as the target."""
+
+    def test_stops_at_the_first_step_where_the_condition_holds(
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+    ) -> None:
+        """The run stops on the first step where the condition is true and stays there."""
+        assert short_sim.run_until(reached(JAN_15)) is True
+        assert short_sim.current_time == JAN_15
+        assert "Target reached after 2 iterations" in info_messages(caplog)
+
+    @pytest.mark.parametrize("value", [True, np.True_], ids=["bool", "numpy_bool"])
+    def test_a_condition_already_true_takes_zero_steps(
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture, value: bool
+    ) -> None:
+        """A condition that is already true stops before stepping."""
+        assert short_sim.run_until(lambda sim: value) is True
+        assert short_sim.current_time == JAN_1
+        assert "Target reached after 0 iterations" in info_messages(caplog)
+
+    def test_a_condition_never_true_stops_at_the_configured_end(
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+    ) -> None:
+        """The default bound is the configured stop time."""
+        assert short_sim.run_until(lambda sim: False) is False
+        assert short_sim.current_time == FIRST_STEP_AT_OR_AFTER_END
+        assert "Target not reached after 5 iterations (reached max_steps)" in info_messages(
+            caplog
+        )
+
+    def test_max_steps_can_stop_before_the_configured_end(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """A small bound stops the run early."""
+        assert short_sim.run_until(lambda sim: False, max_steps=2) is False
+        assert short_sim.current_time == JAN_1 + STEP_SIZE * 2
+
+    def test_max_steps_can_run_past_the_configured_end(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """A large bound runs further than the default bound would."""
+        assert short_sim.run_until(lambda sim: False, max_steps=7) is False
+        assert short_sim.current_time == JAN_1 + STEP_SIZE * 7
+        assert short_sim.current_time > FIRST_STEP_AT_OR_AFTER_END  # type: ignore [operator]
+
+    def test_a_negative_max_steps_raises(self, short_sim: InteractiveContext) -> None:
+        """A negative bound is a mistake, not zero steps."""
+        with pytest.raises(ValueError, match="max_steps"):
+            short_sim.run_until(lambda sim: False, max_steps=-1)
+        assert short_sim.current_time == JAN_1
+
+    def test_no_steps_remaining_takes_zero_steps(
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+    ) -> None:
+        """With the default bound, a sim already past its stop time takes zero steps."""
+        short_sim.run()
+
+        assert short_sim.run_until(lambda sim: False) is False
+        assert short_sim.current_time == FIRST_STEP_AT_OR_AFTER_END
+        assert "Target not reached after 0 iterations (reached max_steps)" in info_messages(
+            caplog
+        )
+
+    @pytest.mark.parametrize(
+        "condition, match",
+        [
+            (lambda sim: pd.Series([True, False]), r"returned Series\.$"),
+            (lambda sim: 1, r"returned int\.$"),
+        ],
+        ids=["series", "int"],
+    )
+    def test_a_non_bool_condition_raises(
+        self,
+        short_sim: InteractiveContext,
+        condition: Callable[[InteractiveContext], Any],
+        match: str,
+    ) -> None:
+        """A condition must return a bool, not a value that is merely truthy or falsy."""
+        with pytest.raises(TypeError, match=match):
+            short_sim.run_until(condition)
+
+
+class TestRunUntilProgressBar:
+    """The notebook progress bar counts the steps run_until actually takes."""
+
+    @pytest.fixture
+    def in_notebook(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "vivarium.engine.interface.interactive.run_from_ipython", lambda: True
+        )
+
+    def test_counts_the_steps_taken(
+        self,
+        short_sim: InteractiveContext,
+        in_notebook: None,
+        progress_widgets: list[FakeWidget],
+    ) -> None:
+        """A run that stops early shows its step count and finishes the bar."""
+        short_sim.run_until(reached(JAN_15))
+
+        progress = progress_widgets[0]
+        assert progress.value == 2
+        assert progress.bar_style == "success"
+
+    def test_no_bar_when_already_reached(
+        self,
+        short_sim: InteractiveContext,
+        in_notebook: None,
+        progress_widgets: list[FakeWidget],
+    ) -> None:
+        """A run that takes no steps draws no bar."""
+        short_sim.run_until(lambda sim: True)
+
+        assert progress_widgets == []
+
+    def test_marks_the_bar_failed_when_a_callable_raises(
+        self,
+        short_sim: InteractiveContext,
+        in_notebook: None,
+        progress_widgets: list[FakeWidget],
+    ) -> None:
+        """An error mid-run leaves the bar marked as failed, not finished."""
+
+        def breaks_on_jan_15(sim: InteractiveContext) -> bool:
+            if reached(JAN_15)(sim):
+                raise KeyError("no such column")
+            return False
+
+        with pytest.raises(KeyError):
+            short_sim.run_until(breaks_on_jan_15)
+
+        assert progress_widgets[0].bar_style == "danger"
+
+
+class TestFindResources:
+    """Tests for locating simulation resources by name or registering component."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(
+            components=[
+                ColumnCreator(),
+                ColumnCreatorAndRequirer(),
+                AttributePipelineCreator(),
+            ]
+        )
+
+    def test_the_frame_has_the_conventional_columns(self, sim: InteractiveContext) -> None:
+        """This shape is the convention the other introspection tools follow."""
+        found = sim.find_resources("test_column_1")
+        assert list(found.columns) == ["name", "resource_type", "component"]
+
+    def test_a_fragment_need_not_be_the_whole_name(self, sim: InteractiveContext) -> None:
+        assert "test_column_1" in set(sim.find_resources("column_1")["name"])
+
+    def test_columns_and_streams_are_not_reported(self, sim: InteractiveContext) -> None:
+        """A column's public face is its attribute, so reporting it adds a
+        near-duplicate row; a stream is upstream of the values it randomizes."""
+        assert not {"column", "stream"} & set(sim.find_resources("")["resource_type"])
+
+    def test_lookup_tables_are_reported(self) -> None:
+        """The shared fixture registers none, so this one needs its own sim."""
+        sim = InteractiveContext(components=[NestedLookupCaller()])
+        found = sim.find_resources("inner_lookup")
+        assert set(found["resource_type"]) == {"lookup_table"}
+
+    def test_matching_is_case_insensitive(self, sim: InteractiveContext) -> None:
+        assert sim.find_resources("TEST_COLUMN_1").equals(sim.find_resources("test_column_1"))
+
+    def test_the_pattern_is_literal_by_default(self, sim: InteractiveContext) -> None:
+        """A name copied out of an earlier result finds itself, so regex syntax in
+        it is matched as text rather than silently changing the search."""
+        assert sim.find_resources("test_column_.").empty
+
+    def test_the_pattern_is_a_regular_expression_when_asked(
+        self, sim: InteractiveContext
+    ) -> None:
+        """The same pattern, with the flag, treats '.' as a wildcard."""
+        assert not sim.find_resources("test_column_.", regex=True).empty
+
+    def test_regex_anchors_isolate_a_precise_name(self, sim: InteractiveContext) -> None:
+        """Anchoring narrows a broad search rather than finding something else."""
+        broad = sim.find_resources("test_column_")
+        precise = sim.find_resources("^test_column_[12]$", regex=True)
+        assert set(precise["name"]) == {"test_column_1", "test_column_2"}
+        assert set(precise.itertuples(index=False)) < set(broad.itertuples(index=False))
+
+    def test_a_component_name_matches_the_resources_it_registered(
+        self, sim: InteractiveContext
+    ) -> None:
+        """No node is named 'column_creator_and_requirer', so every row here
+        matched on its component rather than its own name."""
+        found = sim.find_resources("^column_creator_and_requirer$", regex=True)
+        assert set(found["component"]) == {"column_creator_and_requirer"}
+
+    def test_results_are_sorted_by_name_then_resource_type(
+        self, sim: InteractiveContext
+    ) -> None:
+        """Name first, for a stable order a reader can scan."""
+        found = sim.find_resources("test")
+        expected = found.sort_values(["name", "resource_type"], ignore_index=True)
+        assert found.equals(expected)
+
+    def test_every_other_resource_in_the_graph_is_reachable(
+        self, sim: InteractiveContext
+    ) -> None:
+        """Only columns and streams are withheld; nothing else is."""
+        expected = {
+            (str(node.name), node.RESOURCE_TYPE, node.component.name)
+            for node in sim._resource.get_graph().nodes
+            if node.RESOURCE_TYPE not in ("column", "stream")
+        }
+        assert set(sim.find_resources("").itertuples(index=False)) == expected
+
+    def test_no_match_returns_an_empty_frame(self, sim: InteractiveContext) -> None:
+        assert sim.find_resources("no_such_resource").empty
+
+    def test_an_empty_result_keeps_the_conventional_columns(
+        self, sim: InteractiveContext
+    ) -> None:
+        found = sim.find_resources("no_such_resource")
+        assert list(found.columns) == ["name", "resource_type", "component"]
+
+    def test_an_invalid_regex_raises_a_useful_error(self, sim: InteractiveContext) -> None:
+        with pytest.raises(ValueError, match="Invalid regular expression 'test_column_\\['"):
+            sim.find_resources("test_column_[", regex=True)
+
+    def test_that_same_pattern_is_harmless_without_the_regex_flag(
+        self, sim: InteractiveContext
+    ) -> None:
+        """Literal matching cannot raise, whatever the text contains."""
+        assert sim.find_resources("test_column_[").empty
 
 
 def test_get_attribute_names() -> None:
