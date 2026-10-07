@@ -1,12 +1,8 @@
 **0.3.0 - 10/07/26**
 
-- Add the ``writing-style`` skill: rules for prose that people read, based on
-  ASD-STE100 Simplified Technical English, with a bundled ``ste_check.py`` checker,
-  before-and-after examples, and ``check_agent_blocks.py`` to keep the agent copies of
-  the rules the same
-- Invoke ``writing-style`` from ``_finalize-core``, ``commit-splitter``, and
-  ``change-propagation`` before they post PR, commit, or comment text
-- Add a plain-English prose line to the ``_review_*`` agents and ``_split_proposer``
+- Add a one-line plain-English writing rule, based on ASD-STE100 Simplified
+  Technical English, to the five ``_review_*`` agents and ``_split_proposer``
+  (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
 
 **0.2.1 - 09/16/26**
 

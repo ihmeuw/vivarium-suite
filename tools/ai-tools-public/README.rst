@@ -48,9 +48,6 @@ Which skill to use
    * - A finished agent run you want audited
      - ``/simsci:workflow-assessment``
      - a transcript-cited report; read-only
-   * - A PR, ticket, or commit draft to make plain
-     - ``/simsci:writing-style``
-     - a rewrite in plain technical English, checked by a script
 
 A full ``pr-prep`` or ``framework-development`` run spawns several sub-agents
 and takes a while. Nothing is pushed until you approve the PR.
@@ -75,6 +72,9 @@ In more detail:
   every finding is then independently scored for confidence (0-100) by a
   per-finding ``_review_scorer`` Haiku sub-agent, and findings below 50 are
   dropped — so only verified issues reach the report, each shown with its score.
+  The review agents and ``_split_proposer`` carry a one-line rule to write their
+  prose in plain technical English, based on ASD-STE100 Simplified Technical
+  English.
 
   It then proposes a **disposition per finding** (fix now / ticket / drop, each
   with a one-line why), bucketing by scope and using the confidence score only to
@@ -151,16 +151,6 @@ In more detail:
   over the run's session transcripts and grades coverage, ordering/gates,
   parallelism, handoffs, tool use, and result propagation, with
   transcript-cited findings. Claude Code-only, read-only throughout.
-- ``/simsci:writing-style`` — rules for prose that people read (PR text, ticket
-  text, commit bodies, CHANGELOG entries, design documents, and reports), based on
-  ASD-STE100 Simplified Technical English and adapted for software. The skill
-  bundles ``ste_check.py``, a standard-library checker. The skill's ``SKILL.md``
-  lists what the checker reports. ``_finalize-core``, ``commit-splitter``, and ``change-propagation``
-  invoke it and run the script before they post text. The ``_review_*`` agents and
-  ``_split_proposer`` carry a one-line copy of the rules. The skill's tests run
-  ``scripts/check_agent_blocks.py``, which fails when a copy changes or goes
-  missing. ASD-STE100 is a copyright and trademark of ASD. The skill paraphrases some
-  of its rules and does not claim compliance.
 
 These are slash commands too; Claude Code also loads them on its own when the
 conversation matches the skill's description.
@@ -180,11 +170,6 @@ worked example: its ``team-conventions``, ``ticket-triage``, ``environments``,
 ``design-doc``, and ``brainstorming`` skills are what these seams resolve to
 when both plugins are installed. Installing nothing extra works too: every
 workflow falls back to generic behavior.
-
-A team skill that drafts PR, ticket, or commit text can invoke
-``simsci:writing-style`` and run its checker before its own approval gate. The
-team skill still owns the template and the format, and the writing-style rules
-apply only to the sentences inside them.
 
 To pull ``simsci`` in automatically, declare it in your plugin's
 ``.claude-plugin/plugin.json``::

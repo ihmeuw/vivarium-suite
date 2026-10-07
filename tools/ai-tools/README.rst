@@ -18,6 +18,9 @@ team-specific layer on top, and ``simsci``'s optional seams (branch and PR
 conventions, ticket filing, environment setup) resolve automatically to the
 team skills below when both plugins are enabled.
 
+The ``_vv_writer``, ``_claim_auditor``, and ``_duplicate_finder`` agents carry the
+same one-line plain-English writing rule as the ``simsci`` review agents.
+
 It includes:
 
 **Model Development**

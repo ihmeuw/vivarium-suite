@@ -122,9 +122,8 @@ conventions skill), invoke it and follow it for the PR mechanics. Otherwise:
 name branches descriptively (include the ticket key when there is one), fill
 in each repo's PR template (`.github/pull_request_template.md`) when it has
 one, and open every PR as a **draft**. File one PR per repository from its
-integrated branch. Write each PR body with `simsci:writing-style` and run its
-checker before you open the PR. If your team announces PRs in a chat channel
-and you have a tool to post there, offer to do so.
+integrated branch. If your team announces PRs in a chat channel and you have
+a tool to post there, offer to do so.
 
 ### 6. Report
 

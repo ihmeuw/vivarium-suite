@@ -1,3 +1,8 @@
+**0.28.0 - 10/07/26**
+
+- Add the one-line plain-English writing rule from ``simsci`` 0.3.0 to
+  ``_vv_writer``, ``_claim_auditor``, and ``_duplicate_finder`` (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
+
 **0.27.1 - 09/22/26**
 
 - ``make-commands``: document that ``build-env`` fails fast and tears down the
