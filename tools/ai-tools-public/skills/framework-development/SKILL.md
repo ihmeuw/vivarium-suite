@@ -72,14 +72,21 @@ finalize & PR = finalize_core        # Phase 5: user-gated; residuals -> tickets
   building the wording.
 
 Exit with a short written design summary the user has agreed to. End it with a
-**short testing strategy** — a few lines on what must be tested to be confident the
-feature works as expected:
+**short testing strategy** on what must be tested to be confident the feature works
+as expected, in three sections with one item per line:
 
-- **Feature requirements** — what the feature must do.
-- **Use cases** — the important behaviors that show each requirement is met, with
-  their expected outcomes.
-- **Edge cases** — the boundaries and failure paths that test each requirement's
-  limits.
+```
+Testing strategy
+
+Feature requirements
+- <what the feature must do>
+
+Use cases
+- <an important behavior that shows a requirement is met, and its expected outcome>
+
+Edge cases
+- <a boundary or failure path that tests a requirement's limits, and the expected behavior>
+```
 
 It says *what* to test, not how; no test code.
 
