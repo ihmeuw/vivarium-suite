@@ -380,11 +380,12 @@ name, or whose component's name, contains it, along with the type of each one.
                                                                                              is_alive      attribute                                                 mortality
 
 Results come back most relevant first, in the following order:
+
 - the resource name matches exactly
 - the resource name begins with the pattern
 - the resource name contains the pattern as one or more whole dot-separated segments
 - the resource name contains the pattern as part of a segment
-- the component name includes the pattern
+- the resource name does not match at all, and only its component's name does
 
 That last bullet is why ``is_alive`` is at the bottom in the example above: "mortality"
 appears nowhere in its name, and it is listed only because the ``mortality`` component

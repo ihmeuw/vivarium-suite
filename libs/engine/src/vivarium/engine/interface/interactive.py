@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from math import ceil
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, NamedTuple, overload
 
 import pandas as pd
 
@@ -39,8 +39,21 @@ _RESOURCE_TYPE_ORDER = (
 )
 """Resource types in the order :meth:`InteractiveContext.find_resources` ranks them."""
 
+_RESOURCE_TYPE_RANK = {
+    resource_type: index for index, resource_type in enumerate(_RESOURCE_TYPE_ORDER)
+}
 
-def _match_rank(matcher: re.Pattern[str], name: str, component: str) -> int:
+
+class _ResourceRow(NamedTuple):
+    """A candidate row, with the relevance rank that orders it but is not reported."""
+
+    rank: int
+    name: str
+    resource_type: str
+    component: str
+
+
+def _match_rank(matcher: re.Pattern[str], name: str) -> int:
     """Rank a resource by how squarely the pattern hit its name, best first.
 
     Names are dot-delimited hierarchies, so a match filling whole segments means
@@ -48,17 +61,20 @@ def _match_rank(matcher: re.Pattern[str], name: str, component: str) -> int:
     ``mortality.mortality_rate`` above ``excess_mortality_rate``, which merely
     contains those characters.
     """
-    match = matcher.search(name)
-    if match is None:
-        return 4  # only the component matched
-    start, end = match.span()
-    if (start, end) == (0, len(name)):
-        return 0  # the whole name
-    if start == 0:
-        return 1  # a leading segment
-    if name[start - 1] == "." and (end == len(name) or name[end] == "."):
-        return 2  # whole segments from the middle or the end
-    return 3  # part of a segment
+    # A pattern can occur several times in one name, so take its best showing
+    # rather than whichever happens to come first.
+    rank = 4  # only the component matched
+    for match in matcher.finditer(name):
+        start, end = match.span()
+        if (start, end) == (0, len(name)):
+            return 0  # the entire name
+        if start == 0:
+            rank = min(rank, 1)  # the start of the name
+        elif name[start - 1] == "." and (end == len(name) or name[end] == "."):
+            rank = min(rank, 2)  # whole segments from the middle or the end
+        else:
+            rank = min(rank, 3)  # part of a segment
+    return rank
 
 
 if TYPE_CHECKING:
@@ -408,8 +424,8 @@ class InteractiveContext(SimulationContext):
             and ``component``, one row per resource, most relevant first.
 
             Relevance is how squarely the pattern hit the name: the whole name,
-            then a leading segment, then whole segments from the middle or the
-            end, then part of a segment, and last the resources that matched only
+            then the start of it, then whole segments from the middle or the end,
+            then part of a segment, and last the resources that matched only
             through their component. Ties break by resource type - attributes,
             values, modifiers, lookup tables, initializers - and then by name.
 
@@ -440,23 +456,31 @@ class InteractiveContext(SimulationContext):
                 " search for this text literally."
             ) from error
 
-        rows = []
+        rows: list[_ResourceRow] = []
         for resource in self._resource.get_graph().nodes:
             if resource.RESOURCE_TYPE in _UNSEARCHABLE_RESOURCE_TYPES:
                 continue
             resource_name = str(resource.name)
             component_name = resource.component.name
             if matcher.search(resource_name) or matcher.search(component_name):
-                rank = _match_rank(matcher, resource_name, component_name)
-                rows.append((rank, resource_name, resource.RESOURCE_TYPE, component_name))
+                rank = _match_rank(matcher, resource_name)
+                rows.append(
+                    _ResourceRow(rank, resource_name, resource.RESOURCE_TYPE, component_name)
+                )
 
-        found = pd.DataFrame(rows, columns=["rank", "name", "resource_type", "component"])
-        found["resource_type"] = pd.Categorical(
-            found["resource_type"], categories=_RESOURCE_TYPE_ORDER, ordered=True
+        rows.sort(
+            key=lambda row: (
+                row.rank,
+                # A type absent from _RESOURCE_TYPE_ORDER sorts last rather than
+                # being dropped, so a type added later still reports its real name.
+                _RESOURCE_TYPE_RANK.get(row.resource_type, len(_RESOURCE_TYPE_RANK)),
+                row.name,
+            )
         )
-        found = found.sort_values(["rank", "resource_type", "name"], ignore_index=True)
-        found["resource_type"] = found["resource_type"].astype(str)
-        return found.drop(columns="rank")
+        return pd.DataFrame(
+            [(row.name, row.resource_type, row.component) for row in rows],
+            columns=["name", "resource_type", "component"],
+        )
 
     def list_events(self) -> list[str]:
         """List all event types registered with the simulation."""
