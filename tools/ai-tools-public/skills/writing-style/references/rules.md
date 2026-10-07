@@ -34,6 +34,10 @@ numbers because we could not confirm them.
 | 9.3 | Do not use phrasal verbs. | Keep | Phrasal verbs are hard for second-language readers. The checker uses a short list that we wrote. |
 | GR-6 | Do not use Latin abbreviations. | Keep | "e.g." and "i.e." are often confused. |
 
+The checker also has two hard limits that are not in the standard: 35 words in a
+sentence and eight sentences in a paragraph. We chose these limits so that a hard
+finding is almost always a real problem.
+
 ## Rules from outside the standard
 
 The skill adds a list of patterns to avoid. These patterns come from the experience of

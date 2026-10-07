@@ -44,7 +44,8 @@ Use one of three levels. The level depends on the type of text.
 
 1. Procedures are strict. Procedures include test steps, reproduction steps, setup
    steps, and instructions to a reviewer. Write one instruction in each sentence. Use
-   the imperative. Write no more than 20 words in each sentence.
+   the imperative. Write no more than 20 words in each sentence. Number the steps,
+   because the checker applies the 20-word limit only to numbered list items.
 2. Descriptive text in an artifact is firm. This includes a PR motivation, a ticket
    background, design-document prose, and CHANGELOG entries. Write no more than 25
    words in each sentence. Give each paragraph one topic. Write no more than six
@@ -58,8 +59,9 @@ only the voice and tense rules to them.
 
 ## Rules
 
-The number after each rule is the related ASD-STE100 Issue 9 rule. The rules are in
-our own words. See `references/rules.md` for the reason to keep or adapt each rule.
+The number after each rule is the related ASD-STE100 Issue 9 rule. We took the numbers
+from a third-party summary and did not check them against the standard. The rules are
+in our own words. See `references/rules.md` for the reason to keep or adapt each rule.
 
 - Use one name for each thing and one verb for each action. When you choose a term,
   use it every time. Do not change words for variety. (1.11, 9.4)
@@ -131,13 +133,15 @@ EOF
 Use `--kind wiki` for the wiki markup that some issue trackers use (`h2.` headings,
 `{code}` blocks, `{{monospace}}` text). Use `--kind plain` for a commit message or an
 RST file such as a CHANGELOG. Add `--skip-pattern '<regex>'` for each template line
-that must stay word for word.
+that must stay word for word. A pattern sees the line after inline code changes to
+`CODE`, so do not put backticks in a pattern.
 
 - Fix every hard finding. Hard findings are semicolons, contractions, Latin
   abbreviations, sentences over 35 words, and paragraphs over eight sentences.
 - Read each advisory finding and fix it if it is a real problem. The passive-voice
   and "-ing" checks match patterns and do not parse grammar, so some findings are
-  false. A fixed heading that a template or another skill gives is not a problem.
+  false. The "-ing" check finds only a form of "be" before an "-ing" verb, such as
+  "is causing". A fixed heading that a template or another skill gives is not a problem.
 - Text in double quotes is exempt from all rules except the length rules. Put a
   quoted log or error message in a code block, not in quotation marks.
 - Do not show the checker output at the gate unless the user asks for it. Show the
@@ -147,6 +151,12 @@ The checker does not check noun clusters, word choice, or meaning. A clean resul
 necessary but not sufficient. Read the draft once more as a reader who arrives cold.
 
 `references/examples.md` has before-and-after pairs for each type of text.
+
+## Maintenance
+
+Agents cannot load this skill, so some agents carry a one-line copy of the rules. The
+canonical line is in `references/agent-block.md`. Run `scripts/check_agent_blocks.py`
+after you change the line or add an agent that needs it.
 
 ## Attribution
 

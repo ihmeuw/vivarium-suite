@@ -1,7 +1,8 @@
 # Before and after
 
 Each pair shows a typical draft and a rewrite that follows the `writing-style` rules.
-The rewrites keep every fact in the draft.
+The rewrites keep every fact in the draft and add no new facts. Text in angle brackets
+is a detail that the writer must supply from the work. Do not invent it.
 
 ## PR description
 
@@ -92,16 +93,17 @@ After:
 
 ```text
 Filed as tickets:
-- PROJ-412: `merge_frames` copies the index twice.
-- PROJ-413: The `--dry-run` flag has no test.
+- <ticket key>: <one finding in one sentence>
+- <ticket key>: <one finding in one sentence>
 
 Carried out unresolved:
-- The docs build failed once in three runs. The same failure occurs on `main`, so
-  this PR did not cause it.
+- The docs build fails on some runs. The failure occurred before this PR, so this PR
+  did not cause it.
 ```
 
 The rewrite lists each item and gives each a reason. A reviewer who arrives cold can
-act on each line.
+act on each line. The draft did not name the tickets, so the rewrite has placeholders
+for them.
 
 ## Chat reply that explains a bug
 
@@ -116,7 +118,7 @@ After:
 
 ```text
 The retry wrapper catches the exception and returns `None`. The caller then indexes
-into that `None`, which causes the `TypeError` that you see.
+into that `None`, which causes the error that you see.
 ```
 
 ## Reproduction steps

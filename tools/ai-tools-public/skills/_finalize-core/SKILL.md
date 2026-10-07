@@ -25,8 +25,9 @@ if this ships as a stack rather than one PR. Ask for anything missing rather tha
 inferring it.
 
 Invoke `simsci:writing-style` before you draft any text in the steps below. The PR
-title, the PR body, and the Step 6 comment are artifact text. The Step 1 summary and
-the final report are conversation text.
+title, the PR body, and the Step 6 comment are artifact text. Run its checker on the PR
+body and the Step 6 comment before you show or post them. The Step 1 summary and the
+final report are conversation text.
 
 ## Step 1 — Summarize and read the branch
 
@@ -64,10 +65,9 @@ filed", or "unresolved" — because that is what Step 6 reports.
 
 **Gate — approve the PR.** Show in one place: Step 1's summary, the commit
 organization you intend (Step 4), the PR title/base/draft status, and **the exact
-body of the Step 6 comment**, after you run the `simsci:writing-style` checker on
-it. Take one approval covering that whole write set — commits, push, PR, and
-comment. The comment is a public write, so it gets seen before it lands rather than
-after. Without approval, stop and leave the branch in
+body of the Step 6 comment**. Take one approval covering that whole write set —
+commits, push, PR, and comment. The comment is a public write, so it gets seen
+before it lands rather than after. Without approval, stop and leave the branch in
 place, saying what would have happened.
 
 ## Step 4 — Shape a reviewable history
@@ -106,8 +106,7 @@ PR template from the actual diff if one exists. A **draft** is the safe default 
 a PR you open.
 
 Either way, put Step 1's summary and the validation verdict, residuals included, in
-the body. Run the `simsci:writing-style` checker on the body before you post it, and
-fix every hard finding. Prefer the GitHub MCP's pull-request tools over the `gh` CLI
+the body. Prefer the GitHub MCP's pull-request tools over the `gh` CLI
 when both are available: the MCP needs no shell access and works in sandboxed
 environments where `gh` cannot read its credentials.
 

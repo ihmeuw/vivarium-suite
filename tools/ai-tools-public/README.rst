@@ -154,10 +154,8 @@ In more detail:
 - ``/simsci:writing-style`` — rules for prose that people read (PR text, ticket
   text, commit bodies, CHANGELOG entries, design documents, and reports), based on
   ASD-STE100 Simplified Technical English and adapted for software. The skill
-  bundles ``ste_check.py``, a standard-library script that reports semicolons,
-  contractions, Latin abbreviations, and long sentences as hard findings, and
-  passive voice, present perfect, phrasal verbs, and figurative words as advisory
-  findings. ``_finalize-core``, ``commit-splitter``, and ``change-propagation``
+  bundles ``ste_check.py``, a standard-library checker. The skill's ``SKILL.md``
+  lists what the checker reports. ``_finalize-core``, ``commit-splitter``, and ``change-propagation``
   invoke it and run the script before they post text. The ``_review_*`` agents and
   ``_split_proposer`` carry a one-line copy of the rules. The skill's tests run
   ``scripts/check_agent_blocks.py``, which fails when a copy changes or goes
