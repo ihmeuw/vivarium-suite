@@ -90,16 +90,16 @@ well described by a log-linear curve, the
 :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect` component
 can be used instead. This component:
 
-1. Loads :term:`TMRED` data from its configured data source (the artifact by
-   default) and computes the :term:`TMREL` as a uniform random draw between the
-   TMRED's minimum and maximum.
-2. Interpolates the RR at the TMREL from the configured RR data points and
-   divides all RR values by this quantity, so that the RR at the TMREL equals
-   1. The result is clipped to a minimum of 1.
-3. Constructs a lookup table of piecewise-linear intervals from the normalized
-   RR data. Each interval has a left and right exposure boundary and
-   corresponding left and right RR values.
-4. When determining a simulant's relative risk, identifies which interval
+1. Loads RR data points from its configured data source (the artifact by
+   default) and clips them to a minimum of ``MINIMUM_RELATIVE_RISK`` (1 by
+   default; ``None`` disables the clip). The RRs
+   are not otherwise rescaled, so they must be consistent with the
+   :term:`PAF` data: the PAF must have been computed from the same clipped
+   RRs.
+2. Constructs a lookup table of piecewise-linear intervals from the RR data.
+   Each interval has a left and right exposure boundary and corresponding left
+   and right RR values.
+3. When determining a simulant's relative risk, identifies which interval
    contains the simulant's exposure and linearly interpolates:
 
 .. math::

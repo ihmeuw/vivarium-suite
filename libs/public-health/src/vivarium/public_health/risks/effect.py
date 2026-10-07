@@ -15,12 +15,10 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import scipy
 from vivarium.config_tree import ConfigTree
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lookup import LookupTable
 
-from vivarium.public_health.causal_factor.distributions import MissingDataError
 from vivarium.public_health.causal_factor.effect import CausalFactorEffect
 from vivarium.public_health.risks import Risk
 from vivarium.public_health.utilities import EntityString, TargetString
@@ -91,23 +89,21 @@ class NonLogLinearRiskEffect(RiskEffect):
 
     This component:
 
-    1. Reads TMRED data from its configured data source (the artifact by
-       default) and defines the TMREL.
-    2. Calculates the relative risk at TMREL by linearly interpolating over
-       relative risk data defined in the configuration.
-    3. Divides relative risk data from configuration by RR at TMREL
-       and clips to :attr:`MINIMUM_RELATIVE_RISK`.
-    4. Builds a ``LookupTable`` that returns the exposure and RR of the left
+    1. Loads relative risk data defined in the configuration and clips it to
+       :attr:`MINIMUM_RELATIVE_RISK`. The relative risks are otherwise used
+       as-is, so they must be consistent with the population attributable
+       fraction data: the PAF must have been computed from these relative
+       risks after the clip.
+    2. Builds a ``LookupTable`` that returns the exposure and RR of the left
        and right edges of the RR bin containing a simulant's exposure.
-    5. Uses this ``LookupTable`` to modify the target pipeline by linearly
+    3. Uses this ``LookupTable`` to modify the target pipeline by linearly
        interpolating a simulant's RR value and multiplying it by the intended
        target rate.
     """
 
     MINIMUM_RELATIVE_RISK: float | None = 1.0
-    """Lower bound applied to the TMREL-normalized relative risks. Set to
-    ``None`` for a risk that is protective over part of its exposure range and
-    so needs to keep relative risks below 1."""
+    """Lower bound applied to the loaded relative risks. Set to ``None`` to
+    use the relative risks without a lower bound."""
 
     ##############
     # Properties #
@@ -142,22 +138,12 @@ class NonLogLinearRiskEffect(RiskEffect):
                         ``{risk}.population_attributable_fraction``. Used to
                         adjust the target rate to account for the portion
                         attributable to this risk.
-                    tmred:
-                        Source for theoretical-minimum-risk exposure (TMRED)
-                        data, used to compute the TMREL at which the relative
-                        risk is normalized to 1. Default is the artifact key
-                        ``{risk}.tmred``. Accepts a single-row DataFrame with
-                        ``distribution``, ``min``, and ``max`` columns to
-                        bypass the artifact. The ``distribution`` column must be
-                        one of ``"uniform"`` (TMREL drawn uniformly from
-                        ``[min, max]``) or ``"draws"`` (draw-level TMRELs).
         """
         return {
             self.name: {
                 "data_sources": {
                     "relative_risk": f"{self.causal_factor}.relative_risk",
                     "population_attributable_fraction": f"{self.causal_factor}.population_attributable_fraction",
-                    "tmred": f"{self.causal_factor}.tmred",
                 },
             }
         }
@@ -268,11 +254,10 @@ class NonLogLinearRiskEffect(RiskEffect):
         builder: Builder,
         configuration: ConfigTree | None = None,
     ) -> str | float | pd.DataFrame:
-        """Load relative risk data, normalizing by RR at the TMREL.
+        """Load relative risk data and clip it to :attr:`MINIMUM_RELATIVE_RISK`.
 
-        Compute the Theoretical Minimum-Risk Exposure Level (TMREL)
-        from TMRED data, interpolate RR at the TMREL, divide all RR
-        values by this quantity, and clip to be at least 1.
+        The relative risks are otherwise used as-is, so they must be
+        consistent with the population attributable fraction data.
 
         Parameters
         ----------
@@ -284,12 +269,10 @@ class NonLogLinearRiskEffect(RiskEffect):
 
         Returns
         -------
-            The normalized relative risk data as a DataFrame.
+            The relative risk data as a DataFrame.
 
         Raises
         ------
-        MissingDataError
-            If the TMRED data uses draw-level TMRELs or is not found.
         ValueError
             If the relative risk data fails validation (e.g. it is empty,
             or its ``parameter`` column is non-numeric or not monotonically
@@ -298,75 +281,11 @@ class NonLogLinearRiskEffect(RiskEffect):
         if configuration is None:
             configuration = self.configuration
 
-        self.tmrel = self.get_tmrel(builder, configuration)
-
-        original_rrs = self.get_filtered_data(
-            builder, configuration.data_sources.relative_risk
-        )
-        self.validate_rr_data(original_rrs)
-
-        demographic_cols = self.get_demographic_columns(original_rrs)
-
-        def get_rr_at_tmrel(rr_data: pd.DataFrame) -> float:
-            """Interpolate the relative risk at the TMREL."""
-            interpolated_rr_function = scipy.interpolate.interp1d(
-                rr_data["parameter"],
-                rr_data["value"],
-                kind="linear",
-                bounds_error=False,
-                fill_value=(
-                    rr_data["value"].min(),
-                    rr_data["value"].max(),
-                ),
-            )
-            rr_at_tmrel = interpolated_rr_function(self.tmrel).item()
-            return rr_at_tmrel
-
-        rrs_at_tmrel = (
-            original_rrs.groupby(demographic_cols)[["parameter", "value"]]
-            .apply(get_rr_at_tmrel)
-            .rename("rr_at_tmrel")
-        )
-        rr_data = original_rrs.merge(rrs_at_tmrel.reset_index())
-        rr_data["value"] = rr_data["value"] / rr_data["rr_at_tmrel"]
+        rr_data = self.get_filtered_data(builder, configuration.data_sources.relative_risk)
+        self.validate_rr_data(rr_data)
         if self.MINIMUM_RELATIVE_RISK is not None:
-            rr_data["value"] = np.clip(rr_data["value"], self.MINIMUM_RELATIVE_RISK, np.inf)
-        rr_data = rr_data.drop("rr_at_tmrel", axis=1)
-
+            rr_data["value"] = rr_data["value"].clip(lower=self.MINIMUM_RELATIVE_RISK)
         return rr_data
-
-    def get_tmrel(self, builder: Builder, configuration: ConfigTree | None = None) -> float:
-        """Draw the Theoretical Minimum-Risk Exposure Level from the TMRED data.
-
-        Parameters
-        ----------
-        builder
-            Access point for utilizing framework interfaces during setup.
-        configuration
-            Optional configuration override. If ``None``, use
-            ``self.configuration``.
-
-        Returns
-        -------
-            The TMREL, drawn uniformly from the TMRED range.
-
-        Raises
-        ------
-        MissingDataError
-            If the TMRED data uses draw-level TMRELs or is not found.
-        """
-        tmred = self.get_tmred(builder, configuration)
-        if tmred["distribution"] == "uniform":
-            draw = builder.configuration.input_data.input_draw_number
-            rng = np.random.default_rng(builder.randomness.get_seed(self.name + str(draw)))
-            return float(rng.uniform(tmred["min"], tmred["max"]))
-        if tmred["distribution"] == "draws":  # currently only for iron deficiency
-            raise MissingDataError(
-                f"This data has draw-level TMRELs. You will need to contact the research team that models {self.causal_factor.name} to get this data."
-            )
-        raise MissingDataError(
-            f"No TMRED found in gbd_mapping for risk {self.causal_factor.name}"
-        )
 
     @staticmethod
     def get_demographic_columns(rr_data: pd.DataFrame) -> list[str]:
