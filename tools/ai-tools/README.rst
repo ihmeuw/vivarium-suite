@@ -22,7 +22,9 @@ The ``_vv_writer``, ``_claim_auditor``, and ``_duplicate_finder`` agents carry t
 same one-line plain-English writing rule as the ``simsci`` review agents.
 
 A ``SessionStart`` hook adds a short plain-English writing text
-(``hooks/writing-style.txt``) to the start of each session. Replies, PR text,
+(``hooks/writing-style.txt``), based on ASD-STE100 Simplified Technical English, to
+the start of each session. The text does not name the standard, because in evals,
+naming it made the output less clear and less complete. Replies, PR text,
 tickets, and commit messages from the main session then follow it. The hook runs
 again after ``/clear`` and after compaction. Subagents do not get the text, so the
 agents above carry their own one-line rule. The hook runs through ``bash``, which
