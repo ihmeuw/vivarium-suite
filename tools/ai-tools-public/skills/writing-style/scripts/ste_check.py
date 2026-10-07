@@ -39,7 +39,7 @@ IRREGULAR_PARTICIPLES = (
     "grown|held|led|paid|said|sold|struck|stuck|taught|thought|woken|worn"
 )
 PRESENT_PERFECT = re.compile(
-    rf"\b(?:has|have|had|hasn['’]t|haven['’]t)\s+(?:\w+ly\s+)?(?:\w+ed|{IRREGULAR_PARTICIPLES})\b",
+    rf"\b(?:has|have|hasn['’]t|haven['’]t)\s+(?:\w+ly\s+)?(?:\w+ed|{IRREGULAR_PARTICIPLES})\b",
     re.IGNORECASE,
 )
 PASSIVE_EXCEPTIONS = {
@@ -53,6 +53,13 @@ PASSIVE_EXCEPTIONS = {
     "aligned",
     "tired",
     "pleased",
+    # These participles are also common adjectives of state, as in "the flag is set".
+    "set",
+    "put",
+    "read",
+    "run",
+    "split",
+    "left",
 }
 PASSIVE = re.compile(
     rf"\b(?:is|are|was|were|be|been|being)\s+(?:\w+ly\s+)?(\w+ed|{IRREGULAR_PARTICIPLES})\b",
@@ -91,10 +98,11 @@ PHRASAL_VERBS = re.compile(
 )
 FIGURATIVE = re.compile(
     r"\b(?:under the hood|workhorse|killer feature|game[- ]changer|deep dive|"
-    r"silver bullet|low-hanging fruit|heavy lifting|not just|not only)\b",
+    r"silver bullet|low-hanging fruit|heavy lifting)\b",
     re.IGNORECASE,
 )
-SENTENCE_START_CONJUNCTION = re.compile(r"^(?:And|But|So)\b")
+NOT_ONLY = re.compile(r"\bnot (?:just|only|merely)\b", re.IGNORECASE)
+SENTENCE_START_CONJUNCTION = re.compile(r"^(?:And|But)\b")
 QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”")
 
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
@@ -111,8 +119,9 @@ WIKI_INLINE_CODE = re.compile(r"\{\{.*?\}\}")
 WIKI_STRUCTURE = re.compile(r"^(h[1-6]\.\s|bq\.|\|\||\||----\s*$)")
 RST_UNDERLINE = re.compile(r"^([-=~^*#+`'\"])\1{2,}\s*$")
 SENTENCE_END = re.compile(r"[.!?][\"'”’)\]*_]*\s+[\"'“‘(\[*_]*(\S)")
-ABBREVIATIONS = {"fig", "figs", "dr", "mr", "mrs", "ms", "no", "vs", "approx", "eq", "sec"}
-ABBREVIATIONS |= {"vol", "e.g", "i.e", "cf", "al", "viz"}
+ABBREVIATIONS = {"dr", "mr", "mrs", "ms", "vs", "approx", "e.g", "i.e", "cf", "al", "viz"}
+# These words also end sentences, so they count as abbreviations only before a number.
+NUMBER_ABBREVIATIONS = {"no", "fig", "figs", "eq", "sec", "vol"}
 
 
 @dataclass
@@ -155,7 +164,7 @@ class Report:
         return {
             "sentences": self.sentences,
             "mean_words_per_sentence": mean,
-            "sentences_over_25_words": self.long_sentences,
+            f"sentences_over_{MAX_WORDS_DESCRIPTIVE}_words": self.long_sentences,
             "hard": len(self.hard),
             "advisory": len(self.findings) - len(self.hard),
         }
@@ -184,7 +193,7 @@ def _strip_comments(line: str, in_comment: bool) -> tuple[str, bool]:
 
 def strip_out_of_scope(
     text: str, kind: str, skip_patterns: list[re.Pattern[str]]
-) -> list[str]:
+) -> tuple[list[str], list[tuple[int, str]]]:
     """Blank or replace the text that the rules do not govern, keeping the line count.
 
     Parameters
@@ -198,7 +207,8 @@ def strip_out_of_scope(
 
     Returns
     -------
-        One string per input line. An excluded line becomes an empty string.
+        One string per input line, where an excluded line becomes an empty string, and
+        the line number and name of each fence, block, or comment that never closes.
     """
     raw_lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     out: list[str] = []
@@ -206,7 +216,12 @@ def strip_out_of_scope(
     wiki_block: str | None = None
     in_comment = False
     in_directive = False
-    front_matter = kind == "markdown" and raw_lines[0].strip() == "---"
+    opened_at = 0
+    front_matter = (
+        kind == "markdown"
+        and raw_lines[0].strip() == "---"
+        and any(line.strip() in ("---", "...") for line in raw_lines[1:])
+    )
     for number, line in enumerate(raw_lines):
         if front_matter:
             out.append("")
@@ -216,6 +231,7 @@ def strip_out_of_scope(
             line = WIKI_INLINE_CODE.sub(CODE_TOKEN, line)
             markers = WIKI_BLOCK.findall(line)
             if wiki_block or markers:
+                opened_at = opened_at if wiki_block else number + 1
                 for marker in (m.lower() for m in markers):
                     wiki_block = None if wiki_block == marker else (wiki_block or marker)
                 out.append("")
@@ -234,25 +250,34 @@ def strip_out_of_scope(
                 continue
             # A backtick fence whose info string has a backtick is inline code, not a fence.
             if match and not (match.group(1)[0] == "`" and "`" in match.group(2)):
-                fence = match.group(1)
+                fence, opened_at = match.group(1), number + 1
                 out.append("")
                 continue
             line = INLINE_CODE.sub(CODE_TOKEN, line)
             if kind == "markdown":
+                was_open = in_comment
                 line, in_comment = _strip_comments(line, in_comment)
+                opened_at = number + 1 if in_comment and not was_open else opened_at
         stripped = line.strip()
         if kind == "plain":
-            # Commit bodies and RST files: skip directives, tables, and literal blocks.
+            # Plain text has no fences, so use the RST and commit-body conventions. An RST
+            # directive body is the indented text below ".. name::".
             if in_directive and (not stripped or line[:1].isspace()):
                 out.append("")
                 continue
             in_directive = stripped.startswith(".. ")
+            # An indented block after a blank line is a literal block or pasted code.
             indented_block = line.startswith("    ") and (not out or not out[-1].strip())
+            # Prose almost never has a tab, and pasted tables and logs often do.
             if in_directive or "\t" in line or indented_block:
                 out.append("")
                 continue
+            # An RST heading is a one-line paragraph above an underline at least as long
+            # as the heading. Any other run of punctuation is a separator.
             if RST_UNDERLINE.match(stripped):
-                if out:
+                heading = raw_lines[number - 1].strip() if number else ""
+                alone = number < 2 or not raw_lines[number - 2].strip()
+                if heading and alone and len(stripped) >= len(heading):
                     out[-1] = ""
                 out.append("")
                 continue
@@ -269,7 +294,16 @@ def strip_out_of_scope(
             line = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", line)
             line = HTML_ENTITY.sub(" ", line)
         out.append(URL.sub(URL_TOKEN, line))
-    return out
+    unclosed = [
+        (opened_at, name)
+        for name, is_open in (
+            ("code fence", fence),
+            ("block", wiki_block),
+            ("comment", in_comment),
+        )
+        if is_open
+    ]
+    return out, unclosed
 
 
 def split_units(lines: list[str], kind: str) -> list[Unit]:
@@ -307,6 +341,8 @@ def _is_sentence_end(text: str, match: re.Match[str], quotes: list[tuple[int, in
     before = text[: match.start()].split()
     token = before[-1].lower().lstrip("(\"'“*_") if before else ""
     if token in ABBREVIATIONS:
+        return False
+    if token in NUMBER_ABBREVIATIONS and match.group(1).isdigit():
         return False
     return not (token == "etc" and match.group(1).islower())
 
@@ -389,6 +425,8 @@ def check_sentence(sentence: str, line: int, procedure: bool, report: Report) ->
         add("advisory", "phrasal-verb", f"{match.group(0)!r}: use a one-word verb")
     for match in FIGURATIVE.finditer(checked):
         add("advisory", "figurative", f"{match.group(0)!r}: say it literally")
+    for match in NOT_ONLY.finditer(checked):
+        add("advisory", "not-only", f"{match.group(0)!r}: state the point directly")
     if SENTENCE_START_CONJUNCTION.match(checked):
         add(
             "advisory",
@@ -417,7 +455,11 @@ def check(
     """
     patterns = [re.compile(p) for p in skip_patterns or []]
     report = Report()
-    for unit in split_units(strip_out_of_scope(text, kind, patterns), kind):
+    lines, unclosed = strip_out_of_scope(text, kind, patterns)
+    for line, name in unclosed:
+        message = f"the {name} never closes, so the text after it was not checked"
+        report.findings.append(Finding(line, "advisory", "unclosed", message, ""))
+    for unit in split_units(lines, kind):
         sentences = split_sentences(unit)
         for sentence, line in sentences:
             check_sentence(sentence, line, unit.procedure, report)
@@ -455,17 +497,23 @@ def main(argv: list[str] | None = None) -> int:
     """Run the checker from the command line and return the exit code."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("path", nargs="?", help="file to check (default: stdin)")
-    parser.add_argument("--kind", choices=["markdown", "wiki", "plain"], default="markdown")
+    parser.add_argument(
+        "--kind",
+        choices=["markdown", "wiki", "plain"],
+        default="markdown",
+        help="markup: markdown, wiki (issue-tracker markup), or plain (commit messages, RST)",
+    )
     parser.add_argument(
         "--skip-pattern",
         action="append",
         default=[],
-        help="regex for lines to leave unchecked, such as a template line (repeatable)",
+        help="regex for lines to leave unchecked (repeatable); it sees inline code as CODE",
     )
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     try:
         args = parser.parse_args(argv)
     except SystemExit as error:
+        # Return the code so that a caller of main() can see a usage error.
         return 0 if error.code == 0 else 2
     try:
         data = Path(args.path).read_bytes() if args.path else sys.stdin.buffer.read()

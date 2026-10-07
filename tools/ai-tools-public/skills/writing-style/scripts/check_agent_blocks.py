@@ -16,7 +16,9 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parent.parent
 BLOCK_FILE = SKILL_DIR / "references" / "agent-block.md"
 DEFAULT_AGENTS_DIR = SKILL_DIR.parent.parent / "agents"
-PREFIX = "- Write prose for people"
+# A copy is found by the first words of the canonical line, so an edit later in the line
+# shows as a changed copy, not a missing one.
+PREFIX_WORDS = 5
 REQUIRED_AGENTS = (
     "_review_design.md",
     "_review_documentation.md",
@@ -41,10 +43,11 @@ def canonical_line(block_file: Path = BLOCK_FILE) -> str:
 
 def problems(path: Path, canonical: str, required: bool) -> list[str]:
     """Return the problems with the prose line in one agent file."""
+    prefix = " ".join(canonical.split()[:PREFIX_WORDS])
     copies = [
         line.strip()
         for line in path.read_text().splitlines()
-        if line.strip().startswith(PREFIX)
+        if line.strip().startswith(prefix)
     ]
     if not copies:
         return [f"{path}: missing the prose line"] if required else []
