@@ -23,6 +23,7 @@ from tests.framework.results.helpers import (
 from tests.helpers import (
     AttributePipelineCreator,
     ColumnCreator,
+    ColumnCreatorAndRequirer,
     MultiLevelMultiColumnCreator,
     MultiLevelSingleColumnCreator,
     NestedAttributeCreator,
@@ -101,6 +102,106 @@ def test_run_for_duration() -> None:
 
     sim.run_for("5 days")
     assert sim._clock.time == initial_time + pd.Timedelta("15 days")  # type: ignore[operator]
+
+
+class TestFindResources:
+    """Tests for locating simulation resources by name or registering component."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(
+            components=[
+                ColumnCreator(),
+                ColumnCreatorAndRequirer(),
+                AttributePipelineCreator(),
+            ]
+        )
+
+    def test_the_frame_has_the_conventional_columns(self, sim: InteractiveContext) -> None:
+        """This shape is the convention the other introspection tools follow."""
+        found = sim.find_resources("test_column_1")
+        assert list(found.columns) == ["name", "resource_type", "component"]
+
+    def test_a_fragment_need_not_be_the_whole_name(self, sim: InteractiveContext) -> None:
+        assert "test_column_1" in set(sim.find_resources("column_1")["name"])
+
+    def test_columns_and_streams_are_not_reported(self, sim: InteractiveContext) -> None:
+        """A column's public face is its attribute, so reporting it adds a
+        near-duplicate row; a stream is upstream of the values it randomizes."""
+        assert not {"column", "stream"} & set(sim.find_resources("")["resource_type"])
+
+    def test_lookup_tables_are_reported(self) -> None:
+        """The shared fixture registers none, so this one needs its own sim."""
+        sim = InteractiveContext(components=[NestedLookupCaller()])
+        found = sim.find_resources("inner_lookup")
+        assert set(found["resource_type"]) == {"lookup_table"}
+
+    def test_matching_is_case_insensitive(self, sim: InteractiveContext) -> None:
+        assert sim.find_resources("TEST_COLUMN_1").equals(sim.find_resources("test_column_1"))
+
+    def test_the_pattern_is_literal_by_default(self, sim: InteractiveContext) -> None:
+        """A name copied out of an earlier result finds itself, so regex syntax in
+        it is matched as text rather than silently changing the search."""
+        assert sim.find_resources("test_column_.").empty
+
+    def test_the_pattern_is_a_regular_expression_when_asked(
+        self, sim: InteractiveContext
+    ) -> None:
+        """The same pattern, with the flag, treats '.' as a wildcard."""
+        assert not sim.find_resources("test_column_.", regex=True).empty
+
+    def test_regex_anchors_isolate_a_precise_name(self, sim: InteractiveContext) -> None:
+        """Anchoring narrows a broad search rather than finding something else."""
+        broad = sim.find_resources("test_column_")
+        precise = sim.find_resources("^test_column_[12]$", regex=True)
+        assert set(precise["name"]) == {"test_column_1", "test_column_2"}
+        assert set(precise.itertuples(index=False)) < set(broad.itertuples(index=False))
+
+    def test_a_component_name_matches_the_resources_it_registered(
+        self, sim: InteractiveContext
+    ) -> None:
+        """No node is named 'column_creator_and_requirer', so every row here
+        matched on its component rather than its own name."""
+        found = sim.find_resources("^column_creator_and_requirer$", regex=True)
+        assert set(found["component"]) == {"column_creator_and_requirer"}
+
+    def test_results_are_sorted_by_name_then_resource_type(
+        self, sim: InteractiveContext
+    ) -> None:
+        """Name first, for a stable order a reader can scan."""
+        found = sim.find_resources("test")
+        expected = found.sort_values(["name", "resource_type"], ignore_index=True)
+        assert found.equals(expected)
+
+    def test_every_other_resource_in_the_graph_is_reachable(
+        self, sim: InteractiveContext
+    ) -> None:
+        """Only columns and streams are withheld; nothing else is."""
+        expected = {
+            (str(node.name), node.RESOURCE_TYPE, node.component.name)
+            for node in sim._resource.get_graph().nodes
+            if node.RESOURCE_TYPE not in ("column", "stream")
+        }
+        assert set(sim.find_resources("").itertuples(index=False)) == expected
+
+    def test_no_match_returns_an_empty_frame(self, sim: InteractiveContext) -> None:
+        assert sim.find_resources("no_such_resource").empty
+
+    def test_an_empty_result_keeps_the_conventional_columns(
+        self, sim: InteractiveContext
+    ) -> None:
+        found = sim.find_resources("no_such_resource")
+        assert list(found.columns) == ["name", "resource_type", "component"]
+
+    def test_an_invalid_regex_raises_a_useful_error(self, sim: InteractiveContext) -> None:
+        with pytest.raises(ValueError, match="Invalid regular expression 'test_column_\\['"):
+            sim.find_resources("test_column_[", regex=True)
+
+    def test_that_same_pattern_is_harmless_without_the_regex_flag(
+        self, sim: InteractiveContext
+    ) -> None:
+        """Literal matching cannot raise, whatever the text contains."""
+        assert sim.find_resources("test_column_[").empty
 
 
 def test_get_attribute_names() -> None:
