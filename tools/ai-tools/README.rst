@@ -18,7 +18,16 @@ team-specific layer on top, and ``simsci``'s optional seams (branch and PR
 conventions, ticket filing, environment setup) resolve automatically to the
 team skills below when both plugins are enabled.
 
-It includes:
+The text that these skills write for people follows the ``simsci:writing-style``
+skill, which is based on ASD-STE100 Simplified Technical English. This text includes
+tickets, PR text, Jira comments, design-doc text, and CHANGELOG entries.
+``team-conventions``, ``brainstorming``, and ``ticket-triage`` run the skill's
+checker before they show a draft for approval. The ``_vv_writer``,
+``_claim_auditor``, and ``_duplicate_finder`` agents carry a one-line copy of the
+rules, and ``repo-maintenance`` checks that each copy matches the canonical line in
+``simsci``.
+
+``simsci-internal`` includes:
 
 **Model Development**
 

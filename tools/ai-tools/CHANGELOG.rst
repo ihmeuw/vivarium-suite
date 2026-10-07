@@ -1,3 +1,17 @@
+**0.28.0 - 10/07/26**
+
+- Use ``simsci:writing-style`` when ``team-conventions``, ``brainstorming``,
+  ``ticket-triage``, ``design-doc``, ``model-development``, and
+  ``repo-maintenance`` draft text for people. ``team-conventions``,
+  ``brainstorming``, and ``ticket-triage`` run its checker before they show a
+  draft for approval (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
+- Add the writing-style agent line to ``_vv_writer``, ``_claim_auditor``, and
+  ``_duplicate_finder``. ``repo-maintenance`` reports each of these agents whose
+  line is missing or different from the canonical line in ``simsci``
+- ``model-development`` gets the ``simsci`` 0.3.0 change to ``_finalize-core``,
+  which runs the writing-style checker on the PR body and the not-addressed comment
+- Requires ``simsci`` 0.3.0 or later
+
 **0.27.1 - 09/22/26**
 
 - ``make-commands``: document that ``build-env`` fails fast and tears down the

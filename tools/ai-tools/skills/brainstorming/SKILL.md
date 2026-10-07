@@ -70,6 +70,8 @@ Compose a Jira-wiki-markup comment body with these sections:
 - `h3. Acceptance criteria` — bulleted, testable.
 - `h3. Notes / risks` — anything the implementer should know that doesn't fit above.
 
+Write the sections with the `simsci:writing-style` skill, and run its checker with `--kind wiki` before you show the draft.
+
 Show the user the comment body and the target ticket key. On explicit approval, write it.
 
 

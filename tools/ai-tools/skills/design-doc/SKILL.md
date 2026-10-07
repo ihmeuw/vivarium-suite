@@ -26,11 +26,11 @@ The returned `body_storage` is Confluence storage XHTML — that is what you wil
 
 ## 2. Draft the copy with the user
 
-Work iteratively. For each section the user has content for, propose Confluence storage XHTML (the same format the template uses). Keep all section headings even when a section is short — engineers scanning the doc rely on the rhythm. Use `*na*` when a section truly doesn't apply (e.g. *Current state* for a greenfield effort). You may also add new sections if it seems relevant.
+Work iteratively. For each section the user has content for, propose Confluence storage XHTML (the same format the template uses). Write the section text with the `simsci:writing-style` skill. Keep all section headings even when a section is short — engineers scanning the doc rely on the rhythm. Use `*na*` when a section truly doesn't apply (e.g. *Current state* for a greenfield effort). You may also add new sections if it seems relevant.
 
 
 A few notes based on existing docs:
-- The *User interaction and design* section is the workhorse — add h3 subheadings freely (*Discussion*, *Potential solutions*, *Decision*, *Use cases*, *Class diagram*). *Results Processing* is a good example of the depth this section can take.
+- The *User interaction and design* section holds most of the content — add h3 subheadings freely (*Discussion*, *Potential solutions*, *Decision*, *Use cases*, *Class diagram*). *Results Processing* is a good example of the depth this section can take.
 - In the Tasks table, story points use the `X.01` convention (`1.01`, `2.01`, …). For guidance about the pointing convention, consult page id 176590586 (https://hub.ihme.washington.edu/spaces/SSE/pages/176590586/Point+Jira+Tickets) Do not fill in the Ticket column — that is for the user to update as they create tickets.
 
 Show the user the draft. **Do not call `create_page` until the user explicitly approves the copy.**

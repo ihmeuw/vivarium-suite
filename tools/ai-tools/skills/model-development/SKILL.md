@@ -231,6 +231,7 @@ triage.
    verdict.
 4. **Post the verification traces to each PR.** Once the PR exists, attach the key
    plots, tables, and output from the verification notebook — the record that the
-   iteration was checked against the research expectations. This is in addition to
+   iteration was checked against the research expectations. Write the text that
+   goes with them with the `simsci:writing-style` skill. This is in addition to
    the not-addressed comment `simsci:_finalize-core` posts, not a replacement for
    it.

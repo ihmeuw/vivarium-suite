@@ -7,6 +7,10 @@ description: SimSci Engineering team conventions for everyday git/Jira/PR mechan
 
 The four workflows below are the team-standard ways to start a change, file the ticket that justifies it, ship the resulting PR, and flag it for review. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
 
+Invoke the `simsci:writing-style` skill before you draft ticket text (§2), PR text (§3), or a reply to a review comment (§5). Before you show a §2 draft, run its checker with `--kind wiki --skip-pattern '^_TODO \(human\)'`. Before you show a §3 body, run it with `--kind markdown`.
+
+Do not change the section headings from the hub page (§2) or the PR template (§3). Keep the `TL;DR` line as §2 says: the `_TODO (human)` line, or the user's own words. If the checker flags the user's words in the `TL;DR`, do not change them. The writing rules apply only to the sentences that you write under the headings.
+
 ## 1. Naming a branch
 
 Format: `<username>/<library>/mic-####/short-desc`
