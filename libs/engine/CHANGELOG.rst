@@ -1,3 +1,8 @@
+**5.12.1 - 10/07/26**
+
+- Order ``InteractiveContext.find_resources()`` results by how squarely the pattern
+  hit each name rather than alphabetically, and break ties by resource type
+
 **5.12.0 - 10/07/26**
 
 - Add ``InteractiveContext.find_resources()`` to search the simulation's resources

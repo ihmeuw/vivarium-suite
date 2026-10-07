@@ -30,6 +30,37 @@ _UNSEARCHABLE_RESOURCE_TYPES = frozenset(
 )
 """Resource types :meth:`InteractiveContext.find_resources` does not report."""
 
+_RESOURCE_TYPE_ORDER = (
+    "attribute",
+    "value",
+    "value_modifier",
+    "lookup_table",
+    "initializer",
+)
+"""Resource types in the order :meth:`InteractiveContext.find_resources` ranks them."""
+
+
+def _match_rank(matcher: re.Pattern[str], name: str, component: str) -> int:
+    """Rank a resource by how squarely the pattern hit its name, best first.
+
+    Names are dot-delimited hierarchies, so a match filling whole segments means
+    more than one filling a partial segment: searching "mortality_rate" should rank
+    ``mortality.mortality_rate`` above ``excess_mortality_rate``, which merely
+    contains those characters.
+    """
+    match = matcher.search(name)
+    if match is None:
+        return 4  # only the component matched
+    start, end = match.span()
+    if (start, end) == (0, len(name)):
+        return 0  # the whole name
+    if start == 0:
+        return 1  # a leading segment
+    if name[start - 1] == "." and (end == len(name) or name[end] == "."):
+        return 2  # whole segments from the middle or the end
+    return 3  # part of a segment
+
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
@@ -374,8 +405,13 @@ class InteractiveContext(SimulationContext):
         Returns
         -------
             A frame of matching resources with columns ``name``, ``resource_type``
-            and ``component``, one row per resource, sorted by name and then
-            resource type.
+            and ``component``, one row per resource, most relevant first.
+
+            Relevance is how squarely the pattern hit the name: the whole name,
+            then a leading segment, then whole segments from the middle or the
+            end, then part of a segment, and last the resources that matched only
+            through their component. Ties break by resource type - attributes,
+            values, modifiers, lookup tables, initializers - and then by name.
 
         Raises
         ------
@@ -411,11 +447,16 @@ class InteractiveContext(SimulationContext):
             resource_name = str(resource.name)
             component_name = resource.component.name
             if matcher.search(resource_name) or matcher.search(component_name):
-                rows.append((resource_name, resource.RESOURCE_TYPE, component_name))
+                rank = _match_rank(matcher, resource_name, component_name)
+                rows.append((rank, resource_name, resource.RESOURCE_TYPE, component_name))
 
-        return pd.DataFrame(rows, columns=["name", "resource_type", "component"]).sort_values(
-            ["name", "resource_type"], ignore_index=True
+        found = pd.DataFrame(rows, columns=["rank", "name", "resource_type", "component"])
+        found["resource_type"] = pd.Categorical(
+            found["resource_type"], categories=_RESOURCE_TYPE_ORDER, ordered=True
         )
+        found = found.sort_values(["rank", "resource_type", "name"], ignore_index=True)
+        found["resource_type"] = found["resource_type"].astype(str)
+        return found.drop(columns="rank")
 
     def list_events(self) -> list[str]:
         """List all event types registered with the simulation."""
