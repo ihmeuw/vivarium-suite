@@ -1,0 +1,15 @@
+{
+    "description": "Add a summary of the simsci:writing-style rules to each session.",
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\""
+                    }
+                ]
+            }
+        ]
+    }
+}

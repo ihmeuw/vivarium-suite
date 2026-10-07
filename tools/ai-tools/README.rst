@@ -27,6 +27,14 @@ checker before they show a draft for approval. The ``_vv_writer``,
 rules, and ``repo-maintenance`` checks that each copy matches the canonical line in
 ``simsci``.
 
+A ``SessionStart`` hook (``hooks/session-start.sh``) adds a short summary of these
+rules to the start of each session, so replies in the conversation follow them too.
+The hook runs again after ``/clear`` and after compaction. Subagents do not get the
+summary. The agents named above have no Skill tool, so they follow their one-line copy
+of the rules. The hook runs through ``bash``, which on Windows means Git Bash. To
+disable the hook, set ``SIMSCI_WRITING_STYLE=off`` in the environment that starts
+Claude Code, or under ``env`` in ``~/.claude/settings.json``.
+
 ``simsci-internal`` includes:
 
 **Model Development**
@@ -107,6 +115,8 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives unde
 - ``tools/ai-tools/agents/``: specialist sub-agents spawned by the skills.
 - ``tools/ai-tools/skills/``: Claude Code skills (workflow entry points and
   model-loaded reference material).
+- ``tools/ai-tools/hooks/``: the ``SessionStart`` hook (``hooks.json`` and
+  ``session-start.sh``) that adds the writing-style summary to each session.
 - ``tools/ai-tools/CHANGELOG.rst``: history of plugin changes.
 
 Top-level project metadata (license, code of conduct, contributing guide) lives at the
