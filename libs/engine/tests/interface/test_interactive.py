@@ -125,6 +125,7 @@ class AttributeNamed(Component):
             self._attribute_name, lambda index: pd.Series(0, index=index)
         )
 
+
 JAN_1 = pd.Timestamp("2020-01-01")
 JAN_8 = pd.Timestamp("2020-01-08")
 JAN_15 = pd.Timestamp("2020-01-15")
