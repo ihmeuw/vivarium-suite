@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
 
 class WatchError(VivariumError):
-    """Raised when a watch expression registered on an :class:`InteractiveContext` fails."""
+    """Raised when a watch expression raises an exception."""
 
 
 class InteractiveContext(SimulationContext):
@@ -121,6 +121,16 @@ class InteractiveContext(SimulationContext):
         if setup:
             self.setup()
 
+    @property
+    def current_time(self) -> ClockTime:
+        """Returns the current simulation time."""
+        return self._clock.time
+
+    @property
+    def watches(self) -> dict[str, dict[ClockTime, Any]]:
+        """Return a copy of the recorded watch values."""
+        return {name: dict(values) for name, values in self._watch_values.items()}
+
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Get the formatted results, saying why there are none if gathering is off."""
         if not self._results.to_observe:
@@ -130,11 +140,6 @@ class InteractiveContext(SimulationContext):
             )
         return super().get_results()
 
-    @property
-    def current_time(self) -> ClockTime:
-        """Returns the current simulation time."""
-        return self._clock.time
-
     def setup(self) -> None:
         super().setup()
         self.initialize_simulants()
@@ -142,9 +147,6 @@ class InteractiveContext(SimulationContext):
 
     def step(self, step_size: ClockStepSize | None = None) -> None:
         """Advance the simulation one step.
-
-        Values of any registered watches are recorded after the step; see
-        :meth:`watch`.
 
         Parameters
         ----------
@@ -180,9 +182,8 @@ class InteractiveContext(SimulationContext):
         Each expression is called with this context and its return value is
         recorded under the current clock time, first when it is registered and
         then after every step taken by any stepping method. Values are stored
-        exactly as returned, so an expression may return a scalar, a Series, a
-        DataFrame, or any other object. Registration is all or nothing: if any
-        expression in the call is rejected or fails, none of them is registered.
+        exactly as returned. Registration is all or nothing: if any expression in
+        the call is rejected or fails, none of them is registered.
         An expression must not call :meth:`watch` or :meth:`unwatch`; one that
         does fails with a :class:`WatchError`.
 
@@ -198,8 +199,6 @@ class InteractiveContext(SimulationContext):
             If a name is already watched, or the context has not been set up.
         TypeError
             If a value is not callable.
-        RuntimeError
-            If called from inside a watch expression.
         WatchError
             If an expression raises when first evaluated. The original exception
             is chained.
@@ -218,22 +217,8 @@ class InteractiveContext(SimulationContext):
             self._watch_values[name] = {}
         self._store_watch_values(values)
 
-    @property
-    def watches(self) -> dict[str, dict[ClockTime, Any]]:
-        """Return the recorded watch values, keyed by watch name and then clock time.
-
-        A watch registered partway through a run has entries only from its
-        registration onward. The returned dicts are copies, so adding, removing or
-        replacing their keys does not change the record. The recorded values are
-        not copied, so changing one of them in place does.
-        """
-        return {name: dict(values) for name, values in self._watch_values.items()}
-
     def unwatch(self, *names: str) -> None:
         """Stop watching the named expressions and drop their recorded values.
-
-        A removed name may be registered again and starts with no recorded values.
-        Calling this with no names does nothing.
 
         Parameters
         ----------

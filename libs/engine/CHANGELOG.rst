@@ -1,4 +1,4 @@
-**5.14.0 - 10/07/26**
+**5.14.0 - 10/08/26**
 
 - Add ``InteractiveContext.watch()`` to register named expressions that are evaluated at
   registration and after every step
