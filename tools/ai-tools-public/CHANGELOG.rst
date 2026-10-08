@@ -1,3 +1,9 @@
+**0.3.0 - 10/07/26**
+
+- Add a one-line plain-English writing rule, based on ASD-STE100 Simplified
+  Technical English, to the five ``_review_*`` agents and ``_split_proposer``
+  (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
+
 **0.2.1 - 09/16/26**
 
 - Update documentation and skills for public release

@@ -42,3 +42,5 @@ Return a structured plan with these sections:
 - Do NOT propose splits that produce intermediate commits which wouldn't compile or pass type checks, unless explicitly asked for that trade-off.
 - If the diff is already small (≲ ~150 lines) and coherent, say so and recommend a single commit rather than inventing a split.
 - Use the repository's existing commit-message conventions when visible in recent `git log` — don't impose an unrelated style.
+- Write prose for people in plain technical English. Use short sentences in the active voice and simple tenses, and one name for each thing. Do not use semicolons, Latin abbreviations, or metaphors. Put code identifiers and paths in backticks.
+- The repository's commit conventions still decide the format of each subject.

@@ -1,0 +1,15 @@
+{
+    "description": "Add the SimSci plain-English writing text to the start of each session.",
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/writing-style.sh\""
+                    }
+                ]
+            }
+        ]
+    }
+}
