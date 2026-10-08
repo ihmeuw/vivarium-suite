@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,7 @@ from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
+from vivarium.engine.interface.interactive import _match_rank
 
 
 def test_list_values() -> None:
@@ -105,6 +107,23 @@ def test_run_for_duration() -> None:
 
     sim.run_for("5 days")
     assert sim._clock.time == initial_time + pd.Timedelta("15 days")  # type: ignore[operator]
+
+
+class AttributeNamed(Component):
+    """Register one attribute pipeline under a caller-chosen name."""
+
+    def __init__(self, attribute_name: str):
+        super().__init__()
+        self._attribute_name = attribute_name
+
+    @property
+    def name(self) -> str:
+        return f"attribute_named.{self._attribute_name}"
+
+    def setup(self, builder: Builder) -> None:
+        builder.value.register_attribute_producer(
+            self._attribute_name, lambda index: pd.Series(0, index=index)
+        )
 
 
 JAN_1 = pd.Timestamp("2020-01-01")
@@ -386,13 +405,115 @@ class TestFindResources:
         found = sim.find_resources("^column_creator_and_requirer$", regex=True)
         assert set(found["component"]) == {"column_creator_and_requirer"}
 
-    def test_results_are_sorted_by_name_then_resource_type(
-        self, sim: InteractiveContext
+    def test_an_exact_name_match_comes_first(self, sim: InteractiveContext) -> None:
+        """The thing you named outranks everything merely containing it, even one
+        whose name sorts earlier alphabetically."""
+        found = sim.find_resources("test_column_4")
+        assert list(found["name"]) == [
+            "test_column_4",
+            "2.column_creator_and_requirer.initialize_test_column_4",
+        ]
+
+    @pytest.mark.parametrize(
+        "pattern, name, expected",
+        [
+            ("a.b.c", "a.b.c", 0),
+            ("a.b", "a.b.c", 1),
+            ("a", "a.b.c", 1),
+            ("b", "a.b.c", 2),
+            ("c", "a.b.c", 2),
+            ("b.c", "a.b.c", 2),
+            ("b_x", "a.b_x_y.c", 3),
+            ("y.c", "a.b_x_y.c", 3),
+            ("ever", "test_ever_eligible", 3),
+            ("umn_1", "test_column_1", 4),
+            ("ever", "never_treated", 4),
+            ("", "a.b.c", 1),
+            ("zzz", "a.b.c", 5),
+        ],
+        ids=[
+            "whole name",
+            "leading segments",
+            "one leading segment",
+            "middle segment",
+            "last segment",
+            "several segments to the end",
+            "whole words inside a segment",
+            "whole words across a segment boundary",
+            "a whole word in a name with no dots",
+            "part of a word in a name with no dots",
+            "a fragment buried in a longer word",
+            "an empty pattern matches at the start",
+            "no match on the name at all",
+        ],
+    )
+    def test_each_rank_is_assigned_as_documented(
+        self, pattern: str, name: str, expected: int
     ) -> None:
-        """Name first, for a stable order a reader can scan."""
-        found = sim.find_resources("test")
-        expected = found.sort_values(["name", "resource_type"], ignore_index=True)
-        assert found.equals(expected)
+        """Pin the tiers directly: an ordering test cannot distinguish them when the
+        alphabetical tiebreak happens to agree with the ranking."""
+        matcher = re.compile(re.escape(pattern), re.IGNORECASE)
+        assert _match_rank(matcher, name) == expected
+
+    def test_a_whole_segment_outranks_part_of_one(self) -> None:
+        """Names are dotted hierarchies, so filling a segment means more than
+        straddling one. The names are chosen so alphabetical order contradicts the
+        ranking: only the segment rule can put ``zz_outer.needle`` first."""
+        sim = InteractiveContext(
+            components=[AttributeNamed("zz_outer.needle"), AttributeNamed("aa_needle_part")]
+        )
+        assert list(sim.find_resources("needle")["name"]) == [
+            "zz_outer.needle",
+            "aa_needle_part",
+        ]
+
+    def test_a_whole_word_outranks_a_fragment_of_one(self) -> None:
+        """Segments are underscore-separated words, so a pattern filling whole words
+        means more than one buried inside a longer word. Alphabetical order again
+        contradicts the ranking, so only the word rule can put ``zz_`` first."""
+        sim = InteractiveContext(
+            components=[
+                AttributeNamed("zz_test_ever_eligible"),
+                AttributeNamed("aa_never_treated"),
+            ]
+        )
+        assert list(sim.find_resources("ever")["name"]) == [
+            "zz_test_ever_eligible",
+            "aa_never_treated",
+        ]
+
+    def test_regex_mode_is_ranked_the_same_way(self, sim: InteractiveContext) -> None:
+        """The rank comes from the match's span, so the flag does not change it.
+        Alphabetically the initializer would lead, since a digit sorts before a
+        letter."""
+        found = sim.find_resources("test_column_[14]", regex=True)
+        assert list(found["name"]) == [
+            "test_column_1",
+            "test_column_4",
+            "2.column_creator_and_requirer.initialize_test_column_4",
+        ]
+
+    def test_a_component_only_match_comes_last(self, sim: InteractiveContext) -> None:
+        """Matching through the component is the surprising hit, so it sorts last."""
+        found = sim.find_resources("column_creator")
+        assert not found.empty
+        assert not found["name"].str.contains("column_creator").iloc[-1]
+
+    def test_ties_break_by_resource_type(self, sim: InteractiveContext) -> None:
+        """Within one rank, attributes come before modifiers, not alphabetically."""
+        found = sim.find_resources("")
+        assert list(dict.fromkeys(found["resource_type"])) == [
+            "attribute",
+            "value",
+            "value_modifier",
+            "initializer",
+        ]
+
+    def test_ties_then_break_by_name(self, sim: InteractiveContext) -> None:
+        """Within one rank and one resource type, names run alphabetically."""
+        found = sim.find_resources("")
+        attributes = list(found.loc[found["resource_type"] == "attribute", "name"])
+        assert attributes == sorted(attributes)
 
     def test_every_other_resource_in_the_graph_is_reachable(
         self, sim: InteractiveContext

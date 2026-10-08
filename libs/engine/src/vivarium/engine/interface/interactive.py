@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from math import ceil
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, NamedTuple, overload
 
 import numpy as np
 import pandas as pd
@@ -30,6 +30,67 @@ _UNSEARCHABLE_RESOURCE_TYPES = frozenset(
     {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE}
 )
 """Resource types :meth:`InteractiveContext.find_resources` does not report."""
+
+_RESOURCE_TYPE_ORDER = (
+    "attribute",
+    "value",
+    "value_modifier",
+    "lookup_table",
+    "initializer",
+)
+"""Resource types in the order :meth:`InteractiveContext.find_resources` ranks them."""
+
+_RESOURCE_TYPE_RANK = {
+    resource_type: index for index, resource_type in enumerate(_RESOURCE_TYPE_ORDER)
+}
+
+_WORD_SEPARATORS = frozenset({".", "_"})
+"""Characters :meth:`InteractiveContext.find_resources` treats as word boundaries."""
+
+
+class _ResourceRow(NamedTuple):
+    """A candidate row, with the relevance rank that orders it but is not reported."""
+
+    rank: int
+    name: str
+    resource_type: str
+    component: str
+
+
+def _match_rank(matcher: re.Pattern[str], name: str) -> int:
+    """Rank a resource by how squarely the pattern hit its name, best first.
+
+    Names are dot-delimited hierarchies of underscore-separated words, so a match
+    filling whole segments means more than one filling whole words, which in turn
+    means more than one landing mid-word. Searching "mortality_rate" ranks
+    ``mortality.mortality_rate`` above ``excess_mortality_rate``, which merely
+    contains those characters; searching "ever" ranks ``test_ever_eligible`` above
+    ``never_treated``.
+    """
+    # A pattern can occur several times in one name, so take its best showing
+    # rather than whichever happens to come first.
+    rank = 5  # only the component matched
+    for match in matcher.finditer(name):
+        start, end = match.span()
+        if (start, end) == (0, len(name)):
+            # the entire name, e.g. "age" for "age"
+            return 0
+        if start == 0:
+            # the start of the name, e.g. "age" in "agent_used.x.y"
+            rank = min(rank, 1)
+        elif name[start - 1] == "." and (end == len(name) or name[end] == "."):
+            # whole segments from the middle or the end, e.g. "age" in "mortality.age.rate"
+            rank = min(rank, 2)
+        elif name[start - 1] in _WORD_SEPARATORS and (
+            end == len(name) or name[end] in _WORD_SEPARATORS
+        ):
+            # whole words from the middle or the end, e.g. "age" in "mortality_age_rate"
+            rank = min(rank, 3)
+        else:
+            # part of a word, e.g. "age" in "coverage"
+            rank = min(rank, 4)
+    return rank
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -465,8 +526,14 @@ class InteractiveContext(SimulationContext):
         Returns
         -------
             A frame of matching resources with columns ``name``, ``resource_type``
-            and ``component``, one row per resource, sorted by name and then
-            resource type.
+            and ``component``, one row per resource, most relevant first.
+
+            Relevance is how squarely the pattern hit the name: the whole name,
+            then the start of it, then whole dot-separated segments from the
+            middle or the end, then whole underscore-separated words, then part
+            of a word, and last the resources that matched only through their
+            component. Ties break by resource type - attributes, values,
+            modifiers, lookup tables, initializers - and then by name.
 
         Raises
         ------
@@ -495,17 +562,30 @@ class InteractiveContext(SimulationContext):
                 " search for this text literally."
             ) from error
 
-        rows = []
+        rows: list[_ResourceRow] = []
         for resource in self._resource.get_graph().nodes:
             if resource.RESOURCE_TYPE in _UNSEARCHABLE_RESOURCE_TYPES:
                 continue
             resource_name = str(resource.name)
             component_name = resource.component.name
             if matcher.search(resource_name) or matcher.search(component_name):
-                rows.append((resource_name, resource.RESOURCE_TYPE, component_name))
+                rank = _match_rank(matcher, resource_name)
+                rows.append(
+                    _ResourceRow(rank, resource_name, resource.RESOURCE_TYPE, component_name)
+                )
 
-        return pd.DataFrame(rows, columns=["name", "resource_type", "component"]).sort_values(
-            ["name", "resource_type"], ignore_index=True
+        rows.sort(
+            key=lambda row: (
+                row.rank,
+                # A type absent from _RESOURCE_TYPE_ORDER sorts last rather than
+                # being dropped, so a type added later still reports its real name.
+                _RESOURCE_TYPE_RANK.get(row.resource_type, len(_RESOURCE_TYPE_RANK)),
+                row.name,
+            )
+        )
+        return pd.DataFrame(
+            [(row.name, row.resource_type, row.component) for row in rows],
+            columns=["name", "resource_type", "component"],
         )
 
     def list_events(self) -> list[str]:
