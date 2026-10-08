@@ -3,7 +3,7 @@
   "owner": {
     "name": "IHME"
   },
-  "description": "Marketplace for the IHME Simulation Science Team ai-tools plugins: simsci (generic developer workflows for any IHME team) and simsci-internal (SimSci/vivarium-specific workflows).",
+  "description": "Marketplace for the IHME Simulation Science Team ai-tools plugins: simsci (generic developer workflows for any IHME team), simsci-internal (SimSci/vivarium-specific workflows), and simsci-research (SimSci research team workflows).",
   "allowCrossMarketplaceDependenciesOn": ["claude-plugins-official"],
   "plugins": [
     {
@@ -15,6 +15,15 @@
       "name": "simsci-internal",
       "source": "./tools/ai-tools",
       "description": "For the IHME Simulation Science team only: vivarium model development and SimSci conventions (Jira, hub, Jenkins, Slack) layered on simsci; its conventions skills take over simsci's branch, ticket, and PR seams. Depends on simsci and also installs the slack plugin. Other teams: install simsci alone."
+    },
+    {
+      "name": "simsci-research",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/ihmeuw/vivarium-research-tools.git",
+        "path": "tools/ai-tools"
+      },
+      "description": "For the IHME Simulation Science research team: a reviewer-first summary of a session's prompts, human review, and unverified content. Lives in the vivarium-research-tools repo and depends on simsci."
     }
   ]
 }
