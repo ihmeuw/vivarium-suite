@@ -1,3 +1,21 @@
+**5.13.1 - 10/08/26**
+
+- Order ``InteractiveContext.find_resources()`` results by how squarely the pattern
+  hit each name rather than alphabetically, and break ties by resource type
+
+**5.13.0 - 10/07/26**
+
+- **Breaking change.** Rename the ``end_time`` argument of ``InteractiveContext.run_until`` to
+  ``target``
+- Allow ``InteractiveContext.run_until`` to take a callable condition and return whether its
+  target was reached
+- Log the ``run_until`` completion message at the INFO level instead of printing it
+
+**5.12.0 - 10/07/26**
+
+- Add ``InteractiveContext.find_resources()`` to search the simulation's resources
+  by name or registering component and report the kind of each match
+
 **5.11.0 - 09/24/26**
 
 - Rename ``Pipeline.mutators`` to ``Pipeline.modifiers``

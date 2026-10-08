@@ -1,3 +1,15 @@
+**6.7.0 10/05/26**
+
+- Stop normalizing ``NonLogLinearRiskEffect`` relative risks by the RR at the TMREL
+
+Breaking changes:
+
+- Remove ``NonLogLinearRiskEffect.get_tmrel`` and its ``tmred`` data source
+
+**6.6.5 - 09/30/26**
+
+- Bump pandas pin due to use of `include_groups` in grouping function
+
 **6.6.4 - 09/24/26**
 
 - Rename the ``mutator`` argument of the calibration constant combiner to ``modifier``

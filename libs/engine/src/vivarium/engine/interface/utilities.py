@@ -62,6 +62,7 @@ def log_progress(
     display(box)  # type: ignore [no-untyped-call]
 
     index = 0
+    failed = False
     try:
         for index, record in enumerate(sequence, 1):
             if index == 1 or index % every == 0:
@@ -73,13 +74,17 @@ def log_progress(
                         name=name, index=index, size=size
                     )
             yield record
-    except Exception as e:
+    except Exception:
+        failed = True
         progress.bar_style = "danger"
         raise
-    else:
-        progress.bar_style = "success"
-        progress.value = index
-        label.value = "{name}: {index}".format(name=name, index=str(index or "?"))
+    finally:
+        # Also runs when the caller stops iterating early, as run_until does once its
+        # condition is met.
+        if not failed:
+            progress.bar_style = "success"
+            progress.value = index
+            label.value = "{name}: {index}".format(name=name, index=str(index or "?"))
 
 
 class InteractiveError(VivariumError):
