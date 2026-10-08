@@ -2,7 +2,7 @@
 
 - Order ``InteractiveContext.find_resources()`` results by how squarely the pattern
   hit each name rather than alphabetically, and break ties by resource type
-  
+
 **5.13.0 - 10/07/26**
 
 - **Breaking change.** Rename the ``end_time`` argument of ``InteractiveContext.run_until`` to

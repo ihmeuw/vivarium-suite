@@ -384,8 +384,13 @@ Results come back most relevant first, in the following order:
 - the resource name matches exactly
 - the resource name begins with the pattern
 - the resource name contains the pattern as one or more whole dot-separated segments
-- the resource name contains the pattern as part of a segment
+- the resource name contains the pattern as one or more whole underscore-separated words
+- the resource name contains the pattern as part of a word
 - the resource name does not match at all, and only its component's name does
+
+The two middle bullets are why searching "ever" ranks ``test_ever_eligible``, where
+"ever" is a word of its own, above ``never_treated``, where it is buried inside
+another word.
 
 That last bullet is why ``is_alive`` is at the bottom in the example above: "mortality"
 appears nowhere in its name, and it is listed only because the ``mortality`` component

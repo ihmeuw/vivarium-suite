@@ -425,9 +425,11 @@ class TestFindResources:
             ("b.c", "a.b.c", 2),
             ("b_x", "a.b_x_y.c", 3),
             ("y.c", "a.b_x_y.c", 3),
-            ("umn_1", "test_column_1", 3),
+            ("ever", "test_ever_eligible", 3),
+            ("umn_1", "test_column_1", 4),
+            ("ever", "never_treated", 4),
             ("", "a.b.c", 1),
-            ("zzz", "a.b.c", 4),
+            ("zzz", "a.b.c", 5),
         ],
         ids=[
             "whole name",
@@ -436,9 +438,11 @@ class TestFindResources:
             "middle segment",
             "last segment",
             "several segments to the end",
-            "start of a segment",
-            "crosses a segment boundary",
-            "inside a name with no dots",
+            "whole words inside a segment",
+            "whole words across a segment boundary",
+            "a whole word in a name with no dots",
+            "part of a word in a name with no dots",
+            "a fragment buried in a longer word",
             "an empty pattern matches at the start",
             "no match on the name at all",
         ],
@@ -461,6 +465,21 @@ class TestFindResources:
         assert list(sim.find_resources("needle")["name"]) == [
             "zz_outer.needle",
             "aa_needle_part",
+        ]
+
+    def test_a_whole_word_outranks_a_fragment_of_one(self) -> None:
+        """Segments are underscore-separated words, so a pattern filling whole words
+        means more than one buried inside a longer word. Alphabetical order again
+        contradicts the ranking, so only the word rule can put ``zz_`` first."""
+        sim = InteractiveContext(
+            components=[
+                AttributeNamed("zz_test_ever_eligible"),
+                AttributeNamed("aa_never_treated"),
+            ]
+        )
+        assert list(sim.find_resources("ever")["name"]) == [
+            "zz_test_ever_eligible",
+            "aa_never_treated",
         ]
 
     def test_regex_mode_is_ranked_the_same_way(self, sim: InteractiveContext) -> None:

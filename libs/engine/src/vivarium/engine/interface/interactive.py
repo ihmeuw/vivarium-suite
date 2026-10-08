@@ -44,6 +44,9 @@ _RESOURCE_TYPE_RANK = {
     resource_type: index for index, resource_type in enumerate(_RESOURCE_TYPE_ORDER)
 }
 
+_WORD_SEPARATORS = frozenset({".", "_"})
+"""Characters :meth:`InteractiveContext.find_resources` treats as word boundaries."""
+
 
 class _ResourceRow(NamedTuple):
     """A candidate row, with the relevance rank that orders it but is not reported."""
@@ -57,24 +60,35 @@ class _ResourceRow(NamedTuple):
 def _match_rank(matcher: re.Pattern[str], name: str) -> int:
     """Rank a resource by how squarely the pattern hit its name, best first.
 
-    Names are dot-delimited hierarchies, so a match filling whole segments means
-    more than one filling a partial segment: searching "mortality_rate" should rank
+    Names are dot-delimited hierarchies of underscore-separated words, so a match
+    filling whole segments means more than one filling whole words, which in turn
+    means more than one landing mid-word. Searching "mortality_rate" ranks
     ``mortality.mortality_rate`` above ``excess_mortality_rate``, which merely
-    contains those characters.
+    contains those characters; searching "ever" ranks ``test_ever_eligible`` above
+    ``never_treated``.
     """
     # A pattern can occur several times in one name, so take its best showing
     # rather than whichever happens to come first.
-    rank = 4  # only the component matched
+    rank = 5  # only the component matched
     for match in matcher.finditer(name):
         start, end = match.span()
         if (start, end) == (0, len(name)):
-            return 0  # the entire name
+            # the entire name, e.g. "age" for "age"
+            return 0
         if start == 0:
-            rank = min(rank, 1)  # the start of the name
+            # the start of the name, e.g. "age" in "agent_used.x.y"
+            rank = min(rank, 1)
         elif name[start - 1] == "." and (end == len(name) or name[end] == "."):
-            rank = min(rank, 2)  # whole segments from the middle or the end
+            # whole segments from the middle or the end, e.g. "age" in "mortality.age.rate"
+            rank = min(rank, 2)
+        elif name[start - 1] in _WORD_SEPARATORS and (
+            end == len(name) or name[end] in _WORD_SEPARATORS
+        ):
+            # whole words from the middle or the end, e.g. "age" in "mortality_age_rate"
+            rank = min(rank, 3)
         else:
-            rank = min(rank, 3)  # part of a segment
+            # part of a word, e.g. "age" in "coverage"
+            rank = min(rank, 4)
     return rank
 
 
@@ -515,10 +529,11 @@ class InteractiveContext(SimulationContext):
             and ``component``, one row per resource, most relevant first.
 
             Relevance is how squarely the pattern hit the name: the whole name,
-            then the start of it, then whole segments from the middle or the end,
-            then part of a segment, and last the resources that matched only
-            through their component. Ties break by resource type - attributes,
-            values, modifiers, lookup tables, initializers - and then by name.
+            then the start of it, then whole dot-separated segments from the
+            middle or the end, then whole underscore-separated words, then part
+            of a word, and last the resources that matched only through their
+            component. Ties break by resource type - attributes, values,
+            modifiers, lookup tables, initializers - and then by name.
 
         Raises
         ------
