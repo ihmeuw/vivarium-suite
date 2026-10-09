@@ -500,34 +500,34 @@ limit, which may go past the end time.
 
    True 2022-02-10 00:00:00
 
-Watching values as the simulation runs
-++++++++++++++++++++++++++++++++++++++
+Recording values as the simulation runs
++++++++++++++++++++++++++++++++++++++++
 
 To track a specific quantity over time not already covered by a registered
-observation, use :meth:`~vivarium.engine.interface.interactive.InteractiveContext.watch`.
+observation, use :meth:`~vivarium.engine.interface.interactive.InteractiveContext.record`.
 It takes keyword arguments only: each keyword is the name to record values
 under, and its value is a callable that takes the simulation and returns the
-value to record. Every watch is evaluated once when it is registered and again
+value to record. Every record is evaluated once when it is registered and again
 after every step, whether that step comes from ``step``, ``take_steps``,
 ``run_for``, ``run_until`` or ``run``, and its values are recorded under the
 clock time.
 
-:attr:`~vivarium.engine.interface.interactive.InteractiveContext.watches`
-returns what has been recorded as a dict keyed by watch name and then by time,
+:attr:`~vivarium.engine.interface.interactive.InteractiveContext.records`
+returns what has been recorded as a dict keyed by record name and then by time,
 which converts directly to a ``pandas`` object. Values are stored exactly as
-returned, so a watch may return a scalar, a Series, a DataFrame, or anything
+returned, so a record may return a scalar, a Series, a DataFrame, or anything
 else.
 
 .. testcode::
 
-   sim.watch(
+   sim.record(
        mean_age=lambda s: s.get_population("age").mean(),
        n_wasted=lambda s: s.get_population("child_wasting.exposure").sum(),
    )
    sim.take_steps(3)
 
-   print(pd.Series(sim.watches["mean_age"]).round(3))
-   print(pd.Series(sim.watches["n_wasted"]))
+   print(pd.Series(sim.records["mean_age"]).round(3))
+   print(pd.Series(sim.records["n_wasted"]))
 
 .. testoutput::
 
@@ -542,16 +542,16 @@ else.
    2022-02-11 12:00:00    8
    dtype: int64
 
-If a watch raises, the run stops with a
-:class:`~vivarium.engine.exceptions.WatchError` that names the watch
+If a record raises, the run stops with a
+:class:`~vivarium.engine.exceptions.RecordError` that names the record
 and the time, and nothing is recorded for that step. Use
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.unwatch` to
-stop watching an expression and drop its recorded values.
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.strike` to
+stop recording an expression and drop its recorded values.
 
 .. testcode::
 
-   sim.unwatch("n_wasted")
-   print(list(sim.watches))
+   sim.strike("n_wasted")
+   print(list(sim.records))
 
 .. testoutput::
 

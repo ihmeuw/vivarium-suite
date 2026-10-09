@@ -1,11 +1,11 @@
-**5.14.0 - 10/08/26**
+**5.14.0 - 10/09/26**
 
-- Add ``InteractiveContext.watch()`` to register named expressions that are evaluated at
+- Add ``InteractiveContext.record()`` to register named expressions that are evaluated at
   registration and after every step
-- Add ``InteractiveContext.watches`` to read the recorded values, keyed by watch name and
+- Add ``InteractiveContext.records`` to read the recorded values, keyed by record name and
   then clock time
-- Add ``InteractiveContext.unwatch()`` to remove watches and their recorded values
-- Add ``WatchError``, raised when a watch expression fails
+- Add ``InteractiveContext.strike()`` to remove records and their recorded values
+- Add ``RecordError``, raised when a record expression fails
 
 **5.13.0 - 10/07/26**
 

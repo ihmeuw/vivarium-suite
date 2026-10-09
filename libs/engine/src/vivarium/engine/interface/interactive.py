@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, overload
 import numpy as np
 import pandas as pd
 
-from vivarium.engine.exceptions import WatchError
+from vivarium.engine.exceptions import RecordError
 from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.randomness.stream import RandomnessStream
@@ -48,8 +48,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class _Watch:
-    """A registered watch expression and the values it has recorded."""
+class _Record:
+    """A registered record expression and the values it has recorded."""
 
     func: Callable[[InteractiveContext], Any]
     values: dict[ClockTime, Any] = field(default_factory=dict)
@@ -120,7 +120,7 @@ class InteractiveContext(SimulationContext):
         )
 
         self._results.set_to_observe(observe)
-        self._watches: dict[str, _Watch] = {}
+        self._records: dict[str, _Record] = {}
 
         if setup:
             self.setup()
@@ -131,9 +131,9 @@ class InteractiveContext(SimulationContext):
         return self._clock.time
 
     @property
-    def watches(self) -> dict[str, dict[ClockTime, Any]]:
-        """Return a copy of the recorded watch values."""
-        return {name: dict(watch.values) for name, watch in self._watches.items()}
+    def records(self) -> dict[str, dict[ClockTime, Any]]:
+        """Return a copy of the recorded values."""
+        return {name: dict(record.values) for name, record in self._records.items()}
 
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Get the formatted results, saying why there are none if gathering is off."""
@@ -162,8 +162,8 @@ class InteractiveContext(SimulationContext):
         ------
         ValueError
             If ``step_size`` is not compatible with the clock's step size.
-        WatchError
-            If a watch expression raises after the step. The clock stays on the
+        RecordError
+            If a record expression raises after the step. The clock stays on the
             completed step.
         """
         old_step_size = self._clock._clock_step_size
@@ -178,97 +178,97 @@ class InteractiveContext(SimulationContext):
             self._clock._clock_step_size = step_size
         super().step()
         self._clock._clock_step_size = old_step_size
-        if self._watches:
-            self._record_watches()
+        if self._records:
+            self._record_all()
 
-    def watch(self, **watches: Callable[[InteractiveContext], Any]) -> None:
+    def record(self, **records: Callable[[InteractiveContext], Any]) -> None:
         """Register named expressions to evaluate now and after every step.
 
         Each expression is called with this context and its return value is
         recorded under the current clock time, first when it is registered and
-        then after every step taken. Values are stored
-        exactly as returned. Registration is all or nothing: if any expression in
-        the call is rejected or fails, none of them is registered.
+        then after every step taken. Values are stored exactly as returned.
+        Registration is all or nothing: if any expression in the call is rejected
+        or fails, none of them is registered.
 
         Parameters
         ----------
-        watches
+        records
             Callables keyed by the name to record them under. Each takes this
             context and returns the value to record.
 
         Raises
         ------
         ValueError
-            If a name is already watched, or the context has not been set up.
+            If a name is already a record, or the context has not been set up.
         TypeError
             If a value is not callable.
-        WatchError
+        RecordError
             If an expression raises when first evaluated. The original exception
             is chained.
         """
         if self._lifecycle.current_state == lifecycle_states.INITIALIZATION:
             raise ValueError(
-                "Cannot watch a simulation that is not set up. Call setup() first."
+                "Cannot add records to a simulation that is not set up. Call setup() first."
             )
-        duplicates = [name for name in watches if name in self._watches]
+        duplicates = [name for name in records if name in self._records]
         if duplicates:
-            raise ValueError(f"Already watching {duplicates}. Unwatch them first.")
-        non_callables = [name for name, func in watches.items() if not callable(func)]
+            raise ValueError(f"Already recording {duplicates}. Strike them first.")
+        non_callables = [name for name, func in records.items() if not callable(func)]
         if non_callables:
-            raise TypeError(f"Watches {non_callables} are not callable.")
+            raise TypeError(f"Records {non_callables} are not callable.")
 
-        values = self._evaluate_watches(watches)
-        for name, func in watches.items():
-            self._watches[name] = _Watch(func)
-        self._store_watch_values(values)
+        values = self._evaluate_records(records)
+        for name, func in records.items():
+            self._records[name] = _Record(func)
+        self._store_record_values(values)
 
-    def unwatch(self, *names: str) -> None:
-        """Stop watching the named expressions and drop their recorded values.
+    def strike(self, *names: str) -> None:
+        """Stop recording the named expressions and drop their recorded values.
 
         Parameters
         ----------
         names
-            The names of the watches to remove.
+            The names of the records to remove.
 
         Raises
         ------
         ValueError
-            If any name is not watched, in which case nothing is removed.
+            If any name is not a record, in which case nothing is removed.
         """
-        unknown = [name for name in names if name not in self._watches]
+        unknown = [name for name in names if name not in self._records]
         if unknown:
-            raise ValueError(f"Not watching {unknown}.")
+            raise ValueError(f"Not recording {unknown}.")
         for name in names:
             # pop with a default so a name repeated in the call is not an error
-            self._watches.pop(name, None)
+            self._records.pop(name, None)
 
-    def _record_watches(self) -> None:
-        """Evaluate every registered watch and record the values under the current time."""
-        funcs = {name: watch.func for name, watch in self._watches.items()}
-        self._store_watch_values(self._evaluate_watches(funcs))
+    def _record_all(self) -> None:
+        """Evaluate every registered record and store the values under the current time."""
+        funcs = {name: record.func for name, record in self._records.items()}
+        self._store_record_values(self._evaluate_records(funcs))
 
-    def _evaluate_watches(
-        self, watches: dict[str, Callable[[InteractiveContext], Any]]
+    def _evaluate_records(
+        self, records: dict[str, Callable[[InteractiveContext], Any]]
     ) -> dict[str, Any]:
-        """Evaluate each watch at the current time, raising WatchError on the first failure."""
+        """Evaluate each record at the current time, raising RecordError on the first failure."""
         time = self.current_time
         values: dict[str, Any] = {}
-        for name, func in watches.items():
+        for name, func in records.items():
             try:
                 values[name] = func(self)
             except Exception as error:
-                raise WatchError(
-                    f"Watch '{name}' failed at time {time}: {error!r}"
+                raise RecordError(
+                    f"Record '{name}' failed at time {time}: {error!r}"
                 ) from error
         return values
 
-    def _store_watch_values(self, values: dict[str, Any]) -> None:
-        """Record each watch's value under the current clock time."""
+    def _store_record_values(self, values: dict[str, Any]) -> None:
+        """Store each record's value under the current clock time."""
         time = self.current_time
         for name, value in values.items():
-            # A watch expression may have unwatched another watch while they ran.
-            if name in self._watches:
-                self._watches[name].values[time] = value
+            # A record expression may have struck another record while they ran.
+            if name in self._records:
+                self._records[name].values[time] = value
 
     def run(self, with_logging: bool = True) -> None:  # type: ignore [override]
         """Run the simulation for the duration specified in the configuration.

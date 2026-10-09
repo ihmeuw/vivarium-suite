@@ -15,5 +15,5 @@ class VivariumError(Exception):
     pass
 
 
-class WatchError(VivariumError):
-    """Raised when a watch expression raises an exception."""
+class RecordError(VivariumError):
+    """Raised when a record expression raises an exception."""

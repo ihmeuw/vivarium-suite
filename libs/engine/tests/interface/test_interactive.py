@@ -34,7 +34,7 @@ from tests.helpers import (
 )
 from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
-from vivarium.engine.exceptions import WatchError
+from vivarium.engine.exceptions import RecordError
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
@@ -335,8 +335,8 @@ def days_elapsed(sim: InteractiveContext) -> int:
     return int((sim.current_time - JAN_1) / pd.Timedelta(days=1))  # type: ignore [operator]
 
 
-class TestWatchRecording:
-    """Watches are evaluated at registration and after every step."""
+class TestRecording:
+    """Records are evaluated at registration and after every step."""
 
     @pytest.mark.parametrize(
         "advance, expected_times",
@@ -369,29 +369,29 @@ class TestWatchRecording:
         expected_times: list[pd.Timestamp],
     ) -> None:
         """Each stepping method records one value per step, keyed by the clock time after it."""
-        short_sim.watch(clock=clock)
+        short_sim.record(clock=clock)
 
         advance(short_sim)
 
-        assert short_sim.watches == {"clock": {time: time for time in expected_times}}
+        assert short_sim.records == {"clock": {time: time for time in expected_times}}
 
-    def test_a_watch_registered_mid_run(self, short_sim: InteractiveContext) -> None:
-        """A later watch starts at its registration time; an earlier one keeps its history."""
-        short_sim.watch(early=clock)
+    def test_a_record_registered_mid_run(self, short_sim: InteractiveContext) -> None:
+        """A later record starts at its registration time; an earlier one keeps its history."""
+        short_sim.record(early=clock)
         short_sim.step()
-        short_sim.watch(late=clock)
+        short_sim.record(late=clock)
         short_sim.step()
 
-        watches = short_sim.watches
-        assert list(watches["early"]) == [JAN_1, JAN_8, JAN_15]
-        assert list(watches["late"]) == [JAN_8, JAN_15]
+        records = short_sim.records
+        assert list(records["early"]) == [JAN_1, JAN_8, JAN_15]
+        assert list(records["late"]) == [JAN_8, JAN_15]
 
     def test_values_are_stored_as_returned(self, short_sim: InteractiveContext) -> None:
         """Series, DataFrame, None and arbitrary object returns are stored as the very objects returned."""
         series = pd.Series([1.0, 2.0])
         frame = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         anything = object()
-        short_sim.watch(
+        short_sim.record(
             series=lambda sim: series,
             frame=lambda sim: frame,
             none=lambda sim: None,
@@ -399,62 +399,62 @@ class TestWatchRecording:
         )
         short_sim.step()
 
-        watches = short_sim.watches
+        records = short_sim.records
         for time in (JAN_1, JAN_8):
-            assert watches["series"][time] is series
-            assert watches["frame"][time] is frame
-            assert time in watches["none"]
-            assert watches["none"][time] is None
-            assert watches["anything"][time] is anything
+            assert records["series"][time] is series
+            assert records["frame"][time] is frame
+            assert time in records["none"]
+            assert records["none"][time] is None
+            assert records["anything"][time] is anything
 
-    def test_watches_returns_a_copy(self, short_sim: InteractiveContext) -> None:
+    def test_records_returns_a_copy(self, short_sim: InteractiveContext) -> None:
         """Changing the returned dicts at either level does not change the record."""
-        short_sim.watch(clock=clock, days=days_elapsed)
+        short_sim.record(clock=clock, days=days_elapsed)
 
-        watches = short_sim.watches
-        del watches["days"]
-        watches["added"] = {}
-        watches["clock"][JAN_1] = "replaced"
+        records = short_sim.records
+        del records["days"]
+        records["added"] = {}
+        records["clock"][JAN_1] = "replaced"
 
-        assert short_sim.watches == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
+        assert short_sim.records == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
 
 
-class TestWatchRegistration:
-    """watch() registers all of its expressions or none of them."""
+class TestRecordRegistration:
+    """record() registers all of its expressions or none of them."""
 
     def test_a_duplicate_name_raises_and_keeps_the_original(
         self, short_sim: InteractiveContext
     ) -> None:
-        """Re-registering a watched name raises ValueError and leaves the existing watch."""
-        short_sim.watch(clock=clock)
+        """Registering a name that is already a record raises ValueError and keeps the original."""
+        short_sim.record(clock=clock)
 
         with pytest.raises(ValueError, match="clock"):
-            short_sim.watch(other=days_elapsed, clock=lambda sim: "replacement")
+            short_sim.record(other=days_elapsed, clock=lambda sim: "replacement")
 
         short_sim.step()
-        assert short_sim.watches == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
+        assert short_sim.records == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
 
-    def test_watching_before_setup_registers_nothing(self) -> None:
-        """Calling watch on a context built with setup=False raises and registers nothing."""
+    def test_recording_before_setup_registers_nothing(self) -> None:
+        """Calling record on a context built with setup=False raises and registers nothing."""
         sim = InteractiveContext(configuration=SHORT_SIM_CONFIGURATION, setup=False)
 
         with pytest.raises(ValueError, match="not set up"):
-            sim.watch(clock=clock)
+            sim.record(clock=clock)
 
         sim.setup()
-        assert sim.watches == {}
-        sim.watch(clock=clock)
-        assert sim.watches == {"clock": {JAN_1: JAN_1}}
+        assert sim.records == {}
+        sim.record(clock=clock)
+        assert sim.records == {"clock": {JAN_1: JAN_1}}
 
 
-class TestWatchFailure:
-    """A watch that raises is attributable and leaves a consistent record."""
+class TestRecordFailure:
+    """A record that raises is attributable and leaves consistent records."""
 
     @staticmethod
     def fails_from(
         time: pd.Timestamp, error: Exception | None = None
     ) -> Callable[[InteractiveContext], ClockTime]:
-        """Return a watch that records the clock until it reaches ``time`` and then raises."""
+        """Return a record expression that returns the clock until ``time`` and then raises."""
         to_raise = error if error is not None else KeyError("no such column")
 
         def expression(sim: InteractiveContext) -> ClockTime:
@@ -467,18 +467,18 @@ class TestWatchFailure:
     @pytest.mark.parametrize(
         "fails_at", [JAN_1, JAN_8], ids=["at_registration", "after_a_step"]
     )
-    def test_a_failure_raises_watch_error(
+    def test_a_failure_raises_record_error(
         self, short_sim: InteractiveContext, fails_at: pd.Timestamp
     ) -> None:
-        """The WatchError names the watch and the clock time and chains the original."""
+        """The RecordError names the record and the clock time and chains the original."""
         original = KeyError("no such column")
 
-        with pytest.raises(WatchError) as error:
-            short_sim.watch(broken_watch=self.fails_from(fails_at, original))
+        with pytest.raises(RecordError) as error:
+            short_sim.record(broken_record=self.fails_from(fails_at, original))
             short_sim.step()
 
         message = str(error.value)
-        assert "broken_watch" in message
+        assert "broken_record" in message
         assert str(fails_at) in message
         assert error.value.__cause__ is original
 
@@ -486,10 +486,10 @@ class TestWatchFailure:
         "rejected, error, expected",
         [
             (5, TypeError, {}),
-            (fails_from(JAN_1), WatchError, {}),
+            (fails_from(JAN_1), RecordError, {}),
             (
                 fails_from(JAN_15),
-                WatchError,
+                RecordError,
                 {
                     name: {JAN_1: JAN_1, JAN_8: JAN_8}
                     for name in ("before", "rejected", "after")
@@ -505,105 +505,105 @@ class TestWatchFailure:
         error: type[Exception],
         expected: dict[str, dict[ClockTime, Any]],
     ) -> None:
-        """A rejected or failing watch leaves no value for any watch at the time it failed."""
-        # Working watches on both sides of the failing one, so neither evaluation
+        """A rejected or failing record leaves no value for any record at the time it failed."""
+        # Working records on both sides of the failing one, so neither evaluation
         # order hides a stored value.
         with pytest.raises(error):
-            short_sim.watch(before=clock, rejected=rejected, after=clock)
+            short_sim.record(before=clock, rejected=rejected, after=clock)
             short_sim.take_steps(3)
 
-        assert short_sim.watches == expected
+        assert short_sim.records == expected
 
-    def test_a_failing_watch_still_restores_a_custom_step_size(
+    def test_a_failing_record_still_restores_a_custom_step_size(
         self, short_sim: InteractiveContext
     ) -> None:
-        """After a watch fails on a step with a custom step_size, the next step uses the configured size.
+        """After a record fails on a step with a custom step_size, the next step uses the configured size.
 
         This is a regression test for the order of operations in ``step``: the step size
-        must be restored before the watches are evaluated, or a failing watch would skip
+        must be restored before the records are evaluated, or a failing record would skip
         the restore.
         """
         three_days_on = JAN_1 + pd.Timedelta(days=3)
-        short_sim.watch(broken=self.fails_from(three_days_on))
+        short_sim.record(broken=self.fails_from(three_days_on))
 
-        with pytest.raises(WatchError):
+        with pytest.raises(RecordError):
             short_sim.step(pd.Timedelta(days=3))
 
-        short_sim.unwatch("broken")
+        short_sim.strike("broken")
         short_sim.step()
 
         assert short_sim.current_time == three_days_on + STEP_SIZE
 
-    def test_a_watch_may_unwatch_another_while_running(
+    def test_a_record_may_strike_another_while_running(
         self, short_sim: InteractiveContext
     ) -> None:
-        """A watch that unwatches another mid-step removes it without breaking recording."""
+        """A record that strikes another mid-step removes it without breaking recording."""
 
-        def unwatches_other(sim: InteractiveContext) -> ClockTime:
+        def strikes_other(sim: InteractiveContext) -> ClockTime:
             if reached(JAN_8)(sim):
-                sim.unwatch("other")
+                sim.strike("other")
             return sim.current_time
 
-        short_sim.watch(remover=unwatches_other, other=clock)
+        short_sim.record(remover=strikes_other, other=clock)
         short_sim.step()
 
-        assert short_sim.watches == {"remover": {JAN_1: JAN_1, JAN_8: JAN_8}}
+        assert short_sim.records == {"remover": {JAN_1: JAN_1, JAN_8: JAN_8}}
 
 
-class TestUnwatch:
-    """unwatch() drops watches and their history."""
+class TestStrike:
+    """strike() drops records and their history."""
 
-    def test_drops_the_watch_and_stops_calling_it(
+    def test_drops_the_record_and_stops_calling_it(
         self, short_sim: InteractiveContext
     ) -> None:
-        """An unwatched expression loses its history and is not called again; others remain."""
+        """A struck expression loses its history and is not called again; others remain."""
         calls: list[ClockTime] = []
 
         def counted(sim: InteractiveContext) -> None:
             calls.append(sim.current_time)
 
-        short_sim.watch(counted=counted, days=days_elapsed)
+        short_sim.record(counted=counted, days=days_elapsed)
         short_sim.step()
-        short_sim.unwatch("counted")
+        short_sim.strike("counted")
         short_sim.step()
 
         assert calls == [JAN_1, JAN_8]
-        assert short_sim.watches == {"days": {JAN_1: 0, JAN_8: 7, JAN_15: 14}}
+        assert short_sim.records == {"days": {JAN_1: 0, JAN_8: 7, JAN_15: 14}}
 
-    def test_a_name_can_be_watched_again_with_a_fresh_history(
+    def test_a_name_can_be_recorded_again_with_a_fresh_history(
         self, short_sim: InteractiveContext
     ) -> None:
-        """Re-registering an unwatched name starts from an empty history."""
-        short_sim.watch(clock=clock)
+        """Re-registering an struck name starts from an empty history."""
+        short_sim.record(clock=clock)
         short_sim.step()
-        short_sim.unwatch("clock")
+        short_sim.strike("clock")
         short_sim.step()
 
-        short_sim.watch(clock=clock)
+        short_sim.record(clock=clock)
 
-        assert short_sim.watches == {"clock": {JAN_15: JAN_15}}
+        assert short_sim.records == {"clock": {JAN_15: JAN_15}}
 
     def test_an_unknown_name_raises_and_removes_nothing(
         self, short_sim: InteractiveContext
     ) -> None:
         """An unknown name raises ValueError and the valid names passed with it are kept."""
-        short_sim.watch(clock=clock, days=days_elapsed)
+        short_sim.record(clock=clock, days=days_elapsed)
 
-        with pytest.raises(ValueError, match="not_watched"):
-            short_sim.unwatch("clock", "not_watched", "days")
+        with pytest.raises(ValueError, match="not_recorded"):
+            short_sim.strike("clock", "not_recorded", "days")
 
-        assert short_sim.watches == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
+        assert short_sim.records == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
 
 
-def test_watches_on_an_unmodified_model(disease_model_spec: Path) -> None:
-    """A watch on the example disease model records every step with no spec or component change."""
+def test_records_on_an_unmodified_model(disease_model_spec: Path) -> None:
+    """A record on the example disease model records every step with no spec or component change."""
     sim = InteractiveContext(str(disease_model_spec))
-    sim.watch(mean_age=lambda s: s.get_population("age").mean())
+    sim.record(mean_age=lambda s: s.get_population("age").mean())
     start = sim.current_time
 
     sim.take_steps(3)
 
-    recorded = sim.watches["mean_age"]
+    recorded = sim.records["mean_age"]
     assert len(recorded) == 4
     assert list(recorded)[0] == start
     assert recorded[sim.current_time] == sim.get_population("age").mean()
