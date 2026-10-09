@@ -503,12 +503,15 @@ limit, which may go past the end time.
 Watching values as the simulation runs
 ++++++++++++++++++++++++++++++++++++++
 
-To follow a quantity over time without changing the model, register it with
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.watch`. Each
-keyword names a callable that takes the simulation and returns the value to
-record. Every watch is evaluated once when it is registered and again after
-every step, whichever method takes the step, and its values are recorded under
-the clock time.
+To track a specific quantity over time not already covered by a registered
+observation, use :meth:`~vivarium.engine.interface.interactive.InteractiveContext.watch`.
+It takes keyword arguments only: each keyword is the name to record values
+under, and its value is a callable that takes the simulation and returns the
+value to record. Every watch is evaluated once when it is registered and again
+after every step, whether that step comes from ``step``, ``take_steps``,
+``run_for``, ``run_until`` or ``run``, and its values are recorded under the
+clock time.
+
 :attr:`~vivarium.engine.interface.interactive.InteractiveContext.watches`
 returns what has been recorded as a dict keyed by watch name and then by time,
 which converts directly to a ``pandas`` object. Values are stored exactly as
@@ -519,38 +522,35 @@ else.
 
    sim.watch(
        mean_age=lambda s: s.get_population("age").mean(),
-       n_infected=lambda s: (
-           s.get_population("lower_respiratory_infections")
-           == "infected_with_lower_respiratory_infections"
-       ).sum(),
+       n_wasted=lambda s: s.get_population("child_wasting.exposure").sum(),
    )
    sim.take_steps(3)
 
-   mean_age = pd.Series(sim.watches["mean_age"])
-   for time in mean_age.index:
-       print(time)
-
-   watched = pd.DataFrame(sim.watches)
-   print(list(watched.columns), len(watched))
+   print(pd.Series(sim.watches["mean_age"]).round(3))
+   print(pd.Series(sim.watches["n_wasted"]))
 
 .. testoutput::
 
-   2022-02-10 00:00:00
-   2022-02-10 12:00:00
-   2022-02-11 00:00:00
-   2022-02-11 12:00:00
-   ['mean_age', 'n_infected'] 4
+   2022-02-10 00:00:00    2.217
+   2022-02-10 12:00:00    2.218
+   2022-02-11 00:00:00    2.220
+   2022-02-11 12:00:00    2.221
+   dtype: float64
+   2022-02-10 00:00:00    8
+   2022-02-10 12:00:00    8
+   2022-02-11 00:00:00    8
+   2022-02-11 12:00:00    8
+   dtype: int64
 
-The first entry is the value at registration and each later one follows a step.
 If a watch raises, the run stops with a
-:class:`~vivarium.engine.interface.interactive.WatchError` that names the watch
+:class:`~vivarium.engine.exceptions.WatchError` that names the watch
 and the time, and nothing is recorded for that step. Use
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.unwatch` to
 stop watching an expression and drop its recorded values.
 
 .. testcode::
 
-   sim.unwatch("n_infected")
+   sim.unwatch("n_wasted")
    print(list(sim.watches))
 
 .. testoutput::

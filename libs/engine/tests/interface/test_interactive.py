@@ -34,11 +34,11 @@ from tests.helpers import (
 )
 from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.exceptions import WatchError
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
-from vivarium.engine.interface import WatchError
 from vivarium.engine.types import ClockTime
 
 
@@ -389,9 +389,7 @@ class TestWatchRecording:
 
         assert short_sim.watches == {"clock": {time: time for time in expected_times}}
 
-    def test_a_watch_registered_mid_run_has_fewer_times(
-        self, short_sim: InteractiveContext
-    ) -> None:
+    def test_a_watch_registered_mid_run(self, short_sim: InteractiveContext) -> None:
         """A later watch starts at its registration time; an earlier one keeps its history."""
         short_sim.watch(early=clock)
         short_sim.step()
@@ -531,31 +529,20 @@ class TestWatchFailure:
 
         assert short_sim.current_time == three_days_on + STEP_SIZE
 
-    @pytest.mark.parametrize("method", ["watch", "unwatch"])
-    def test_a_watch_that_changes_the_watches_raises(
-        self, short_sim: InteractiveContext, method: str
+    def test_a_watch_may_unwatch_another_while_running(
+        self, short_sim: InteractiveContext
     ) -> None:
-        """A watch that calls watch or unwatch fails with a WatchError and changes nothing."""
+        """A watch that unwatches another mid-step removes it without breaking recording."""
 
-        def meddler(sim: InteractiveContext) -> ClockTime:
+        def unwatches_other(sim: InteractiveContext) -> ClockTime:
             if reached(JAN_8)(sim):
-                if method == "watch":
-                    sim.watch(late=clock)
-                else:
-                    sim.unwatch("other")
+                sim.unwatch("other")
             return sim.current_time
 
-        short_sim.watch(other=clock, meddler=meddler)
+        short_sim.watch(remover=unwatches_other, other=clock)
+        short_sim.step()
 
-        with pytest.raises(WatchError, match="meddler") as error:
-            short_sim.step()
-
-        assert isinstance(error.value.__cause__, RuntimeError)
-        assert f"{method}()" in str(error.value.__cause__)
-        assert short_sim.watches == {"other": {JAN_1: JAN_1}, "meddler": {JAN_1: JAN_1}}
-        # The guard against re-entry is cleared after the failure.
-        short_sim.watch(late=clock)
-        assert short_sim.watches["late"] == {JAN_8: JAN_8}
+        assert short_sim.watches == {"remover": {JAN_1: JAN_1, JAN_8: JAN_8}}
 
 
 class TestUnwatch:

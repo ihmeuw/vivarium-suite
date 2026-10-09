@@ -1,1 +1,1 @@
-from vivarium.engine.interface.interactive import InteractiveContext, WatchError
+from vivarium.engine.interface.interactive import InteractiveContext

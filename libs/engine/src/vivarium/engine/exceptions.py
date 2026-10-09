@@ -13,3 +13,7 @@ class VivariumError(Exception):
     """Generic exception raised for errors in ``vivarium`` simulations."""
 
     pass
+
+
+class WatchError(VivariumError):
+    """Raised when a watch expression raises an exception."""
