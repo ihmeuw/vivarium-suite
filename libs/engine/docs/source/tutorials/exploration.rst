@@ -353,9 +353,8 @@ Finding something by name
 Everything above assumes you already know what the thing you want is called, and
 which kind of thing it is; you might not know either.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
-takes a fragment of a name and reports every :term:`resource <Resource>` that matches
-it in its name or the name of the component that registered it as well as the type
-of each resource.
+takes a fragment of a name and reports every :term:`resource <Resource>` whose own
+name, or whose component's name, contains it, along with the type of each one.
 
 .. testcode::
 
@@ -365,23 +364,36 @@ of each resource.
 .. testoutput::
 
                                                                                                  name  resource_type                                                 component
-                                                                      3.mortality.initialize_is_alive    initializer                                                 mortality
-                       disease_state.infected_with_lower_respiratory_infections.excess_mortality_rate   lookup_table  disease_state.infected_with_lower_respiratory_infections
-                      disease_state.susceptible_to_lower_respiratory_infections.excess_mortality_rate   lookup_table disease_state.susceptible_to_lower_respiratory_infections
-                                     infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
-    infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
-                                                                                             is_alive      attribute                                                 mortality
-                                           lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
-                                                                             mortality.mortality_rate   lookup_table                                                 mortality
                                                                                        mortality_rate      attribute                                                 mortality
           mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality value_modifier                disease_model.lower_respiratory_infections
    mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality value_modifier disease_state.susceptible_to_lower_respiratory_infections
     mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality value_modifier  disease_state.infected_with_lower_respiratory_infections
+                                                                             mortality.mortality_rate   lookup_table                                                 mortality
+                                                                      3.mortality.initialize_is_alive    initializer                                                 mortality
+                                     infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
+    infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
+                                           lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
                                     susceptible_to_lower_respiratory_infections.excess_mortality_rate      attribute disease_state.susceptible_to_lower_respiratory_infections
    susceptible_to_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute disease_state.susceptible_to_lower_respiratory_infections
+                       disease_state.infected_with_lower_respiratory_infections.excess_mortality_rate   lookup_table  disease_state.infected_with_lower_respiratory_infections
+                      disease_state.susceptible_to_lower_respiratory_infections.excess_mortality_rate   lookup_table disease_state.susceptible_to_lower_respiratory_infections
+                                                                                             is_alive      attribute                                                 mortality
 
-Notice that the ``is_alive`` resource is included in the output even though its
-name does not contain "mortality". This is because the ``mortality`` component
+Results come back most relevant first, in the following order:
+
+- the resource name matches exactly
+- the resource name begins with the pattern
+- the resource name contains the pattern as one or more whole dot-separated segments
+- the resource name contains the pattern as one or more whole underscore-separated words
+- the resource name contains the pattern as part of a word
+- the resource name does not match at all, and only its component's name does
+
+The two middle bullets are why searching "ever" ranks ``test_ever_eligible``, where
+"ever" is a word of its own, above ``never_treated``, where it is buried inside
+another word.
+
+That last bullet is why ``is_alive`` is at the bottom in the example above: "mortality"
+appears nowhere in its name, and it is listed only because the ``mortality`` component
 registered it.
 
 .. note::
@@ -405,11 +417,10 @@ registered it.
     cannot find those. Once you have located a pipeline, printing it reports them,
     as shown above.
 
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
-by default performs a literal substring match; to search with regex, pass ``regex=True``.
-For example, we can search for the ``mortality`` component exactly using anchors
-which will match the component name exactly rather than every name containing the
-word "mortality".
+The pattern is matched literally by default; pass ``regex=True`` to treat it as a
+regular expression instead. For example, we can anchor our "mortality" search so
+that it narrows to *exactly* ``mortality`` rather than everything with "mortality"
+somewhere in its name.
 
 .. testcode::
 
@@ -421,10 +432,10 @@ word "mortality".
 .. testoutput::
 
                               name resource_type component
-   3.mortality.initialize_is_alive   initializer mortality
                           is_alive     attribute mortality
-          mortality.mortality_rate  lookup_table mortality
                     mortality_rate     attribute mortality
+          mortality.mortality_rate  lookup_table mortality
+   3.mortality.initialize_is_alive   initializer mortality
 
 .. note::
 
