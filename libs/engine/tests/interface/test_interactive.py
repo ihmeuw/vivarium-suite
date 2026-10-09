@@ -335,20 +335,6 @@ def days_elapsed(sim: InteractiveContext) -> int:
     return int((sim.current_time - JAN_1) / pd.Timedelta(days=1))  # type: ignore [operator]
 
 
-def fails_from(
-    time: pd.Timestamp, error: Exception | None = None
-) -> Callable[[InteractiveContext], ClockTime]:
-    """Return a watch that records the clock until it reaches ``time`` and then raises."""
-    to_raise = error if error is not None else KeyError("no such column")
-
-    def expression(sim: InteractiveContext) -> ClockTime:
-        if reached(time)(sim):
-            raise to_raise
-        return sim.current_time
-
-    return expression
-
-
 class TestWatchRecording:
     """Watches are evaluated at registration and after every step."""
 
@@ -401,11 +387,15 @@ class TestWatchRecording:
         assert list(watches["late"]) == [JAN_8, JAN_15]
 
     def test_values_are_stored_as_returned(self, short_sim: InteractiveContext) -> None:
-        """Series, DataFrame and None returns are stored as the very objects returned."""
+        """Series, DataFrame, None and arbitrary object returns are stored as the very objects returned."""
         series = pd.Series([1.0, 2.0])
         frame = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        anything = object()
         short_sim.watch(
-            series=lambda sim: series, frame=lambda sim: frame, none=lambda sim: None
+            series=lambda sim: series,
+            frame=lambda sim: frame,
+            none=lambda sim: None,
+            anything=lambda sim: anything,
         )
         short_sim.step()
 
@@ -415,6 +405,7 @@ class TestWatchRecording:
             assert watches["frame"][time] is frame
             assert time in watches["none"]
             assert watches["none"][time] is None
+            assert watches["anything"][time] is anything
 
     def test_watches_returns_a_copy(self, short_sim: InteractiveContext) -> None:
         """Changing the returned dicts at either level does not change the record."""
@@ -447,7 +438,7 @@ class TestWatchRegistration:
         """Calling watch on a context built with setup=False raises and registers nothing."""
         sim = InteractiveContext(configuration=SHORT_SIM_CONFIGURATION, setup=False)
 
-        with pytest.raises(ValueError, match="No start time"):
+        with pytest.raises(ValueError, match="not set up"):
             sim.watch(clock=clock)
 
         sim.setup()
@@ -459,6 +450,20 @@ class TestWatchRegistration:
 class TestWatchFailure:
     """A watch that raises is attributable and leaves a consistent record."""
 
+    @staticmethod
+    def fails_from(
+        time: pd.Timestamp, error: Exception | None = None
+    ) -> Callable[[InteractiveContext], ClockTime]:
+        """Return a watch that records the clock until it reaches ``time`` and then raises."""
+        to_raise = error if error is not None else KeyError("no such column")
+
+        def expression(sim: InteractiveContext) -> ClockTime:
+            if reached(time)(sim):
+                raise to_raise
+            return sim.current_time
+
+        return expression
+
     @pytest.mark.parametrize(
         "fails_at", [JAN_1, JAN_8], ids=["at_registration", "after_a_step"]
     )
@@ -469,7 +474,7 @@ class TestWatchFailure:
         original = KeyError("no such column")
 
         with pytest.raises(WatchError) as error:
-            short_sim.watch(broken_watch=fails_from(fails_at, original))
+            short_sim.watch(broken_watch=self.fails_from(fails_at, original))
             short_sim.step()
 
         message = str(error.value)
@@ -493,7 +498,7 @@ class TestWatchFailure:
         ],
         ids=["not_callable_at_registration", "fails_at_registration", "fails_after_a_step"],
     )
-    def test_a_failure_records_nothing_for_any_watch(
+    def test_a_failure_records_nothing_at_the_failing_time(
         self,
         short_sim: InteractiveContext,
         rejected: Any,
@@ -519,7 +524,7 @@ class TestWatchFailure:
         the restore.
         """
         three_days_on = JAN_1 + pd.Timedelta(days=3)
-        short_sim.watch(broken=fails_from(three_days_on))
+        short_sim.watch(broken=self.fails_from(three_days_on))
 
         with pytest.raises(WatchError):
             short_sim.step(pd.Timedelta(days=3))

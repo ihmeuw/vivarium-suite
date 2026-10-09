@@ -24,6 +24,7 @@ import pandas as pd
 
 from vivarium.engine.exceptions import WatchError
 from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.randomness.stream import RandomnessStream
 from vivarium.engine.framework.resource.resource import Column
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
@@ -205,6 +206,10 @@ class InteractiveContext(SimulationContext):
             If an expression raises when first evaluated. The original exception
             is chained.
         """
+        if self._lifecycle.current_state == lifecycle_states.INITIALIZATION:
+            raise ValueError(
+                "Cannot watch a simulation that is not set up. Call setup() first."
+            )
         duplicates = [name for name in watches if name in self._watches]
         if duplicates:
             raise ValueError(f"Already watching {duplicates}. Unwatch them first.")
@@ -246,8 +251,6 @@ class InteractiveContext(SimulationContext):
         self, watches: dict[str, Callable[[InteractiveContext], Any]]
     ) -> dict[str, Any]:
         """Evaluate each watch at the current time, raising WatchError on the first failure."""
-        # Read the clock before calling anything so that a context that is not set up
-        # fails here, before any expression runs or any watch is registered.
         time = self.current_time
         values: dict[str, Any] = {}
         for name, func in watches.items():
