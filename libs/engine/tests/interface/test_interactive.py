@@ -365,10 +365,9 @@ class TestFindResources:
     def test_a_fragment_need_not_be_the_whole_name(self, sim: InteractiveContext) -> None:
         assert "test_column_1" in set(sim.find_resources("column_1")["name"])
 
-    def test_columns_and_streams_are_not_reported(self, sim: InteractiveContext) -> None:
-        """A column's public face is its attribute, so reporting it adds a
-        near-duplicate row; a stream is upstream of the values it randomizes."""
-        assert not {"column", "stream"} & set(sim.find_resources("")["resource_type"])
+    def test_unsearchable_types_are_not_reported(self, sim: InteractiveContext) -> None:
+        reported = set(sim.find_resources("")["resource_type"])
+        assert not {"column", "stream", "initializer"} & reported
 
     def test_lookup_tables_are_reported(self) -> None:
         """The shared fixture registers none, so this one needs its own sim."""
@@ -405,13 +404,18 @@ class TestFindResources:
         found = sim.find_resources("^column_creator_and_requirer$", regex=True)
         assert set(found["component"]) == {"column_creator_and_requirer"}
 
-    def test_an_exact_name_match_comes_first(self, sim: InteractiveContext) -> None:
+    def test_an_exact_name_match_comes_first(self) -> None:
         """The thing you named outranks everything merely containing it, even one
         whose name sorts earlier alphabetically."""
-        found = sim.find_resources("test_column_4")
-        assert list(found["name"]) == [
-            "test_column_4",
-            "2.column_creator_and_requirer.initialize_test_column_4",
+        sim = InteractiveContext(
+            components=[
+                AttributeNamed("needle"),
+                AttributeNamed("here_is_a_needle_in_a_haystack"),
+            ]
+        )
+        assert list(sim.find_resources("needle")["name"]) == [
+            "needle",
+            "here_is_a_needle_in_a_haystack",
         ]
 
     @pytest.mark.parametrize(
@@ -482,15 +486,16 @@ class TestFindResources:
             "aa_never_treated",
         ]
 
-    def test_regex_mode_is_ranked_the_same_way(self, sim: InteractiveContext) -> None:
+    def test_regex_mode_is_ranked_the_same_way(self) -> None:
         """The rank comes from the match's span, so the flag does not change it.
-        Alphabetically the initializer would lead, since a digit sorts before a
-        letter."""
-        found = sim.find_resources("test_column_[14]", regex=True)
-        assert list(found["name"]) == [
-            "test_column_1",
-            "test_column_4",
-            "2.column_creator_and_requirer.initialize_test_column_4",
+        These are the names of the segment test, ordered against the alphabet, so
+        a regex path that lost the span would reorder them."""
+        sim = InteractiveContext(
+            components=[AttributeNamed("zz_outer.needle"), AttributeNamed("aa_needle_part")]
+        )
+        assert list(sim.find_resources("n[e]+dle", regex=True)["name"]) == [
+            "zz_outer.needle",
+            "aa_needle_part",
         ]
 
     def test_a_component_only_match_comes_last(self, sim: InteractiveContext) -> None:
@@ -499,14 +504,23 @@ class TestFindResources:
         assert not found.empty
         assert not found["name"].str.contains("column_creator").iloc[-1]
 
-    def test_ties_break_by_resource_type(self, sim: InteractiveContext) -> None:
-        """Within one rank, attributes come before modifiers, not alphabetically."""
-        found = sim.find_resources("")
-        assert list(dict.fromkeys(found["resource_type"])) == [
+    def test_ties_break_by_resource_type(self) -> None:
+        """Within one rank, attributes come before modifiers, not alphabetically.
+        The lookup table is what makes this discriminating: the other three types
+        happen to fall in alphabetical order on their own, so a sim without one
+        would pass under either rule."""
+        sim = InteractiveContext(
+            components=[
+                ColumnCreator(),
+                AttributePipelineCreator(),
+                NestedLookupCaller(),
+            ]
+        )
+        assert list(dict.fromkeys(sim.find_resources("")["resource_type"])) == [
             "attribute",
             "value",
             "value_modifier",
-            "initializer",
+            "lookup_table",
         ]
 
     def test_ties_then_break_by_name(self, sim: InteractiveContext) -> None:
@@ -518,11 +532,11 @@ class TestFindResources:
     def test_every_other_resource_in_the_graph_is_reachable(
         self, sim: InteractiveContext
     ) -> None:
-        """Only columns and streams are withheld; nothing else is."""
+        """Only columns, streams, and initializers are withheld; nothing else is."""
         expected = {
             (str(node.name), node.RESOURCE_TYPE, node.component.name)
             for node in sim._resource.get_graph().nodes
-            if node.RESOURCE_TYPE not in ("column", "stream")
+            if node.RESOURCE_TYPE not in ("column", "stream", "initializer")
         }
         assert set(sim.find_resources("").itertuples(index=False)) == expected
 
