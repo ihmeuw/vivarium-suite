@@ -1,4 +1,4 @@
-**0.3.0 - 10/08/26**
+**0.2.2 - 10/09/26**
 
 - Add a short testing strategy section to the design ``/simsci:framework-development``
   agrees with the user
