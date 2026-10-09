@@ -563,7 +563,8 @@ class InteractiveContext(SimulationContext):
             then the start of it, then whole dot-separated segments from the
             middle or the end, then whole underscore-separated words, then part
             of a word, and last the resources that matched only through their
-            component. Ties break by resource type and then by name.
+            component. Ties break by resource type - attributes, values,
+            modifiers, lookup tables - and then by name.
 
         Raises
         ------

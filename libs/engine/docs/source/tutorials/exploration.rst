@@ -407,9 +407,11 @@ registered it.
     out. A column contains the backing data of an attribute of the same name, so
     reporting it adds a near-duplicate row without adding information. A randomness
     stream is upstream of the values it randomizes rather than one of them and there's
-    not much to gain from reporting it. Initializers are unlikely to be helpful
-    while debugging; use :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
-    instead.
+    not much to gain from reporting it. An initializer is named for the call that
+    fills a column rather than for the quantity you would search for, so it crowds
+    the results;
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
+    reports those instead.
 
 .. note::
 
