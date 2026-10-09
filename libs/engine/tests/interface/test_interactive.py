@@ -36,6 +36,7 @@ from tests.helpers import (
 from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
@@ -96,6 +97,40 @@ def test_get_value_and_get_attribute_point_at_each_other() -> None:
         sim.get_value("test_column_1")
     with pytest.raises(ValueError, match="Try get_value\\(\\)"):
         sim.get_attribute("simulant_step_size")
+
+
+class TestGetLookupTable:
+    """Tests for retrieving a lookup table from an interactive simulation."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(components=[NestedLookupCaller()])
+
+    def test_the_table_itself_is_returned(self, sim: InteractiveContext) -> None:
+        """The getter hands back the table, not the data it holds."""
+        table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
+        assert isinstance(table, LookupTable)
+        assert table.name == "nested_lookup_caller.inner_lookup"
+
+    def test_the_returned_table_is_callable(self, sim: InteractiveContext) -> None:
+        """Calling it with an index is the point of having it."""
+        table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
+        assert len(table(sim.get_population_index())) == len(sim.get_population_index())
+
+    def test_an_unregistered_name_raises(self, sim: InteractiveContext) -> None:
+        """An unknown name is rejected rather than quietly accepted."""
+        with pytest.raises(ValueError, match="No lookup table 'foo' registered."):
+            sim.get_lookup_table("foo")
+
+    def test_every_lookup_table_name_find_resources_reports_can_be_fetched(
+        self, sim: InteractiveContext
+    ) -> None:
+        """The two halves agree: whatever the search surfaces, the getter accepts."""
+        found = sim.find_resources("")
+        names = found.loc[found["resource_type"] == "lookup_table", "name"]
+        assert len(names) > 0
+        for name in names:
+            assert sim.get_lookup_table(name).name == name
 
 
 def test_run_for_duration() -> None:

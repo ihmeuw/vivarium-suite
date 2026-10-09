@@ -437,6 +437,30 @@ somewhere in its name.
              mortality_rate     attribute mortality
    mortality.mortality_rate  lookup_table mortality
 
+Each resource type can be retrieved:
+
+- ``value``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
+- ``attribute``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`
+- ``value_modifier``: no getter; use the corresponding pipeline's ``modifiers``
+  attribute to inspect them
+- ``lookup_table``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_lookup_table`
+
+For example, we can get the mortality rate lookup table found above:
+
+.. testcode::
+
+   mr_table = sim.get_lookup_table("mortality.mortality_rate")
+   print(mr_table(sim.get_population_index()[:5]))
+
+.. testoutput::
+
+   0    0.01
+   1    0.01
+   2    0.01
+   3    0.01
+   4    0.01
+   Name: value, dtype: float64
+
 .. note::
 
     Matching is case-insensitive, and the pattern is matched *literally* unless

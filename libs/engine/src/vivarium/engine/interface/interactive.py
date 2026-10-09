@@ -100,6 +100,7 @@ if TYPE_CHECKING:
 
     from vivarium.engine import Component
     from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.lookup.table import LookupTable
     from vivarium.engine.framework.values import AttributePipeline, Pipeline
     from vivarium.engine.types import ClockStepSize, ClockTime
 
@@ -502,6 +503,37 @@ class InteractiveContext(SimulationContext):
                 "Are you looking for a value pipeline? Try get_value()."
             )
         return self._values.get_attribute(attribute_pipeline_name)
+
+    def get_lookup_table(
+        self, name: str
+    ) -> LookupTable[pd.Series[Any]] | LookupTable[pd.DataFrame]:
+        """Get the lookup table associated with the given name.
+
+        Calling the returned table with a population index returns the data it
+        holds for those simulants.
+
+        Parameters
+        ----------
+        name
+            Name of the lookup table to return. Available names are the
+            ``lookup_table`` rows of :meth:`find_resources`.
+
+        Returns
+        -------
+            The requested lookup table.
+
+        Raises
+        ------
+        ValueError
+            If no lookup table of that name is registered.
+        """
+        if name not in self._tables.tables:
+            raise ValueError(
+                f"No lookup table '{name}' registered. A table is "
+                "usually named for the component that built it, so it may be "
+                "longer than the quantity it holds; try find_resources()."
+            )
+        return self._tables.tables[name]
 
     def find_resources(self, pattern: str, *, regex: bool = False) -> pd.DataFrame:
         """Find simulation resources whose name or component matches a pattern.

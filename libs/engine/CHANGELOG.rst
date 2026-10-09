@@ -1,6 +1,7 @@
-**5.13.2 - 10/09/26**
+**5.14.0 - 10/09/26**
 
 - Stop reporting initializers from ``InteractiveContext.find_resources()``
+- Add ``InteractiveContext.get_lookup_table()``
 
 **5.13.1 - 10/08/26**
 
