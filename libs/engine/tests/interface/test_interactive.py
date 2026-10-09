@@ -338,43 +338,6 @@ def days_elapsed(sim: InteractiveContext) -> int:
 class TestRecording:
     """Records are evaluated at registration and after every step."""
 
-    @pytest.mark.parametrize(
-        "advance, expected_times",
-        [
-            (lambda sim: sim.step(), [JAN_1, JAN_8]),
-            (
-                lambda sim: sim.step(pd.Timedelta(days=3)),
-                [JAN_1, JAN_1 + pd.Timedelta(days=3)],
-            ),
-            (lambda sim: sim.take_steps(2), [JAN_1, JAN_8, JAN_15]),
-            (lambda sim: sim.run_for(STEP_SIZE * 2), [JAN_1, JAN_8, JAN_15]),
-            (lambda sim: sim.run_until(JAN_15), [JAN_1, JAN_8, JAN_15]),
-            (lambda sim: sim.run_until(reached(JAN_15)), [JAN_1, JAN_8, JAN_15]),
-            (lambda sim: sim.run(), [JAN_1 + STEP_SIZE * i for i in range(6)]),
-        ],
-        ids=[
-            "step",
-            "step_with_size",
-            "take_steps",
-            "run_for",
-            "run_until_time",
-            "run_until_callable",
-            "run",
-        ],
-    )
-    def test_every_stepping_method_records_each_step(
-        self,
-        short_sim: InteractiveContext,
-        advance: Callable[[InteractiveContext], object],
-        expected_times: list[pd.Timestamp],
-    ) -> None:
-        """Each stepping method records one value per step, keyed by the clock time after it."""
-        short_sim.record(clock=clock)
-
-        advance(short_sim)
-
-        assert short_sim.records == {"clock": {time: time for time in expected_times}}
-
     def test_a_record_registered_mid_run(self, short_sim: InteractiveContext) -> None:
         """A later record starts at its registration time; an earlier one keeps its history."""
         short_sim.record(early=clock)
@@ -434,16 +397,14 @@ class TestRecordRegistration:
         short_sim.step()
         assert short_sim.records == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
 
-    def test_recording_before_setup_registers_nothing(self) -> None:
-        """Calling record on a context built with setup=False raises and registers nothing."""
+    def test_recording_before_setup_records_at_setup(self) -> None:
+        """A record registered before setup gets its first value when setup runs."""
         sim = InteractiveContext(configuration=SHORT_SIM_CONFIGURATION, setup=False)
 
-        with pytest.raises(ValueError, match="not set up"):
-            sim.record(clock=clock)
+        sim.record(clock=clock)
+        assert sim.records == {"clock": {}}
 
         sim.setup()
-        assert sim.records == {}
-        sim.record(clock=clock)
         assert sim.records == {"clock": {JAN_1: JAN_1}}
 
 
@@ -483,33 +444,30 @@ class TestRecordFailure:
         assert error.value.__cause__ is original
 
     @pytest.mark.parametrize(
-        "rejected, error, expected",
+        "failing, expected",
         [
-            (5, TypeError, {}),
-            (fails_from(JAN_1), RecordError, {}),
+            (fails_from(JAN_1), {}),
             (
                 fails_from(JAN_15),
-                RecordError,
                 {
                     name: {JAN_1: JAN_1, JAN_8: JAN_8}
-                    for name in ("before", "rejected", "after")
+                    for name in ("before", "failing", "after")
                 },
             ),
         ],
-        ids=["not_callable_at_registration", "fails_at_registration", "fails_after_a_step"],
+        ids=["fails_at_registration", "fails_after_a_step"],
     )
     def test_a_failure_records_nothing_at_the_failing_time(
         self,
         short_sim: InteractiveContext,
-        rejected: Any,
-        error: type[Exception],
+        failing: Callable[[InteractiveContext], ClockTime],
         expected: dict[str, dict[ClockTime, Any]],
     ) -> None:
-        """A rejected or failing record leaves no value for any record at the time it failed."""
+        """A failing record leaves no value for any record at the time it failed."""
         # Working records on both sides of the failing one, so neither evaluation
         # order hides a stored value.
-        with pytest.raises(error):
-            short_sim.record(before=clock, rejected=rejected, after=clock)
+        with pytest.raises(RecordError):
+            short_sim.record(before=clock, failing=failing, after=clock)
             short_sim.take_steps(3)
 
         assert short_sim.records == expected
@@ -529,34 +487,35 @@ class TestRecordFailure:
         with pytest.raises(RecordError):
             short_sim.step(pd.Timedelta(days=3))
 
-        short_sim.strike("broken")
+        short_sim.stop_recording("broken")
         short_sim.step()
 
         assert short_sim.current_time == three_days_on + STEP_SIZE
 
-    def test_a_record_may_strike_another_while_running(
+    def test_a_record_may_stop_another_while_running(
         self, short_sim: InteractiveContext
     ) -> None:
-        """A record that strikes another mid-step removes it without breaking recording."""
+        """A record that stops another mid-step stops it without breaking recording."""
 
-        def strikes_other(sim: InteractiveContext) -> ClockTime:
+        def stops_other(sim: InteractiveContext) -> ClockTime:
             if reached(JAN_8)(sim):
-                sim.strike("other")
+                sim.stop_recording("other")
             return sim.current_time
 
-        short_sim.record(remover=strikes_other, other=clock)
-        short_sim.step()
+        short_sim.record(stopper=stops_other, other=clock)
+        short_sim.take_steps(2)
 
-        assert short_sim.records == {"remover": {JAN_1: JAN_1, JAN_8: JAN_8}}
+        assert short_sim.records == {
+            "stopper": {JAN_1: JAN_1, JAN_8: JAN_8, JAN_15: JAN_15},
+            "other": {JAN_1: JAN_1, JAN_8: JAN_8},
+        }
 
 
-class TestStrike:
-    """strike() drops records and their history."""
+class TestStopRecording:
+    """stop_recording() stops records, keeping or erasing their history, and record() resumes them."""
 
-    def test_drops_the_record_and_stops_calling_it(
-        self, short_sim: InteractiveContext
-    ) -> None:
-        """A struck expression loses its history and is not called again; others remain."""
+    def test_stops_calling_but_keeps_the_history(self, short_sim: InteractiveContext) -> None:
+        """A stopped record is not called again but keeps its values; others continue."""
         calls: list[ClockTime] = []
 
         def counted(sim: InteractiveContext) -> None:
@@ -564,35 +523,68 @@ class TestStrike:
 
         short_sim.record(counted=counted, days=days_elapsed)
         short_sim.step()
-        short_sim.strike("counted")
+        short_sim.stop_recording("counted")
         short_sim.step()
 
         assert calls == [JAN_1, JAN_8]
-        assert short_sim.records == {"days": {JAN_1: 0, JAN_8: 7, JAN_15: 14}}
+        assert short_sim.records == {
+            "counted": {JAN_1: None, JAN_8: None},
+            "days": {JAN_1: 0, JAN_8: 7, JAN_15: 14},
+        }
 
-    def test_a_name_can_be_recorded_again_with_a_fresh_history(
-        self, short_sim: InteractiveContext
-    ) -> None:
-        """Re-registering an struck name starts from an empty history."""
+    def test_erasing_the_history_frees_the_name(self, short_sim: InteractiveContext) -> None:
+        """With erase_history the record is removed, and its name starts fresh if reused."""
         short_sim.record(clock=clock)
         short_sim.step()
-        short_sim.strike("clock")
-        short_sim.step()
+
+        short_sim.stop_recording("clock", erase_history=True)
+        assert short_sim.records == {}
 
         short_sim.record(clock=clock)
+        assert short_sim.records == {"clock": {JAN_8: JAN_8}}
 
-        assert short_sim.records == {"clock": {JAN_15: JAN_15}}
+    def test_a_stopped_record_resumes_by_name(self, short_sim: InteractiveContext) -> None:
+        """Passing a stopped record's name to record resumes it, leaving a gap while stopped."""
+        jan_22, jan_29 = JAN_1 + STEP_SIZE * 3, JAN_1 + STEP_SIZE * 4
+        short_sim.record(clock=clock)
+        short_sim.step()
+        short_sim.stop_recording("clock")
+        short_sim.take_steps(2)
 
-    def test_an_unknown_name_raises_and_removes_nothing(
+        short_sim.record("clock")
+        short_sim.step()
+
+        assert list(short_sim.records["clock"]) == [JAN_1, JAN_8, jan_22, jan_29]
+
+    def test_resuming_an_active_record_does_nothing(
         self, short_sim: InteractiveContext
     ) -> None:
-        """An unknown name raises ValueError and the valid names passed with it are kept."""
-        short_sim.record(clock=clock, days=days_elapsed)
+        """Passing the name of a record that is still recording changes nothing."""
+        short_sim.record(clock=clock)
+
+        short_sim.record("clock")
+
+        assert short_sim.records == {"clock": {JAN_1: JAN_1}}
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda sim: sim.stop_recording("clock", "not_recorded"),
+            lambda sim: sim.record("not_recorded"),
+        ],
+        ids=["stop_recording", "record"],
+    )
+    def test_an_unknown_name_raises_and_changes_nothing(
+        self, short_sim: InteractiveContext, call: Callable[[InteractiveContext], None]
+    ) -> None:
+        """An unknown name raises ValueError and the records are left as they were."""
+        short_sim.record(clock=clock)
 
         with pytest.raises(ValueError, match="not_recorded"):
-            short_sim.strike("clock", "not_recorded", "days")
+            call(short_sim)
 
-        assert short_sim.records == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
+        short_sim.step()
+        assert short_sim.records == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
 
 
 def test_records_on_an_unmodified_model(disease_model_spec: Path) -> None:

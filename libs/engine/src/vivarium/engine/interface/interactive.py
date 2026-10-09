@@ -53,6 +53,7 @@ class _Record:
 
     func: Callable[[InteractiveContext], Any]
     values: dict[ClockTime, Any] = field(default_factory=dict)
+    active: bool = True
 
 
 class InteractiveContext(SimulationContext):
@@ -148,6 +149,9 @@ class InteractiveContext(SimulationContext):
         super().setup()
         self.initialize_simulants()
         self._population_view = self._builder.population.get_view()
+        active = {name: record for name, record in self._records.items() if record.active}
+        if active:
+            self._record_values(active)
 
     def step(self, step_size: ClockStepSize | None = None) -> None:
         """Advance the simulation one step.
@@ -178,20 +182,24 @@ class InteractiveContext(SimulationContext):
             self._clock._clock_step_size = step_size
         super().step()
         self._clock._clock_step_size = old_step_size
-        if self._records:
-            self._record_all()
+        active = {name: record for name, record in self._records.items() if record.active}
+        if active:
+            self._record_values(active)
 
-    def record(self, **records: Callable[[InteractiveContext], Any]) -> None:
-        """Register named expressions to evaluate now and after every step.
+    def record(self, *names: str, **records: Callable[[InteractiveContext], Any]) -> None:
+        """Register named expressions, or resume stopped ones, to evaluate every step.
 
         Each expression is called with this context and its return value is
-        recorded under the current clock time, first when it is registered and
-        then after every step taken. Values are stored exactly as returned.
-        Registration is all or nothing: if any expression in the call is rejected
-        or fails, none of them is registered.
+        recorded under the current clock time, first as soon as the simulation is
+        set up (immediately if it already is) and then after every step taken.
+        Values are stored exactly as returned. After setup, the call is all or
+        nothing: if any expression fails, nothing is registered or resumed.
 
         Parameters
         ----------
+        names
+            Names of stopped records to resume. Their history is kept and new values
+            are added from now on. A name that is still recording is left as it is.
         records
             Callables keyed by the name to record them under. Each takes this
             context and returns the value to record.
@@ -199,76 +207,72 @@ class InteractiveContext(SimulationContext):
         Raises
         ------
         ValueError
-            If a name is already a record, or the context has not been set up.
-        TypeError
-            If a value is not callable.
+            If a name to resume is not a record, or a new name is already a record.
         RecordError
-            If an expression raises when first evaluated. The original exception
-            is chained.
+            If an expression raises when evaluated. For records registered before
+            setup, this is raised by ``setup``. The original exception is chained.
         """
-        if self._lifecycle.current_state == lifecycle_states.INITIALIZATION:
-            raise ValueError(
-                "Cannot add records to a simulation that is not set up. Call setup() first."
-            )
+        unknown = [name for name in names if name not in self._records]
+        if unknown:
+            raise ValueError(f"No records named {unknown} to resume.")
         duplicates = [name for name in records if name in self._records]
         if duplicates:
-            raise ValueError(f"Already recording {duplicates}. Strike them first.")
-        non_callables = [name for name, func in records.items() if not callable(func)]
-        if non_callables:
-            raise TypeError(f"Records {non_callables} are not callable.")
+            raise ValueError(
+                f"Record names must be unique; {duplicates} already exist. Use a "
+                "different name, or pass an existing name without a callable to resume it."
+            )
+        resumed = {
+            name: self._records[name] for name in names if not self._records[name].active
+        }
+        new_records = {name: _Record(func) for name, func in records.items()}
+        # Before setup there is nothing to evaluate yet; setup records the starting values.
+        if self._lifecycle.current_state != lifecycle_states.INITIALIZATION:
+            self._record_values({**resumed, **new_records})
+        for record in resumed.values():
+            record.active = True
+        self._records.update(new_records)
 
-        values = self._evaluate_records(records)
-        for name, func in records.items():
-            self._records[name] = _Record(func)
-        self._store_record_values(values)
+    def stop_recording(self, *names: str, erase_history: bool = False) -> None:
+        """Stop evaluating the named records, keeping their recorded values.
 
-    def strike(self, *names: str) -> None:
-        """Stop recording the named expressions and drop their recorded values.
+        A stopped record can be resumed with :meth:`record` by passing its name.
 
         Parameters
         ----------
         names
-            The names of the records to remove.
+            The names of the records to stop.
+        erase_history
+            Whether to also remove the records and their recorded values. A value
+            of False (the default) keeps them in :attr:`records`.
 
         Raises
         ------
         ValueError
-            If any name is not a record, in which case nothing is removed.
+            If any name is not a record, in which case nothing is changed.
         """
         unknown = [name for name in names if name not in self._records]
         if unknown:
-            raise ValueError(f"Not recording {unknown}.")
+            raise ValueError(f"No records named {unknown}.")
         for name in names:
-            # pop with a default so a name repeated in the call is not an error
-            self._records.pop(name, None)
+            if erase_history:
+                # pop with a default so a name repeated in the call is not an error
+                self._records.pop(name, None)
+            else:
+                self._records[name].active = False
 
-    def _record_all(self) -> None:
-        """Evaluate every registered record and store the values under the current time."""
-        funcs = {name: record.func for name, record in self._records.items()}
-        self._store_record_values(self._evaluate_records(funcs))
-
-    def _evaluate_records(
-        self, records: dict[str, Callable[[InteractiveContext], Any]]
-    ) -> dict[str, Any]:
-        """Evaluate each record at the current time, raising RecordError on the first failure."""
+    def _record_values(self, records: dict[str, _Record]) -> None:
+        """Evaluate each record at the current time and store the values, or none if any fails."""
         time = self.current_time
         values: dict[str, Any] = {}
-        for name, func in records.items():
+        for name, record in records.items():
             try:
-                values[name] = func(self)
+                values[name] = record.func(self)
             except Exception as error:
                 raise RecordError(
                     f"Record '{name}' failed at time {time}: {error!r}"
                 ) from error
-        return values
-
-    def _store_record_values(self, values: dict[str, Any]) -> None:
-        """Store each record's value under the current clock time."""
-        time = self.current_time
         for name, value in values.items():
-            # A record expression may have struck another record while they ran.
-            if name in self._records:
-                self._records[name].values[time] = value
+            records[name].values[time] = value
 
     def run(self, with_logging: bool = True) -> None:  # type: ignore [override]
         """Run the simulation for the duration specified in the configuration.

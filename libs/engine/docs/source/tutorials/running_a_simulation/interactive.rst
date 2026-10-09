@@ -545,12 +545,14 @@ else.
 If a record raises, the run stops with a
 :class:`~vivarium.engine.exceptions.RecordError` that names the record
 and the time, and nothing is recorded for that step. Use
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.strike` to
-stop recording an expression and drop its recorded values.
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.stop_recording`
+to stop recording an expression. Its recorded values are kept, and passing its
+name to ``record`` (without a callable) resumes it. Pass ``erase_history=True``
+to remove the record and its values instead.
 
 .. testcode::
 
-   sim.strike("n_wasted")
+   sim.stop_recording("n_wasted", erase_history=True)
    print(list(sim.records))
 
 .. testoutput::
