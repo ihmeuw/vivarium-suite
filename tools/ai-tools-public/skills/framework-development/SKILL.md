@@ -71,7 +71,24 @@ finalize & PR = finalize_core        # Phase 5: user-gated; residuals -> tickets
   criterion's literal wording and the actual need to the user rather than
   building the wording.
 
-Exit with a short written design summary the user has agreed to.
+Exit with a short written design summary the user has agreed to. End it with a
+**short testing strategy** on what must be tested to be confident the feature works
+as expected, in three sections with one item per line:
+
+```
+Testing strategy
+
+Feature requirements
+- <what the feature must do>
+
+Use cases
+- <an important behavior that shows a requirement is met, and its expected outcome>
+
+Edge cases
+- <a boundary or failure path that tests a requirement's limits, and the expected behavior>
+```
+
+It says *what* to test, not how; no test code.
 
 ## Phase 2 — Stub the interface and the tests (inline)
 
@@ -80,8 +97,9 @@ Author **two stub layers** — the shared contract, which you own:
 1. **Source stubs** — signatures + ship-quality API docstrings, bodies left as
    ``raise NotImplementedError`` / ``...``. Don't stuff test criteria into them.
 2. **Test stubs** — the acceptance criteria as stubbed test functions:
-   descriptive names + a one-line docstring each, **empty bodies**. This is
-   where you decide *what* gets tested; the test writer only decides *how*.
+   descriptive names + a one-line docstring each, **empty bodies**. Derive them
+   from the testing strategy agreed in Phase 1: at least one stub per use case and
+   edge case. The test writer only decides *how* each is tested.
 
 Scope the contract to the **whole feature**, not just a new helper in isolation:
 stub the call-site wiring (where the new code is invoked) alongside the new unit,
