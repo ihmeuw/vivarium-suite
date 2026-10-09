@@ -15,13 +15,16 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from math import ceil
 from typing import TYPE_CHECKING, NamedTuple, overload
 
 import numpy as np
 import pandas as pd
 
+from vivarium.engine.exceptions import RecordError
 from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.randomness.stream import RandomnessStream
 from vivarium.engine.framework.resource.resource import Column
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
@@ -105,6 +108,15 @@ if TYPE_CHECKING:
     from vivarium.engine.types import ClockStepSize, ClockTime
 
 
+@dataclass
+class _Record:
+    """A registered record expression and the values it has recorded."""
+
+    func: Callable[[InteractiveContext], Any]
+    values: dict[ClockTime, Any] = field(default_factory=dict)
+    active: bool = True
+
+
 class InteractiveContext(SimulationContext):
     """A simulation context with helper methods for running simulations interactively.
 
@@ -170,9 +182,20 @@ class InteractiveContext(SimulationContext):
         )
 
         self._results.set_to_observe(observe)
+        self._records: dict[str, _Record] = {}
 
         if setup:
             self.setup()
+
+    @property
+    def current_time(self) -> ClockTime:
+        """Returns the current simulation time."""
+        return self._clock.time
+
+    @property
+    def records(self) -> dict[str, dict[ClockTime, Any]]:
+        """Return a copy of the recorded values."""
+        return {name: dict(record.values) for name, record in self._records.items()}
 
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Get the formatted results, saying why there are none if gathering is off."""
@@ -183,15 +206,13 @@ class InteractiveContext(SimulationContext):
             )
         return super().get_results()
 
-    @property
-    def current_time(self) -> ClockTime:
-        """Returns the current simulation time."""
-        return self._clock.time
-
     def setup(self) -> None:
         super().setup()
         self.initialize_simulants()
         self._population_view = self._builder.population.get_view()
+        active = {name: record for name, record in self._records.items() if record.active}
+        if active:
+            self._record_values(active)
 
     def step(self, step_size: ClockStepSize | None = None) -> None:
         """Advance the simulation one step.
@@ -201,6 +222,14 @@ class InteractiveContext(SimulationContext):
         step_size
             An optional size of step to take. Must be compatible with the
             simulation clock's step size (usually a pandas.Timedelta).
+
+        Raises
+        ------
+        ValueError
+            If ``step_size`` is not compatible with the clock's step size.
+        RecordError
+            If a record expression raises after the step. The clock stays on the
+            completed step.
         """
         old_step_size = self._clock._clock_step_size
         if step_size is not None:
@@ -214,6 +243,97 @@ class InteractiveContext(SimulationContext):
             self._clock._clock_step_size = step_size
         super().step()
         self._clock._clock_step_size = old_step_size
+        active = {name: record for name, record in self._records.items() if record.active}
+        if active:
+            self._record_values(active)
+
+    def record(self, *names: str, **records: Callable[[InteractiveContext], Any]) -> None:
+        """Register named expressions, or resume stopped ones, to evaluate every step.
+
+        Each expression is called with this context and its return value is
+        recorded under the current clock time, first as soon as the simulation is
+        set up (immediately if it already is) and then after every step taken.
+        Values are stored exactly as returned. After setup, the call is all or
+        nothing: if any expression fails, nothing is registered or resumed.
+
+        Parameters
+        ----------
+        names
+            Names of stopped records to resume. Their history is kept and new values
+            are added from now on. A name that is still recording is left as it is.
+        records
+            Callables keyed by the name to record them under. Each takes this
+            context and returns the value to record.
+
+        Raises
+        ------
+        ValueError
+            If a name to resume is not a record, or a new name is already a record.
+        RecordError
+            If an expression raises when evaluated. For records registered before
+            setup, this is raised by ``setup``. The original exception is chained.
+        """
+        unknown = [name for name in names if name not in self._records]
+        if unknown:
+            raise ValueError(f"No records named {unknown} to resume.")
+        duplicates = [name for name in records if name in self._records]
+        if duplicates:
+            raise ValueError(
+                f"Record names must be unique; {duplicates} already exist. Use a "
+                "different name, or pass an existing name without a callable to resume it."
+            )
+        resumed = {
+            name: self._records[name] for name in names if not self._records[name].active
+        }
+        new_records = {name: _Record(func) for name, func in records.items()}
+        # Before setup there is nothing to evaluate yet; setup records the starting values.
+        if self._lifecycle.current_state != lifecycle_states.INITIALIZATION:
+            self._record_values({**resumed, **new_records})
+        for record in resumed.values():
+            record.active = True
+        self._records.update(new_records)
+
+    def stop_recording(self, *names: str, erase_history: bool = False) -> None:
+        """Stop evaluating the named records, keeping their recorded values.
+
+        A stopped record can be resumed with :meth:`record` by passing its name.
+
+        Parameters
+        ----------
+        names
+            The names of the records to stop.
+        erase_history
+            Whether to also remove the records and their recorded values. A value
+            of False (the default) keeps them in :attr:`records`.
+
+        Raises
+        ------
+        ValueError
+            If any name is not a record, in which case nothing is changed.
+        """
+        unknown = [name for name in names if name not in self._records]
+        if unknown:
+            raise ValueError(f"No records named {unknown}.")
+        for name in names:
+            if erase_history:
+                # pop with a default so a name repeated in the call is not an error
+                self._records.pop(name, None)
+            else:
+                self._records[name].active = False
+
+    def _record_values(self, records: dict[str, _Record]) -> None:
+        """Evaluate each record at the current time and store the values, or none if any fails."""
+        time = self.current_time
+        values: dict[str, Any] = {}
+        for name, record in records.items():
+            try:
+                values[name] = record.func(self)
+            except Exception as error:
+                raise RecordError(
+                    f"Record '{name}' failed at time {time}: {error!r}"
+                ) from error
+        for name, value in values.items():
+            records[name].values[time] = value
 
     def run(self, with_logging: bool = True) -> None:  # type: ignore [override]
         """Run the simulation for the duration specified in the configuration.

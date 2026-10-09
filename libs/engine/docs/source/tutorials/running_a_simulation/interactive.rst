@@ -500,6 +500,65 @@ limit, which may go past the end time.
 
    True 2022-02-10 00:00:00
 
+Recording values as the simulation runs
++++++++++++++++++++++++++++++++++++++++
+
+To track a specific quantity over time not already covered by a registered
+observation, use :meth:`~vivarium.engine.interface.interactive.InteractiveContext.record`.
+It takes keyword arguments only: each keyword is the name to record values
+under, and its value is a callable that takes the simulation and returns the
+value to record. Every record is evaluated once when it is registered and again
+after every step, whether that step comes from ``step``, ``take_steps``,
+``run_for``, ``run_until`` or ``run``, and its values are recorded under the
+clock time.
+
+:attr:`~vivarium.engine.interface.interactive.InteractiveContext.records`
+returns what has been recorded as a dict keyed by record name and then by time,
+which converts directly to a ``pandas`` object. Values are stored exactly as
+returned, so a record may return a scalar, a Series, a DataFrame, or anything
+else.
+
+.. testcode::
+
+   sim.record(
+       mean_age=lambda s: s.get_population("age").mean(),
+       n_wasted=lambda s: s.get_population("child_wasting.exposure").sum(),
+   )
+   sim.take_steps(3)
+
+   print(pd.Series(sim.records["mean_age"]).round(3))
+   print(pd.Series(sim.records["n_wasted"]))
+
+.. testoutput::
+
+   2022-02-10 00:00:00    2.217
+   2022-02-10 12:00:00    2.218
+   2022-02-11 00:00:00    2.220
+   2022-02-11 12:00:00    2.221
+   dtype: float64
+   2022-02-10 00:00:00    8
+   2022-02-10 12:00:00    8
+   2022-02-11 00:00:00    8
+   2022-02-11 12:00:00    8
+   dtype: int64
+
+If a record raises, the run stops with a
+:class:`~vivarium.engine.exceptions.RecordError` that names the record
+and the time, and nothing is recorded for that step. Use
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.stop_recording`
+to stop recording an expression. Its recorded values are kept, and passing its
+name to ``record`` (without a callable) resumes it. Pass ``erase_history=True``
+to remove the record and its values instead.
+
+.. testcode::
+
+   sim.stop_recording("n_wasted", erase_history=True)
+   print(list(sim.records))
+
+.. testoutput::
+
+   ['mean_age']
+
 Advancing a simulation does not, on its own, produce any results - an
 ``InteractiveContext`` does not observe them by default. See
 :ref:`getting results <interactive_results>` for what that means and how to

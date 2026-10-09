@@ -1,3 +1,13 @@
+**5.14.0 - 10/12/26**
+
+- Add ``InteractiveContext.record()`` to register named expressions that are evaluated at
+  registration and after every step
+- Add ``InteractiveContext.records`` to read the recorded values, keyed by record name and
+  then clock time
+- Add ``InteractiveContext.stop_recording()`` to stop records, keeping their values unless
+  ``erase_history=True``; passing a stopped record's name to ``record()`` resumes it
+- Add ``RecordError``, raised when a record expression fails
+
 **5.13.1 - 10/08/26**
 
 - Order ``InteractiveContext.find_resources()`` results by how squarely the pattern
