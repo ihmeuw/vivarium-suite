@@ -187,6 +187,7 @@ def deployPackage(Map options = [:]) {
     stage("Tagging Version and Pushing") {
         withWorkingDirectory {
             withCredentials([gitUsernamePassword(credentialsId: gitCredentialsId)]) {
+                sh "${ACTIVATE} && make check-release-tag"
                 sh "${ACTIVATE} && make tag-version"
             }
         }
