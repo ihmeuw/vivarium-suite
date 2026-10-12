@@ -529,9 +529,9 @@ class InteractiveContext(SimulationContext):
         """
         if name not in self._tables.tables:
             raise ValueError(
-                f"No lookup table '{name}' registered. A table is "
-                "usually named for the component that built it, so it may be "
-                "longer than the quantity it holds; try find_resources()."
+                f"No lookup table '{name}' registered. A table is usually named "
+                "for the component that built it, so its name may be longer than "
+                "the quantity it holds; try find_resources()."
             )
         return self._tables.tables[name]
 
