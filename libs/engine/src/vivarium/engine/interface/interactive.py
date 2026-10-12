@@ -23,11 +23,11 @@ import pandas as pd
 
 from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.framework.randomness.stream import RandomnessStream
-from vivarium.engine.framework.resource.resource import Column
+from vivarium.engine.framework.resource.resource import Column, Initializer
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
 
 _UNSEARCHABLE_RESOURCE_TYPES = frozenset(
-    {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE}
+    {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE, Initializer.RESOURCE_TYPE}
 )
 """Resource types :meth:`InteractiveContext.find_resources` does not report."""
 
@@ -36,7 +36,6 @@ _RESOURCE_TYPE_ORDER = (
     "value",
     "value_modifier",
     "lookup_table",
-    "initializer",
 )
 """Resource types in the order :meth:`InteractiveContext.find_resources` ranks them."""
 
@@ -532,8 +531,7 @@ class InteractiveContext(SimulationContext):
             then the start of it, then whole dot-separated segments from the
             middle or the end, then whole underscore-separated words, then part
             of a word, and last the resources that matched only through their
-            component. Ties break by resource type - attributes, values,
-            modifiers, lookup tables, initializers - and then by name.
+            component. Ties break by resource type and then by name.
 
         Raises
         ------
@@ -542,10 +540,7 @@ class InteractiveContext(SimulationContext):
 
         Notes
         -----
-        Columns and randomness streams are left out. A column is a component's
-        private store whose public face is an attribute of the same name, so
-        reporting it adds a near-duplicate row without adding information, and a
-        stream is upstream of the values it randomizes rather than one of them.
+        Columns, randomness streams, and initializers are excluded.
 
         Modifiers of both attribute and value pipelines appear under the resource
         type ``value_modifier``. There is no accessor for one; read it by printing

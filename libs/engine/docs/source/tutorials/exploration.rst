@@ -369,7 +369,6 @@ name, or whose component's name, contains it, along with the type of each one.
    mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality value_modifier disease_state.susceptible_to_lower_respiratory_infections
     mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality value_modifier  disease_state.infected_with_lower_respiratory_infections
                                                                              mortality.mortality_rate   lookup_table                                                 mortality
-                                                                      3.mortality.initialize_is_alive    initializer                                                 mortality
                                      infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
     infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
                                            lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
@@ -404,11 +403,13 @@ registered it.
 
 .. note::
 
-    Columns and randomness streams are deliberately left out. A column contains the
-    backing data of an attribute of the same name, so reporting it adds a near-duplicate
-    row without adding information. Meanwhile, a randomness stream is upstream of
-    the values it randomizes rather than one of them and there's not much to gain
-    from reporting it.
+    Columns, randomness streams, and population initializers are deliberately left
+    out. A column contains the backing data of an attribute of the same name, so
+    reporting it adds a near-duplicate row without adding information. A randomness
+    stream is upstream of the values it randomizes rather than one of them and there's
+    not much to gain from reporting it. Initializers are unlikely to be helpful
+    while debugging; use :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
+    instead.
 
 .. note::
 
@@ -431,11 +432,10 @@ somewhere in its name.
 
 .. testoutput::
 
-                              name resource_type component
-                          is_alive     attribute mortality
-                    mortality_rate     attribute mortality
-          mortality.mortality_rate  lookup_table mortality
-   3.mortality.initialize_is_alive   initializer mortality
+                       name resource_type component
+                   is_alive     attribute mortality
+             mortality_rate     attribute mortality
+   mortality.mortality_rate  lookup_table mortality
 
 .. note::
 
