@@ -549,7 +549,6 @@ class TestFindResources:
             "test_column_1",
             "test_column_2",
             "test_column_3",
-        ]
 
     def test_ties_break_by_resource_type(self) -> None:
         """Within one rank, attributes come before modifiers, not alphabetically.
