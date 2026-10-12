@@ -364,9 +364,9 @@ class TestRecording:
         short_sim.record(late=clock)
         short_sim.step()
 
-        records = short_sim.records
-        assert list(records["early"]) == [JAN_1, JAN_8, JAN_15]
-        assert list(records["late"]) == [JAN_8, JAN_15]
+        recorded = short_sim.recorded_values
+        assert list(recorded["early"]) == [JAN_1, JAN_8, JAN_15]
+        assert list(recorded["late"]) == [JAN_8, JAN_15]
 
     def test_values_are_stored_as_returned(self, short_sim: InteractiveContext) -> None:
         """Series, DataFrame, None and arbitrary object returns are stored as the very objects returned."""
@@ -381,24 +381,24 @@ class TestRecording:
         )
         short_sim.step()
 
-        records = short_sim.records
+        recorded = short_sim.recorded_values
         for time in (JAN_1, JAN_8):
-            assert records["series"][time] is series
-            assert records["frame"][time] is frame
-            assert time in records["none"]
-            assert records["none"][time] is None
-            assert records["anything"][time] is anything
+            assert recorded["series"][time] is series
+            assert recorded["frame"][time] is frame
+            assert time in recorded["none"]
+            assert recorded["none"][time] is None
+            assert recorded["anything"][time] is anything
 
-    def test_records_returns_a_copy(self, short_sim: InteractiveContext) -> None:
+    def test_recorded_values_returns_a_copy(self, short_sim: InteractiveContext) -> None:
         """Changing the returned dicts at either level does not change the record."""
         short_sim.record(clock=clock, days=days_elapsed)
 
-        records = short_sim.records
-        del records["days"]
-        records["added"] = {}
-        records["clock"][JAN_1] = "replaced"
+        recorded = short_sim.recorded_values
+        del recorded["days"]
+        recorded["added"] = {}
+        recorded["clock"][JAN_1] = "replaced"
 
-        assert short_sim.records == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
+        assert short_sim.recorded_values == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
 
 
 class TestRecordRegistration:
@@ -414,17 +414,17 @@ class TestRecordRegistration:
             short_sim.record(other=days_elapsed, clock=lambda sim: "replacement")
 
         short_sim.step()
-        assert short_sim.records == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
+        assert short_sim.recorded_values == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
 
     def test_recording_before_setup_records_at_setup(self) -> None:
         """A record registered before setup gets its first value when setup runs."""
         sim = InteractiveContext(configuration=SHORT_SIM_CONFIGURATION, setup=False)
 
         sim.record(clock=clock)
-        assert sim.records == {"clock": {}}
+        assert sim.recorded_values == {"clock": {}}
 
         sim.setup()
-        assert sim.records == {"clock": {JAN_1: JAN_1}}
+        assert sim.recorded_values == {"clock": {JAN_1: JAN_1}}
 
 
 class TestRecordFailure:
@@ -489,7 +489,7 @@ class TestRecordFailure:
             short_sim.record(before=clock, failing=failing, after=clock)
             short_sim.take_steps(3)
 
-        assert short_sim.records == expected
+        assert short_sim.recorded_values == expected
 
     def test_a_failing_record_still_restores_a_custom_step_size(
         self, short_sim: InteractiveContext
@@ -524,7 +524,7 @@ class TestRecordFailure:
         short_sim.record(stopper=stops_other, other=clock)
         short_sim.take_steps(2)
 
-        assert short_sim.records == {
+        assert short_sim.recorded_values == {
             "stopper": {JAN_1: JAN_1, JAN_8: JAN_8, JAN_15: JAN_15},
             "other": {JAN_1: JAN_1, JAN_8: JAN_8},
         }
@@ -546,7 +546,7 @@ class TestStopRecording:
         short_sim.step()
 
         assert calls == [JAN_1, JAN_8]
-        assert short_sim.records == {
+        assert short_sim.recorded_values == {
             "counted": {JAN_1: None, JAN_8: None},
             "days": {JAN_1: 0, JAN_8: 7, JAN_15: 14},
         }
@@ -557,10 +557,10 @@ class TestStopRecording:
         short_sim.step()
 
         short_sim.stop_recording("clock", erase_history=True)
-        assert short_sim.records == {}
+        assert short_sim.recorded_values == {}
 
         short_sim.record(clock=clock)
-        assert short_sim.records == {"clock": {JAN_8: JAN_8}}
+        assert short_sim.recorded_values == {"clock": {JAN_8: JAN_8}}
 
     def test_a_stopped_record_resumes_by_name(self, short_sim: InteractiveContext) -> None:
         """Passing a stopped record's name to record resumes it, leaving a gap while stopped."""
@@ -573,7 +573,7 @@ class TestStopRecording:
         short_sim.record("clock")
         short_sim.step()
 
-        assert list(short_sim.records["clock"]) == [JAN_1, JAN_8, jan_22, jan_29]
+        assert list(short_sim.recorded_values["clock"]) == [JAN_1, JAN_8, jan_22, jan_29]
 
     def test_resuming_an_active_record_does_nothing(
         self, short_sim: InteractiveContext
@@ -583,7 +583,7 @@ class TestStopRecording:
 
         short_sim.record("clock")
 
-        assert short_sim.records == {"clock": {JAN_1: JAN_1}}
+        assert short_sim.recorded_values == {"clock": {JAN_1: JAN_1}}
 
     @pytest.mark.parametrize(
         "call",
@@ -603,7 +603,7 @@ class TestStopRecording:
             call(short_sim)
 
         short_sim.step()
-        assert short_sim.records == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
+        assert short_sim.recorded_values == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
 
 
 def test_records_on_an_unmodified_model(disease_model_spec: Path) -> None:
@@ -614,7 +614,7 @@ def test_records_on_an_unmodified_model(disease_model_spec: Path) -> None:
 
     sim.take_steps(3)
 
-    recorded = sim.records["mean_age"]
+    recorded = sim.recorded_values["mean_age"]
     assert len(recorded) == 4
     assert list(recorded)[0] == start
     assert recorded[sim.current_time] == sim.get_population("age").mean()

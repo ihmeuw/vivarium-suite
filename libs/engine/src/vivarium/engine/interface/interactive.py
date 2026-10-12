@@ -193,7 +193,7 @@ class InteractiveContext(SimulationContext):
         return self._clock.time
 
     @property
-    def records(self) -> dict[str, dict[ClockTime, Any]]:
+    def recorded_values(self) -> dict[str, dict[ClockTime, Any]]:
         """Return a copy of the recorded values."""
         return {name: dict(record.values) for name, record in self._records.items()}
 
@@ -304,7 +304,7 @@ class InteractiveContext(SimulationContext):
             The names of the records to stop.
         erase_history
             Whether to also remove the records and their recorded values. A value
-            of False (the default) keeps them in :attr:`records`.
+            of False (the default) keeps them in :attr:`recorded_values`.
 
         Raises
         ------

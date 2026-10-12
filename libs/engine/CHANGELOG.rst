@@ -2,7 +2,7 @@
 
 - Add ``InteractiveContext.record()`` to register named expressions that are evaluated at
   registration and after every step
-- Add ``InteractiveContext.records`` to read the recorded values, keyed by record name and
+- Add ``InteractiveContext.recorded_values`` to read the recorded values, keyed by record name and
   then clock time
 - Add ``InteractiveContext.stop_recording()`` to stop records, keeping their values unless
   ``erase_history=True``; passing a stopped record's name to ``record()`` resumes it

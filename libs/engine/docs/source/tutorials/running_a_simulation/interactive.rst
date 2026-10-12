@@ -512,7 +512,7 @@ after every step, whether that step comes from ``step``, ``take_steps``,
 ``run_for``, ``run_until`` or ``run``, and its values are recorded under the
 clock time.
 
-:attr:`~vivarium.engine.interface.interactive.InteractiveContext.records`
+:attr:`~vivarium.engine.interface.interactive.InteractiveContext.recorded_values`
 returns what has been recorded as a dict keyed by record name and then by time,
 which converts directly to a ``pandas`` object. Values are stored exactly as
 returned, so a record may return a scalar, a Series, a DataFrame, or anything
@@ -526,8 +526,8 @@ else.
    )
    sim.take_steps(3)
 
-   print(pd.Series(sim.records["mean_age"]).round(3))
-   print(pd.Series(sim.records["n_wasted"]))
+   print(pd.Series(sim.recorded_values["mean_age"]).round(3))
+   print(pd.Series(sim.recorded_values["n_wasted"]))
 
 .. testoutput::
 
@@ -553,7 +553,7 @@ to remove the record and its values instead.
 .. testcode::
 
    sim.stop_recording("n_wasted", erase_history=True)
-   print(list(sim.records))
+   print(list(sim.recorded_values))
 
 .. testoutput::
 
