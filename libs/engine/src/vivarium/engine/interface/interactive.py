@@ -640,27 +640,6 @@ class InteractiveContext(SimulationContext):
             raise ValueError(f"No event {event_name} in system.")
         return self._events.get_listeners(event_name)
 
-    def get_emitter(
-        self, event_name: str
-    ) -> Callable[[pd.Index[int], dict[str, Any] | None], None]:
-        """Get the callable that emits the given type of events.
-
-        Available events can be found by calling
-        :func:`InteractiveContext.list_events`.
-
-        Parameters
-        ----------
-        event_name
-            The name of the event to grab the listeners for.
-
-        Returns
-        -------
-            The callable that emits the named event.
-        """
-        if event_name not in self._events:
-            raise ValueError(f"No event {event_name} in system.")
-        return self._events.get_emitter(event_name)
-
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.
 
