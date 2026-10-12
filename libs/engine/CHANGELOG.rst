@@ -1,3 +1,7 @@
+**5.13.2 - 10/09/26**
+
+- Stop reporting initializers from ``InteractiveContext.find_resources()``
+
 **5.13.1 - 10/08/26**
 
 - Order ``InteractiveContext.find_resources()`` results by how squarely the pattern
