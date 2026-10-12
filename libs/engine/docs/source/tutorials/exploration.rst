@@ -407,9 +407,11 @@ registered it.
     out. A column contains the backing data of an attribute of the same name, so
     reporting it adds a near-duplicate row without adding information. A randomness
     stream is upstream of the values it randomizes rather than one of them and there's
-    not much to gain from reporting it. Initializers are unlikely to be helpful
-    while debugging; use :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
-    instead.
+    not much to gain from reporting it. An initializer is named for the call that
+    fills a column rather than for the quantity you would search for, so it crowds
+    the results;
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
+    reports those instead.
 
 .. note::
 
@@ -436,6 +438,30 @@ somewhere in its name.
                    is_alive     attribute mortality
              mortality_rate     attribute mortality
    mortality.mortality_rate  lookup_table mortality
+
+Each resource type can be retrieved:
+
+- ``value``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
+- ``attribute``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`
+- ``value_modifier``: no getter; use the corresponding pipeline's ``modifiers``
+  attribute to inspect them
+- ``lookup_table``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_lookup_table`
+
+For example, we can get the mortality rate lookup table found above:
+
+.. testcode::
+
+   mr_table = sim.get_lookup_table("mortality.mortality_rate")
+   print(mr_table(sim.get_population_index()[:5]))
+
+.. testoutput::
+
+   0    0.01
+   1    0.01
+   2    0.01
+   3    0.01
+   4    0.01
+   Name: value, dtype: float64
 
 .. note::
 

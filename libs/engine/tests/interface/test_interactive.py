@@ -36,6 +36,7 @@ from tests.helpers import (
 from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
@@ -96,6 +97,44 @@ def test_get_value_and_get_attribute_point_at_each_other() -> None:
         sim.get_value("test_column_1")
     with pytest.raises(ValueError, match="Try get_value\\(\\)"):
         sim.get_attribute("simulant_step_size")
+
+
+class TestGetLookupTable:
+    """Tests for retrieving a lookup table from an interactive simulation."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(components=[NestedLookupCaller()])
+
+    def test_the_table_itself_is_returned(self, sim: InteractiveContext) -> None:
+        """The getter hands back the table, not the data it holds."""
+        table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
+        assert isinstance(table, LookupTable)
+        assert table.name == "nested_lookup_caller.inner_lookup"
+
+    def test_the_returned_table_is_callable(self, sim: InteractiveContext) -> None:
+        """Calling it with an index is the point of having it, so check the values
+        it produces and not just their count."""
+        table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
+        index = sim.get_population_index()
+        assert len(index) > 0
+        # The fixture keys the table on 'inner', which is the index modulo three.
+        assert (table(index) == (index % 3 + 1) * 10).all()
+
+    def test_an_unregistered_name_raises(self, sim: InteractiveContext) -> None:
+        """An unknown name is rejected rather than quietly accepted."""
+        with pytest.raises(ValueError, match="No lookup table 'foo' registered."):
+            sim.get_lookup_table("foo")
+
+    def test_every_lookup_table_name_find_resources_reports_can_be_fetched(
+        self, sim: InteractiveContext
+    ) -> None:
+        """The two halves agree: whatever the search surfaces, the getter accepts."""
+        found = sim.find_resources("")
+        names = found.loc[found["resource_type"] == "lookup_table", "name"]
+        assert len(names) > 0
+        for name in names:
+            assert sim.get_lookup_table(name).name == name
 
 
 def test_run_for_duration() -> None:
@@ -498,11 +537,19 @@ class TestFindResources:
             "aa_needle_part",
         ]
 
-    def test_a_component_only_match_comes_last(self, sim: InteractiveContext) -> None:
-        """Matching through the component is the surprising hit, so it sorts last."""
-        found = sim.find_resources("column_creator")
-        assert not found.empty
-        assert not found["name"].str.contains("column_creator").iloc[-1]
+    def test_a_component_only_match_comes_last(self) -> None:
+        """Matching through the component is the surprising hit, so it sorts last.
+        Only ``zz_column_creator`` matches on its own name; the rest are reached
+        through their component, and alphabetical order would lead with them."""
+        sim = InteractiveContext(
+            components=[AttributeNamed("zz_column_creator"), ColumnCreator()]
+        )
+        assert list(sim.find_resources("column_creator")["name"]) == [
+            "zz_column_creator",
+            "test_column_1",
+            "test_column_2",
+            "test_column_3",
+        ]
 
     def test_ties_break_by_resource_type(self) -> None:
         """Within one rank, attributes come before modifiers, not alphabetically.
@@ -516,12 +563,10 @@ class TestFindResources:
                 NestedLookupCaller(),
             ]
         )
-        assert list(dict.fromkeys(sim.find_resources("")["resource_type"])) == [
-            "attribute",
-            "value",
-            "value_modifier",
-            "lookup_table",
-        ]
+        order = ["attribute", "value", "value_modifier", "lookup_table"]
+        types = list(sim.find_resources("")["resource_type"])
+        assert set(types) == set(order)
+        assert types == sorted(types, key=order.index)
 
     def test_ties_then_break_by_name(self, sim: InteractiveContext) -> None:
         """Within one rank and one resource type, names run alphabetically."""
