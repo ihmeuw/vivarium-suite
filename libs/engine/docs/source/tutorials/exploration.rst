@@ -211,15 +211,6 @@ We see in the example above that ``BasePopulation``, ``Mortality``, and
 the lower respiratory infections ``DiseaseModel`` each registered a listener
 to the ``time_step`` phase, all at priority 5.
 
-.. note::
-
-    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_emitter`
-    is also present on the context, but it is restricted to the ``setup``,
-    ``simulation_end`` and ``report`` lifecycle states, so it is not callable
-    from a session that is simply set up or mid-run. Emitting events by hand is
-    discouraged in any case; see the :ref:`event system concept page <event_concept>`
-    for why, and prefer registering listeners.
-
 State table attributes and value pipelines
 ++++++++++++++++++++++++++++++++++++++++++
 
