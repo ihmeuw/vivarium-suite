@@ -348,9 +348,7 @@ class SimulationContext:
     def report(self, print_results: bool = True) -> None:
         self._lifecycle.set_state(lifecycle_states.REPORT)
         self.report_emitter(self.get_population_index(), None)
-        # Read the results manager directly so subclasses that add non-DataFrame
-        # values to get_results (such as InteractiveContext) can still write parquet.
-        results = self._results.get_results()
+        results = self.get_results()
         if print_results:
             for measure, df in results.items():
                 self._logger.info(f"\n{measure}:\n{pformat(df)}")

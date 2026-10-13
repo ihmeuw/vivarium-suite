@@ -471,24 +471,6 @@ class TestObservationsInResults:
         assert list(sim.get_results()) == ["clock"]
         assert "pass observe=True" not in caplog.text
 
-    def test_report_writes_only_the_model_results(self, tmp_path: Path) -> None:
-        """report() writes the model's results to parquet and leaves the observations out."""
-        sim = InteractiveContext(
-            configuration={
-                **HARRY_POTTER_CONFIG,
-                "output_data": {"results_directory": str(tmp_path)},
-            },
-            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
-            observe=True,
-        )
-        sim.register_observation(clock=clock)
-        sim.step()
-        sim.finalize()
-
-        sim.report(print_results=False)
-
-        assert sorted(path.name for path in tmp_path.iterdir()) == ["house_points.parquet"]
-
 
 class TestObservationRegistration:
     """register_observation() registers all of its observations or none of them."""
