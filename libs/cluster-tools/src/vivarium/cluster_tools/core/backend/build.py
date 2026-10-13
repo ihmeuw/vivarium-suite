@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import pytask
-from pytask import NodeInfo, PNode, PythonNode, Session, TaskOutcome, TaskWithoutPath
 
 from vivarium.cluster_tools.core.backend.task import Task, check_unique_task_names
 
@@ -22,7 +21,7 @@ TASK_KEY = "task"
 """Key under which a pytask task's attributes hold its shared-representation task."""
 
 
-def to_pytask_task(task: Task) -> TaskWithoutPath:
+def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     """Convert a shared-representation task into a pytask task.
 
     The pytask task depends on ``task.inputs``, on ``task.code_id`` under ``CODE_ID_KEY``,
@@ -75,13 +74,13 @@ def to_pytask_task(task: Task) -> TaskWithoutPath:
             inspect.Parameter(key, inspect.Parameter.KEYWORD_ONLY) for key in task.outputs
         ]
         setattr(_run, "__signature__", inspect.Signature(parameters))
-    depends_on: dict[str, PNode] = {**task.inputs, CODE_ID_KEY: task.code_id}
+    depends_on: dict[str, pytask.PNode] = {**task.inputs, CODE_ID_KEY: task.code_id}
     if isinstance(task.run, str):
-        depends_on[COMMAND_KEY] = PythonNode(
+        depends_on[COMMAND_KEY] = pytask.PythonNode(
             name=f"{task.name}::{COMMAND_KEY}",
             value=task.run,
             hash=True,
-            node_info=NodeInfo(
+            node_info=pytask.NodeInfo(
                 arg_name=COMMAND_KEY,
                 path=(),
                 task_path=None,
@@ -89,7 +88,7 @@ def to_pytask_task(task: Task) -> TaskWithoutPath:
                 value=task.run,
             ),
         )
-    return TaskWithoutPath(
+    return pytask.TaskWithoutPath(
         name=task.name,
         function=_run,
         depends_on=depends_on,
@@ -98,7 +97,7 @@ def to_pytask_task(task: Task) -> TaskWithoutPath:
     )
 
 
-def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> Session:
+def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
     """Build ``tasks`` with pytask, keeping its state under ``root``.
 
     Parameters
@@ -132,6 +131,6 @@ def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> Session:
     return pytask.build(tasks=pytask_tasks, config=config, task_files=(), **kwargs)
 
 
-def outcomes(session: Session) -> dict[str, TaskOutcome]:
+def outcomes(session: pytask.Session) -> dict[str, pytask.TaskOutcome]:
     """Return the outcome of each executed task, keyed by task name."""
     return {report.task.name: report.outcome for report in session.execution_reports}
