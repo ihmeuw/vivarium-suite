@@ -47,3 +47,8 @@ Return only this digest. Do not include raw search results, full issue
 descriptions, or tickets you ruled out. If a search fails or the Jira MCP is
 unavailable, say so explicitly for the affected groups rather than returning
 an empty match list.
+
+Copy each ticket summary exactly as Jira gives it. The *why* lines and any
+failure notes reach the user in the triage report:
+
+- Write prose for people in plain technical English. Use short sentences in the active voice and simple tenses, and one name for each thing. Do not use semicolons, Latin abbreviations, or metaphors. Put code identifiers and paths in backticks.
