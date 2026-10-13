@@ -1,4 +1,4 @@
-**0.28.0 - 10/07/26**
+**0.28.0 - 10/13/26**
 
 - Add a ``SessionStart`` hook that adds a short plain-English writing text, based
   on ASD-STE100 Simplified Technical English, to each session. Set
