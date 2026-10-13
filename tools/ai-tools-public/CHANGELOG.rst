@@ -1,7 +1,13 @@
-**0.2.2 - 10/09/26**
+**0.3.1 - 10/13/26**
 
 - Add a short testing strategy section to the design ``/simsci:framework-development``
   agrees with the user
+
+**0.3.0 - 10/13/26**
+
+- Add a one-line plain-English writing rule, based on ASD-STE100 Simplified
+  Technical English, to the five ``_review_*`` agents and ``_split_proposer``
+  (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
 
 **0.2.1 - 09/16/26**
 

@@ -61,3 +61,7 @@ write a check, that is a signal the plan is underspecified — escalate instead.
   the research doc doesn't pin down, or contract names that look wrong — report,
   don't guess, don't weaken or skip a check to make it pass, and don't soften a
   threshold the research doc states.
+
+The trace notes and the escalations reach people:
+
+- Write prose for people in plain technical English. Use short sentences in the active voice and simple tenses, and one name for each thing. Do not use semicolons, Latin abbreviations, or metaphors. Put code identifiers and paths in backticks.
