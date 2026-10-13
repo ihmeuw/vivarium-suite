@@ -1,7 +1,6 @@
 **0.3.1 - 10/13/26**
 
-- Add a short testing strategy section to the design ``/simsci:framework-development``
-  agrees with the user
+- Add a short testing strategy section to the ``/simsci:framework-development`` design proposal
 
 **0.3.0 - 10/13/26**
 
