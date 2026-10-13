@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, NamedTuple, overload
 import numpy as np
 import pandas as pd
 
-from vivarium.engine.exceptions import RecordError
+from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.randomness.stream import RandomnessStream
@@ -95,7 +95,7 @@ def _match_rank(matcher: re.Pattern[str], name: str) -> int:
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
     from pathlib import Path
     from typing import Any
 
@@ -109,8 +109,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class _Record:
-    """A registered record expression and the values it has recorded."""
+class _InteractiveObservation:
+    """An observation registered on an interactive context and the values it has observed."""
 
     func: Callable[[InteractiveContext], Any]
     values: dict[ClockTime, Any] = field(default_factory=dict)
@@ -120,7 +120,8 @@ class _Record:
 class InteractiveContext(SimulationContext):
     """A simulation context with helper methods for running simulations interactively.
 
-    Does not observe results by default; pass ``observe=True`` to include them.
+    Does not gather the model's results by default; pass ``observe=True`` to
+    include them.
     """
 
     def __init__(
@@ -165,8 +166,10 @@ class InteractiveContext(SimulationContext):
             Note that only the first context built in a process configures logging
             and subsequent contexts will inherit that configuration.
         observe
-            Whether to observe results. A value of False (the default) prevents
-            observations from being recorded and results generated.
+            Whether to gather the results of the observations the model's
+            components register. A value of False (the default) prevents them
+            from being gathered. Observations registered with
+            :meth:`register_observation` are evaluated either way.
         setup
             Whether to set the simulation up on construction. A value of True
             (the default) freezes the configuration; pass False to change
@@ -182,7 +185,7 @@ class InteractiveContext(SimulationContext):
         )
 
         self._results.set_to_observe(observe)
-        self._records: dict[str, _Record] = {}
+        self._observations: dict[str, _InteractiveObservation] = {}
 
         if setup:
             self.setup()
@@ -192,27 +195,31 @@ class InteractiveContext(SimulationContext):
         """Returns the current simulation time."""
         return self._clock.time
 
-    @property
-    def recorded_values(self) -> dict[str, dict[ClockTime, Any]]:
-        """Return a copy of the recorded values."""
-        return {name: dict(record.values) for name, record in self._records.items()}
+    def get_results(self) -> dict[str, Any]:
+        """Get the model's formatted results and the values of each registered observation.
 
-    def get_results(self) -> dict[str, pd.DataFrame]:
-        """Get the formatted results, saying why there are none if gathering is off."""
-        if not self._results.to_observe:
+        Each observation registered with :meth:`register_observation` is keyed by
+        its name, and its value is a copy of the values it has observed, keyed by
+        clock time.
+        """
+        if not self._results.to_observe and not self._observations:
             self._logger.warning(
                 "No results to return. An InteractiveContext does not observe "
                 "results by default; pass observe=True to include them."
             )
-        return super().get_results()
+        results: dict[str, Any] = super().get_results()
+        for name, observation in self._observations.items():
+            results[name] = dict(observation.values)
+        return results
 
     def setup(self) -> None:
         super().setup()
         self.initialize_simulants()
         self._population_view = self._builder.population.get_view()
-        active = {name: record for name, record in self._records.items() if record.active}
+        self._check_no_model_observation_named(self._observations)
+        active = {name: obs for name, obs in self._observations.items() if obs.active}
         if active:
-            self._record_values(active)
+            self._observe(active)
 
     def step(self, step_size: ClockStepSize | None = None) -> None:
         """Advance the simulation one step.
@@ -227,9 +234,9 @@ class InteractiveContext(SimulationContext):
         ------
         ValueError
             If ``step_size`` is not compatible with the clock's step size.
-        RecordError
-            If a record expression raises after the step. The clock stays on the
-            completed step.
+        ObservationError
+            If an observation registered with :meth:`register_observation` raises
+            after the step. The clock stays on the completed step.
         """
         old_step_size = self._clock._clock_step_size
         if step_size is not None:
@@ -243,91 +250,113 @@ class InteractiveContext(SimulationContext):
             self._clock._clock_step_size = step_size
         super().step()
         self._clock._clock_step_size = old_step_size
-        active = {name: record for name, record in self._records.items() if record.active}
+        active = {name: obs for name, obs in self._observations.items() if obs.active}
         if active:
-            self._record_values(active)
+            self._observe(active)
 
-    def record(self, *names: str, **records: Callable[[InteractiveContext], Any]) -> None:
-        """Register named expressions, or resume stopped ones, to evaluate every step.
+    def register_observation(
+        self, *names: str, **observations: Callable[[InteractiveContext], Any]
+    ) -> None:
+        """Register named observations, or resume unregistered ones, to evaluate every step.
 
-        Each expression is called with this context and its return value is
-        recorded under the current clock time, first as soon as the simulation is
+        Each observation is called with this context and its return value is
+        stored under the current clock time, first as soon as the simulation is
         set up (immediately if it already is) and then after every step taken.
-        Values are stored exactly as returned. After setup, the call is all or
-        nothing: if any expression fails, nothing is registered or resumed.
+        Values are stored exactly as returned and are included in
+        :meth:`get_results`. After setup, the call is all or nothing: if any
+        observation fails, nothing is registered or resumed.
 
         Parameters
         ----------
         names
-            Names of stopped records to resume. Their history is kept and new values
-            are added from now on. A name that is still recording is left as it is.
-        records
-            Callables keyed by the name to record them under. Each takes this
-            context and returns the value to record.
+            Names of unregistered observations to resume. Their values are kept and
+            new values are added from now on. A name that is still registered is
+            left as it is.
+        observations
+            Callables keyed by the name to store their values under. Each takes
+            this context and returns the value to store.
 
         Raises
         ------
         ValueError
-            If a name to resume is not a record, or a new name is already a record.
-        RecordError
-            If an expression raises when evaluated. For records registered before
-            setup, this is raised by ``setup``. The original exception is chained.
+            If a name to resume is not an observation, or a new name is already an
+            observation on this context or in the model. For observations
+            registered before setup, the check against the model's observations
+            is made by ``setup``.
+        ObservationError
+            If an observation raises when evaluated. For observations registered
+            before setup, this is raised by ``setup``. The original exception is
+            chained.
         """
-        unknown = [name for name in names if name not in self._records]
+        unknown = [name for name in names if name not in self._observations]
         if unknown:
-            raise ValueError(f"No records named {unknown} to resume.")
-        duplicates = [name for name in records if name in self._records]
+            raise ValueError(f"No observations named {unknown} to resume.")
+        duplicates = [name for name in observations if name in self._observations]
         if duplicates:
             raise ValueError(
-                f"Record names must be unique; {duplicates} already exist. Use a "
+                f"Observation names must be unique; {duplicates} already exist. Use a "
                 "different name, or pass an existing name without a callable to resume it."
             )
         resumed = {
-            name: self._records[name] for name in names if not self._records[name].active
+            name: self._observations[name]
+            for name in names
+            if not self._observations[name].active
         }
-        new_records = {name: _Record(func) for name, func in records.items()}
-        # Before setup there is nothing to evaluate yet; setup records the starting values.
+        new_observations = {
+            name: _InteractiveObservation(func) for name, func in observations.items()
+        }
+        # Before setup there is nothing to evaluate or check against yet; setup does both.
         if self._lifecycle.current_state != lifecycle_states.INITIALIZATION:
-            self._record_values({**resumed, **new_records})
-        for record in resumed.values():
-            record.active = True
-        self._records.update(new_records)
+            self._check_no_model_observation_named(new_observations)
+            self._observe({**resumed, **new_observations})
+        for observation in resumed.values():
+            observation.active = True
+        self._observations.update(new_observations)
 
-    def stop_recording(self, *names: str) -> None:
-        """Stop evaluating the named records, keeping their recorded values.
+    def unregister_observation(self, *names: str) -> None:
+        """Stop evaluating the named observations, keeping their values.
 
-        A stopped record's values stay in :attr:`recorded_values`, and it can be
-        resumed with :meth:`record` by passing its name.
+        An unregistered observation's values stay in :meth:`get_results`, and it
+        can be resumed with :meth:`register_observation` by passing its name.
 
         Parameters
         ----------
         names
-            The names of the records to stop.
+            The names of the observations to stop.
 
         Raises
         ------
         ValueError
-            If any name is not a record, in which case nothing is changed.
+            If any name is not an observation, in which case nothing is changed.
         """
-        unknown = [name for name in names if name not in self._records]
+        unknown = [name for name in names if name not in self._observations]
         if unknown:
-            raise ValueError(f"No records named {unknown}.")
+            raise ValueError(f"No observations named {unknown}.")
         for name in names:
-            self._records[name].active = False
+            self._observations[name].active = False
 
-    def _record_values(self, records: dict[str, _Record]) -> None:
-        """Evaluate each record at the current time and store the values, or none if any fails."""
+    def _check_no_model_observation_named(self, names: Iterable[str]) -> None:
+        """Raise if any name is already an observation registered by the model."""
+        taken = sorted(set(names) & set(self._results.observation_names))
+        if taken:
+            raise ValueError(
+                f"Observation names {taken} passed to register_observation are already "
+                "registered by the model. Use a different name."
+            )
+
+    def _observe(self, observations: dict[str, _InteractiveObservation]) -> None:
+        """Evaluate each observation at the current time and store the values, or none if any fails."""
         time = self.current_time
         values: dict[str, Any] = {}
-        for name, record in records.items():
+        for name, observation in observations.items():
             try:
-                values[name] = record.func(self)
+                values[name] = observation.func(self)
             except Exception as error:
-                raise RecordError(
-                    f"Record '{name}' failed at time {time}: {error!r}"
+                raise ObservationError(
+                    f"Observation '{name}' failed at time {time}: {error!r}"
                 ) from error
         for name, value in values.items():
-            records[name].values[time] = value
+            observations[name].values[time] = value
 
     def run(self, with_logging: bool = True) -> None:  # type: ignore [override]
         """Run the simulation for the duration specified in the configuration.

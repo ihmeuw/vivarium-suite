@@ -1,11 +1,12 @@
 **5.15.0 - 10/14/26**
 
-- Add ``InteractiveContext.record()`` to register named expressions that are evaluated at
-  registration and after every step
-- Add ``InteractiveContext.recorded_values`` to read the recorded values, keyed by record name and
-  then clock time
-- Add ``InteractiveContext.stop_recording()`` to stop records while keeping their values
-- Add ``RecordError``, raised when a record expression fails
+- Add ``InteractiveContext.register_observation()`` to register named callables that are
+  evaluated at registration and after every step, and to resume unregistered ones by name
+- Add ``InteractiveContext.unregister_observation()`` to stop evaluating observations while
+  keeping their values
+- Include these observations in ``InteractiveContext.get_results()``, which now returns
+  ``dict[str, Any]``
+- Add ``ObservationError``, raised when one of these observations fails
 
 **5.14.1 - 10/12/26**
 
