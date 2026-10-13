@@ -31,3 +31,7 @@ py:class Tool
 py:class Task
 # pytask
 py:class _pytask.node_protocols.PNode
+py:class _pytask.nodes.PathNode
+py:class _pytask.nodes.TaskWithoutPath
+py:class _pytask.outcomes.TaskOutcome
+py:class _pytask.session.Session
