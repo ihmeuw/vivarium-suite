@@ -93,3 +93,7 @@ counts: {ok: N, stale: N, unverifiable: N, unreachable: N}
 Omit `evidence`/`correction` for non-`stale` claims. If you cannot
 complete the audit at all, return `audited: no` with a one-line reason —
 never return an empty or partial result silently.
+
+The `correction` text becomes documentation that people read:
+
+- Write prose for people in plain technical English. Use short sentences in the active voice and simple tenses, and one name for each thing. Do not use semicolons, Latin abbreviations, or metaphors. Put code identifiers and paths in backticks.
