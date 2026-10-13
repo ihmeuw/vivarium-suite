@@ -19,9 +19,8 @@
     {
       "name": "simsci-research",
       "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/ihmeuw/vivarium-research-tools.git",
-        "path": "tools/ai-tools"
+        "source": "github",
+        "repo": "ihmeuw/vivarium-research-tools"
       },
       "description": "For the IHME Simulation Science research team: a reviewer-first summary of a session's prompts, human review, and unverified content. Lives in the vivarium-research-tools repo."
     }
