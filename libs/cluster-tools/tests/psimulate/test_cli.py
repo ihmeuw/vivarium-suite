@@ -1,7 +1,7 @@
 """Tests for psimulate CLI features.
 """
 
-import datetime
+import re
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -475,8 +475,9 @@ class TestValidationParity:
         assert "nonexistent_node_type" in result.output or "not supported" in result.output
 
 
-# The date after which positional argument support should be removed.
-_DEPRECATION_DEADLINE = datetime.date(2026, 10, 9)
+# Positional argument support must be removed before this major version is released.
+_DEPRECATION_REMOVAL_MAJOR_VERSION = 5
+_CHANGELOG = Path(__file__).resolve().parents[2] / "CHANGELOG.rst"
 
 
 class TestKeywordArgs:
@@ -689,18 +690,21 @@ class TestPositionalKeywordConflict:
 
 
 class TestDeprecationDeadline:
-    """This test fails after the deprecation deadline to remind us to remove
-    positional argument support entirely."""
+    """This test fails once the CHANGELOG is bumped to the next major version to
+    remind us to remove positional argument support entirely."""
 
-    def test_positional_args_deadline_not_reached(self) -> None:
+    def test_positional_args_removal_version_not_reached(self) -> None:
         """If this test fails, it is time to remove positional argument support
         for model_specification, branch_configuration, and results_root.
         Replace them entirely with the keyword options --model-specification/-M,
         --branch-configuration/-B, and --results-root/-R."""
-        today = datetime.date.today()
-        assert today < _DEPRECATION_DEADLINE, (
-            f"Positional argument deprecation deadline ({_DEPRECATION_DEADLINE}) has passed. "
-            f"Remove positional argument support for model_specification, "
+        first_line = _CHANGELOG.read_text().splitlines()[0]
+        match = re.match(r"\*\*(\d+)\.\d+\.\d+ - ", first_line)
+        assert match, f"Could not parse a version from CHANGELOG first line: {first_line!r}"
+        major_version = int(match.group(1))
+        assert major_version < _DEPRECATION_REMOVAL_MAJOR_VERSION, (
+            f"Version {_DEPRECATION_REMOVAL_MAJOR_VERSION}.0.0 must not ship with positional "
+            f"argument support. Remove positional argument support for model_specification, "
             f"branch_configuration, and results_root. Use the keyword options "
             f"--model-specification/-M, --branch-configuration/-B, and "
             f"--results-root/-R exclusively."

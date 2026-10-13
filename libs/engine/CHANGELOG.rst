@@ -1,4 +1,4 @@
-**5.14.0 - 10/12/26**
+**5.15.0 - 10/13/26**
 
 - Add ``InteractiveContext.record()`` to register named expressions that are evaluated at
   registration and after every step
@@ -7,6 +7,16 @@
 - Add ``InteractiveContext.stop_recording()`` to stop records, keeping their values unless
   ``erase_history=True``; passing a stopped record's name to ``record()`` resumes it
 - Add ``RecordError``, raised when a record expression fails
+
+**5.14.1 - 10/12/26**
+
+- **Breaking change.** Remove ``InteractiveContext.get_emitter``, which was only
+  callable on an already-finalized simulation.
+
+**5.14.0 - 10/12/26**
+
+- Stop reporting initializers from ``InteractiveContext.find_resources()``
+- Add ``InteractiveContext.get_lookup_table()``
 
 **5.13.1 - 10/08/26**
 

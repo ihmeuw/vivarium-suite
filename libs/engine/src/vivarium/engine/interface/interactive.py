@@ -26,11 +26,11 @@ from vivarium.engine.exceptions import RecordError
 from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.randomness.stream import RandomnessStream
-from vivarium.engine.framework.resource.resource import Column
+from vivarium.engine.framework.resource.resource import Column, Initializer
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
 
 _UNSEARCHABLE_RESOURCE_TYPES = frozenset(
-    {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE}
+    {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE, Initializer.RESOURCE_TYPE}
 )
 """Resource types :meth:`InteractiveContext.find_resources` does not report."""
 
@@ -39,7 +39,6 @@ _RESOURCE_TYPE_ORDER = (
     "value",
     "value_modifier",
     "lookup_table",
-    "initializer",
 )
 """Resource types in the order :meth:`InteractiveContext.find_resources` ranks them."""
 
@@ -104,6 +103,7 @@ if TYPE_CHECKING:
 
     from vivarium.engine import Component
     from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.lookup.table import LookupTable
     from vivarium.engine.framework.values import AttributePipeline, Pipeline
     from vivarium.engine.types import ClockStepSize, ClockTime
 
@@ -624,6 +624,37 @@ class InteractiveContext(SimulationContext):
             )
         return self._values.get_attribute(attribute_pipeline_name)
 
+    def get_lookup_table(
+        self, name: str
+    ) -> LookupTable[pd.Series[Any]] | LookupTable[pd.DataFrame]:
+        """Get the lookup table associated with the given name.
+
+        Calling the returned table with a population index returns the data it
+        holds for those simulants.
+
+        Parameters
+        ----------
+        name
+            Name of the lookup table to return. Available names are the
+            ``lookup_table`` rows of :meth:`find_resources`.
+
+        Returns
+        -------
+            The requested lookup table.
+
+        Raises
+        ------
+        ValueError
+            If no lookup table of that name is registered.
+        """
+        if name not in self._tables.tables:
+            raise ValueError(
+                f"No lookup table '{name}' registered. A table is usually named "
+                "for the component that built it, so its name may be longer than "
+                "the quantity it holds; try find_resources()."
+            )
+        return self._tables.tables[name]
+
     def find_resources(self, pattern: str, *, regex: bool = False) -> pd.DataFrame:
         """Find simulation resources whose name or component matches a pattern.
 
@@ -653,7 +684,7 @@ class InteractiveContext(SimulationContext):
             middle or the end, then whole underscore-separated words, then part
             of a word, and last the resources that matched only through their
             component. Ties break by resource type - attributes, values,
-            modifiers, lookup tables, initializers - and then by name.
+            modifiers, lookup tables - and then by name.
 
         Raises
         ------
@@ -662,10 +693,7 @@ class InteractiveContext(SimulationContext):
 
         Notes
         -----
-        Columns and randomness streams are left out. A column is a component's
-        private store whose public face is an attribute of the same name, so
-        reporting it adds a near-duplicate row without adding information, and a
-        stream is upstream of the values it randomizes rather than one of them.
+        Columns, randomness streams, and initializers are excluded.
 
         Modifiers of both attribute and value pipelines appear under the resource
         type ``value_modifier``. There is no accessor for one; read it by printing
@@ -731,27 +759,6 @@ class InteractiveContext(SimulationContext):
         if event_name not in self._events:
             raise ValueError(f"No event {event_name} in system.")
         return self._events.get_listeners(event_name)
-
-    def get_emitter(
-        self, event_name: str
-    ) -> Callable[[pd.Index[int], dict[str, Any] | None], None]:
-        """Get the callable that emits the given type of events.
-
-        Available events can be found by calling
-        :func:`InteractiveContext.list_events`.
-
-        Parameters
-        ----------
-        event_name
-            The name of the event to grab the listeners for.
-
-        Returns
-        -------
-            The callable that emits the named event.
-        """
-        if event_name not in self._events:
-            raise ValueError(f"No event {event_name} in system.")
-        return self._events.get_emitter(event_name)
 
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.
