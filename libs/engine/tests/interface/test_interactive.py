@@ -570,7 +570,7 @@ class TestRecordFailure:
 
 
 class TestStopRecording:
-    """stop_recording() stops records, keeping or erasing their history, and record() resumes them."""
+    """stop_recording() stops records, keeping their history, and record() resumes them."""
 
     def test_stops_calling_but_keeps_the_history(self, short_sim: InteractiveContext) -> None:
         """A stopped record is not called again but keeps its values; others continue."""
@@ -589,17 +589,6 @@ class TestStopRecording:
             "counted": {JAN_1: None, JAN_8: None},
             "days": {JAN_1: 0, JAN_8: 7, JAN_15: 14},
         }
-
-    def test_erasing_the_history_frees_the_name(self, short_sim: InteractiveContext) -> None:
-        """With erase_history the record is removed, and its name starts fresh if reused."""
-        short_sim.record(clock=clock)
-        short_sim.step()
-
-        short_sim.stop_recording("clock", erase_history=True)
-        assert short_sim.recorded_values == {}
-
-        short_sim.record(clock=clock)
-        assert short_sim.recorded_values == {"clock": {JAN_8: JAN_8}}
 
     def test_a_stopped_record_resumes_by_name(self, short_sim: InteractiveContext) -> None:
         """Passing a stopped record's name to record resumes it, leaving a gap while stopped."""

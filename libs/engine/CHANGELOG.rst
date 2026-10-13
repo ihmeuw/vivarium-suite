@@ -1,11 +1,10 @@
-**5.15.0 - 10/13/26**
+**5.15.0 - 10/14/26**
 
 - Add ``InteractiveContext.record()`` to register named expressions that are evaluated at
   registration and after every step
 - Add ``InteractiveContext.recorded_values`` to read the recorded values, keyed by record name and
   then clock time
-- Add ``InteractiveContext.stop_recording()`` to stop records, keeping their values unless
-  ``erase_history=True``; passing a stopped record's name to ``record()`` resumes it
+- Add ``InteractiveContext.stop_recording()`` to stop records while keeping their values
 - Add ``RecordError``, raised when a record expression fails
 
 **5.14.1 - 10/12/26**

@@ -547,17 +547,16 @@ If a record raises, the run stops with a
 and the time, and nothing is recorded for that step. Use
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.stop_recording`
 to stop recording an expression. Its recorded values are kept, and passing its
-name to ``record`` (without a callable) resumes it. Pass ``erase_history=True``
-to remove the record and its values instead.
+name to ``record`` (without a callable) resumes it.
 
 .. testcode::
 
-   sim.stop_recording("n_wasted", erase_history=True)
+   sim.stop_recording("n_wasted")
    print(list(sim.recorded_values))
 
 .. testoutput::
 
-   ['mean_age']
+   ['mean_age', 'n_wasted']
 
 Advancing a simulation does not, on its own, produce any results - an
 ``InteractiveContext`` does not observe them by default. See

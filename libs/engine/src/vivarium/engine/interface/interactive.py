@@ -293,18 +293,16 @@ class InteractiveContext(SimulationContext):
             record.active = True
         self._records.update(new_records)
 
-    def stop_recording(self, *names: str, erase_history: bool = False) -> None:
+    def stop_recording(self, *names: str) -> None:
         """Stop evaluating the named records, keeping their recorded values.
 
-        A stopped record can be resumed with :meth:`record` by passing its name.
+        A stopped record's values stay in :attr:`recorded_values`, and it can be
+        resumed with :meth:`record` by passing its name.
 
         Parameters
         ----------
         names
             The names of the records to stop.
-        erase_history
-            Whether to also remove the records and their recorded values. A value
-            of False (the default) keeps them in :attr:`recorded_values`.
 
         Raises
         ------
@@ -315,11 +313,7 @@ class InteractiveContext(SimulationContext):
         if unknown:
             raise ValueError(f"No records named {unknown}.")
         for name in names:
-            if erase_history:
-                # pop with a default so a name repeated in the call is not an error
-                self._records.pop(name, None)
-            else:
-                self._records[name].active = False
+            self._records[name].active = False
 
     def _record_values(self, records: dict[str, _Record]) -> None:
         """Evaluate each record at the current time and store the values, or none if any fails."""
