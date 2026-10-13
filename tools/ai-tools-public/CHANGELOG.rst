@@ -1,4 +1,4 @@
-**0.3.0 - 10/07/26**
+**0.3.0 - 10/13/26**
 
 - Add a one-line plain-English writing rule, based on ASD-STE100 Simplified
   Technical English, to the five ``_review_*`` agents and ``_split_proposer``
