@@ -211,15 +211,6 @@ We see in the example above that ``BasePopulation``, ``Mortality``, and
 the lower respiratory infections ``DiseaseModel`` each registered a listener
 to the ``time_step`` phase, all at priority 5.
 
-.. note::
-
-    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_emitter`
-    is also present on the context, but it is restricted to the ``setup``,
-    ``simulation_end`` and ``report`` lifecycle states, so it is not callable
-    from a session that is simply set up or mid-run. Emitting events by hand is
-    discouraged in any case; see the :ref:`event system concept page <event_concept>`
-    for why, and prefer registering listeners.
-
 State table attributes and value pipelines
 ++++++++++++++++++++++++++++++++++++++++++
 
@@ -353,9 +344,8 @@ Finding something by name
 Everything above assumes you already know what the thing you want is called, and
 which kind of thing it is; you might not know either.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
-takes a fragment of a name and reports every :term:`resource <Resource>` that matches
-it in its name or the name of the component that registered it as well as the type
-of each resource.
+takes a fragment of a name and reports every :term:`resource <Resource>` whose own
+name, or whose component's name, contains it, along with the type of each one.
 
 .. testcode::
 
@@ -365,23 +355,35 @@ of each resource.
 .. testoutput::
 
                                                                                                  name  resource_type                                                 component
-                                                                      3.mortality.initialize_is_alive    initializer                                                 mortality
-                       disease_state.infected_with_lower_respiratory_infections.excess_mortality_rate   lookup_table  disease_state.infected_with_lower_respiratory_infections
-                      disease_state.susceptible_to_lower_respiratory_infections.excess_mortality_rate   lookup_table disease_state.susceptible_to_lower_respiratory_infections
-                                     infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
-    infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
-                                                                                             is_alive      attribute                                                 mortality
-                                           lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
-                                                                             mortality.mortality_rate   lookup_table                                                 mortality
                                                                                        mortality_rate      attribute                                                 mortality
           mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality value_modifier                disease_model.lower_respiratory_infections
    mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality value_modifier disease_state.susceptible_to_lower_respiratory_infections
     mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality value_modifier  disease_state.infected_with_lower_respiratory_infections
+                                                                             mortality.mortality_rate   lookup_table                                                 mortality
+                                     infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
+    infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
+                                           lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
                                     susceptible_to_lower_respiratory_infections.excess_mortality_rate      attribute disease_state.susceptible_to_lower_respiratory_infections
    susceptible_to_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute disease_state.susceptible_to_lower_respiratory_infections
+                       disease_state.infected_with_lower_respiratory_infections.excess_mortality_rate   lookup_table  disease_state.infected_with_lower_respiratory_infections
+                      disease_state.susceptible_to_lower_respiratory_infections.excess_mortality_rate   lookup_table disease_state.susceptible_to_lower_respiratory_infections
+                                                                                             is_alive      attribute                                                 mortality
 
-Notice that the ``is_alive`` resource is included in the output even though its
-name does not contain "mortality". This is because the ``mortality`` component
+Results come back most relevant first, in the following order:
+
+- the resource name matches exactly
+- the resource name begins with the pattern
+- the resource name contains the pattern as one or more whole dot-separated segments
+- the resource name contains the pattern as one or more whole underscore-separated words
+- the resource name contains the pattern as part of a word
+- the resource name does not match at all, and only its component's name does
+
+The two middle bullets are why searching "ever" ranks ``test_ever_eligible``, where
+"ever" is a word of its own, above ``never_treated``, where it is buried inside
+another word.
+
+That last bullet is why ``is_alive`` is at the bottom in the example above: "mortality"
+appears nowhere in its name, and it is listed only because the ``mortality`` component
 registered it.
 
 .. note::
@@ -392,11 +394,15 @@ registered it.
 
 .. note::
 
-    Columns and randomness streams are deliberately left out. A column contains the
-    backing data of an attribute of the same name, so reporting it adds a near-duplicate
-    row without adding information. Meanwhile, a randomness stream is upstream of
-    the values it randomizes rather than one of them and there's not much to gain
-    from reporting it.
+    Columns, randomness streams, and population initializers are deliberately left
+    out. A column contains the backing data of an attribute of the same name, so
+    reporting it adds a near-duplicate row without adding information. A randomness
+    stream is upstream of the values it randomizes rather than one of them and there's
+    not much to gain from reporting it. An initializer is named for the call that
+    fills a column rather than for the quantity you would search for, so it crowds
+    the results;
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
+    reports those instead.
 
 .. note::
 
@@ -405,11 +411,10 @@ registered it.
     cannot find those. Once you have located a pipeline, printing it reports them,
     as shown above.
 
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
-by default performs a literal substring match; to search with regex, pass ``regex=True``.
-For example, we can search for the ``mortality`` component exactly using anchors
-which will match the component name exactly rather than every name containing the
-word "mortality".
+The pattern is matched literally by default; pass ``regex=True`` to treat it as a
+regular expression instead. For example, we can anchor our "mortality" search so
+that it narrows to *exactly* ``mortality`` rather than everything with "mortality"
+somewhere in its name.
 
 .. testcode::
 
@@ -420,11 +425,34 @@ word "mortality".
 
 .. testoutput::
 
-                              name resource_type component
-   3.mortality.initialize_is_alive   initializer mortality
-                          is_alive     attribute mortality
-          mortality.mortality_rate  lookup_table mortality
-                    mortality_rate     attribute mortality
+                       name resource_type component
+                   is_alive     attribute mortality
+             mortality_rate     attribute mortality
+   mortality.mortality_rate  lookup_table mortality
+
+Each resource type can be retrieved:
+
+- ``value``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
+- ``attribute``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`
+- ``value_modifier``: no getter; use the corresponding pipeline's ``modifiers``
+  attribute to inspect them
+- ``lookup_table``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_lookup_table`
+
+For example, we can get the mortality rate lookup table found above:
+
+.. testcode::
+
+   mr_table = sim.get_lookup_table("mortality.mortality_rate")
+   print(mr_table(sim.get_population_index()[:5]))
+
+.. testoutput::
+
+   0    0.01
+   1    0.01
+   2    0.01
+   3    0.01
+   4    0.01
+   Name: value, dtype: float64
 
 .. note::
 

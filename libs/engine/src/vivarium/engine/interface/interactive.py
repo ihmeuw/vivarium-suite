@@ -16,20 +16,80 @@ from __future__ import annotations
 
 import re
 from math import ceil
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, NamedTuple, overload
 
 import numpy as np
 import pandas as pd
 
 from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.framework.randomness.stream import RandomnessStream
-from vivarium.engine.framework.resource.resource import Column
+from vivarium.engine.framework.resource.resource import Column, Initializer
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
 
 _UNSEARCHABLE_RESOURCE_TYPES = frozenset(
-    {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE}
+    {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE, Initializer.RESOURCE_TYPE}
 )
 """Resource types :meth:`InteractiveContext.find_resources` does not report."""
+
+_RESOURCE_TYPE_ORDER = (
+    "attribute",
+    "value",
+    "value_modifier",
+    "lookup_table",
+)
+"""Resource types in the order :meth:`InteractiveContext.find_resources` ranks them."""
+
+_RESOURCE_TYPE_RANK = {
+    resource_type: index for index, resource_type in enumerate(_RESOURCE_TYPE_ORDER)
+}
+
+_WORD_SEPARATORS = frozenset({".", "_"})
+"""Characters :meth:`InteractiveContext.find_resources` treats as word boundaries."""
+
+
+class _ResourceRow(NamedTuple):
+    """A candidate row, with the relevance rank that orders it but is not reported."""
+
+    rank: int
+    name: str
+    resource_type: str
+    component: str
+
+
+def _match_rank(matcher: re.Pattern[str], name: str) -> int:
+    """Rank a resource by how squarely the pattern hit its name, best first.
+
+    Names are dot-delimited hierarchies of underscore-separated words, so a match
+    filling whole segments means more than one filling whole words, which in turn
+    means more than one landing mid-word. Searching "mortality_rate" ranks
+    ``mortality.mortality_rate`` above ``excess_mortality_rate``, which merely
+    contains those characters; searching "ever" ranks ``test_ever_eligible`` above
+    ``never_treated``.
+    """
+    # A pattern can occur several times in one name, so take its best showing
+    # rather than whichever happens to come first.
+    rank = 5  # only the component matched
+    for match in matcher.finditer(name):
+        start, end = match.span()
+        if (start, end) == (0, len(name)):
+            # the entire name, e.g. "age" for "age"
+            return 0
+        if start == 0:
+            # the start of the name, e.g. "age" in "agent_used.x.y"
+            rank = min(rank, 1)
+        elif name[start - 1] == "." and (end == len(name) or name[end] == "."):
+            # whole segments from the middle or the end, e.g. "age" in "mortality.age.rate"
+            rank = min(rank, 2)
+        elif name[start - 1] in _WORD_SEPARATORS and (
+            end == len(name) or name[end] in _WORD_SEPARATORS
+        ):
+            # whole words from the middle or the end, e.g. "age" in "mortality_age_rate"
+            rank = min(rank, 3)
+        else:
+            # part of a word, e.g. "age" in "coverage"
+            rank = min(rank, 4)
+    return rank
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -40,6 +100,7 @@ if TYPE_CHECKING:
 
     from vivarium.engine import Component
     from vivarium.engine.framework.event import Event
+    from vivarium.engine.framework.lookup.table import LookupTable
     from vivarium.engine.framework.values import AttributePipeline, Pipeline
     from vivarium.engine.types import ClockStepSize, ClockTime
 
@@ -443,6 +504,37 @@ class InteractiveContext(SimulationContext):
             )
         return self._values.get_attribute(attribute_pipeline_name)
 
+    def get_lookup_table(
+        self, name: str
+    ) -> LookupTable[pd.Series[Any]] | LookupTable[pd.DataFrame]:
+        """Get the lookup table associated with the given name.
+
+        Calling the returned table with a population index returns the data it
+        holds for those simulants.
+
+        Parameters
+        ----------
+        name
+            Name of the lookup table to return. Available names are the
+            ``lookup_table`` rows of :meth:`find_resources`.
+
+        Returns
+        -------
+            The requested lookup table.
+
+        Raises
+        ------
+        ValueError
+            If no lookup table of that name is registered.
+        """
+        if name not in self._tables.tables:
+            raise ValueError(
+                f"No lookup table '{name}' registered. A table is usually named "
+                "for the component that built it, so its name may be longer than "
+                "the quantity it holds; try find_resources()."
+            )
+        return self._tables.tables[name]
+
     def find_resources(self, pattern: str, *, regex: bool = False) -> pd.DataFrame:
         """Find simulation resources whose name or component matches a pattern.
 
@@ -465,8 +557,14 @@ class InteractiveContext(SimulationContext):
         Returns
         -------
             A frame of matching resources with columns ``name``, ``resource_type``
-            and ``component``, one row per resource, sorted by name and then
-            resource type.
+            and ``component``, one row per resource, most relevant first.
+
+            Relevance is how squarely the pattern hit the name: the whole name,
+            then the start of it, then whole dot-separated segments from the
+            middle or the end, then whole underscore-separated words, then part
+            of a word, and last the resources that matched only through their
+            component. Ties break by resource type - attributes, values,
+            modifiers, lookup tables - and then by name.
 
         Raises
         ------
@@ -475,10 +573,7 @@ class InteractiveContext(SimulationContext):
 
         Notes
         -----
-        Columns and randomness streams are left out. A column is a component's
-        private store whose public face is an attribute of the same name, so
-        reporting it adds a near-duplicate row without adding information, and a
-        stream is upstream of the values it randomizes rather than one of them.
+        Columns, randomness streams, and initializers are excluded.
 
         Modifiers of both attribute and value pipelines appear under the resource
         type ``value_modifier``. There is no accessor for one; read it by printing
@@ -495,17 +590,30 @@ class InteractiveContext(SimulationContext):
                 " search for this text literally."
             ) from error
 
-        rows = []
+        rows: list[_ResourceRow] = []
         for resource in self._resource.get_graph().nodes:
             if resource.RESOURCE_TYPE in _UNSEARCHABLE_RESOURCE_TYPES:
                 continue
             resource_name = str(resource.name)
             component_name = resource.component.name
             if matcher.search(resource_name) or matcher.search(component_name):
-                rows.append((resource_name, resource.RESOURCE_TYPE, component_name))
+                rank = _match_rank(matcher, resource_name)
+                rows.append(
+                    _ResourceRow(rank, resource_name, resource.RESOURCE_TYPE, component_name)
+                )
 
-        return pd.DataFrame(rows, columns=["name", "resource_type", "component"]).sort_values(
-            ["name", "resource_type"], ignore_index=True
+        rows.sort(
+            key=lambda row: (
+                row.rank,
+                # A type absent from _RESOURCE_TYPE_ORDER sorts last rather than
+                # being dropped, so a type added later still reports its real name.
+                _RESOURCE_TYPE_RANK.get(row.resource_type, len(_RESOURCE_TYPE_RANK)),
+                row.name,
+            )
+        )
+        return pd.DataFrame(
+            [(row.name, row.resource_type, row.component) for row in rows],
+            columns=["name", "resource_type", "component"],
         )
 
     def list_events(self) -> list[str]:
@@ -531,27 +639,6 @@ class InteractiveContext(SimulationContext):
         if event_name not in self._events:
             raise ValueError(f"No event {event_name} in system.")
         return self._events.get_listeners(event_name)
-
-    def get_emitter(
-        self, event_name: str
-    ) -> Callable[[pd.Index[int], dict[str, Any] | None], None]:
-        """Get the callable that emits the given type of events.
-
-        Available events can be found by calling
-        :func:`InteractiveContext.list_events`.
-
-        Parameters
-        ----------
-        event_name
-            The name of the event to grab the listeners for.
-
-        Returns
-        -------
-            The callable that emits the named event.
-        """
-        if event_name not in self._events:
-            raise ValueError(f"No event {event_name} in system.")
-        return self._events.get_emitter(event_name)
 
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -35,9 +36,11 @@ from tests.helpers import (
 from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
+from vivarium.engine.interface.interactive import _match_rank
 
 
 def test_list_values() -> None:
@@ -96,6 +99,44 @@ def test_get_value_and_get_attribute_point_at_each_other() -> None:
         sim.get_attribute("simulant_step_size")
 
 
+class TestGetLookupTable:
+    """Tests for retrieving a lookup table from an interactive simulation."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(components=[NestedLookupCaller()])
+
+    def test_the_table_itself_is_returned(self, sim: InteractiveContext) -> None:
+        """The getter hands back the table, not the data it holds."""
+        table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
+        assert isinstance(table, LookupTable)
+        assert table.name == "nested_lookup_caller.inner_lookup"
+
+    def test_the_returned_table_is_callable(self, sim: InteractiveContext) -> None:
+        """Calling it with an index is the point of having it, so check the values
+        it produces and not just their count."""
+        table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
+        index = sim.get_population_index()
+        assert len(index) > 0
+        # The fixture keys the table on 'inner', which is the index modulo three.
+        assert (table(index) == (index % 3 + 1) * 10).all()
+
+    def test_an_unregistered_name_raises(self, sim: InteractiveContext) -> None:
+        """An unknown name is rejected rather than quietly accepted."""
+        with pytest.raises(ValueError, match="No lookup table 'foo' registered."):
+            sim.get_lookup_table("foo")
+
+    def test_every_lookup_table_name_find_resources_reports_can_be_fetched(
+        self, sim: InteractiveContext
+    ) -> None:
+        """The two halves agree: whatever the search surfaces, the getter accepts."""
+        found = sim.find_resources("")
+        names = found.loc[found["resource_type"] == "lookup_table", "name"]
+        assert len(names) > 0
+        for name in names:
+            assert sim.get_lookup_table(name).name == name
+
+
 def test_run_for_duration() -> None:
     sim = InteractiveContext()
     initial_time = sim._clock.time
@@ -105,6 +146,23 @@ def test_run_for_duration() -> None:
 
     sim.run_for("5 days")
     assert sim._clock.time == initial_time + pd.Timedelta("15 days")  # type: ignore[operator]
+
+
+class AttributeNamed(Component):
+    """Register one attribute pipeline under a caller-chosen name."""
+
+    def __init__(self, attribute_name: str):
+        super().__init__()
+        self._attribute_name = attribute_name
+
+    @property
+    def name(self) -> str:
+        return f"attribute_named.{self._attribute_name}"
+
+    def setup(self, builder: Builder) -> None:
+        builder.value.register_attribute_producer(
+            self._attribute_name, lambda index: pd.Series(0, index=index)
+        )
 
 
 JAN_1 = pd.Timestamp("2020-01-01")
@@ -346,10 +404,9 @@ class TestFindResources:
     def test_a_fragment_need_not_be_the_whole_name(self, sim: InteractiveContext) -> None:
         assert "test_column_1" in set(sim.find_resources("column_1")["name"])
 
-    def test_columns_and_streams_are_not_reported(self, sim: InteractiveContext) -> None:
-        """A column's public face is its attribute, so reporting it adds a
-        near-duplicate row; a stream is upstream of the values it randomizes."""
-        assert not {"column", "stream"} & set(sim.find_resources("")["resource_type"])
+    def test_unsearchable_types_are_not_reported(self, sim: InteractiveContext) -> None:
+        reported = set(sim.find_resources("")["resource_type"])
+        assert not {"column", "stream", "initializer"} & reported
 
     def test_lookup_tables_are_reported(self) -> None:
         """The shared fixture registers none, so this one needs its own sim."""
@@ -386,22 +443,145 @@ class TestFindResources:
         found = sim.find_resources("^column_creator_and_requirer$", regex=True)
         assert set(found["component"]) == {"column_creator_and_requirer"}
 
-    def test_results_are_sorted_by_name_then_resource_type(
-        self, sim: InteractiveContext
+    def test_an_exact_name_match_comes_first(self) -> None:
+        """The thing you named outranks everything merely containing it, even one
+        whose name sorts earlier alphabetically."""
+        sim = InteractiveContext(
+            components=[
+                AttributeNamed("needle"),
+                AttributeNamed("here_is_a_needle_in_a_haystack"),
+            ]
+        )
+        assert list(sim.find_resources("needle")["name"]) == [
+            "needle",
+            "here_is_a_needle_in_a_haystack",
+        ]
+
+    @pytest.mark.parametrize(
+        "pattern, name, expected",
+        [
+            ("a.b.c", "a.b.c", 0),
+            ("a.b", "a.b.c", 1),
+            ("a", "a.b.c", 1),
+            ("b", "a.b.c", 2),
+            ("c", "a.b.c", 2),
+            ("b.c", "a.b.c", 2),
+            ("b_x", "a.b_x_y.c", 3),
+            ("y.c", "a.b_x_y.c", 3),
+            ("ever", "test_ever_eligible", 3),
+            ("umn_1", "test_column_1", 4),
+            ("ever", "never_treated", 4),
+            ("", "a.b.c", 1),
+            ("zzz", "a.b.c", 5),
+        ],
+        ids=[
+            "whole name",
+            "leading segments",
+            "one leading segment",
+            "middle segment",
+            "last segment",
+            "several segments to the end",
+            "whole words inside a segment",
+            "whole words across a segment boundary",
+            "a whole word in a name with no dots",
+            "part of a word in a name with no dots",
+            "a fragment buried in a longer word",
+            "an empty pattern matches at the start",
+            "no match on the name at all",
+        ],
+    )
+    def test_each_rank_is_assigned_as_documented(
+        self, pattern: str, name: str, expected: int
     ) -> None:
-        """Name first, for a stable order a reader can scan."""
-        found = sim.find_resources("test")
-        expected = found.sort_values(["name", "resource_type"], ignore_index=True)
-        assert found.equals(expected)
+        """Pin the tiers directly: an ordering test cannot distinguish them when the
+        alphabetical tiebreak happens to agree with the ranking."""
+        matcher = re.compile(re.escape(pattern), re.IGNORECASE)
+        assert _match_rank(matcher, name) == expected
+
+    def test_a_whole_segment_outranks_part_of_one(self) -> None:
+        """Names are dotted hierarchies, so filling a segment means more than
+        straddling one. The names are chosen so alphabetical order contradicts the
+        ranking: only the segment rule can put ``zz_outer.needle`` first."""
+        sim = InteractiveContext(
+            components=[AttributeNamed("zz_outer.needle"), AttributeNamed("aa_needle_part")]
+        )
+        assert list(sim.find_resources("needle")["name"]) == [
+            "zz_outer.needle",
+            "aa_needle_part",
+        ]
+
+    def test_a_whole_word_outranks_a_fragment_of_one(self) -> None:
+        """Segments are underscore-separated words, so a pattern filling whole words
+        means more than one buried inside a longer word. Alphabetical order again
+        contradicts the ranking, so only the word rule can put ``zz_`` first."""
+        sim = InteractiveContext(
+            components=[
+                AttributeNamed("zz_test_ever_eligible"),
+                AttributeNamed("aa_never_treated"),
+            ]
+        )
+        assert list(sim.find_resources("ever")["name"]) == [
+            "zz_test_ever_eligible",
+            "aa_never_treated",
+        ]
+
+    def test_regex_mode_is_ranked_the_same_way(self) -> None:
+        """The rank comes from the match's span, so the flag does not change it.
+        These are the names of the segment test, ordered against the alphabet, so
+        a regex path that lost the span would reorder them."""
+        sim = InteractiveContext(
+            components=[AttributeNamed("zz_outer.needle"), AttributeNamed("aa_needle_part")]
+        )
+        assert list(sim.find_resources("n[e]+dle", regex=True)["name"]) == [
+            "zz_outer.needle",
+            "aa_needle_part",
+        ]
+
+    def test_a_component_only_match_comes_last(self) -> None:
+        """Matching through the component is the surprising hit, so it sorts last.
+        Only ``zz_column_creator`` matches on its own name; the rest are reached
+        through their component, and alphabetical order would lead with them."""
+        sim = InteractiveContext(
+            components=[AttributeNamed("zz_column_creator"), ColumnCreator()]
+        )
+        assert list(sim.find_resources("column_creator")["name"]) == [
+            "zz_column_creator",
+            "test_column_1",
+            "test_column_2",
+            "test_column_3",
+        ]
+
+    def test_ties_break_by_resource_type(self) -> None:
+        """Within one rank, attributes come before modifiers, not alphabetically.
+        The lookup table is what makes this discriminating: the other three types
+        happen to fall in alphabetical order on their own, so a sim without one
+        would pass under either rule."""
+        sim = InteractiveContext(
+            components=[
+                ColumnCreator(),
+                AttributePipelineCreator(),
+                NestedLookupCaller(),
+            ]
+        )
+        order = ["attribute", "value", "value_modifier", "lookup_table"]
+        types = list(sim.find_resources("")["resource_type"])
+        assert set(types) == set(order)
+        assert types == sorted(types, key=order.index)
+
+    def test_ties_then_break_by_name(self, sim: InteractiveContext) -> None:
+        """Within one rank and one resource type, names run alphabetically."""
+        found = sim.find_resources("")
+        attributes = list(found.loc[found["resource_type"] == "attribute", "name"])
+        assert attributes == sorted(attributes)
 
     def test_every_other_resource_in_the_graph_is_reachable(
         self, sim: InteractiveContext
     ) -> None:
-        """Only columns and streams are withheld; nothing else is."""
+        """Only columns, streams, and initializers are withheld; nothing else is."""
         expected = {
             (str(node.name), node.RESOURCE_TYPE, node.component.name)
             for node in sim._resource.get_graph().nodes
-            if node.RESOURCE_TYPE not in ("column", "stream")
+            if node.RESOURCE_TYPE not in ("column", "stream", "initializer")
         }
         assert set(sim.find_resources("").itertuples(index=False)) == expected
 
