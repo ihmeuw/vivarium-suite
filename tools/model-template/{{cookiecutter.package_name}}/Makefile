@@ -19,6 +19,12 @@ endif
 # Set the package name as the last part of this file's parent directory path
 PACKAGE_NAME = $(notdir $(CURDIR))
 
+# The package's name, read from pyproject.toml so there is only one copy of it.
+# awk rather than Python, because environment.sh needs this before any
+# environment exists.
+DIST_NAME := $(shell awk -F'"' '/^\[project\]/{p=1} p && /^name[[:space:]]*=/{print $$2; exit}' $(CURDIR)/pyproject.toml)
+$(if $(DIST_NAME),,$(error Could not read the [project] name from pyproject.toml))
+
 # Helper function for validating enum arguments
 validate_arg = $(if $(filter-out $(2),$(1)),$(error Error: '$(3)' must be one of: $(2), got '$(1)'))
 
@@ -53,6 +59,7 @@ include $(MAKE_INCLUDES)/base.mk
 include $(MAKE_INCLUDES)/test.mk
 else # empty
 # Use this help message (since the vivarium_build_utils version is not available)
+.PHONY: help
 help:
 	@echo
 	@echo "For Make's standard help, run 'make --help'."
@@ -125,6 +132,7 @@ help:
 	@echo
 endif
 
+.PHONY: build-env
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
 	$(call validate_make_args,build-env,type name path lfs py include_timestamp force keep_env)
@@ -214,6 +222,7 @@ _build-env:
 # Default shared environment directory (set by Jenkins nightly builds)
 SHARED_ENV_DIR ?= /mnt/team/simulation_science/priv/engineering/jenkins/shared_envs
 
+.PHONY: build-shared-env
 build-shared-env: # Create a lightweight venv overlay on top of a shared conda environment
 #	Validate arguments - exit if unsupported arguments are passed
 	$(call validate_make_args,build-shared-env,type venv_dir venv_name shared_env_dir force)
@@ -225,7 +234,7 @@ build-shared-env: # Create a lightweight venv overlay on top of a shared conda e
 #	venv_dir
 	@$(eval venv_dir ?= .venv)
 #	venv_name
-	@$(eval venv_name ?= $(PACKAGE_NAME)_$(type))
+	@$(eval venv_name ?= $(DIST_NAME)_$(type))
 #	Construct full venv path
 	@$(eval venv_path := $(venv_dir)/$(venv_name))
 #	shared_env_dir
@@ -234,7 +243,7 @@ build-shared-env: # Create a lightweight venv overlay on top of a shared conda e
 	@$(eval force ?= no)
 	@$(call validate_arg,$(force),yes no,force)
 #	Construct shared environment path
-	@$(eval SHARED_ENV_NAME := $(PACKAGE_NAME)_$(type)_current)
+	@$(eval SHARED_ENV_NAME := $(DIST_NAME)_$(type)_current)
 	@$(eval SHARED_ENV_PATH := $(shared_env_dir)/$(SHARED_ENV_NAME))
 
 #	Verify shared environment exists
@@ -300,3 +309,7 @@ build-shared-env: # Create a lightweight venv overlay on top of a shared conda e
 	@echo "  1. Activate it: 'source $(venv_path)/bin/activate'"
 	@echo "  2. Run 'make help' again to see all newly available targets"
 	@echo
+
+.PHONY: print-dist-name
+print-dist-name: # Print the distribution name (used by environment.sh)
+	@echo $(DIST_NAME)

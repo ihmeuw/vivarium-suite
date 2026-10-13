@@ -1,3 +1,8 @@
+**4.9.2 - 10/07/26**
+
+- Add the nutrition optimization pregnancy and child models to the nightly shared
+  environment build
+
 **4.9.1 - 09/25/26**
 
 - Carry each library's supported Python versions on ``Lib``
