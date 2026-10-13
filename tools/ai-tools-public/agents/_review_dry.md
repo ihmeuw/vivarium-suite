@@ -34,7 +34,8 @@ Return a numbered list of findings. For each:
 
 ## Constraints
 
-- Be terse. State each finding's problem and fix in ≤2 sentences; add a "why it matters" clause only when the impact is non-obvious. Use a code snippet only when the fix isn't clear from a sentence.
+- Be terse. State each finding's problem and fix in no more than two sentences. Add a "why it matters" clause only when the impact is not obvious. Use a code snippet only when a sentence cannot make the fix clear.
+- Write prose for people in plain technical English. Use short sentences in the active voice and simple tenses, and one name for each thing. Do not use semicolons, Latin abbreviations, or metaphors. Put code identifiers and paths in backticks.
 - If there are no findings, say so in one line. Do not restate or summarize the diff.
 - DO NOT flag intentional repetition where abstraction would reduce clarity
 - DO NOT suggest changes outside the scope of the PR diff

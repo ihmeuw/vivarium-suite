@@ -211,15 +211,6 @@ We see in the example above that ``BasePopulation``, ``Mortality``, and
 the lower respiratory infections ``DiseaseModel`` each registered a listener
 to the ``time_step`` phase, all at priority 5.
 
-.. note::
-
-    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_emitter`
-    is also present on the context, but it is restricted to the ``setup``,
-    ``simulation_end`` and ``report`` lifecycle states, so it is not callable
-    from a session that is simply set up or mid-run. Emitting events by hand is
-    discouraged in any case; see the :ref:`event system concept page <event_concept>`
-    for why, and prefer registering listeners.
-
 State table attributes and value pipelines
 ++++++++++++++++++++++++++++++++++++++++++
 
@@ -369,7 +360,6 @@ name, or whose component's name, contains it, along with the type of each one.
    mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality value_modifier disease_state.susceptible_to_lower_respiratory_infections
     mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality value_modifier  disease_state.infected_with_lower_respiratory_infections
                                                                              mortality.mortality_rate   lookup_table                                                 mortality
-                                                                      3.mortality.initialize_is_alive    initializer                                                 mortality
                                      infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
     infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
                                            lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
@@ -404,11 +394,15 @@ registered it.
 
 .. note::
 
-    Columns and randomness streams are deliberately left out. A column contains the
-    backing data of an attribute of the same name, so reporting it adds a near-duplicate
-    row without adding information. Meanwhile, a randomness stream is upstream of
-    the values it randomizes rather than one of them and there's not much to gain
-    from reporting it.
+    Columns, randomness streams, and population initializers are deliberately left
+    out. A column contains the backing data of an attribute of the same name, so
+    reporting it adds a near-duplicate row without adding information. A randomness
+    stream is upstream of the values it randomizes rather than one of them and there's
+    not much to gain from reporting it. An initializer is named for the call that
+    fills a column rather than for the quantity you would search for, so it crowds
+    the results;
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
+    reports those instead.
 
 .. note::
 
@@ -431,11 +425,34 @@ somewhere in its name.
 
 .. testoutput::
 
-                              name resource_type component
-                          is_alive     attribute mortality
-                    mortality_rate     attribute mortality
-          mortality.mortality_rate  lookup_table mortality
-   3.mortality.initialize_is_alive   initializer mortality
+                       name resource_type component
+                   is_alive     attribute mortality
+             mortality_rate     attribute mortality
+   mortality.mortality_rate  lookup_table mortality
+
+Each resource type can be retrieved:
+
+- ``value``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
+- ``attribute``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`
+- ``value_modifier``: no getter; use the corresponding pipeline's ``modifiers``
+  attribute to inspect them
+- ``lookup_table``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_lookup_table`
+
+For example, we can get the mortality rate lookup table found above:
+
+.. testcode::
+
+   mr_table = sim.get_lookup_table("mortality.mortality_rate")
+   print(mr_table(sim.get_population_index()[:5]))
+
+.. testoutput::
+
+   0    0.01
+   1    0.01
+   2    0.01
+   3    0.01
+   4    0.01
+   Name: value, dtype: float64
 
 .. note::
 
