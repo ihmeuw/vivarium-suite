@@ -1,3 +1,7 @@
+**0.3.1 - 10/13/26**
+
+- Add a short testing strategy section to the ``/simsci:framework-development`` design proposal
+
 **0.3.0 - 10/13/26**
 
 - Add a one-line plain-English writing rule, based on ASD-STE100 Simplified
