@@ -509,15 +509,12 @@ observations, use
 Pass each observation as a keyword argument: the keyword is the observation's
 name, and its value is a callable that takes the simulation and returns the
 value to store. Every observation is evaluated once when it is registered and
-again after every step, whether that step comes from ``step``, ``take_steps``,
-``run_for``, ``run_until`` or ``run``, and its values are stored under the
-clock time.
+again after every step.
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_results`
-returns each observation under its name, as a dict keyed by time, which
-converts directly to a ``pandas`` object. Values are stored exactly as returned,
-so an observation may return a scalar, a Series, a DataFrame, or anything else.
-An observation's name must not match one that the model already observes.
+returns each observation under its name, as a dict keyed by time. Values are
+stored exactly as returned. An observation's name must not match one that the
+model already observes.
 
 .. testcode::
 
@@ -544,9 +541,7 @@ An observation's name must not match one that the model already observes.
    2022-02-11 12:00:00    8
    dtype: int64
 
-If an observation raises, the run stops with an
-:class:`~vivarium.engine.exceptions.ObservationError` that names the
-observation and the time, and nothing is stored for that step. Use
+Use
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.unregister_observation`
 to stop evaluating an observation. Its values are kept in ``get_results``, and
 passing its name to ``register_observation`` (without a callable) resumes it.

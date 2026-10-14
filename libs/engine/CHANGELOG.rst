@@ -1,4 +1,4 @@
-**5.15.0 - 10/14/26**
+**5.15.0 - 10/15/26**
 
 - Add ``InteractiveContext.register_observation()`` to register named callables that are
   evaluated at registration and after every step, and to resume unregistered ones by name

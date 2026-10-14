@@ -312,6 +312,9 @@ class InteractiveContext(SimulationContext):
         for observation in resumed.values():
             observation.active = True
         self._observations.update(new_observations)
+        already_registered = [name for name in names if name not in resumed]
+        if already_registered:
+            self._logger.info(f"Observations {already_registered} are already registered.")
 
     def unregister_observation(self, *names: str) -> None:
         """Stop evaluating the named observations, keeping their values.

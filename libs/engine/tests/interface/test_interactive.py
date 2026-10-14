@@ -657,14 +657,15 @@ class TestUnregisterObservation:
         assert list(short_sim.get_results()["clock"]) == [JAN_1, JAN_8, jan_22, jan_29]
 
     def test_resuming_a_registered_observation_does_nothing(
-        self, short_sim: InteractiveContext
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
     ) -> None:
-        """Passing the name of an observation that is still registered changes nothing."""
+        """Passing the name of an observation that is still registered changes nothing and logs that."""
         short_sim.register_observation(clock=clock)
 
         short_sim.register_observation("clock")
 
         assert short_sim.get_results() == {"clock": {JAN_1: JAN_1}}
+        assert "Observations ['clock'] are already registered." in info_messages(caplog)
 
     @pytest.mark.parametrize(
         "call",
