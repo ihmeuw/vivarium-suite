@@ -292,6 +292,9 @@ class InteractiveContext(SimulationContext):
         for record in resumed.values():
             record.active = True
         self._records.update(new_records)
+        already_recording = [name for name in names if name not in resumed]
+        if already_recording:
+            self._logger.info(f"Records {already_recording} are already recording.")
 
     def stop_recording(self, *names: str) -> None:
         """Stop evaluating the named records, keeping their recorded values.

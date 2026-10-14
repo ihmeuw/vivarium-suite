@@ -604,14 +604,15 @@ class TestStopRecording:
         assert list(short_sim.recorded_values["clock"]) == [JAN_1, JAN_8, jan_22, jan_29]
 
     def test_resuming_an_active_record_does_nothing(
-        self, short_sim: InteractiveContext
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
     ) -> None:
-        """Passing the name of a record that is still recording changes nothing."""
+        """Passing the name of a record that is still recording changes nothing and logs that."""
         short_sim.record(clock=clock)
 
         short_sim.record("clock")
 
         assert short_sim.recorded_values == {"clock": {JAN_1: JAN_1}}
+        assert "Records ['clock'] are already recording." in info_messages(caplog)
 
     @pytest.mark.parametrize(
         "call",

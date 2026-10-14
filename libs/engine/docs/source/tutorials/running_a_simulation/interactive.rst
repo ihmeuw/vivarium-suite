@@ -508,15 +508,11 @@ observation, use :meth:`~vivarium.engine.interface.interactive.InteractiveContex
 It takes keyword arguments only: each keyword is the name to record values
 under, and its value is a callable that takes the simulation and returns the
 value to record. Every record is evaluated once when it is registered and again
-after every step, whether that step comes from ``step``, ``take_steps``,
-``run_for``, ``run_until`` or ``run``, and its values are recorded under the
-clock time.
+after every step.
 
 :attr:`~vivarium.engine.interface.interactive.InteractiveContext.recorded_values`
-returns what has been recorded as a dict keyed by record name and then by time,
-which converts directly to a ``pandas`` object. Values are stored exactly as
-returned, so a record may return a scalar, a Series, a DataFrame, or anything
-else.
+returns what has been recorded as a dict keyed by record name and then by time.
+Values are stored exactly as returned.
 
 .. testcode::
 
@@ -542,9 +538,7 @@ else.
    2022-02-11 12:00:00    8
    dtype: int64
 
-If a record raises, the run stops with a
-:class:`~vivarium.engine.exceptions.RecordError` that names the record
-and the time, and nothing is recorded for that step. Use
+Use
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.stop_recording`
 to stop recording an expression. Its recorded values are kept, and passing its
 name to ``record`` (without a callable) resumes it.

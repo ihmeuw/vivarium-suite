@@ -1,4 +1,4 @@
-**5.15.0 - 10/14/26**
+**5.15.0 - 10/15/26**
 
 - Add ``InteractiveContext.record()`` to register named expressions that are evaluated at
   registration and after every step
