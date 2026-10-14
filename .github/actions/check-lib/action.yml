@@ -55,9 +55,7 @@ runs:
       run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ inputs.library }} --changed "${{ inputs.changed-libs }}"
       shell: bash
 
-    # Each check runs even if an earlier check failed, so one run reports every
-    # failing check. They still need a verified install (verify is skipped if the
-    # install fails), and the job fails if any check fails.
+    # Run every check after a verified install, even if an earlier check failed.
     - name: Lint ${{ inputs.library }}
       if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
       run: cd libs/${{ inputs.library }} && make lint
