@@ -113,9 +113,6 @@ def call(Map config = [:]){
     options {
       // Keep 100 old builds.
       buildDiscarder logRotator(numToKeepStr: "100")
-
-      // Fail immediately if any part of a parallel stage fails
-      parallelsAlwaysFailFast()
     }
 
     parameters {
@@ -138,6 +135,11 @@ def call(Map config = [:]){
         name: "FORCE_FULL_BUILD",
         defaultValue: false,
         description: "Force a complete build regardless of change type (overrides doc-only and changelog-only skip logic)."
+      )
+      booleanParam(
+        name: "FAIL_FAST",
+        defaultValue: false,
+        description: "Stop at the first failing check and abort the other Python versions. By default every check runs on every Python version so the build reports all failures."
       )
       string(
         name: "SLACK_TO",
@@ -291,6 +293,11 @@ def call(Map config = [:]){
                               if (!canDeploy) {
                                 echo "Skipping deploy: Jenkins did not start this build for a " +
                                      "new commit. Set FORCE_DEPLOY to release from it."
+                              } else if (currentBuild.currentResult != 'SUCCESS') {
+                                // Checks no longer stop the build when they fail, so the
+                                // build can reach this point after a failed check.
+                                echo "Skipping deploy: a check failed earlier in this build " +
+                                     "(build result: ${currentBuild.currentResult})."
                               } else {
                                 if (!has_changelog_update()) {
                                   error "Deploy failed: Changelog does not contain a proper version update."
@@ -322,6 +329,7 @@ def call(Map config = [:]){
               }
             }
 
+            parallelPythonVersions.failFast = (params.FAIL_FAST == true)
             parallel parallelPythonVersions
           }
         }

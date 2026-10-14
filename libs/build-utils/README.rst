@@ -143,3 +143,19 @@ A deploy requires all of:
 - a deployable change in the tip commit
 - a new-commit build or ``FORCE_DEPLOY``
 - a version update in ``CHANGELOG.rst``
+- every check in this build passed
+
+Failing checks
+==============
+
+By default a check that fails (lint, mypy, tests, docs, doctests) marks its stage
+and the build as failed but does not stop the build. Every check runs on every
+Python version, so one build shows everything that is failing. ``make check`` and
+``make lint`` behave the same way locally and end with a summary of which steps
+failed.
+
+Set the ``FAIL_FAST`` build parameter to stop at the first failing check and abort
+the other Python versions. Jenkins adds a new parameter to a job only after the
+first build that declares it, so ``FAIL_FAST`` appears in "Build with Parameters"
+after the job's first build on a library version that includes it. That first
+build uses the default and runs every check.

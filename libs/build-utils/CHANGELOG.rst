@@ -1,3 +1,11 @@
+**4.10.0 - 10/14/26**
+
+- Run every step of ``make check`` and ``make lint`` even when one fails, and end
+  with a summary of the failed steps
+- Run every check on every Python version in Jenkins by default, and add the
+  ``FAIL_FAST`` parameter to restore stopping at the first failure
+- Skip the Jenkins deploy when any check in the build failed
+
 **4.9.2 - 10/07/26**
 
 - Add the nutrition optimization pregnancy and child models to the nightly shared
