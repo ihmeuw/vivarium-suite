@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from vivarium.engine.exceptions import ObservationError
-from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.engine import BaseSimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.randomness.stream import RandomnessStream
 from vivarium.engine.framework.resource.resource import Column, Initializer
@@ -117,7 +117,7 @@ class _InteractiveObservation:
     active: bool = True
 
 
-class InteractiveContext(SimulationContext):
+class InteractiveContext(BaseSimulationContext):
     """A simulation context with helper methods for running simulations interactively.
 
     Does not gather the model's results by default; pass ``observe=True`` to
@@ -361,7 +361,7 @@ class InteractiveContext(SimulationContext):
         for name, value in values.items():
             observations[name].values[time] = value
 
-    def run(self, with_logging: bool = True) -> None:  # type: ignore [override]
+    def run(self, with_logging: bool = True) -> None:
         """Run the simulation for the duration specified in the configuration.
 
         Parameters

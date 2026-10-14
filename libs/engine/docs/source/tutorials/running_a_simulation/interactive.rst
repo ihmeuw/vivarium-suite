@@ -298,7 +298,7 @@ population size to be smaller so the simulation takes less time to run.
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
 We then need to call the
-:meth:`~vivarium.engine.framework.engine.SimulationContext.setup` method on the
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.setup` method on the
 simulation context to prepare it to run.
 
 .. testcode::
