@@ -764,7 +764,11 @@ class InteractiveContext(SimulationContext):
         The resource graph is a directed acyclic graph rather than a tree, so a
         resource can be reached along several paths. Every parent shows it, but
         only the first arrival that expands it unrolls its dependencies. The
-        rest are marked ``(expanded above)``.
+        rest are marked ``(expanded above)``. A resource first expanded deep in
+        the tree, where ``depth`` cut off its own dependencies, keeps that mark
+        when it is reached again higher up. The branch it points at can then
+        hide more than the depth allows at the new position. Raise ``depth`` to
+        see the rest.
 
         Every resource type is reported, including the ``column`` and ``initializer``
         nodes that :meth:`InteractiveContext.find_resources` leaves out. Those sit
