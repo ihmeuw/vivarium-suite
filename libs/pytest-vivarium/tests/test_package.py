@@ -26,7 +26,7 @@ def test_pytest11_entry_point_is_registered() -> None:
 
     The plugin is useless to consumers unless this entry point resolves, so a
     typo in ``pyproject.toml`` should fail loudly here rather than silently
-    disabling the markers/fixtures everywhere downstream.
+    disabling the markers and options everywhere downstream.
     """
     eps = entry_points(group="pytest11")
     assert "pytest_vivarium" in eps.names
