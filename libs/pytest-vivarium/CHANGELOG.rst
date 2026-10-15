@@ -1,4 +1,4 @@
-**0.3.0 - 10/02/26**
+**0.3.0 - 10/15/26**
 
 - **Breaking change.** Remove the ``no_gbd_cache`` fixture. It depended on
   ``vivarium_gbd_access``, which this package does not depend on; use
