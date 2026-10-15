@@ -267,7 +267,7 @@ class AttributesValueSource(ValueSource):
 class ValueModifier(Resource, RequiresPrettyHook):
     """A resource representing a modifier of a value pipeline."""
 
-    RESOURCE_TYPE = "value_modifier"
+    RESOURCE_TYPE: str = "value_modifier"
 
     def __init__(
         self,
@@ -337,7 +337,7 @@ class Pipeline(Resource, RequiresPrettyHook):
     attributes; for those, use :class:`~vivarium.engine.framework.values.pipeline.AttributePipeline`.
     """
 
-    RESOURCE_TYPE = "value"
+    RESOURCE_TYPE: str = "value"
     """The type of the resource."""
 
     def __init__(self, name: str, component: Component | None = None) -> None:
@@ -606,7 +606,7 @@ class AttributePipeline(Pipeline):
 
     """
 
-    RESOURCE_TYPE = "attribute"
+    RESOURCE_TYPE: str = "attribute"
     """The type of the resource."""
 
     @property
