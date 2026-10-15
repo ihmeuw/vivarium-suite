@@ -289,7 +289,7 @@ class OrderedDependencyCreator(Component):
         value = builder.value.register_value_producer("ordered_value", self.source)
         builder.value.register_attribute_producer("ordered_attribute", self.source)
         builder.value.register_attribute_producer(
-            "ordered", self.source, required_resources=["ordered_attribute", value, table]
+            "ordered", self.source, required_resources=[table, value, "ordered_attribute"]
         )
         builder.value.register_attribute_modifier("ordered", self.modifier)
 

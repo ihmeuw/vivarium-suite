@@ -714,8 +714,8 @@ class TestPrintDependencies:
     def test_an_ambiguous_bare_name_lists_the_candidates(
         self, sim: InteractiveContext
     ) -> None:
-        """Every private column shares its name with an attribute, so the bare name
-        has to be refused rather than resolved to whichever comes first."""
+        """A private column usually shares its name with an attribute, so the bare
+        name has to be refused rather than resolved to whichever comes first."""
         with pytest.raises(ValueError, match="matches more than one resource") as error:
             sim.print_dependencies("test_column_1", "uses")
         assert "'attribute.test_column_1'" in str(error.value)
@@ -775,8 +775,13 @@ class TestRenderDependencyTree:
 
     @pytest.fixture
     def diamond(self) -> tuple[nx.DiGraph[Resource], dict[str, _Node]]:
-        """``a`` uses ``b`` and ``c``, both use ``d``, and ``d`` uses ``e``."""
-        return self.build_graph({"a": "b c", "b": "d", "c": "d", "d": "e"})
+        """``a`` uses ``b`` and ``c``, both use ``d``, and ``d`` uses ``e``.
+
+        The names are listed out of alphabetical order so that the expected output
+        differs from the order networkx hands back. Listing them in order would let
+        a renderer that never sorted still pass.
+        """
+        return self.build_graph({"a": "c b", "c": "d", "b": "d", "d": "e"})
 
     def test_a_shared_node_keeps_both_edges_but_unrolls_once(
         self, diamond: tuple[nx.DiGraph[Resource], dict[str, _Node]]
@@ -818,9 +823,22 @@ class TestRenderDependencyTree:
             "    └── node.tail",
         ]
 
+    def test_an_expanded_node_reached_at_the_limit_is_not_called_hidden(self) -> None:
+        """``s`` is expanded as a direct dependency, then reached again under ``t``
+        exactly at the limit, where both annotations apply. Having been expanded
+        wins, because its dependencies are on the screen already."""
+        graph, nodes = self.build_graph({"a": "t s", "t": "s", "s": "u"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
+            "node.a",
+            "├── node.s",
+            "│   └── node.u",
+            "└── node.t",
+            "    └── node.s  (expanded above)",
+        ]
+
     def test_a_repeated_leaf_is_left_unmarked(self) -> None:
         """Nothing was expanded and nothing is hidden, so both arrivals print plain."""
-        graph, nodes = self.build_graph({"a": "b c", "b": "d", "c": "d"})
+        graph, nodes = self.build_graph({"a": "c b", "c": "d", "b": "d"})
         assert _render_dependency_tree(graph, nodes["a"], "uses", None) == [
             "node.a",
             "├── node.b",
@@ -830,7 +848,7 @@ class TestRenderDependencyTree:
         ]
 
     def test_a_hidden_branch_counts_what_it_hides(self) -> None:
-        graph, nodes = self.build_graph({"a": "b", "b": "c d e"})
+        graph, nodes = self.build_graph({"a": "b", "b": "e d c"})
         assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
             "node.a",
             "└── node.b  (3 more)",
