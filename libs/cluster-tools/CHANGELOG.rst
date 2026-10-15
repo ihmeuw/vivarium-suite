@@ -1,3 +1,7 @@
+**4.7.2 - 10/12/26**
+
+- Tie the positional-argument deprecation test to the 5.0.0 release instead of a date
+
 **4.7.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built

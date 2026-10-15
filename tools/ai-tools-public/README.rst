@@ -72,6 +72,10 @@ In more detail:
   every finding is then independently scored for confidence (0-100) by a
   per-finding ``_review_scorer`` Haiku sub-agent, and findings below 50 are
   dropped — so only verified issues reach the report, each shown with its score.
+  The review agents and ``_split_proposer`` carry a one-line rule to write their
+  prose in plain technical English, based on ASD-STE100 Simplified Technical
+  English. The rule does not name the standard. In evals, naming it in the text
+  that agents see made their output less clear and less complete.
 
   It then proposes a **disposition per finding** (fix now / ticket / drop, each
   with a one-line why), bucketing by scope and using the confidence score only to
@@ -121,10 +125,12 @@ In more detail:
 - ``/simsci:framework-development <ticket or feature description>`` — an
   end-to-end design → implement → verify → PR loop on a single well-scoped
   feature. The main session owns the design and the interface stubs, then runs
-  a **black-box TDD** build. It owns the contract: it writes
-  **source stubs** (the API) plus **body-less test stubs** that enumerate the
-  acceptance criteria, commits them, and creates two git worktrees from that
-  baseline. It then fans out ``_feature_implementer`` and ``_test_writer`` in
+  a **black-box TDD** build. The design includes a short
+  testing strategy: the feature requirements, and the use cases and edge
+  cases that test them. It owns the contract: it writes **source stubs** (the API) plus
+  **body-less test stubs** that enumerate the acceptance criteria, commits them, and
+  creates two git worktrees from that baseline. It then fans out
+  ``_feature_implementer`` and ``_test_writer`` in
   parallel — the tester fleshes out the test stubs, the implementer fills the
   source bodies treating those stubs as read-only criteria — each confined to its
   own worktree, whose lineages never merge, so neither ever sees the other's
@@ -371,8 +377,7 @@ Code:
 - ``_trace_extractor`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
   only. It is the one agent that deliberately reads *outside* the working
   tree: Claude Code session transcripts under ``~/.claude/projects/`` (which
-  can contain anything). It returns compact digests, not transcript content,
-  and is spawned only by the ``workflow-assessment`` skill.
+  can contain anything). It returns compact digests, not transcript content.
 - ``_diff_analyzer``, ``_hypothesis_tester``, and ``_split_proposer``
   declare ``Bash`` to run ``git`` commands. In practice, every
   operation they perform is a read-only git command (``git diff``,
