@@ -1,3 +1,12 @@
+**5.15.0 - 10/15/26**
+
+- Add ``InteractiveContext.record()`` to register named expressions that are evaluated at
+  registration and after every step
+- Add ``InteractiveContext.recorded_values`` to read the recorded values, keyed by record name and
+  then clock time
+- Add ``InteractiveContext.stop_recording()`` to stop records while keeping their values
+- Add ``RecordError``, raised when a record expression fails
+
 **5.14.1 - 10/12/26**
 
 - **Breaking change.** Remove ``InteractiveContext.get_emitter``, which was only
