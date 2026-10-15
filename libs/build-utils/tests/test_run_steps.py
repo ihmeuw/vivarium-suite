@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from vivarium.build_utils import run_steps
 from vivarium.build_utils.run_steps import main
 
 
@@ -21,19 +22,25 @@ class FakeRunner:
         return self.exit_codes[target]
 
 
-def test_all_targets_pass(capsys: pytest.CaptureFixture[str]) -> None:
+def test_all_targets_pass(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     runner = FakeRunner({"lint": 0, "test-all": 0})
+    monkeypatch.setattr(run_steps, "run_make_target", runner)
 
-    assert main(["lint", "test-all"], run_target=runner) == 0
+    assert main(["lint", "test-all"]) == 0
     assert runner.calls == ["lint", "test-all"]
     out = capsys.readouterr().out
     assert "PASSED  lint\nPASSED  test-all\nAll 2 targets passed" in out
 
 
-def test_failure_does_not_stop_later_targets(capsys: pytest.CaptureFixture[str]) -> None:
+def test_failure_does_not_stop_later_targets(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     runner = FakeRunner({"lint": 1, "mypy-if-typed": 0, "test-all": 2})
+    monkeypatch.setattr(run_steps, "run_make_target", runner)
 
-    assert main(["lint", "mypy-if-typed", "test-all"], run_target=runner) == 1
+    assert main(["lint", "mypy-if-typed", "test-all"]) == 1
     assert runner.calls == ["lint", "mypy-if-typed", "test-all"]
     out = capsys.readouterr().out
     assert (
@@ -43,7 +50,7 @@ def test_failure_does_not_stop_later_targets(capsys: pytest.CaptureFixture[str])
 
 def test_requires_a_target() -> None:
     with pytest.raises(SystemExit) as exc_info:
-        main([], run_target=FakeRunner({}))
+        main([])
     assert exc_info.value.code == 2
 
 
