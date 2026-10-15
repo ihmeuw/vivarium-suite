@@ -245,6 +245,61 @@ class AttributePipelineCreator(Component):
         )
 
 
+class DiamondAttributeCreator(Component):
+    """A helper class to register attributes whose dependencies reconverge.
+
+    ``diamond_top`` requires ``diamond_left`` and ``diamond_right``, both of
+    which require ``diamond_base``, which in turn requires ``diamond_root``. So
+    ``diamond_base`` is reached along two paths and still has a dependency of
+    its own below it.
+
+    """
+
+    def setup(self, builder: Builder) -> None:
+        for name, required_resources in [
+            ("diamond_root", []),
+            ("diamond_base", ["diamond_root"]),
+            ("diamond_left", ["diamond_base"]),
+            ("diamond_right", ["diamond_base"]),
+            ("diamond_top", ["diamond_left", "diamond_right"]),
+        ]:
+            builder.value.register_attribute_producer(
+                name, self.source, required_resources=required_resources
+            )
+
+    def source(self, index: pd.Index[int]) -> pd.Series[Any]:
+        return pd.Series([i % 3 for i in index], index=index)
+
+
+class OrderedDependencyCreator(Component):
+    """A helper class whose attribute depends on one resource of several types.
+
+    ``ordered`` reads an attribute, a value pipeline, and a lookup table, and
+    carries a modifier of its own. Those four types are the ones whose rendered
+    order differs from a plain alphabetical sort of their resource ids.
+
+    """
+
+    CONFIGURATION_DEFAULTS = {
+        "ordered_dependency_creator": {"data_sources": {"ordered_table": 0.4}}
+    }
+
+    def setup(self, builder: Builder) -> None:
+        table = self.build_lookup_table(builder, "ordered_table", value_columns="scalar")
+        value = builder.value.register_value_producer("ordered_value", self.source)
+        builder.value.register_attribute_producer("ordered_attribute", self.source)
+        builder.value.register_attribute_producer(
+            "ordered", self.source, required_resources=[table, value, "ordered_attribute"]
+        )
+        builder.value.register_attribute_modifier("ordered", self.modifier)
+
+    def source(self, index: pd.Index[int]) -> pd.Series[Any]:
+        return pd.Series([i % 3 for i in index], index=index)
+
+    def modifier(self, index: pd.Index[int], values: pd.Series[Any]) -> pd.Series[Any]:
+        return values
+
+
 class NestedAttributeCreator(Component):
     """A helper class to register nested pipelines."""
 

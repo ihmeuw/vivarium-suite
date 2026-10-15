@@ -1,3 +1,8 @@
+**5.15.0 - 10/15/26**
+
+- Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,
+  or what uses it, as a depth-limited tree
+
 **5.14.1 - 10/12/26**
 
 - **Breaking change.** Remove ``InteractiveContext.get_emitter``, which was only
