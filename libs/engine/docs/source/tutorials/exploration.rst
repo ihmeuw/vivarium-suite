@@ -573,15 +573,9 @@ Getting the dependencies as objects
 -----------------------------------
 
 The tree is for reading. To work with a resource object itself, you can explicitly
-fetch it via the appropriate getter:
-
-- Value Pipelines: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
-- Attribute Pipelines: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`,
-- Value Modifiers: use the corresponding pipeline's ``modifiers`` attribute to inspect them
-- Lookup Tables: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_lookup_table`
-
-Alternatively, :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_dependencies`
-returns a list of all *direct* (depth=1) dependencies of a resource.
+fetch it via the appropriate method or use 
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_dependencies`
+to get a list of all *direct* (depth=1) dependencies of a resource.
 
 .. testcode::
 
