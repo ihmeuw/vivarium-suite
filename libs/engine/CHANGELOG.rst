@@ -3,8 +3,9 @@
 - Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,
   or what uses it, as a depth-limited tree
 - Add ``InteractiveContext.get_dependencies()`` to return direct dependency objects
-- Show the short repr rather than the full description when a resource is displayed
-  inside a container in a notebook
+- Show the short repr rather than the full description when a pipeline, value
+  source, modifier, combiner, or post-processor is displayed inside a container
+  in a notebook
 
 **5.14.1 - 10/12/26**
 

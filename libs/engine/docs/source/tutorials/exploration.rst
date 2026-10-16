@@ -571,10 +571,16 @@ reaches both is refused instead of resolved to one of them.
 Getting the dependencies as objects
 -----------------------------------
 
-The tree is for reading. If you want to actually do something with the resource
-objects themselves, you can call their corresponding getter functions. Alternatively,
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_dependencies`
-hands back a list of the _direct_ (depth=1) dependencies of a resource.
+The tree is for reading. To work with a resource object itself, you can explicitly
+fetch it via the appropriate getter:
+
+- Value Pipelines: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
+- Attribute Pipelines: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`,
+- Value Modifiers: use the corresponding pipeline's ``modifiers`` attribute to inspect them
+- Lookup Tables: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_lookup_table`
+
+Alternatively, :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_dependencies`
+returns a list of all *direct* (depth=1) dependencies of a resource.
 
 .. testcode::
 

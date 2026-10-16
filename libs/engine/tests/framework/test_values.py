@@ -1218,6 +1218,11 @@ class UnusablePopulationView:
         )
 
 
+def _noop_modifier(index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
+    """A modifier that exists only to give a ``ValueModifier`` a readable name."""
+    return value
+
+
 class TestStringRepresentations:
     """Tests for the pipeline description and the short reprs around it.
 
@@ -1556,6 +1561,7 @@ class TestStringRepresentations:
             lambda: AttributePipeline("nascent"),
             lambda: ValueSource(Pipeline("host"), Pipeline("upstream")),
             lambda: MissingValueSource(Pipeline("host")),
+            lambda: ValueModifier(Pipeline("host"), _noop_modifier, ColumnCreator()),
             lambda: NamedCombiner(replace_combiner),
             lambda: NamedPostProcessor(rescale_post_processor),
         ],
@@ -1564,6 +1570,7 @@ class TestStringRepresentations:
             "attribute_pipeline",
             "value_source",
             "missing_source",
+            "value_modifier",
             "combiner",
             "post_processor",
         ],
@@ -1584,6 +1591,7 @@ class TestStringRepresentations:
             lambda: AttributePipeline("nascent"),
             lambda: ValueSource(Pipeline("host"), Pipeline("upstream")),
             lambda: MissingValueSource(Pipeline("host")),
+            lambda: ValueModifier(Pipeline("host"), _noop_modifier, ColumnCreator()),
             lambda: NamedCombiner(replace_combiner),
             lambda: NamedPostProcessor(rescale_post_processor),
         ],
@@ -1592,6 +1600,7 @@ class TestStringRepresentations:
             "attribute_pipeline",
             "value_source",
             "missing_source",
+            "value_modifier",
             "combiner",
             "post_processor",
         ],
