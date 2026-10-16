@@ -22,6 +22,7 @@ tools to easily setup and run a simulation.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from pathlib import Path
 from pprint import pformat
 from time import time
@@ -60,14 +61,12 @@ from vivarium.engine.framework.values import ValuesInterface, ValuesManager
 from vivarium.engine.types import ClockTime
 
 
-class BaseSimulationContext:
+class BaseSimulationContext(ABC):
     """The simulation state and lifecycle shared by every simulation context.
 
     Builds the managers and components from a model specification and runs the
-    setup, population creation, time step, and simulation end phases. Use
-    :class:`SimulationContext` to run a simulation from start to finish, or
-    :class:`~vivarium.engine.interface.interactive.InteractiveContext` to run one
-    interactively.
+    setup, population creation, time step, and simulation end phases. Subclasses
+    define how the simulation is run.
     """
 
     _created_simulation_contexts: set[str] = set()
@@ -262,10 +261,10 @@ class BaseSimulationContext:
             raise ComponentConfigError(message)
 
         self._lifecycle.add_constraint(
-            self.add_components, allow_during=[lifecycle_states.INITIALIZATION]
+            self._add_components, allow_during=[lifecycle_states.INITIALIZATION]
         )
 
-        self.add_components(components_list)
+        self._add_components(components_list)
 
     @property
     def name(self) -> str:
@@ -330,9 +329,13 @@ class BaseSimulationContext:
                 f"Some configuration keys not used during run: {unused_config_keys}."
             )
 
-    def add_components(self, component_list: list[Component]) -> None:
-        """Adds new components to the simulation."""
+    def _add_components(self, component_list: list[Component]) -> None:
+        """Add new components to the simulation."""
         self._component_manager.add_components(component_list)
+
+    @abstractmethod
+    def run(self) -> None:
+        """Run the simulation to the end time in its configuration."""
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name})"

@@ -324,9 +324,10 @@ After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 Adding additional components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Another use case for creating the
-:class:`~vivarium.engine.interface.interactive.InteractiveContext` in
-its pre-setup state is to extend existing models.
+You can also extend an existing model by passing extra components to the
+:class:`~vivarium.engine.interface.interactive.InteractiveContext`. They are
+added to the components in the model specification, and ``configuration``
+can set values for them.
 
 For example, say we wanted to add another risk for unsafe water sources
 into our disease model. We could do the following.
@@ -337,27 +338,24 @@ into our disease model. We could do the following.
     from vivarium.engine.examples.disease_model import get_model_specification_path, Risk, RiskEffect
 
     p = get_model_specification_path()
-    sim = InteractiveContext(p, setup=False)
-
-    sim.add_components(
-        [
+    sim = InteractiveContext(
+        p,
+        components=[
             Risk("unsafe_water_source"),
             RiskEffect(
                 "unsafe_water_source",
                 "infected_with_lower_respiratory_infections.incidence_rate",
             ),
-        ]
+        ],
+        configuration={
+            'unsafe_water_source': {
+                'proportion_exposed': 0.3
+            },
+            'effect_of_unsafe_water_source_on_infected_with_lower_respiratory_infections.incidence_rate': {
+                'relative_risk': 8,
+            },
+        },
     )
-    sim.configuration.update({
-        'unsafe_water_source': {
-            'proportion_exposed': 0.3
-        },
-        'effect_of_unsafe_water_source_on_infected_with_lower_respiratory_infections.incidence_rate': {
-            'relative_risk': 8,
-        },
-    })
-
-    sim.setup()
 
 This is an easy way to take an old model and toy around with new components
 to immediately see their effects.
