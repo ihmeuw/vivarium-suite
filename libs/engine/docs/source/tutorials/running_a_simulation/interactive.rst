@@ -503,18 +503,22 @@ limit, which may go past the end time.
 Observing values as the simulation runs
 +++++++++++++++++++++++++++++++++++++++
 
-To track a specific quantity over time not already covered by the model's
-observations, use
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`.
-Pass each observation as a keyword argument: the keyword is the observation's
-name, and its value is a callable that takes the simulation and returns the
-value to store. Every observation is evaluated once when it is registered and
-again after every step.
-
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_results`
-returns each observation under its name, as a dict keyed by time. Values are
-stored exactly as returned. An observation's name must not match one that the
-model already observes.
+returns the results of the model's observations, as long as the simulation was
+created with ``InteractiveContext(..., observe=True)``. An ``InteractiveContext``
+does not observe them by default. See :ref:`getting results <interactive_results>`
+for more detail.
+
+To track a quantity over time that the model's observations do not cover, add
+your own observation with
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`.
+This works whether or not ``observe`` is set. Pass each observation as a
+keyword argument: the keyword is the observation's name, and its value is a
+callable that takes the simulation and returns the value to store. Every
+observation is evaluated once when it is registered and again after every
+step. ``get_results`` returns each observation under its name, as a dict keyed
+by time. Values are stored exactly as returned. An observation's name must not
+match one that the model already observes.
 
 .. testcode::
 
@@ -555,8 +559,8 @@ passing its name to ``register_observation`` (without a callable) resumes it.
 
    ['mean_age', 'n_wasted']
 
-Apart from the observations registered here, advancing a simulation does not,
-on its own, produce any results - an
-``InteractiveContext`` does not observe them by default. See
-:ref:`getting results <interactive_results>` for what that means and how to
-turn it on.
+.. note::
+
+   ``unregister_observation`` only applies to observations registered with
+   ``register_observation``. It cannot unregister the observations that the
+   model's components register.
