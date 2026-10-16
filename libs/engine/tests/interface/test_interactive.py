@@ -34,6 +34,7 @@ from tests.helpers import (
     NestedAttributeCreator,
     NestedLookupCaller,
     OrderedDependencyCreator,
+    ReversedNameCreator,
     SingleColumnCreator,
 )
 from tests.interface.conftest import FakeWidget
@@ -781,7 +782,7 @@ class TestGetDependencies:
     def test_an_unreported_type_one_level_away_yields_nothing(
         self, sim: InteractiveContext
     ) -> None:
-        """An attribute is backed by a column, so the default depth reports nothing
+        """An attribute is backed by a column, so walking one level reports nothing
         even though print_dependencies draws that column."""
         assert sim.get_dependencies("attribute.test_column_4", "uses") == []
 
@@ -804,6 +805,15 @@ class TestGetDependencies:
             "value.ordered_value",
             "lookup_table.ordered_dependency_creator.ordered_table",
             "value_modifier.ordered.1.ordered_dependency_creator.modifier",
+        ]
+
+    def test_same_type_results_are_sorted_by_name(self) -> None:
+        """Two neighbors of one type, registered in the reverse of name order, so
+        a sort that ignored the name would hand these back the other way around."""
+        sim = InteractiveContext(components=[ReversedNameCreator()])
+        assert self.ids(sim.get_dependencies("attribute.reversed_root", "uses")) == [
+            "attribute.alpha",
+            "attribute.zulu",
         ]
 
     def test_a_root_with_no_dependencies_returns_nothing(

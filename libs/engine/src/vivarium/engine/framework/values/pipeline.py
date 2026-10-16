@@ -66,8 +66,8 @@ class RequiresPrettyHook:
         several multi-line descriptions together with no way to tell them apart.
         ``stack`` holds the objects being printed, so it is one deep for a bare
         object and deeper for one inside a container. It is an IPython internal,
-        hence the ``getattr``: without it this falls back to the description,
-        which is the behavior this guard replaces.
+        so the ``getattr`` guards against it going missing. Without it the hook
+        shows the description.
         """
         nested = len(getattr(printer, "stack", ())) > 1
         printer.text(repr(self) if nested else str(self))

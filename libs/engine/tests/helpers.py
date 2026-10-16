@@ -300,6 +300,26 @@ class OrderedDependencyCreator(Component):
         return values
 
 
+class ReversedNameCreator(Component):
+    """A helper class whose attribute reads two attributes in reverse name order.
+
+    ``reversed_root`` requires ``zulu`` and then ``alpha``, so the order the
+    dependencies were registered in is the reverse of the order their names sort
+    in.
+
+    """
+
+    def setup(self, builder: Builder) -> None:
+        for name in ["zulu", "alpha"]:
+            builder.value.register_attribute_producer(name, self.source)
+        builder.value.register_attribute_producer(
+            "reversed_root", self.source, required_resources=["zulu", "alpha"]
+        )
+
+    def source(self, index: pd.Index[int]) -> pd.Series[Any]:
+        return pd.Series([i % 3 for i in index], index=index)
+
+
 class NestedAttributeCreator(Component):
     """A helper class to register nested pipelines."""
 
