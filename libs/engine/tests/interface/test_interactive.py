@@ -29,6 +29,7 @@ from tests.helpers import (
     ColumnCreator,
     ColumnCreatorAndRequirer,
     DiamondAttributeCreator,
+    ManyModifierCreator,
     MultiLevelMultiColumnCreator,
     MultiLevelSingleColumnCreator,
     NestedAttributeCreator,
@@ -816,6 +817,16 @@ class TestGetDependencies:
             "attribute.zulu",
         ]
 
+    def test_modifiers_past_the_ninth_stay_in_application_order(self) -> None:
+        """The number in a modifier's name is the order it is applied in. Past the
+        ninth that number is two digits, which a plain text sort gets wrong."""
+        sim = InteractiveContext(components=[ManyModifierCreator()])
+        assert self.ids(sim.get_dependencies("value.many_modifiers", "uses")) == [
+            f"value_modifier.many_modifiers.{number}.many_modifier_creator"
+            f".modifier_{number - 1:02d}"
+            for number in range(1, ManyModifierCreator.MODIFIER_COUNT + 1)
+        ]
+
     def test_a_root_with_no_dependencies_returns_nothing(
         self, sim: InteractiveContext
     ) -> None:
@@ -969,6 +980,21 @@ class TestRenderDependencyTree:
         assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
             "node.a",
             "└── node.b",
+        ]
+
+    def test_a_run_of_digits_in_a_name_sorts_as_a_number(self) -> None:
+        """Resource names carry unpadded indices, so ``10`` is drawn after ``2``.
+
+        The tree and the list share one sort key, so this is what keeps the
+        renderer on it.
+        """
+        graph, nodes = self.build_graph({"a": "b10 b9 b2 b1"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
+            "node.a",
+            "├── node.b1",
+            "├── node.b2",
+            "├── node.b9",
+            "└── node.b10",
         ]
 
     def test_used_by_walks_the_other_way(

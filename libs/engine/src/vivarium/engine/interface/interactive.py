@@ -143,11 +143,19 @@ def _validate_direction(direction: str) -> None:
         )
 
 
-def _dependency_sort_key(resource: Resource) -> tuple[int, str]:
+def _natural_key(name: str) -> tuple[tuple[int, int | str], ...]:
+    """Split a name so that a run of digits in it compares as a number."""
+    # Resource names carry unpadded indices, so "10" has to sort after "2".
+    return tuple(
+        (0, int(part)) if part.isdigit() else (1, part) for part in re.split(r"(\d+)", name)
+    )
+
+
+def _dependency_sort_key(resource: Resource) -> tuple[int, tuple[tuple[int, int | str], ...]]:
     """Sort resources by type and then by name."""
     # A type absent from the order sorts last rather than being dropped.
     rank = _DEPENDENCY_TYPE_RANK.get(resource.RESOURCE_TYPE, len(_DEPENDENCY_TYPE_RANK))
-    return rank, str(resource.resource_id)
+    return rank, _natural_key(str(resource.resource_id))
 
 
 def _dependencies(
