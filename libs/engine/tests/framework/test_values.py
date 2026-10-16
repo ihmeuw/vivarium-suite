@@ -1577,6 +1577,60 @@ class TestStringRepresentations:
 
         assert PlainTextFormatter()(obj) == str(obj)
 
+    @pytest.mark.parametrize(
+        "build",
+        [
+            lambda: Pipeline("nascent"),
+            lambda: AttributePipeline("nascent"),
+            lambda: ValueSource(Pipeline("host"), Pipeline("upstream")),
+            lambda: MissingValueSource(Pipeline("host")),
+            lambda: NamedCombiner(replace_combiner),
+            lambda: NamedPostProcessor(rescale_post_processor),
+        ],
+        ids=[
+            "pipeline",
+            "attribute_pipeline",
+            "value_source",
+            "missing_source",
+            "combiner",
+            "post_processor",
+        ],
+    )
+    def test_ipython_display_inside_a_container_is_the_repr(
+        self, build: Callable[[], object]
+    ) -> None:
+        """IPython calls the hook on every object it walks into, not only on the
+        one echoed in the cell, so the description has to give way to the repr."""
+        pytest.importorskip("IPython")
+        from IPython.core.formatters import PlainTextFormatter
+
+        obj = build()
+
+        assert PlainTextFormatter()([obj]) == f"[{obj!r}]"
+
+    def test_a_container_does_not_run_descriptions_together(self) -> None:
+        """The symptom the container rule exists for, on real descriptions.
+
+        Each one spans several lines, so showing them in a list would leave
+        nothing to mark where one ends and the next begins.
+        """
+        pytest.importorskip("IPython")
+        from IPython.core.formatters import PlainTextFormatter
+
+        class Producer(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_value_producer("first", source=self.source)
+                builder.value.register_value_producer("second", source=self.source)
+
+            def source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+        sim = InteractiveContext(components=[Producer()])
+        pipelines = [sim.get_value("first"), sim.get_value("second")]
+
+        assert "\n" in str(pipelines[0])
+        assert PlainTextFormatter()(pipelines) == "[Pipeline('first'), Pipeline('second')]"
+
     def test_str_numbers_several_post_processors_and_bullets_several_modifiers(
         self,
     ) -> None:
