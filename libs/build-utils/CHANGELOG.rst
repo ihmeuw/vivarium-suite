@@ -1,3 +1,10 @@
+**4.9.3 - 10/09/26**
+
+- Check the Jenkins deploy changelog update against the last successful build rather
+  than the previous commit, so a push of several commits deploys
+- Fail a Jenkins deploy whose ``CHANGELOG.rst`` version was already released from
+  another commit, via the new ``check-release-tag`` make target
+
 **4.9.2 - 10/07/26**
 
 - Add the nutrition optimization pregnancy and child models to the nightly shared

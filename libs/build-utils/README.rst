@@ -88,9 +88,9 @@ Pipeline's branch source, which is the right default for most repos.
 Tag prefix
 ----------
 
-The ``TAG_PREFIX`` environment variable controls both ``make tag-version`` and
-``make validate-tag``. It must be set consistently in both targets, or
-``validate-tag`` will silently look at the wrong set of tags.
+The ``TAG_PREFIX`` environment variable controls ``make tag-version``,
+``make validate-tag``, and ``make check-release-tag``. It must be set consistently
+in all of them, or ``validate-tag`` will silently look at the wrong set of tags.
 
 - Standalone repos: leave unset. Tags are ``v<X.Y.Z>``.
 - Monorepo libs: set ``TAG_PREFIX=vivarium-<lib>-`` (e.g. ``vivarium-core-``).
@@ -140,6 +140,6 @@ A deploy requires all of:
 
 - ``deployable: true``
 - the ``main`` branch
-- a deployable change in the tip commit
+- a deployable change since the last successful build
 - a new-commit build or ``FORCE_DEPLOY``
-- a version update in ``CHANGELOG.rst``
+- a version update in ``CHANGELOG.rst`` that wasn't already released from another commit

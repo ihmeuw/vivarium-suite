@@ -245,6 +245,19 @@ tag-version: # Tag current version and push to git
 		git push origin "$$tag"; \
 	fi
 
+.PHONY: check-release-tag
+check-release-tag: # Fail if this version was already released from another commit
+    # Jenkins runs this before tag-version. tag-version skips an existing tag so a
+    # FORCE_DEPLOY redrive of the released commit works, but a later commit that
+    # didn't bump CHANGELOG.rst must not re-release the same version.
+	@tag="${TAG_PREFIX}v${PACKAGE_VERSION}"; \
+	if tagged=$$(git rev-parse -q --verify "refs/tags/$$tag^{commit}"); then \
+		if [ "$$tagged" != "$$(git rev-parse HEAD)" ]; then \
+			echo "ERROR: $$tag was already released from $$tagged; bump the CHANGELOG.rst version."; \
+			exit 1; \
+		fi; \
+	fi
+
 .PHONY: build-package
 build-package: # Build pip wheel package
 	pip install build
