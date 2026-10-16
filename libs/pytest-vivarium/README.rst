@@ -6,8 +6,8 @@ A `pytest <https://docs.pytest.org/>`_ plugin providing the shared test
 configuration used across the Institute for Health Metrics and Evaluation's
 Simulation Science team's `Vivarium <https://vivarium-engine.readthedocs.io/en/latest/>`_
 projects: the ``slow``/``weekly``/``cluster`` markers and their ``--runslow`` /
-``--runweekly`` / ``--slurm-project`` options, a memory- and CPU-aware ceiling on
-``pytest -n auto`` xdist workers, and the ``no_gbd_cache`` fixture.
+``--runweekly`` / ``--slurm-project`` options and a memory- and CPU-aware ceiling
+on ``pytest -n auto`` xdist workers.
 
 It is one of the libraries in the
 `vivarium-suite <https://github.com/ihmeuw/vivarium-suite>`_ monorepo.
