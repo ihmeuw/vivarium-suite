@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pandas as pd
@@ -318,6 +319,35 @@ class ReversedNameCreator(Component):
 
     def source(self, index: pd.Index[int]) -> pd.Series[Any]:
         return pd.Series([i % 3 for i in index], index=index)
+
+
+class ManyModifierCreator(Component):
+    """A helper class that puts more than nine modifiers on one value pipeline.
+
+    The number Vivarium builds into a modifier's name is the order it is applied
+    in. Past the ninth that number is two digits wide, so reading the name as
+    text puts the tenth modifier ahead of the second.
+
+    """
+
+    MODIFIER_COUNT = 12
+
+    def setup(self, builder: Builder) -> None:
+        builder.value.register_value_producer("many_modifiers", self.source)
+        for number in range(self.MODIFIER_COUNT):
+            builder.value.register_value_modifier(
+                "many_modifiers", modifier=self._modifier(number)
+            )
+
+    def source(self, index: pd.Index[int]) -> pd.Series[Any]:
+        return pd.Series(1.0, index=index)
+
+    def _modifier(self, number: int) -> Callable[..., Any]:
+        def modifier(index: pd.Index[int], values: pd.Series[Any]) -> pd.Series[Any]:
+            return values
+
+        modifier.__name__ = f"modifier_{number:02d}"
+        return modifier
 
 
 class NestedAttributeCreator(Component):
