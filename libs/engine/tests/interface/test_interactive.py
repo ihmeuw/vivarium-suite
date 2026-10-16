@@ -463,6 +463,18 @@ class TestObservationsInResults:
         assert results["house_points"][VALUE_COLUMN].sum() > 0
         assert list(results["clock"]) == [start, sim.current_time]
 
+    def test_unregistering_leaves_model_observations_running(self) -> None:
+        """Unregistering every registered observation does not stop the model's observations."""
+        sim = hogwarts()
+        sim.register_observation(clock=clock)
+        sim.step()
+        points_before = sim.get_results()["house_points"][VALUE_COLUMN].sum()
+
+        sim.unregister_observation("clock")
+        sim.step()
+
+        assert sim.get_results()["house_points"][VALUE_COLUMN].sum() > points_before
+
     def test_observations_alone_do_not_warn(self, caplog: LogCaptureFixture) -> None:
         """With observe=False, registered observations are results, so there is nothing to warn about."""
         sim = hogwarts(observe=False)
@@ -496,7 +508,7 @@ class TestObservationRegistration:
         with pytest.raises(ValueError, match="house_points"):
             sim.register_observation(house_points=clock)
 
-        assert "house_points" not in sim._observations
+        assert "house_points" not in sim._interactive_observations
 
     def test_a_model_observation_name_raises_at_setup(self) -> None:
         """A name registered before setup is checked against the model's observations by setup."""

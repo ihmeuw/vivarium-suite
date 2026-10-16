@@ -185,7 +185,7 @@ class InteractiveContext(SimulationContext):
         )
 
         self._results.set_to_observe(observe)
-        self._observations: dict[str, _InteractiveObservation] = {}
+        self._interactive_observations: dict[str, _InteractiveObservation] = {}
 
         if setup:
             self.setup()
@@ -202,13 +202,14 @@ class InteractiveContext(SimulationContext):
         its name, and its value is a copy of the values it has observed, keyed by
         clock time.
         """
-        if not self._results.to_observe and not self._observations:
+        if not self._results.to_observe and not self._interactive_observations:
             self._logger.warning(
                 "No results to return. An InteractiveContext does not observe "
-                "results by default; pass observe=True to include them."
+                "results by default; pass observe=True to include the model's "
+                "observations, or use register_observation() to add your own."
             )
         results: dict[str, Any] = super().get_results()
-        for name, observation in self._observations.items():
+        for name, observation in self._interactive_observations.items():
             results[name] = dict(observation.values)
         return results
 
@@ -216,8 +217,10 @@ class InteractiveContext(SimulationContext):
         super().setup()
         self.initialize_simulants()
         self._population_view = self._builder.population.get_view()
-        self._check_no_model_observation_named(self._observations)
-        active = {name: obs for name, obs in self._observations.items() if obs.active}
+        self._assert_no_duplicate_names(self._interactive_observations)
+        active = {
+            name: obs for name, obs in self._interactive_observations.items() if obs.active
+        }
         if active:
             self._observe(active)
 
@@ -250,7 +253,9 @@ class InteractiveContext(SimulationContext):
             self._clock._clock_step_size = step_size
         super().step()
         self._clock._clock_step_size = old_step_size
-        active = {name: obs for name, obs in self._observations.items() if obs.active}
+        active = {
+            name: obs for name, obs in self._interactive_observations.items() if obs.active
+        }
         if active:
             self._observe(active)
 
@@ -284,34 +289,32 @@ class InteractiveContext(SimulationContext):
             registered before setup, the check against the model's observations
             is made by ``setup``.
         ObservationError
-            If an observation raises when evaluated. For observations registered
-            before setup, this is raised by ``setup``. The original exception is
-            chained.
+            If an observation raises when evaluated.
         """
-        unknown = [name for name in names if name not in self._observations]
+        unknown = [name for name in names if name not in self._interactive_observations]
         if unknown:
             raise ValueError(f"No observations named {unknown} to resume.")
-        duplicates = [name for name in observations if name in self._observations]
+        duplicates = [name for name in observations if name in self._interactive_observations]
         if duplicates:
             raise ValueError(
                 f"Observation names must be unique; {duplicates} already exist. Use a "
                 "different name, or pass an existing name without a callable to resume it."
             )
         resumed = {
-            name: self._observations[name]
+            name: self._interactive_observations[name]
             for name in names
-            if not self._observations[name].active
+            if not self._interactive_observations[name].active
         }
         new_observations = {
             name: _InteractiveObservation(func) for name, func in observations.items()
         }
         # Before setup there is nothing to evaluate or check against yet; setup does both.
         if self._lifecycle.current_state != lifecycle_states.INITIALIZATION:
-            self._check_no_model_observation_named(new_observations)
+            self._assert_no_duplicate_names(new_observations)
             self._observe({**resumed, **new_observations})
         for observation in resumed.values():
             observation.active = True
-        self._observations.update(new_observations)
+        self._interactive_observations.update(new_observations)
         already_registered = [name for name in names if name not in resumed]
         if already_registered:
             self._logger.info(f"Observations {already_registered} are already registered.")
@@ -320,7 +323,7 @@ class InteractiveContext(SimulationContext):
         """Stop evaluating the named observations, keeping their values.
 
         An unregistered observation's values stay in :meth:`get_results`, and it
-        can be resumed with :meth:`register_observation` by passing its name.
+        can be resumed with :meth:`register_observation` by passing just its name.
 
         Parameters
         ----------
@@ -332,13 +335,13 @@ class InteractiveContext(SimulationContext):
         ValueError
             If any name is not an observation, in which case nothing is changed.
         """
-        unknown = [name for name in names if name not in self._observations]
+        unknown = [name for name in names if name not in self._interactive_observations]
         if unknown:
             raise ValueError(f"No observations named {unknown}.")
         for name in names:
-            self._observations[name].active = False
+            self._interactive_observations[name].active = False
 
-    def _check_no_model_observation_named(self, names: Iterable[str]) -> None:
+    def _assert_no_duplicate_names(self, names: Iterable[str]) -> None:
         """Raise if any name is already an observation registered by the model."""
         taken = sorted(set(names) & set(self._results.observation_names))
         if taken:

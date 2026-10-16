@@ -4,8 +4,7 @@
   evaluated at registration and after every step, and to resume unregistered ones by name
 - Add ``InteractiveContext.unregister_observation()`` to stop evaluating observations while
   keeping their values
-- Include these observations in ``InteractiveContext.get_results()``, which now returns
-  ``dict[str, Any]``
+- Include these observations in ``InteractiveContext.get_results()``
 - Add ``ObservationError``, raised when one of these observations fails
 
 **5.14.1 - 10/12/26**
