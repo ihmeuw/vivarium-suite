@@ -568,6 +568,31 @@ reaches both is refused instead of resolved to one of them.
 
    'age' matches more than one resource. Use one of: 'attribute.age', 'column.age'.
 
+Getting the dependencies as objects
+-----------------------------------
+
+The tree is for reading. If you want to actually do something with the resource
+objects themselves, you can call their corresponding getter functions. Alternatively,
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_dependencies`
+hands back a list of the _direct_ (depth=1) dependencies of a resource.
+
+.. testcode::
+
+   for resource in sim.get_dependencies("mortality_rate", direction="uses"):
+       print(resource.resource_id)
+
+.. testoutput::
+
+   lookup_table.mortality.mortality_rate
+   value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
+   value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality
+   value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality
+
+Unlike :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_dependencies`,
+this will not return columns, randomness streams, and initializers (the same types
+a :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+call omits).
+
 .. _interactive_results:
 
 Observed results
