@@ -1,3 +1,9 @@
+**4.10.0 - 10/14/26**
+
+- Run every check in ``make check``, ``make lint``, and Jenkins even when one fails,
+  with ``FAIL_FAST`` (a Jenkins parameter, or ``make check FAIL_FAST=1``) to restore
+  stopping at the first failure
+
 **4.9.2 - 10/07/26**
 
 - Add the nutrition optimization pregnancy and child models to the nightly shared
