@@ -194,6 +194,7 @@ setup-slack:
 lint: # Check for formatting errors
 # NOTE: This is not actually running isort and black but rather just checking the --diffs.
 # Runs both checks even if isort fails, so one run shows every formatting problem.
+# Pass FAIL_FAST=1 to stop at the first failure.
 	@python -m vivarium.build_utils.run_steps lint-isort lint-black
 
 # Steps of `lint`; left out of `make list` because `lint` is the entry point.
@@ -289,6 +290,7 @@ clean: # Clean build artifacts and temporary files
 .PHONY: check
 check: # Run development checks
 # 	Runs every step even if an earlier one fails, then prints which steps failed.
+# 	Pass FAIL_FAST=1 to stop at the first failure.
 	@python -m vivarium.build_utils.run_steps lint mypy-if-typed test-all build-docs test-docs
 
 .PHONY: format

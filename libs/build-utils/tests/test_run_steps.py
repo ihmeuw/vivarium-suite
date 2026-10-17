@@ -10,6 +10,12 @@ from vivarium.build_utils import run_steps
 from vivarium.build_utils.run_steps import main
 
 
+@pytest.fixture(autouse=True)
+def unset_fail_fast(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep a ``FAIL_FAST`` set in the caller's shell from changing these tests."""
+    monkeypatch.delenv("FAIL_FAST", raising=False)
+
+
 class FakeRunner:
     """Record the targets run and return a preset exit code for each."""
 
@@ -46,6 +52,34 @@ def test_failure_does_not_stop_later_targets(
     assert (
         "FAILED  lint\nPASSED  mypy-if-typed\nFAILED  test-all\n2 of 3 targets failed" in out
     )
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes"])
+def test_fail_fast_stops_at_first_failure(
+    value: str, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner = FakeRunner({"lint": 0, "mypy-if-typed": 1, "test-all": 0})
+    monkeypatch.setattr(run_steps, "run_make_target", runner)
+    monkeypatch.setenv("FAIL_FAST", value)
+
+    assert main(["lint", "mypy-if-typed", "test-all"]) == 1
+    assert runner.calls == ["lint", "mypy-if-typed"]
+    out = capsys.readouterr().out
+    assert (
+        "PASSED  lint\nFAILED  mypy-if-typed\nSKIPPED test-all\n1 of 2 targets failed" in out
+    )
+
+
+@pytest.mark.parametrize("value", ["", "0", "false"])
+def test_fail_fast_off_values_run_every_target(
+    value: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner = FakeRunner({"lint": 1, "test-all": 0})
+    monkeypatch.setattr(run_steps, "run_make_target", runner)
+    monkeypatch.setenv("FAIL_FAST", value)
+
+    assert main(["lint", "test-all"]) == 1
+    assert runner.calls == ["lint", "test-all"]
 
 
 def test_requires_a_target() -> None:
