@@ -1,3 +1,7 @@
+**0.6.2 - 10/19/26**
+
+- Use the pytest-vivarium ``cluster`` marker for the SLURM-only parser test
+
 **0.6.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built
