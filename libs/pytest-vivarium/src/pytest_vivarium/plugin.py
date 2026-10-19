@@ -184,6 +184,9 @@ def _auto_num_workers() -> int:
     return _resolve_workers(_usable_cpu_count(), _available_memory_gb())
 
 
+# xdist ships its own implementation of this firstresult hook, and without tryfirst
+# whichever plugin was registered last wins, which depends on plugin load order.
+@pytest.hookimpl(tryfirst=True)
 def pytest_xdist_auto_num_workers(config: Config) -> int:
     """Resolve a safe worker count for ``-n auto`` (capped at DEFAULT_MAX_WORKERS, scaled to CPUs/memory, floored at 1).
 

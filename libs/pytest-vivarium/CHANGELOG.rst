@@ -1,3 +1,8 @@
+**0.3.1 - 10/16/26**
+
+- Make the ``-n auto`` worker-count hook run before pytest-xdist's default, so the
+  plugin's worker count is used regardless of plugin load order.
+
 **0.3.0 - 10/15/26**
 
 - **Breaking change.** Remove the ``no_gbd_cache`` fixture. It depended on
