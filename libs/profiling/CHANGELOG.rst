@@ -1,4 +1,4 @@
-**0.6.2 - 10/19/26**
+**0.6.2 - 10/20/26**
 
 - Use the pytest-vivarium ``cluster`` marker for the SLURM-only parser test
 
