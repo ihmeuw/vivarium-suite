@@ -1,8 +1,8 @@
 """Run make targets in order, continue past failures, and summarize the results.
 
 Backs ``make check`` and ``make lint``, so a single run reports every failing
-target instead of stopping at the first one. Set ``FAIL_FAST`` in the
-environment (e.g. ``make check FAIL_FAST=1``) to stop at the first failure
+target instead of stopping at the first one. Set ``FAIL_FAST`` or ``fail_fast``
+in the environment (e.g. ``make check fail_fast=1``) to stop at the first failure
 instead. Usage::
 
     python -m vivarium.build_utils.run_steps <target> [<target> ...]
@@ -22,9 +22,15 @@ def run_make_target(target: str) -> int:
     return subprocess.run(["make", target]).returncode
 
 
+FAIL_FAST_VARIABLES = ("FAIL_FAST", "fail_fast")
+
+
 def fail_fast_requested() -> bool:
-    """Return whether ``FAIL_FAST`` is set to a value other than empty, ``0``, or ``false``."""
-    return os.environ.get("FAIL_FAST", "").strip().lower() not in ("", "0", "false")
+    """Return whether either fail-fast variable is set to a value other than empty, ``0``, or ``false``."""
+    return any(
+        os.environ.get(name, "").strip().lower() not in ("", "0", "false")
+        for name in FAIL_FAST_VARIABLES
+    )
 
 
 def format_summary(results: dict[str, bool], skipped: Sequence[str] = ()) -> str:

@@ -152,7 +152,8 @@ By default a check that fails (lint, mypy, tests, docs, doctests) marks its stag
 and the build as failed but does not stop the build. Every check runs on every
 Python version, so one build shows everything that is failing. ``make check`` and
 ``make lint`` behave the same way locally and end with a summary of which steps
-failed.
+failed. Pass ``fail_fast=1`` (or ``FAIL_FAST=1``) to either one to stop at the
+first failure.
 
 Set the ``FAIL_FAST`` build parameter to stop at the first failing check and abort
 the other Python versions. Jenkins adds a new parameter to a job only after the

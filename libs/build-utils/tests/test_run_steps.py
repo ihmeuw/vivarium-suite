@@ -7,13 +7,14 @@ from pathlib import Path
 import pytest
 
 from vivarium.build_utils import run_steps
-from vivarium.build_utils.run_steps import main
+from vivarium.build_utils.run_steps import FAIL_FAST_VARIABLES, main
 
 
 @pytest.fixture(autouse=True)
 def unset_fail_fast(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep a ``FAIL_FAST`` set in the caller's shell from changing these tests."""
-    monkeypatch.delenv("FAIL_FAST", raising=False)
+    """Keep a fail-fast variable set in the caller's shell from changing these tests."""
+    for name in FAIL_FAST_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
 
 
 class FakeRunner:
@@ -54,13 +55,17 @@ def test_failure_does_not_stop_later_targets(
     )
 
 
+@pytest.mark.parametrize("name", FAIL_FAST_VARIABLES)
 @pytest.mark.parametrize("value", ["1", "true", "yes"])
 def test_fail_fast_stops_at_first_failure(
-    value: str, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    name: str,
+    value: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = FakeRunner({"lint": 0, "mypy-if-typed": 1, "test-all": 0})
     monkeypatch.setattr(run_steps, "run_make_target", runner)
-    monkeypatch.setenv("FAIL_FAST", value)
+    monkeypatch.setenv(name, value)
 
     assert main(["lint", "mypy-if-typed", "test-all"]) == 1
     assert runner.calls == ["lint", "mypy-if-typed"]
@@ -70,13 +75,14 @@ def test_fail_fast_stops_at_first_failure(
     )
 
 
+@pytest.mark.parametrize("name", FAIL_FAST_VARIABLES)
 @pytest.mark.parametrize("value", ["", "0", "false"])
 def test_fail_fast_off_values_run_every_target(
-    value: str, monkeypatch: pytest.MonkeyPatch
+    name: str, value: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     runner = FakeRunner({"lint": 1, "test-all": 0})
     monkeypatch.setattr(run_steps, "run_make_target", runner)
-    monkeypatch.setenv("FAIL_FAST", value)
+    monkeypatch.setenv(name, value)
 
     assert main(["lint", "test-all"]) == 1
     assert runner.calls == ["lint", "test-all"]
