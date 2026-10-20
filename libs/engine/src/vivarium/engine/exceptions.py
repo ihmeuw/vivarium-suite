@@ -15,5 +15,5 @@ class VivariumError(Exception):
     pass
 
 
-class RecordError(VivariumError):
-    """Raised when a record expression raises an exception."""
+class ObservationError(VivariumError):
+    """Raised when an observation registered on an interactive context raises an exception."""

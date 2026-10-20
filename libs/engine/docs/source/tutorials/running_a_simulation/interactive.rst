@@ -500,30 +500,37 @@ limit, which may go past the end time.
 
    True 2022-02-10 00:00:00
 
-Recording values as the simulation runs
+Observing values as the simulation runs
 +++++++++++++++++++++++++++++++++++++++
 
-To track a specific quantity over time not already covered by a registered
-observation, use :meth:`~vivarium.engine.interface.interactive.InteractiveContext.record`.
-It takes keyword arguments only: each keyword is the name to record values
-under, and its value is a callable that takes the simulation and returns the
-value to record. Every record is evaluated once when it is registered and again
-after every step.
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_results`
+returns the results of the model's observations, as long as the simulation was
+created with ``InteractiveContext(..., observe=True)``. An ``InteractiveContext``
+does not observe them by default. See :ref:`getting results <interactive_results>`
+for more detail.
 
-:attr:`~vivarium.engine.interface.interactive.InteractiveContext.recorded_values`
-returns what has been recorded as a dict keyed by record name and then by time.
-Values are stored exactly as returned.
+To track a quantity over time that the model's observations do not cover, add
+your own observation with
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`.
+This works whether or not ``observe`` is set. Pass each observation as a
+keyword argument: the keyword is the observation's name, and its value is a
+callable that takes the simulation and returns the value to store. Every
+observation is evaluated once when it is registered and again after every
+step. ``get_results`` returns each observation under its name, as a dict keyed
+by time. Values are stored exactly as returned. An observation's name must not
+match one that the model already observes.
 
 .. testcode::
 
-   sim.record(
+   sim.register_observation(
        mean_age=lambda s: s.get_population("age").mean(),
        n_wasted=lambda s: s.get_population("child_wasting.exposure").sum(),
    )
    sim.take_steps(3)
 
-   print(pd.Series(sim.recorded_values["mean_age"]).round(3))
-   print(pd.Series(sim.recorded_values["n_wasted"]))
+   results = sim.get_results()
+   print(pd.Series(results["mean_age"]).round(3))
+   print(pd.Series(results["n_wasted"]))
 
 .. testoutput::
 
@@ -539,20 +546,21 @@ Values are stored exactly as returned.
    dtype: int64
 
 Use
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.stop_recording`
-to stop recording an expression. Its recorded values are kept, and passing its
-name to ``record`` (without a callable) resumes it.
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.pause_observation`
+to stop evaluating an observation. Its values are kept in ``get_results``, and
+passing its name to ``register_observation`` (without a callable) resumes it.
 
 .. testcode::
 
-   sim.stop_recording("n_wasted")
-   print(list(sim.recorded_values))
+   sim.pause_observation("n_wasted")
+   print(list(sim.get_results()))
 
 .. testoutput::
 
    ['mean_age', 'n_wasted']
 
-Advancing a simulation does not, on its own, produce any results - an
-``InteractiveContext`` does not observe them by default. See
-:ref:`getting results <interactive_results>` for what that means and how to
-turn it on.
+.. note::
+
+   ``pause_observation`` only applies to observations registered with
+   ``register_observation``. It cannot pause the observations that the
+   model's components register.
