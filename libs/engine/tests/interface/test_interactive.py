@@ -463,14 +463,14 @@ class TestObservationsInResults:
         assert results["house_points"][VALUE_COLUMN].sum() > 0
         assert list(results["clock"]) == [start, sim.current_time]
 
-    def test_unregistering_leaves_model_observations_running(self) -> None:
-        """Unregistering every registered observation does not stop the model's observations."""
+    def test_pausing_leaves_model_observations_running(self) -> None:
+        """Pausing every registered observation does not stop the model's observations."""
         sim = hogwarts()
         sim.register_observation(clock=clock)
         sim.step()
         points_before = sim.get_results()["house_points"][VALUE_COLUMN].sum()
 
-        sim.unregister_observation("clock")
+        sim.pause_observation("clock")
         sim.step()
 
         assert sim.get_results()["house_points"][VALUE_COLUMN].sum() > points_before
@@ -608,19 +608,19 @@ class TestObservationFailure:
         with pytest.raises(ObservationError):
             short_sim.step(pd.Timedelta(days=3))
 
-        short_sim.unregister_observation("broken")
+        short_sim.pause_observation("broken")
         short_sim.step()
 
         assert short_sim.current_time == three_days_on + STEP_SIZE
 
-    def test_an_observation_may_unregister_another_while_running(
+    def test_an_observation_may_pause_another_while_running(
         self, short_sim: InteractiveContext
     ) -> None:
-        """An observation that unregisters another mid-step stops it without breaking observing."""
+        """An observation that pauses another mid-step stops it without breaking observing."""
 
         def stops_other(sim: InteractiveContext) -> ClockTime:
             if reached(JAN_8)(sim):
-                sim.unregister_observation("other")
+                sim.pause_observation("other")
             return sim.current_time
 
         short_sim.register_observation(stopper=stops_other, other=clock)
@@ -632,11 +632,11 @@ class TestObservationFailure:
         }
 
 
-class TestUnregisterObservation:
-    """unregister_observation() stops observations, keeping their values, and register_observation() resumes them."""
+class TestPauseObservation:
+    """pause_observation() stops observations, keeping their values, and register_observation() resumes them."""
 
     def test_stops_calling_but_keeps_the_values(self, short_sim: InteractiveContext) -> None:
-        """An unregistered observation is not called again but keeps its values; others continue."""
+        """A paused observation is not called again but keeps its values; others continue."""
         calls: list[ClockTime] = []
 
         def counted(sim: InteractiveContext) -> None:
@@ -644,7 +644,7 @@ class TestUnregisterObservation:
 
         short_sim.register_observation(counted=counted, days=days_elapsed)
         short_sim.step()
-        short_sim.unregister_observation("counted")
+        short_sim.pause_observation("counted")
         short_sim.step()
 
         assert calls == [JAN_1, JAN_8]
@@ -653,14 +653,14 @@ class TestUnregisterObservation:
             "days": {JAN_1: 0, JAN_8: 7, JAN_15: 14},
         }
 
-    def test_an_unregistered_observation_resumes_by_name(
+    def test_a_paused_observation_resumes_by_name(
         self, short_sim: InteractiveContext
     ) -> None:
-        """Passing an unregistered observation's name to register_observation resumes it, leaving a gap."""
+        """Passing a paused observation's name to register_observation resumes it, leaving a gap."""
         jan_22, jan_29 = JAN_1 + STEP_SIZE * 3, JAN_1 + STEP_SIZE * 4
         short_sim.register_observation(clock=clock)
         short_sim.step()
-        short_sim.unregister_observation("clock")
+        short_sim.pause_observation("clock")
         short_sim.take_steps(2)
 
         short_sim.register_observation("clock")
@@ -682,10 +682,10 @@ class TestUnregisterObservation:
     @pytest.mark.parametrize(
         "call",
         [
-            lambda sim: sim.unregister_observation("clock", "not_observed"),
+            lambda sim: sim.pause_observation("clock", "not_observed"),
             lambda sim: sim.register_observation("not_observed"),
         ],
-        ids=["unregister_observation", "register_observation"],
+        ids=["pause_observation", "register_observation"],
     )
     def test_an_unknown_name_raises_and_changes_nothing(
         self, short_sim: InteractiveContext, call: Callable[[InteractiveContext], None]

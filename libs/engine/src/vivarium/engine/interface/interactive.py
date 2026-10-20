@@ -218,11 +218,7 @@ class InteractiveContext(BaseSimulationContext):
         self.initialize_simulants()
         self._population_view = self._builder.population.get_view()
         self._assert_no_duplicate_names(self._interactive_observations)
-        active = {
-            name: obs for name, obs in self._interactive_observations.items() if obs.active
-        }
-        if active:
-            self._observe(active)
+        self._observe()
 
     def step(self, step_size: ClockStepSize | None = None) -> None:
         """Advance the simulation one step.
@@ -253,16 +249,12 @@ class InteractiveContext(BaseSimulationContext):
             self._clock._clock_step_size = step_size
         super().step()
         self._clock._clock_step_size = old_step_size
-        active = {
-            name: obs for name, obs in self._interactive_observations.items() if obs.active
-        }
-        if active:
-            self._observe(active)
+        self._observe()
 
     def register_observation(
         self, *names: str, **observations: Callable[[InteractiveContext], Any]
     ) -> None:
-        """Register named observations, or resume unregistered ones, to evaluate every step.
+        """Register named observations, or resume paused ones, to evaluate every step.
 
         Each observation is called with this context and its return value is
         stored under the current clock time, first as soon as the simulation is
@@ -274,7 +266,7 @@ class InteractiveContext(BaseSimulationContext):
         Parameters
         ----------
         names
-            Names of unregistered observations to resume. Their values are kept and
+            Names of paused observations to resume. Their values are kept and
             new values are added from now on. A name that is still registered is
             left as it is.
         observations
@@ -319,10 +311,10 @@ class InteractiveContext(BaseSimulationContext):
         if already_registered:
             self._logger.info(f"Observations {already_registered} are already registered.")
 
-    def unregister_observation(self, *names: str) -> None:
+    def pause_observation(self, *names: str) -> None:
         """Stop evaluating the named observations, keeping their values.
 
-        An unregistered observation's values stay in :meth:`get_results`, and it
+        A paused observation's values stay in :meth:`get_results`, and it
         can be resumed with :meth:`register_observation` by passing just its name.
 
         Parameters
@@ -350,8 +342,17 @@ class InteractiveContext(BaseSimulationContext):
                 "registered by the model. Use a different name."
             )
 
-    def _observe(self, observations: dict[str, _InteractiveObservation]) -> None:
-        """Evaluate each observation at the current time and store the values, or none if any fails."""
+    def _observe(
+        self, observations: dict[str, _InteractiveObservation] | None = None
+    ) -> None:
+        """Evaluate the given observations, or all active ones, and store the values, or none if any fails."""
+        if observations is None:
+            # Fix the active set up front, since an observation may pause another.
+            observations = {
+                name: obs
+                for name, obs in self._interactive_observations.items()
+                if obs.active
+            }
         time = self.current_time
         values: dict[str, Any] = {}
         for name, observation in observations.items():
@@ -361,6 +362,7 @@ class InteractiveContext(BaseSimulationContext):
                 raise ObservationError(
                     f"Observation '{name}' failed at time {time}: {error!r}"
                 ) from error
+        # Store only after every observation succeeds so a failure leaves no partial values.
         for name, value in values.items():
             observations[name].values[time] = value
 
