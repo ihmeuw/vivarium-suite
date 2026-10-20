@@ -836,6 +836,18 @@ class TestRenderDependencyTree:
             "    └── node.s  (expanded above)",
         ]
 
+    def test_a_cycle_stops_where_it_rejoins_an_expanded_node(self) -> None:
+        """``b`` is marked expanded before the walk descends into it, so arriving
+        back at it from ``c`` ends the branch. Marking it afterwards instead
+        recurses without end, and no acyclic graph tells the two orders apart."""
+        graph, nodes = self.build_graph({"a": "b", "b": "c", "c": "b"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", None) == [
+            "node.a",
+            "└── node.b",
+            "    └── node.c",
+            "        └── node.b  (expanded above)",
+        ]
+
     def test_a_repeated_leaf_is_left_unmarked(self) -> None:
         """Nothing was expanded and nothing is hidden, so both arrivals print plain."""
         graph, nodes = self.build_graph({"a": "c b", "c": "d", "b": "d"})

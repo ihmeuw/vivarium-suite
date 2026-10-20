@@ -208,6 +208,9 @@ def _render_dependency_tree(
                 # Don't recurse into this child, either because it has no dependencies or
                 # because it has more dependencies but we are at the depth limit
                 continue
+            # Mark the child before walking it, not after. A cycle leads back to
+            # the child from inside its own subtree, where an unmarked child is
+            # expanded again and the walk never ends.
             expanded.add(child)
             walk(node=child, prefix=prefix + ("    " if last else "│   "), level=level + 1)
 
