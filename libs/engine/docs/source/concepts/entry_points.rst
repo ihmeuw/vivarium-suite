@@ -23,13 +23,17 @@ The Vivarium Engine
 -------------------
 
 The :mod:`engine <vivarium.engine.framework.engine>` houses the
-:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>` --
+:class:`BaseSimulationContext <vivarium.engine.framework.engine.BaseSimulationContext>` --
 the key :mod:`vivarium.engine` object for running and interacting with simulations.
 It is the top-level manager for all state information in :mod:`vivarium.engine`. All
 simulations are created by a call to the ``__init__`` of the
-:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>` at
-some level and wrappers around the context should try to be as thin as
-possible around simulation creation.
+:class:`BaseSimulationContext <vivarium.engine.framework.engine.BaseSimulationContext>`
+at some level and wrappers around the context should try to be as thin as
+possible around simulation creation. The
+:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`
+runs a simulation from start to finish, and the
+:class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
+runs one interactively. Both build on the base context.
 
 The context accepts four arguments:
 
