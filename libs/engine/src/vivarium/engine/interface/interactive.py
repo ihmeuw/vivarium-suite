@@ -199,7 +199,8 @@ def _render_dependency_tree(
                 suffix = "  (expanded above)"
             elif depth is not None and level + 1 == depth and child_dependencies:
                 # This child has more dependencies but we are at the depth limit
-                suffix = f"  ({len(child_dependencies)} more)"
+                hidden = len(child_dependencies)
+                suffix = f"  ({hidden} direct branch{'es' if hidden > 1 else ''} hidden)"
             else:
                 suffix = ""
             branch = "└── " if last else "├── "
@@ -761,8 +762,9 @@ class InteractiveContext(SimulationContext):
 
         Notes
         -----
-        A branch cut off by ``depth`` reports how many direct dependencies it hides
-        as ``(N more)``.
+        A branch cut off by ``depth`` is marked ``(N direct branches hidden)``,
+        where ``N`` counts its direct dependencies and not every resource below
+        them.
 
         The resource graph is a directed acyclic graph rather than a tree, so a
         resource can be reached along several paths. Every parent shows it, but

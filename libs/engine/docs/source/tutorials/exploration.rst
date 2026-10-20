@@ -478,13 +478,14 @@ to print what other resources use it.
 
    attribute.mortality_rate
    ├── lookup_table.mortality.mortality_rate
-   ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality  (1 more)
-   ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality  (1 more)
-   └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality  (1 more)
+   ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality  (1 direct branch hidden)
+   ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality  (1 direct branch hidden)
+   └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality  (1 direct branch hidden)
 
 The default depth of 1 reports only the immediate dependencies. A branch with
-more underneath it reports how many direct children it is hiding as ``(N more)``.
-Pass a larger ``depth`` to see more of the tree.
+more underneath it is marked ``(N direct branches hidden)``, where ``N`` counts
+the branches cut off at that point and not every resource below them. Pass a
+larger ``depth`` to see more of the tree.
 
 .. testcode::
 
@@ -497,9 +498,9 @@ Pass a larger ``depth`` to see more of the tree.
    ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
    │   └── attribute.lower_respiratory_infections.cause_specific_mortality_rate
    ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality
-   │   └── attribute.susceptible_to_lower_respiratory_infections.excess_mortality_rate  (1 more)
+   │   └── attribute.susceptible_to_lower_respiratory_infections.excess_mortality_rate  (1 direct branch hidden)
    └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality
-       └── attribute.infected_with_lower_respiratory_infections.excess_mortality_rate  (1 more)
+       └── attribute.infected_with_lower_respiratory_infections.excess_mortality_rate  (1 direct branch hidden)
 
 Pass ``depth=None`` to walk a chain to its end.
 

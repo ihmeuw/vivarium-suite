@@ -1,4 +1,4 @@
-**5.15.0 - 10/15/26**
+**5.15.0 - 10/20/26**
 
 - Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,
   or what uses it, as a depth-limited tree

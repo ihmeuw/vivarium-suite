@@ -646,8 +646,8 @@ class TestPrintDependencies:
         """The same resource, walked the other way, reports different neighbors."""
         assert self.printed(sim, capsys, "attribute.diamond_base", "used-by") == [
             "attribute.diamond_base",
-            "├── attribute.diamond_left  (1 more)",
-            "└── attribute.diamond_right  (1 more)",
+            "├── attribute.diamond_left  (1 direct branch hidden)",
+            "└── attribute.diamond_right  (1 direct branch hidden)",
         ]
 
     def test_dependencies_are_grouped_by_resource_type(
@@ -804,9 +804,9 @@ class TestRenderDependencyTree:
         assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
             "node.a",
             "├── node.b",
-            "│   └── node.d  (1 more)",
+            "│   └── node.d  (1 direct branch hidden)",
             "└── node.c",
-            "    └── node.d  (1 more)",
+            "    └── node.d  (1 direct branch hidden)",
         ]
 
     def test_a_node_reached_again_above_the_limit_is_expanded_there(self) -> None:
@@ -818,7 +818,7 @@ class TestRenderDependencyTree:
         assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
             "node.a",
             "├── node.branch",
-            "│   └── node.shared  (1 more)",
+            "│   └── node.shared  (1 direct branch hidden)",
             "└── node.shared",
             "    └── node.tail",
         ]
@@ -863,7 +863,7 @@ class TestRenderDependencyTree:
         graph, nodes = self.build_graph({"a": "b", "b": "e d c"})
         assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
             "node.a",
-            "└── node.b  (3 more)",
+            "└── node.b  (3 direct branches hidden)",
         ]
 
     def test_a_leaf_at_the_limit_reports_nothing(self) -> None:
