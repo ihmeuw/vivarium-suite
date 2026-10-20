@@ -1033,6 +1033,13 @@ class TestModifierSelection:
         assert "Pipeline test has no modifier(s) ['not_a_modifier']" in message
         assert str(available) in message
 
+    @pytest.mark.parametrize("bad_entry", [1, None, lambda value: value])
+    def test_entry_of_wrong_type_raises(
+        self, value_pipeline: Pipeline, bad_entry: object
+    ) -> None:
+        with pytest.raises(TypeError, match="ValueModifier objects or their names"):
+            value_pipeline(modifiers=[value_pipeline.modifiers[0], bad_entry])  # type: ignore[list-item]
+
     def test_modifier_from_another_pipeline_raises(
         self, value_pipeline: Pipeline, manager: ValuesManager
     ) -> None:

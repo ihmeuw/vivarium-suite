@@ -437,6 +437,9 @@ class Pipeline(Resource, RequiresPrettyHook):
         ValueError
             If ``modifiers`` is given with ``mode="source"``, names a modifier
             that is not on this pipeline, or names a modifier more than once.
+        TypeError
+            If an entry of ``modifiers`` is neither a :class:`ValueModifier` nor
+            a string.
         """
         return self._call(*args, mode=mode, modifiers=modifiers, **kwargs)
 
@@ -489,9 +492,14 @@ class Pipeline(Resource, RequiresPrettyHook):
             if isinstance(requested, str):
                 match = by_name.get(requested)
                 label = requested
-            else:
+            elif isinstance(requested, ValueModifier):
                 match = requested if requested in self.modifiers else None
                 label = requested.name
+            else:
+                raise TypeError(
+                    "Modifiers must be given as ValueModifier objects or their names, "
+                    f"not {type(requested).__name__}: {requested!r}."
+                )
             if match is None:
                 unknown.append(label)
             elif match in selected:
@@ -726,6 +734,9 @@ class AttributePipeline(Pipeline):
         ValueError
             If ``modifiers`` is given with ``mode="source"``, names a modifier
             that is not on this pipeline, or names a modifier more than once.
+        TypeError
+            If an entry of ``modifiers`` is neither a :class:`ValueModifier` nor
+            a string.
         """
         # NOTE: must pass index in as arg (NOT kwarg!) to match signature of parent Pipeline._call()
         # Always skip post-processor at _call level; AttributePipeline handles it here.
