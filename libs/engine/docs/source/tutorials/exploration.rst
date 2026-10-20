@@ -462,6 +462,113 @@ For example, we can get the mortality rate lookup table found above:
     contains characters - brackets, parentheses, a dot - that a regular expression
     would otherwise read as syntax.
 
+Following a resource's dependencies
+-----------------------------------
+
+Once you have found a resource, you might be interested in what it uses and/or what
+uses it. :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_dependencies`
+answers both. Pass ``direction="uses"`` to print what the resource uses and ``direction="used-by"``
+to print what other resources use it.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", direction="uses")
+
+.. testoutput::
+
+   attribute.mortality_rate
+   ├── lookup_table.mortality.mortality_rate
+   ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality  (1 direct branch hidden)
+   ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality  (1 direct branch hidden)
+   └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality  (1 direct branch hidden)
+
+The default depth of 1 reports only the immediate dependencies. A branch with
+more underneath it is marked ``(N direct branches hidden)``, where ``N`` counts
+the branches cut off at that point and not every resource below them. Pass a
+larger ``depth`` to see more of the tree.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", direction="uses", depth=2)
+
+.. testoutput::
+
+   attribute.mortality_rate
+   ├── lookup_table.mortality.mortality_rate
+   ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
+   │   └── attribute.lower_respiratory_infections.cause_specific_mortality_rate
+   ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality
+   │   └── attribute.susceptible_to_lower_respiratory_infections.excess_mortality_rate  (1 direct branch hidden)
+   └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality
+       └── attribute.infected_with_lower_respiratory_infections.excess_mortality_rate  (1 direct branch hidden)
+
+Pass ``depth=None`` to walk a chain to its end.
+
+.. testcode::
+
+   sim.print_dependencies("child_wasting.exposure", direction="uses", depth=None)
+
+.. testoutput::
+
+   attribute.child_wasting.exposure
+   ├── attribute.child_wasting.proportion_exposed
+   │   ├── attribute.child_wasting.base_proportion_exposed
+   │   └── value_modifier.child_wasting.proportion_exposed.1.treatment_intervention.sqlns.child_wasting.proportion_exposed.intervention_effect
+   │       └── attribute.sqlns.effect_size
+   └── attribute.child_wasting_propensity
+       └── column.child_wasting_propensity
+           └── initializer.5.risk.child_wasting.initialize_propensity
+               └── stream.child_wasting
+                   ├── attribute.age
+                   │   └── column.age
+                   │       └── initializer.1.base_population.initialize_entrance_time_and_age
+                   │           └── stream.age_initialization
+                   └── attribute.entrance_time
+                       └── column.entrance_time
+                           └── initializer.1.base_population.initialize_entrance_time_and_age  (expanded above)
+
+.. note::
+
+    The dependency tree includes columns, initializers, and streams despite those
+    being excluded from the results of a 
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+    call. These are included here because they are part of the dependency graph
+    and so are relevant to understanding what a resource uses and what uses it.
+
+The resource graph is a directed acyclic graph rather than a tree, so a resource
+can be reached along more than one path. e.g., in the output above,
+``initializer.1.base_population.initialize_entrance_time_and_age`` is reached through
+both ``attribute.age`` and ``attribute.entrance_time``. If a resource exists in
+more than one branch and also includes its own children, only the first branch is
+unrolled; any subsequent branches that reach it are marked ``(expanded above)``.
+
+A resource with nothing on the side you asked about reports as ``(none)``.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", "used-by")
+
+.. testoutput::
+
+   attribute.mortality_rate
+       (none)
+
+The first argument, ``resource``, takes a bare name, a full resource id such as
+``"attribute.mortality_rate"``, or a :class:`~vivarium.engine.framework.resource.resource.Resource`
+object. Most private columns share a name with an attribute, so a bare name that
+reaches both is refused instead of resolved to one of them.
+
+.. testcode::
+
+   try:
+       sim.print_dependencies("age", "uses")
+   except ValueError as error:
+       print(error)
+
+.. testoutput::
+
+   'age' matches more than one resource. Use one of: 'attribute.age', 'column.age'.
+
 .. _interactive_results:
 
 Observed results
