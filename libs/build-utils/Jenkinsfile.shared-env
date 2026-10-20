@@ -85,6 +85,10 @@ pipeline {
                         mkdir -p '${params.SHARED_ENV_DIR}'
                         chmod 755 '${params.SHARED_ENV_DIR}'
                     """
+
+                    // conda-pack archives from before builds were kept side by side.
+                    // TODO: remove this step once the archives are gone.
+                    sh "rm -rf '${params.SHARED_ENV_DIR}/archive'"
                 }
             }
         }
