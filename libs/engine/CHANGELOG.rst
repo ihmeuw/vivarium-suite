@@ -1,3 +1,7 @@
+**5.15.0 - 10/21/26**
+
+- Add a ``modifiers`` argument to pipeline calls that applies only the given modifiers
+
 **5.14.1 - 10/12/26**
 
 - **Breaking change.** Remove ``InteractiveContext.get_emitter``, which was only
