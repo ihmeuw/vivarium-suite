@@ -115,7 +115,6 @@ def categorical_risk_observer_sim(base_config_factory, base_plugins, risk_data):
     simulation.setup()
     simulation.step()
     simulation.finalize()
-    simulation.report()
     return simulation
 
 

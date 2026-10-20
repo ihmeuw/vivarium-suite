@@ -3,11 +3,12 @@
 The Vivarium Engine
 ===================
 
-The engine houses the :class:`SimulationContext` -- the key ``vivarium`` object
-for running and interacting with simulations. It is the top level manager
+The engine houses the :class:`BaseSimulationContext` -- the key ``vivarium``
+object for running and interacting with simulations. It is the top level manager
 for all state information in ``vivarium``.  By intention, it exposes a very
 simple interface for managing the
-:ref:`simulation lifecycle <lifecycle_concept>`.
+:ref:`simulation lifecycle <lifecycle_concept>`. The :class:`SimulationContext`
+extends it to run a simulation from start to finish.
 
 Also included here is the simulation :class:`Builder`, which is the main
 interface that components use to interact with the simulation framework. You
@@ -21,6 +22,7 @@ tools to easily setup and run a simulation.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from pathlib import Path
 from pprint import pformat
 from time import time
@@ -59,7 +61,14 @@ from vivarium.engine.framework.values import ValuesInterface, ValuesManager
 from vivarium.engine.types import ClockTime
 
 
-class SimulationContext:
+class BaseSimulationContext(ABC):
+    """The simulation state and lifecycle shared by every simulation context.
+
+    Builds the managers and components from a model specification and runs the
+    setup, population creation, time step, and simulation end phases. Subclasses
+    define how the simulation is run.
+    """
+
     _created_simulation_contexts: set[str] = set()
 
     @staticmethod
@@ -83,17 +92,17 @@ class SimulationContext:
         a non-threadsafe operation.
         """
         if sim_name is None:
-            sim_number = len(SimulationContext._created_simulation_contexts) + 1
+            sim_number = len(BaseSimulationContext._created_simulation_contexts) + 1
             sim_name = f"simulation_{sim_number}"
 
-        if sim_name in SimulationContext._created_simulation_contexts:
+        if sim_name in BaseSimulationContext._created_simulation_contexts:
             msg = (
                 "Attempting to create two SimulationContexts "
                 f"with the same name {sim_name}"
             )
             raise VivariumError(msg)
 
-        SimulationContext._created_simulation_contexts.add(sim_name)
+        BaseSimulationContext._created_simulation_contexts.add(sim_name)
         return sim_name
 
     @staticmethod
@@ -104,7 +113,7 @@ class SimulationContext:
         -----
         This is primarily useful for testing purposes.
         """
-        SimulationContext._created_simulation_contexts = set()
+        BaseSimulationContext._created_simulation_contexts = set()
 
     def __init__(
         self,
@@ -252,10 +261,10 @@ class SimulationContext:
             raise ComponentConfigError(message)
 
         self._lifecycle.add_constraint(
-            self.add_components, allow_during=[lifecycle_states.INITIALIZATION]
+            self._add_components, allow_during=[lifecycle_states.INITIALIZATION]
         )
 
-        self.add_components(components_list)
+        self._add_components(components_list)
 
     @property
     def name(self) -> str:
@@ -269,14 +278,6 @@ class SimulationContext:
     def get_results(self) -> dict[str, pd.DataFrame]:
         """Returns a dictionary of formatted results."""
         return self._results.get_results()
-
-    def run_simulation(self) -> None:
-        """Runs all steps of a simulation."""
-        self.setup()
-        self.initialize_simulants()
-        self.run()
-        self.finalize()
-        self.report()
 
     def setup(self) -> None:
         self._lifecycle.set_state(lifecycle_states.SETUP)
@@ -319,6 +320,42 @@ class SimulationContext:
             self.time_step_emitters[event](pop_to_update, None)
         self._clock.step_forward(self.get_population_index())
 
+    def finalize(self) -> None:
+        self._lifecycle.set_state(lifecycle_states.SIMULATION_END)
+        self.end_emitter(self.get_population_index(), None)
+        unused_config_keys = self.configuration.unused_keys()
+        if unused_config_keys:
+            self._logger.warning(
+                f"Some configuration keys not used during run: {unused_config_keys}."
+            )
+
+    def _add_components(self, component_list: list[Component]) -> None:
+        """Add new components to the simulation."""
+        self._component_manager.add_components(component_list)
+
+    @abstractmethod
+    def run(self) -> None:
+        """Run the simulation to the end time in its configuration."""
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.name})"
+
+
+class SimulationContext(BaseSimulationContext):
+    """A simulation context that runs a simulation from start to finish.
+
+    Adds running to the configured end time with optional backups, reporting and
+    writing results, and the performance metrics of a run.
+    """
+
+    def run_simulation(self) -> None:
+        """Runs all steps of a simulation."""
+        self.setup()
+        self.initialize_simulants()
+        self.run()
+        self.finalize()
+        self.report()
+
     def run(
         self,
         backup_path: Path | None = None,
@@ -335,15 +372,6 @@ class SimulationContext:
         else:
             while self.current_time < self._clock.stop_time:  # type: ignore [operator]
                 self.step()
-
-    def finalize(self) -> None:
-        self._lifecycle.set_state(lifecycle_states.SIMULATION_END)
-        self.end_emitter(self.get_population_index(), None)
-        unused_config_keys = self.configuration.unused_keys()
-        if unused_config_keys:
-            self._logger.warning(
-                f"Some configuration keys not used during run: {unused_config_keys}."
-            )
 
     def report(self, print_results: bool = True) -> None:
         self._lifecycle.set_state(lifecycle_states.REPORT)
@@ -391,13 +419,6 @@ class SimulationContext:
         ]
         performance_metrics = pd.DataFrame(records)
         return performance_metrics
-
-    def add_components(self, component_list: list[Component]) -> None:
-        """Adds new components to the simulation."""
-        self._component_manager.add_components(component_list)
-
-    def __repr__(self) -> str:
-        return f"SimulationContext({self.name})"
 
     def get_number_of_steps_remaining(self) -> int:
         return self._clock.time_steps_remaining
