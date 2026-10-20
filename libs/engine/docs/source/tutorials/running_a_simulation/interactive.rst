@@ -546,13 +546,13 @@ match one that the model already observes.
    dtype: int64
 
 Use
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.unregister_observation`
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.pause_observation`
 to stop evaluating an observation. Its values are kept in ``get_results``, and
 passing its name to ``register_observation`` (without a callable) resumes it.
 
 .. testcode::
 
-   sim.unregister_observation("n_wasted")
+   sim.pause_observation("n_wasted")
    print(list(sim.get_results()))
 
 .. testoutput::
@@ -561,6 +561,6 @@ passing its name to ``register_observation`` (without a callable) resumes it.
 
 .. note::
 
-   ``unregister_observation`` only applies to observations registered with
-   ``register_observation``. It cannot unregister the observations that the
+   ``pause_observation`` only applies to observations registered with
+   ``register_observation``. It cannot pause the observations that the
    model's components register.

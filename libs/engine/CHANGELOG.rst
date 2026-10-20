@@ -1,8 +1,8 @@
 **5.15.0 - 10/15/26**
 
 - Add ``InteractiveContext.register_observation()`` to register named callables that are
-  evaluated at registration and after every step, and to resume unregistered ones by name
-- Add ``InteractiveContext.unregister_observation()`` to stop evaluating observations while
+  evaluated at registration and after every step, and to resume paused ones by name
+- Add ``InteractiveContext.pause_observation()`` to stop evaluating observations while
   keeping their values
 - Include these observations in ``InteractiveContext.get_results()``
 - Add ``ObservationError``, raised when one of these observations fails
