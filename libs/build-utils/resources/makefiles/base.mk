@@ -86,7 +86,8 @@ help: # Curated help message
 	echo; \
 	echo "build-env                     Create a new environment with installed packages"; \
 	echo "check                         Run development checks"; \
-	echo "                              (isort, black, mypy, tests, docs)"; \
+	echo "                              (isort, black, mypy, tests, docs);"; \
+	echo "                              runs every step and summarizes failures"; \
 	echo "format                        Format code (isort and black)"; \
 	echo "manual-deploy-artifactory     Deploy package; only use if Jenkins deploy fails"; \
 	echo "model <command> [args]        Run model lineage tool (e.g., make model tree,"; \
@@ -192,9 +193,17 @@ setup-slack:
 .PHONY: lint
 lint: # Check for formatting errors
 # NOTE: This is not actually running isort and black but rather just checking the --diffs.
-	@echo
-	@echo "Running isort and black"
+# Runs both checks even if isort fails, so one run shows every formatting problem.
+# Pass fail_fast=1 (or FAIL_FAST=1) to stop at the first failure.
+	@python -m vivarium.build_utils.run_steps lint-isort lint-black
+
+# Steps of `lint`; left out of `make list` because `lint` is the entry point.
+.PHONY: lint-isort
+lint-isort:
 	isort $(LOCATIONS) --check --verbose --only-modified --diff
+
+.PHONY: lint-black
+lint-black:
 	black $(LOCATIONS) --check --diff
 
 .PHONY: mypy
@@ -293,24 +302,9 @@ clean: # Clean build artifacts and temporary files
 
 .PHONY: check
 check: # Run development checks
-	make lint
-# 	Run mypy if any py.typed marker exists under src/ (see mypy-if-typed)
-	@echo
-	make mypy-if-typed
-# 	Run all fast tests
-	@echo
-	@echo "Running fast tests"
-	make test-all
-# 	Build docs
-	@echo
-	@echo "Building documentation"
-	make build-docs
-# 	Test docs
-	@echo
-	@echo "Running doctests"
-	make test-docs
-	@echo
-	@echo "*** All checks passed successfully! ***"
+# 	Runs every step even if an earlier one fails, then prints which steps failed.
+# 	Pass fail_fast=1 (or FAIL_FAST=1) to stop at the first failure.
+	@python -m vivarium.build_utils.run_steps lint mypy-if-typed test-all build-docs test-docs
 
 .PHONY: format
 format: # Format code (isort and black)

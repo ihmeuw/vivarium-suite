@@ -19,8 +19,9 @@ plus the repo root `CLAUDE.md`.
 
 1. **Enumerate.** Build the unit list: one unit per directory under
    each plugin's `skills/` (all files in the directory belong to the
-   unit), one per file in each plugin's `agents/`, plus each plugin's
-   `README.rst` and the repo root `CLAUDE.md`. The CHANGELOGs are
+   unit), one per file in each plugin's `agents/`, one per plugin `hooks/`
+   directory if it exists, plus each plugin's `README.rst` and the repo
+   root `CLAUDE.md`. The CHANGELOGs are
    history, not claims — skip them. Record the count; the final report must account for every unit.
 2. **Fan out.** Spawn one `simsci-internal:_claim_auditor` sub-agent per unit (in
    parallel batches). Each extracts the unit's load-bearing checkable

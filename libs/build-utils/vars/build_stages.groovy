@@ -122,12 +122,24 @@ def installPackage(String env_reqs = "", boolean useCache = false) {
     }
 }
 
+// Run a check command. Unless FAIL_FAST is set, a failure marks the stage and build
+// as failed but lets later checks run, so one build reports every failing check.
+def runCheck(String command) {
+    if (params.FAIL_FAST) {
+        sh command
+    } else {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+            sh command
+        }
+    }
+}
+
 def checkFormatting() {
     stage("Check Formatting - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
             script {
-                sh "${ACTIVATE} && make lint"
-                sh "${ACTIVATE} && make mypy-if-typed"
+                runCheck("${ACTIVATE} && make lint")
+                runCheck("${ACTIVATE} && make mypy-if-typed")
             }
         }
     }
@@ -147,10 +159,11 @@ def runTests(List test_types, boolean runWeekly) {
                 def parallelTests = test_types.collectEntries {
                     ["${full_name(it)} Tests" : {
                         stage("Run ${full_name(it)} Tests - Python ${PYTHON_VERSION}") {
-                            sh "${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}${runWeekly ? ' RUNWEEKLY=1' : ''}"
+                            runCheck("${ACTIVATE} && make ${it}${(env.IS_CRON.toBoolean() || params.RUN_SLOW) ? ' RUNSLOW=1' : ''}${runWeekly ? ' RUNWEEKLY=1' : ''}")
                         }
                     }]
                 }
+                parallelTests.failFast = (params.FAIL_FAST == true)
                 parallel parallelTests
             }
         }
@@ -160,7 +173,7 @@ def runTests(List test_types, boolean runWeekly) {
 def buildDocs() {
     stage("Build Docs - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
-            sh "${ACTIVATE} && make build-docs"
+            runCheck("${ACTIVATE} && make build-docs")
         }
     }
 }
@@ -168,7 +181,7 @@ def buildDocs() {
 def testDocs() {
     stage("Test Docs - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
-            sh "${ACTIVATE} && make test-docs"
+            runCheck("${ACTIVATE} && make test-docs")
         }
     }
 }

@@ -298,7 +298,7 @@ population size to be smaller so the simulation takes less time to run.
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
 We then need to call the
-:meth:`~vivarium.engine.framework.engine.SimulationContext.setup` method on the
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.setup` method on the
 simulation context to prepare it to run.
 
 .. testcode::
@@ -324,9 +324,10 @@ After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 Adding additional components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Another use case for creating the
-:class:`~vivarium.engine.interface.interactive.InteractiveContext` in
-its pre-setup state is to extend existing models.
+You can also extend an existing model by passing extra components to the
+:class:`~vivarium.engine.interface.interactive.InteractiveContext`. They are
+added to the components in the model specification, and ``configuration``
+can set values for them.
 
 For example, say we wanted to add another risk for unsafe water sources
 into our disease model. We could do the following.
@@ -337,27 +338,24 @@ into our disease model. We could do the following.
     from vivarium.engine.examples.disease_model import get_model_specification_path, Risk, RiskEffect
 
     p = get_model_specification_path()
-    sim = InteractiveContext(p, setup=False)
-
-    sim.add_components(
-        [
+    sim = InteractiveContext(
+        p,
+        components=[
             Risk("unsafe_water_source"),
             RiskEffect(
                 "unsafe_water_source",
                 "infected_with_lower_respiratory_infections.incidence_rate",
             ),
-        ]
+        ],
+        configuration={
+            'unsafe_water_source': {
+                'proportion_exposed': 0.3
+            },
+            'effect_of_unsafe_water_source_on_infected_with_lower_respiratory_infections.incidence_rate': {
+                'relative_risk': 8,
+            },
+        },
     )
-    sim.configuration.update({
-        'unsafe_water_source': {
-            'proportion_exposed': 0.3
-        },
-        'effect_of_unsafe_water_source_on_infected_with_lower_respiratory_infections.incidence_rate': {
-            'relative_risk': 8,
-        },
-    })
-
-    sim.setup()
 
 This is an easy way to take an old model and toy around with new components
 to immediately see their effects.
@@ -500,7 +498,67 @@ limit, which may go past the end time.
 
    True 2022-02-10 00:00:00
 
-Advancing a simulation does not, on its own, produce any results - an
-``InteractiveContext`` does not observe them by default. See
-:ref:`getting results <interactive_results>` for what that means and how to
-turn it on.
+Observing values as the simulation runs
++++++++++++++++++++++++++++++++++++++++
+
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_results`
+returns the results of the model's observations, as long as the simulation was
+created with ``InteractiveContext(..., observe=True)``. An ``InteractiveContext``
+does not observe them by default. See :ref:`getting results <interactive_results>`
+for more detail.
+
+To track a quantity over time that the model's observations do not cover, add
+your own observation with
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`.
+This works whether or not ``observe`` is set. Pass each observation as a
+keyword argument: the keyword is the observation's name, and its value is a
+callable that takes the simulation and returns the value to store. Every
+observation is evaluated once when it is registered and again after every
+step. ``get_results`` returns each observation under its name, as a dict keyed
+by time. Values are stored exactly as returned. An observation's name must not
+match one that the model already observes.
+
+.. testcode::
+
+   sim.register_observation(
+       mean_age=lambda s: s.get_population("age").mean(),
+       n_wasted=lambda s: s.get_population("child_wasting.exposure").sum(),
+   )
+   sim.take_steps(3)
+
+   results = sim.get_results()
+   print(pd.Series(results["mean_age"]).round(3))
+   print(pd.Series(results["n_wasted"]))
+
+.. testoutput::
+
+   2022-02-10 00:00:00    2.217
+   2022-02-10 12:00:00    2.218
+   2022-02-11 00:00:00    2.220
+   2022-02-11 12:00:00    2.221
+   dtype: float64
+   2022-02-10 00:00:00    8
+   2022-02-10 12:00:00    8
+   2022-02-11 00:00:00    8
+   2022-02-11 12:00:00    8
+   dtype: int64
+
+Use
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.pause_observation`
+to stop evaluating an observation. Its values are kept in ``get_results``, and
+passing its name to ``register_observation`` (without a callable) resumes it.
+
+.. testcode::
+
+   sim.pause_observation("n_wasted")
+   print(list(sim.get_results()))
+
+.. testoutput::
+
+   ['mean_age', 'n_wasted']
+
+.. note::
+
+   ``pause_observation`` only applies to observations registered with
+   ``register_observation``. It cannot pause the observations that the
+   model's components register.

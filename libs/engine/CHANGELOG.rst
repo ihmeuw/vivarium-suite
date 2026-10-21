@@ -1,3 +1,39 @@
+**5.16.0 - 10/21/26**
+
+- Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,
+  or what uses it, as a depth-limited tree
+- Add ``InteractiveContext.get_dependencies()`` to return direct dependency objects
+- Show the short repr rather than the full description when a pipeline, value
+  source, modifier, combiner, or post-processor is displayed inside a container
+  in a notebook
+- Name the table in ``LookupTable``'s repr so a list of tables can be told apart
+
+**5.15.0 - 10/21/26**
+
+- **Breaking change.** Make ``InteractiveContext`` inherit from a new ``BaseSimulationContext``
+  instead of ``SimulationContext``, so it no longer has ``run_simulation``, ``report``,
+  ``write_backup``, ``load_from_backup``, ``get_performance_metrics``, or
+  ``get_number_of_steps_remaining``
+- **Breaking change.** Make ``add_components`` private on ``SimulationContext`` and
+  ``InteractiveContext``. Pass extra components to the constructor's ``components``
+  argument instead
+- Add ``InteractiveContext.register_observation()`` to register named callables that are
+  evaluated at registration and after every step, and to resume paused ones by name
+- Add ``InteractiveContext.pause_observation()`` to stop evaluating observations while
+  keeping their values
+- Include these observations in ``InteractiveContext.get_results()``
+- Add ``ObservationError``, raised when one of these observations fails
+
+**5.14.1 - 10/12/26**
+
+- **Breaking change.** Remove ``InteractiveContext.get_emitter``, which was only
+  callable on an already-finalized simulation.
+
+**5.14.0 - 10/12/26**
+
+- Stop reporting initializers from ``InteractiveContext.find_resources()``
+- Add ``InteractiveContext.get_lookup_table()``
+
 **5.13.1 - 10/08/26**
 
 - Order ``InteractiveContext.find_resources()`` results by how squarely the pattern

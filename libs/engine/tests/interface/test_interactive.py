@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,19 +28,27 @@ from tests.helpers import (
     AttributePipelineCreator,
     ColumnCreator,
     ColumnCreatorAndRequirer,
+    DiamondAttributeCreator,
+    ManyModifierCreator,
     MultiLevelMultiColumnCreator,
     MultiLevelSingleColumnCreator,
     NestedAttributeCreator,
     NestedLookupCaller,
+    OrderedDependencyCreator,
+    ReversedNameCreator,
     SingleColumnCreator,
 )
 from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.lookup.table import LookupTable
+from vivarium.engine.framework.resource.resource import Column, Resource
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
-from vivarium.engine.interface.interactive import _match_rank
+from vivarium.engine.interface.interactive import _match_rank, _render_dependency_tree
+from vivarium.engine.types import ClockTime
 
 
 def test_list_values() -> None:
@@ -98,6 +107,44 @@ def test_get_value_and_get_attribute_point_at_each_other() -> None:
         sim.get_attribute("simulant_step_size")
 
 
+class TestGetLookupTable:
+    """Tests for retrieving a lookup table from an interactive simulation."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(components=[NestedLookupCaller()])
+
+    def test_the_table_itself_is_returned(self, sim: InteractiveContext) -> None:
+        """The getter hands back the table, not the data it holds."""
+        table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
+        assert isinstance(table, LookupTable)
+        assert table.name == "nested_lookup_caller.inner_lookup"
+
+    def test_the_returned_table_is_callable(self, sim: InteractiveContext) -> None:
+        """Calling it with an index is the point of having it, so check the values
+        it produces and not just their count."""
+        table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
+        index = sim.get_population_index()
+        assert len(index) > 0
+        # The fixture keys the table on 'inner', which is the index modulo three.
+        assert (table(index) == (index % 3 + 1) * 10).all()
+
+    def test_an_unregistered_name_raises(self, sim: InteractiveContext) -> None:
+        """An unknown name is rejected rather than quietly accepted."""
+        with pytest.raises(ValueError, match="No lookup table 'foo' registered."):
+            sim.get_lookup_table("foo")
+
+    def test_every_lookup_table_name_find_resources_reports_can_be_fetched(
+        self, sim: InteractiveContext
+    ) -> None:
+        """The two halves agree: whatever the search surfaces, the getter accepts."""
+        found = sim.find_resources("")
+        names = found.loc[found["resource_type"] == "lookup_table", "name"]
+        assert len(names) > 0
+        for name in names:
+            assert sim.get_lookup_table(name).name == name
+
+
 def test_run_for_duration() -> None:
     sim = InteractiveContext()
     initial_time = sim._clock.time
@@ -132,20 +179,19 @@ JAN_15 = pd.Timestamp("2020-01-15")
 JAN_31 = pd.Timestamp("2020-01-31")
 STEP_SIZE = pd.Timedelta(days=7)
 FIRST_STEP_AT_OR_AFTER_END = pd.Timestamp("2020-02-05")
+SHORT_SIM_CONFIGURATION: dict[str, Any] = {
+    "time": {
+        "start": {"year": JAN_1.year, "month": JAN_1.month, "day": JAN_1.day},
+        "end": {"year": JAN_31.year, "month": JAN_31.month, "day": JAN_31.day},
+        "step_size": STEP_SIZE.days,
+    }
+}
 
 
 @pytest.fixture
 def short_sim() -> InteractiveContext:
     """A sim configured from Jan 1 to Jan 31 in 7-day steps."""
-    return InteractiveContext(
-        configuration={
-            "time": {
-                "start": {"year": JAN_1.year, "month": JAN_1.month, "day": JAN_1.day},
-                "end": {"year": JAN_31.year, "month": JAN_31.month, "day": JAN_31.day},
-                "step_size": STEP_SIZE.days,
-            }
-        }
-    )
+    return InteractiveContext(configuration=SHORT_SIM_CONFIGURATION)
 
 
 def reached(time: pd.Timestamp) -> Callable[[InteractiveContext], bool]:
@@ -344,6 +390,336 @@ class TestRunUntilProgressBar:
         assert progress_widgets[0].bar_style == "danger"
 
 
+def clock(sim: InteractiveContext) -> ClockTime:
+    """Return the current clock time, so an observed value shows when it was evaluated."""
+    return sim.current_time
+
+
+def days_elapsed(sim: InteractiveContext) -> int:
+    return int((sim.current_time - JAN_1) / pd.Timedelta(days=1))  # type: ignore [operator]
+
+
+def hogwarts(observe: bool = True, setup: bool = True) -> InteractiveContext:
+    """Return a Hogwarts sim whose model registers the ``house_points`` observation."""
+    return InteractiveContext(
+        configuration=HARRY_POTTER_CONFIG,
+        components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+        observe=observe,
+        setup=setup,
+    )
+
+
+class TestObserving:
+    """Observations are evaluated at registration and after every step."""
+
+    def test_an_observation_registered_mid_run(self, short_sim: InteractiveContext) -> None:
+        """A later observation starts at its registration time; an earlier one keeps its values."""
+        short_sim.register_observation(early=clock)
+        short_sim.step()
+        short_sim.register_observation(late=clock)
+        short_sim.step()
+
+        results = short_sim.get_results()
+        assert list(results["early"]) == [JAN_1, JAN_8, JAN_15]
+        assert list(results["late"]) == [JAN_8, JAN_15]
+
+    def test_values_are_stored_as_returned(self, short_sim: InteractiveContext) -> None:
+        """Series, DataFrame, None and arbitrary object returns are stored as the very objects returned."""
+        series = pd.Series([1.0, 2.0])
+        frame = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        anything = object()
+        short_sim.register_observation(
+            series=lambda sim: series,
+            frame=lambda sim: frame,
+            none=lambda sim: None,
+            anything=lambda sim: anything,
+        )
+        short_sim.step()
+
+        results = short_sim.get_results()
+        for time in (JAN_1, JAN_8):
+            assert results["series"][time] is series
+            assert results["frame"][time] is frame
+            assert time in results["none"]
+            assert results["none"][time] is None
+            assert results["anything"][time] is anything
+
+    def test_get_results_returns_a_copy(self, short_sim: InteractiveContext) -> None:
+        """Changing the returned dicts at either level does not change the observations."""
+        short_sim.register_observation(clock=clock, days=days_elapsed)
+
+        results = short_sim.get_results()
+        del results["days"]
+        results["added"] = {}
+        results["clock"][JAN_1] = "replaced"
+
+        assert short_sim.get_results() == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
+
+
+class TestObservationsInResults:
+    """get_results() returns the model's results and the registered observations together."""
+
+    def test_model_results_and_observations_are_returned_together(self) -> None:
+        sim = hogwarts()
+        start = sim.current_time
+        sim.register_observation(clock=clock)
+        sim.step()
+
+        results = sim.get_results()
+        assert results["house_points"][VALUE_COLUMN].sum() > 0
+        assert list(results["clock"]) == [start, sim.current_time]
+
+    def test_pausing_leaves_model_observations_running(self) -> None:
+        """Pausing every registered observation does not stop the model's observations."""
+        sim = hogwarts()
+        sim.register_observation(clock=clock)
+        sim.step()
+        points_before = sim.get_results()["house_points"][VALUE_COLUMN].sum()
+
+        sim.pause_observation("clock")
+        sim.step()
+
+        assert sim.get_results()["house_points"][VALUE_COLUMN].sum() > points_before
+
+    def test_observations_alone_do_not_warn(self, caplog: LogCaptureFixture) -> None:
+        """With observe=False, registered observations are results, so there is nothing to warn about."""
+        sim = hogwarts(observe=False)
+        sim.register_observation(clock=clock)
+
+        assert list(sim.get_results()) == ["clock"]
+        assert "pass observe=True" not in caplog.text
+
+
+class TestObservationRegistration:
+    """register_observation() registers all of its observations or none of them."""
+
+    def test_a_duplicate_name_raises_and_keeps_the_original(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """Registering a name that is already an observation raises ValueError and keeps the original."""
+        short_sim.register_observation(clock=clock)
+
+        with pytest.raises(ValueError, match="clock"):
+            short_sim.register_observation(
+                other=days_elapsed, clock=lambda sim: "replacement"
+            )
+
+        short_sim.step()
+        assert short_sim.get_results() == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
+
+    def test_a_model_observation_name_raises_after_setup(self) -> None:
+        """A name the model already observes raises at registration, naming it."""
+        sim = hogwarts()
+
+        with pytest.raises(ValueError, match="house_points"):
+            sim.register_observation(house_points=clock)
+
+        assert "house_points" not in sim._interactive_observations
+
+    def test_a_model_observation_name_raises_at_setup(self) -> None:
+        """A name registered before setup is checked against the model's observations by setup."""
+        sim = hogwarts(setup=False)
+        sim.register_observation(house_points=clock)
+
+        with pytest.raises(ValueError, match="house_points.*register_observation"):
+            sim.setup()
+
+    def test_registering_before_setup_observes_at_setup(self) -> None:
+        """An observation registered before setup gets its first value when setup runs."""
+        sim = InteractiveContext(configuration=SHORT_SIM_CONFIGURATION, setup=False)
+
+        sim.register_observation(clock=clock)
+        assert sim.get_results() == {"clock": {}}
+
+        sim.setup()
+        assert sim.get_results() == {"clock": {JAN_1: JAN_1}}
+
+
+class TestObservationFailure:
+    """An observation that raises is attributable and leaves consistent values."""
+
+    @staticmethod
+    def fails_from(
+        time: pd.Timestamp, error: Exception | None = None
+    ) -> Callable[[InteractiveContext], ClockTime]:
+        """Return an observation that returns the clock until ``time`` and then raises."""
+        to_raise = error if error is not None else KeyError("no such column")
+
+        def observation(sim: InteractiveContext) -> ClockTime:
+            if reached(time)(sim):
+                raise to_raise
+            return sim.current_time
+
+        return observation
+
+    @pytest.mark.parametrize(
+        "fails_at", [JAN_1, JAN_8], ids=["at_registration", "after_a_step"]
+    )
+    def test_a_failure_raises_observation_error(
+        self, short_sim: InteractiveContext, fails_at: pd.Timestamp
+    ) -> None:
+        """The ObservationError names the observation and the clock time and chains the original."""
+        original = KeyError("no such column")
+
+        with pytest.raises(ObservationError) as error:
+            short_sim.register_observation(broken=self.fails_from(fails_at, original))
+            short_sim.step()
+
+        message = str(error.value)
+        assert "broken" in message
+        assert str(fails_at) in message
+        assert error.value.__cause__ is original
+
+    @pytest.mark.parametrize(
+        "failing, expected",
+        [
+            (fails_from(JAN_1), {}),
+            (
+                fails_from(JAN_15),
+                {
+                    name: {JAN_1: JAN_1, JAN_8: JAN_8}
+                    for name in ("before", "failing", "after")
+                },
+            ),
+        ],
+        ids=["fails_at_registration", "fails_after_a_step"],
+    )
+    def test_a_failure_stores_nothing_at_the_failing_time(
+        self,
+        short_sim: InteractiveContext,
+        failing: Callable[[InteractiveContext], ClockTime],
+        expected: dict[str, dict[ClockTime, Any]],
+    ) -> None:
+        """A failing observation leaves no value for any observation at the time it failed."""
+        # Working observations on both sides of the failing one, so neither evaluation
+        # order hides a stored value.
+        with pytest.raises(ObservationError):
+            short_sim.register_observation(before=clock, failing=failing, after=clock)
+            short_sim.take_steps(3)
+
+        assert short_sim.get_results() == expected
+
+    def test_a_failing_observation_still_restores_a_custom_step_size(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """After an observation fails on a step with a custom step_size, the next step uses the configured size.
+
+        This is a regression test for the order of operations in ``step``: the step size
+        must be restored before the observations are evaluated, or a failing observation
+        would skip the restore.
+        """
+        three_days_on = JAN_1 + pd.Timedelta(days=3)
+        short_sim.register_observation(broken=self.fails_from(three_days_on))
+
+        with pytest.raises(ObservationError):
+            short_sim.step(pd.Timedelta(days=3))
+
+        short_sim.pause_observation("broken")
+        short_sim.step()
+
+        assert short_sim.current_time == three_days_on + STEP_SIZE
+
+    def test_an_observation_may_pause_another_while_running(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """An observation that pauses another mid-step stops it without breaking observing."""
+
+        def stops_other(sim: InteractiveContext) -> ClockTime:
+            if reached(JAN_8)(sim):
+                sim.pause_observation("other")
+            return sim.current_time
+
+        short_sim.register_observation(stopper=stops_other, other=clock)
+        short_sim.take_steps(2)
+
+        assert short_sim.get_results() == {
+            "stopper": {JAN_1: JAN_1, JAN_8: JAN_8, JAN_15: JAN_15},
+            "other": {JAN_1: JAN_1, JAN_8: JAN_8},
+        }
+
+
+class TestPauseObservation:
+    """pause_observation() stops observations, keeping their values, and register_observation() resumes them."""
+
+    def test_stops_calling_but_keeps_the_values(self, short_sim: InteractiveContext) -> None:
+        """A paused observation is not called again but keeps its values; others continue."""
+        calls: list[ClockTime] = []
+
+        def counted(sim: InteractiveContext) -> None:
+            calls.append(sim.current_time)
+
+        short_sim.register_observation(counted=counted, days=days_elapsed)
+        short_sim.step()
+        short_sim.pause_observation("counted")
+        short_sim.step()
+
+        assert calls == [JAN_1, JAN_8]
+        assert short_sim.get_results() == {
+            "counted": {JAN_1: None, JAN_8: None},
+            "days": {JAN_1: 0, JAN_8: 7, JAN_15: 14},
+        }
+
+    def test_a_paused_observation_resumes_by_name(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """Passing a paused observation's name to register_observation resumes it, leaving a gap."""
+        jan_22, jan_29 = JAN_1 + STEP_SIZE * 3, JAN_1 + STEP_SIZE * 4
+        short_sim.register_observation(clock=clock)
+        short_sim.step()
+        short_sim.pause_observation("clock")
+        short_sim.take_steps(2)
+
+        short_sim.register_observation("clock")
+        short_sim.step()
+
+        assert list(short_sim.get_results()["clock"]) == [JAN_1, JAN_8, jan_22, jan_29]
+
+    def test_resuming_a_registered_observation_does_nothing(
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+    ) -> None:
+        """Passing the name of an observation that is still registered changes nothing and logs that."""
+        short_sim.register_observation(clock=clock)
+
+        short_sim.register_observation("clock")
+
+        assert short_sim.get_results() == {"clock": {JAN_1: JAN_1}}
+        assert "Observations ['clock'] are already registered." in info_messages(caplog)
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda sim: sim.pause_observation("clock", "not_observed"),
+            lambda sim: sim.register_observation("not_observed"),
+        ],
+        ids=["pause_observation", "register_observation"],
+    )
+    def test_an_unknown_name_raises_and_changes_nothing(
+        self, short_sim: InteractiveContext, call: Callable[[InteractiveContext], None]
+    ) -> None:
+        """An unknown name raises ValueError and the observations are left as they were."""
+        short_sim.register_observation(clock=clock)
+
+        with pytest.raises(ValueError, match="not_observed"):
+            call(short_sim)
+
+        short_sim.step()
+        assert short_sim.get_results() == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
+
+
+def test_observes_an_unmodified_model(disease_model_spec: Path) -> None:
+    """An observation on the example disease model is stored every step with no spec or component change."""
+    sim = InteractiveContext(str(disease_model_spec))
+    sim.register_observation(mean_age=lambda s: s.get_population("age").mean())
+    start = sim.current_time
+
+    sim.take_steps(3)
+
+    observed = sim.get_results()["mean_age"]
+    assert len(observed) == 4
+    assert list(observed)[0] == start
+    assert observed[sim.current_time] == sim.get_population("age").mean()
+
+
 class TestFindResources:
     """Tests for locating simulation resources by name or registering component."""
 
@@ -365,10 +741,9 @@ class TestFindResources:
     def test_a_fragment_need_not_be_the_whole_name(self, sim: InteractiveContext) -> None:
         assert "test_column_1" in set(sim.find_resources("column_1")["name"])
 
-    def test_columns_and_streams_are_not_reported(self, sim: InteractiveContext) -> None:
-        """A column's public face is its attribute, so reporting it adds a
-        near-duplicate row; a stream is upstream of the values it randomizes."""
-        assert not {"column", "stream"} & set(sim.find_resources("")["resource_type"])
+    def test_unsearchable_types_are_not_reported(self, sim: InteractiveContext) -> None:
+        reported = set(sim.find_resources("")["resource_type"])
+        assert not {"column", "stream", "initializer"} & reported
 
     def test_lookup_tables_are_reported(self) -> None:
         """The shared fixture registers none, so this one needs its own sim."""
@@ -405,13 +780,18 @@ class TestFindResources:
         found = sim.find_resources("^column_creator_and_requirer$", regex=True)
         assert set(found["component"]) == {"column_creator_and_requirer"}
 
-    def test_an_exact_name_match_comes_first(self, sim: InteractiveContext) -> None:
+    def test_an_exact_name_match_comes_first(self) -> None:
         """The thing you named outranks everything merely containing it, even one
         whose name sorts earlier alphabetically."""
-        found = sim.find_resources("test_column_4")
-        assert list(found["name"]) == [
-            "test_column_4",
-            "2.column_creator_and_requirer.initialize_test_column_4",
+        sim = InteractiveContext(
+            components=[
+                AttributeNamed("needle"),
+                AttributeNamed("here_is_a_needle_in_a_haystack"),
+            ]
+        )
+        assert list(sim.find_resources("needle")["name"]) == [
+            "needle",
+            "here_is_a_needle_in_a_haystack",
         ]
 
     @pytest.mark.parametrize(
@@ -482,32 +862,48 @@ class TestFindResources:
             "aa_never_treated",
         ]
 
-    def test_regex_mode_is_ranked_the_same_way(self, sim: InteractiveContext) -> None:
+    def test_regex_mode_is_ranked_the_same_way(self) -> None:
         """The rank comes from the match's span, so the flag does not change it.
-        Alphabetically the initializer would lead, since a digit sorts before a
-        letter."""
-        found = sim.find_resources("test_column_[14]", regex=True)
-        assert list(found["name"]) == [
+        These are the names of the segment test, ordered against the alphabet, so
+        a regex path that lost the span would reorder them."""
+        sim = InteractiveContext(
+            components=[AttributeNamed("zz_outer.needle"), AttributeNamed("aa_needle_part")]
+        )
+        assert list(sim.find_resources("n[e]+dle", regex=True)["name"]) == [
+            "zz_outer.needle",
+            "aa_needle_part",
+        ]
+
+    def test_a_component_only_match_comes_last(self) -> None:
+        """Matching through the component is the surprising hit, so it sorts last.
+        Only ``zz_column_creator`` matches on its own name; the rest are reached
+        through their component, and alphabetical order would lead with them."""
+        sim = InteractiveContext(
+            components=[AttributeNamed("zz_column_creator"), ColumnCreator()]
+        )
+        assert list(sim.find_resources("column_creator")["name"]) == [
+            "zz_column_creator",
             "test_column_1",
-            "test_column_4",
-            "2.column_creator_and_requirer.initialize_test_column_4",
+            "test_column_2",
+            "test_column_3",
         ]
 
-    def test_a_component_only_match_comes_last(self, sim: InteractiveContext) -> None:
-        """Matching through the component is the surprising hit, so it sorts last."""
-        found = sim.find_resources("column_creator")
-        assert not found.empty
-        assert not found["name"].str.contains("column_creator").iloc[-1]
-
-    def test_ties_break_by_resource_type(self, sim: InteractiveContext) -> None:
-        """Within one rank, attributes come before modifiers, not alphabetically."""
-        found = sim.find_resources("")
-        assert list(dict.fromkeys(found["resource_type"])) == [
-            "attribute",
-            "value",
-            "value_modifier",
-            "initializer",
-        ]
+    def test_ties_break_by_resource_type(self) -> None:
+        """Within one rank, attributes come before modifiers, not alphabetically.
+        The lookup table is what makes this discriminating: the other three types
+        happen to fall in alphabetical order on their own, so a sim without one
+        would pass under either rule."""
+        sim = InteractiveContext(
+            components=[
+                ColumnCreator(),
+                AttributePipelineCreator(),
+                NestedLookupCaller(),
+            ]
+        )
+        order = ["attribute", "value", "value_modifier", "lookup_table"]
+        types = list(sim.find_resources("")["resource_type"])
+        assert set(types) == set(order)
+        assert types == sorted(types, key=order.index)
 
     def test_ties_then_break_by_name(self, sim: InteractiveContext) -> None:
         """Within one rank and one resource type, names run alphabetically."""
@@ -518,11 +914,11 @@ class TestFindResources:
     def test_every_other_resource_in_the_graph_is_reachable(
         self, sim: InteractiveContext
     ) -> None:
-        """Only columns and streams are withheld; nothing else is."""
+        """Only columns, streams, and initializers are withheld; nothing else is."""
         expected = {
             (str(node.name), node.RESOURCE_TYPE, node.component.name)
             for node in sim._resource.get_graph().nodes
-            if node.RESOURCE_TYPE not in ("column", "stream")
+            if node.RESOURCE_TYPE not in ("column", "stream", "initializer")
         }
         assert set(sim.find_resources("").itertuples(index=False)) == expected
 
@@ -544,6 +940,419 @@ class TestFindResources:
     ) -> None:
         """Literal matching cannot raise, whatever the text contains."""
         assert sim.find_resources("test_column_[").empty
+
+
+class TestPrintDependencies:
+    """Tests for printing what a resource uses and what uses it."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(
+            components=[
+                DiamondAttributeCreator(),
+                ColumnCreator(),
+                ColumnCreatorAndRequirer(),
+            ]
+        )
+
+    @staticmethod
+    def printed(
+        sim: InteractiveContext,
+        capsys: pytest.CaptureFixture[str],
+        *args: Any,
+        **kwargs: Any,
+    ) -> list[str]:
+        sim.print_dependencies(*args, **kwargs)
+        return capsys.readouterr().out.splitlines()
+
+    def test_uses_reports_what_the_resource_reads(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert self.printed(sim, capsys, "attribute.diamond_base", "uses") == [
+            "attribute.diamond_base",
+            "└── attribute.diamond_root",
+        ]
+
+    def test_used_by_reports_what_reads_the_resource(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The same resource, walked the other way, reports different neighbors."""
+        assert self.printed(sim, capsys, "attribute.diamond_base", "used-by") == [
+            "attribute.diamond_base",
+            "├── attribute.diamond_left  (1 direct branch hidden)",
+            "└── attribute.diamond_right  (1 direct branch hidden)",
+        ]
+
+    def test_dependencies_are_grouped_by_resource_type(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """What feeds a resource comes first and what is layered over it comes last.
+        Sorting by resource id alone would put the lookup table above the value, and
+        find_resources would put the modifier above the lookup table."""
+        sim = InteractiveContext(components=[OrderedDependencyCreator()])
+        assert self.printed(sim, capsys, "attribute.ordered", "uses") == [
+            "attribute.ordered",
+            "├── attribute.ordered_attribute",
+            "├── value.ordered_value",
+            "├── lookup_table.ordered_dependency_creator.ordered_table",
+            "└── value_modifier.ordered.1.ordered_dependency_creator.modifier",
+        ]
+
+    def test_a_depth_of_none_walks_the_whole_chain(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert self.printed(sim, capsys, "attribute.test_column_4", "uses", depth=None) == [
+            "attribute.test_column_4",
+            "└── column.test_column_4",
+            "    └── initializer.2.column_creator_and_requirer.initialize_test_column_4",
+            "        ├── attribute.test_column_2",
+            "        │   └── column.test_column_2",
+            "        │       └── initializer.1.column_creator.initialize_test_columns",
+            "        └── stream.stream_1",
+        ]
+
+    def test_a_shared_node_is_drawn_under_every_parent(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Both halves of the diamond keep their edge to what they share, but only
+        the first one unrolls it. TestRenderDependencyTree covers the shape rules
+        against graphs; this checks one of them on a graph the engine really builds."""
+        assert self.printed(sim, capsys, "attribute.diamond_top", "uses", depth=3) == [
+            "attribute.diamond_top",
+            "├── attribute.diamond_left",
+            "│   └── attribute.diamond_base",
+            "│       └── attribute.diamond_root",
+            "└── attribute.diamond_right",
+            "    └── attribute.diamond_base  (expanded above)",
+        ]
+
+    def test_a_root_with_no_dependencies_says_so(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Otherwise the bare name alone reads as though the call failed."""
+        assert self.printed(sim, capsys, "attribute.diamond_top", "used-by") == [
+            "attribute.diamond_top",
+            "    (none)",
+        ]
+
+    def test_a_bare_name_a_full_id_and_an_object_agree(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        node = sim.get_attribute("diamond_base")
+        by_name = self.printed(sim, capsys, "diamond_base", "uses")
+        assert by_name[0] == "attribute.diamond_base"
+        assert by_name == self.printed(sim, capsys, "attribute.diamond_base", "uses")
+        assert by_name == self.printed(sim, capsys, node, "uses")
+
+    def test_an_ambiguous_bare_name_lists_the_candidates(
+        self, sim: InteractiveContext
+    ) -> None:
+        """A private column usually shares its name with an attribute, so the bare
+        name has to be refused rather than resolved to whichever comes first."""
+        with pytest.raises(ValueError, match="matches more than one resource") as error:
+            sim.print_dependencies("test_column_1", "uses")
+        assert "'attribute.test_column_1'" in str(error.value)
+        assert "'column.test_column_1'" in str(error.value)
+
+    def test_an_unknown_name_points_at_find_resources(self, sim: InteractiveContext) -> None:
+        with pytest.raises(ValueError, match="No resource named 'no_such_resource'") as error:
+            sim.print_dependencies("no_such_resource", "uses")
+        assert "find_resources" in str(error.value)
+
+    def test_a_resource_outside_the_graph_raises(self, sim: InteractiveContext) -> None:
+        unregistered = Column("not_registered", ColumnCreator())
+        with pytest.raises(ValueError, match="is not in the resource graph"):
+            sim.print_dependencies(unregistered, "uses")
+
+    @pytest.mark.parametrize("depth", [0, -1])
+    def test_a_depth_below_one_raises(self, sim: InteractiveContext, depth: int) -> None:
+        with pytest.raises(ValueError, match=f"A depth of {depth} is not valid"):
+            sim.print_dependencies("attribute.diamond_top", "uses", depth=depth)
+
+    def test_an_unknown_direction_raises(self, sim: InteractiveContext) -> None:
+        """The annotation rules this out, but nothing stops an untyped caller."""
+        unknown_direction: Any = "upstream"
+        with pytest.raises(ValueError, match="Unknown direction 'upstream'"):
+            sim.print_dependencies("attribute.diamond_top", unknown_direction)
+
+
+class TestGetDependencies:
+    """Tests for getting the resources a resource uses and the ones that use it."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(
+            components=[
+                DiamondAttributeCreator(),
+                ColumnCreator(),
+                ColumnCreatorAndRequirer(),
+            ]
+        )
+
+    @staticmethod
+    def ids(resources: list[Resource]) -> list[str]:
+        return [str(resource.resource_id) for resource in resources]
+
+    def test_uses_reports_what_the_resource_reads(self, sim: InteractiveContext) -> None:
+        assert self.ids(sim.get_dependencies("attribute.diamond_base", "uses")) == [
+            "attribute.diamond_root"
+        ]
+
+    def test_used_by_reports_what_reads_the_resource(self, sim: InteractiveContext) -> None:
+        """The same resource, walked the other way, reports different neighbors."""
+        assert self.ids(sim.get_dependencies("attribute.diamond_base", "used-by")) == [
+            "attribute.diamond_left",
+            "attribute.diamond_right",
+        ]
+
+    def test_the_graph_nodes_themselves_are_returned(self, sim: InteractiveContext) -> None:
+        """The point of this over print_dependencies is having the resource in hand."""
+        assert sim.get_dependencies("attribute.diamond_base", "uses") == [
+            sim.get_attribute("diamond_root")
+        ]
+
+    def test_an_unreported_type_one_level_away_yields_nothing(
+        self, sim: InteractiveContext
+    ) -> None:
+        """An attribute is backed by a column, so walking one level reports nothing
+        even though print_dependencies draws that column."""
+        assert sim.get_dependencies("attribute.test_column_4", "uses") == []
+
+    def test_reported_and_unreported_neighbors_are_separated(
+        self, sim: InteractiveContext
+    ) -> None:
+        """This initializer reads one attribute and one randomness stream, and only
+        the attribute comes back."""
+        initializer = "initializer.2.column_creator_and_requirer.initialize_test_column_4"
+        assert self.ids(sim.get_dependencies(initializer, "uses")) == [
+            "attribute.test_column_2"
+        ]
+
+    def test_results_are_grouped_by_resource_type(self) -> None:
+        """The same order print_dependencies draws, which sorting by resource id
+        alone would not give."""
+        sim = InteractiveContext(components=[OrderedDependencyCreator()])
+        assert self.ids(sim.get_dependencies("attribute.ordered", "uses")) == [
+            "attribute.ordered_attribute",
+            "value.ordered_value",
+            "lookup_table.ordered_dependency_creator.ordered_table",
+            "value_modifier.ordered.1.ordered_dependency_creator.modifier",
+        ]
+
+    def test_same_type_results_are_sorted_by_name(self) -> None:
+        """Two neighbors of one type, registered in the reverse of name order, so
+        a sort that ignored the name would hand these back the other way around."""
+        sim = InteractiveContext(components=[ReversedNameCreator()])
+        assert self.ids(sim.get_dependencies("attribute.reversed_root", "uses")) == [
+            "attribute.alpha",
+            "attribute.zulu",
+        ]
+
+    def test_modifiers_past_the_ninth_stay_in_application_order(self) -> None:
+        """The number in a modifier's name is the order it is applied in. Past the
+        ninth that number is two digits, which a plain text sort gets wrong."""
+        sim = InteractiveContext(components=[ManyModifierCreator()])
+        assert self.ids(sim.get_dependencies("value.many_modifiers", "uses")) == [
+            f"value_modifier.many_modifiers.{number}.many_modifier_creator"
+            f".modifier_{number - 1:02d}"
+            for number in range(1, ManyModifierCreator.MODIFIER_COUNT + 1)
+        ]
+
+    def test_a_root_with_no_dependencies_returns_nothing(
+        self, sim: InteractiveContext
+    ) -> None:
+        assert sim.get_dependencies("attribute.diamond_top", "used-by") == []
+
+    def test_a_bare_name_a_full_id_and_an_object_agree(self, sim: InteractiveContext) -> None:
+        node = sim.get_attribute("diamond_base")
+        by_name = sim.get_dependencies("diamond_base", "uses")
+        assert by_name == sim.get_dependencies("attribute.diamond_base", "uses")
+        assert by_name == sim.get_dependencies(node, "uses")
+
+    def test_an_ambiguous_bare_name_lists_the_candidates(
+        self, sim: InteractiveContext
+    ) -> None:
+        with pytest.raises(ValueError, match="matches more than one resource") as error:
+            sim.get_dependencies("test_column_1", "uses")
+        assert "'attribute.test_column_1'" in str(error.value)
+        assert "'column.test_column_1'" in str(error.value)
+
+    def test_an_unknown_name_points_at_find_resources(self, sim: InteractiveContext) -> None:
+        with pytest.raises(ValueError, match="No resource named 'no_such_resource'") as error:
+            sim.get_dependencies("no_such_resource", "uses")
+        assert "find_resources" in str(error.value)
+
+    def test_a_resource_outside_the_graph_raises(self, sim: InteractiveContext) -> None:
+        unregistered = Column("not_registered", ColumnCreator())
+        with pytest.raises(ValueError, match="is not in the resource graph"):
+            sim.get_dependencies(unregistered, "uses")
+
+    def test_an_unknown_direction_raises(self, sim: InteractiveContext) -> None:
+        """The annotation rules this out, but nothing stops an untyped caller."""
+        unknown_direction: Any = "upstream"
+        with pytest.raises(ValueError, match="Unknown direction 'upstream'"):
+            sim.get_dependencies("attribute.diamond_top", unknown_direction)
+
+
+class _Node(Resource):
+    """A bare graph node, typed so that rendered ids stay short in assertions."""
+
+    RESOURCE_TYPE = "node"
+
+
+class TestRenderDependencyTree:
+    """Tests for how the renderer draws a shape, independent of any simulation.
+
+    Reaching these shapes through the public method costs a registered component
+    apiece, which buries the rule under pipeline registration. Stating the graph
+    directly keeps the rule in view.
+    """
+
+    @staticmethod
+    def build_graph(
+        dependencies: dict[str, str]
+    ) -> tuple[nx.DiGraph[Resource], dict[str, _Node]]:
+        """Build a resource graph from a mapping of each node to the names it uses."""
+        names = set(dependencies) | {
+            name for used in dependencies.values() for name in used.split()
+        }
+        nodes = {name: _Node(name, None) for name in names}
+        graph: nx.DiGraph[Resource] = nx.DiGraph()
+        graph.add_nodes_from(nodes.values())
+        for parent, children in dependencies.items():
+            for child in children.split():
+                graph.add_edge(nodes[child], nodes[parent])
+        return graph, nodes
+
+    @pytest.fixture
+    def diamond(self) -> tuple[nx.DiGraph[Resource], dict[str, _Node]]:
+        """``a`` uses ``b`` and ``c``, both use ``d``, and ``d`` uses ``e``.
+
+        The names are listed out of alphabetical order so that the expected output
+        differs from the order networkx hands back. Listing them in order would let
+        a renderer that never sorted still pass.
+        """
+        return self.build_graph({"a": "c b", "c": "d", "b": "d", "d": "e"})
+
+    def test_a_shared_node_keeps_both_edges_but_unrolls_once(
+        self, diamond: tuple[nx.DiGraph[Resource], dict[str, _Node]]
+    ) -> None:
+        graph, nodes = diamond
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 3) == [
+            "node.a",
+            "├── node.b",
+            "│   └── node.d",
+            "│       └── node.e",
+            "└── node.c",
+            "    └── node.d  (expanded above)",
+        ]
+
+    def test_a_node_cut_off_at_the_limit_is_never_called_expanded(
+        self, diamond: tuple[nx.DiGraph[Resource], dict[str, _Node]]
+    ) -> None:
+        """Neither arrival expanded it, so both report what they are hiding."""
+        graph, nodes = diamond
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
+            "node.a",
+            "├── node.b",
+            "│   └── node.d  (1 direct branch hidden)",
+            "└── node.c",
+            "    └── node.d  (1 direct branch hidden)",
+        ]
+
+    def test_a_node_reached_again_above_the_limit_is_expanded_there(self) -> None:
+        """``shared`` is reached under ``branch`` first, at the limit, and then as a
+        direct dependency where there is room for it."""
+        graph, nodes = self.build_graph(
+            {"a": "branch shared", "branch": "shared", "shared": "tail"}
+        )
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
+            "node.a",
+            "├── node.branch",
+            "│   └── node.shared  (1 direct branch hidden)",
+            "└── node.shared",
+            "    └── node.tail",
+        ]
+
+    def test_an_expanded_node_reached_at_the_limit_is_not_called_hidden(self) -> None:
+        """``s`` is expanded as a direct dependency, then reached again under ``t``
+        exactly at the limit, where both annotations apply. Having been expanded
+        wins, because its dependencies are on the screen already."""
+        graph, nodes = self.build_graph({"a": "t s", "t": "s", "s": "u"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
+            "node.a",
+            "├── node.s",
+            "│   └── node.u",
+            "└── node.t",
+            "    └── node.s  (expanded above)",
+        ]
+
+    def test_a_cycle_stops_where_it_rejoins_an_expanded_node(self) -> None:
+        """``b`` is marked expanded before the walk descends into it, so arriving
+        back at it from ``c`` ends the branch. Marking it afterwards instead
+        recurses without end, and no acyclic graph tells the two orders apart."""
+        graph, nodes = self.build_graph({"a": "b", "b": "c", "c": "b"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", None) == [
+            "node.a",
+            "└── node.b",
+            "    └── node.c",
+            "        └── node.b  (expanded above)",
+        ]
+
+    def test_a_repeated_leaf_is_left_unmarked(self) -> None:
+        """Nothing was expanded and nothing is hidden, so both arrivals print plain."""
+        graph, nodes = self.build_graph({"a": "c b", "c": "d", "b": "d"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", None) == [
+            "node.a",
+            "├── node.b",
+            "│   └── node.d",
+            "└── node.c",
+            "    └── node.d",
+        ]
+
+    def test_a_hidden_branch_counts_what_it_hides(self) -> None:
+        graph, nodes = self.build_graph({"a": "b", "b": "e d c"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
+            "node.a",
+            "└── node.b  (3 direct branches hidden)",
+        ]
+
+    def test_a_leaf_at_the_limit_reports_nothing(self) -> None:
+        """A branch that ends at the limit hides nothing, so it is left unmarked."""
+        graph, nodes = self.build_graph({"a": "b"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
+            "node.a",
+            "└── node.b",
+        ]
+
+    def test_a_run_of_digits_in_a_name_sorts_as_a_number(self) -> None:
+        """Resource names carry unpadded indices, so ``10`` is drawn after ``2``.
+
+        The tree and the list share one sort key, so this is what keeps the
+        renderer on it.
+        """
+        graph, nodes = self.build_graph({"a": "b10 b9 b2 b1"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
+            "node.a",
+            "├── node.b1",
+            "├── node.b2",
+            "├── node.b9",
+            "└── node.b10",
+        ]
+
+    def test_used_by_walks_the_other_way(
+        self, diamond: tuple[nx.DiGraph[Resource], dict[str, _Node]]
+    ) -> None:
+        """The same graph, read from the far end, inverts every edge."""
+        graph, nodes = diamond
+        assert _render_dependency_tree(graph, nodes["e"], "used-by", None) == [
+            "node.e",
+            "└── node.d",
+            "    ├── node.b",
+            "    │   └── node.a",
+            "    └── node.c",
+            "        └── node.a",
+        ]
 
 
 def test_get_attribute_names() -> None:
@@ -945,14 +1754,6 @@ class TestResultsGathering:
     produces is the same one a gathering run produces.
     """
 
-    @staticmethod
-    def _hogwarts(observe: bool) -> InteractiveContext:
-        return InteractiveContext(
-            configuration=HARRY_POTTER_CONFIG,
-            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
-            observe=observe,
-        )
-
     def test_observe_defaults_to_off(self) -> None:
         """Constructed without the flag, so a change to the default fails here.
 
@@ -971,7 +1772,7 @@ class TestResultsGathering:
         assert sim.get_results() == {}
 
     def test_empty_results_say_why(self, caplog: LogCaptureFixture) -> None:
-        self._hogwarts(observe=False).get_results()
+        hogwarts(observe=False).get_results()
         assert "pass observe=True" in caplog.text
 
     def test_no_warning_when_observing_was_requested(self, caplog: LogCaptureFixture) -> None:
@@ -992,13 +1793,13 @@ class TestResultsGathering:
         assert "pass observe=True" not in caplog.text
 
     def test_observed_when_requested(self) -> None:
-        sim = self._hogwarts(observe=True)
+        sim = hogwarts(observe=True)
         sim.step()
         assert sim.get_results()["house_points"][VALUE_COLUMN].sum() > 0
 
     def test_observers_are_still_registered(self) -> None:
         """The point of gating the manager rather than filtering by type."""
-        sim = self._hogwarts(observe=False)
+        sim = hogwarts(observe=False)
         observers = [
             c.name for c in sim._component_manager._components if isinstance(c, Observer)
         ]
@@ -1021,8 +1822,8 @@ class TestResultsGathering:
 
     def test_whether_listeners_are_registered(self) -> None:
         """The results manager registers at every priority in four phases."""
-        assert self._gather_listeners(self._hogwarts(observe=False)) == 0
-        assert self._gather_listeners(self._hogwarts(observe=True)) > 0
+        assert self._gather_listeners(hogwarts(observe=False)) == 0
+        assert self._gather_listeners(hogwarts(observe=True)) > 0
 
     def test_state_table_is_unchanged(self, disease_model_spec: Path) -> None:
         """Observers are still registered and can manage columns.

@@ -1,3 +1,15 @@
+**0.3.1 - 10/16/26**
+
+- Make the ``-n auto`` worker-count hook run before pytest-xdist's default, so the
+  plugin's worker count is used regardless of plugin load order.
+
+**0.3.0 - 10/15/26**
+
+- **Breaking change.** Remove the ``no_gbd_cache`` fixture. It depended on
+  ``vivarium_gbd_access``, which this package does not depend on; use
+  ``vivarium_gbd_access``'s ``cache_mode("off")`` instead.
+- Drop the ``vivarium-config-tree`` dependency, which only that fixture used.
+
 **0.2.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built

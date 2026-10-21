@@ -211,15 +211,6 @@ We see in the example above that ``BasePopulation``, ``Mortality``, and
 the lower respiratory infections ``DiseaseModel`` each registered a listener
 to the ``time_step`` phase, all at priority 5.
 
-.. note::
-
-    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_emitter`
-    is also present on the context, but it is restricted to the ``setup``,
-    ``simulation_end`` and ``report`` lifecycle states, so it is not callable
-    from a session that is simply set up or mid-run. Emitting events by hand is
-    discouraged in any case; see the :ref:`event system concept page <event_concept>`
-    for why, and prefer registering listeners.
-
 State table attributes and value pipelines
 ++++++++++++++++++++++++++++++++++++++++++
 
@@ -369,7 +360,6 @@ name, or whose component's name, contains it, along with the type of each one.
    mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality value_modifier disease_state.susceptible_to_lower_respiratory_infections
     mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality value_modifier  disease_state.infected_with_lower_respiratory_infections
                                                                              mortality.mortality_rate   lookup_table                                                 mortality
-                                                                      3.mortality.initialize_is_alive    initializer                                                 mortality
                                      infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
     infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
                                            lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
@@ -404,11 +394,15 @@ registered it.
 
 .. note::
 
-    Columns and randomness streams are deliberately left out. A column contains the
-    backing data of an attribute of the same name, so reporting it adds a near-duplicate
-    row without adding information. Meanwhile, a randomness stream is upstream of
-    the values it randomizes rather than one of them and there's not much to gain
-    from reporting it.
+    Columns, randomness streams, and population initializers are deliberately left
+    out. A column contains the backing data of an attribute of the same name, so
+    reporting it adds a near-duplicate row without adding information. A randomness
+    stream is upstream of the values it randomizes rather than one of them and there's
+    not much to gain from reporting it. An initializer is named for the call that
+    fills a column rather than for the quantity you would search for, so it crowds
+    the results;
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
+    reports those instead.
 
 .. note::
 
@@ -431,11 +425,34 @@ somewhere in its name.
 
 .. testoutput::
 
-                              name resource_type component
-                          is_alive     attribute mortality
-                    mortality_rate     attribute mortality
-          mortality.mortality_rate  lookup_table mortality
-   3.mortality.initialize_is_alive   initializer mortality
+                       name resource_type component
+                   is_alive     attribute mortality
+             mortality_rate     attribute mortality
+   mortality.mortality_rate  lookup_table mortality
+
+Each resource type can be retrieved:
+
+- ``value``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
+- ``attribute``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`
+- ``value_modifier``: no getter; use the corresponding pipeline's ``modifiers``
+  attribute to inspect them
+- ``lookup_table``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_lookup_table`
+
+For example, we can get the mortality rate lookup table found above:
+
+.. testcode::
+
+   mr_table = sim.get_lookup_table("mortality.mortality_rate")
+   print(mr_table(sim.get_population_index()[:5]))
+
+.. testoutput::
+
+   0    0.01
+   1    0.01
+   2    0.01
+   3    0.01
+   4    0.01
+   Name: value, dtype: float64
 
 .. note::
 
@@ -444,6 +461,138 @@ somewhere in its name.
     copying a name out of an earlier result; such a name finds itself even when it
     contains characters - brackets, parentheses, a dot - that a regular expression
     would otherwise read as syntax.
+
+Following a resource's dependencies
+-----------------------------------
+
+Once you have found a resource, you might be interested in what it uses and/or what
+uses it. :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_dependencies`
+answers both. Pass ``direction="uses"`` to print what the resource uses and ``direction="used-by"``
+to print what other resources use it.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", direction="uses")
+
+.. testoutput::
+
+   attribute.mortality_rate
+   ├── lookup_table.mortality.mortality_rate
+   ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality  (1 direct branch hidden)
+   ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality  (1 direct branch hidden)
+   └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality  (1 direct branch hidden)
+
+The default depth of 1 reports only the immediate dependencies. A branch with
+more underneath it is marked ``(N direct branches hidden)``, where ``N`` counts
+the branches cut off at that point and not every resource below them. Pass a
+larger ``depth`` to see more of the tree.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", direction="uses", depth=2)
+
+.. testoutput::
+
+   attribute.mortality_rate
+   ├── lookup_table.mortality.mortality_rate
+   ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
+   │   └── attribute.lower_respiratory_infections.cause_specific_mortality_rate
+   ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality
+   │   └── attribute.susceptible_to_lower_respiratory_infections.excess_mortality_rate  (1 direct branch hidden)
+   └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality
+       └── attribute.infected_with_lower_respiratory_infections.excess_mortality_rate  (1 direct branch hidden)
+
+Pass ``depth=None`` to walk a chain to its end.
+
+.. testcode::
+
+   sim.print_dependencies("child_wasting.exposure", direction="uses", depth=None)
+
+.. testoutput::
+
+   attribute.child_wasting.exposure
+   ├── attribute.child_wasting.proportion_exposed
+   │   ├── attribute.child_wasting.base_proportion_exposed
+   │   └── value_modifier.child_wasting.proportion_exposed.1.treatment_intervention.sqlns.child_wasting.proportion_exposed.intervention_effect
+   │       └── attribute.sqlns.effect_size
+   └── attribute.child_wasting_propensity
+       └── column.child_wasting_propensity
+           └── initializer.5.risk.child_wasting.initialize_propensity
+               └── stream.child_wasting
+                   ├── attribute.age
+                   │   └── column.age
+                   │       └── initializer.1.base_population.initialize_entrance_time_and_age
+                   │           └── stream.age_initialization
+                   └── attribute.entrance_time
+                       └── column.entrance_time
+                           └── initializer.1.base_population.initialize_entrance_time_and_age  (expanded above)
+
+.. note::
+
+    The dependency tree includes columns, initializers, and streams despite those
+    being excluded from the results of a 
+    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+    call. These are included here because they are part of the dependency graph
+    and so are relevant to understanding what a resource uses and what uses it.
+
+The resource graph is a directed acyclic graph rather than a tree, so a resource
+can be reached along more than one path. e.g., in the output above,
+``initializer.1.base_population.initialize_entrance_time_and_age`` is reached through
+both ``attribute.age`` and ``attribute.entrance_time``. If a resource exists in
+more than one branch and also includes its own children, only the first branch is
+unrolled; any subsequent branches that reach it are marked ``(expanded above)``.
+
+A resource with nothing on the side you asked about reports as ``(none)``.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", "used-by")
+
+.. testoutput::
+
+   attribute.mortality_rate
+       (none)
+
+The first argument, ``resource``, takes a bare name, a full resource id such as
+``"attribute.mortality_rate"``, or a :class:`~vivarium.engine.framework.resource.resource.Resource`
+object. Most private columns share a name with an attribute, so a bare name that
+reaches both is refused instead of resolved to one of them.
+
+.. testcode::
+
+   try:
+       sim.print_dependencies("age", "uses")
+   except ValueError as error:
+       print(error)
+
+.. testoutput::
+
+   'age' matches more than one resource. Use one of: 'attribute.age', 'column.age'.
+
+Getting the dependencies as objects
+-----------------------------------
+
+The tree is for reading. To work with a resource object itself, you can explicitly
+fetch it via the appropriate method or use 
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_dependencies`
+to get a list of all *direct* (depth=1) dependencies of a resource.
+
+.. testcode::
+
+   for resource in sim.get_dependencies("mortality_rate", direction="uses"):
+       print(resource.resource_id)
+
+.. testoutput::
+
+   lookup_table.mortality.mortality_rate
+   value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
+   value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality
+   value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality
+
+Unlike :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_dependencies`,
+this will not return columns, randomness streams, and initializers (the same types
+a :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+call omits).
 
 .. _interactive_results:
 

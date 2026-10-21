@@ -60,6 +60,11 @@ class ResultsManager(Manager):
         """Whether results are observed as the simulation runs."""
         return self._to_observe
 
+    @property
+    def observation_names(self) -> list[str]:
+        """The names of the registered observations."""
+        return list(self._results_context.observations)
+
     def set_to_observe(self, observe: bool) -> None:
         """Turn per-step results gathering on or off.
 
