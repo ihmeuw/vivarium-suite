@@ -1053,16 +1053,18 @@ class InteractiveContext(BaseSimulationContext):
 
         Returns
         -------
-            A frame with one row per listener or observation, indexed by ``phase``
-            and ``priority``, with columns ``component``, ``kind``, ``name`` and
-            ``active``. ``kind`` is either ``"listener"`` or ``"observation"``.
-            ``name`` is the listener's method name or the observation's name.
-            ``active`` says whether the row runs in this context.
+            A frame with one row per listener or observation, indexed by
+            ``lifecycle_state`` and ``priority``, with columns ``component``,
+            ``kind``, ``name`` and ``active``. ``kind`` is either ``"listener"``
+            or ``"observation"``. ``name`` is the listener's method name or the
+            observation's name. ``active`` says whether the row runs in this
+            context.
 
         Notes
         -----
-        Phases run in the order shown, and within a phase lower priorities run
-        first. Rows that share a phase and priority have no guaranteed order.
+        Lifecycle states run in the order shown, and within a state lower
+        priorities run first. Rows that share a state and priority have no
+        guaranteed order.
 
         Observations are listed even when results are not observed, which is the
         default for an interactive context. Their ``active`` value is then False.
@@ -1072,15 +1074,15 @@ class InteractiveContext(BaseSimulationContext):
         are left out because they run between steps rather than within one.
         """
         rows: list[tuple[str, int, str | None, str, str, bool]] = []
-        for phase in self._lifecycle.get_state_names("main_loop"):
-            listeners = self._events.get_listeners(phase)
+        for lifecycle_state in self._lifecycle.get_state_names("main_loop"):
+            listeners = self._events.get_listeners(lifecycle_state)
             for priority in range(NUM_EVENT_PRIORITIES):
                 for observation, component in self._results.get_scheduled_observations(
-                    phase, priority
+                    lifecycle_state, priority
                 ):
                     rows.append(
                         (
-                            phase,
+                            lifecycle_state,
                             priority,
                             component.name,
                             "observation",
@@ -1096,7 +1098,7 @@ class InteractiveContext(BaseSimulationContext):
                         continue
                     rows.append(
                         (
-                            phase,
+                            lifecycle_state,
                             priority,
                             getattr(owner, "name", None),
                             "listener",
@@ -1105,8 +1107,9 @@ class InteractiveContext(BaseSimulationContext):
                         )
                     )
         return pd.DataFrame(
-            rows, columns=["phase", "priority", "component", "kind", "name", "active"]
-        ).set_index(["phase", "priority"])
+            rows,
+            columns=["lifecycle_state", "priority", "component", "kind", "name", "active"],
+        ).set_index(["lifecycle_state", "priority"])
 
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.

@@ -163,9 +163,9 @@ for what the phases and states are.
         report
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_schedule`
-returns what runs in a single time step as a frame indexed by phase and priority.
-It lists each listener with its priority, and it lists each observation at the
-phase and priority where it is made.
+returns what runs in a single time step as a frame indexed by lifecycle state and
+priority. It lists each listener with its priority, and it lists each observation
+at the state and priority where it is made.
 
 .. testcode::
 
@@ -175,7 +175,7 @@ phase and priority where it is made.
     :options: +NORMALIZE_WHITESPACE
 
                                                                   component         kind                  name  active
-    phase              priority
+    lifecycle_state    priority
     time_step__prepare 5                                    deaths_observer     listener  on_time_step_prepare    True
     time_step          5                                    base_population     listener          on_time_step    True
                        5                                          mortality     listener          on_time_step    True
@@ -191,7 +191,7 @@ them run.
 
 .. warning::
 
-    Rows that share a phase and a priority, such as the three ``time_step``
+    Rows that share a lifecycle state and a priority, such as the three ``time_step``
     listeners above, have no guaranteed order. The frame shows them in the order
     they run now, but that order can change when components are added or reordered
     in the model specification; do not write code that depends on it.
