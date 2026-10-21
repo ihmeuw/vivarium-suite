@@ -423,6 +423,16 @@ class TestLookupTableResource:
         assert table.resource_id == "lookup_table.lookup_creator.test_table"
         assert table.required_resources == ["attribute.foo", "attribute.bar"]
 
+    def test_repr_names_the_table(self, lookup_manager: LookupTableManager) -> None:
+        """Two tables in a list are told apart by their names, not their shared type."""
+        creator = LookupCreator()
+        first = lookup_manager._build_table(creator, 5, "first_table", value_columns="value")
+        second = lookup_manager._build_table(
+            creator, 5, "second_table", value_columns="value"
+        )
+        assert repr(first) == "LookupTable('lookup_creator.first_table')"
+        assert repr(second) == "LookupTable('lookup_creator.second_table')"
+
     def test_adding_resources(self, lookup_manager: LookupTableManager) -> None:
         component = LookupCreator()
         lookup_manager._get_current_component.return_value = component  # type: ignore [attr-defined]

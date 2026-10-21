@@ -68,5 +68,4 @@ See Also
 --------
 
 - :ref:`vph_treatment_concept`
-- :ref:`therapeutic_inertia_concept`
 - :mod:`vivarium.public_health.treatment.scale_up`

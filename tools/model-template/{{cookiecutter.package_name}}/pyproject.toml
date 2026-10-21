@@ -23,7 +23,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "vivarium-dependencies[pytest]",
-    "vivarium-testing-utils",
+    "pytest-vivarium",
 ]
 cluster = ["vivarium-cluster-tools>={{cookiecutter.vivarium_cluster_tools_version}}"]
 data = [
