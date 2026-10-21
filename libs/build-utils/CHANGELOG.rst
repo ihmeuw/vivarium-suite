@@ -1,3 +1,8 @@
+**4.11.0 - 10/21/26**
+
+- Run Sphinx directly in ``build-docs`` and ``test-docs`` instead of through
+  ``docs/Makefile``
+
 **4.10.1 - 10/21/26**
 
 - Check the Jenkins deploy changelog update against the last successful build rather
