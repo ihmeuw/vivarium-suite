@@ -1,3 +1,10 @@
+**4.10.1 - 10/21/26**
+
+- Check the Jenkins deploy changelog update against the last successful build rather
+  than the previous commit, so a push of several commits deploys
+- Fail a Jenkins deploy whose ``CHANGELOG.rst`` version was already released from
+  another commit, via the new ``check-release-tag`` make target
+
 **4.10.0 - 10/19/26**
 
 - Run every check in ``make check``, ``make lint``, and Jenkins even when one fails,

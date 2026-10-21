@@ -15,7 +15,7 @@ def call() {
     
     // If no files changed, return false
     if (changedFiles == '') {
-        echo "No files were changed in this commit"
+        echo "No files were changed since base commit ${previousCommit}"
         return false
     }
     
