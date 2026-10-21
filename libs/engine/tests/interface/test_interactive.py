@@ -40,6 +40,7 @@ from tests.helpers import (
 )
 from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.resource.resource import Column, Resource
@@ -47,6 +48,7 @@ from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
 from vivarium.engine.interface.interactive import _match_rank, _render_dependency_tree
+from vivarium.engine.types import ClockTime
 
 
 def test_list_values() -> None:
@@ -177,20 +179,19 @@ JAN_15 = pd.Timestamp("2020-01-15")
 JAN_31 = pd.Timestamp("2020-01-31")
 STEP_SIZE = pd.Timedelta(days=7)
 FIRST_STEP_AT_OR_AFTER_END = pd.Timestamp("2020-02-05")
+SHORT_SIM_CONFIGURATION: dict[str, Any] = {
+    "time": {
+        "start": {"year": JAN_1.year, "month": JAN_1.month, "day": JAN_1.day},
+        "end": {"year": JAN_31.year, "month": JAN_31.month, "day": JAN_31.day},
+        "step_size": STEP_SIZE.days,
+    }
+}
 
 
 @pytest.fixture
 def short_sim() -> InteractiveContext:
     """A sim configured from Jan 1 to Jan 31 in 7-day steps."""
-    return InteractiveContext(
-        configuration={
-            "time": {
-                "start": {"year": JAN_1.year, "month": JAN_1.month, "day": JAN_1.day},
-                "end": {"year": JAN_31.year, "month": JAN_31.month, "day": JAN_31.day},
-                "step_size": STEP_SIZE.days,
-            }
-        }
-    )
+    return InteractiveContext(configuration=SHORT_SIM_CONFIGURATION)
 
 
 def reached(time: pd.Timestamp) -> Callable[[InteractiveContext], bool]:
@@ -387,6 +388,336 @@ class TestRunUntilProgressBar:
             short_sim.run_until(breaks_on_jan_15)
 
         assert progress_widgets[0].bar_style == "danger"
+
+
+def clock(sim: InteractiveContext) -> ClockTime:
+    """Return the current clock time, so an observed value shows when it was evaluated."""
+    return sim.current_time
+
+
+def days_elapsed(sim: InteractiveContext) -> int:
+    return int((sim.current_time - JAN_1) / pd.Timedelta(days=1))  # type: ignore [operator]
+
+
+def hogwarts(observe: bool = True, setup: bool = True) -> InteractiveContext:
+    """Return a Hogwarts sim whose model registers the ``house_points`` observation."""
+    return InteractiveContext(
+        configuration=HARRY_POTTER_CONFIG,
+        components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+        observe=observe,
+        setup=setup,
+    )
+
+
+class TestObserving:
+    """Observations are evaluated at registration and after every step."""
+
+    def test_an_observation_registered_mid_run(self, short_sim: InteractiveContext) -> None:
+        """A later observation starts at its registration time; an earlier one keeps its values."""
+        short_sim.register_observation(early=clock)
+        short_sim.step()
+        short_sim.register_observation(late=clock)
+        short_sim.step()
+
+        results = short_sim.get_results()
+        assert list(results["early"]) == [JAN_1, JAN_8, JAN_15]
+        assert list(results["late"]) == [JAN_8, JAN_15]
+
+    def test_values_are_stored_as_returned(self, short_sim: InteractiveContext) -> None:
+        """Series, DataFrame, None and arbitrary object returns are stored as the very objects returned."""
+        series = pd.Series([1.0, 2.0])
+        frame = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        anything = object()
+        short_sim.register_observation(
+            series=lambda sim: series,
+            frame=lambda sim: frame,
+            none=lambda sim: None,
+            anything=lambda sim: anything,
+        )
+        short_sim.step()
+
+        results = short_sim.get_results()
+        for time in (JAN_1, JAN_8):
+            assert results["series"][time] is series
+            assert results["frame"][time] is frame
+            assert time in results["none"]
+            assert results["none"][time] is None
+            assert results["anything"][time] is anything
+
+    def test_get_results_returns_a_copy(self, short_sim: InteractiveContext) -> None:
+        """Changing the returned dicts at either level does not change the observations."""
+        short_sim.register_observation(clock=clock, days=days_elapsed)
+
+        results = short_sim.get_results()
+        del results["days"]
+        results["added"] = {}
+        results["clock"][JAN_1] = "replaced"
+
+        assert short_sim.get_results() == {"clock": {JAN_1: JAN_1}, "days": {JAN_1: 0}}
+
+
+class TestObservationsInResults:
+    """get_results() returns the model's results and the registered observations together."""
+
+    def test_model_results_and_observations_are_returned_together(self) -> None:
+        sim = hogwarts()
+        start = sim.current_time
+        sim.register_observation(clock=clock)
+        sim.step()
+
+        results = sim.get_results()
+        assert results["house_points"][VALUE_COLUMN].sum() > 0
+        assert list(results["clock"]) == [start, sim.current_time]
+
+    def test_pausing_leaves_model_observations_running(self) -> None:
+        """Pausing every registered observation does not stop the model's observations."""
+        sim = hogwarts()
+        sim.register_observation(clock=clock)
+        sim.step()
+        points_before = sim.get_results()["house_points"][VALUE_COLUMN].sum()
+
+        sim.pause_observation("clock")
+        sim.step()
+
+        assert sim.get_results()["house_points"][VALUE_COLUMN].sum() > points_before
+
+    def test_observations_alone_do_not_warn(self, caplog: LogCaptureFixture) -> None:
+        """With observe=False, registered observations are results, so there is nothing to warn about."""
+        sim = hogwarts(observe=False)
+        sim.register_observation(clock=clock)
+
+        assert list(sim.get_results()) == ["clock"]
+        assert "pass observe=True" not in caplog.text
+
+
+class TestObservationRegistration:
+    """register_observation() registers all of its observations or none of them."""
+
+    def test_a_duplicate_name_raises_and_keeps_the_original(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """Registering a name that is already an observation raises ValueError and keeps the original."""
+        short_sim.register_observation(clock=clock)
+
+        with pytest.raises(ValueError, match="clock"):
+            short_sim.register_observation(
+                other=days_elapsed, clock=lambda sim: "replacement"
+            )
+
+        short_sim.step()
+        assert short_sim.get_results() == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
+
+    def test_a_model_observation_name_raises_after_setup(self) -> None:
+        """A name the model already observes raises at registration, naming it."""
+        sim = hogwarts()
+
+        with pytest.raises(ValueError, match="house_points"):
+            sim.register_observation(house_points=clock)
+
+        assert "house_points" not in sim._interactive_observations
+
+    def test_a_model_observation_name_raises_at_setup(self) -> None:
+        """A name registered before setup is checked against the model's observations by setup."""
+        sim = hogwarts(setup=False)
+        sim.register_observation(house_points=clock)
+
+        with pytest.raises(ValueError, match="house_points.*register_observation"):
+            sim.setup()
+
+    def test_registering_before_setup_observes_at_setup(self) -> None:
+        """An observation registered before setup gets its first value when setup runs."""
+        sim = InteractiveContext(configuration=SHORT_SIM_CONFIGURATION, setup=False)
+
+        sim.register_observation(clock=clock)
+        assert sim.get_results() == {"clock": {}}
+
+        sim.setup()
+        assert sim.get_results() == {"clock": {JAN_1: JAN_1}}
+
+
+class TestObservationFailure:
+    """An observation that raises is attributable and leaves consistent values."""
+
+    @staticmethod
+    def fails_from(
+        time: pd.Timestamp, error: Exception | None = None
+    ) -> Callable[[InteractiveContext], ClockTime]:
+        """Return an observation that returns the clock until ``time`` and then raises."""
+        to_raise = error if error is not None else KeyError("no such column")
+
+        def observation(sim: InteractiveContext) -> ClockTime:
+            if reached(time)(sim):
+                raise to_raise
+            return sim.current_time
+
+        return observation
+
+    @pytest.mark.parametrize(
+        "fails_at", [JAN_1, JAN_8], ids=["at_registration", "after_a_step"]
+    )
+    def test_a_failure_raises_observation_error(
+        self, short_sim: InteractiveContext, fails_at: pd.Timestamp
+    ) -> None:
+        """The ObservationError names the observation and the clock time and chains the original."""
+        original = KeyError("no such column")
+
+        with pytest.raises(ObservationError) as error:
+            short_sim.register_observation(broken=self.fails_from(fails_at, original))
+            short_sim.step()
+
+        message = str(error.value)
+        assert "broken" in message
+        assert str(fails_at) in message
+        assert error.value.__cause__ is original
+
+    @pytest.mark.parametrize(
+        "failing, expected",
+        [
+            (fails_from(JAN_1), {}),
+            (
+                fails_from(JAN_15),
+                {
+                    name: {JAN_1: JAN_1, JAN_8: JAN_8}
+                    for name in ("before", "failing", "after")
+                },
+            ),
+        ],
+        ids=["fails_at_registration", "fails_after_a_step"],
+    )
+    def test_a_failure_stores_nothing_at_the_failing_time(
+        self,
+        short_sim: InteractiveContext,
+        failing: Callable[[InteractiveContext], ClockTime],
+        expected: dict[str, dict[ClockTime, Any]],
+    ) -> None:
+        """A failing observation leaves no value for any observation at the time it failed."""
+        # Working observations on both sides of the failing one, so neither evaluation
+        # order hides a stored value.
+        with pytest.raises(ObservationError):
+            short_sim.register_observation(before=clock, failing=failing, after=clock)
+            short_sim.take_steps(3)
+
+        assert short_sim.get_results() == expected
+
+    def test_a_failing_observation_still_restores_a_custom_step_size(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """After an observation fails on a step with a custom step_size, the next step uses the configured size.
+
+        This is a regression test for the order of operations in ``step``: the step size
+        must be restored before the observations are evaluated, or a failing observation
+        would skip the restore.
+        """
+        three_days_on = JAN_1 + pd.Timedelta(days=3)
+        short_sim.register_observation(broken=self.fails_from(three_days_on))
+
+        with pytest.raises(ObservationError):
+            short_sim.step(pd.Timedelta(days=3))
+
+        short_sim.pause_observation("broken")
+        short_sim.step()
+
+        assert short_sim.current_time == three_days_on + STEP_SIZE
+
+    def test_an_observation_may_pause_another_while_running(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """An observation that pauses another mid-step stops it without breaking observing."""
+
+        def stops_other(sim: InteractiveContext) -> ClockTime:
+            if reached(JAN_8)(sim):
+                sim.pause_observation("other")
+            return sim.current_time
+
+        short_sim.register_observation(stopper=stops_other, other=clock)
+        short_sim.take_steps(2)
+
+        assert short_sim.get_results() == {
+            "stopper": {JAN_1: JAN_1, JAN_8: JAN_8, JAN_15: JAN_15},
+            "other": {JAN_1: JAN_1, JAN_8: JAN_8},
+        }
+
+
+class TestPauseObservation:
+    """pause_observation() stops observations, keeping their values, and register_observation() resumes them."""
+
+    def test_stops_calling_but_keeps_the_values(self, short_sim: InteractiveContext) -> None:
+        """A paused observation is not called again but keeps its values; others continue."""
+        calls: list[ClockTime] = []
+
+        def counted(sim: InteractiveContext) -> None:
+            calls.append(sim.current_time)
+
+        short_sim.register_observation(counted=counted, days=days_elapsed)
+        short_sim.step()
+        short_sim.pause_observation("counted")
+        short_sim.step()
+
+        assert calls == [JAN_1, JAN_8]
+        assert short_sim.get_results() == {
+            "counted": {JAN_1: None, JAN_8: None},
+            "days": {JAN_1: 0, JAN_8: 7, JAN_15: 14},
+        }
+
+    def test_a_paused_observation_resumes_by_name(
+        self, short_sim: InteractiveContext
+    ) -> None:
+        """Passing a paused observation's name to register_observation resumes it, leaving a gap."""
+        jan_22, jan_29 = JAN_1 + STEP_SIZE * 3, JAN_1 + STEP_SIZE * 4
+        short_sim.register_observation(clock=clock)
+        short_sim.step()
+        short_sim.pause_observation("clock")
+        short_sim.take_steps(2)
+
+        short_sim.register_observation("clock")
+        short_sim.step()
+
+        assert list(short_sim.get_results()["clock"]) == [JAN_1, JAN_8, jan_22, jan_29]
+
+    def test_resuming_a_registered_observation_does_nothing(
+        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+    ) -> None:
+        """Passing the name of an observation that is still registered changes nothing and logs that."""
+        short_sim.register_observation(clock=clock)
+
+        short_sim.register_observation("clock")
+
+        assert short_sim.get_results() == {"clock": {JAN_1: JAN_1}}
+        assert "Observations ['clock'] are already registered." in info_messages(caplog)
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda sim: sim.pause_observation("clock", "not_observed"),
+            lambda sim: sim.register_observation("not_observed"),
+        ],
+        ids=["pause_observation", "register_observation"],
+    )
+    def test_an_unknown_name_raises_and_changes_nothing(
+        self, short_sim: InteractiveContext, call: Callable[[InteractiveContext], None]
+    ) -> None:
+        """An unknown name raises ValueError and the observations are left as they were."""
+        short_sim.register_observation(clock=clock)
+
+        with pytest.raises(ValueError, match="not_observed"):
+            call(short_sim)
+
+        short_sim.step()
+        assert short_sim.get_results() == {"clock": {JAN_1: JAN_1, JAN_8: JAN_8}}
+
+
+def test_observes_an_unmodified_model(disease_model_spec: Path) -> None:
+    """An observation on the example disease model is stored every step with no spec or component change."""
+    sim = InteractiveContext(str(disease_model_spec))
+    sim.register_observation(mean_age=lambda s: s.get_population("age").mean())
+    start = sim.current_time
+
+    sim.take_steps(3)
+
+    observed = sim.get_results()["mean_age"]
+    assert len(observed) == 4
+    assert list(observed)[0] == start
+    assert observed[sim.current_time] == sim.get_population("age").mean()
 
 
 class TestFindResources:
@@ -1423,14 +1754,6 @@ class TestResultsGathering:
     produces is the same one a gathering run produces.
     """
 
-    @staticmethod
-    def _hogwarts(observe: bool) -> InteractiveContext:
-        return InteractiveContext(
-            configuration=HARRY_POTTER_CONFIG,
-            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
-            observe=observe,
-        )
-
     def test_observe_defaults_to_off(self) -> None:
         """Constructed without the flag, so a change to the default fails here.
 
@@ -1449,7 +1772,7 @@ class TestResultsGathering:
         assert sim.get_results() == {}
 
     def test_empty_results_say_why(self, caplog: LogCaptureFixture) -> None:
-        self._hogwarts(observe=False).get_results()
+        hogwarts(observe=False).get_results()
         assert "pass observe=True" in caplog.text
 
     def test_no_warning_when_observing_was_requested(self, caplog: LogCaptureFixture) -> None:
@@ -1470,13 +1793,13 @@ class TestResultsGathering:
         assert "pass observe=True" not in caplog.text
 
     def test_observed_when_requested(self) -> None:
-        sim = self._hogwarts(observe=True)
+        sim = hogwarts(observe=True)
         sim.step()
         assert sim.get_results()["house_points"][VALUE_COLUMN].sum() > 0
 
     def test_observers_are_still_registered(self) -> None:
         """The point of gating the manager rather than filtering by type."""
-        sim = self._hogwarts(observe=False)
+        sim = hogwarts(observe=False)
         observers = [
             c.name for c in sim._component_manager._components if isinstance(c, Observer)
         ]
@@ -1499,8 +1822,8 @@ class TestResultsGathering:
 
     def test_whether_listeners_are_registered(self) -> None:
         """The results manager registers at every priority in four phases."""
-        assert self._gather_listeners(self._hogwarts(observe=False)) == 0
-        assert self._gather_listeners(self._hogwarts(observe=True)) > 0
+        assert self._gather_listeners(hogwarts(observe=False)) == 0
+        assert self._gather_listeners(hogwarts(observe=True)) > 0
 
     def test_state_table_is_unchanged(self, disease_model_spec: Path) -> None:
         """Observers are still registered and can manage columns.
