@@ -1,3 +1,11 @@
+**4.10.1 - 10/20/26**
+
+- Build each nightly shared environment into its own directory and repoint
+  ``<env>_current`` at it only once the build is complete, so a failed build no longer
+  leaves the shared environment missing or half-installed
+- Keep the previous build as ``<env>_previous`` in place of conda-pack archives, and
+  remove the ``RETENTION_DAYS`` parameter
+
 **4.10.0 - 10/19/26**
 
 - Run every check in ``make check``, ``make lint``, and Jenkins even when one fails,
