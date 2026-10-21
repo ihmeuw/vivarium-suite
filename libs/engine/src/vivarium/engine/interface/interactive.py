@@ -25,20 +25,39 @@ import pandas as pd
 from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import BaseSimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
+from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.randomness.stream import RandomnessStream
-from vivarium.engine.framework.resource.resource import Column, Initializer
+from vivarium.engine.framework.resource.resource import Column, Initializer, Resource
+from vivarium.engine.framework.values import AttributePipeline, Pipeline, ValueModifier
 from vivarium.engine.interface.utilities import log_progress, run_from_ipython
 
-_UNSEARCHABLE_RESOURCE_TYPES = frozenset(
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+    from pathlib import Path
+    from typing import Any, Literal
+
+    import networkx as nx
+    from vivarium.config_tree.main import ConfigTree
+
+    from vivarium.engine import Component
+    from vivarium.engine.framework.event import Event
+    from vivarium.engine.types import ClockStepSize, ClockTime
+
+_IGNORED_RESOURCE_TYPES = frozenset(
     {Column.RESOURCE_TYPE, RandomnessStream.RESOURCE_TYPE, Initializer.RESOURCE_TYPE}
 )
-"""Resource types :meth:`InteractiveContext.find_resources` does not report."""
+"""Resource types to ignore.
+
+These resource types are not very usable/debuggable in an interactive context, so
+:meth:`InteractiveContext.find_resources` and :meth:`InteractiveContext.get_dependencies`
+do not report them.
+"""
 
 _RESOURCE_TYPE_ORDER = (
-    "attribute",
-    "value",
-    "value_modifier",
-    "lookup_table",
+    AttributePipeline.RESOURCE_TYPE,
+    Pipeline.RESOURCE_TYPE,
+    ValueModifier.RESOURCE_TYPE,
+    LookupTable.RESOURCE_TYPE,
 )
 """Resource types in the order :meth:`InteractiveContext.find_resources` ranks them."""
 
@@ -94,18 +113,139 @@ def _match_rank(matcher: re.Pattern[str], name: str) -> int:
     return rank
 
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
-    from pathlib import Path
-    from typing import Any
+_DEPENDENCY_DIRECTIONS = ("uses", "used-by")
+"""Directions :meth:`InteractiveContext.print_dependencies` can walk."""
 
-    from vivarium.config_tree.main import ConfigTree
+_DEPENDENCY_TYPE_ORDER = (
+    AttributePipeline.RESOURCE_TYPE,
+    Pipeline.RESOURCE_TYPE,
+    LookupTable.RESOURCE_TYPE,
+    Column.RESOURCE_TYPE,
+    RandomnessStream.RESOURCE_TYPE,
+    Initializer.RESOURCE_TYPE,
+    ValueModifier.RESOURCE_TYPE,
+)
+"""Resource types in the order :meth:`InteractiveContext.print_dependencies` draws them.
 
-    from vivarium.engine import Component
-    from vivarium.engine.framework.event import Event
-    from vivarium.engine.framework.lookup.table import LookupTable
-    from vivarium.engine.framework.values import AttributePipeline, Pipeline
-    from vivarium.engine.types import ClockStepSize, ClockTime
+This is structural rather than the relevance ranking :data:`_RESOURCE_TYPE_ORDER`
+applies: what feeds a resource comes first, then the storage and randomness it is
+built out of, and last the modifiers layered over it.
+"""
+
+_DEPENDENCY_TYPE_RANK = {
+    resource_type: index for index, resource_type in enumerate(_DEPENDENCY_TYPE_ORDER)
+}
+
+
+def _validate_direction(direction: str) -> None:
+    """Check the direction a dependency walk was asked to take."""
+    if direction not in _DEPENDENCY_DIRECTIONS:
+        raise ValueError(
+            f"Unknown direction '{direction}'. Use 'uses' for what this resource"
+            " uses or 'used-by' for what uses it."
+        )
+
+
+def _natural_key(name: str) -> tuple[tuple[int, int | str], ...]:
+    """Split a name so that a run of digits in it compares as a number."""
+    # Resource names carry unpadded indices, so "10" has to sort after "2".
+    return tuple(
+        (0, int(part)) if part.isdigit() else (1, part) for part in re.split(r"(\d+)", name)
+    )
+
+
+def _dependency_sort_key(resource: Resource) -> tuple[int, tuple[tuple[int, int | str], ...]]:
+    """Sort resources by type and then by name."""
+    # A type absent from the order sorts last rather than being dropped.
+    rank = _DEPENDENCY_TYPE_RANK.get(resource.RESOURCE_TYPE, len(_DEPENDENCY_TYPE_RANK))
+    return rank, _natural_key(str(resource.resource_id))
+
+
+def _dependencies(
+    graph: nx.DiGraph[Resource], node: Resource, direction: str
+) -> list[Resource]:
+    """Get the resources that a node uses or is used by, sorted by type and name."""
+    neighbors = graph.predecessors(node) if direction == "uses" else graph.successors(node)
+    return sorted(neighbors, key=_dependency_sort_key)
+
+
+def _resolve_resource(graph: nx.DiGraph[Resource], resource: str | Resource) -> Resource:
+    """Find the graph node that a resource argument names."""
+    nodes_by_id = {str(node.resource_id): node for node in graph.nodes}
+
+    if isinstance(resource, Resource):
+        node = nodes_by_id.get(str(resource.resource_id))
+        if node is None:
+            raise ValueError(
+                f"Resource '{resource.resource_id}' is not in the resource graph."
+            )
+        return node
+
+    if resource in nodes_by_id:
+        return nodes_by_id[resource]
+
+    # Handle a bare name by looking for a unique match among all resources
+    matches = sorted(
+        (node for node in graph.nodes if node.name == resource),
+        key=lambda node: str(node.resource_id),
+    )
+    if not matches:
+        raise ValueError(
+            f"No resource named '{resource}'. Use find_resources to search for it."
+        )
+    if len(matches) > 1:
+        candidates = ", ".join(repr(str(node.resource_id)) for node in matches)
+        raise ValueError(
+            f"'{resource}' matches more than one resource. Use one of: {candidates}."
+        )
+    return matches[0]
+
+
+def _render_dependency_tree(
+    graph: nx.DiGraph[Resource],
+    root: Resource,
+    direction: str,
+    depth: int | None,
+) -> list[str]:
+    """Render the dependency tree rooted at a resource, one string per line."""
+    lines = [str(root.resource_id)]
+    # ``expanded`` holds the nodes actually recursed into rather than the nodes
+    # printed. A node cut off by the depth limit was never expanded, so a later
+    # arrival at it has to report its hidden dependencies too rather than claim
+    # they were shown already.
+    expanded = {root}
+
+    def walk(node: Resource, prefix: str, level: int) -> None:
+        children = _dependencies(graph, node, direction)
+        for position, child in enumerate(children):
+            last = position == len(children) - 1
+            child_dependencies = _dependencies(graph, child, direction)
+            if child in expanded:
+                # This child has already been expanded in a previous branch
+                suffix = "  (expanded above)"
+            elif depth is not None and level + 1 == depth and child_dependencies:
+                # This child has more dependencies but we are at the depth limit
+                hidden = len(child_dependencies)
+                suffix = f"  ({hidden} direct branch{'es' if hidden > 1 else ''} hidden)"
+            else:
+                suffix = ""
+            branch = "└── " if last else "├── "
+            lines.append(f"{prefix}{branch}{child.resource_id}{suffix}")
+            if suffix or not child_dependencies:
+                # Don't recurse into this child, either because it has no dependencies or
+                # because it has more dependencies but we are at the depth limit
+                continue
+            # Mark the child before walking it, not after. A cycle leads back to
+            # the child from inside its own subtree, where an unmarked child is
+            # expanded again and the walk never ends.
+            expanded.add(child)
+            walk(node=child, prefix=prefix + ("    " if last else "│   "), level=level + 1)
+
+    if _dependencies(graph, root, direction):
+        walk(node=root, prefix="", level=0)
+    else:
+        lines.append("    (none)")
+    return lines
 
 
 @dataclass
@@ -743,7 +883,7 @@ class InteractiveContext(BaseSimulationContext):
 
         rows: list[_ResourceRow] = []
         for resource in self._resource.get_graph().nodes:
-            if resource.RESOURCE_TYPE in _UNSEARCHABLE_RESOURCE_TYPES:
+            if resource.RESOURCE_TYPE in _IGNORED_RESOURCE_TYPES:
                 continue
             resource_name = str(resource.name)
             component_name = resource.component.name
@@ -766,6 +906,119 @@ class InteractiveContext(BaseSimulationContext):
             [(row.name, row.resource_type, row.component) for row in rows],
             columns=["name", "resource_type", "component"],
         )
+
+    def print_dependencies(
+        self,
+        resource: str | Resource,
+        direction: Literal["uses", "used-by"],
+        depth: int | None = 1,
+    ) -> None:
+        """Print what a resource uses or what uses it as a tree.
+
+        Parameters
+        ----------
+        resource
+            The resource to start from, given as a ``Resource``, as a full
+            resource id such as ``"attribute.age"``, or as a bare name such as
+            ``"age"``. A bare name has to name exactly one resource.
+        direction
+            Which way to walk. ``"uses"`` reports the resources this one reads,
+            and ``"used-by"`` reports the resources that read it.
+        depth
+            How many levels to print. A value of None walks the whole chain.
+
+        Raises
+        ------
+        ValueError
+            If ``direction`` is neither ``"uses"`` nor ``"used-by"``, if
+            ``depth`` is neither None nor at least 1, or if ``resource`` does
+            not name exactly one resource in the graph.
+
+        Notes
+        -----
+        A branch cut off by ``depth`` is marked ``(N direct branches hidden)``,
+        where ``N`` counts its direct dependencies and not every resource below
+        them.
+
+        The resource graph is a directed acyclic graph rather than a tree, so a
+        resource can be reached along several paths. Every parent shows it, but
+        only the first arrival that expands it unrolls its dependencies. The
+        rest are marked ``(expanded above)``. A resource first expanded deep in
+        the tree, where ``depth`` cut off its own dependencies, keeps that mark
+        when it is reached again higher up. The branch it points at can then
+        hide more than the depth allows at the new position. Raise ``depth`` to
+        see the rest.
+
+        Every resource type is reported, including the ``column`` and ``initializer``
+        nodes that :meth:`InteractiveContext.find_resources` leaves out. Those sit
+        between an attribute and whatever its initializer reads, so a chain runs
+        through them.
+
+        Dependencies of one resource are grouped by type in the order defined by
+        ``_DEPENDENCY_TYPE_ORDER`` (and then sorted by name); what feeds a resource
+        comes first and the modifiers layered over it come last. This is a different
+        order from the one :meth:`InteractiveContext.find_resources` ranks by, which
+        sorts by how likely a match is to be the resource you are looking for.
+        """
+        _validate_direction(direction)
+        if depth is not None and depth < 1:
+            raise ValueError(
+                f"A depth of {depth} is not valid. Use a depth of at least 1, or"
+                " None to walk the whole chain."
+            )
+
+        graph = self._resource.get_graph()
+        root = _resolve_resource(graph, resource)
+        print("\n".join(_render_dependency_tree(graph, root, direction, depth)))
+
+    def get_dependencies(
+        self,
+        resource: str | Resource,
+        direction: Literal["uses", "used-by"],
+    ) -> list[Resource]:
+        """Get the direct resources a resource uses or the resources that use it.
+
+        Use this to work with the dependencies themselves. :meth:`InteractiveContext.print_dependencies`
+        walks the same graph but draws it as a tree to read.
+
+        Parameters
+        ----------
+        resource
+            The resource to start from, given as a ``Resource``, as a full
+            resource id such as ``"attribute.age"``, or as a bare name such as
+            ``"age"``. A bare name has to name exactly one resource.
+        direction
+            Which way to walk. ``"uses"`` reports the resources this one reads,
+            and ``"used-by"`` reports the resources that read it.
+
+        Returns
+        -------
+            The resources one level away, grouped by resource type in the order
+            :meth:`InteractiveContext.print_dependencies` draws them and sorted
+            by name within a type.
+
+        Raises
+        ------
+        ValueError
+            If ``direction`` is neither ``"uses"`` nor ``"used-by"``, or if
+            ``resource`` does not name exactly one resource in the graph.
+
+        Notes
+        -----
+        Columns, randomness streams, and initializers are left out (as they are
+        from :meth:`InteractiveContext.find_resources`).
+
+        Results report the dependencies a component explicitly declared. An undeclared
+        dependency is missing here with no signal.
+        """
+        _validate_direction(direction)
+        graph = self._resource.get_graph()
+        root = _resolve_resource(graph, resource)
+        return [
+            dependency
+            for dependency in _dependencies(graph, root, direction)
+            if dependency.RESOURCE_TYPE not in _IGNORED_RESOURCE_TYPES
+        ]
 
     def list_events(self) -> list[str]:
         """List all event types registered with the simulation."""

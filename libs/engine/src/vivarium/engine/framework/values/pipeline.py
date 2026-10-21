@@ -45,8 +45,9 @@ class RequiresPrettyHook:
 
     That same rule is why ``_repr_pretty_`` is repeated on each class below rather
     than inherited from here: a class defining ``__repr__`` stops the walk before
-    an inherited hook is reached, so a hook defined here would never run. Only the
-    check is shared; the repetition of the hook itself is load-bearing.
+    an inherited hook is reached, so a hook defined here would never run. The
+    declaration has to be repeated, but its body does not, so each one delegates
+    to ``_write_pretty``.
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -56,6 +57,20 @@ class RequiresPrettyHook:
                 f"{cls.__name__} defines __repr__ without _repr_pretty_, which shadows the "
                 "inherited IPython display hook. Define both, or neither."
             )
+
+    def _write_pretty(self, printer: Any) -> None:
+        """Write the description, or the short repr when nested in a container.
+
+        IPython calls the display hook on every object it recurses into, not only
+        on the one echoed in the cell, so a list of these would otherwise run
+        several multi-line descriptions together with no way to tell them apart.
+        ``stack`` holds the objects being printed, so it is one deep for a bare
+        object and deeper for one inside a container. It is an IPython internal,
+        so the ``getattr`` guards against it going missing. Without it the hook
+        shows the description.
+        """
+        nested = len(getattr(printer, "stack", ())) > 1
+        printer.text(repr(self) if nested else str(self))
 
 
 def _callable_display_name(callable_: Callable[..., Any]) -> str:
@@ -105,13 +120,8 @@ class NamedCallable(RequiresPrettyHook):
         return f"<{type(self).__name__} {str(self)!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Show this object's description when it is echoed bare in an IPython cell.
-
-        IPython's display machinery prefers this hook over ``__repr__``, so the
-        description shows up in a notebook while ``__repr__`` stays short enough
-        for tracebacks and collections.
-        """
-        printer.text(str(self))
+        """Show this object's description when it is echoed bare in an IPython cell."""
+        self._write_pretty(printer)
 
     def __eq__(self, other: object) -> bool:
         # Equal to the callable it wraps, so a comparison against the bare
@@ -157,13 +167,8 @@ class ValueSource(RequiresPrettyHook):
         return f"<{type(self).__name__} {identifier!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Show this object's description when it is echoed bare in an IPython cell.
-
-        IPython's display machinery prefers this hook over ``__repr__``, so the
-        description shows up in a notebook while ``__repr__`` stays short enough
-        for tracebacks and collections.
-        """
-        printer.text(str(self))
+        """Show this object's description when it is echoed bare in an IPython cell."""
+        self._write_pretty(printer)
 
     @property
     def _identifier(self) -> Any:
@@ -267,7 +272,7 @@ class AttributesValueSource(ValueSource):
 class ValueModifier(Resource, RequiresPrettyHook):
     """A resource representing a modifier of a value pipeline."""
 
-    RESOURCE_TYPE = "value_modifier"
+    RESOURCE_TYPE: str = "value_modifier"
 
     def __init__(
         self,
@@ -301,13 +306,8 @@ class ValueModifier(Resource, RequiresPrettyHook):
         return f"<{type(self).__name__} {self.name!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Show this object's description when it is echoed bare in an IPython cell.
-
-        IPython's display machinery prefers this hook over ``__repr__``, so the
-        description shows up in a notebook while ``__repr__`` stays short enough
-        for tracebacks and collections.
-        """
-        printer.text(str(self))
+        """Show this object's description when it is echoed bare in an IPython cell."""
+        self._write_pretty(printer)
 
     def _describe(self) -> tuple[str, str]:
         """Return this modifier's callable name and the name of its component."""
@@ -337,7 +337,7 @@ class Pipeline(Resource, RequiresPrettyHook):
     attributes; for those, use :class:`~vivarium.engine.framework.values.pipeline.AttributePipeline`.
     """
 
-    RESOURCE_TYPE = "value"
+    RESOURCE_TYPE: str = "value"
     """The type of the resource."""
 
     def __init__(self, name: str, component: Component | None = None) -> None:
@@ -451,13 +451,8 @@ class Pipeline(Resource, RequiresPrettyHook):
         return f"{type(self).__name__}({self.name!r})"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Show the full description when the pipeline is echoed in an IPython cell.
-
-        IPython's display machinery prefers this hook over ``__repr__``, so the
-        description shows up in a notebook while ``__repr__`` stays short enough
-        for tracebacks and collections.
-        """
-        printer.text(str(self))
+        """Show the full description when the pipeline is echoed in an IPython cell."""
+        self._write_pretty(printer)
 
     def __str__(self) -> str:
         """Render everything registered on this pipeline, in application order.
@@ -606,7 +601,7 @@ class AttributePipeline(Pipeline):
 
     """
 
-    RESOURCE_TYPE = "attribute"
+    RESOURCE_TYPE: str = "attribute"
     """The type of the resource."""
 
     @property

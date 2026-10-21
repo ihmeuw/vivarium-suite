@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,10 +28,14 @@ from tests.helpers import (
     AttributePipelineCreator,
     ColumnCreator,
     ColumnCreatorAndRequirer,
+    DiamondAttributeCreator,
+    ManyModifierCreator,
     MultiLevelMultiColumnCreator,
     MultiLevelSingleColumnCreator,
     NestedAttributeCreator,
     NestedLookupCaller,
+    OrderedDependencyCreator,
+    ReversedNameCreator,
     SingleColumnCreator,
 )
 from tests.interface.conftest import FakeWidget
@@ -38,10 +43,11 @@ from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.lookup.table import LookupTable
+from vivarium.engine.framework.resource.resource import Column, Resource
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
-from vivarium.engine.interface.interactive import _match_rank
+from vivarium.engine.interface.interactive import _match_rank, _render_dependency_tree
 from vivarium.engine.types import ClockTime
 
 
@@ -934,6 +940,419 @@ class TestFindResources:
     ) -> None:
         """Literal matching cannot raise, whatever the text contains."""
         assert sim.find_resources("test_column_[").empty
+
+
+class TestPrintDependencies:
+    """Tests for printing what a resource uses and what uses it."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(
+            components=[
+                DiamondAttributeCreator(),
+                ColumnCreator(),
+                ColumnCreatorAndRequirer(),
+            ]
+        )
+
+    @staticmethod
+    def printed(
+        sim: InteractiveContext,
+        capsys: pytest.CaptureFixture[str],
+        *args: Any,
+        **kwargs: Any,
+    ) -> list[str]:
+        sim.print_dependencies(*args, **kwargs)
+        return capsys.readouterr().out.splitlines()
+
+    def test_uses_reports_what_the_resource_reads(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert self.printed(sim, capsys, "attribute.diamond_base", "uses") == [
+            "attribute.diamond_base",
+            "└── attribute.diamond_root",
+        ]
+
+    def test_used_by_reports_what_reads_the_resource(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The same resource, walked the other way, reports different neighbors."""
+        assert self.printed(sim, capsys, "attribute.diamond_base", "used-by") == [
+            "attribute.diamond_base",
+            "├── attribute.diamond_left  (1 direct branch hidden)",
+            "└── attribute.diamond_right  (1 direct branch hidden)",
+        ]
+
+    def test_dependencies_are_grouped_by_resource_type(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """What feeds a resource comes first and what is layered over it comes last.
+        Sorting by resource id alone would put the lookup table above the value, and
+        find_resources would put the modifier above the lookup table."""
+        sim = InteractiveContext(components=[OrderedDependencyCreator()])
+        assert self.printed(sim, capsys, "attribute.ordered", "uses") == [
+            "attribute.ordered",
+            "├── attribute.ordered_attribute",
+            "├── value.ordered_value",
+            "├── lookup_table.ordered_dependency_creator.ordered_table",
+            "└── value_modifier.ordered.1.ordered_dependency_creator.modifier",
+        ]
+
+    def test_a_depth_of_none_walks_the_whole_chain(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert self.printed(sim, capsys, "attribute.test_column_4", "uses", depth=None) == [
+            "attribute.test_column_4",
+            "└── column.test_column_4",
+            "    └── initializer.2.column_creator_and_requirer.initialize_test_column_4",
+            "        ├── attribute.test_column_2",
+            "        │   └── column.test_column_2",
+            "        │       └── initializer.1.column_creator.initialize_test_columns",
+            "        └── stream.stream_1",
+        ]
+
+    def test_a_shared_node_is_drawn_under_every_parent(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Both halves of the diamond keep their edge to what they share, but only
+        the first one unrolls it. TestRenderDependencyTree covers the shape rules
+        against graphs; this checks one of them on a graph the engine really builds."""
+        assert self.printed(sim, capsys, "attribute.diamond_top", "uses", depth=3) == [
+            "attribute.diamond_top",
+            "├── attribute.diamond_left",
+            "│   └── attribute.diamond_base",
+            "│       └── attribute.diamond_root",
+            "└── attribute.diamond_right",
+            "    └── attribute.diamond_base  (expanded above)",
+        ]
+
+    def test_a_root_with_no_dependencies_says_so(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Otherwise the bare name alone reads as though the call failed."""
+        assert self.printed(sim, capsys, "attribute.diamond_top", "used-by") == [
+            "attribute.diamond_top",
+            "    (none)",
+        ]
+
+    def test_a_bare_name_a_full_id_and_an_object_agree(
+        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        node = sim.get_attribute("diamond_base")
+        by_name = self.printed(sim, capsys, "diamond_base", "uses")
+        assert by_name[0] == "attribute.diamond_base"
+        assert by_name == self.printed(sim, capsys, "attribute.diamond_base", "uses")
+        assert by_name == self.printed(sim, capsys, node, "uses")
+
+    def test_an_ambiguous_bare_name_lists_the_candidates(
+        self, sim: InteractiveContext
+    ) -> None:
+        """A private column usually shares its name with an attribute, so the bare
+        name has to be refused rather than resolved to whichever comes first."""
+        with pytest.raises(ValueError, match="matches more than one resource") as error:
+            sim.print_dependencies("test_column_1", "uses")
+        assert "'attribute.test_column_1'" in str(error.value)
+        assert "'column.test_column_1'" in str(error.value)
+
+    def test_an_unknown_name_points_at_find_resources(self, sim: InteractiveContext) -> None:
+        with pytest.raises(ValueError, match="No resource named 'no_such_resource'") as error:
+            sim.print_dependencies("no_such_resource", "uses")
+        assert "find_resources" in str(error.value)
+
+    def test_a_resource_outside_the_graph_raises(self, sim: InteractiveContext) -> None:
+        unregistered = Column("not_registered", ColumnCreator())
+        with pytest.raises(ValueError, match="is not in the resource graph"):
+            sim.print_dependencies(unregistered, "uses")
+
+    @pytest.mark.parametrize("depth", [0, -1])
+    def test_a_depth_below_one_raises(self, sim: InteractiveContext, depth: int) -> None:
+        with pytest.raises(ValueError, match=f"A depth of {depth} is not valid"):
+            sim.print_dependencies("attribute.diamond_top", "uses", depth=depth)
+
+    def test_an_unknown_direction_raises(self, sim: InteractiveContext) -> None:
+        """The annotation rules this out, but nothing stops an untyped caller."""
+        unknown_direction: Any = "upstream"
+        with pytest.raises(ValueError, match="Unknown direction 'upstream'"):
+            sim.print_dependencies("attribute.diamond_top", unknown_direction)
+
+
+class TestGetDependencies:
+    """Tests for getting the resources a resource uses and the ones that use it."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(
+            components=[
+                DiamondAttributeCreator(),
+                ColumnCreator(),
+                ColumnCreatorAndRequirer(),
+            ]
+        )
+
+    @staticmethod
+    def ids(resources: list[Resource]) -> list[str]:
+        return [str(resource.resource_id) for resource in resources]
+
+    def test_uses_reports_what_the_resource_reads(self, sim: InteractiveContext) -> None:
+        assert self.ids(sim.get_dependencies("attribute.diamond_base", "uses")) == [
+            "attribute.diamond_root"
+        ]
+
+    def test_used_by_reports_what_reads_the_resource(self, sim: InteractiveContext) -> None:
+        """The same resource, walked the other way, reports different neighbors."""
+        assert self.ids(sim.get_dependencies("attribute.diamond_base", "used-by")) == [
+            "attribute.diamond_left",
+            "attribute.diamond_right",
+        ]
+
+    def test_the_graph_nodes_themselves_are_returned(self, sim: InteractiveContext) -> None:
+        """The point of this over print_dependencies is having the resource in hand."""
+        assert sim.get_dependencies("attribute.diamond_base", "uses") == [
+            sim.get_attribute("diamond_root")
+        ]
+
+    def test_an_unreported_type_one_level_away_yields_nothing(
+        self, sim: InteractiveContext
+    ) -> None:
+        """An attribute is backed by a column, so walking one level reports nothing
+        even though print_dependencies draws that column."""
+        assert sim.get_dependencies("attribute.test_column_4", "uses") == []
+
+    def test_reported_and_unreported_neighbors_are_separated(
+        self, sim: InteractiveContext
+    ) -> None:
+        """This initializer reads one attribute and one randomness stream, and only
+        the attribute comes back."""
+        initializer = "initializer.2.column_creator_and_requirer.initialize_test_column_4"
+        assert self.ids(sim.get_dependencies(initializer, "uses")) == [
+            "attribute.test_column_2"
+        ]
+
+    def test_results_are_grouped_by_resource_type(self) -> None:
+        """The same order print_dependencies draws, which sorting by resource id
+        alone would not give."""
+        sim = InteractiveContext(components=[OrderedDependencyCreator()])
+        assert self.ids(sim.get_dependencies("attribute.ordered", "uses")) == [
+            "attribute.ordered_attribute",
+            "value.ordered_value",
+            "lookup_table.ordered_dependency_creator.ordered_table",
+            "value_modifier.ordered.1.ordered_dependency_creator.modifier",
+        ]
+
+    def test_same_type_results_are_sorted_by_name(self) -> None:
+        """Two neighbors of one type, registered in the reverse of name order, so
+        a sort that ignored the name would hand these back the other way around."""
+        sim = InteractiveContext(components=[ReversedNameCreator()])
+        assert self.ids(sim.get_dependencies("attribute.reversed_root", "uses")) == [
+            "attribute.alpha",
+            "attribute.zulu",
+        ]
+
+    def test_modifiers_past_the_ninth_stay_in_application_order(self) -> None:
+        """The number in a modifier's name is the order it is applied in. Past the
+        ninth that number is two digits, which a plain text sort gets wrong."""
+        sim = InteractiveContext(components=[ManyModifierCreator()])
+        assert self.ids(sim.get_dependencies("value.many_modifiers", "uses")) == [
+            f"value_modifier.many_modifiers.{number}.many_modifier_creator"
+            f".modifier_{number - 1:02d}"
+            for number in range(1, ManyModifierCreator.MODIFIER_COUNT + 1)
+        ]
+
+    def test_a_root_with_no_dependencies_returns_nothing(
+        self, sim: InteractiveContext
+    ) -> None:
+        assert sim.get_dependencies("attribute.diamond_top", "used-by") == []
+
+    def test_a_bare_name_a_full_id_and_an_object_agree(self, sim: InteractiveContext) -> None:
+        node = sim.get_attribute("diamond_base")
+        by_name = sim.get_dependencies("diamond_base", "uses")
+        assert by_name == sim.get_dependencies("attribute.diamond_base", "uses")
+        assert by_name == sim.get_dependencies(node, "uses")
+
+    def test_an_ambiguous_bare_name_lists_the_candidates(
+        self, sim: InteractiveContext
+    ) -> None:
+        with pytest.raises(ValueError, match="matches more than one resource") as error:
+            sim.get_dependencies("test_column_1", "uses")
+        assert "'attribute.test_column_1'" in str(error.value)
+        assert "'column.test_column_1'" in str(error.value)
+
+    def test_an_unknown_name_points_at_find_resources(self, sim: InteractiveContext) -> None:
+        with pytest.raises(ValueError, match="No resource named 'no_such_resource'") as error:
+            sim.get_dependencies("no_such_resource", "uses")
+        assert "find_resources" in str(error.value)
+
+    def test_a_resource_outside_the_graph_raises(self, sim: InteractiveContext) -> None:
+        unregistered = Column("not_registered", ColumnCreator())
+        with pytest.raises(ValueError, match="is not in the resource graph"):
+            sim.get_dependencies(unregistered, "uses")
+
+    def test_an_unknown_direction_raises(self, sim: InteractiveContext) -> None:
+        """The annotation rules this out, but nothing stops an untyped caller."""
+        unknown_direction: Any = "upstream"
+        with pytest.raises(ValueError, match="Unknown direction 'upstream'"):
+            sim.get_dependencies("attribute.diamond_top", unknown_direction)
+
+
+class _Node(Resource):
+    """A bare graph node, typed so that rendered ids stay short in assertions."""
+
+    RESOURCE_TYPE = "node"
+
+
+class TestRenderDependencyTree:
+    """Tests for how the renderer draws a shape, independent of any simulation.
+
+    Reaching these shapes through the public method costs a registered component
+    apiece, which buries the rule under pipeline registration. Stating the graph
+    directly keeps the rule in view.
+    """
+
+    @staticmethod
+    def build_graph(
+        dependencies: dict[str, str]
+    ) -> tuple[nx.DiGraph[Resource], dict[str, _Node]]:
+        """Build a resource graph from a mapping of each node to the names it uses."""
+        names = set(dependencies) | {
+            name for used in dependencies.values() for name in used.split()
+        }
+        nodes = {name: _Node(name, None) for name in names}
+        graph: nx.DiGraph[Resource] = nx.DiGraph()
+        graph.add_nodes_from(nodes.values())
+        for parent, children in dependencies.items():
+            for child in children.split():
+                graph.add_edge(nodes[child], nodes[parent])
+        return graph, nodes
+
+    @pytest.fixture
+    def diamond(self) -> tuple[nx.DiGraph[Resource], dict[str, _Node]]:
+        """``a`` uses ``b`` and ``c``, both use ``d``, and ``d`` uses ``e``.
+
+        The names are listed out of alphabetical order so that the expected output
+        differs from the order networkx hands back. Listing them in order would let
+        a renderer that never sorted still pass.
+        """
+        return self.build_graph({"a": "c b", "c": "d", "b": "d", "d": "e"})
+
+    def test_a_shared_node_keeps_both_edges_but_unrolls_once(
+        self, diamond: tuple[nx.DiGraph[Resource], dict[str, _Node]]
+    ) -> None:
+        graph, nodes = diamond
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 3) == [
+            "node.a",
+            "├── node.b",
+            "│   └── node.d",
+            "│       └── node.e",
+            "└── node.c",
+            "    └── node.d  (expanded above)",
+        ]
+
+    def test_a_node_cut_off_at_the_limit_is_never_called_expanded(
+        self, diamond: tuple[nx.DiGraph[Resource], dict[str, _Node]]
+    ) -> None:
+        """Neither arrival expanded it, so both report what they are hiding."""
+        graph, nodes = diamond
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
+            "node.a",
+            "├── node.b",
+            "│   └── node.d  (1 direct branch hidden)",
+            "└── node.c",
+            "    └── node.d  (1 direct branch hidden)",
+        ]
+
+    def test_a_node_reached_again_above_the_limit_is_expanded_there(self) -> None:
+        """``shared`` is reached under ``branch`` first, at the limit, and then as a
+        direct dependency where there is room for it."""
+        graph, nodes = self.build_graph(
+            {"a": "branch shared", "branch": "shared", "shared": "tail"}
+        )
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
+            "node.a",
+            "├── node.branch",
+            "│   └── node.shared  (1 direct branch hidden)",
+            "└── node.shared",
+            "    └── node.tail",
+        ]
+
+    def test_an_expanded_node_reached_at_the_limit_is_not_called_hidden(self) -> None:
+        """``s`` is expanded as a direct dependency, then reached again under ``t``
+        exactly at the limit, where both annotations apply. Having been expanded
+        wins, because its dependencies are on the screen already."""
+        graph, nodes = self.build_graph({"a": "t s", "t": "s", "s": "u"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 2) == [
+            "node.a",
+            "├── node.s",
+            "│   └── node.u",
+            "└── node.t",
+            "    └── node.s  (expanded above)",
+        ]
+
+    def test_a_cycle_stops_where_it_rejoins_an_expanded_node(self) -> None:
+        """``b`` is marked expanded before the walk descends into it, so arriving
+        back at it from ``c`` ends the branch. Marking it afterwards instead
+        recurses without end, and no acyclic graph tells the two orders apart."""
+        graph, nodes = self.build_graph({"a": "b", "b": "c", "c": "b"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", None) == [
+            "node.a",
+            "└── node.b",
+            "    └── node.c",
+            "        └── node.b  (expanded above)",
+        ]
+
+    def test_a_repeated_leaf_is_left_unmarked(self) -> None:
+        """Nothing was expanded and nothing is hidden, so both arrivals print plain."""
+        graph, nodes = self.build_graph({"a": "c b", "c": "d", "b": "d"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", None) == [
+            "node.a",
+            "├── node.b",
+            "│   └── node.d",
+            "└── node.c",
+            "    └── node.d",
+        ]
+
+    def test_a_hidden_branch_counts_what_it_hides(self) -> None:
+        graph, nodes = self.build_graph({"a": "b", "b": "e d c"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
+            "node.a",
+            "└── node.b  (3 direct branches hidden)",
+        ]
+
+    def test_a_leaf_at_the_limit_reports_nothing(self) -> None:
+        """A branch that ends at the limit hides nothing, so it is left unmarked."""
+        graph, nodes = self.build_graph({"a": "b"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
+            "node.a",
+            "└── node.b",
+        ]
+
+    def test_a_run_of_digits_in_a_name_sorts_as_a_number(self) -> None:
+        """Resource names carry unpadded indices, so ``10`` is drawn after ``2``.
+
+        The tree and the list share one sort key, so this is what keeps the
+        renderer on it.
+        """
+        graph, nodes = self.build_graph({"a": "b10 b9 b2 b1"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
+            "node.a",
+            "├── node.b1",
+            "├── node.b2",
+            "├── node.b9",
+            "└── node.b10",
+        ]
+
+    def test_used_by_walks_the_other_way(
+        self, diamond: tuple[nx.DiGraph[Resource], dict[str, _Node]]
+    ) -> None:
+        """The same graph, read from the far end, inverts every edge."""
+        graph, nodes = diamond
+        assert _render_dependency_tree(graph, nodes["e"], "used-by", None) == [
+            "node.e",
+            "└── node.d",
+            "    ├── node.b",
+            "    │   └── node.a",
+            "    └── node.c",
+            "        └── node.a",
+        ]
 
 
 def test_get_attribute_names() -> None:

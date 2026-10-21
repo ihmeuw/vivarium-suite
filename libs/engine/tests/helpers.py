@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pandas as pd
@@ -243,6 +244,110 @@ class AttributePipelineCreator(Component):
             "attribute_generating_columns_6_7",
             lambda index, df: df,
         )
+
+
+class DiamondAttributeCreator(Component):
+    """A helper class to register attributes whose dependencies reconverge.
+
+    ``diamond_top`` requires ``diamond_left`` and ``diamond_right``, both of
+    which require ``diamond_base``, which in turn requires ``diamond_root``. So
+    ``diamond_base`` is reached along two paths and still has a dependency of
+    its own below it.
+
+    """
+
+    def setup(self, builder: Builder) -> None:
+        for name, required_resources in [
+            ("diamond_root", []),
+            ("diamond_base", ["diamond_root"]),
+            ("diamond_left", ["diamond_base"]),
+            ("diamond_right", ["diamond_base"]),
+            ("diamond_top", ["diamond_left", "diamond_right"]),
+        ]:
+            builder.value.register_attribute_producer(
+                name, self.source, required_resources=required_resources
+            )
+
+    def source(self, index: pd.Index[int]) -> pd.Series[Any]:
+        return pd.Series([i % 3 for i in index], index=index)
+
+
+class OrderedDependencyCreator(Component):
+    """A helper class whose attribute depends on one resource of several types.
+
+    ``ordered`` reads an attribute, a value pipeline, and a lookup table, and
+    carries a modifier of its own. Those four types are the ones whose rendered
+    order differs from a plain alphabetical sort of their resource ids.
+
+    """
+
+    CONFIGURATION_DEFAULTS = {
+        "ordered_dependency_creator": {"data_sources": {"ordered_table": 0.4}}
+    }
+
+    def setup(self, builder: Builder) -> None:
+        table = self.build_lookup_table(builder, "ordered_table", value_columns="scalar")
+        value = builder.value.register_value_producer("ordered_value", self.source)
+        builder.value.register_attribute_producer("ordered_attribute", self.source)
+        builder.value.register_attribute_producer(
+            "ordered", self.source, required_resources=[table, value, "ordered_attribute"]
+        )
+        builder.value.register_attribute_modifier("ordered", self.modifier)
+
+    def source(self, index: pd.Index[int]) -> pd.Series[Any]:
+        return pd.Series([i % 3 for i in index], index=index)
+
+    def modifier(self, index: pd.Index[int], values: pd.Series[Any]) -> pd.Series[Any]:
+        return values
+
+
+class ReversedNameCreator(Component):
+    """A helper class whose attribute reads two attributes in reverse name order.
+
+    ``reversed_root`` requires ``zulu`` and then ``alpha``, so the order the
+    dependencies were registered in is the reverse of the order their names sort
+    in.
+
+    """
+
+    def setup(self, builder: Builder) -> None:
+        for name in ["zulu", "alpha"]:
+            builder.value.register_attribute_producer(name, self.source)
+        builder.value.register_attribute_producer(
+            "reversed_root", self.source, required_resources=["zulu", "alpha"]
+        )
+
+    def source(self, index: pd.Index[int]) -> pd.Series[Any]:
+        return pd.Series([i % 3 for i in index], index=index)
+
+
+class ManyModifierCreator(Component):
+    """A helper class that puts more than nine modifiers on one value pipeline.
+
+    The number Vivarium builds into a modifier's name is the order it is applied
+    in. Past the ninth that number is two digits wide, so reading the name as
+    text puts the tenth modifier ahead of the second.
+
+    """
+
+    MODIFIER_COUNT = 12
+
+    def setup(self, builder: Builder) -> None:
+        builder.value.register_value_producer("many_modifiers", self.source)
+        for number in range(self.MODIFIER_COUNT):
+            builder.value.register_value_modifier(
+                "many_modifiers", modifier=self._modifier(number)
+            )
+
+    def source(self, index: pd.Index[int]) -> pd.Series[Any]:
+        return pd.Series(1.0, index=index)
+
+    def _modifier(self, number: int) -> Callable[..., Any]:
+        def modifier(index: pd.Index[int], values: pd.Series[Any]) -> pd.Series[Any]:
+            return values
+
+        modifier.__name__ = f"modifier_{number:02d}"
+        return modifier
 
 
 class NestedAttributeCreator(Component):
