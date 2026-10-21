@@ -326,7 +326,7 @@ class LookupTable(Resource, Generic[T]):
         return result
 
     def __repr__(self) -> str:
-        return "LookupTable()"
+        return f"{type(self).__name__}({self.name!r})"
 
     @staticmethod
     def get_name(component_name: str, table_name: str) -> str:

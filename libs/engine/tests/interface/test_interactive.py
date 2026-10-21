@@ -29,11 +29,13 @@ from tests.helpers import (
     ColumnCreator,
     ColumnCreatorAndRequirer,
     DiamondAttributeCreator,
+    ManyModifierCreator,
     MultiLevelMultiColumnCreator,
     MultiLevelSingleColumnCreator,
     NestedAttributeCreator,
     NestedLookupCaller,
     OrderedDependencyCreator,
+    ReversedNameCreator,
     SingleColumnCreator,
 )
 from tests.interface.conftest import FakeWidget
@@ -743,6 +745,124 @@ class TestPrintDependencies:
             sim.print_dependencies("attribute.diamond_top", unknown_direction)
 
 
+class TestGetDependencies:
+    """Tests for getting the resources a resource uses and the ones that use it."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> InteractiveContext:
+        return InteractiveContext(
+            components=[
+                DiamondAttributeCreator(),
+                ColumnCreator(),
+                ColumnCreatorAndRequirer(),
+            ]
+        )
+
+    @staticmethod
+    def ids(resources: list[Resource]) -> list[str]:
+        return [str(resource.resource_id) for resource in resources]
+
+    def test_uses_reports_what_the_resource_reads(self, sim: InteractiveContext) -> None:
+        assert self.ids(sim.get_dependencies("attribute.diamond_base", "uses")) == [
+            "attribute.diamond_root"
+        ]
+
+    def test_used_by_reports_what_reads_the_resource(self, sim: InteractiveContext) -> None:
+        """The same resource, walked the other way, reports different neighbors."""
+        assert self.ids(sim.get_dependencies("attribute.diamond_base", "used-by")) == [
+            "attribute.diamond_left",
+            "attribute.diamond_right",
+        ]
+
+    def test_the_graph_nodes_themselves_are_returned(self, sim: InteractiveContext) -> None:
+        """The point of this over print_dependencies is having the resource in hand."""
+        assert sim.get_dependencies("attribute.diamond_base", "uses") == [
+            sim.get_attribute("diamond_root")
+        ]
+
+    def test_an_unreported_type_one_level_away_yields_nothing(
+        self, sim: InteractiveContext
+    ) -> None:
+        """An attribute is backed by a column, so walking one level reports nothing
+        even though print_dependencies draws that column."""
+        assert sim.get_dependencies("attribute.test_column_4", "uses") == []
+
+    def test_reported_and_unreported_neighbors_are_separated(
+        self, sim: InteractiveContext
+    ) -> None:
+        """This initializer reads one attribute and one randomness stream, and only
+        the attribute comes back."""
+        initializer = "initializer.2.column_creator_and_requirer.initialize_test_column_4"
+        assert self.ids(sim.get_dependencies(initializer, "uses")) == [
+            "attribute.test_column_2"
+        ]
+
+    def test_results_are_grouped_by_resource_type(self) -> None:
+        """The same order print_dependencies draws, which sorting by resource id
+        alone would not give."""
+        sim = InteractiveContext(components=[OrderedDependencyCreator()])
+        assert self.ids(sim.get_dependencies("attribute.ordered", "uses")) == [
+            "attribute.ordered_attribute",
+            "value.ordered_value",
+            "lookup_table.ordered_dependency_creator.ordered_table",
+            "value_modifier.ordered.1.ordered_dependency_creator.modifier",
+        ]
+
+    def test_same_type_results_are_sorted_by_name(self) -> None:
+        """Two neighbors of one type, registered in the reverse of name order, so
+        a sort that ignored the name would hand these back the other way around."""
+        sim = InteractiveContext(components=[ReversedNameCreator()])
+        assert self.ids(sim.get_dependencies("attribute.reversed_root", "uses")) == [
+            "attribute.alpha",
+            "attribute.zulu",
+        ]
+
+    def test_modifiers_past_the_ninth_stay_in_application_order(self) -> None:
+        """The number in a modifier's name is the order it is applied in. Past the
+        ninth that number is two digits, which a plain text sort gets wrong."""
+        sim = InteractiveContext(components=[ManyModifierCreator()])
+        assert self.ids(sim.get_dependencies("value.many_modifiers", "uses")) == [
+            f"value_modifier.many_modifiers.{number}.many_modifier_creator"
+            f".modifier_{number - 1:02d}"
+            for number in range(1, ManyModifierCreator.MODIFIER_COUNT + 1)
+        ]
+
+    def test_a_root_with_no_dependencies_returns_nothing(
+        self, sim: InteractiveContext
+    ) -> None:
+        assert sim.get_dependencies("attribute.diamond_top", "used-by") == []
+
+    def test_a_bare_name_a_full_id_and_an_object_agree(self, sim: InteractiveContext) -> None:
+        node = sim.get_attribute("diamond_base")
+        by_name = sim.get_dependencies("diamond_base", "uses")
+        assert by_name == sim.get_dependencies("attribute.diamond_base", "uses")
+        assert by_name == sim.get_dependencies(node, "uses")
+
+    def test_an_ambiguous_bare_name_lists_the_candidates(
+        self, sim: InteractiveContext
+    ) -> None:
+        with pytest.raises(ValueError, match="matches more than one resource") as error:
+            sim.get_dependencies("test_column_1", "uses")
+        assert "'attribute.test_column_1'" in str(error.value)
+        assert "'column.test_column_1'" in str(error.value)
+
+    def test_an_unknown_name_points_at_find_resources(self, sim: InteractiveContext) -> None:
+        with pytest.raises(ValueError, match="No resource named 'no_such_resource'") as error:
+            sim.get_dependencies("no_such_resource", "uses")
+        assert "find_resources" in str(error.value)
+
+    def test_a_resource_outside_the_graph_raises(self, sim: InteractiveContext) -> None:
+        unregistered = Column("not_registered", ColumnCreator())
+        with pytest.raises(ValueError, match="is not in the resource graph"):
+            sim.get_dependencies(unregistered, "uses")
+
+    def test_an_unknown_direction_raises(self, sim: InteractiveContext) -> None:
+        """The annotation rules this out, but nothing stops an untyped caller."""
+        unknown_direction: Any = "upstream"
+        with pytest.raises(ValueError, match="Unknown direction 'upstream'"):
+            sim.get_dependencies("attribute.diamond_top", unknown_direction)
+
+
 class _Node(Resource):
     """A bare graph node, typed so that rendered ids stay short in assertions."""
 
@@ -872,6 +992,21 @@ class TestRenderDependencyTree:
         assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
             "node.a",
             "└── node.b",
+        ]
+
+    def test_a_run_of_digits_in_a_name_sorts_as_a_number(self) -> None:
+        """Resource names carry unpadded indices, so ``10`` is drawn after ``2``.
+
+        The tree and the list share one sort key, so this is what keeps the
+        renderer on it.
+        """
+        graph, nodes = self.build_graph({"a": "b10 b9 b2 b1"})
+        assert _render_dependency_tree(graph, nodes["a"], "uses", 1) == [
+            "node.a",
+            "├── node.b1",
+            "├── node.b2",
+            "├── node.b9",
+            "└── node.b10",
         ]
 
     def test_used_by_walks_the_other_way(

@@ -1,7 +1,12 @@
-**5.15.0 - 10/20/26**
+**5.15.0 - 10/21/26**
 
 - Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,
   or what uses it, as a depth-limited tree
+- Add ``InteractiveContext.get_dependencies()`` to return direct dependency objects
+- Show the short repr rather than the full description when a pipeline, value
+  source, modifier, combiner, or post-processor is displayed inside a container
+  in a notebook
+- Name the table in ``LookupTable``'s repr so a list of tables can be told apart
 
 **5.14.1 - 10/12/26**
 
