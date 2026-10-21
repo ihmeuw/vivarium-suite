@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections import Counter
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -321,6 +322,13 @@ ModifierSelection = ValueModifier | str | Iterable[ValueModifier | str]
 """The modifiers to apply when calling a pipeline, as objects or names."""
 
 
+def _labels(modifiers: Iterable[ValueModifier | str]) -> list[str]:
+    """Return the names of modifiers given as objects or names."""
+    return [
+        modifier if isinstance(modifier, str) else modifier.name for modifier in modifiers
+    ]
+
+
 class Pipeline(Resource, RequiresPrettyHook):
     """A tool for building up values across several components.
 
@@ -435,8 +443,9 @@ class Pipeline(Resource, RequiresPrettyHook):
         DynamicValueError
             If the pipeline is invoked without a source set.
         ValueError
-            If ``modifiers`` is given with ``mode="source"``, names a modifier
-            that is not on this pipeline, or names a modifier more than once.
+            If ``modifiers`` is given with ``mode="source"``, includes a
+            modifier object or name that is not on this pipeline, or includes
+            the same modifier more than once.
         TypeError
             If an entry of ``modifiers`` is neither a :class:`ValueModifier` nor
             a string.
@@ -483,37 +492,33 @@ class Pipeline(Resource, RequiresPrettyHook):
             modifiers = [modifiers]
 
         by_name = {modifier.name: modifier for modifier in self.modifiers}
-        # ValueModifier keeps the default identity equality and hash, so set
-        # membership and the check against self.modifiers compare objects.
-        selected: set[ValueModifier] = set()
-        unknown: list[str] = []
-        duplicates: list[str] = []
+        # Unknown names stay strings, so the set difference below keeps them.
+        resolved: list[ValueModifier | str] = []
         for requested in modifiers:
             if isinstance(requested, str):
-                match = by_name.get(requested)
-                label = requested
-            elif isinstance(requested, ValueModifier):
-                match = requested if requested in self.modifiers else None
-                label = requested.name
-            else:
+                requested = by_name.get(requested, requested)
+            elif not isinstance(requested, ValueModifier):
                 raise TypeError(
                     "Modifiers must be given as ValueModifier objects or their names, "
                     f"not {type(requested).__name__}: {requested!r}."
                 )
-            if match is None:
-                unknown.append(label)
-            elif match in selected:
-                duplicates.append(label)
-            else:
-                selected.add(match)
+            resolved.append(requested)
+
+        # ValueModifier keeps the default identity equality and hash, so the set
+        # operations compare objects.
+        selected = set(resolved)
+        unknown = sorted(_labels(selected - set(self.modifiers)))
         if unknown:
             raise ValueError(
                 f"Pipeline {self.name} has no modifier(s) {unknown}. "
                 f"Available modifiers: {list(by_name)}."
             )
-        if duplicates:
+        if len(selected) != len(resolved):
+            duplicates = [
+                modifier for modifier, count in Counter(resolved).items() if count > 1
+            ]
             raise ValueError(
-                f"Modifier(s) {duplicates} were requested more than once for "
+                f"Modifier(s) {_labels(duplicates)} were requested more than once for "
                 f"pipeline {self.name}. Each modifier is applied at most once; "
                 "check whether you meant to request a different modifier."
             )
@@ -732,8 +737,9 @@ class AttributePipeline(Pipeline):
         DynamicValueError
             If the pipeline is invoked without a source set.
         ValueError
-            If ``modifiers`` is given with ``mode="source"``, names a modifier
-            that is not on this pipeline, or names a modifier more than once.
+            If ``modifiers`` is given with ``mode="source"``, includes a
+            modifier object or name that is not on this pipeline, or includes
+            the same modifier more than once.
         TypeError
             If an entry of ``modifiers`` is neither a :class:`ValueModifier` nor
             a string.
