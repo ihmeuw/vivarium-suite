@@ -1,3 +1,19 @@
+**5.15.0 - 10/21/26**
+
+- **Breaking change.** Make ``InteractiveContext`` inherit from a new ``BaseSimulationContext``
+  instead of ``SimulationContext``, so it no longer has ``run_simulation``, ``report``,
+  ``write_backup``, ``load_from_backup``, ``get_performance_metrics``, or
+  ``get_number_of_steps_remaining``
+- **Breaking change.** Make ``add_components`` private on ``SimulationContext`` and
+  ``InteractiveContext``. Pass extra components to the constructor's ``components``
+  argument instead
+- Add ``InteractiveContext.register_observation()`` to register named callables that are
+  evaluated at registration and after every step, and to resume paused ones by name
+- Add ``InteractiveContext.pause_observation()`` to stop evaluating observations while
+  keeping their values
+- Include these observations in ``InteractiveContext.get_results()``
+- Add ``ObservationError``, raised when one of these observations fails
+
 **5.14.1 - 10/12/26**
 
 - **Breaking change.** Remove ``InteractiveContext.get_emitter``, which was only
