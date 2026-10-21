@@ -53,4 +53,4 @@ from vivarium.public_health.risks import (
     Risk,
     RiskEffect,
 )
-from vivarium.public_health.treatment import AbsoluteShift, LinearScaleUp, TherapeuticInertia
+from vivarium.public_health.treatment import AbsoluteShift, LinearScaleUp

@@ -1,3 +1,9 @@
+**6.8.0 - 10/21/26**
+
+Breaking changes:
+
+- Remove the ``TherapeuticInertia`` component, which failed on setup
+
 **6.7.0 10/05/26**
 
 - Stop normalizing ``NonLogLinearRiskEffect`` relative risks by the RR at the TMREL
