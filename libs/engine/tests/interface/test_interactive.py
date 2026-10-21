@@ -42,6 +42,7 @@ from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.resource.resource import Column, Resource
 from vivarium.engine.framework.results import Observer
@@ -1870,3 +1871,140 @@ class TestResultsGathering:
         assert run(observe=True)["sneaky"][VALUE_COLUMN].sum() > 0
         # Now confirm that the sneaky observer's observation is not gathered
         assert run(observe=False) == {}
+
+
+class TimeStepListener(Component):
+    """Listen in ``time_step`` at a given priority and in ``time_step__cleanup``."""
+
+    def __init__(self, label: str, priority: int) -> None:
+        super().__init__()
+        self._label = label
+        self._priority = priority
+
+    @property
+    def name(self) -> str:
+        return f"listener_{self._label}"
+
+    @property
+    def time_step_priority(self) -> int:
+        return self._priority
+
+    def on_time_step(self, event: Event) -> None:
+        pass
+
+    def on_time_step_cleanup(self, event: Event) -> None:
+        pass
+
+
+class TestGetSchedule:
+    @staticmethod
+    def _rows(sim: InteractiveContext) -> list[tuple[Any, ...]]:
+        return list(sim.get_schedule().reset_index().itertuples(index=False, name=None))
+
+    def test_rows_run_by_phase_then_priority(self) -> None:
+        sim = InteractiveContext(
+            components=[TimeStepListener("late", 7), TimeStepListener("early", 2)]
+        )
+        rows = self._rows(sim)
+        assert rows[:2] == [
+            ("time_step", 2, "listener_early", "listener", "on_time_step", True),
+            ("time_step", 7, "listener_late", "listener", "on_time_step", True),
+        ]
+        # Both clean up at the default priority, so their order is not checked.
+        assert sorted(rows[2:]) == [
+            (
+                "time_step__cleanup",
+                5,
+                f"listener_{label}",
+                "listener",
+                "on_time_step_cleanup",
+                True,
+            )
+            for label in ["early", "late"]
+        ]
+
+    def test_frame_shape(self) -> None:
+        schedule = InteractiveContext(components=[TimeStepListener("a", 3)]).get_schedule()
+        assert schedule.index.names == ["phase", "priority"]
+        assert list(schedule.columns) == ["component", "kind", "name", "active"]
+
+    @pytest.mark.parametrize("observe", [False, True])
+    def test_observations_are_listed_whether_or_not_observed(self, observe: bool) -> None:
+        sim = InteractiveContext(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+            observe=observe,
+        )
+        observations = [row for row in self._rows(sim) if row[3] == "observation"]
+        assert observations == [
+            (
+                "collect_metrics",
+                5,
+                "house_points_observer",
+                "observation",
+                "house_points",
+                observe,
+            )
+        ]
+
+    def test_results_manager_listeners_are_not_listed(self) -> None:
+        """Its listeners make the observations, which are listed in their place."""
+        sim = InteractiveContext(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+            observe=True,
+        )
+        assert sim._results.name not in {row[2] for row in self._rows(sim)}
+
+    def test_rows_match_what_runs_in_a_step(
+        self, disease_model_spec: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Wrap every listener and record what is called during one step."""
+        sim = InteractiveContext(str(disease_model_spec), observe=True)
+        calls: list[tuple[Any, ...]] = []
+        results_context = sim._results._results_context
+        get_observations = results_context.get_observations
+
+        def record_observations(event: Event) -> list[Any]:
+            observations = get_observations(event)
+            for observation in observations:
+                component = sim._results._observation_components[observation.name]
+                calls.append(
+                    (
+                        event.name,
+                        event.priority,
+                        component.name,
+                        "observation",
+                        observation.name,
+                    )
+                )
+            return observations
+
+        def record(listener: Callable[[Event], None]) -> Callable[[Event], None]:
+            # Every listener in this model is a bound method.
+            owner = getattr(listener, "__self__")
+
+            def recorded(event: Event) -> None:
+                if owner is not sim._results:
+                    calls.append(
+                        (
+                            event.name,
+                            event.priority,
+                            owner.name,
+                            "listener",
+                            listener.__name__,
+                        )
+                    )
+                listener(event)
+
+            return recorded
+
+        expected = [row[:5] for row in self._rows(sim)]
+        monkeypatch.setattr(results_context, "get_observations", record_observations)
+        for phase in sim._lifecycle.get_state_names("main_loop"):
+            for listeners in sim._events.get_channel(phase).listeners:
+                listeners[:] = [record(listener) for listener in listeners]
+
+        sim.step()
+        assert any(row[3] == "observation" for row in expected)
+        assert calls == expected

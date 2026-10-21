@@ -1,3 +1,8 @@
+**5.17.0 - 10/22/26**
+
+- Add ``InteractiveContext.get_schedule()`` to get a within-step schedule of 
+  events and their associated pipelines, observers, and results
+
 **5.16.0 - 10/21/26**
 
 - Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,

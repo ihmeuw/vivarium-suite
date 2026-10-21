@@ -238,6 +238,40 @@ def test_add_observation_nop_stratifications(
         assert m in caplog.text
 
 
+def test_get_scheduled_observations() -> None:
+    class EarlyObserver(Observer):
+        def register_observations(self, builder: Builder) -> None:
+            builder.results.register_adding_observation(
+                name="early", when=lifecycle_states.TIME_STEP, priority=2
+            )
+
+    observers = [HousePointsObserver(), QuidditchWinsObserver(), EarlyObserver()]
+    sim = InteractiveContext(
+        configuration=HARRY_POTTER_CONFIG,
+        components=[*observers, HogwartsResultsStratifier()],
+    )
+    results = sim._results
+
+    def scheduled(when: str, priority: int) -> list[tuple[str, str]]:
+        return [
+            (observation.name, component.name)
+            for observation, component in results.get_scheduled_observations(when, priority)
+        ]
+
+    assert sorted(scheduled(lifecycle_states.COLLECT_METRICS, DEFAULT_EVENT_PRIORITY)) == [
+        ("house_points", "house_points_observer"),
+        ("quidditch_wins", "quidditch_wins_observer"),
+    ]
+    assert scheduled(lifecycle_states.TIME_STEP, 2) == [("early", "early_observer")]
+    assert scheduled(lifecycle_states.TIME_STEP, DEFAULT_EVENT_PRIORITY) == []
+    assert scheduled(lifecycle_states.TIME_STEP_PREPARE, DEFAULT_EVENT_PRIORITY) == []
+    # Asking about a state with no observations must not add it to the grouping.
+    assert (
+        lifecycle_states.TIME_STEP_PREPARE
+        not in results._results_context.grouped_observations
+    )
+
+
 def test_setting_default_stratifications_at_setup(mocker: pytest_mock.MockFixture) -> None:
     """Test that set default stratifications happens at setup"""
     mgr = ResultsManager()

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, NamedTuple, overload
 import numpy as np
 import pandas as pd
 
+from vivarium.engine.component import NUM_EVENT_PRIORITIES
 from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import BaseSimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -1043,6 +1044,69 @@ class InteractiveContext(BaseSimulationContext):
         if event_name not in self._events:
             raise ValueError(f"No event {event_name} in system.")
         return self._events.get_listeners(event_name)
+
+    def get_schedule(self) -> pd.DataFrame:
+        """Get what runs in a time step, in the order it currently runs.
+
+        Use this to find out when a component's listeners and observations run
+        relative to the rest of the model.
+
+        Returns
+        -------
+            A frame with one row per listener or observation, indexed by ``phase``
+            and ``priority``, with columns ``component``, ``kind``, ``name`` and
+            ``active``. ``kind`` is either ``"listener"`` or ``"observation"``.
+            ``name`` is the listener's method name or the observation's name.
+            ``active`` says whether the row runs in this context.
+
+        Notes
+        -----
+        Phases run in the order shown, and within a phase lower priorities run
+        first. Rows that share a phase and priority have no guaranteed order.
+
+        Observations are listed even when results are not observed, which is the
+        default for an interactive context. Their ``active`` value is then False.
+        An active observation can still skip a step if its own condition says to.
+
+        Ad-hoc interactive observations added with :meth:`register_observation`
+        are left out because they run between steps rather than within one.
+        """
+        rows: list[tuple[str, int, str | None, str, str, bool]] = []
+        for phase in self._lifecycle.get_state_names("main_loop"):
+            listeners = self._events.get_listeners(phase)
+            for priority in range(NUM_EVENT_PRIORITIES):
+                for observation, component in self._results.get_scheduled_observations(
+                    phase, priority
+                ):
+                    rows.append(
+                        (
+                            phase,
+                            priority,
+                            component.name,
+                            "observation",
+                            observation.name,
+                            self._results.to_observe,
+                        )
+                    )
+                for listener in listeners.get(priority, []):
+                    owner = getattr(listener, "__self__", None)
+                    if owner is self._results:
+                        # The results manager listens at every priority to make
+                        # observations which are listed above in its place.
+                        continue
+                    rows.append(
+                        (
+                            phase,
+                            priority,
+                            getattr(owner, "name", None),
+                            "listener",
+                            getattr(listener, "__name__", type(listener).__name__),
+                            True,
+                        )
+                    )
+        return pd.DataFrame(
+            rows, columns=["phase", "priority", "component", "kind", "name", "active"]
+        ).set_index(["phase", "priority"])
 
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.

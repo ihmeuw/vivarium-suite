@@ -118,7 +118,7 @@ one of them, so it has to be called after the simulation has started moving.
 What runs, and when
 +++++++++++++++++++
 
-Two methods print the order in which things happen.
+Three methods show the order in which things happen.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_lifecycle_order`
 shows the simulation's lifecycles and the components that run in each state in
 the order that they fire. See :ref:`the simulation lifecycle concept docs <lifecycle_concept>`
@@ -161,6 +161,40 @@ for what the phases and states are.
     simulation_end
         simulation_end
         report
+
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_schedule`
+returns what runs in a single time step as a frame indexed by phase and priority.
+It lists each listener with its priority, and it lists each observation at the
+phase and priority where it is made.
+
+.. testcode::
+
+    print(sim.get_schedule().to_string())
+
+.. testoutput::
+    :options: +NORMALIZE_WHITESPACE
+
+                                                                  component         kind                  name  active
+    phase              priority
+    time_step__prepare 5                                    deaths_observer     listener  on_time_step_prepare    True
+    time_step          5                                    base_population     listener          on_time_step    True
+                       5                                          mortality     listener          on_time_step    True
+                       5         disease_model.lower_respiratory_infections     listener          on_time_step    True
+    time_step__cleanup 5         disease_model.lower_respiratory_infections     listener  on_time_step_cleanup    True
+    collect_metrics    5                                    deaths_observer  observation                  dead   False
+                       5                                      ylls_observer  observation                  ylls   False
+
+An interactive context does not observe results by default, so the observations
+here have ``active`` set to False. They are listed anyway so that you can see
+when they would run. Pass ``observe=True`` when you build the context to make
+them run.
+
+.. warning::
+
+    Rows that share a phase and a priority, such as the three ``time_step``
+    listeners above, have no guaranteed order. The frame shows them in the order
+    they run now, but that order can change when components are added or reordered
+    in the model specification; do not write code that depends on it.
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
 shows the order in which components populate new simulants.
