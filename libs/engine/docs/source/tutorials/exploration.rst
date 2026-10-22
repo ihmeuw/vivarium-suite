@@ -447,11 +447,11 @@ For example, we can get the mortality rate lookup table found above:
 
 .. testoutput::
 
-   0    0.01
-   1    0.01
-   2    0.01
-   3    0.01
-   4    0.01
+   0    0.0114
+   1    0.0114
+   2    0.0114
+   3    0.0114
+   4    0.0114
    Name: value, dtype: float64
 
 .. note::
@@ -635,39 +635,52 @@ Pass ``observe=True`` to collect them:
 
     dead
       stratification  value
-    0            all   23.0
+    0            all   15.0
     ylls
       stratification        value
-    0            all  1989.372585
+    0            all  1291.333257
 
 .. testcode::
     :hide:
 
+    from datetime import timedelta
+
     from vivarium.engine import InteractiveContext
     from vivarium.engine.examples.disease_model import get_model_specification_path
+    from vivarium.engine.framework.utilities import from_yearly
     from vivarium.fuzzy_checker import FuzzyChecker
 
     fuzzy_checker = FuzzyChecker()
 
     sim = InteractiveContext(get_model_specification_path(), observe=True)
-    sim.take_steps(10)
+    n_steps = 10
+    sim.take_steps(n_steps)
 
     results = sim.get_results()
     population_size = sim.configuration.population.population_size
     deaths = int(results["dead"]["value"].iloc[0])
     ylls = results["ylls"]["value"].iloc[0]
 
-    # FIXME [MIC-7458]
-    # Guard the numbers shown above against going empty or absurd. Deliberately
-    # not a calibration check on the model's mortality; the example's configured
-    # rates do not reach the pipelines they appear to configure, so the disease
-    # has no mortality effect and a band derived from the config would encode a
-    # wrong model of the example rather than check it.
-    assert 0 < deaths < population_size / 100
+    # Calibrate deaths against the configured rates. Susceptible simulants die
+    # at the background rate less the LRI CSMR, which DiseaseModel approximates
+    # as incidence times case fatality. The EMR of the few infected simulants
+    # adds well under one expected death here, so the target leaves it out.
+    config = sim.configuration
+    transitions = [c for c in sim.list_components() if c.startswith("disease_transition.")]
+    incidence_key = next(c for c in transitions if c.endswith(".incidence_rate"))
+    remission_key = next(c for c in transitions if c.endswith(".remission_rate"))
+    incidence = config[incidence_key].data_sources.incidence_rate
+    remission = config[remission_key].data_sources.remission_rate
+    emr = config[
+        "disease_state.infected_with_lower_respiratory_infections"
+    ].data_sources.excess_mortality_rate
+    csmr = incidence * emr / (emr + remission)
+    background = config.mortality.data_sources.mortality_rate - csmr
+    step_probability = from_yearly(background, timedelta(days=config.time.step_size))
     fuzzy_checker.assert_proportion(
         deaths,
         population_size,
-        (1e-4, 1e-3),
+        1 - (1 - step_probability) ** n_steps,
         name="exploration_tutorial_deaths",
     )
 
@@ -771,20 +784,25 @@ configuration by simply printing it.
         age_end:
             model_override: 5
     mortality:
-        mortality_rate:
-            model_override: 0.0114
-        life_expectancy:
-            model_override: 88.9
         data_sources:
             mortality_rate:
-                component_configs: 0.01
-    lower_respiratory_infections:
-        incidence_rate:
-            model_override: 0.871
-        remission_rate:
-            model_override: 45.1
-        excess_mortality_rate:
-            model_override: 0.634
+                model_override: 0.0114
+        life_expectancy:
+            model_override: 88.9
+    disease_state.infected_with_lower_respiratory_infections:
+        data_sources:
+            excess_mortality_rate:
+                model_override: 0.06
+            initialization_weights:
+                component_configs: 0.0
+    disease_transition.'disease_state.susceptible_to_lower_respiratory_infections'.'disease_state.infected_with_lower_respiratory_infections'.lower_respiratory_infections.incidence_rate.infected_with_lower_respiratory_infections.incidence_rate:
+        data_sources:
+            incidence_rate:
+                model_override: 0.871
+    disease_transition.'disease_state.infected_with_lower_respiratory_infections'.'disease_state.susceptible_to_lower_respiratory_infections'.lower_respiratory_infections.remission_rate.infected_with_lower_respiratory_infections.remission_rate:
+        data_sources:
+            remission_rate:
+                model_override: 45.1
     child_wasting:
         proportion_exposed:
             model_override: 0.0914
@@ -818,12 +836,6 @@ configuration by simply printing it.
         data_sources:
             initialization_weights:
                 component_configs: 1.0
-            excess_mortality_rate:
-                component_configs: 0.0
-    disease_state.infected_with_lower_respiratory_infections:
-        data_sources:
-            initialization_weights:
-                component_configs: 0.0
             excess_mortality_rate:
                 component_configs: 0.0
 
