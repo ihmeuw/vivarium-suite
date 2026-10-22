@@ -1046,70 +1046,83 @@ class InteractiveContext(BaseSimulationContext):
         return self._events.get_listeners(event_name)
 
     def get_schedule(self) -> pd.DataFrame:
-        """Get what runs in a time step, in the order it currently runs.
+        """Get what runs in the simulation, in the order they currently run.
 
-        Use this to find out when a component's listeners and observations run
-        relative to the rest of the model.
+        Use this to find out when a component's actions and observations run
+        relative to the rest of the model. An "action" is a method, such as
+        ``on_time_step``, that the simulation calls in a lifecycle state.
 
         Returns
         -------
-            A frame with one row per listener or observation, indexed by
-            ``lifecycle_state`` and ``priority``, with columns ``component``,
-            ``kind``, ``name`` and ``active``. ``kind`` is either ``"listener"``
-            or ``"observation"``. ``name`` is the listener's method name or the
-            observation's name. ``active`` says whether the row runs in this
-            context.
+            A frame with one row per action or observation, indexed by
+            ``phase``, ``state`` and ``priority``, with columns
+            ``component``, ``kind``, ``name`` and ``active``. ``kind`` is either
+            ``"action"`` or ``"observation"``. ``name`` is the action's method
+            name or the observation's name. ``active`` says whether the row runs
+            in this context.
 
         Notes
         -----
-        Lifecycle states run in the order shown, and within a state lower
-        priorities run first. Rows that share a state and priority have no
-        guaranteed order.
+        Phases and their lifecycle states run in the order shown, and within a
+        state lower priorities run first. The states of the ``main_loop`` phase
+        repeat every time step. Rows that share a state and priority have no
+        guaranteed order. States with nothing in them are left out.
 
         Observations are listed even when results are not observed, which is the
         default for an interactive context. Their ``active`` value is then False.
-        An active observation can still skip a step if its own condition says to.
 
-        Ad-hoc interactive observations added with :meth:`register_observation`
-        are left out because they run between steps rather than within one.
+        The results manager's own actions are left out. Its work is shown as the
+        observations it makes, so the frame has the same rows whether or not
+        results are observed.
+
+        An active observation is checked every step but can still decline to run,
+        through its to_observe condition or because its population filter leaves
+        no simulants.
+
         """
-        rows: list[tuple[str, int, str | None, str, str, bool]] = []
-        for lifecycle_state in self._lifecycle.get_state_names("main_loop"):
-            listeners = self._events.get_listeners(lifecycle_state)
-            for priority in range(NUM_EVENT_PRIORITIES):
-                for observation, component in self._results.get_scheduled_observations(
-                    lifecycle_state, priority
-                ):
-                    rows.append(
-                        (
-                            lifecycle_state,
-                            priority,
-                            component.name,
-                            "observation",
-                            observation.name,
-                            self._results.to_observe,
+        # A row is phase, state, priority, component name, kind, action/observation name, active.
+        rows: list[tuple[str, str, int, str | None, str, str, bool]] = []
+        for phase in self._lifecycle.get_phase_names():
+            for state in self._lifecycle.get_state_names(phase):
+                # get_listeners() would create a channel for a state with none.
+                listeners = self._events.get_listeners(state) if state in self._events else {}
+                for priority in range(NUM_EVENT_PRIORITIES):
+                    for (
+                        observation,
+                        component,
+                    ) in self._results.get_scheduled_observations(state, priority):
+                        rows.append(
+                            (
+                                phase,
+                                state,
+                                priority,
+                                component.name,
+                                "observation",
+                                observation.name,
+                                self._results.to_observe,
+                            )
                         )
-                    )
-                for listener in listeners.get(priority, []):
-                    owner = getattr(listener, "__self__", None)
-                    if owner is self._results:
-                        # The results manager listens at every priority to make
-                        # observations which are listed above in its place.
-                        continue
-                    rows.append(
-                        (
-                            lifecycle_state,
-                            priority,
-                            getattr(owner, "name", None),
-                            "listener",
-                            getattr(listener, "__name__", type(listener).__name__),
-                            True,
+                    for listener in listeners.get(priority, []):
+                        owner = getattr(listener, "__self__", None)
+                        if owner is self._results:
+                            # The results manager's work is listed as the
+                            # observations above.
+                            continue
+                        rows.append(
+                            (
+                                phase,
+                                state,
+                                priority,
+                                getattr(owner, "name", None),
+                                "action",
+                                getattr(listener, "__name__", type(listener).__name__),
+                                True,
+                            )
                         )
-                    )
+        index = ["phase", "state", "priority"]
         return pd.DataFrame(
-            rows,
-            columns=["lifecycle_state", "priority", "component", "kind", "name", "active"],
-        ).set_index(["lifecycle_state", "priority"])
+            rows, columns=index + ["component", "kind", "name", "active"]
+        ).set_index(index)
 
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.

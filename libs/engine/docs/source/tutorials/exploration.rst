@@ -163,9 +163,10 @@ for what the phases and states are.
         report
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_schedule`
-returns what runs in a single time step as a frame indexed by lifecycle state and
-priority. It lists each listener with its priority, and it lists each observation
-at the state and priority where it is made.
+returns what runs in each lifecycle state as a frame indexed by phase, state and
+priority. It lists each action with its priority, and it lists each
+observation at the state and priority where it is made. The states of the
+``main_loop`` phase repeat every time step.
 
 .. testcode::
 
@@ -174,15 +175,21 @@ at the state and priority where it is made.
 .. testoutput::
     :options: +NORMALIZE_WHITESPACE
 
-                                                                  component         kind                  name  active
-    lifecycle_state    priority
-    time_step__prepare 5                                    deaths_observer     listener  on_time_step_prepare    True
-    time_step          5                                    base_population     listener          on_time_step    True
-                       5                                          mortality     listener          on_time_step    True
-                       5         disease_model.lower_respiratory_infections     listener          on_time_step    True
-    time_step__cleanup 5         disease_model.lower_respiratory_infections     listener  on_time_step_cleanup    True
-    collect_metrics    5                                    deaths_observer  observation                  dead   False
-                       5                                      ylls_observer  observation                  ylls   False
+                                                                            component         kind                  name  active
+    phase     state              priority
+    setup     post_setup         5                                     values_manager       action         on_post_setup    True
+                                 5                                 population_manager       action         on_post_setup    True
+                                 5                                     datetime_clock       action         on_post_setup    True
+                                 5                                      event_manager       action         on_post_setup    True
+                                 5                               lookup_table_manager       action         on_post_setup    True
+                                 5         disease_model.lower_respiratory_infections       action         on_post_setup    True
+    main_loop time_step__prepare 5                                    deaths_observer       action  on_time_step_prepare    True
+              time_step          5                                    base_population       action          on_time_step    True
+                                 5                                          mortality       action          on_time_step    True
+                                 5         disease_model.lower_respiratory_infections       action          on_time_step    True
+              time_step__cleanup 5         disease_model.lower_respiratory_infections       action  on_time_step_cleanup    True
+              collect_metrics    5                                    deaths_observer  observation                  dead   False
+                                 5                                      ylls_observer  observation                  ylls   False
 
 An interactive context does not observe results by default, so the observations
 here have ``active`` set to False. They are listed anyway so that you can see
@@ -192,7 +199,7 @@ them run.
 .. warning::
 
     Rows that share a lifecycle state and a priority, such as the three ``time_step``
-    listeners above, have no guaranteed order. The frame shows them in the order
+    actions above, have no guaranteed order. The frame shows them in the order
     they run now, but that order can change when components are added or reordered
     in the model specification; do not write code that depends on it.
 
