@@ -98,8 +98,24 @@ def test_declared_root_input_without_a_file_is_unresolved(tmp_path: Path) -> Non
         tmp_path / "out", "run1", root_inputs={"bop": tmp_path / "gone.csv"}
     )
 
-    with pytest.raises(WiringError, match="bop"):
+    with pytest.raises(WiringError, match="no file at"):
         reg.resolve_input("bop")
+
+
+def test_root_input_colliding_with_an_output_path_is_a_definition_error(
+    tmp_path: Path,
+) -> None:
+    """A root input resolving onto a produced key's path is caught, not silently merged."""
+    out = tmp_path / "out"
+    reg = ArtifactRegistry(out, "run1", root_inputs={"raw": out / "run1" / "collide.csv"})
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.register_output("collide.csv")
+
+    message = str(excinfo.value)
+    assert "raw" in message
+    assert "collide.csv" in message
+    assert "one path" in message
 
 
 def test_registry_wires_a_runnable_pipeline(tmp_path: Path) -> None:

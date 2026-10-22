@@ -12,8 +12,9 @@ a list and hands them to :func:`~vivarium.cluster_tools.core.backend.build.build
 Register every output before resolving inputs. The two guards here are the ones
 pytask cannot make for us -- a hard error when two keys resolve to one path (which
 pytask would otherwise silently merge) and a did-you-mean on a mistyped key.
-Everything heavier (a missing producer that is also not a root input, a cycle, two
-tasks claiming one product) is left to pytask, which fails safe.
+An unresolved input (no producer and no root-input file) is caught here with a
+did-you-mean; everything heavier (a cycle, two tasks claiming one product) is left
+to pytask, which fails safe.
 """
 
 import difflib
@@ -53,13 +54,17 @@ class ArtifactRegistry:
         root_inputs: Mapping[ArtifactKey, Path | str] | None = None,
     ) -> None:
         self._run_dir = Path(output_root).resolve() / run_name
-        self._root_inputs = {key: Path(p) for key, p in (root_inputs or {}).items()}
+        self._root_inputs = {key: Path(p).resolve() for key, p in (root_inputs or {}).items()}
         self._producers: dict[ArtifactKey, PathNode] = {}
-        self._key_by_path: dict[Path, ArtifactKey] = {}
+        # Seed the collision guard with root-input paths so an output cannot land on
+        # one and be silently merged into it by pytask.
+        self._key_by_path: dict[Path, ArtifactKey] = {
+            path: key for key, path in self._root_inputs.items()
+        }
 
     def path_for(self, key: ArtifactKey) -> Path:
-        """Return the path a produced ``key`` resolves to for this run."""
-        return self._run_dir / key
+        """Return the resolved path a produced ``key`` resolves to for this run."""
+        return (self._run_dir / key).resolve()
 
     def register_output(self, key: ArtifactKey) -> PathNode:
         """Register ``key`` as produced by a step and return its file node.
@@ -79,9 +84,10 @@ class ArtifactRegistry:
         Raises
         ------
         WiringError
-            If a different key already resolves to this key's path.
+            If a different key -- an output or a declared root input -- already
+            resolves to this key's path.
         """
-        resolved = self.path_for(key).resolve()
+        resolved = self.path_for(key)
         claimant = self._key_by_path.get(resolved)
         if claimant is not None and claimant != key:
             raise WiringError(
