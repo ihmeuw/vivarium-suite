@@ -1,7 +1,7 @@
-**5.17.0 - 10/22/26**
+**5.17.0 - 10/23/26**
 
-- Add ``InteractiveContext.get_schedule()`` to get a within-step schedule of 
-  events and their associated pipelines, observers, and results
+- Add ``InteractiveContext.get_schedule()`` to get what runs in each lifecycle
+  state, in order, including the model's observations
 
 **5.16.0 - 10/21/26**
 

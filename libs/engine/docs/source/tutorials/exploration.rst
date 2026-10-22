@@ -196,6 +196,13 @@ here have ``active`` set to False. They are listed anyway so that you can see
 when they would run. Pass ``observe=True`` when you build the context to make
 them run.
 
+Interactive observations you add to an :class:`~vivarium.engine.interface.interactive.InteractiveContext`
+via :meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`
+are listed at the end of the ``main_loop`` phase, with ``kind`` set to
+``"observation (interactive)"``. They have no state, priority or component,
+because they run after setup (if registered prior to setting up the context)
+and after each step rather than in a lifecycle state.
+
 .. warning::
 
     Rows that share a lifecycle state and a priority, such as the three ``time_step``
