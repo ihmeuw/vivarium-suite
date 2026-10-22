@@ -360,8 +360,8 @@ their names. All other modifiers are skipped.
 .. testoutput::
 
    mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
-   0.01
-   0.00998...
+   0.0114
+   0.01024...
 
 ``modifiers`` composes with ``mode="default"`` and ``mode="no-post-processors"``.
 Combining it with ``mode="source"`` raises an error, since that mode applies no
