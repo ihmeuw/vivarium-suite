@@ -205,10 +205,11 @@ or at the end of setup if registered before it, and then after every step.
 
 .. warning::
 
-    Rows that share a lifecycle state and a priority, such as the three ``time_step``
-    actions above, have no guaranteed order. The frame shows them in the order
-    they run now, but that order can change when components are added or reordered
-    in the model specification. Do not write code that depends on it.
+    Rows that share a lifecycle phase, state, and a priority, such as the three
+    ``time_step`` actions above, have no guaranteed order. While the frame does
+    show them in the order they run now, that order can change when components
+    are added or reordered in the model specification. Do not write code that
+    depends on it.
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
 shows the order in which components populate new simulants.
