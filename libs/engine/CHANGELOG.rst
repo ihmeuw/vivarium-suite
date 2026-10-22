@@ -1,4 +1,4 @@
-**5.17.0 - 10/21/26**
+**5.17.0 - 10/22/26**
 
 - Add a ``modifiers`` argument to pipeline calls that applies only the given modifiers
 
