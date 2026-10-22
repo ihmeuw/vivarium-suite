@@ -199,16 +199,16 @@ them run.
 Interactive observations you add to an :class:`~vivarium.engine.interface.interactive.InteractiveContext`
 via :meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`
 are listed at the end of the ``main_loop`` phase, with ``kind`` set to
-``"observation (interactive)"``. They have no state, priority or component,
-because they run after setup (if registered prior to setting up the context)
-and after each step rather than in a lifecycle state.
+``"observation (interactive)"``. They have no state, priority, or component
+because they do not run in a lifecycle state. They run once when registered,
+or at the end of setup if registered before it, and then after every step.
 
 .. warning::
 
     Rows that share a lifecycle state and a priority, such as the three ``time_step``
     actions above, have no guaranteed order. The frame shows them in the order
     they run now, but that order can change when components are added or reordered
-    in the model specification; do not write code that depends on it.
+    in the model specification. Do not write code that depends on it.
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
 shows the order in which components populate new simulants.

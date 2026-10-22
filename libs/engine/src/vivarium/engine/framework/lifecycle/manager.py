@@ -104,7 +104,7 @@ class LifeCycleManager(Manager):
             )
 
     def get_phase_names(self) -> list[str]:
-        """Gets all phases in their order of execution.
+        """Get the names of all phases in their order of execution.
 
         Returns
         -------
