@@ -167,6 +167,17 @@ def test_configured_rates_reach_mortality(disease_model_spec: Path) -> None:
     )
 
 
+def test_configured_remission_reaches_pipeline(disease_model_spec: Path) -> None:
+    config = ConfigTree(disease_model_spec, layers=["base", "override"])
+    config.update(
+        {"configuration": {REMISSION_KEY: {"data_sources": {"remission_rate": 12.3}}}}
+    )
+
+    simulation = InteractiveContext(config)
+    remission = simulation.get_population([f"{INFECTED}.remission_rate"])
+    assert np.allclose(remission, from_yearly(12.3, STEP_SIZE))
+
+
 @pytest.mark.parametrize("excess_mortality_rate", [0.06, 5.0])
 def test_excess_mortality_only_affects_infected(
     disease_model_spec: Path, excess_mortality_rate: float
