@@ -20,6 +20,11 @@ class DiseaseTransition(Transition):
     ##############
 
     @property
+    def name(self) -> str:
+        # The generated name repeats both state names, which makes an unwieldy config key.
+        return f"disease_transition.{self.rate_name}"
+
+    @property
     def configuration_defaults(self) -> dict[str, Any]:
         return {self.name: {"data_sources": {self.measure: self._transition_rate}}}
 
@@ -42,7 +47,6 @@ class DiseaseTransition(Transition):
         self.cause_key = cause_key
         self.measure = measure
         self.rate_name = rate_name
-        # Stored privately so the default rate does not become part of the component name.
         self._transition_rate = transition_rate
         self.joint_paf_pipeline = f"{self.rate_name}.population_attributable_fraction"
 

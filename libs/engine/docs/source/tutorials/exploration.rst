@@ -666,14 +666,14 @@ Pass ``observe=True`` to collect them:
     # as incidence times case fatality. The EMR of the few infected simulants
     # adds well under one expected death here, so the target leaves it out.
     config = sim.configuration
-    transitions = [c for c in sim.list_components() if c.startswith("disease_transition.")]
-    incidence_key = next(c for c in transitions if c.endswith(".incidence_rate"))
-    remission_key = next(c for c in transitions if c.endswith(".remission_rate"))
-    incidence = config[incidence_key].data_sources.incidence_rate
-    remission = config[remission_key].data_sources.remission_rate
-    emr = config[
-        "disease_state.infected_with_lower_respiratory_infections"
-    ].data_sources.excess_mortality_rate
+    infected = "infected_with_lower_respiratory_infections"
+    incidence = config[
+        f"disease_transition.{infected}.incidence_rate"
+    ].data_sources.incidence_rate
+    remission = config[
+        f"disease_transition.{infected}.remission_rate"
+    ].data_sources.remission_rate
+    emr = config[f"disease_state.{infected}"].data_sources.excess_mortality_rate
     csmr = incidence * emr / (emr + remission)
     background = config.mortality.data_sources.mortality_rate - csmr
     step_probability = from_yearly(background, timedelta(days=config.time.step_size))
@@ -795,11 +795,11 @@ configuration by simply printing it.
                 model_override: 0.06
             initialization_weights:
                 component_configs: 0.0
-    disease_transition.'disease_state.susceptible_to_lower_respiratory_infections'.'disease_state.infected_with_lower_respiratory_infections'.lower_respiratory_infections.incidence_rate.infected_with_lower_respiratory_infections.incidence_rate:
+    disease_transition.infected_with_lower_respiratory_infections.incidence_rate:
         data_sources:
             incidence_rate:
                 model_override: 0.871
-    disease_transition.'disease_state.infected_with_lower_respiratory_infections'.'disease_state.susceptible_to_lower_respiratory_infections'.lower_respiratory_infections.remission_rate.infected_with_lower_respiratory_infections.remission_rate:
+    disease_transition.infected_with_lower_respiratory_infections.remission_rate:
         data_sources:
             remission_rate:
                 model_override: 45.1

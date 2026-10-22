@@ -37,10 +37,10 @@ configuration:
     disease_state.infected_with_lower_respiratory_infections:
         data_sources:
             excess_mortality_rate: 0.06
-    "disease_transition.'disease_state.susceptible_to_lower_respiratory_infections'.'disease_state.infected_with_lower_respiratory_infections'.lower_respiratory_infections.incidence_rate.infected_with_lower_respiratory_infections.incidence_rate":
+    disease_transition.infected_with_lower_respiratory_infections.incidence_rate:
         data_sources:
             incidence_rate: 0.871
-    "disease_transition.'disease_state.infected_with_lower_respiratory_infections'.'disease_state.susceptible_to_lower_respiratory_infections'.lower_respiratory_infections.remission_rate.infected_with_lower_respiratory_infections.remission_rate":
+    disease_transition.infected_with_lower_respiratory_infections.remission_rate:
         data_sources:
             remission_rate: 45.1
     child_wasting:

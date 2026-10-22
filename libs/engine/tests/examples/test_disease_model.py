@@ -11,17 +11,10 @@ from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.utilities import from_yearly
 
 LRI = "lower_respiratory_infections"
-SUSCEPTIBLE = f"susceptible_to_{LRI}"
 INFECTED = f"infected_with_{LRI}"
 INFECTED_KEY = f"disease_state.{INFECTED}"
-INCIDENCE_KEY = (
-    f"disease_transition.'disease_state.{SUSCEPTIBLE}'.'disease_state.{INFECTED}'"
-    f".{LRI}.incidence_rate.{INFECTED}.incidence_rate"
-)
-REMISSION_KEY = (
-    f"disease_transition.'disease_state.{INFECTED}'.'disease_state.{SUSCEPTIBLE}'"
-    f".{LRI}.remission_rate.{INFECTED}.remission_rate"
-)
+INCIDENCE_KEY = f"disease_transition.{INFECTED}.incidence_rate"
+REMISSION_KEY = f"disease_transition.{INFECTED}.remission_rate"
 STEP_SIZE = timedelta(days=0.5)
 
 
