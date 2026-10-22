@@ -50,17 +50,29 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
         Directory holding pytask's config, state, and lockfile (see
         :func:`~vivarium.cluster_tools.core.backend.build.build`).
     kwargs
-        Extra keyword arguments forwarded to ``pytask.build``.
+        Extra keyword arguments forwarded to
+        :func:`~vivarium.cluster_tools.core.backend.build.build`.
 
     Returns
     -------
         One :class:`StepPreview` per step, in the session's report order.
+
+    Raises
+    ------
+    RuntimeError
+        If the build does not complete (a collection or DAG failure), since the
+        session's reports are then empty or partial and would misreport as an
+        all-skip plan.
     """
     session = build(tasks, root, dry_run=True, explain=True, **kwargs)
+    if session.exit_code != pytask.ExitCode.OK:
+        raise RuntimeError(
+            f"preview could not build the plan: pytask exited with {session.exit_code!r}."
+        )
     return [_step_preview(report) for report in session.execution_reports]
 
 
-def _step_preview(report: Any) -> StepPreview:
+def _step_preview(report: pytask.ExecutionReport) -> StepPreview:
     """Read a single step's preview off its execution report."""
     return StepPreview(
         name=report.task.name,
@@ -73,9 +85,4 @@ def _reasons(explanation: Any) -> list[str]:
     """Pull the human-readable reasons off a pytask explanation object."""
     if explanation is None:
         return []
-    entries = getattr(explanation, "reasons", None)
-    if entries is None:
-        entries = getattr(explanation, "changes", None)
-    if entries is None:
-        return [str(explanation)]
-    return [str(entry) for entry in entries]
+    return [str(reason) for reason in getattr(explanation, "reasons", [])]

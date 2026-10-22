@@ -108,7 +108,7 @@ def test_missing_output_marks_its_producer(
     tasks, root, _raw, artifact = converged
     artifact.unlink()
     plan = preview(tasks, root)
-    assert "build" in _would_run(plan)
+    assert _would_run(plan) == {"build", "pafs"}
 
 
 def test_preview_writes_no_product(
@@ -128,3 +128,14 @@ def test_preview_returns_in_memory_step_objects(
     plan = preview(tasks, root)
     assert plan and all(isinstance(step, StepPreview) for step in plan)
     assert {step.name for step in plan} == {"build", "pafs"}
+
+
+def test_preview_raises_when_the_build_fails(tmp_path: Path) -> None:
+    """A failed build (here a dependency cycle) raises instead of a false all-skip plan."""
+    x, y = tmp_path / "x.csv", tmp_path / "y.csv"
+    x.write_text("x\n")
+    y.write_text("y\n")
+    tasks = [_copy_task("a", y, x), _copy_task("b", x, y)]  # a: y->x, b: x->y, a cycle
+
+    with pytest.raises(RuntimeError):
+        preview(tasks, tmp_path / ".workflow")
