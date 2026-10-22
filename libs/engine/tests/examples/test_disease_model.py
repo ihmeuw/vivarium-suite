@@ -175,7 +175,7 @@ def test_excess_mortality_only_affects_infected(
     config.update(
         {
             "configuration": _disease_config(
-                mortality_rate=0.0114,
+                mortality_rate=10.0,
                 incidence_rate=25.0,
                 remission_rate=45.1,
                 excess_mortality_rate=excess_mortality_rate,
@@ -191,6 +191,7 @@ def test_excess_mortality_only_affects_infected(
 
     infected_rate = pop.loc[is_infected, "mortality_rate"]
     susceptible_rate = pop.loc[~is_infected, "mortality_rate"]
+    assert (susceptible_rate > 0).all()
     assert infected_rate.min() > susceptible_rate.max()
     assert np.allclose(
         infected_rate - susceptible_rate.iloc[0],
