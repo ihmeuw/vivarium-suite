@@ -1056,10 +1056,10 @@ class InteractiveContext(BaseSimulationContext):
         -------
             A frame with one row per action or observation, indexed by
             ``phase``, ``state`` and ``priority``, with columns
-            ``component``, ``kind``, ``name`` and ``active``. ``kind`` is either
-            ``"action"`` or ``"observation"``. ``name`` is the action's method
-            name or the observation's name. ``active`` says whether the row runs
-            in this context.
+            ``component``, ``kind``, ``name`` and ``active``. ``kind`` is
+            ``"action"``, ``"observation"`` or ``"observation (interactive)"``.
+            ``name`` is the action's method name or the observation's name.
+            ``active`` says whether the row runs in this context.
 
         Notes
         -----
@@ -1079,9 +1079,15 @@ class InteractiveContext(BaseSimulationContext):
         through its to_observe condition or because its population filter leaves
         no simulants.
 
+        Observations registered with :meth:`register_observation` are listed at
+        the end of the ``main_loop`` phase with no state, priority or component.
+        They run once when registered, or at the end of setup if registered
+        before it, and then after every step. A paused one has ``active`` set to
+        False.
+
         """
         # A row is phase, state, priority, component name, kind, action/observation name, active.
-        rows: list[tuple[str, str, int, str | None, str, str, bool]] = []
+        rows: list[tuple[str, str | None, int | None, str | None, str, str, bool]] = []
         for phase in self._lifecycle.get_phase_names():
             for state in self._lifecycle.get_state_names(phase):
                 # get_listeners() would create a channel for a state with none.
@@ -1119,10 +1125,26 @@ class InteractiveContext(BaseSimulationContext):
                                 True,
                             )
                         )
+            # Add interactive observations to end of main loop phase
+            if phase == "main_loop":
+                for name, interactive_observation in self._interactive_observations.items():
+                    rows.append(
+                        (
+                            phase,
+                            None,
+                            None,
+                            None,
+                            "observation (interactive)",
+                            name,
+                            interactive_observation.active,
+                        )
+                    )
         index = ["phase", "state", "priority"]
-        return pd.DataFrame(
-            rows, columns=index + ["component", "kind", "name", "active"]
-        ).set_index(index)
+        return (
+            pd.DataFrame(rows, columns=index + ["component", "kind", "name", "active"])
+            .astype({"priority": "Int64"})
+            .set_index(index)
+        )
 
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.

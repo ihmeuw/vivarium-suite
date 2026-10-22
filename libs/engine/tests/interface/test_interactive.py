@@ -1915,7 +1915,7 @@ class TestGetSchedule:
         expected = pd.DataFrame(
             {
                 "state": ["time_step"] * 2 + ["time_step__cleanup"] * 2,
-                "priority": [2, 7, 5, 5],
+                "priority": pd.array([2, 7, 5, 5], dtype="Int64"),
                 "component": ["listener_early", "listener_late"] * 2,
                 "kind": "action",
                 "name": ["on_time_step"] * 2 + ["on_time_step_cleanup"] * 2,
@@ -1941,7 +1941,7 @@ class TestGetSchedule:
             {
                 "phase": ["setup", "simulation_end"],
                 "state": ["post_setup", "simulation_end"],
-                "priority": [5, 5],
+                "priority": pd.array([5, 5], dtype="Int64"),
                 "component": ["setup_and_end_listener"] * 2,
                 "kind": "action",
                 "name": ["on_post_setup", "on_simulation_end"],
@@ -1996,7 +1996,7 @@ class TestGetSchedule:
             {
                 "phase": ["main_loop"],
                 "state": ["collect_metrics"],
-                "priority": [5],
+                "priority": pd.array([5], dtype="Int64"),
                 "component": ["house_points_observer"],
                 "kind": ["observation"],
                 "name": ["house_points"],
@@ -2013,6 +2013,27 @@ class TestGetSchedule:
             observe=True,
         )
         assert sim._results.name not in sim.get_schedule()["component"].values
+
+    def test_interactive_observations_end_the_main_loop(self) -> None:
+        sim = InteractiveContext(components=[SetupAndEndListener(), TimeStepListener("a", 3)])
+        sim.register_observation(
+            running=lambda sim: sim.current_time, paused=lambda sim: sim.current_time
+        )
+        sim.pause_observation("paused")
+        main_loop = sim.get_schedule().query("phase == 'main_loop'")
+        expected = pd.DataFrame(
+            {
+                "phase": ["main_loop"] * 2,
+                "state": [None, None],
+                "priority": [None, None],
+                "component": [None, None],
+                "kind": "observation (interactive)",
+                "name": ["running", "paused"],
+                "active": [True, False],
+            }
+        ).astype({"state": "str", "priority": "Int64", "component": "str"})
+        # Compare as columns, since an index level made only of None has a different type.
+        pd.testing.assert_frame_equal(main_loop.tail(2).reset_index(), expected)
 
     def test_rows_match_what_runs_in_a_step(
         self, disease_model_spec: Path, monkeypatch: pytest.MonkeyPatch
@@ -2071,5 +2092,8 @@ class TestGetSchedule:
         sim.step()
         assert set(expected["kind"]) == {"action", "observation"}
         pd.testing.assert_frame_equal(
-            pd.DataFrame(calls).set_index(["state", "priority"]), expected
+            pd.DataFrame(calls)
+            .astype({"priority": "Int64"})
+            .set_index(["state", "priority"]),
+            expected,
         )
