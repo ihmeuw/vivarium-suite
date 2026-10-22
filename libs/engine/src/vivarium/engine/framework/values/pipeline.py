@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections import Counter
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -317,6 +318,17 @@ class ValueModifier(Resource, RequiresPrettyHook):
         return _callable_display_name(self._source), component_name
 
 
+ModifierSelection = ValueModifier | str | Iterable[ValueModifier | str]
+"""The modifiers to apply when calling a pipeline, as objects or names."""
+
+
+def _labels(modifiers: Iterable[ValueModifier | str]) -> list[str]:
+    """Return the names of modifiers given as objects or names."""
+    return [
+        modifier if isinstance(modifier, str) else modifier.name for modifier in modifiers
+    ]
+
+
 class Pipeline(Resource, RequiresPrettyHook):
     """A tool for building up values across several components.
 
@@ -400,6 +412,7 @@ class Pipeline(Resource, RequiresPrettyHook):
         self,
         *args: Any,
         mode: Literal["default", "source", "no-post-processors"] = "default",
+        modifiers: ModifierSelection | None = None,
         **kwargs: Any,
     ) -> Any:
         """Generates the value represented by this pipeline.
@@ -409,6 +422,14 @@ class Pipeline(Resource, RequiresPrettyHook):
         mode
             The mode for pipeline evaluation. One of "default", "source",
             or "no-post-processors".
+        modifiers
+            The modifiers to apply, given as :class:`ValueModifier` objects
+            from :attr:`modifiers` or as their names; all other modifiers are
+            skipped. The selected modifiers still apply in pipeline order, not
+            in the order given, and that order is not guaranteed. None applies
+            every modifier. The result is computed from the current simulation
+            state, so it is not necessarily the value the simulation used during
+            a time step.
         args, kwargs
             Pipeline arguments. These should be the arguments to the
             callable source of the pipeline.
@@ -421,13 +442,21 @@ class Pipeline(Resource, RequiresPrettyHook):
         ------
         DynamicValueError
             If the pipeline is invoked without a source set.
+        ValueError
+            If ``modifiers`` is given with ``mode="source"``, includes a
+            modifier object or name that is not on this pipeline, or includes
+            the same modifier more than once.
+        TypeError
+            If an entry of ``modifiers`` is neither a :class:`ValueModifier` nor
+            a string.
         """
-        return self._call(*args, mode=mode, **kwargs)
+        return self._call(*args, mode=mode, modifiers=modifiers, **kwargs)
 
     def _call(
         self,
         *args: Any,
         mode: Literal["default", "source", "no-post-processors"] = "default",
+        modifiers: ModifierSelection | None = None,
         **kwargs: Any,
     ) -> Any:
         if not self.source:
@@ -435,10 +464,10 @@ class Pipeline(Resource, RequiresPrettyHook):
                 f"The dynamic value pipeline for {self.name} has no source. This likely means "
                 f"you are attempting to modify a value that hasn't been created."
             )
+        selected_modifiers = self._select_modifiers(mode, modifiers)
         value = self.source(*args, **kwargs)
-        if mode != "source":
-            for modifier in self.modifiers:
-                value = self.combiner(value, modifier, *args, **kwargs)
+        for modifier in selected_modifiers:
+            value = self.combiner(value, modifier, *args, **kwargs)
         if mode == "default":
             for processor in self.post_processor:
                 value = processor(value, self.manager)
@@ -446,6 +475,54 @@ class Pipeline(Resource, RequiresPrettyHook):
             value.name = self.name
 
         return value
+
+    def _select_modifiers(
+        self,
+        mode: Literal["default", "source", "no-post-processors"],
+        modifiers: ModifierSelection | None,
+    ) -> list[ValueModifier]:
+        """Return the modifiers to apply, in pipeline order."""
+        if mode == "source":
+            if modifiers is not None:
+                raise ValueError("Cannot select modifiers with mode='source'.")
+            return []
+        if modifiers is None:
+            return self.modifiers
+        if isinstance(modifiers, (str, ValueModifier)):
+            modifiers = [modifiers]
+
+        by_name = {modifier.name: modifier for modifier in self.modifiers}
+        # Unknown names stay strings, so the set difference below keeps them.
+        resolved: list[ValueModifier | str] = []
+        for requested in modifiers:
+            if isinstance(requested, str):
+                requested = by_name.get(requested, requested)
+            elif not isinstance(requested, ValueModifier):
+                raise TypeError(
+                    "Modifiers must be given as ValueModifier objects or their names, "
+                    f"not {type(requested).__name__}: {requested!r}."
+                )
+            resolved.append(requested)
+
+        # ValueModifier keeps the default identity equality and hash, so the set
+        # operations compare objects.
+        selected = set(resolved)
+        unknown = sorted(_labels(selected - set(self.modifiers)))
+        if unknown:
+            raise ValueError(
+                f"Pipeline {self.name} has no modifier(s) {unknown}. "
+                f"Available modifiers: {list(by_name)}."
+            )
+        if len(selected) != len(resolved):
+            duplicates = [
+                modifier for modifier, count in Counter(resolved).items() if count > 1
+            ]
+            raise ValueError(
+                f"Modifier(s) {_labels(duplicates)} were requested more than once for "
+                f"pipeline {self.name}. Each modifier is applied at most once; "
+                "check whether you meant to request a different modifier."
+            )
+        return [modifier for modifier in self.modifiers if modifier in selected]
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
@@ -625,6 +702,7 @@ class AttributePipeline(Pipeline):
         self,
         index: pd.Index[int],
         mode: Literal["default", "source", "no-post-processors"] = "default",
+        modifiers: ModifierSelection | None = None,
     ) -> pd.Series[Any] | pd.DataFrame:
         """Generates the attributes represented by this pipeline.
 
@@ -636,6 +714,14 @@ class AttributePipeline(Pipeline):
         mode
             The mode for pipeline evaluation. One of "default", "source",
             or "no-post-processors".
+        modifiers
+            The modifiers to apply, given as :class:`ValueModifier` objects
+            from :attr:`modifiers` or as their names; all other modifiers are
+            skipped. The selected modifiers still apply in pipeline order, not
+            in the order given, and that order is not guaranteed. None applies
+            every modifier. The result is computed from the current simulation
+            state, so it is not necessarily the value the simulation used during
+            a time step.
 
         Returns
         -------
@@ -645,6 +731,13 @@ class AttributePipeline(Pipeline):
         ------
         DynamicValueError
             If the pipeline is invoked without a source set.
+        ValueError
+            If ``modifiers`` is given with ``mode="source"``, includes a
+            modifier object or name that is not on this pipeline, or includes
+            the same modifier more than once.
+        TypeError
+            If an entry of ``modifiers`` is neither a :class:`ValueModifier` nor
+            a string.
         """
         # NOTE: must pass index in as arg (NOT kwarg!) to match signature of parent Pipeline._call()
         # Always skip post-processor at _call level; AttributePipeline handles it here.
@@ -652,7 +745,7 @@ class AttributePipeline(Pipeline):
         _call_mode: Literal["source", "no-post-processors"] = (
             "source" if mode == "source" else "no-post-processors"
         )
-        attribute = self._call(index, mode=_call_mode)
+        attribute = self._call(index, mode=_call_mode, modifiers=modifiers)
         if mode == "default":
             for processor in self.post_processor:
                 attribute = processor(index, attribute, self.manager)

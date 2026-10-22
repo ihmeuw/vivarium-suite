@@ -1,3 +1,7 @@
+**5.17.0 - 10/22/26**
+
+- Add a ``modifiers`` argument to pipeline calls that applies only the given modifiers
+
 **5.16.0 - 10/21/26**
 
 - Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,
