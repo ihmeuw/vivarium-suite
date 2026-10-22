@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from vivarium.cluster_tools.core.backend.nodes import AlwaysStaleNode
 from vivarium.cluster_tools.core.backend.task import Task, check_unique_task_names
 
 _MUST_NOT_BE_CALLED = "must not be called during Task construction"
@@ -58,6 +59,26 @@ def test_task_rejects_empty_name() -> None:
     """Reject an empty name."""
     with pytest.raises(ValueError, match="non-empty"):
         Task(**_task_kwargs(name=""))
+
+
+def test_task_defaults_code_id_to_always_stale() -> None:
+    """Default an omitted code_id to an always-stale node named for the task."""
+    kwargs = _task_kwargs(name="build_artifact")
+    del kwargs["code_id"]
+
+    task = Task(**kwargs)
+
+    assert isinstance(task.code_id, AlwaysStaleNode)
+    assert task.code_id.name == "build_artifact::code"
+
+
+def test_task_keeps_an_explicit_code_id() -> None:
+    """Keep a code_id that is passed explicitly rather than defaulting it."""
+    node = _StubNode("code")
+
+    task = Task(**_task_kwargs(code_id=node))
+
+    assert task.code_id is node
 
 
 def test_check_unique_task_names() -> None:
