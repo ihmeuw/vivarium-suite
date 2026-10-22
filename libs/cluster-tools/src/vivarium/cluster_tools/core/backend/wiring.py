@@ -1,0 +1,134 @@
+"""Producer/consumer wiring: resolve declared artifact keys to shared nodes.
+
+A pipeline names each artifact with a logical key. An output registers its key
+against one resolved file node under the run's output directory, and an input
+naming that key resolves to the identical node object, so pytask draws the
+producer-to-consumer edge from shared node identity rather than from any separate
+declaration. The output root and run name namespace produced paths, so two runs
+write to distinct directories.
+
+This is a plain registry, not a container class: a pipeline builds its tasks into
+a list and hands them to :func:`~vivarium.cluster_tools.core.backend.build.build`.
+Register every output before resolving inputs. The two guards here are the ones
+pytask cannot make for us -- a hard error when two keys resolve to one path (which
+pytask would otherwise silently merge) and a did-you-mean on a mistyped key.
+Everything heavier (a missing producer that is also not a root input, a cycle, two
+tasks claiming one product) is left to pytask, which fails safe.
+"""
+
+import difflib
+from collections.abc import Mapping
+from pathlib import Path
+
+from pytask import PathNode
+
+from vivarium.cluster_tools.core.backend.nodes import file_node
+
+ArtifactKey = str
+"""A logical artifact name, resolved to a file node under the run's output directory."""
+
+
+class WiringError(Exception):
+    """A definition-time wiring error: an alias collision or an unresolved input."""
+
+
+class ArtifactRegistry:
+    """Resolve declared artifact keys to shared file nodes for one run.
+
+    Parameters
+    ----------
+    output_root
+        Directory under which produced artifacts live.
+    run_name
+        Names this run's output subdirectory, so two runs do not collide.
+    root_inputs
+        Source files the pipeline consumes but does not produce, keyed by the same
+        logical key an input names. Resolved to a file node when the file exists.
+    """
+
+    def __init__(
+        self,
+        output_root: Path | str,
+        run_name: str,
+        root_inputs: Mapping[ArtifactKey, Path | str] | None = None,
+    ) -> None:
+        self._run_dir = Path(output_root).resolve() / run_name
+        self._root_inputs = {key: Path(p) for key, p in (root_inputs or {}).items()}
+        self._producers: dict[ArtifactKey, PathNode] = {}
+        self._key_by_path: dict[Path, ArtifactKey] = {}
+
+    def path_for(self, key: ArtifactKey) -> Path:
+        """Return the path a produced ``key`` resolves to for this run."""
+        return self._run_dir / key
+
+    def register_output(self, key: ArtifactKey) -> PathNode:
+        """Register ``key`` as produced by a step and return its file node.
+
+        Registering the same key again returns the same node, so two tasks claiming
+        one product is left for pytask to reject.
+
+        Parameters
+        ----------
+        key
+            The output's logical key.
+
+        Returns
+        -------
+            The file node the key resolves to, shared with any consumer of the key.
+
+        Raises
+        ------
+        WiringError
+            If a different key already resolves to this key's path.
+        """
+        resolved = self.path_for(key).resolve()
+        claimant = self._key_by_path.get(resolved)
+        if claimant is not None and claimant != key:
+            raise WiringError(
+                f"keys {claimant!r} and {key!r} resolve to one path {resolved}."
+            )
+        node = self._producers.get(key)
+        if node is None:
+            node = file_node(resolved)
+            self._producers[key] = node
+            self._key_by_path[resolved] = key
+        return node
+
+    def resolve_input(self, key: ArtifactKey) -> PathNode:
+        """Resolve an input ``key`` to the node that produces it, or a root-input file.
+
+        Parameters
+        ----------
+        key
+            The input's logical key.
+
+        Returns
+        -------
+            The identical node object a producer registered for ``key`` (so the
+            consumer gets a real edge to it), or a file node for a declared root
+            input that exists on disk.
+
+        Raises
+        ------
+        WiringError
+            If ``key`` has no registered producer and no root-input file on disk. An
+            unknown key carries a did-you-mean suggestion from the registered keys.
+        """
+        produced = self._producers.get(key)
+        if produced is not None:
+            return produced
+        source = self._root_inputs.get(key)
+        if source is not None:
+            if not source.exists():
+                raise WiringError(
+                    f"input {key!r} is unresolved: declared as a root input but no file "
+                    f"at {source}."
+                )
+            return file_node(source)
+        known = list(self._producers) + list(self._root_inputs)
+        hint = difflib.get_close_matches(key, known, n=1)
+        suffix = f" Did you mean {hint[0]!r}?" if hint else ""
+        raise WiringError(
+            f"input {key!r} is unresolved: no registered producer and no root input."
+            f"{suffix}"
+        )
