@@ -826,7 +826,7 @@ class InteractiveContext(BaseSimulationContext):
             )
         return self._tables.tables[name]
 
-    def find_resources(self, pattern: str, *, regex: bool = False) -> pd.DataFrame:
+    def find_resources(self, pattern: str = "", *, regex: bool = False) -> pd.DataFrame:
         """Find simulation resources whose name or component matches a pattern.
 
         Use this to locate a value when you know roughly what it is called but not
@@ -838,7 +838,8 @@ class InteractiveContext(BaseSimulationContext):
         pattern
             The text to look for, matched case-insensitively against both a
             resource's name and the name of the component that registered it. It
-            may appear anywhere in either name. An empty pattern matches everything.
+            may appear anywhere in either name. An empty pattern, the default,
+            matches everything.
         regex
             Whether to treat the pattern as a regular expression. It is matched
             literally by default, so a name copied out of an earlier result always
