@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, NamedTuple, overload
 import numpy as np
 import pandas as pd
 
+from vivarium.engine.component import NUM_EVENT_PRIORITIES
 from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import BaseSimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -1044,6 +1045,107 @@ class InteractiveContext(BaseSimulationContext):
         if event_name not in self._events:
             raise ValueError(f"No event {event_name} in system.")
         return self._events.get_listeners(event_name)
+
+    def get_schedule(self) -> pd.DataFrame:
+        """Get what runs in the simulation, in the order they currently run.
+
+        Use this to find out when a component's actions and observations run
+        relative to the rest of the model. An "action" is a method, such as
+        ``on_time_step``, that the simulation calls in a lifecycle state.
+
+        Returns
+        -------
+            A frame with one row per action or observation, indexed by
+            ``phase``, ``state`` and ``priority``, with columns
+            ``component``, ``kind``, ``name`` and ``active``. ``kind`` is
+            ``"action"``, ``"observation"`` or ``"observation (interactive)"``.
+            ``name`` is the action's method name or the observation's name.
+            ``active`` says whether the row runs in this context.
+
+        Notes
+        -----
+        Phases and their lifecycle states run in the order shown, and within a
+        state lower priorities run first. The states of the ``main_loop`` phase
+        repeat every time step. Rows that share a state and priority have no
+        guaranteed order. States with nothing in them are left out.
+
+        Observations are listed even when results are not observed, which is the
+        default for an interactive context. Their ``active`` value is then False.
+
+        The results manager's own actions are left out. Its work is shown as the
+        observations it makes, so the frame has the same rows whether or not
+        results are observed.
+
+        An active observation is checked every step but can still decline to run,
+        through its to_observe condition or because its population filter leaves
+        no simulants.
+
+        Observations registered with :meth:`register_observation` are listed at
+        the end of the ``main_loop`` phase with no state, priority or component.
+        They run once when registered, or at the end of setup if registered
+        before it, and then after every step. A paused one has ``active`` set to
+        False.
+
+        """
+        # A row is phase, state, priority, component name, kind, action/observation name, active.
+        rows: list[tuple[str, str | None, int | None, str | None, str, str, bool]] = []
+        for phase in self._lifecycle.get_phase_names():
+            for state in self._lifecycle.get_state_names(phase):
+                # get_listeners() would create a channel for a state with none.
+                listeners = self._events.get_listeners(state) if state in self._events else {}
+                for priority in range(NUM_EVENT_PRIORITIES):
+                    for (
+                        observation,
+                        component,
+                    ) in self._results.get_scheduled_observations(state, priority):
+                        rows.append(
+                            (
+                                phase,
+                                state,
+                                priority,
+                                component.name,
+                                "observation",
+                                observation.name,
+                                self._results.to_observe,
+                            )
+                        )
+                    for listener in listeners.get(priority, []):
+                        owner = getattr(listener, "__self__", None)
+                        if owner is self._results:
+                            # The results manager's work is listed as the
+                            # observations above.
+                            continue
+                        rows.append(
+                            (
+                                phase,
+                                state,
+                                priority,
+                                getattr(owner, "name", None),
+                                "action",
+                                getattr(listener, "__name__", type(listener).__name__),
+                                True,
+                            )
+                        )
+            # Add interactive observations to end of main loop phase
+            if phase == "main_loop":
+                for name, interactive_observation in self._interactive_observations.items():
+                    rows.append(
+                        (
+                            phase,
+                            None,
+                            None,
+                            None,
+                            "observation (interactive)",
+                            name,
+                            interactive_observation.active,
+                        )
+                    )
+        index = ["phase", "state", "priority"]
+        return (
+            pd.DataFrame(rows, columns=index + ["component", "kind", "name", "active"])
+            .astype({"priority": "Int64"})
+            .set_index(index)
+        )
 
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.

@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event, EventManager
+from vivarium.engine.framework.lifecycle import LifeCycleError, lifecycle_states
 
 
 class EventData(TypedDict):
@@ -81,15 +84,15 @@ def test_emission(event_init: _EVENT_INIT_TYPE) -> None:
     manager.clock = lambda: pd.Timestamp(1990, 1, 1)
     manager.step_size = lambda: pd.Timedelta(30, unit="D")
     manager.add_constraint = lambda f, **kwargs: f
-    emitter = manager.get_emitter("test_event")
-    manager.register_listener("test_event", listener)
+    emitter = manager.get_emitter(lifecycle_states.TIME_STEP)
+    manager.register_listener(lifecycle_states.TIME_STEP, listener)
     emitter(event_init["orig"]["index"], None)
 
     assert signal[0]
 
     signal[0] = False
 
-    emitter = manager.get_emitter("test_unheard_event")
+    emitter = manager.get_emitter(lifecycle_states.TIME_STEP_CLEANUP)
     emitter(event_init["new_val"]["index"], None)
     assert not signal[0]
 
@@ -116,17 +119,17 @@ def test_listener_priority(event_init: _EVENT_INIT_TYPE) -> None:
     manager.clock = lambda: pd.Timestamp(1990, 1, 1)
     manager.step_size = lambda: pd.Timedelta(30, "D")
     manager.add_constraint = lambda f, **kwargs: f
-    emitter = manager.get_emitter("test_event")
-    manager.register_listener("test_event", listener1, priority=0)
-    manager.register_listener("test_event", listener2)
-    manager.register_listener("test_event", listener3, priority=9)
+    emitter = manager.get_emitter(lifecycle_states.TIME_STEP)
+    manager.register_listener(lifecycle_states.TIME_STEP, listener1, priority=0)
+    manager.register_listener(lifecycle_states.TIME_STEP, listener2)
+    manager.register_listener(lifecycle_states.TIME_STEP, listener3, priority=9)
 
     emitter(event_init["orig"]["index"], None)
     assert np.all(signal)
 
 
 def test_contains() -> None:
-    event = "test_event"
+    event = lifecycle_states.TIME_STEP
 
     manager = EventManager()
     manager.add_constraint = lambda f, **kwargs: f
@@ -139,11 +142,54 @@ def test_list_events() -> None:
     manager = EventManager()
     manager.add_constraint = lambda f, **kwargs: f
     _ = manager.get_channel("event1")
-    _ = manager.get_emitter("event2")
+    _ = manager.get_emitter(lifecycle_states.TIME_STEP)
 
     def event3_listener(*_: Any, **__: Any) -> None:
         pass
 
-    manager.register_listener("event3", event3_listener)
+    manager.register_listener(lifecycle_states.TIME_STEP_CLEANUP, event3_listener)
     _ = manager.get_listeners("event4")
-    assert manager.list_events() == ["event1", "event2", "event3", "event4"]
+    assert manager.list_events() == [
+        "event1",
+        lifecycle_states.TIME_STEP,
+        lifecycle_states.TIME_STEP_CLEANUP,
+        "event4",
+    ]
+
+
+class TestEventNamesMustBeLifecycleStates:
+    @pytest.fixture
+    def manager(self) -> EventManager:
+        manager = EventManager()
+        manager.add_constraint = lambda f, **kwargs: f
+        return manager
+
+    def test_register_listener_rejects_an_unknown_name(self, manager: EventManager) -> None:
+        with pytest.raises(
+            LifeCycleError,
+            match=(
+                "'my_event' is not a life cycle state.*"
+                "Use one of: initialization, setup, .*, report."
+            ),
+        ):
+            manager.register_listener("my_event", lambda event: None)
+        assert "my_event" not in manager
+
+    def test_get_emitter_rejects_an_unknown_name(self, manager: EventManager) -> None:
+        with pytest.raises(LifeCycleError, match="'my_event' is not a life cycle state"):
+            manager.get_emitter("my_event")
+        assert "my_event" not in manager
+
+    @pytest.mark.parametrize("state", lifecycle_states.ALL_STATES)
+    def test_a_lifecycle_state_is_accepted(self, manager: EventManager, state: str) -> None:
+        manager.register_listener(state, lambda event: None)
+        manager.get_emitter(state)
+        assert state in manager
+
+    def test_a_component_using_an_unknown_name_fails_during_setup(self) -> None:
+        class CustomEventListener(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.event.register_listener("my_event", lambda event: None)
+
+        with pytest.raises(LifeCycleError, match="'my_event' is not a life cycle state"):
+            InteractiveContext(components=[CustomEventListener()])
