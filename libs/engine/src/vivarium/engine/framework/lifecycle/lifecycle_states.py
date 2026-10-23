@@ -3,10 +3,11 @@
 Lifecycle States
 ================
 
-This module defines constants representing the states in the simulation lifecycle.
+This module defines the states and phases of the simulation lifecycle.
 
 """
 
+from dataclasses import dataclass
 
 # Initialization states
 INITIALIZATION = "initialization"
@@ -37,3 +38,33 @@ SIMULATION_END = "simulation_end"
 """The name of the simulation end state in the simulation lifecycle."""
 REPORT = "report"
 """The name of the report state in the simulation lifecycle."""
+
+
+@dataclass(frozen=True)
+class Phase:
+    """A phase of the simulation lifecycle."""
+
+    name: str
+    """The name of the phase."""
+    states: tuple[str, ...]
+    """The names of the states in the phase, in their order of execution."""
+    loop: bool = False
+    """Whether the states in the phase repeat."""
+
+
+PHASES = (
+    Phase("setup", (SETUP, POST_SETUP, POPULATION_CREATION)),
+    Phase(
+        "main_loop",
+        (TIME_STEP_PREPARE, TIME_STEP, TIME_STEP_CLEANUP, COLLECT_METRICS),
+        loop=True,
+    ),
+    Phase("simulation_end", (SIMULATION_END, REPORT)),
+)
+"""The phases the simulation adds to the lifecycle, in their order of execution.
+
+The initialization phase is not included, because the lifecycle creates it itself.
+"""
+
+ALL_STATES = (INITIALIZATION, *(state for phase in PHASES for state in phase.states))
+"""The names of all states in the simulation lifecycle, in their order of execution."""
