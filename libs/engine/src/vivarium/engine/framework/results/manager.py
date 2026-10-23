@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 import pandas as pd
 
-from vivarium.engine.component import DEFAULT_EVENT_PRIORITY, NUM_EVENT_PRIORITIES
+from vivarium.engine.component import DEFAULT_EVENT_PRIORITY, NUM_EVENT_PRIORITIES, Component
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.results.context import ResultsContext
@@ -48,6 +48,7 @@ class ResultsManager(Manager):
     def __init__(self) -> None:
         self._raw_results: defaultdict[str, pd.DataFrame] = defaultdict()
         self._results_context = ResultsContext()
+        self._observation_components: dict[str, Component | Manager] = {}
         self._name = "results_manager"
         self._to_observe = True
 
@@ -99,6 +100,7 @@ class ResultsManager(Manager):
         self.population_view = builder.population.get_view()
         self.clock = builder.time.clock()
         self.step_size = builder.time.step_size()
+        self._get_current_component = builder.components.get_current_component_or_manager
 
         builder.lifecycle.add_constraint(
             self.set_to_observe, allow_during=[lifecycle_states.INITIALIZATION]
@@ -365,6 +367,37 @@ class ResultsManager(Manager):
             stratifications=stratifications,
             **kwargs,
         )
+        self._observation_components[name] = self._get_current_component()
+
+    def get_scheduled_observations(
+        self, when: str, priority: int
+    ) -> list[tuple[Observation, Component | Manager]]:
+        """Get the observations made at a lifecycle state and priority.
+
+        Observations are returned whether or not results are being observed.
+
+        Parameters
+        ----------
+        when
+            The name of the lifecycle state.
+        priority
+            The priority level within that lifecycle state.
+
+        Returns
+        -------
+            Each observation paired with the component that registered it, in the
+            order the observations are currently made.
+        """
+        return [
+            (observation, self._observation_components[observation.name])
+            # get() rather than indexing, which would add the state to the defaultdict.
+            for stratification_observations in self._results_context.grouped_observations.get(
+                when, {}
+            ).values()
+            for observations in stratification_observations.values()
+            for observation in observations
+            if observation.priority == priority
+        ]
 
     ##################
     # Helper methods #

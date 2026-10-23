@@ -118,7 +118,7 @@ one of them, so it has to be called after the simulation has started moving.
 What runs, and when
 +++++++++++++++++++
 
-Two methods print the order in which things happen.
+Three methods show the order in which things happen.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_lifecycle_order`
 shows the simulation's lifecycles and the components that run in each state in
 the order that they fire. See :ref:`the simulation lifecycle concept docs <lifecycle_concept>`
@@ -161,6 +161,55 @@ for what the phases and states are.
     simulation_end
         simulation_end
         report
+
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_schedule`
+returns what runs in each lifecycle state as a frame indexed by phase, state and
+priority. It lists each action with its priority, and it lists each
+observation at the state and priority where it is made. The states of the
+``main_loop`` phase repeat every time step.
+
+.. testcode::
+
+    print(sim.get_schedule().to_string())
+
+.. testoutput::
+    :options: +NORMALIZE_WHITESPACE
+
+                                                                            component         kind                  name  active
+    phase     state              priority
+    setup     post_setup         5                                     values_manager       action         on_post_setup    True
+                                 5                                 population_manager       action         on_post_setup    True
+                                 5                                     datetime_clock       action         on_post_setup    True
+                                 5                                      event_manager       action         on_post_setup    True
+                                 5                               lookup_table_manager       action         on_post_setup    True
+                                 5         disease_model.lower_respiratory_infections       action         on_post_setup    True
+    main_loop time_step__prepare 5                                    deaths_observer       action  on_time_step_prepare    True
+              time_step          5                                    base_population       action          on_time_step    True
+                                 5                                          mortality       action          on_time_step    True
+                                 5         disease_model.lower_respiratory_infections       action          on_time_step    True
+              time_step__cleanup 5         disease_model.lower_respiratory_infections       action  on_time_step_cleanup    True
+              collect_metrics    5                                    deaths_observer  observation                  dead   False
+                                 5                                      ylls_observer  observation                  ylls   False
+
+An interactive context does not observe results by default, so the observations
+here have ``active`` set to False. They are listed anyway so that you can see
+when they would run. Pass ``observe=True`` when you build the context to make
+them run.
+
+Interactive observations you add to an :class:`~vivarium.engine.interface.interactive.InteractiveContext`
+via :meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`
+are listed at the end of the ``main_loop`` phase, with ``kind`` set to
+``"observation (interactive)"``. They have no state, priority, or component
+because they do not run in a lifecycle state. They run once when registered,
+or at the end of setup if registered before it, and then after every step.
+
+.. warning::
+
+    Rows that share a lifecycle phase, state, and a priority, such as the three
+    ``time_step`` actions above, have no guaranteed order. While the frame does
+    show them in the order they run now, that order can change when components
+    are added or reordered in the model specification. Do not write code that
+    depends on it.
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
 shows the order in which components populate new simulants.
