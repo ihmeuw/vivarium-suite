@@ -222,6 +222,15 @@ class LifeCycle:
         phase = [p for p in self._phases if state_name in p].pop()
         return phase.get_state(state_name)
 
+    def get_phase_names(self) -> list[str]:
+        """Retrieve the names of all phases in their order of execution.
+
+        Returns
+        -------
+            The phase names in order of execution.
+        """
+        return [phase.name for phase in self._phases]
+
     def get_state_names(self, phase_name: str) -> list[str]:
         """Retrieve the names of all states in the provided phase.
 
