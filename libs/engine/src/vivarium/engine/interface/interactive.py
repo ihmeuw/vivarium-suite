@@ -749,7 +749,7 @@ class InteractiveContext(BaseSimulationContext):
             index, attributes, include_untracked=include_untracked
         )
 
-    def get_attribute_names(self) -> list[str]:
+    def list_attributes(self) -> list[str]:
         """List all attributes in the population state table."""
         return self._population.get_all_attribute_names()
 
@@ -776,7 +776,7 @@ class InteractiveContext(BaseSimulationContext):
         ----------
         attribute_pipeline_name
             Name of the attribute pipeline to return. Available names are given
-            by :meth:`get_attribute_names`.
+            by :meth:`list_attributes`.
 
         Returns
         -------
@@ -789,7 +789,7 @@ class InteractiveContext(BaseSimulationContext):
         """
         # Guarded because the values manager creates a pipeline for an unknown
         # name, which would silently pollute the simulation with an empty one.
-        if attribute_pipeline_name not in self.get_attribute_names():
+        if attribute_pipeline_name not in self.list_attributes():
             raise ValueError(
                 f"No attribute pipeline '{attribute_pipeline_name}' registered. "
                 "Are you looking for a value pipeline? Try get_value()."

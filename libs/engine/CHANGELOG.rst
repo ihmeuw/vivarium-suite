@@ -1,3 +1,7 @@
+**5.19.0 - 10/26/26**
+
+- **Breaking change.** Rename ``InteractiveContext.get_attribute_names()`` to ``list_attributes()``
+
 **5.18.1 - 10/23/26**
 
 - Raise when a listener or emitter is registered for an event name that is not a lifecycle state

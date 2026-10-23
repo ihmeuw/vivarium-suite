@@ -272,14 +272,14 @@ precise. A simulation exposes two things that are similar but not identical:
 :term:`Attributes <Attribute>` - computed by
 :term:`attribute pipelines <Attribute Pipeline>` - are simulant-specific values;
 they are the columns of the :term:`state table <Population State Table>`.
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute_names`
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_attributes`
 lists the names of all of the attributes in a given simulation and
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_population`
 gets their current values.
 
 .. code-block:: python
 
-    attribute_names = sim.get_attribute_names()
+    attribute_names = sim.list_attributes()
     print(len(attribute_names))
     # list four of them
     print(attribute_names[0:4])
@@ -300,7 +300,7 @@ gets their current values.
     :hide:
 
     fresh = get_disease_model_simulation()
-    attribute_names = fresh.get_attribute_names()
+    attribute_names = fresh.list_attributes()
     assert len(attribute_names) == 24
     assert attribute_names[0:4] == ["entrance_time", "age", "sex", "mortality_rate"]
     pop = fresh.get_population(["age", "sex"])

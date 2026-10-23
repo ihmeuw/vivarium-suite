@@ -72,7 +72,7 @@ class TestGetAttribute:
 
     def test_a_created_column_is_an_attribute(self, sim: InteractiveContext) -> None:
         """A column a component creates is reachable as an attribute."""
-        assert "test_column_1" in sim.get_attribute_names()
+        assert "test_column_1" in sim.list_attributes()
 
     def test_the_pipeline_itself_is_returned(self, sim: InteractiveContext) -> None:
         """The getter hands back the pipeline, not the value it produces."""
@@ -90,12 +90,12 @@ class TestGetAttribute:
         without the guard in ``InteractiveContext.get_attribute`` a misspelling would
         leave a new pipeline behind.
         """
-        registered = sim.get_attribute_names()
+        registered = sim.list_attributes()
 
         with pytest.raises(ValueError):
             sim.get_attribute("foo")
 
-        assert sim.get_attribute_names() == registered
+        assert sim.list_attributes() == registered
 
 
 def test_get_value_and_get_attribute_point_at_each_other() -> None:
@@ -1359,7 +1359,7 @@ class TestRenderDependencyTree:
         ]
 
 
-def test_get_attribute_names() -> None:
+def test_list_attributes() -> None:
     sim = InteractiveContext(
         components=[MultiLevelMultiColumnCreator(), AttributePipelineCreator()]
     )
@@ -1373,9 +1373,9 @@ def test_get_attribute_names() -> None:
         "test_attribute",
         "attribute_generating_columns_6_7",
     ]
-    assert set(sim.get_attribute_names()) == set(expected_attributes)
+    assert set(sim.list_attributes()) == set(expected_attributes)
     # Make sure there's nothing unexpected compared to the actual population df
-    assert set(sim.get_attribute_names()) == set(
+    assert set(sim.list_attributes()) == set(
         sim.get_population(expected_attributes).columns.get_level_values(0)
     )
 
@@ -1607,7 +1607,7 @@ class TestGetPopulationNestedAttributes:
             kwargs["include_untracked"] = include_untracked
 
         max_depth = self._patch_depth_tracking(sim, mocker)
-        pop = sim.get_population(sim.get_attribute_names(), **kwargs)  # type: ignore[call-overload]
+        pop = sim.get_population(sim.list_attributes(), **kwargs)  # type: ignore[call-overload]
         if include_untracked is True:
             assert set(pop["inner"]) == {0, 1, 2}
             if outer_column is not None:
@@ -1840,7 +1840,7 @@ class TestResultsGathering:
         def run(observe: bool) -> pd.DataFrame:
             sim = InteractiveContext(str(disease_model_spec), observe=observe)
             sim.take_steps(5)
-            return sim.get_population(sim.get_attribute_names())
+            return sim.get_population(sim.list_attributes())
 
         on, off = run(observe=True), run(observe=False)
         assert "previous_alive" in off.columns

@@ -30,7 +30,7 @@ def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) ->
 
     simulation = InteractiveContext(config)
 
-    all_attributes = simulation.get_attribute_names()
+    all_attributes = simulation.list_attributes()
     pop = simulation.get_population(all_attributes)
     expected_columns = {
         "is_alive",

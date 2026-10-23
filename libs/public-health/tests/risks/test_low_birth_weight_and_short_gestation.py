@@ -92,7 +92,7 @@ def test_lbwsg_risk_effect_rr_pipeline(base_config, base_plugins, mock_rr_interp
     expected_pipeline_name = (
         f"{lbwsg_effect.causal_factor.name}_on_{lbwsg_effect.target_name}.relative_risk"
     )
-    assert expected_pipeline_name in sim.get_attribute_names()
+    assert expected_pipeline_name in sim.list_attributes()
 
     pop = sim.get_population(
         [
