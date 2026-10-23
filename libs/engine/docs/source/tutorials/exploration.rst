@@ -120,14 +120,10 @@ What runs, and when
 
 Three methods show the order in which things happen.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_lifecycle_order`
-shows the simulation's lifecycles and the components that run in each state in
-the order that they fire. See :ref:`the simulation lifecycle concept docs <lifecycle_concept>`
-for what the phases and states are.
-
-.. note::
-
-    Components at the same priority level have no guaranteed order relative to
-    one another!
+shows the simulation's lifecycle phases and the states in each, in the order they
+run. A ``*`` marks a phase whose states repeat. See
+:ref:`the simulation lifecycle concept docs <lifecycle_concept>` for what the phases
+and states are.
 
 .. testcode::
 
@@ -141,22 +137,11 @@ for what the phases and states are.
     setup
         setup
         post_setup
-            ValuesManager(values_manager).on_post_setup
-            PopulationManager(population_manager).on_post_setup
-            DateTimeClock(datetime_clock).on_post_setup
-            EventManager(event_manager).on_post_setup
-            LookupTableManager(lookup_table_manager).on_post_setup
-            DiseaseModel(disease_model.lower_respiratory_infections).on_post_setup
         population_creation
     main_loop*
         time_step__prepare
-            DeathsObserver(deaths_observer).on_time_step_prepare
         time_step
-            BasePopulation(base_population).on_time_step
-            Mortality(mortality).on_time_step
-            DiseaseModel(disease_model.lower_respiratory_infections).on_time_step
         time_step__cleanup
-            DiseaseModel(disease_model.lower_respiratory_infections).on_time_step_cleanup
         collect_metrics
     simulation_end
         simulation_end
@@ -232,33 +217,6 @@ shows the order in which components populate new simulants.
     BasePopulation(base_population).initialize_sex
     DiseaseModel(disease_model.lower_respiratory_infections).initialize_state
     Risk(risk.child_wasting).initialize_propensity
-
-The event system is reachable too (Refer to :ref:`the event concept docs <event_concept>`).
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_events`
-names the event channels, and
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_listeners`
-returns the listeners on one channel, keyed by priority. For example, to list
-all events and then determine any components with registered "time_step" 
-listeners:
-
-.. testcode::
-
-    print(sim.list_events())
-    print(sim.get_listeners("time_step").keys())
-    for listener in sim.get_listeners("time_step")[5]:
-        print(repr(listener))
-
-.. testoutput::
-
-    ['post_setup', 'time_step', 'time_step__cleanup', 'time_step__prepare', 'collect_metrics', 'simulation_end', 'report']
-    dict_keys([5])
-    <bound method BasePopulation.on_time_step of BasePopulation()>
-    <bound method Mortality.on_time_step of Mortality()>
-    <bound method Machine.on_time_step of DiseaseModel(state_column=lower_respiratory_infections)>
-
-We see in the example above that ``BasePopulation``, ``Mortality``, and
-the lower respiratory infections ``DiseaseModel`` each registered a listener
-to the ``time_step`` phase, all at priority 5.
 
 State table attributes and value pipelines
 ++++++++++++++++++++++++++++++++++++++++++

@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from vivarium.config_tree.main import ConfigTree
 
     from vivarium.engine import Component
-    from vivarium.engine.framework.event import Event
     from vivarium.engine.types import ClockStepSize, ClockTime
 
 _IGNORED_RESOURCE_TYPES = frozenset(
@@ -1022,30 +1021,6 @@ class InteractiveContext(BaseSimulationContext):
             if dependency.RESOURCE_TYPE not in _IGNORED_RESOURCE_TYPES
         ]
 
-    def list_events(self) -> list[str]:
-        """List all event types registered with the simulation."""
-        return self._events.list_events()
-
-    def get_listeners(self, event_name: str) -> dict[int, list[Callable[[Event], None]]]:
-        """Get all listeners of a particular type of event.
-
-        Available events can be found by calling
-        :func:`InteractiveContext.list_events`.
-
-        Parameters
-        ----------
-        event_name
-            The name of the event to grab the listeners for.
-
-        Returns
-        -------
-            A dictionary that maps each priority level of the named event's
-            listeners to a list of listeners at that level.
-        """
-        if event_name not in self._events:
-            raise ValueError(f"No event {event_name} in system.")
-        return self._events.get_listeners(event_name)
-
     def get_schedule(self) -> pd.DataFrame:
         """Get what runs in the simulation, in the order they currently run.
 
@@ -1184,7 +1159,7 @@ class InteractiveContext(BaseSimulationContext):
         print("\n".join(initializers))
 
     def print_lifecycle_order(self) -> None:
-        """Print the order of lifecycle events (including user event handlers)."""
+        """Print the lifecycle phases and the states in each, in the order they run."""
         print(self._lifecycle)
 
     def __repr__(self) -> str:

@@ -1983,9 +1983,9 @@ class TestGetSchedule:
 
     def test_no_event_channels_are_created(self) -> None:
         sim = InteractiveContext(components=[TimeStepListener("a", 3)])
-        events = sim.list_events()
+        events = sim._events.list_events()
         sim.get_schedule()
-        assert sim.list_events() == events
+        assert sim._events.list_events() == events
 
     @pytest.mark.parametrize("observe", [False, True])
     def test_observations_are_listed_whether_or_not_observed(self, observe: bool) -> None:

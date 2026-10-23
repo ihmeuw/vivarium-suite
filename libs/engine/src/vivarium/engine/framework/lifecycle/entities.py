@@ -106,7 +106,7 @@ class LifeCycleState:
         return f"LifeCycleState(name={self.name})"
 
     def __str__(self) -> str:
-        return "\n\t".join([self.name] + self._handlers)
+        return self.name
 
 
 class LifeCyclePhase:

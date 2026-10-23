@@ -1,6 +1,10 @@
 **5.19.0 - 10/26/26**
 
 - **Breaking change.** Rename ``InteractiveContext.get_attribute_names()`` to ``list_attributes()``
+- **Breaking change.** Remove ``InteractiveContext.list_events()`` and
+  ``InteractiveContext.get_listeners()``. Use ``get_schedule()`` instead
+- Stop listing event handlers in ``InteractiveContext.print_lifecycle_order()``, which
+  now prints only the lifecycle phases and their states
 
 **5.18.1 - 10/23/26**
 
