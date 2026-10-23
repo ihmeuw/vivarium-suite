@@ -3,6 +3,8 @@
 - **Breaking change.** Rename ``InteractiveContext.get_attribute_names()`` to ``list_attributes()``
 - **Breaking change.** Remove ``InteractiveContext.list_events()`` and
   ``InteractiveContext.get_listeners()``. Use ``get_schedule()`` instead
+- **Breaking change.** Remove ``builder.lifecycle.add_handlers()``, which only fed
+  the handler listing that ``print_lifecycle_order()`` no longer shows
 - Stop listing event handlers in ``InteractiveContext.print_lifecycle_order()``, which
   now prints only the lifecycle phases and their states
 

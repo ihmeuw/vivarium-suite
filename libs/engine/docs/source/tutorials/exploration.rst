@@ -165,7 +165,6 @@ observation at the state and priority where it is made. The states of the
     setup     post_setup         5                                     values_manager       action         on_post_setup    True
                                  5                                 population_manager       action         on_post_setup    True
                                  5                                     datetime_clock       action         on_post_setup    True
-                                 5                                      event_manager       action         on_post_setup    True
                                  5                               lookup_table_manager       action         on_post_setup    True
                                  5         disease_model.lower_respiratory_infections       action         on_post_setup    True
     main_loop time_step__prepare 5                                    deaths_observer       action  on_time_step_prepare    True

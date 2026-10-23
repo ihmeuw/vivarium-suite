@@ -1961,8 +1961,8 @@ class TestGetSchedule:
     def test_manager_listeners_are_listed(self) -> None:
         sim = InteractiveContext(components=[TimeStepListener("a", 3)])
         post_setup = sim.get_schedule().query("state == 'post_setup'")
-        # Managers' own listeners are listed, such as the event manager's on_post_setup.
-        assert "event_manager" in post_setup["component"].values
+        # Managers' own listeners are listed, such as the values manager's on_post_setup.
+        assert "values_manager" in post_setup["component"].values
 
     def test_observing_changes_only_whether_observations_are_active(self) -> None:
         schedules = {
