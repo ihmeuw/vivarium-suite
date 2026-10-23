@@ -1,7 +1,16 @@
-**5.17.0 - 10/23/26**
+**5.18.0 - 10/23/26**
 
 - Add ``InteractiveContext.get_schedule()`` to get what runs in each lifecycle
   state, in order, including the model's observations
+  
+**5.17.1 - 10/22/26**
+
+- Make ``InteractiveContext.find_resources()``'s ``pattern`` optional, so calling it
+  with no arguments lists every resource
+
+**5.17.0 - 10/22/26**
+
+- Add a ``modifiers`` argument to pipeline calls that applies only the given modifiers
 
 **5.16.0 - 10/21/26**
 

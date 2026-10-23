@@ -139,7 +139,7 @@ class TestGetLookupTable:
         self, sim: InteractiveContext
     ) -> None:
         """The two halves agree: whatever the search surfaces, the getter accepts."""
-        found = sim.find_resources("")
+        found = sim.find_resources()
         names = found.loc[found["resource_type"] == "lookup_table", "name"]
         assert len(names) > 0
         for name in names:
@@ -743,7 +743,7 @@ class TestFindResources:
         assert "test_column_1" in set(sim.find_resources("column_1")["name"])
 
     def test_unsearchable_types_are_not_reported(self, sim: InteractiveContext) -> None:
-        reported = set(sim.find_resources("")["resource_type"])
+        reported = set(sim.find_resources()["resource_type"])
         assert not {"column", "stream", "initializer"} & reported
 
     def test_lookup_tables_are_reported(self) -> None:
@@ -902,13 +902,13 @@ class TestFindResources:
             ]
         )
         order = ["attribute", "value", "value_modifier", "lookup_table"]
-        types = list(sim.find_resources("")["resource_type"])
+        types = list(sim.find_resources()["resource_type"])
         assert set(types) == set(order)
         assert types == sorted(types, key=order.index)
 
     def test_ties_then_break_by_name(self, sim: InteractiveContext) -> None:
         """Within one rank and one resource type, names run alphabetically."""
-        found = sim.find_resources("")
+        found = sim.find_resources()
         attributes = list(found.loc[found["resource_type"] == "attribute", "name"])
         assert attributes == sorted(attributes)
 
@@ -921,7 +921,10 @@ class TestFindResources:
             for node in sim._resource.get_graph().nodes
             if node.RESOURCE_TYPE not in ("column", "stream", "initializer")
         }
-        assert set(sim.find_resources("").itertuples(index=False)) == expected
+        assert set(sim.find_resources().itertuples(index=False)) == expected
+
+    def test_no_pattern_lists_every_resource(self, sim: InteractiveContext) -> None:
+        pd.testing.assert_frame_equal(sim.find_resources(), sim.find_resources(""))
 
     def test_no_match_returns_an_empty_frame(self, sim: InteractiveContext) -> None:
         assert sim.find_resources("no_such_resource").empty

@@ -387,6 +387,48 @@ and its error message will point you back at attributes (and vice versa).
 
    No value pipeline 'mortality_rate' registered. Are you looking for an attribute pipeline? Try get_attribute().
 
+Calling a pipeline
+~~~~~~~~~~~~~~~~~~
+
+Calling a pipeline evaluates it. The ``mode`` argument controls how much of the
+pipeline runs: ``"source"`` returns the source alone, ``"no-post-processors"``
+applies the modifiers but skips the post-processors, and ``"default"`` runs
+everything. To isolate the contribution of particular modifiers, pass them as
+``modifiers``, either as the objects in the pipeline's ``modifiers`` list or as
+their names. All other modifiers are skipped.
+
+.. testcode::
+
+   mortality_rate = sim.get_attribute("mortality_rate")
+   index = sim.get_population_index()[:1]
+   delete_csmr = mortality_rate.modifiers[0]
+   print(delete_csmr.name)
+   print(mortality_rate(index, mode="source").iloc[0])
+   print(mortality_rate(index, mode="no-post-processors", modifiers=[delete_csmr]).iloc[0])
+
+.. testoutput::
+
+   mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
+   0.01
+   0.00998...
+
+``modifiers`` composes with ``mode="default"`` and ``mode="no-post-processors"``.
+Combining it with ``mode="source"`` raises an error, since that mode applies no
+modifiers.
+
+.. warning::
+
+    Keep these caveats in mind when selecting modifiers:
+
+    - The selected modifiers apply in the pipeline's order, not in the order you
+      list them, and **that order is not guaranteed (see above)**. When modifiers do
+      not commute, the result depends on that order.
+    - A modifier's name contains its registration index, so a name saved from an
+      earlier run can stop matching after components are added or reordered. A
+      name that matches no modifier raises an error.
+    - The result is computed from the current state of the simulation. **It is not
+      necessarily the value the simulation used during a time step.**
+
 Finding something by name
 -------------------------
 
