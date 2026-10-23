@@ -1,8 +1,13 @@
-**5.17.2 - 10/23/26**
+**5.18.1 - 10/23/26**
 
 - Raise when a listener or emitter is registered for an event name that is not a lifecycle state
 - Define the lifecycle phases once in ``lifecycle_states.PHASES`` and build the lifecycle from them
 
+**5.18.0 - 10/23/26**
+
+- Add ``InteractiveContext.get_schedule()`` to get what runs in each lifecycle
+  state, in order, including the model's observations
+  
 **5.17.1 - 10/22/26**
 
 - Make ``InteractiveContext.find_resources()``'s ``pattern`` optional, so calling it
