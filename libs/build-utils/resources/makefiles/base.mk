@@ -30,6 +30,14 @@ endif
 # A package with no `[project].name` must fail rather than fall back to a directory name.
 DOCS_NAME ?= $(DIST_NAME_FROM_PROJECT)
 
+# Sphinx program and docs folders used by `build-docs` and `test-docs`; `deploy-docs`
+# also uses DOCS_BUILD_DIR.
+# The defaults match the monorepo libraries; a repo with another docs layout overrides
+# them in its own Makefile.
+SPHINXBUILD ?= sphinx-build
+DOCS_SOURCE_DIR ?= docs/source
+DOCS_BUILD_DIR ?= docs/build
+
 # Build the editable_mode=compat config-settings flag only when the distribution name was parsed from [project].
 # NOTE: editable_mode=compat: produces a classic .pth-based editable install
 #   (sys.path entry pointing at src/) instead of the PEP 660 default
@@ -141,6 +149,8 @@ debug: # Print debug information
 	@echo "PACKAGE_DIR:                      ${PACKAGE_DIR}"
 	@echo "PACKAGE_VERSION:                  ${PACKAGE_VERSION}"
 	@echo "DOCS_NAME:                        ${DOCS_NAME}"
+	@echo "DOCS_SOURCE_DIR:                  ${DOCS_SOURCE_DIR}"
+	@echo "DOCS_BUILD_DIR:                   ${DOCS_BUILD_DIR}"
 	@echo "PYPI_ARTIFACTORY_CREDENTIALS_USR: ${PYPI_ARTIFACTORY_CREDENTIALS_USR} "
 	@echo
 	@echo "vivarium_build_utils version:     $(shell python -c "import importlib.metadata; print(importlib.metadata.version('vivarium_build_utils'))" 2>/dev/null || echo "unknown")"
@@ -222,17 +232,19 @@ mypy-if-typed: # Run mypy only if a py.typed marker exists under src/
 
 .PHONY: build-docs
 build-docs: # Build documentation
-	@if [ -d docs/ ]; then \
-		rm -rf docs/build/; \
-		$(MAKE) -C docs/ html SPHINXOPTS="-T -W --keep-going"; \
+# Run when docs/ or DOCS_SOURCE_DIR exists: another layout under docs/ fails loudly
+# rather than skipping, and a DOCS_SOURCE_DIR outside docs/ still builds.
+	@if [ -d docs/ ] || [ -d $(DOCS_SOURCE_DIR) ]; then \
+		rm -rf $(DOCS_BUILD_DIR); \
+		$(SPHINXBUILD) -M html $(DOCS_SOURCE_DIR) $(DOCS_BUILD_DIR) -T -W --keep-going; \
 	else \
 		echo "No 'docs/' folder found - skipping."; \
 	fi
 
 .PHONY: test-docs
 test-docs: # Test documentation examples
-	@if [ -d docs/ ]; then \
-		$(MAKE) doctest -C docs/; \
+	@if [ -d docs/ ] || [ -d $(DOCS_SOURCE_DIR) ]; then \
+		$(SPHINXBUILD) -M doctest $(DOCS_SOURCE_DIR) $(DOCS_BUILD_DIR); \
 	else \
 		echo "No 'docs/' folder found - skipping."; \
 	fi
@@ -286,7 +298,7 @@ deploy-docs: # Deploy documentation to shared server
 	@[ "${DOCS_NAME}" ] && echo "" > /dev/null || ( echo "DOCS_NAME is empty; add a [project] name to pyproject.toml or pass DOCS_NAME explicitly"; exit 1 )
 	@case "${DOCS_NAME}" in *[@/]*) echo "DOCS_NAME '${DOCS_NAME}' looks like a Jenkins workspace name rather than a package name; refusing to publish"; exit 1 ;; esac
 	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
-	cp -R ./docs/build/html/* ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
+	cp -R $(DOCS_BUILD_DIR)/html/* ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
 	chmod -R 0775 ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
 	cd ${DOCS_ROOT_PATH}/${DOCS_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
 
