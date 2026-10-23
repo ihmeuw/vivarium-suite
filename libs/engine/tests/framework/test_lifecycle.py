@@ -199,6 +199,16 @@ def test_lifecycle_get_states() -> None:
         lc.get_state_names("not_a_phase")
 
 
+def test_lifecycle_get_phase_names() -> None:
+    lc = LifeCycle()
+    # initialization is automatically added on instantiation
+    assert lc.get_phase_names() == ["initialization"]
+
+    for phase in ["phase_b", "phase_a", "phase_c"]:
+        lc.add_phase(phase, [f"{phase}_state"], loop=False)
+    assert lc.get_phase_names() == ["initialization", "phase_b", "phase_a", "phase_c"]
+
+
 def test_lifecycle_integration() -> None:
     lc = LifeCycle()
 
