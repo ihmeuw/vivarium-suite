@@ -1,3 +1,8 @@
+**5.18.0 - 10/23/26**
+
+- Add ``InteractiveContext.get_schedule()`` to get what runs in each lifecycle
+  state, in order, including the model's observations
+  
 **5.17.1 - 10/22/26**
 
 - Make ``InteractiveContext.find_resources()``'s ``pattern`` optional, so calling it

@@ -103,6 +103,15 @@ class LifeCycleManager(Manager):
                 f"to {new_state.name} requested."
             )
 
+    def get_phase_names(self) -> list[str]:
+        """Get the names of all phases in their order of execution.
+
+        Returns
+        -------
+            A list of phase names in order of execution.
+        """
+        return self.lifecycle.get_phase_names()
+
     def get_state_names(self, phase: str) -> list[str]:
         """Gets all states in the phase in their order of execution.
 
