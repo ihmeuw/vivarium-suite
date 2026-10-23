@@ -1,3 +1,12 @@
+**5.17.1 - 10/22/26**
+
+- Make ``InteractiveContext.find_resources()``'s ``pattern`` optional, so calling it
+  with no arguments lists every resource
+
+**5.17.0 - 10/22/26**
+
+- Add a ``modifiers`` argument to pipeline calls that applies only the given modifiers
+
 **5.16.0 - 10/21/26**
 
 - Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,

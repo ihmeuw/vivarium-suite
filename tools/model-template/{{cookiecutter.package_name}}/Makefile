@@ -227,9 +227,6 @@ _build-env:
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS.
 	conda run --no-capture-output $(CONDA_ENV_FLAG) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) \
 		$(if $(filter no,$(artifactory_access)),IHME_PYPI=)
-	@if [ "$(type)" = "simulation" ]; then \
-		conda install $(CONDA_ENV_FLAG) redis -c anaconda -y; \
-	fi
 # 	`set -e` is load-bearing: a multi-command line reports only its last command's status.
 	@if [ "$(lfs)" = "yes" ]; then \
 		set -e; \
