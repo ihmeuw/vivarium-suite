@@ -185,8 +185,6 @@ class EventManager(Manager):
         self.clock = builder.time.clock()
         self.step_size = builder.time.step_size()
 
-        builder.event.register_listener(lifecycle_states.POST_SETUP, self.on_post_setup)
-        self.add_handlers = builder.lifecycle.add_handlers
         self.add_constraint = builder.lifecycle.add_constraint
 
         builder.lifecycle.add_constraint(
@@ -200,10 +198,6 @@ class EventManager(Manager):
         builder.lifecycle.add_constraint(
             self.register_listener, allow_during=[lifecycle_states.SETUP]
         )
-
-    def on_post_setup(self, event: Event) -> None:
-        for name, channel in self._event_types.items():
-            self.add_handlers(name, [h for level in channel.listeners for h in level])
 
     def get_emitter(
         self, event_name: str

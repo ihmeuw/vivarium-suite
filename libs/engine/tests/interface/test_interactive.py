@@ -72,7 +72,7 @@ class TestGetAttribute:
 
     def test_a_created_column_is_an_attribute(self, sim: InteractiveContext) -> None:
         """A column a component creates is reachable as an attribute."""
-        assert "test_column_1" in sim.get_attribute_names()
+        assert "test_column_1" in sim.list_attributes()
 
     def test_the_pipeline_itself_is_returned(self, sim: InteractiveContext) -> None:
         """The getter hands back the pipeline, not the value it produces."""
@@ -90,12 +90,12 @@ class TestGetAttribute:
         without the guard in ``InteractiveContext.get_attribute`` a misspelling would
         leave a new pipeline behind.
         """
-        registered = sim.get_attribute_names()
+        registered = sim.list_attributes()
 
         with pytest.raises(ValueError):
             sim.get_attribute("foo")
 
-        assert sim.get_attribute_names() == registered
+        assert sim.list_attributes() == registered
 
 
 def test_get_value_and_get_attribute_point_at_each_other() -> None:
@@ -1359,7 +1359,7 @@ class TestRenderDependencyTree:
         ]
 
 
-def test_get_attribute_names() -> None:
+def test_list_attributes() -> None:
     sim = InteractiveContext(
         components=[MultiLevelMultiColumnCreator(), AttributePipelineCreator()]
     )
@@ -1373,11 +1373,22 @@ def test_get_attribute_names() -> None:
         "test_attribute",
         "attribute_generating_columns_6_7",
     ]
-    assert set(sim.get_attribute_names()) == set(expected_attributes)
+    assert set(sim.list_attributes()) == set(expected_attributes)
     # Make sure there's nothing unexpected compared to the actual population df
-    assert set(sim.get_attribute_names()) == set(
+    assert set(sim.list_attributes()) == set(
         sim.get_population(expected_attributes).columns.get_level_values(0)
     )
+
+
+def test_get_attribute_names_is_removed_at_next_major_version() -> None:
+    """Fail once the CHANGELOG starts a new major release while the deprecated alias remains."""
+    changelog = Path(__file__).parents[2] / "CHANGELOG.rst"
+    match = re.match(r"\*\*(\d+)\.", changelog.read_text())
+    assert match is not None
+    if int(match.group(1)) != 5:
+        assert not hasattr(
+            InteractiveContext, "get_attribute_names"
+        ), "Remove the deprecated InteractiveContext.get_attribute_names() before next major release."
 
 
 def test_get_population_querying() -> None:
@@ -1607,7 +1618,7 @@ class TestGetPopulationNestedAttributes:
             kwargs["include_untracked"] = include_untracked
 
         max_depth = self._patch_depth_tracking(sim, mocker)
-        pop = sim.get_population(sim.get_attribute_names(), **kwargs)  # type: ignore[call-overload]
+        pop = sim.get_population(sim.list_attributes(), **kwargs)  # type: ignore[call-overload]
         if include_untracked is True:
             assert set(pop["inner"]) == {0, 1, 2}
             if outer_column is not None:
@@ -1840,7 +1851,7 @@ class TestResultsGathering:
         def run(observe: bool) -> pd.DataFrame:
             sim = InteractiveContext(str(disease_model_spec), observe=observe)
             sim.take_steps(5)
-            return sim.get_population(sim.get_attribute_names())
+            return sim.get_population(sim.list_attributes())
 
         on, off = run(observe=True), run(observe=False)
         assert "previous_alive" in off.columns
@@ -1961,8 +1972,8 @@ class TestGetSchedule:
     def test_manager_listeners_are_listed(self) -> None:
         sim = InteractiveContext(components=[TimeStepListener("a", 3)])
         post_setup = sim.get_schedule().query("state == 'post_setup'")
-        # Managers' own listeners are listed, such as the event manager's on_post_setup.
-        assert "event_manager" in post_setup["component"].values
+        # Managers' own listeners are listed, such as the values manager's on_post_setup.
+        assert "values_manager" in post_setup["component"].values
 
     def test_observing_changes_only_whether_observations_are_active(self) -> None:
         schedules = {
@@ -1983,9 +1994,9 @@ class TestGetSchedule:
 
     def test_no_event_channels_are_created(self) -> None:
         sim = InteractiveContext(components=[TimeStepListener("a", 3)])
-        events = sim.list_events()
+        events = sim._events.list_events()
         sim.get_schedule()
-        assert sim.list_events() == events
+        assert sim._events.list_events() == events
 
     @pytest.mark.parametrize("observe", [False, True])
     def test_observations_are_listed_whether_or_not_observed(self, observe: bool) -> None:
