@@ -558,7 +558,7 @@ def test_private_columns_get_registered() -> None:
         "datetime_clock": [],
     }
     # Check that there are indeed other attributes registered besides via column_created
-    len(sim.get_population(sim.get_attribute_names()).columns) > 3
+    len(sim.get_population(sim.list_attributes()).columns) > 3
 
 
 ####################

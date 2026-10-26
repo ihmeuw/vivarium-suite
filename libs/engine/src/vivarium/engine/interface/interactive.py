@@ -15,6 +15,7 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass, field
 from math import ceil
 from typing import TYPE_CHECKING, NamedTuple, overload
@@ -41,7 +42,6 @@ if TYPE_CHECKING:
     from vivarium.config_tree.main import ConfigTree
 
     from vivarium.engine import Component
-    from vivarium.engine.framework.event import Event
     from vivarium.engine.types import ClockStepSize, ClockTime
 
 _IGNORED_RESOURCE_TYPES = frozenset(
@@ -749,9 +749,23 @@ class InteractiveContext(BaseSimulationContext):
             index, attributes, include_untracked=include_untracked
         )
 
-    def get_attribute_names(self) -> list[str]:
+    def list_attributes(self) -> list[str]:
         """List all attributes in the population state table."""
         return self._population.get_all_attribute_names()
+
+    def get_attribute_names(self) -> list[str]:
+        """Deprecated alias for :meth:`list_attributes`.
+
+        .. deprecated:: 5.19.0
+            Use :meth:`list_attributes` instead. This alias will be removed.
+        """
+        warnings.warn(
+            "InteractiveContext.get_attribute_names is deprecated and will be removed; "
+            "use InteractiveContext.list_attributes instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self.list_attributes()
 
     def list_values(self) -> list[str]:
         """List the names of all value pipelines in the simulation."""
@@ -776,7 +790,7 @@ class InteractiveContext(BaseSimulationContext):
         ----------
         attribute_pipeline_name
             Name of the attribute pipeline to return. Available names are given
-            by :meth:`get_attribute_names`.
+            by :meth:`list_attributes`.
 
         Returns
         -------
@@ -789,7 +803,7 @@ class InteractiveContext(BaseSimulationContext):
         """
         # Guarded because the values manager creates a pipeline for an unknown
         # name, which would silently pollute the simulation with an empty one.
-        if attribute_pipeline_name not in self.get_attribute_names():
+        if attribute_pipeline_name not in self.list_attributes():
             raise ValueError(
                 f"No attribute pipeline '{attribute_pipeline_name}' registered. "
                 "Are you looking for a value pipeline? Try get_value()."
@@ -1022,30 +1036,6 @@ class InteractiveContext(BaseSimulationContext):
             if dependency.RESOURCE_TYPE not in _IGNORED_RESOURCE_TYPES
         ]
 
-    def list_events(self) -> list[str]:
-        """List all event types registered with the simulation."""
-        return self._events.list_events()
-
-    def get_listeners(self, event_name: str) -> dict[int, list[Callable[[Event], None]]]:
-        """Get all listeners of a particular type of event.
-
-        Available events can be found by calling
-        :func:`InteractiveContext.list_events`.
-
-        Parameters
-        ----------
-        event_name
-            The name of the event to grab the listeners for.
-
-        Returns
-        -------
-            A dictionary that maps each priority level of the named event's
-            listeners to a list of listeners at that level.
-        """
-        if event_name not in self._events:
-            raise ValueError(f"No event {event_name} in system.")
-        return self._events.get_listeners(event_name)
-
     def get_schedule(self) -> pd.DataFrame:
         """Get what runs in the simulation, in the order they currently run.
 
@@ -1184,7 +1174,7 @@ class InteractiveContext(BaseSimulationContext):
         print("\n".join(initializers))
 
     def print_lifecycle_order(self) -> None:
-        """Print the order of lifecycle events (including user event handlers)."""
+        """Print the lifecycle phases and the states in each, in the order they run."""
         print(self._lifecycle)
 
     def __repr__(self) -> str:
