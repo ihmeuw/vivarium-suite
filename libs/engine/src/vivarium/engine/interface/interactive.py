@@ -15,6 +15,7 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass, field
 from math import ceil
 from typing import TYPE_CHECKING, NamedTuple, overload
@@ -751,6 +752,20 @@ class InteractiveContext(BaseSimulationContext):
     def list_attributes(self) -> list[str]:
         """List all attributes in the population state table."""
         return self._population.get_all_attribute_names()
+
+    def get_attribute_names(self) -> list[str]:
+        """Deprecated alias for :meth:`list_attributes`.
+
+        .. deprecated:: 5.19.0
+            Use :meth:`list_attributes` instead. This alias will be removed.
+        """
+        warnings.warn(
+            "InteractiveContext.get_attribute_names is deprecated and will be removed; "
+            "use InteractiveContext.list_attributes instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self.list_attributes()
 
     def list_values(self) -> list[str]:
         """List the names of all value pipelines in the simulation."""

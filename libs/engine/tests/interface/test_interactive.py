@@ -1380,6 +1380,17 @@ def test_list_attributes() -> None:
     )
 
 
+def test_get_attribute_names_is_removed_at_next_major_version() -> None:
+    """Fail once the CHANGELOG starts a 6.x release while the deprecated alias remains."""
+    changelog = Path(__file__).parents[2] / "CHANGELOG.rst"
+    match = re.match(r"\*\*(\d+)\.", changelog.read_text())
+    assert match is not None
+    if int(match.group(1)) != 5:
+        assert not hasattr(
+            InteractiveContext, "get_attribute_names"
+        ), "Remove the deprecated InteractiveContext.get_attribute_names() before next major release."
+
+
 def test_get_population_querying() -> None:
     sim = InteractiveContext(components=[ColumnCreator()])
     assert set(sim.get_population("test_column_1")) == {0, 1, 2}
