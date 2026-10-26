@@ -48,7 +48,11 @@ from vivarium.engine.framework.resource.resource import Column, Resource
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
-from vivarium.engine.interface.interactive import _match_rank, _render_dependency_tree
+from vivarium.engine.interface.interactive import (
+    _HELP_SECTIONS,
+    _match_rank,
+    _render_dependency_tree,
+)
 from vivarium.engine.types import ClockTime
 
 
@@ -2111,3 +2115,44 @@ class TestGetSchedule:
             .set_index(["state", "priority"]),
             expected,
         )
+
+
+class TestHelp:
+    NOT_INDEXED = {"help", "finalize", "initialize_simulants", "name"}
+    """Public members :meth:`InteractiveContext.help` deliberately leaves out."""
+
+    def test_indexes_every_public_member_once(self) -> None:
+        indexed = [name for _, names in _HELP_SECTIONS for name in names]
+        public = {name for name in dir(InteractiveContext) if not name.startswith("_")}
+        assert len(indexed) == len(set(indexed))
+        assert set(indexed) == public - self.NOT_INDEXED
+
+    def test_indexed_members_have_docstrings(self) -> None:
+        for _, names in _HELP_SECTIONS:
+            for name in names:
+                assert inspect.getdoc(getattr(InteractiveContext, name)), name
+
+    def test_prints_each_member_under_its_heading(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        InteractiveContext(setup=False).help()
+        sections = capsys.readouterr().out.strip().split("\n\n")
+
+        assert len(sections) == len(_HELP_SECTIONS)
+        for section, (heading, names) in zip(sections, _HELP_SECTIONS):
+            lines = section.splitlines()
+            assert lines[0] == heading
+            # current_time is the one property and so does not get ()
+            assert [line.split()[0] for line in lines[1:]] == [
+                name if name == "current_time" else f"{name}()" for name in names
+            ]
+
+    def test_prints_docstring_summaries(self, capsys: pytest.CaptureFixture[str]) -> None:
+        InteractiveContext(setup=False).help()
+        lines = capsys.readouterr().out.splitlines()
+
+        for name in (name for _, names in _HELP_SECTIONS for name in names):
+            docstring = inspect.getdoc(getattr(InteractiveContext, name))
+            assert docstring
+            summary = docstring.partition("\n")[0]
+            assert any(line.endswith(f"  {summary}") for line in lines), name

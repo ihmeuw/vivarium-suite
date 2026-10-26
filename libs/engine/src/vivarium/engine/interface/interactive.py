@@ -14,6 +14,7 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 """
 from __future__ import annotations
 
+import inspect
 import re
 import warnings
 from dataclasses import dataclass, field
@@ -68,6 +69,40 @@ _RESOURCE_TYPE_RANK = {
 
 _WORD_SEPARATORS = frozenset({".", "_"})
 """Characters :meth:`InteractiveContext.find_resources` treats as word boundaries."""
+
+_HELP_SECTIONS = (
+    (
+        "Run the simulation",
+        ("setup", "step", "take_steps", "run_for", "run_until", "run", "current_time"),
+    ),
+    ("Inspect the population", ("get_population", "list_attributes", "get_attribute")),
+    (
+        "Find and inspect resources",
+        (
+            "find_resources",
+            "list_values",
+            "get_value",
+            "get_lookup_table",
+            "get_dependencies",
+            "print_dependencies",
+        ),
+    ),
+    (
+        "Inspect components and scheduling",
+        (
+            "list_components",
+            "get_component",
+            "get_schedule",
+            "print_lifecycle_order",
+            "print_initializer_order",
+        ),
+    ),
+    (
+        "Observe and collect results",
+        ("register_observation", "pause_observation", "get_results"),
+    ),
+)
+"""Headings and the :class:`InteractiveContext` members that :meth:`InteractiveContext.help` lists under each."""
 
 
 class _ResourceRow(NamedTuple):
@@ -333,8 +368,22 @@ class InteractiveContext(BaseSimulationContext):
 
     @property
     def current_time(self) -> ClockTime:
-        """Returns the current simulation time."""
+        """Return the current simulation time."""
         return self._clock.time
+
+    def help(self) -> None:
+        """Print the methods available on this context, grouped by task."""
+        width = max(len(name) for _, names in _HELP_SECTIONS for name in names) + 2
+        sections = []
+        for heading, names in _HELP_SECTIONS:
+            lines = [heading]
+            for name in names:
+                member = getattr(type(self), name)
+                label = name if isinstance(member, property) else f"{name}()"
+                summary = (inspect.getdoc(member) or "").partition("\n")[0]
+                lines.append(f"    {label:<{width}}  {summary}")
+            sections.append("\n".join(lines))
+        print("\n\n".join(sections))
 
     def get_results(self) -> dict[str, Any]:
         """Get the model's formatted results and the values of each registered observation.
@@ -355,6 +404,7 @@ class InteractiveContext(BaseSimulationContext):
         return results
 
     def setup(self) -> None:
+        """Set up the simulation and create the initial population."""
         super().setup()
         self.initialize_simulants()
         self._population_view = self._builder.population.get_view()
@@ -1147,7 +1197,8 @@ class InteractiveContext(BaseSimulationContext):
         return self._component_manager.list_components()
 
     def get_component(self, name: str) -> Any:
-        """Get the component in the simulation that has ``name``, if present.
+        """Get the component in the simulation with the given name, if present.
+
         Names are guaranteed to be unique.
 
         Parameters
