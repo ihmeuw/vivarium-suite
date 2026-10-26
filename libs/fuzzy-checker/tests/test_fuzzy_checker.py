@@ -290,7 +290,7 @@ def test_save_diagnostic_output(tmpdir: LocalPath) -> None:
     fuzzy_checker.save_diagnostic_output(tmpdir)
     assert len(tmpdir.listdir()) == 1
 
-    output = pd.read_csv(tmpdir.listdir()[0])
+    output = pd.read_csv(str(tmpdir.listdir()[0]))
     assert output.shape == (1, 15)
 
 
