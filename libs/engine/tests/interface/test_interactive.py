@@ -2118,7 +2118,7 @@ class TestGetSchedule:
 
 
 class TestHelp:
-    NOT_INDEXED = {"help", "finalize", "initialize_simulants", "name"}
+    NOT_INDEXED = {"help", "finalize", "initialize_simulants", "name", "get_attribute_names"}
     """Public members :meth:`InteractiveContext.help` deliberately leaves out."""
 
     def test_indexes_every_public_member_once(self) -> None:
