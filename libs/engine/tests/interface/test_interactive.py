@@ -2127,10 +2127,15 @@ class TestHelp:
         assert len(indexed) == len(set(indexed))
         assert set(indexed) == public - self.NOT_INDEXED
 
-    def test_indexed_members_have_docstrings(self) -> None:
+    def test_indexed_members_have_one_line_summaries(self) -> None:
         for _, names in _HELP_SECTIONS:
             for name in names:
-                assert inspect.getdoc(getattr(InteractiveContext, name)), name
+                docstring = inspect.getdoc(getattr(InteractiveContext, name))
+                assert docstring, name
+                lines = docstring.splitlines()
+                # Assert docstring is either a single line or has an empty line
+                # between the one-liner and the rest
+                assert len(lines) == 1 or not lines[1], name
 
     def test_prints_each_member_under_its_heading(
         self, capsys: pytest.CaptureFixture[str]
@@ -2149,10 +2154,14 @@ class TestHelp:
 
     def test_prints_docstring_summaries(self, capsys: pytest.CaptureFixture[str]) -> None:
         InteractiveContext(setup=False).help()
-        lines = capsys.readouterr().out.splitlines()
+        member_lines = {
+            line.split()[0].removesuffix("()"): line
+            for line in capsys.readouterr().out.splitlines()
+            if line.startswith("    ")
+        }
 
         for name in (name for _, names in _HELP_SECTIONS for name in names):
             docstring = inspect.getdoc(getattr(InteractiveContext, name))
             assert docstring
             summary = docstring.partition("\n")[0]
-            assert any(line.endswith(f"  {summary}") for line in lines), name
+            assert member_lines[name].endswith(f"  {summary}"), name
