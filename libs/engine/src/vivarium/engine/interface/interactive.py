@@ -298,6 +298,8 @@ class InteractiveContext(BaseSimulationContext):
 
     Does not gather the model's results by default; pass ``observe=True`` to
     include them.
+
+    Call :meth:`help` to list the available methods by task.
     """
 
     def __init__(
