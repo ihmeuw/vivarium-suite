@@ -96,6 +96,15 @@ It includes:
 
 Loaded automatically when the context is relevant to the skill's description.
 
+**MCP servers**
+
+- ``jira`` — a local Jira MCP server, forked from the FHS Engineering server in
+  ``ihme-internal/fhseng-claude-utils``. It replaces IHME Infra's hosted
+  ``mcp-jira`` plugin for SimSci work: in addition to get, search, comment,
+  link, and transition tools, it reads and sets story points, priority, fix
+  versions, sprint, and epic. Needs ``uv`` and a Jira personal access token;
+  the ``plugin-setup`` skill walks through both.
+
 Layout
 ======
 
@@ -114,6 +123,8 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives unde
   model-loaded reference material).
 - ``tools/ai-tools/hooks/``: the ``SessionStart`` hook that adds the writing-style
   text to each session.
+- ``tools/ai-tools/.mcp.json`` and ``tools/ai-tools/mcp-servers/``: the ``jira``
+  MCP server, a single ``uv`` script with its unit tests next to it.
 - ``tools/ai-tools/CHANGELOG.rst``: history of plugin changes.
 
 Top-level project metadata (license, code of conduct, contributing guide) lives at the

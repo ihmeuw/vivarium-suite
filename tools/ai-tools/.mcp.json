@@ -1,0 +1,8 @@
+{
+    "mcpServers": {
+        "jira": {
+            "command": "uv",
+            "args": ["run", "--quiet", "--script", "${CLAUDE_PLUGIN_ROOT}/mcp-servers/jira/server.py"]
+        }
+    }
+}

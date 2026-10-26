@@ -124,6 +124,71 @@ The 0600-file approach above is the team default — short install, consistent b
 
 All of these end up at the same state: `JENKINS_MCP_AUTH` set in the environment of whatever shell launches `claude`, and the `.claude.json` entry continues to reference `${JENKINS_MCP_AUTH}` literally.
 
+## Jira MCP server
+
+This plugin ships its own Jira MCP server, `jira` (tools named
+`mcp__plugin_simsci-internal_jira__*`). It replaces IHME Infra's hosted
+`mcp-jira` plugin for SimSci work, because Infra's server cannot read or set
+story points, priority, sprint, or fix versions on create. The server runs
+locally and calls Jira with the user's personal access token.
+
+### 1. Install `uv`
+
+Claude Code starts the server with `uv run --script`, which installs the
+server's Python dependencies on first use. Check with `uv --version`. If it is
+missing, have the user install it:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 2. Create a Jira personal access token
+
+Have the user open `https://jira.ihme.washington.edu`, click their avatar,
+then **Profile** > **Personal Access Tokens** > **Create token**. Jira shows
+the token only once. The token has the same permissions as the user's Jira
+account, so they should treat it like a password.
+
+### 3. Store the token
+
+The server reads `JIRA_API_TOKEN` from the environment. If the variable is not
+set, it reads the line `export JIRA_API_TOKEN=<token>` from `~/.tokens`. Have
+the user run this in their own terminal, not through Claude, so the token does
+not enter the conversation:
+
+```bash
+touch ~/.tokens && chmod 600 ~/.tokens
+read -rs JIRA_TOKEN_RAW   # paste the token and press Enter
+printf 'export JIRA_API_TOKEN=%s\n' "$JIRA_TOKEN_RAW" >> ~/.tokens
+unset JIRA_TOKEN_RAW
+```
+
+### 4. Restart and verify
+
+Restart Claude Code and run `/mcp`. The `plugin:simsci-internal:jira` server
+must show as connected. Then ask Claude to get any MIC ticket. The result must
+include `story_points`. A missing or invalid token gives an error that names
+`JIRA_API_TOKEN`.
+
+### 5. Disable Infra's Jira plugin
+
+With both servers enabled, Claude can pick Infra's `create_issue`, which
+silently drops story points. Have the user disable it:
+
+```text
+/plugin disable mcp-jira@ihme-claude-marketplace
+```
+
+### Optional settings
+
+These environment variables change the server's defaults:
+
+| Variable | Default | Use |
+|----------|---------|-----|
+| `JIRA_PROJECT` | `MIC` | Project for `create_issue` when no `project` is given |
+| `JIRA_BOARD_ID` | `301` (MIC board) | Board that sprint names and `active` resolve against |
+| `JIRA_BASE_URL` | `https://jira.ihme.washington.edu` | Jira instance |
+
 ## GitHub MCP server
 
 The `github` plugin connects Claude Code to GitHub via the hosted MCP server at

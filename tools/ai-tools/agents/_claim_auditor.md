@@ -10,8 +10,8 @@ tools:
   - mcp__plugin_github_github__get_file_contents
   - mcp__plugin_github_github__list_branches
   - mcp__plugin_mcp-hub_mcp-hub__get_page
-  - mcp__plugin_mcp-jira_mcp-jira__get_issue
-  - mcp__plugin_mcp-jira_mcp-jira__search
+  - mcp__plugin_simsci-internal_jira__get_issue
+  - mcp__plugin_simsci-internal_jira__search
   - mcp__plugin_slack_slack__slack_read_channel
   - mcp__plugin_slack_slack__slack_search_channels
   - mcp__jenkins__getJob
