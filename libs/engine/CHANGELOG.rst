@@ -1,3 +1,7 @@
+**5.19.1 - 10/26/26**
+
+- Add ``InteractiveContext.help()``, which prints the context's methods grouped by task
+
 **5.19.0 - 10/26/26**
 
 - **Breaking change.** Remove ``InteractiveContext.list_events()`` and
@@ -8,7 +12,6 @@
   name still works but raises a ``FutureWarning`` and will be removed
 - Stop listing event handlers in ``InteractiveContext.print_lifecycle_order()``, which
   now prints only the lifecycle phases and their states
-- Add ``InteractiveContext.help()``, which prints the context's methods grouped by task
 
 **5.18.1 - 10/23/26**
 
