@@ -1381,7 +1381,7 @@ def test_list_attributes() -> None:
 
 
 def test_get_attribute_names_is_removed_at_next_major_version() -> None:
-    """Fail once the CHANGELOG starts a 6.x release while the deprecated alias remains."""
+    """Fail once the CHANGELOG starts a new major release while the deprecated alias remains."""
     changelog = Path(__file__).parents[2] / "CHANGELOG.rst"
     match = re.match(r"\*\*(\d+)\.", changelog.read_text())
     assert match is not None
