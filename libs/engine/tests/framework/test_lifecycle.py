@@ -52,9 +52,6 @@ class BumbleBee:
     def buzz(self, _event: Event) -> None:
         pass
 
-    def what_we_doin(self, _event: Event) -> None:
-        pass
-
     def __call__(self) -> str:
         return "On the way!"
 
