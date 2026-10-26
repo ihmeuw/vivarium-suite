@@ -1,3 +1,7 @@
+**0.4.2 - 10/23/26**
+
+- Pin pandas<2.2 in the ``gbd`` extra for compatibility with db_queries' SQLAlchemy<2 pin
+
 **0.4.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built

@@ -31,12 +31,18 @@ configuration:
         age_start: 0
         age_end: 5
     mortality:
-        mortality_rate: 0.0114
+        data_sources:
+            mortality_rate: 0.0114
         life_expectancy: 88.9
-    lower_respiratory_infections:
-        incidence_rate: 0.871
-        remission_rate: 45.1
-        excess_mortality_rate: 0.634
+    disease_state.infected_with_lower_respiratory_infections:
+        data_sources:
+            excess_mortality_rate: 0.06
+    disease_transition.infected_with_lower_respiratory_infections.incidence_rate:
+        data_sources:
+            incidence_rate: 0.871
+    disease_transition.infected_with_lower_respiratory_infections.remission_rate:
+        data_sources:
+            remission_rate: 45.1
     child_wasting:
         proportion_exposed: 0.0914
     effect_of_child_wasting_on_infected_with_lower_respiratory_infections.incidence_rate:
