@@ -1,3 +1,7 @@
+**5.19.1 - 10/26/26**
+
+- Add ``InteractiveContext.help()``, which prints the context's methods grouped by task
+
 **5.19.0 - 10/26/26**
 
 - **Breaking change.** Remove ``InteractiveContext.list_events()`` and

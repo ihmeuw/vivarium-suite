@@ -80,6 +80,21 @@ Before looking at what a simulation *does*, it helps to be able to ask what it
 entry points. Almost everything here works on a freshly built simulation; the one
 exception is called out below.
 
+To see what methods are available, use
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.help`:
+
+.. testcode::
+
+   sim.help()
+
+.. testoutput::
+   :options: +ELLIPSIS, +NORMALIZE_WHITESPACE
+
+   Run the simulation
+       setup()   Set up the simulation and create the initial population.
+       step()    Advance the simulation one step.
+   ...
+
 Components
 ++++++++++
 

@@ -16,6 +16,9 @@ simulation in a controlled fashion, and examining the
 This tutorial covers building a context and advancing it. Refer to
 :ref:`Exploring a Simulation in an Interactive Setting <exploration_tutorial>`
 for details on how to examine the internal state and properties of a simulation.
+Once you have a context, call its
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.help` method to list
+everything it can do.
 
 For the following tutorial, we will assume you have set up an environment and
 installed ``vivarium-engine``. If you have not, please see the
