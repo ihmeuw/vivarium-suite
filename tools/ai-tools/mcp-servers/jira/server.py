@@ -223,6 +223,10 @@ def _resolve_sprint(sprint: int | str) -> int:
 
 
 def _add_to_sprint(key: str, sprint: int | str) -> None:
+    """Move an issue into a sprint, or out of all sprints if sprint is 'backlog'."""
+    if isinstance(sprint, str) and sprint.lower() == "backlog":
+        _request("POST", "/backlog/issue", json={"issues": [key]}, base=AGILE_URL)
+        return
     sprint_id = _resolve_sprint(sprint)
     _request("POST", f"/sprint/{sprint_id}/issue", json={"issues": [key]}, base=AGILE_URL)
 
@@ -603,7 +607,8 @@ def update_issue(
     assignee
         Jira username, 'me' for the token owner, or '' to unassign.
     sprint
-        Sprint ID, exact sprint name, or 'active' to move the issue into.
+        Sprint ID, exact sprint name, or 'active' to move the issue into, or
+        'backlog' to remove it from its open sprint.
     links
         Links to add, as {phrase: [issue keys]}. Existing links are kept. See
         create_issue for the phrases.

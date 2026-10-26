@@ -132,6 +132,14 @@ def test_sprint_by_name(jira) -> None:
         server._resolve_sprint("Missing")
 
 
+def test_update_moves_to_backlog(jira) -> None:
+    result = server.update_issue("MIC-1", sprint="Backlog")
+    assert result["sprint_failure"] is None
+    assert jira.calls == [
+        ("POST", "/backlog/issue", {"json": {"issues": ["MIC-1"]}, "base": server.AGILE_URL})
+    ]
+
+
 def test_update_refuses_dropped_macro(jira) -> None:
     jira.responses[("GET", "/issue/MIC-1")] = {
         "fields": {"description": "text {code:python}x = 1{code} {panel}p{panel}"}
