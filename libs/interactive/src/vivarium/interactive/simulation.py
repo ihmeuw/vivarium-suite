@@ -23,16 +23,16 @@ from typing import TYPE_CHECKING, NamedTuple, overload
 
 import numpy as np
 import pandas as pd
-
 from vivarium.engine.component import NUM_EVENT_PRIORITIES
-from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import BaseSimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.randomness.stream import RandomnessStream
 from vivarium.engine.framework.resource.resource import Column, Initializer, Resource
 from vivarium.engine.framework.values import AttributePipeline, Pipeline, ValueModifier
-from vivarium.engine.interface.utilities import log_progress, run_from_ipython
+
+from vivarium.interactive.exceptions import ObservationError
+from vivarium.interactive.utilities import log_progress, run_from_ipython
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -41,7 +41,6 @@ if TYPE_CHECKING:
 
     import networkx as nx
     from vivarium.config_tree.main import ConfigTree
-
     from vivarium.engine import Component
     from vivarium.engine.types import ClockStepSize, ClockTime
 

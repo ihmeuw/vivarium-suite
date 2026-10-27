@@ -12,7 +12,22 @@ import pandas as pd
 import pytest
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
+from vivarium.engine import Component, InteractiveContext
+from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.event import Event
+from vivarium.engine.framework.lookup.table import LookupTable
+from vivarium.engine.framework.resource.resource import Column, Resource
+from vivarium.engine.framework.results import Observer
+from vivarium.engine.framework.results.observation import VALUE_COLUMN
+from vivarium.engine.framework.values import AttributePipeline, Pipeline
+from vivarium.engine.interface.interactive import (
+    _HELP_SECTIONS,
+    _match_rank,
+    _render_dependency_tree,
+)
+from vivarium.engine.types import ClockTime
 
+from tests.conftest import FakeWidget
 from tests.framework.population.helpers import (
     assert_squeezing_multi_level_single_outer_multi_inner,
     assert_squeezing_multi_level_single_outer_single_inner,
@@ -38,22 +53,7 @@ from tests.helpers import (
     ReversedNameCreator,
     SingleColumnCreator,
 )
-from tests.interface.conftest import FakeWidget
-from vivarium.engine import Component, InteractiveContext
-from vivarium.engine.exceptions import ObservationError
-from vivarium.engine.framework.engine import Builder, SimulationContext
-from vivarium.engine.framework.event import Event
-from vivarium.engine.framework.lookup.table import LookupTable
-from vivarium.engine.framework.resource.resource import Column, Resource
-from vivarium.engine.framework.results import Observer
-from vivarium.engine.framework.results.observation import VALUE_COLUMN
-from vivarium.engine.framework.values import AttributePipeline, Pipeline
-from vivarium.engine.interface.interactive import (
-    _HELP_SECTIONS,
-    _match_rank,
-    _render_dependency_tree,
-)
-from vivarium.engine.types import ClockTime
+from vivarium.interactive.exceptions import ObservationError
 
 
 def test_list_values() -> None:
