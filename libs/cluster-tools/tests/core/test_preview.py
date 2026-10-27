@@ -1,8 +1,7 @@
 """Acceptance scenarios for the run preview (``core.backend.preview``).
 
 Each scenario converges a small file pipeline, perturbs one thing, and asserts
-the exact set of steps the dry-run reports as would-run -- the WF-15 "see the
-plan before paying" behavior, mirroring the spike's scenario-1/scenario-2.
+the exact set of steps the dry-run reports as would-run.
 """
 
 from pathlib import Path
