@@ -29,7 +29,6 @@ from vivarium.engine import component as engine_component_module
 from vivarium.engine.framework import artifact as engine_artifact_pkg
 from vivarium.engine.framework.configuration import build_model_specification
 from vivarium.engine.framework.results import observer as engine_observer_module
-from vivarium.engine.interface import interactive as engine_interactive_module
 
 
 def test_version_resolves_to_installed_distribution() -> None:
@@ -43,12 +42,11 @@ def test_version_resolves_to_installed_distribution() -> None:
 
 
 def test_engine_public_api_reexports_resolve_to_source_symbols() -> None:
-    """The 4 top-level engine re-exports (Artifact is intentionally NOT here;
+    """The 3 top-level engine re-exports (Artifact is intentionally NOT here;
     it lives in vivarium-artifact) are identity-equal to the source-module
     objects. Drift here (e.g. a local stub shadowing the import) passes
     ``getattr`` checks but fails identity."""
     assert vivarium.engine.Component is engine_component_module.Component
-    assert vivarium.interactive.Simulation is engine_interactive_module.Simulation
     assert vivarium.engine.Observer is engine_observer_module.Observer
     assert vivarium.engine.build_model_specification is build_model_specification
 

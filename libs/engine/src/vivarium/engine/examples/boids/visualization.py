@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.artist import Artist
-from vivarium.interactive import Simulation
+
+if TYPE_CHECKING:
+    from vivarium.interactive import Simulation
 
 
 # docs-start: plot_boids

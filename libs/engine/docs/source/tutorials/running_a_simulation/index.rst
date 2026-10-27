@@ -8,10 +8,12 @@ Once you've built a :term:`model specification <Model Specification>` that
 describes the :term:`plugins <Plugin>`, :term:`components <Component>`,
 and :term:`configuration <Configuration>` for the model you want to run, it's
 time to run the simulation defined by that model specification using
-``vivarium``. There are two ways to run a single simulation.
+``vivarium``. There are two ways to run a single simulation. The command line
+is described below. To run a simulation interactively, for example in a
+notebook, see the
+`vivarium-interactive tutorial <https://vivarium-interactive.readthedocs.io/en/latest/tutorials/interactive.html>`_.
 
 
 .. toctree::
 
    cli
-   interactive

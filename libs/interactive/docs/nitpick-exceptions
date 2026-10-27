@@ -54,3 +54,9 @@ py:class ClockTime
 py:class ClockStepSize
 py:class Time
 py:class Timedelta
+
+# Bare names from type hints and Raises sections that autodoc renders without a
+# module, so Sphinx can't match them.
+py:class Path
+py:class Component
+py:class LookupTable

@@ -853,7 +853,7 @@ class Simulation(BaseSimulationContext):
         guaranteed order. States with nothing in them are left out.
 
         Observations are listed even when results are not observed, which is the
-        default for an interactive context. Their ``active`` value is then False.
+        default for a :class:`Simulation`. Their ``active`` value is then False.
 
         The results manager's own actions are left out. Its work is shown as the
         observations it makes, so the frame has the same rows whether or not
@@ -1241,7 +1241,7 @@ def _render_dependency_tree(
 
 @dataclass
 class _InteractiveObservation:
-    """An observation registered on an interactive context and the values it has observed."""
+    """An observation registered on a :class:`Simulation` and the values it has observed."""
 
     func: Callable[[Simulation], Any]
     values: dict[ClockTime, Any] = field(default_factory=dict)

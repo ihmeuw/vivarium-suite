@@ -4,6 +4,13 @@
 
 import importlib.metadata
 
+from vivarium.engine.framework.logging.utilities import configure_logging_to_terminal
+
+# Simulations add their terminal log sink once per process, bound to whatever sys.stdout
+# is at that moment. Add it now, while sys.stdout is the real terminal, so that log
+# messages don't become part of a doctest example's checked output.
+configure_logging_to_terminal(verbosity=0)
+
 # -- Project information -----------------------------------------------------
 
 project = "vivarium.interactive"

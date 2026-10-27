@@ -2,7 +2,7 @@
 Vivarium Interactive
 ====================
 
-This package provides ``Simulation``, a way to run
+This package provides :class:`~vivarium.interactive.simulation.Simulation`, a way to run
 and inspect a `vivarium <https://vivarium-engine.readthedocs.io/en/latest/>`_
 simulation interactively, for example in a Jupyter notebook.
 

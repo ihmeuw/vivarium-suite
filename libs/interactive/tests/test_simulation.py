@@ -44,8 +44,7 @@ from tests.helpers import (
     assert_squeezing_multi_level_single_outer_single_inner,
     assert_squeezing_single_level_single_col,
 )
-from vivarium.interactive import Simulation
-from vivarium.interactive.exceptions import ObservationError
+from vivarium.interactive import ObservationError, Simulation
 from vivarium.interactive.simulation import (
     _HELP_SECTIONS,
     _match_rank,
@@ -1357,10 +1356,10 @@ def test_list_attributes() -> None:
 
 def test_get_attribute_names_is_removed_at_next_major_version() -> None:
     """Fail once the CHANGELOG starts a new major release while the deprecated alias remains."""
-    changelog = Path(__file__).parents[2] / "CHANGELOG.rst"
+    changelog = Path(__file__).parents[1] / "CHANGELOG.rst"
     match = re.match(r"\*\*(\d+)\.", changelog.read_text())
     assert match is not None
-    if int(match.group(1)) != 5:
+    if int(match.group(1)) != 1:
         assert not hasattr(
             Simulation, "get_attribute_names"
         ), "Remove the deprecated Simulation.get_attribute_names() before next major release."
