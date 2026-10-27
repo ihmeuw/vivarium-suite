@@ -8,7 +8,7 @@ the backend ``build``/``preview`` directly.
 Two parts the ticket names are deferred and are not here: the synchronous
 fake-Jobmon adapter arrives with the bridge, and the selective-staleness
 assertions (perturb one input, exactly its cone re-runs) arrive with the code
-fingerprint (MIC-7520), since with the always-stale default every step re-runs.
+fingerprint, since with the always-stale default every step re-runs.
 """
 
 from __future__ import annotations
@@ -25,6 +25,9 @@ from vivarium.cluster_tools.core.backend.preview import preview
 from vivarium.cluster_tools.core.backend.task import Task
 from vivarium.cluster_tools.core.backend.wiring import ArtifactRegistry
 from vivarium.cluster_tools.core.frontend.python_step import python_step
+
+# TODO(MIC-7520): add selective-staleness scenario helpers once a step can declare a
+# code fingerprint; the synchronous fake-Jobmon adapter lands with the bridge.
 
 
 @dataclass
