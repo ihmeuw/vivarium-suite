@@ -154,8 +154,8 @@ Claude Code asks for `simsci`'s options when the plugin is enabled. If the user
 skipped that dialog, or needs to change the token later, have them run
 `/plugin`, open **Installed** > **simsci**, and choose **Configure options**.
 They paste the token into **Jira personal access token**. Claude Code masks the
-field and keeps the value in the system's secure credential store, not in
-`settings.json`. The user must type the token into the dialog themselves, so it
+field and keeps the value in its credential store, not in `settings.json`. On
+Linux, that store is `~/.claude/.credentials.json`, which only the user can read. The user must type the token into the dialog themselves, so it
 does not enter the conversation.
 
 The same dialog has an optional **Default Jira project**. SimSci users can set
@@ -165,7 +165,10 @@ without it.
 ### 4. Restart and verify
 
 Restart Claude Code and run `/mcp`. The `plugin:simsci:jira` server must show
-as connected. Then ask Claude to get any MIC ticket. The result must include
+as connected. If it shows `Executable not found in $PATH: "uv"`, `uv` is not on
+the `PATH` of the shell that starts `claude`. Fix that (step 1), then restart.
+Until the server connects, Claude has no Jira tools and gets no error that
+names the cause. Then ask Claude to get any MIC ticket. The result must include
 `story_points`. If the token is missing, the Jira tools return an error that
 points to **Configure options**.
 

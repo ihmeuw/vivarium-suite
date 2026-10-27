@@ -583,7 +583,16 @@ def create_issue(
         story_points=story_points,
         epic=epic,
     )
-    key = _request("POST", "/issue", json={"fields": fields})["key"]
+    try:
+        key = _request("POST", "/issue", json={"fields": fields})["key"]
+    except ToolError as exc:
+        # Jira answers an unknown project key with "project is required".
+        if "project: project is required" in str(exc):
+            raise ToolError(
+                f"{exc} Jira gives this error when it does not know project '{project}'. "
+                "Check the project key."
+            ) from exc
+        raise
 
     sprint_failure = None
     if sprint is not None:

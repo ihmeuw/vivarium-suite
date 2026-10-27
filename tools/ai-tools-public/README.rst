@@ -297,12 +297,15 @@ Only the ``jira`` MCP server needs this. The workflows above do not use it.
 3. Enter the token in the plugin's options. Claude Code asks for them when the
    plugin is enabled. To set or change them later, run ``/plugin``, open
    **Installed** > **simsci**, and choose **Configure options**. The token
-   field is masked, and Claude Code keeps the value in the system's secure
-   credential store, not in ``settings.json``. The optional **Default Jira
+   field is masked, and Claude Code keeps the value in its credential store,
+   not in ``settings.json``. On Linux, that store is
+   ``~/.claude/.credentials.json``, which only you can read. The optional **Default Jira
    project** is the project that ``create_issue`` uses when no project is
    given.
 4. Restart Claude Code and confirm in ``/mcp`` that ``plugin:simsci:jira`` is
-   connected.
+   connected. If it shows ``Executable not found in $PATH: "uv"``, install
+   ``uv`` in a place on the ``PATH`` of the shell that starts ``claude``, then
+   restart. Until the server connects, Claude has no Jira tools.
 5. If you have the ``mcp-jira`` plugin from ``ihme-claude-marketplace``
    installed, disable it, so that Claude uses this server's tools:
    ``/plugin disable mcp-jira@ihme-claude-marketplace``.

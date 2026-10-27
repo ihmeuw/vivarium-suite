@@ -139,6 +139,14 @@ def test_create_issue_uses_default_project(jira, monkeypatch) -> None:
     assert body["fields"]["project"] == {"key": "XYZ"}
 
 
+def test_create_issue_names_an_unknown_project(jira) -> None:
+    jira.responses[("POST", "/issue")] = ToolError(
+        "Jira returned 400 for POST /issue: project: project is required"
+    )
+    with pytest.raises(ToolError, match="does not know project 'NOPE'"):
+        server.create_issue(summary="s", description="d", project="NOPE")
+
+
 def set_boards(jira: FakeJira, sprints_by_board: dict[int, list[tuple[int, str]]]) -> None:
     """Make every listed scrum board answer with its sprints."""
     jira.responses[("GET", "/board")] = {
