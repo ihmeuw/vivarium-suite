@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree import ConfigTree
+from vivarium.interactive import Simulation
 
 from tests.framework.population.conftest import (
     CUBE_COL_NAMES,
@@ -25,7 +26,6 @@ from tests.framework.population.helpers import (
     assert_squeezing_single_level_single_col,
 )
 from tests.helpers import AttributePipelineCreator, ColumnCreator
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -318,7 +318,7 @@ def test_get_skip_post_processor_returns_queried_attribute(
 
 def test_get_mode_default() -> None:
     """Test that mode='default' behaves the same as the current default."""
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[PieComponent()],
         configuration={"population": {"population_size": len(PIE_RECORDS)}},
         setup=True,
@@ -333,7 +333,7 @@ def test_get_mode_default() -> None:
 
 def test_get_mode_default_with_query() -> None:
     """Test that mode='default' works correctly with a query."""
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[PieComponent()],
         configuration={"population": {"population_size": len(PIE_RECORDS)}},
         setup=True,
@@ -445,17 +445,17 @@ class TestGetAttributesReturnTypes:
             AttributePipelineCreator.setup(self, builder)
 
     @pytest.fixture(scope="class")
-    def simulation(self) -> InteractiveContext:
-        return InteractiveContext(
+    def simulation(self) -> Simulation:
+        return Simulation(
             components=[TestGetAttributesReturnTypes.SomeComponent()], setup=True
         )
 
     @pytest.fixture(scope="class")
-    def population_view(self, simulation: InteractiveContext) -> PopulationView:
+    def population_view(self, simulation: Simulation) -> PopulationView:
         return simulation._population.get_view()
 
     @pytest.fixture(scope="class")
-    def index(self, simulation: InteractiveContext) -> pd.Index[int]:
+    def index(self, simulation: Simulation) -> pd.Index[int]:
         return simulation._population.get_population_index()
 
     def test_single_level_single_column(
@@ -1378,9 +1378,7 @@ def test_test_population_ages_only_living_simulants(base_config: ConfigTree) -> 
             super().on_time_step(event)
 
     base_config.update({"population": {"population_size": 100}})
-    simulation = InteractiveContext(
-        components=[KillEvenSimulants()], configuration=base_config
-    )
+    simulation = Simulation(components=[KillEvenSimulants()], configuration=base_config)
     before = simulation.get_population("age")
     assert isinstance(before, pd.Series)
     dead = before.index[before.index.to_numpy() % 2 == 0]

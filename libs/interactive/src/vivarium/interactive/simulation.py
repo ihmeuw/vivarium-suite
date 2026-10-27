@@ -4,7 +4,7 @@ Vivarium Interactive Tools
 ==========================
 
 This module provides an interface for interactive simulation usage. The main
-part is the :class:`InteractiveContext`, a sub-class of the main simulation
+part is the :class:`Simulation`, a sub-class of the main simulation
 object in ``vivarium`` that has been extended to include convenience
 methods for running and exploring the simulation in an interactive setting.
 
@@ -50,7 +50,7 @@ _IGNORED_RESOURCE_TYPES = frozenset(
 """Resource types to ignore.
 
 These resource types are not very usable/debuggable in an interactive context, so
-:meth:`InteractiveContext.find_resources` and :meth:`InteractiveContext.get_dependencies`
+:meth:`Simulation.find_resources` and :meth:`Simulation.get_dependencies`
 do not report them.
 """
 
@@ -60,14 +60,14 @@ _RESOURCE_TYPE_ORDER = (
     ValueModifier.RESOURCE_TYPE,
     LookupTable.RESOURCE_TYPE,
 )
-"""Resource types in the order :meth:`InteractiveContext.find_resources` ranks them."""
+"""Resource types in the order :meth:`Simulation.find_resources` ranks them."""
 
 _RESOURCE_TYPE_RANK = {
     resource_type: index for index, resource_type in enumerate(_RESOURCE_TYPE_ORDER)
 }
 
 _WORD_SEPARATORS = frozenset({".", "_"})
-"""Characters :meth:`InteractiveContext.find_resources` treats as word boundaries."""
+"""Characters :meth:`Simulation.find_resources` treats as word boundaries."""
 
 _HELP_SECTIONS = (
     (
@@ -101,11 +101,11 @@ _HELP_SECTIONS = (
         ("register_observation", "pause_observation", "get_results"),
     ),
 )
-"""Headings and the :class:`InteractiveContext` members that :meth:`InteractiveContext.help` lists under each."""
+"""Headings and the :class:`Simulation` members that :meth:`Simulation.help` lists under each."""
 
 
 _DEPENDENCY_DIRECTIONS = ("uses", "used-by")
-"""Directions :meth:`InteractiveContext.print_dependencies` can walk."""
+"""Directions :meth:`Simulation.print_dependencies` can walk."""
 
 _DEPENDENCY_TYPE_ORDER = (
     AttributePipeline.RESOURCE_TYPE,
@@ -116,7 +116,7 @@ _DEPENDENCY_TYPE_ORDER = (
     Initializer.RESOURCE_TYPE,
     ValueModifier.RESOURCE_TYPE,
 )
-"""Resource types in the order :meth:`InteractiveContext.print_dependencies` draws them.
+"""Resource types in the order :meth:`Simulation.print_dependencies` draws them.
 
 This is structural rather than the relevance ranking :data:`_RESOURCE_TYPE_ORDER`
 applies: what feeds a resource comes first, then the storage and randomness it is
@@ -128,7 +128,7 @@ _DEPENDENCY_TYPE_RANK = {
 }
 
 
-class InteractiveContext(BaseSimulationContext):
+class Simulation(BaseSimulationContext):
     """A simulation context with helper methods for running simulations interactively.
 
     Does not gather the model's results by default; pass ``observe=True`` to
@@ -204,7 +204,7 @@ class InteractiveContext(BaseSimulationContext):
             self.setup()
 
     def __repr__(self) -> str:
-        return "InteractiveContext()"
+        return "Simulation()"
 
     def help(self) -> None:
         """Print the methods available on this context, grouped by task."""
@@ -340,7 +340,7 @@ class InteractiveContext(BaseSimulationContext):
 
     def run_until(
         self,
-        target: ClockTime | Callable[[InteractiveContext], bool],
+        target: ClockTime | Callable[[Simulation], bool],
         with_logging: bool = True,
         *,
         max_steps: int | None = None,
@@ -410,7 +410,7 @@ class InteractiveContext(BaseSimulationContext):
 
     def _run_until_condition(
         self,
-        condition: Callable[[InteractiveContext], bool],
+        condition: Callable[[Simulation], bool],
         max_steps: int,
         with_logging: bool,
     ) -> bool:
@@ -430,7 +430,7 @@ class InteractiveContext(BaseSimulationContext):
             )
         return met
 
-    def _check_condition(self, condition: Callable[[InteractiveContext], bool]) -> bool:
+    def _check_condition(self, condition: Callable[[Simulation], bool]) -> bool:
         """Evaluate a run_until condition, requiring that it return a bool."""
         result = condition(self)
         if not isinstance(result, (bool, np.bool_)):
@@ -520,8 +520,8 @@ class InteractiveContext(BaseSimulationContext):
             Use :meth:`list_attributes` instead. This alias will be removed.
         """
         warnings.warn(
-            "InteractiveContext.get_attribute_names is deprecated and will be removed; "
-            "use InteractiveContext.list_attributes instead.",
+            "Simulation.get_attribute_names is deprecated and will be removed; "
+            "use Simulation.list_attributes instead.",
             FutureWarning,
             stacklevel=2,
         )
@@ -694,7 +694,7 @@ class InteractiveContext(BaseSimulationContext):
     ) -> list[Resource]:
         """Get the direct resources a resource uses or the resources that use it.
 
-        Use this to work with the dependencies themselves. :meth:`InteractiveContext.print_dependencies`
+        Use this to work with the dependencies themselves. :meth:`Simulation.print_dependencies`
         walks the same graph but draws it as a tree to read.
 
         Parameters
@@ -710,7 +710,7 @@ class InteractiveContext(BaseSimulationContext):
         Returns
         -------
             The resources one level away, grouped by resource type in the order
-            :meth:`InteractiveContext.print_dependencies` draws them and sorted
+            :meth:`Simulation.print_dependencies` draws them and sorted
             by name within a type.
 
         Raises
@@ -722,7 +722,7 @@ class InteractiveContext(BaseSimulationContext):
         Notes
         -----
         Columns, randomness streams, and initializers are left out (as they are
-        from :meth:`InteractiveContext.find_resources`).
+        from :meth:`Simulation.find_resources`).
 
         Results report the dependencies a component explicitly declared. An undeclared
         dependency is missing here with no signal.
@@ -779,14 +779,14 @@ class InteractiveContext(BaseSimulationContext):
         see the rest.
 
         Every resource type is reported, including the ``column`` and ``initializer``
-        nodes that :meth:`InteractiveContext.find_resources` leaves out. Those sit
+        nodes that :meth:`Simulation.find_resources` leaves out. Those sit
         between an attribute and whatever its initializer reads, so a chain runs
         through them.
 
         Dependencies of one resource are grouped by type in the order defined by
         ``_DEPENDENCY_TYPE_ORDER`` (and then sorted by name); what feeds a resource
         comes first and the modifiers layered over it come last. This is a different
-        order from the one :meth:`InteractiveContext.find_resources` ranks by, which
+        order from the one :meth:`Simulation.find_resources` ranks by, which
         sorts by how likely a match is to be the resource you are looking for.
         """
         _validate_direction(direction)
@@ -951,7 +951,7 @@ class InteractiveContext(BaseSimulationContext):
     ###############################
 
     def register_observation(
-        self, *names: str, **observations: Callable[[InteractiveContext], Any]
+        self, *names: str, **observations: Callable[[Simulation], Any]
     ) -> None:
         """Register named observations, or resume paused ones, to evaluate every step.
 
@@ -1074,7 +1074,7 @@ class InteractiveContext(BaseSimulationContext):
         """
         if not self._results.to_observe and not self._interactive_observations:
             self._logger.warning(
-                "No results to return. An InteractiveContext does not observe "
+                "No results to return. A Simulation does not observe "
                 "results by default; pass observe=True to include the model's "
                 "observations, or use register_observation() to add your own."
             )
@@ -1243,6 +1243,6 @@ def _render_dependency_tree(
 class _InteractiveObservation:
     """An observation registered on an interactive context and the values it has observed."""
 
-    func: Callable[[InteractiveContext], Any]
+    func: Callable[[Simulation], Any]
     values: dict[ClockTime, Any] = field(default_factory=dict)
     active: bool = True

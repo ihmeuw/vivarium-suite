@@ -10,13 +10,14 @@ import pytest
 import yaml
 from _pytest.logging import LogCaptureFixture
 from loguru import logger
-from vivarium.engine import InteractiveContext
 from vivarium.engine.examples.disease_model import get_model_specification_path
+
+from vivarium.interactive import Simulation
 
 
 @pytest.fixture(autouse=True)
 def _clear_simulation_context_cache() -> None:
-    InteractiveContext._clear_context_cache()
+    Simulation._clear_context_cache()
 
 
 @pytest.fixture

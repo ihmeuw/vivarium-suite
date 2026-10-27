@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from vivarium.engine import InteractiveContext
+from vivarium.interactive import Simulation
+
 from vivarium.engine.examples.disease_model.disease import (
     DiseaseModel,
     DiseaseState,
@@ -19,6 +20,6 @@ def get_model_specification_path() -> str:
     return str(p)
 
 
-def get_disease_model_simulation() -> InteractiveContext:
+def get_disease_model_simulation() -> Simulation:
     p = get_model_specification_path()
-    return InteractiveContext(p)
+    return Simulation(p)

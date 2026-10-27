@@ -13,8 +13,9 @@ do not depend on the internal ``check_data_complete`` name or signature.
 
 import pandas as pd
 import pytest
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age, make_uniform_pop_data
 
@@ -34,7 +35,7 @@ def _build_with_validation(data: pd.DataFrame, base_config_factory, base_plugins
     """Build a one-component sim that validates ``data`` as a lookup table."""
     config = base_config_factory()
     config.update({"interpolation": {"validate": True}})
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[_LookupValidationCanary(data)],
         configuration=config,
         plugin_configuration=base_plugins,

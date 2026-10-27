@@ -22,7 +22,8 @@ documentation for details on the underlying results system).
    import pandas as pd
    from loguru import logger
    logger.disable("vivarium")
-   from vivarium.engine import Component, InteractiveContext
+   from vivarium.engine import Component
+   from vivarium.interactive import Simulation
    from vivarium.engine.framework.engine import Builder
    from vivarium.public_health.disease import (
        DiseaseModel, DiseaseState, SusceptibleState, SI, SIS,
@@ -45,7 +46,8 @@ Common Setup
 
 .. testcode::
 
-   from vivarium.engine import Component, InteractiveContext
+   from vivarium.engine import Component
+   from vivarium.interactive import Simulation
    from vivarium.engine.framework.engine import Builder
    from vivarium.public_health.disease import (
        DiseaseModel, DiseaseState, SusceptibleState, SI, SIS,
@@ -65,7 +67,7 @@ Common Setup
    config = make_base_config()
 
 Every example below passes ``observe=True``. An
-:class:`~vivarium.engine.interface.interactive.InteractiveContext` does not gather
+:class:`~vivarium.interactive.Simulation` does not gather
 results by default since an interactive session is usually for inspecting the
 simulation rather than measuring it. However, this tutorial is about the results
 themselves.
@@ -142,7 +144,7 @@ observations for a disease model:
    config = make_base_config()
    config.update({"population": {"population_size": 1000}}, layer="model_override")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            SI("test_cause"),
@@ -210,7 +212,7 @@ non-zero ``excess_mortality_rate``.
    config = make_base_config()
    config.update({"population": {"population_size": 1000}}, layer="model_override")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            fatal_model,
@@ -268,7 +270,7 @@ It requires at least one disease state with a non-zero
    config = make_base_config()
    config.update({"population": {"population_size": 1000}}, layer="model_override")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            disability_model,
@@ -314,7 +316,7 @@ one observation:
    config = make_base_config()
    config.update({"population": {"population_size": 1000}}, layer="model_override")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Risk("risk_factor.test_risk"),
@@ -374,7 +376,7 @@ an empty list raises a configuration error.
        layer="model_override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            MicrodataObserver(),
@@ -428,7 +430,7 @@ females aged 20 or older:
        layer="model_override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -468,7 +470,7 @@ latter leaves the first step empty:
        layer="model_override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -513,7 +515,7 @@ simulation - each time-step is capped at 100.
        layer="model_override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -576,7 +578,7 @@ shows the same simulants recurring each step:
        layer="model_override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), SimulantID(), MicrodataObserver()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -630,7 +632,7 @@ the four stratifications registered by ``ResultsStratifier`` (``age_group``,
        layer="model_override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            SI("test_cause"),
@@ -678,7 +680,7 @@ ones per observer with ``stratification.<observer_name>.exclude``:
        layer="model_override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            SI("test_cause"),
@@ -745,7 +747,7 @@ name in the observer's ``include`` list:
        layer="model_override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            SI("test_cause"),

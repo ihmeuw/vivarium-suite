@@ -32,7 +32,7 @@ at some level and wrappers around the context should try to be as thin as
 possible around simulation creation. The
 :class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`
 runs a simulation from start to finish, and the
-:class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
+:class:`Simulation <vivarium.interactive.Simulation>`
 runs one interactively. Both build on the base context.
 
 The context accepts four arguments:
@@ -123,8 +123,8 @@ different output directories.
 During model development and debugging, it is frequently more useful to
 work in an interactive setting like a
 `jupyter notebook <https://jupyter.org>`_ or a Python REPL. For this sort of
-work, the :mod:`vivarium.engine.interface.interactive` module provides the
-:class:`InteractiveContext <vivarium.engine.interface.interactive.InteractiveContext>`
+work, the :mod:`vivarium.interactive.simulation` module provides the
+:class:`Simulation <vivarium.interactive.Simulation>`
 (also available as a top-level import from :mod:`vivarium.engine`). Details about
 the many ways to initialize and run a simulation using the interactive context
 are available in the :ref:`interactive tutorial <interactive_tutorial>`.

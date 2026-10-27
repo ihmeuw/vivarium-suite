@@ -14,7 +14,7 @@ configuration required for each approach.
 
    import numpy as np
    import pandas as pd
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.population import *
    from vivarium.public_health._example_data import *
    base_plugins = BASE_PLUGINS
@@ -67,7 +67,7 @@ Every code example in this tutorial uses two helpers imported from
    from vivarium.public_health._example_data import BASE_PLUGINS, make_base_config
 
    # BASE_PLUGINS configures the data plugin to serve example data from memory.
-   # Pass it as plugin_configuration to InteractiveContext.
+   # Pass it as plugin_configuration to Simulation.
    base_plugins = BASE_PLUGINS
 
    # make_base_config() returns a configuration with sensible defaults for
@@ -263,7 +263,7 @@ By default, every data source loads from the artifact (configured via
 .. testcode::
 
    import pandas as pd
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.population import BasePopulation
    from vivarium.public_health._example_data import population_structure
 
@@ -283,7 +283,7 @@ By default, every data source loads from the artifact (configured via
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -307,7 +307,7 @@ defaults (ages 0-125, both sexes, no age-out):
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.population import BasePopulation
 
    config = make_base_config()
@@ -323,7 +323,7 @@ defaults (ages 0-125, both sexes, no age-out):
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -362,7 +362,7 @@ age range of the initial population. This is the most common customization:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -400,7 +400,7 @@ components to represent a cohort of newborns:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -436,7 +436,7 @@ values are ``"Male"``, ``"Female"``, or ``"Both"`` (the default):
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -478,7 +478,7 @@ by the ``AgeOutSimulants`` sub-component when ``untracking_age`` is set:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -584,7 +584,7 @@ directly or as a string data key:
 
    import numpy as np
    import pandas as pd
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.population import ScaledPopulation
    from vivarium.public_health._example_data import population_structure
 
@@ -626,7 +626,7 @@ directly or as a string data key:
 .. testcode::
 
    # Pass the DataFrame directly.
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[ScaledPopulation(scalar_data)],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -664,7 +664,7 @@ and does not require any external data.
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.population import BasePopulation, FertilityDeterministic
 
    config = make_base_config()
@@ -682,7 +682,7 @@ and does not require any external data.
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), FertilityDeterministic()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -740,7 +740,7 @@ Both data sources can be supplied via configuration:
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.population import BasePopulation, FertilityCrudeBirthRate
    from vivarium.public_health._example_data import population_structure, live_births_by_sex
 
@@ -766,7 +766,7 @@ Both data sources can be supplied via configuration:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), FertilityCrudeBirthRate()],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -823,7 +823,7 @@ The tutorial example below supplies a constant rate directly:
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.population import BasePopulation, FertilityAgeSpecificRates
 
    config = make_base_config()
@@ -846,7 +846,7 @@ The tutorial example below supplies a constant rate directly:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), FertilityAgeSpecificRates()],
        configuration=config,
        plugin_configuration=base_plugins,

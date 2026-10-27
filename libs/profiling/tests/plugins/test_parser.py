@@ -1,6 +1,6 @@
 import pytest
 from vivarium.config_tree import ConfigTree
-from vivarium.engine.interface.interactive import InteractiveContext
+from vivarium.interactive import Simulation
 from vivarium.public_health.disease import DiseaseModel
 from vivarium.public_health.results import DiseaseObserver
 from vivarium.public_health.results.causal_factor import CategoricalRiskObserver
@@ -361,7 +361,7 @@ def test_multi_component_parser_simulation():
     }
 
     # Instantiate and setup the simulation
-    sim = InteractiveContext(
+    sim = Simulation(
         components=component_configuration,
         configuration=configuration,
         plugin_configuration=plugin_configuration,

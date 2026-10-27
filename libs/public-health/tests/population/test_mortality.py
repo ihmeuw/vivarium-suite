@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.fuzzy_checker import FuzzyChecker
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.disease import BaseDiseaseState, DiseaseModel, DiseaseState
@@ -12,14 +13,14 @@ from vivarium.public_health.population import BasePopulation
 @pytest.fixture
 def setup_sim_with_pop_and_mortality(
     full_simulants, base_plugins, generate_population_mock
-) -> tuple[InteractiveContext, Component, Component]:
+) -> tuple[Simulation, Component, Component]:
 
     # Initializes an Interactive context with BasePopulation and Mortality components
     start_population_size = len(full_simulants)
 
     generate_population_mock.return_value = full_simulants
     bp = BasePopulation()
-    sim = InteractiveContext(components=[bp], plugin_configuration=base_plugins, setup=False)
+    sim = Simulation(components=[bp], plugin_configuration=base_plugins, setup=False)
     override_config = {
         "population": {
             "population_size": start_population_size,
@@ -41,7 +42,7 @@ def stepped_pop_mortality_sim(base_plugins):
     must not step or mutate it.
     """
     bp = BasePopulation()
-    sim = InteractiveContext(components=[bp], plugin_configuration=base_plugins, setup=False)
+    sim = Simulation(components=[bp], plugin_configuration=base_plugins, setup=False)
     sim.configuration.update(
         {
             # 10000 (not a smaller pop) so ~one step reliably produces deaths for the
@@ -151,9 +152,7 @@ def test_mortality_cause_of_death(
     healthy.add_dwell_time_transition(mortality_state)
 
     model = DiseaseModel("test", residual_state=healthy, states=[healthy, mortality_state])
-    sim = InteractiveContext(
-        components=[bp, model], plugin_configuration=base_plugins, setup=False
-    )
+    sim = Simulation(components=[bp, model], plugin_configuration=base_plugins, setup=False)
     override_config = {
         "population": {
             "population_size": start_population_size,
@@ -231,7 +230,7 @@ def test_unmodeled_causes(full_simulants, base_plugins, generate_population_mock
     generate_population_mock.return_value = full_simulants
     bp = BasePopulation()
 
-    sim = InteractiveContext(components=[bp], plugin_configuration=base_plugins, setup=False)
+    sim = Simulation(components=[bp], plugin_configuration=base_plugins, setup=False)
     override_config = {
         "population": {
             "population_size": start_population_size,

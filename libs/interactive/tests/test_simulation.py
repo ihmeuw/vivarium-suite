@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lookup.table import LookupTable
@@ -20,11 +20,6 @@ from vivarium.engine.framework.resource.resource import Column, Resource
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
-from vivarium.engine.interface.interactive import (
-    _HELP_SECTIONS,
-    _match_rank,
-    _render_dependency_tree,
-)
 from vivarium.engine.types import ClockTime
 
 from tests.conftest import FakeWidget
@@ -49,11 +44,17 @@ from tests.helpers import (
     assert_squeezing_multi_level_single_outer_single_inner,
     assert_squeezing_single_level_single_col,
 )
+from vivarium.interactive import Simulation
 from vivarium.interactive.exceptions import ObservationError
+from vivarium.interactive.simulation import (
+    _HELP_SECTIONS,
+    _match_rank,
+    _render_dependency_tree,
+)
 
 
 def test_list_values() -> None:
-    sim = InteractiveContext()
+    sim = Simulation()
     # a 'simulant_step_size' value is created by default upon setup
     assert sim.list_values() == ["simulant_step_size"]
     assert isinstance(sim.get_value("simulant_step_size"), Pipeline)
@@ -67,27 +68,27 @@ class TestGetAttribute:
     """Tests for retrieving an attribute pipeline from an interactive simulation."""
 
     @pytest.fixture(scope="class")
-    def sim(self) -> InteractiveContext:
-        return InteractiveContext(components=[ColumnCreator()])
+    def sim(self) -> Simulation:
+        return Simulation(components=[ColumnCreator()])
 
-    def test_a_created_column_is_an_attribute(self, sim: InteractiveContext) -> None:
+    def test_a_created_column_is_an_attribute(self, sim: Simulation) -> None:
         """A column a component creates is reachable as an attribute."""
         assert "test_column_1" in sim.list_attributes()
 
-    def test_the_pipeline_itself_is_returned(self, sim: InteractiveContext) -> None:
+    def test_the_pipeline_itself_is_returned(self, sim: Simulation) -> None:
         """The getter hands back the pipeline, not the value it produces."""
         assert isinstance(sim.get_attribute("test_column_1"), AttributePipeline)
 
-    def test_an_unregistered_name_raises(self, sim: InteractiveContext) -> None:
+    def test_an_unregistered_name_raises(self, sim: Simulation) -> None:
         """An unknown name is rejected rather than quietly accepted."""
         with pytest.raises(ValueError, match="No attribute pipeline 'foo' registered."):
             sim.get_attribute("foo")
 
-    def test_a_rejected_lookup_registers_nothing(self, sim: InteractiveContext) -> None:
+    def test_a_rejected_lookup_registers_nothing(self, sim: Simulation) -> None:
         """The guard is what keeps a typo from polluting the simulation.
 
         ``ValuesManager.get_attribute`` creates a pipeline for an unknown name, so
-        without the guard in ``InteractiveContext.get_attribute`` a misspelling would
+        without the guard in ``Simulation.get_attribute`` a misspelling would
         leave a new pipeline behind.
         """
         registered = sim.list_attributes()
@@ -100,7 +101,7 @@ class TestGetAttribute:
 
 def test_get_value_and_get_attribute_point_at_each_other() -> None:
     """A name looked up on the wrong getter says which one to use instead."""
-    sim = InteractiveContext(components=[ColumnCreator()])
+    sim = Simulation(components=[ColumnCreator()])
 
     with pytest.raises(ValueError, match="Try get_attribute\\(\\)"):
         sim.get_value("test_column_1")
@@ -112,16 +113,16 @@ class TestGetLookupTable:
     """Tests for retrieving a lookup table from an interactive simulation."""
 
     @pytest.fixture(scope="class")
-    def sim(self) -> InteractiveContext:
-        return InteractiveContext(components=[NestedLookupCaller()])
+    def sim(self) -> Simulation:
+        return Simulation(components=[NestedLookupCaller()])
 
-    def test_the_table_itself_is_returned(self, sim: InteractiveContext) -> None:
+    def test_the_table_itself_is_returned(self, sim: Simulation) -> None:
         """The getter hands back the table, not the data it holds."""
         table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
         assert isinstance(table, LookupTable)
         assert table.name == "nested_lookup_caller.inner_lookup"
 
-    def test_the_returned_table_is_callable(self, sim: InteractiveContext) -> None:
+    def test_the_returned_table_is_callable(self, sim: Simulation) -> None:
         """Calling it with an index is the point of having it, so check the values
         it produces and not just their count."""
         table = sim.get_lookup_table("nested_lookup_caller.inner_lookup")
@@ -130,13 +131,13 @@ class TestGetLookupTable:
         # The fixture keys the table on 'inner', which is the index modulo three.
         assert (table(index) == (index % 3 + 1) * 10).all()
 
-    def test_an_unregistered_name_raises(self, sim: InteractiveContext) -> None:
+    def test_an_unregistered_name_raises(self, sim: Simulation) -> None:
         """An unknown name is rejected rather than quietly accepted."""
         with pytest.raises(ValueError, match="No lookup table 'foo' registered."):
             sim.get_lookup_table("foo")
 
     def test_every_lookup_table_name_find_resources_reports_can_be_fetched(
-        self, sim: InteractiveContext
+        self, sim: Simulation
     ) -> None:
         """The two halves agree: whatever the search surfaces, the getter accepts."""
         found = sim.find_resources()
@@ -147,7 +148,7 @@ class TestGetLookupTable:
 
 
 def test_run_for_duration() -> None:
-    sim = InteractiveContext()
+    sim = Simulation()
     initial_time = sim._clock.time
 
     sim.run_for(pd.Timedelta("10 days"))
@@ -190,12 +191,12 @@ SHORT_SIM_CONFIGURATION: dict[str, Any] = {
 
 
 @pytest.fixture
-def short_sim() -> InteractiveContext:
+def short_sim() -> Simulation:
     """A sim configured from Jan 1 to Jan 31 in 7-day steps."""
-    return InteractiveContext(configuration=SHORT_SIM_CONFIGURATION)
+    return Simulation(configuration=SHORT_SIM_CONFIGURATION)
 
 
-def reached(time: pd.Timestamp) -> Callable[[InteractiveContext], bool]:
+def reached(time: pd.Timestamp) -> Callable[[Simulation], bool]:
     return lambda sim: bool(sim.current_time >= time)  # type: ignore [operator]
 
 
@@ -206,14 +207,14 @@ def info_messages(caplog: LogCaptureFixture) -> list[str]:
 class TestRunUntilTime:
     """Tests for run_until with a clock time as the target."""
 
-    def test_returns_true(self, short_sim: InteractiveContext) -> None:
+    def test_returns_true(self, short_sim: Simulation) -> None:
         """A time target is always reached."""
         assert short_sim.run_until(JAN_15) is True
         assert short_sim.current_time == JAN_15
 
     def test_logs_the_number_of_steps(
         self,
-        short_sim: InteractiveContext,
+        short_sim: Simulation,
         caplog: LogCaptureFixture,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
@@ -225,7 +226,7 @@ class TestRunUntilTime:
 
     @pytest.mark.parametrize("days_back", [0, 1, 8])
     def test_a_time_at_or_before_now_takes_zero_steps(
-        self, short_sim: InteractiveContext, caplog: LogCaptureFixture, days_back: int
+        self, short_sim: Simulation, caplog: LogCaptureFixture, days_back: int
     ) -> None:
         """A time that has already passed is reached without stepping."""
         short_sim.step()
@@ -237,7 +238,7 @@ class TestRunUntilTime:
     @pytest.mark.parametrize("days_back, warns", [(0, False), (1, True), (8, True)])
     def test_a_time_in_the_past_warns(
         self,
-        short_sim: InteractiveContext,
+        short_sim: Simulation,
         caplog: LogCaptureFixture,
         days_back: int,
         warns: bool,
@@ -250,7 +251,7 @@ class TestRunUntilTime:
         warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
         assert any("before the current time" in message for message in warnings) is warns
 
-    def test_max_steps_with_a_time_raises(self, short_sim: InteractiveContext) -> None:
+    def test_max_steps_with_a_time_raises(self, short_sim: Simulation) -> None:
         """max_steps only applies to callables."""
         with pytest.raises(ValueError, match="callable"):
             short_sim.run_until(JAN_15, max_steps=3)
@@ -261,7 +262,7 @@ class TestRunUntilCondition:
     """Tests for run_until with a condition (callable) as the target."""
 
     def test_stops_at_the_first_step_where_the_condition_holds(
-        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+        self, short_sim: Simulation, caplog: LogCaptureFixture
     ) -> None:
         """The run stops on the first step where the condition is true and stays there."""
         assert short_sim.run_until(reached(JAN_15)) is True
@@ -270,7 +271,7 @@ class TestRunUntilCondition:
 
     @pytest.mark.parametrize("value", [True, np.True_], ids=["bool", "numpy_bool"])
     def test_a_condition_already_true_takes_zero_steps(
-        self, short_sim: InteractiveContext, caplog: LogCaptureFixture, value: bool
+        self, short_sim: Simulation, caplog: LogCaptureFixture, value: bool
     ) -> None:
         """A condition that is already true stops before stepping."""
         assert short_sim.run_until(lambda sim: value) is True
@@ -278,7 +279,7 @@ class TestRunUntilCondition:
         assert "Target reached after 0 iterations" in info_messages(caplog)
 
     def test_a_condition_never_true_stops_at_the_configured_end(
-        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+        self, short_sim: Simulation, caplog: LogCaptureFixture
     ) -> None:
         """The default bound is the configured stop time."""
         assert short_sim.run_until(lambda sim: False) is False
@@ -288,28 +289,26 @@ class TestRunUntilCondition:
         )
 
     def test_max_steps_can_stop_before_the_configured_end(
-        self, short_sim: InteractiveContext
+        self, short_sim: Simulation
     ) -> None:
         """A small bound stops the run early."""
         assert short_sim.run_until(lambda sim: False, max_steps=2) is False
         assert short_sim.current_time == JAN_1 + STEP_SIZE * 2
 
-    def test_max_steps_can_run_past_the_configured_end(
-        self, short_sim: InteractiveContext
-    ) -> None:
+    def test_max_steps_can_run_past_the_configured_end(self, short_sim: Simulation) -> None:
         """A large bound runs further than the default bound would."""
         assert short_sim.run_until(lambda sim: False, max_steps=7) is False
         assert short_sim.current_time == JAN_1 + STEP_SIZE * 7
         assert short_sim.current_time > FIRST_STEP_AT_OR_AFTER_END  # type: ignore [operator]
 
-    def test_a_negative_max_steps_raises(self, short_sim: InteractiveContext) -> None:
+    def test_a_negative_max_steps_raises(self, short_sim: Simulation) -> None:
         """A negative bound is a mistake, not zero steps."""
         with pytest.raises(ValueError, match="max_steps"):
             short_sim.run_until(lambda sim: False, max_steps=-1)
         assert short_sim.current_time == JAN_1
 
     def test_no_steps_remaining_takes_zero_steps(
-        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+        self, short_sim: Simulation, caplog: LogCaptureFixture
     ) -> None:
         """With the default bound, a sim already past its stop time takes zero steps."""
         short_sim.run()
@@ -330,8 +329,8 @@ class TestRunUntilCondition:
     )
     def test_a_non_bool_condition_raises(
         self,
-        short_sim: InteractiveContext,
-        condition: Callable[[InteractiveContext], Any],
+        short_sim: Simulation,
+        condition: Callable[[Simulation], Any],
         match: str,
     ) -> None:
         """A condition must return a bool, not a value that is merely truthy or falsy."""
@@ -344,13 +343,11 @@ class TestRunUntilProgressBar:
 
     @pytest.fixture
     def in_notebook(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "vivarium.engine.interface.interactive.run_from_ipython", lambda: True
-        )
+        monkeypatch.setattr("vivarium.interactive.simulation.run_from_ipython", lambda: True)
 
     def test_counts_the_steps_taken(
         self,
-        short_sim: InteractiveContext,
+        short_sim: Simulation,
         in_notebook: None,
         progress_widgets: list[FakeWidget],
     ) -> None:
@@ -363,7 +360,7 @@ class TestRunUntilProgressBar:
 
     def test_no_bar_when_already_reached(
         self,
-        short_sim: InteractiveContext,
+        short_sim: Simulation,
         in_notebook: None,
         progress_widgets: list[FakeWidget],
     ) -> None:
@@ -374,13 +371,13 @@ class TestRunUntilProgressBar:
 
     def test_marks_the_bar_failed_when_a_callable_raises(
         self,
-        short_sim: InteractiveContext,
+        short_sim: Simulation,
         in_notebook: None,
         progress_widgets: list[FakeWidget],
     ) -> None:
         """An error mid-run leaves the bar marked as failed, not finished."""
 
-        def breaks_on_jan_15(sim: InteractiveContext) -> bool:
+        def breaks_on_jan_15(sim: Simulation) -> bool:
             if reached(JAN_15)(sim):
                 raise KeyError("no such column")
             return False
@@ -391,18 +388,18 @@ class TestRunUntilProgressBar:
         assert progress_widgets[0].bar_style == "danger"
 
 
-def clock(sim: InteractiveContext) -> ClockTime:
+def clock(sim: Simulation) -> ClockTime:
     """Return the current clock time, so an observed value shows when it was evaluated."""
     return sim.current_time
 
 
-def days_elapsed(sim: InteractiveContext) -> int:
+def days_elapsed(sim: Simulation) -> int:
     return int((sim.current_time - JAN_1) / pd.Timedelta(days=1))  # type: ignore [operator]
 
 
-def hogwarts(observe: bool = True, setup: bool = True) -> InteractiveContext:
+def hogwarts(observe: bool = True, setup: bool = True) -> Simulation:
     """Return a Hogwarts sim whose model registers the ``house_points`` observation."""
-    return InteractiveContext(
+    return Simulation(
         configuration=HARRY_POTTER_CONFIG,
         components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
         observe=observe,
@@ -413,7 +410,7 @@ def hogwarts(observe: bool = True, setup: bool = True) -> InteractiveContext:
 class TestObserving:
     """Observations are evaluated at registration and after every step."""
 
-    def test_an_observation_registered_mid_run(self, short_sim: InteractiveContext) -> None:
+    def test_an_observation_registered_mid_run(self, short_sim: Simulation) -> None:
         """A later observation starts at its registration time; an earlier one keeps its values."""
         short_sim.register_observation(early=clock)
         short_sim.step()
@@ -424,7 +421,7 @@ class TestObserving:
         assert list(results["early"]) == [JAN_1, JAN_8, JAN_15]
         assert list(results["late"]) == [JAN_8, JAN_15]
 
-    def test_values_are_stored_as_returned(self, short_sim: InteractiveContext) -> None:
+    def test_values_are_stored_as_returned(self, short_sim: Simulation) -> None:
         """Series, DataFrame, None and arbitrary object returns are stored as the very objects returned."""
         series = pd.Series([1.0, 2.0])
         frame = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
@@ -445,7 +442,7 @@ class TestObserving:
             assert results["none"][time] is None
             assert results["anything"][time] is anything
 
-    def test_get_results_returns_a_copy(self, short_sim: InteractiveContext) -> None:
+    def test_get_results_returns_a_copy(self, short_sim: Simulation) -> None:
         """Changing the returned dicts at either level does not change the observations."""
         short_sim.register_observation(clock=clock, days=days_elapsed)
 
@@ -495,7 +492,7 @@ class TestObservationRegistration:
     """register_observation() registers all of its observations or none of them."""
 
     def test_a_duplicate_name_raises_and_keeps_the_original(
-        self, short_sim: InteractiveContext
+        self, short_sim: Simulation
     ) -> None:
         """Registering a name that is already an observation raises ValueError and keeps the original."""
         short_sim.register_observation(clock=clock)
@@ -527,7 +524,7 @@ class TestObservationRegistration:
 
     def test_registering_before_setup_observes_at_setup(self) -> None:
         """An observation registered before setup gets its first value when setup runs."""
-        sim = InteractiveContext(configuration=SHORT_SIM_CONFIGURATION, setup=False)
+        sim = Simulation(configuration=SHORT_SIM_CONFIGURATION, setup=False)
 
         sim.register_observation(clock=clock)
         assert sim.get_results() == {"clock": {}}
@@ -542,11 +539,11 @@ class TestObservationFailure:
     @staticmethod
     def fails_from(
         time: pd.Timestamp, error: Exception | None = None
-    ) -> Callable[[InteractiveContext], ClockTime]:
+    ) -> Callable[[Simulation], ClockTime]:
         """Return an observation that returns the clock until ``time`` and then raises."""
         to_raise = error if error is not None else KeyError("no such column")
 
-        def observation(sim: InteractiveContext) -> ClockTime:
+        def observation(sim: Simulation) -> ClockTime:
             if reached(time)(sim):
                 raise to_raise
             return sim.current_time
@@ -557,7 +554,7 @@ class TestObservationFailure:
         "fails_at", [JAN_1, JAN_8], ids=["at_registration", "after_a_step"]
     )
     def test_a_failure_raises_observation_error(
-        self, short_sim: InteractiveContext, fails_at: pd.Timestamp
+        self, short_sim: Simulation, fails_at: pd.Timestamp
     ) -> None:
         """The ObservationError names the observation and the clock time and chains the original."""
         original = KeyError("no such column")
@@ -587,8 +584,8 @@ class TestObservationFailure:
     )
     def test_a_failure_stores_nothing_at_the_failing_time(
         self,
-        short_sim: InteractiveContext,
-        failing: Callable[[InteractiveContext], ClockTime],
+        short_sim: Simulation,
+        failing: Callable[[Simulation], ClockTime],
         expected: dict[str, dict[ClockTime, Any]],
     ) -> None:
         """A failing observation leaves no value for any observation at the time it failed."""
@@ -601,7 +598,7 @@ class TestObservationFailure:
         assert short_sim.get_results() == expected
 
     def test_a_failing_observation_still_restores_a_custom_step_size(
-        self, short_sim: InteractiveContext
+        self, short_sim: Simulation
     ) -> None:
         """After an observation fails on a step with a custom step_size, the next step uses the configured size.
 
@@ -621,11 +618,11 @@ class TestObservationFailure:
         assert short_sim.current_time == three_days_on + STEP_SIZE
 
     def test_an_observation_may_pause_another_while_running(
-        self, short_sim: InteractiveContext
+        self, short_sim: Simulation
     ) -> None:
         """An observation that pauses another mid-step stops it without breaking observing."""
 
-        def stops_other(sim: InteractiveContext) -> ClockTime:
+        def stops_other(sim: Simulation) -> ClockTime:
             if reached(JAN_8)(sim):
                 sim.pause_observation("other")
             return sim.current_time
@@ -642,11 +639,11 @@ class TestObservationFailure:
 class TestPauseObservation:
     """pause_observation() stops observations, keeping their values, and register_observation() resumes them."""
 
-    def test_stops_calling_but_keeps_the_values(self, short_sim: InteractiveContext) -> None:
+    def test_stops_calling_but_keeps_the_values(self, short_sim: Simulation) -> None:
         """A paused observation is not called again but keeps its values; others continue."""
         calls: list[ClockTime] = []
 
-        def counted(sim: InteractiveContext) -> None:
+        def counted(sim: Simulation) -> None:
             calls.append(sim.current_time)
 
         short_sim.register_observation(counted=counted, days=days_elapsed)
@@ -660,9 +657,7 @@ class TestPauseObservation:
             "days": {JAN_1: 0, JAN_8: 7, JAN_15: 14},
         }
 
-    def test_a_paused_observation_resumes_by_name(
-        self, short_sim: InteractiveContext
-    ) -> None:
+    def test_a_paused_observation_resumes_by_name(self, short_sim: Simulation) -> None:
         """Passing a paused observation's name to register_observation resumes it, leaving a gap."""
         jan_22, jan_29 = JAN_1 + STEP_SIZE * 3, JAN_1 + STEP_SIZE * 4
         short_sim.register_observation(clock=clock)
@@ -676,7 +671,7 @@ class TestPauseObservation:
         assert list(short_sim.get_results()["clock"]) == [JAN_1, JAN_8, jan_22, jan_29]
 
     def test_resuming_a_registered_observation_does_nothing(
-        self, short_sim: InteractiveContext, caplog: LogCaptureFixture
+        self, short_sim: Simulation, caplog: LogCaptureFixture
     ) -> None:
         """Passing the name of an observation that is still registered changes nothing and logs that."""
         short_sim.register_observation(clock=clock)
@@ -695,7 +690,7 @@ class TestPauseObservation:
         ids=["pause_observation", "register_observation"],
     )
     def test_an_unknown_name_raises_and_changes_nothing(
-        self, short_sim: InteractiveContext, call: Callable[[InteractiveContext], None]
+        self, short_sim: Simulation, call: Callable[[Simulation], None]
     ) -> None:
         """An unknown name raises ValueError and the observations are left as they were."""
         short_sim.register_observation(clock=clock)
@@ -709,7 +704,7 @@ class TestPauseObservation:
 
 def test_observes_an_unmodified_model(disease_model_spec: Path) -> None:
     """An observation on the example disease model is stored every step with no spec or component change."""
-    sim = InteractiveContext(str(disease_model_spec))
+    sim = Simulation(str(disease_model_spec))
     sim.register_observation(mean_age=lambda s: s.get_population("age").mean())
     start = sim.current_time
 
@@ -725,8 +720,8 @@ class TestFindResources:
     """Tests for locating simulation resources by name or registering component."""
 
     @pytest.fixture(scope="class")
-    def sim(self) -> InteractiveContext:
-        return InteractiveContext(
+    def sim(self) -> Simulation:
+        return Simulation(
             components=[
                 ColumnCreator(),
                 ColumnCreatorAndRequirer(),
@@ -734,39 +729,37 @@ class TestFindResources:
             ]
         )
 
-    def test_the_frame_has_the_conventional_columns(self, sim: InteractiveContext) -> None:
+    def test_the_frame_has_the_conventional_columns(self, sim: Simulation) -> None:
         """This shape is the convention the other introspection tools follow."""
         found = sim.find_resources("test_column_1")
         assert list(found.columns) == ["name", "resource_type", "component"]
 
-    def test_a_fragment_need_not_be_the_whole_name(self, sim: InteractiveContext) -> None:
+    def test_a_fragment_need_not_be_the_whole_name(self, sim: Simulation) -> None:
         assert "test_column_1" in set(sim.find_resources("column_1")["name"])
 
-    def test_unsearchable_types_are_not_reported(self, sim: InteractiveContext) -> None:
+    def test_unsearchable_types_are_not_reported(self, sim: Simulation) -> None:
         reported = set(sim.find_resources()["resource_type"])
         assert not {"column", "stream", "initializer"} & reported
 
     def test_lookup_tables_are_reported(self) -> None:
         """The shared fixture registers none, so this one needs its own sim."""
-        sim = InteractiveContext(components=[NestedLookupCaller()])
+        sim = Simulation(components=[NestedLookupCaller()])
         found = sim.find_resources("inner_lookup")
         assert set(found["resource_type"]) == {"lookup_table"}
 
-    def test_matching_is_case_insensitive(self, sim: InteractiveContext) -> None:
+    def test_matching_is_case_insensitive(self, sim: Simulation) -> None:
         assert sim.find_resources("TEST_COLUMN_1").equals(sim.find_resources("test_column_1"))
 
-    def test_the_pattern_is_literal_by_default(self, sim: InteractiveContext) -> None:
+    def test_the_pattern_is_literal_by_default(self, sim: Simulation) -> None:
         """A name copied out of an earlier result finds itself, so regex syntax in
         it is matched as text rather than silently changing the search."""
         assert sim.find_resources("test_column_.").empty
 
-    def test_the_pattern_is_a_regular_expression_when_asked(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_the_pattern_is_a_regular_expression_when_asked(self, sim: Simulation) -> None:
         """The same pattern, with the flag, treats '.' as a wildcard."""
         assert not sim.find_resources("test_column_.", regex=True).empty
 
-    def test_regex_anchors_isolate_a_precise_name(self, sim: InteractiveContext) -> None:
+    def test_regex_anchors_isolate_a_precise_name(self, sim: Simulation) -> None:
         """Anchoring narrows a broad search rather than finding something else."""
         broad = sim.find_resources("test_column_")
         precise = sim.find_resources("^test_column_[12]$", regex=True)
@@ -774,7 +767,7 @@ class TestFindResources:
         assert set(precise.itertuples(index=False)) < set(broad.itertuples(index=False))
 
     def test_a_component_name_matches_the_resources_it_registered(
-        self, sim: InteractiveContext
+        self, sim: Simulation
     ) -> None:
         """No node is named 'column_creator_and_requirer', so every row here
         matched on its component rather than its own name."""
@@ -784,7 +777,7 @@ class TestFindResources:
     def test_an_exact_name_match_comes_first(self) -> None:
         """The thing you named outranks everything merely containing it, even one
         whose name sorts earlier alphabetically."""
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[
                 AttributeNamed("needle"),
                 AttributeNamed("here_is_a_needle_in_a_haystack"),
@@ -840,7 +833,7 @@ class TestFindResources:
         """Names are dotted hierarchies, so filling a segment means more than
         straddling one. The names are chosen so alphabetical order contradicts the
         ranking: only the segment rule can put ``zz_outer.needle`` first."""
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[AttributeNamed("zz_outer.needle"), AttributeNamed("aa_needle_part")]
         )
         assert list(sim.find_resources("needle")["name"]) == [
@@ -852,7 +845,7 @@ class TestFindResources:
         """Segments are underscore-separated words, so a pattern filling whole words
         means more than one buried inside a longer word. Alphabetical order again
         contradicts the ranking, so only the word rule can put ``zz_`` first."""
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[
                 AttributeNamed("zz_test_ever_eligible"),
                 AttributeNamed("aa_never_treated"),
@@ -867,7 +860,7 @@ class TestFindResources:
         """The rank comes from the match's span, so the flag does not change it.
         These are the names of the segment test, ordered against the alphabet, so
         a regex path that lost the span would reorder them."""
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[AttributeNamed("zz_outer.needle"), AttributeNamed("aa_needle_part")]
         )
         assert list(sim.find_resources("n[e]+dle", regex=True)["name"]) == [
@@ -879,9 +872,7 @@ class TestFindResources:
         """Matching through the component is the surprising hit, so it sorts last.
         Only ``zz_column_creator`` matches on its own name; the rest are reached
         through their component, and alphabetical order would lead with them."""
-        sim = InteractiveContext(
-            components=[AttributeNamed("zz_column_creator"), ColumnCreator()]
-        )
+        sim = Simulation(components=[AttributeNamed("zz_column_creator"), ColumnCreator()])
         assert list(sim.find_resources("column_creator")["name"]) == [
             "zz_column_creator",
             "test_column_1",
@@ -894,7 +885,7 @@ class TestFindResources:
         The lookup table is what makes this discriminating: the other three types
         happen to fall in alphabetical order on their own, so a sim without one
         would pass under either rule."""
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[
                 ColumnCreator(),
                 AttributePipelineCreator(),
@@ -906,15 +897,13 @@ class TestFindResources:
         assert set(types) == set(order)
         assert types == sorted(types, key=order.index)
 
-    def test_ties_then_break_by_name(self, sim: InteractiveContext) -> None:
+    def test_ties_then_break_by_name(self, sim: Simulation) -> None:
         """Within one rank and one resource type, names run alphabetically."""
         found = sim.find_resources()
         attributes = list(found.loc[found["resource_type"] == "attribute", "name"])
         assert attributes == sorted(attributes)
 
-    def test_every_other_resource_in_the_graph_is_reachable(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_every_other_resource_in_the_graph_is_reachable(self, sim: Simulation) -> None:
         """Only columns, streams, and initializers are withheld; nothing else is."""
         expected = {
             (str(node.name), node.RESOURCE_TYPE, node.component.name)
@@ -923,24 +912,22 @@ class TestFindResources:
         }
         assert set(sim.find_resources().itertuples(index=False)) == expected
 
-    def test_no_pattern_lists_every_resource(self, sim: InteractiveContext) -> None:
+    def test_no_pattern_lists_every_resource(self, sim: Simulation) -> None:
         pd.testing.assert_frame_equal(sim.find_resources(), sim.find_resources(""))
 
-    def test_no_match_returns_an_empty_frame(self, sim: InteractiveContext) -> None:
+    def test_no_match_returns_an_empty_frame(self, sim: Simulation) -> None:
         assert sim.find_resources("no_such_resource").empty
 
-    def test_an_empty_result_keeps_the_conventional_columns(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_an_empty_result_keeps_the_conventional_columns(self, sim: Simulation) -> None:
         found = sim.find_resources("no_such_resource")
         assert list(found.columns) == ["name", "resource_type", "component"]
 
-    def test_an_invalid_regex_raises_a_useful_error(self, sim: InteractiveContext) -> None:
+    def test_an_invalid_regex_raises_a_useful_error(self, sim: Simulation) -> None:
         with pytest.raises(ValueError, match="Invalid regular expression 'test_column_\\['"):
             sim.find_resources("test_column_[", regex=True)
 
     def test_that_same_pattern_is_harmless_without_the_regex_flag(
-        self, sim: InteractiveContext
+        self, sim: Simulation
     ) -> None:
         """Literal matching cannot raise, whatever the text contains."""
         assert sim.find_resources("test_column_[").empty
@@ -950,8 +937,8 @@ class TestPrintDependencies:
     """Tests for printing what a resource uses and what uses it."""
 
     @pytest.fixture(scope="class")
-    def sim(self) -> InteractiveContext:
-        return InteractiveContext(
+    def sim(self) -> Simulation:
+        return Simulation(
             components=[
                 DiamondAttributeCreator(),
                 ColumnCreator(),
@@ -961,7 +948,7 @@ class TestPrintDependencies:
 
     @staticmethod
     def printed(
-        sim: InteractiveContext,
+        sim: Simulation,
         capsys: pytest.CaptureFixture[str],
         *args: Any,
         **kwargs: Any,
@@ -970,7 +957,7 @@ class TestPrintDependencies:
         return capsys.readouterr().out.splitlines()
 
     def test_uses_reports_what_the_resource_reads(
-        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+        self, sim: Simulation, capsys: pytest.CaptureFixture[str]
     ) -> None:
         assert self.printed(sim, capsys, "attribute.diamond_base", "uses") == [
             "attribute.diamond_base",
@@ -978,7 +965,7 @@ class TestPrintDependencies:
         ]
 
     def test_used_by_reports_what_reads_the_resource(
-        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+        self, sim: Simulation, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """The same resource, walked the other way, reports different neighbors."""
         assert self.printed(sim, capsys, "attribute.diamond_base", "used-by") == [
@@ -993,7 +980,7 @@ class TestPrintDependencies:
         """What feeds a resource comes first and what is layered over it comes last.
         Sorting by resource id alone would put the lookup table above the value, and
         find_resources would put the modifier above the lookup table."""
-        sim = InteractiveContext(components=[OrderedDependencyCreator()])
+        sim = Simulation(components=[OrderedDependencyCreator()])
         assert self.printed(sim, capsys, "attribute.ordered", "uses") == [
             "attribute.ordered",
             "├── attribute.ordered_attribute",
@@ -1003,7 +990,7 @@ class TestPrintDependencies:
         ]
 
     def test_a_depth_of_none_walks_the_whole_chain(
-        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+        self, sim: Simulation, capsys: pytest.CaptureFixture[str]
     ) -> None:
         assert self.printed(sim, capsys, "attribute.test_column_4", "uses", depth=None) == [
             "attribute.test_column_4",
@@ -1016,7 +1003,7 @@ class TestPrintDependencies:
         ]
 
     def test_a_shared_node_is_drawn_under_every_parent(
-        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+        self, sim: Simulation, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Both halves of the diamond keep their edge to what they share, but only
         the first one unrolls it. TestRenderDependencyTree covers the shape rules
@@ -1031,7 +1018,7 @@ class TestPrintDependencies:
         ]
 
     def test_a_root_with_no_dependencies_says_so(
-        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+        self, sim: Simulation, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Otherwise the bare name alone reads as though the call failed."""
         assert self.printed(sim, capsys, "attribute.diamond_top", "used-by") == [
@@ -1040,7 +1027,7 @@ class TestPrintDependencies:
         ]
 
     def test_a_bare_name_a_full_id_and_an_object_agree(
-        self, sim: InteractiveContext, capsys: pytest.CaptureFixture[str]
+        self, sim: Simulation, capsys: pytest.CaptureFixture[str]
     ) -> None:
         node = sim.get_attribute("diamond_base")
         by_name = self.printed(sim, capsys, "diamond_base", "uses")
@@ -1048,9 +1035,7 @@ class TestPrintDependencies:
         assert by_name == self.printed(sim, capsys, "attribute.diamond_base", "uses")
         assert by_name == self.printed(sim, capsys, node, "uses")
 
-    def test_an_ambiguous_bare_name_lists_the_candidates(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_an_ambiguous_bare_name_lists_the_candidates(self, sim: Simulation) -> None:
         """A private column usually shares its name with an attribute, so the bare
         name has to be refused rather than resolved to whichever comes first."""
         with pytest.raises(ValueError, match="matches more than one resource") as error:
@@ -1058,22 +1043,22 @@ class TestPrintDependencies:
         assert "'attribute.test_column_1'" in str(error.value)
         assert "'column.test_column_1'" in str(error.value)
 
-    def test_an_unknown_name_points_at_find_resources(self, sim: InteractiveContext) -> None:
+    def test_an_unknown_name_points_at_find_resources(self, sim: Simulation) -> None:
         with pytest.raises(ValueError, match="No resource named 'no_such_resource'") as error:
             sim.print_dependencies("no_such_resource", "uses")
         assert "find_resources" in str(error.value)
 
-    def test_a_resource_outside_the_graph_raises(self, sim: InteractiveContext) -> None:
+    def test_a_resource_outside_the_graph_raises(self, sim: Simulation) -> None:
         unregistered = Column("not_registered", ColumnCreator())
         with pytest.raises(ValueError, match="is not in the resource graph"):
             sim.print_dependencies(unregistered, "uses")
 
     @pytest.mark.parametrize("depth", [0, -1])
-    def test_a_depth_below_one_raises(self, sim: InteractiveContext, depth: int) -> None:
+    def test_a_depth_below_one_raises(self, sim: Simulation, depth: int) -> None:
         with pytest.raises(ValueError, match=f"A depth of {depth} is not valid"):
             sim.print_dependencies("attribute.diamond_top", "uses", depth=depth)
 
-    def test_an_unknown_direction_raises(self, sim: InteractiveContext) -> None:
+    def test_an_unknown_direction_raises(self, sim: Simulation) -> None:
         """The annotation rules this out, but nothing stops an untyped caller."""
         unknown_direction: Any = "upstream"
         with pytest.raises(ValueError, match="Unknown direction 'upstream'"):
@@ -1084,8 +1069,8 @@ class TestGetDependencies:
     """Tests for getting the resources a resource uses and the ones that use it."""
 
     @pytest.fixture(scope="class")
-    def sim(self) -> InteractiveContext:
-        return InteractiveContext(
+    def sim(self) -> Simulation:
+        return Simulation(
             components=[
                 DiamondAttributeCreator(),
                 ColumnCreator(),
@@ -1097,34 +1082,30 @@ class TestGetDependencies:
     def ids(resources: list[Resource]) -> list[str]:
         return [str(resource.resource_id) for resource in resources]
 
-    def test_uses_reports_what_the_resource_reads(self, sim: InteractiveContext) -> None:
+    def test_uses_reports_what_the_resource_reads(self, sim: Simulation) -> None:
         assert self.ids(sim.get_dependencies("attribute.diamond_base", "uses")) == [
             "attribute.diamond_root"
         ]
 
-    def test_used_by_reports_what_reads_the_resource(self, sim: InteractiveContext) -> None:
+    def test_used_by_reports_what_reads_the_resource(self, sim: Simulation) -> None:
         """The same resource, walked the other way, reports different neighbors."""
         assert self.ids(sim.get_dependencies("attribute.diamond_base", "used-by")) == [
             "attribute.diamond_left",
             "attribute.diamond_right",
         ]
 
-    def test_the_graph_nodes_themselves_are_returned(self, sim: InteractiveContext) -> None:
+    def test_the_graph_nodes_themselves_are_returned(self, sim: Simulation) -> None:
         """The point of this over print_dependencies is having the resource in hand."""
         assert sim.get_dependencies("attribute.diamond_base", "uses") == [
             sim.get_attribute("diamond_root")
         ]
 
-    def test_an_unreported_type_one_level_away_yields_nothing(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_an_unreported_type_one_level_away_yields_nothing(self, sim: Simulation) -> None:
         """An attribute is backed by a column, so walking one level reports nothing
         even though print_dependencies draws that column."""
         assert sim.get_dependencies("attribute.test_column_4", "uses") == []
 
-    def test_reported_and_unreported_neighbors_are_separated(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_reported_and_unreported_neighbors_are_separated(self, sim: Simulation) -> None:
         """This initializer reads one attribute and one randomness stream, and only
         the attribute comes back."""
         initializer = "initializer.2.column_creator_and_requirer.initialize_test_column_4"
@@ -1135,7 +1116,7 @@ class TestGetDependencies:
     def test_results_are_grouped_by_resource_type(self) -> None:
         """The same order print_dependencies draws, which sorting by resource id
         alone would not give."""
-        sim = InteractiveContext(components=[OrderedDependencyCreator()])
+        sim = Simulation(components=[OrderedDependencyCreator()])
         assert self.ids(sim.get_dependencies("attribute.ordered", "uses")) == [
             "attribute.ordered_attribute",
             "value.ordered_value",
@@ -1146,7 +1127,7 @@ class TestGetDependencies:
     def test_same_type_results_are_sorted_by_name(self) -> None:
         """Two neighbors of one type, registered in the reverse of name order, so
         a sort that ignored the name would hand these back the other way around."""
-        sim = InteractiveContext(components=[ReversedNameCreator()])
+        sim = Simulation(components=[ReversedNameCreator()])
         assert self.ids(sim.get_dependencies("attribute.reversed_root", "uses")) == [
             "attribute.alpha",
             "attribute.zulu",
@@ -1155,43 +1136,39 @@ class TestGetDependencies:
     def test_modifiers_past_the_ninth_stay_in_application_order(self) -> None:
         """The number in a modifier's name is the order it is applied in. Past the
         ninth that number is two digits, which a plain text sort gets wrong."""
-        sim = InteractiveContext(components=[ManyModifierCreator()])
+        sim = Simulation(components=[ManyModifierCreator()])
         assert self.ids(sim.get_dependencies("value.many_modifiers", "uses")) == [
             f"value_modifier.many_modifiers.{number}.many_modifier_creator"
             f".modifier_{number - 1:02d}"
             for number in range(1, ManyModifierCreator.MODIFIER_COUNT + 1)
         ]
 
-    def test_a_root_with_no_dependencies_returns_nothing(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_a_root_with_no_dependencies_returns_nothing(self, sim: Simulation) -> None:
         assert sim.get_dependencies("attribute.diamond_top", "used-by") == []
 
-    def test_a_bare_name_a_full_id_and_an_object_agree(self, sim: InteractiveContext) -> None:
+    def test_a_bare_name_a_full_id_and_an_object_agree(self, sim: Simulation) -> None:
         node = sim.get_attribute("diamond_base")
         by_name = sim.get_dependencies("diamond_base", "uses")
         assert by_name == sim.get_dependencies("attribute.diamond_base", "uses")
         assert by_name == sim.get_dependencies(node, "uses")
 
-    def test_an_ambiguous_bare_name_lists_the_candidates(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_an_ambiguous_bare_name_lists_the_candidates(self, sim: Simulation) -> None:
         with pytest.raises(ValueError, match="matches more than one resource") as error:
             sim.get_dependencies("test_column_1", "uses")
         assert "'attribute.test_column_1'" in str(error.value)
         assert "'column.test_column_1'" in str(error.value)
 
-    def test_an_unknown_name_points_at_find_resources(self, sim: InteractiveContext) -> None:
+    def test_an_unknown_name_points_at_find_resources(self, sim: Simulation) -> None:
         with pytest.raises(ValueError, match="No resource named 'no_such_resource'") as error:
             sim.get_dependencies("no_such_resource", "uses")
         assert "find_resources" in str(error.value)
 
-    def test_a_resource_outside_the_graph_raises(self, sim: InteractiveContext) -> None:
+    def test_a_resource_outside_the_graph_raises(self, sim: Simulation) -> None:
         unregistered = Column("not_registered", ColumnCreator())
         with pytest.raises(ValueError, match="is not in the resource graph"):
             sim.get_dependencies(unregistered, "uses")
 
-    def test_an_unknown_direction_raises(self, sim: InteractiveContext) -> None:
+    def test_an_unknown_direction_raises(self, sim: Simulation) -> None:
         """The annotation rules this out, but nothing stops an untyped caller."""
         unknown_direction: Any = "upstream"
         with pytest.raises(ValueError, match="Unknown direction 'upstream'"):
@@ -1360,9 +1337,7 @@ class TestRenderDependencyTree:
 
 
 def test_list_attributes() -> None:
-    sim = InteractiveContext(
-        components=[MultiLevelMultiColumnCreator(), AttributePipelineCreator()]
-    )
+    sim = Simulation(components=[MultiLevelMultiColumnCreator(), AttributePipelineCreator()])
     expected_attributes = [
         # MultiLevelMultiColumnCreator attributes
         "some_attribute",
@@ -1387,12 +1362,12 @@ def test_get_attribute_names_is_removed_at_next_major_version() -> None:
     assert match is not None
     if int(match.group(1)) != 5:
         assert not hasattr(
-            InteractiveContext, "get_attribute_names"
-        ), "Remove the deprecated InteractiveContext.get_attribute_names() before next major release."
+            Simulation, "get_attribute_names"
+        ), "Remove the deprecated Simulation.get_attribute_names() before next major release."
 
 
 def test_get_population_querying() -> None:
-    sim = InteractiveContext(components=[ColumnCreator()])
+    sim = Simulation(components=[ColumnCreator()])
     assert set(sim.get_population("test_column_1")) == {0, 1, 2}
     assert set(sim.get_population("test_column_1", query="test_column_1 > 0")) == {1, 2}
 
@@ -1401,7 +1376,7 @@ def test_get_population_querying() -> None:
 def test_get_population_include_untracked(
     include_untracked: bool | None, mocker: MockerFixture
 ) -> None:
-    sim = InteractiveContext(components=[ColumnCreator()])
+    sim = Simulation(components=[ColumnCreator()])
     sim._population.register_tracked_query("test_column_1 > 0")
     # Need to mock lifecycle state away from initialization or population-creation
     mocker.patch.object(sim._population, "get_current_state", lambda: "on_time_step")
@@ -1419,21 +1394,21 @@ def test_get_population_include_untracked(
 def test_get_population_squeezing() -> None:
 
     # Single-level, single-column -> series
-    sim = InteractiveContext(components=[SingleColumnCreator()])
+    sim = Simulation(components=[SingleColumnCreator()])
     unsqueezed = sim.get_population(["test_column_1"])
     squeezed = sim.get_population("test_column_1")
     assert_squeezing_single_level_single_col(unsqueezed, squeezed, "test_column_1")
 
     # Single-level, multiple-column -> dataframe
     component = ColumnCreator()
-    sim = InteractiveContext(components=[component], setup=True)
+    sim = Simulation(components=[component], setup=True)
     # There's no way to request a squeezed dataframe here.
     df = sim.get_population(["test_column_1", "test_column_2", "test_column_3"])
     assert isinstance(df, pd.DataFrame)
     assert not isinstance(df.columns, pd.MultiIndex)
 
     # Multi-level, single outer, single inner -> series
-    sim = InteractiveContext(components=[MultiLevelSingleColumnCreator()], setup=True)
+    sim = Simulation(components=[MultiLevelSingleColumnCreator()], setup=True)
     unsqueezed = sim.get_population(["some_attribute"])
     squeezed = sim.get_population("some_attribute")
     assert_squeezing_multi_level_single_outer_single_inner(
@@ -1441,14 +1416,14 @@ def test_get_population_squeezing() -> None:
     )
 
     # Multi-level, single outer, multiple inner -> inner dataframe
-    sim = InteractiveContext(components=[MultiLevelMultiColumnCreator()], setup=True)
+    sim = Simulation(components=[MultiLevelMultiColumnCreator()], setup=True)
     sim._population._attribute_pipelines.pop("some_other_attribute")
     unsqueezed = sim.get_population(["some_attribute"])
     squeezed = sim.get_population("some_attribute")
     assert_squeezing_multi_level_single_outer_multi_inner(unsqueezed, squeezed)
 
     # Multi-level, multiple outer -> full unsqueezed multi-level dataframe
-    sim = InteractiveContext(components=[MultiLevelMultiColumnCreator()], setup=True)
+    sim = Simulation(components=[MultiLevelMultiColumnCreator()], setup=True)
     # There's no way to request a squeezed dataframe here.
     df = sim.get_population(["some_attribute", "some_other_attribute"])
     assert isinstance(df, pd.DataFrame)
@@ -1597,7 +1572,7 @@ class TestGetPopulationNestedAttributes:
 
     def _assert_nested_query_suppression(
         self,
-        sim: InteractiveContext,
+        sim: Simulation,
         include_untracked: bool | None,
         mocker: MockerFixture,
         expected_filtered_inner: set[int],
@@ -1636,7 +1611,7 @@ class TestGetPopulationNestedAttributes:
         outer_source_override: Callable[..., pd.DataFrame] | None = None,
         tracked_query: str | None = None,
         mocker: MockerFixture | None = None,
-    ) -> InteractiveContext:
+    ) -> Simulation:
         """Create a sim with a nested pipeline component and verify simplicity."""
 
         class _Component(component_class):  # type: ignore[valid-type, misc]
@@ -1651,7 +1626,7 @@ class TestGetPopulationNestedAttributes:
         if outer_source_override is not None:
             setattr(_Component, "outer_source", outer_source_override)
 
-        sim = InteractiveContext(components=[_Component()])
+        sim = Simulation(components=[_Component()])
         assert not sim._population._attribute_pipelines["outer"].is_simple
         assert sim._population._attribute_pipelines["inner"].is_simple == False
 
@@ -1665,7 +1640,7 @@ class TestGetPopulationNestedAttributes:
         return sim
 
     @staticmethod
-    def _patch_depth_tracking(sim: InteractiveContext, mocker: MockerFixture) -> list[int]:
+    def _patch_depth_tracking(sim: Simulation, mocker: MockerFixture) -> list[int]:
         """Patch ``_get_attributes`` to record max pipeline evaluation depth.
 
         Returns a single-element list (rather than an int which is immutable) so
@@ -1685,7 +1660,7 @@ class TestGetPopulationNestedAttributes:
         return max_depth
 
     @staticmethod
-    def _assert_depth(sim: InteractiveContext, max_depth: list[int], expected: int) -> None:
+    def _assert_depth(sim: Simulation, max_depth: list[int], expected: int) -> None:
         """Assert max depth reached *expected* and counter has reset to 0."""
         assert max_depth[0] == expected
         assert sim._population.pipeline_evaluation_depth == 0
@@ -1694,14 +1669,14 @@ class TestGetPopulationNestedAttributes:
 def test_init_signature_agrees_with_simulation_context() -> None:
     """Guard the parent's parameters, which are re-declared here rather than forwarded.
 
-    ``InteractiveContext`` spells out ``SimulationContext``'s parameters instead of
+    ``Simulation`` spells out ``SimulationContext``'s parameters instead of
     passing ``*args``/``**kwargs`` through, so a new parent parameter would otherwise
     be silently dropped.
 
     Covers signature shape only: names, order, annotations, defaults, and kinds.
     """
     parent = inspect.signature(SimulationContext.__init__).parameters
-    child = inspect.signature(InteractiveContext.__init__).parameters
+    child = inspect.signature(Simulation.__init__).parameters
 
     child_only = ("self", "observe", "setup")
     inherited = [name for name in parent if name != "self"]
@@ -1710,7 +1685,7 @@ def test_init_signature_agrees_with_simulation_context() -> None:
     for name in inherited:
         assert child[name].annotation == parent[name].annotation, name
         # Kind parity is what lets callers pass these positionally to
-        # InteractiveContext, as test_positional_arguments_map_to_parameters does.
+        # Simulation, as test_positional_arguments_map_to_parameters does.
         assert child[name].kind == parent[name].kind, name
         if name == "logging_verbosity":
             # Deliberately quieter than the parent; see the class docstring.
@@ -1727,7 +1702,7 @@ def test_positional_arguments_map_to_parameters() -> None:
     configured in ``__init__``, first-writer-wins per process, so a higher value
     would leak to every later test.
     """
-    sim = InteractiveContext(
+    sim = Simulation(
         None,
         None,
         {"population": {"population_size": 123}},
@@ -1744,7 +1719,7 @@ def test_positional_arguments_map_to_parameters() -> None:
 @pytest.mark.parametrize("parameter", ["setup", "observe"])
 def test_args_are_keyword_only(parameter: str) -> None:
     """keyword-only args are not parent parameters so must not take that slot."""
-    param = inspect.signature(InteractiveContext.__init__).parameters[parameter]
+    param = inspect.signature(Simulation.__init__).parameters[parameter]
     assert param.kind is inspect.Parameter.KEYWORD_ONLY
 
 
@@ -1758,11 +1733,11 @@ def test_keyword_only_parameters_reject_a_positional_call() -> None:
     with pytest.raises(TypeError):
         # Deliberately invalid: mypy catches this statically, and the ignore lets
         # us also pin the runtime behaviour.
-        InteractiveContext(None, None, None, None, None, 0, False)  # type: ignore[call-arg]
+        Simulation(None, None, None, None, None, 0, False)  # type: ignore[call-arg]
 
 
 class TestResultsGathering:
-    """An InteractiveContext does not gather results unless it is asked to.
+    """A Simulation does not gather results unless it is asked to.
 
     Gathering is switched off by leaving the results manager's per-step listeners
     unregistered. Observers stay registered, so the state table an interactive run
@@ -1775,7 +1750,7 @@ class TestResultsGathering:
         Named for the parameter rather than "by default" because the manager's
         own ``to_observe`` defaults the other way, for non-interactive runs.
         """
-        sim = InteractiveContext(
+        sim = Simulation(
             configuration=HARRY_POTTER_CONFIG,
             components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
         )
@@ -1797,7 +1772,7 @@ class TestResultsGathering:
         fixture would make them non-empty, which satisfies the guard on its own
         and never exercises the flag.
         """
-        sim = InteractiveContext(
+        sim = Simulation(
             configuration=HARRY_POTTER_CONFIG,
             components=[Hogwarts()],
             observe=True,
@@ -1821,7 +1796,7 @@ class TestResultsGathering:
         assert observers == ["house_points_observer"]
 
     @staticmethod
-    def _gather_listeners(sim: InteractiveContext) -> int:
+    def _gather_listeners(sim: Simulation) -> int:
         """Count the results manager's per-step gathering listeners.
 
         Excludes its post-setup listener, which is registered either way.
@@ -1845,11 +1820,11 @@ class TestResultsGathering:
 
         Excluding an observer would take its own columns with it - the
         ``disease_model`` example's ``DeathsObserver`` owns ``previous_alive`` -
-        and an InteractiveContext exists to inspect the state table.
+        and a Simulation exists to inspect the state table.
         """
 
         def run(observe: bool) -> pd.DataFrame:
-            sim = InteractiveContext(str(disease_model_spec), observe=observe)
+            sim = Simulation(str(disease_model_spec), observe=observe)
             sim.take_steps(5)
             return sim.get_population(sim.list_attributes())
 
@@ -1873,7 +1848,7 @@ class TestResultsGathering:
                 )
 
         def run(observe: bool) -> dict[str, pd.DataFrame]:
-            sim = InteractiveContext(
+            sim = Simulation(
                 configuration=HARRY_POTTER_CONFIG,
                 components=[Hogwarts(), SneakyComponent()],
                 observe=observe,
@@ -1922,7 +1897,7 @@ class SetupAndEndListener(Component):
 
 class TestGetSchedule:
     def test_rows_run_by_state_then_priority(self) -> None:
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[TimeStepListener("late", 7), TimeStepListener("early", 2)]
         )
         schedule = sim.get_schedule().query("phase == 'main_loop'").droplevel("phase")
@@ -1943,12 +1918,12 @@ class TestGetSchedule:
         )
 
     def test_frame_shape(self) -> None:
-        schedule = InteractiveContext(components=[TimeStepListener("a", 3)]).get_schedule()
+        schedule = Simulation(components=[TimeStepListener("a", 3)]).get_schedule()
         assert schedule.index.names == ["phase", "state", "priority"]
         assert list(schedule.columns) == ["component", "kind", "name", "active"]
 
     def test_listeners_outside_the_main_loop_are_listed(self) -> None:
-        sim = InteractiveContext(components=[SetupAndEndListener()])
+        sim = Simulation(components=[SetupAndEndListener()])
         schedule = sim.get_schedule()
         rows = schedule[schedule["component"] == "setup_and_end_listener"]
         expected = pd.DataFrame(
@@ -1965,19 +1940,19 @@ class TestGetSchedule:
         pd.testing.assert_frame_equal(rows, expected)
 
     def test_phases_run_in_lifecycle_order(self) -> None:
-        sim = InteractiveContext(components=[SetupAndEndListener(), TimeStepListener("a", 3)])
+        sim = Simulation(components=[SetupAndEndListener(), TimeStepListener("a", 3)])
         phases = sim.get_schedule().index.get_level_values("phase").unique()
         assert list(phases) == ["setup", "main_loop", "simulation_end"]
 
     def test_manager_listeners_are_listed(self) -> None:
-        sim = InteractiveContext(components=[TimeStepListener("a", 3)])
+        sim = Simulation(components=[TimeStepListener("a", 3)])
         post_setup = sim.get_schedule().query("state == 'post_setup'")
         # Managers' own listeners are listed, such as the values manager's on_post_setup.
         assert "values_manager" in post_setup["component"].values
 
     def test_observing_changes_only_whether_observations_are_active(self) -> None:
         schedules = {
-            observe: InteractiveContext(
+            observe: Simulation(
                 configuration=HARRY_POTTER_CONFIG,
                 components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
                 observe=observe,
@@ -1993,14 +1968,14 @@ class TestGetSchedule:
         assert not schedules[False]["active"][is_observation].any()
 
     def test_no_event_channels_are_created(self) -> None:
-        sim = InteractiveContext(components=[TimeStepListener("a", 3)])
+        sim = Simulation(components=[TimeStepListener("a", 3)])
         events = sim._events.list_events()
         sim.get_schedule()
         assert sim._events.list_events() == events
 
     @pytest.mark.parametrize("observe", [False, True])
     def test_observations_are_listed_whether_or_not_observed(self, observe: bool) -> None:
-        sim = InteractiveContext(
+        sim = Simulation(
             configuration=HARRY_POTTER_CONFIG,
             components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
             observe=observe,
@@ -2021,7 +1996,7 @@ class TestGetSchedule:
 
     def test_results_manager_listeners_are_not_listed(self) -> None:
         """Its work is listed as the observations it makes."""
-        sim = InteractiveContext(
+        sim = Simulation(
             configuration=HARRY_POTTER_CONFIG,
             components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
             observe=True,
@@ -2029,7 +2004,7 @@ class TestGetSchedule:
         assert sim._results.name not in sim.get_schedule()["component"].values
 
     def test_interactive_observations_end_the_main_loop(self) -> None:
-        sim = InteractiveContext(components=[SetupAndEndListener(), TimeStepListener("a", 3)])
+        sim = Simulation(components=[SetupAndEndListener(), TimeStepListener("a", 3)])
         sim.register_observation(
             running=lambda sim: sim.current_time, paused=lambda sim: sim.current_time
         )
@@ -2053,7 +2028,7 @@ class TestGetSchedule:
         self, disease_model_spec: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Wrap every listener and record what is called during one step."""
-        sim = InteractiveContext(str(disease_model_spec), observe=True)
+        sim = Simulation(str(disease_model_spec), observe=True)
         calls: list[dict[str, Any]] = []
         results_context = sim._results._results_context
         get_observations = results_context.get_observations
@@ -2115,18 +2090,18 @@ class TestGetSchedule:
 
 class TestHelp:
     NOT_INDEXED = {"help", "finalize", "initialize_simulants", "name", "get_attribute_names"}
-    """Public members :meth:`InteractiveContext.help` deliberately leaves out."""
+    """Public members :meth:`Simulation.help` deliberately leaves out."""
 
     def test_indexes_every_public_member_once(self) -> None:
         indexed = [name for _, names in _HELP_SECTIONS for name in names]
-        public = {name for name in dir(InteractiveContext) if not name.startswith("_")}
+        public = {name for name in dir(Simulation) if not name.startswith("_")}
         assert len(indexed) == len(set(indexed))
         assert set(indexed) == public - self.NOT_INDEXED
 
     def test_indexed_members_have_one_line_summaries(self) -> None:
         for _, names in _HELP_SECTIONS:
             for name in names:
-                docstring = inspect.getdoc(getattr(InteractiveContext, name))
+                docstring = inspect.getdoc(getattr(Simulation, name))
                 assert docstring, name
                 lines = docstring.splitlines()
                 # Assert docstring is either a single line or has an empty line
@@ -2136,7 +2111,7 @@ class TestHelp:
     def test_prints_each_member_under_its_heading(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        InteractiveContext(setup=False).help()
+        Simulation(setup=False).help()
         sections = capsys.readouterr().out.strip().split("\n\n")
 
         assert len(sections) == len(_HELP_SECTIONS)
@@ -2149,7 +2124,7 @@ class TestHelp:
             ]
 
     def test_prints_docstring_summaries(self, capsys: pytest.CaptureFixture[str]) -> None:
-        InteractiveContext(setup=False).help()
+        Simulation(setup=False).help()
         member_lines = {
             line.split()[0].removesuffix("()"): line
             for line in capsys.readouterr().out.splitlines()
@@ -2157,7 +2132,7 @@ class TestHelp:
         }
 
         for name in (name for _, names in _HELP_SECTIONS for name in names):
-            docstring = inspect.getdoc(getattr(InteractiveContext, name))
+            docstring = inspect.getdoc(getattr(Simulation, name))
             assert docstring
             summary = docstring.partition("\n")[0]
             assert member_lines[name].endswith(f"  {summary}"), name

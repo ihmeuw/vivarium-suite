@@ -48,7 +48,7 @@ def test_engine_public_api_reexports_resolve_to_source_symbols() -> None:
     objects. Drift here (e.g. a local stub shadowing the import) passes
     ``getattr`` checks but fails identity."""
     assert vivarium.engine.Component is engine_component_module.Component
-    assert vivarium.engine.InteractiveContext is engine_interactive_module.InteractiveContext
+    assert vivarium.interactive.Simulation is engine_interactive_module.Simulation
     assert vivarium.engine.Observer is engine_observer_module.Observer
     assert vivarium.engine.build_model_specification is build_model_specification
 

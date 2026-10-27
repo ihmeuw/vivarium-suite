@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from vivarium.config_tree import ConfigTree
 from vivarium.fuzzy_checker import FuzzyChecker
+from vivarium.interactive import Simulation
 
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.utilities import from_yearly
 
 LRI = "lower_respiratory_infections"
@@ -51,7 +51,7 @@ def test_disease_model(fuzzy_checker: FuzzyChecker, disease_model_spec: Path) ->
         }
     )
 
-    simulation = InteractiveContext(config)
+    simulation = Simulation(config)
 
     all_attributes = simulation.list_attributes()
     pop = simulation.get_population(all_attributes)
@@ -142,7 +142,7 @@ def test_configured_rates_reach_mortality(disease_model_spec: Path) -> None:
     remission_rate = configuration[REMISSION_KEY].data_sources.remission_rate
     excess_mortality_rate = configuration[INFECTED_KEY].data_sources.excess_mortality_rate
 
-    simulation = InteractiveContext(config)
+    simulation = Simulation(config)
     simulation.step()
     pop = simulation.get_population(["mortality_rate", LRI])
     is_infected = pop[LRI] == INFECTED
@@ -166,7 +166,7 @@ def test_configured_remission_reaches_pipeline(disease_model_spec: Path) -> None
         {"configuration": {REMISSION_KEY: {"data_sources": {"remission_rate": 12.3}}}}
     )
 
-    simulation = InteractiveContext(config)
+    simulation = Simulation(config)
     remission = simulation.get_population([f"{INFECTED}.remission_rate"])
     assert np.allclose(remission, from_yearly(12.3, STEP_SIZE))
 
@@ -187,7 +187,7 @@ def test_excess_mortality_only_affects_infected(
         }
     )
 
-    simulation = InteractiveContext(config)
+    simulation = Simulation(config)
     simulation.step()
     pop = simulation.get_population(["mortality_rate", LRI])
     is_infected = pop[LRI] == INFECTED

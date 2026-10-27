@@ -5,10 +5,11 @@ import pandas as pd
 import pytest
 import vivarium.risk_distributions as rd
 from vivarium.config_tree import ConfigTree
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lookup import LookupTable
 from vivarium.fuzzy_checker import FuzzyChecker
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.causal_factor.calibration_constant import (
@@ -89,7 +90,7 @@ def _setup_risk_simulation(
     risk: str | Risk,
     data: dict[str, Any],
     has_risk_effect: bool = True,
-) -> InteractiveContext:
+) -> Simulation:
     if isinstance(risk, str):
         risk = Risk(risk)
     components = [BasePopulation(), risk]
@@ -97,7 +98,7 @@ def _setup_risk_simulation(
         components.append(SIS("some_disease"))
         components.append(RiskEffect(risk.name, "cause.some_disease.incidence_rate"))
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=components,
         configuration=config,
         plugin_configuration=plugins,
@@ -162,7 +163,7 @@ def test_polytomous_risk_lookup_configuration(polytomous_risk, base_config, base
 
 
 def _check_exposure_and_rr(
-    simulation: InteractiveContext,
+    simulation: Simulation,
     risk: EntityString,
     expected_exposures: dict[str, float],
     expected_rrs: dict[str, float],
@@ -323,7 +324,7 @@ def ensemble_distribution_weights() -> dict[str, float]:
 
 def _build_ensemble_distribution_sim(
     config, base_plugins, distribution_weights
-) -> tuple[InteractiveContext, EnsembleDistribution]:
+) -> tuple[Simulation, EnsembleDistribution]:
     """Build (not step) a simulation with an ensemble-distributed risk, returning it
     alongside its configured ``EnsembleDistribution`` component."""
     risk = Risk("risk_factor.test_risk")
@@ -390,7 +391,7 @@ def _build_ensemble_distribution_sim(
 @pytest.fixture(scope="module")
 def ensemble_distribution_sim(
     base_config_factory, base_plugins, ensemble_distribution_weights
-) -> tuple[InteractiveContext, EnsembleDistribution]:
+) -> tuple[Simulation, EnsembleDistribution]:
     """One ensemble-distributed-risk sim, built and stepped once, shared read-only
     across the ensemble tests. The build-and-step also serves as the end-to-end
     smoke test that an ensemble risk runs without error."""
@@ -606,7 +607,7 @@ def test_risk_calibration_constant(base_config_factory, base_plugins):
     modifier = _CalibrationConstantModifier("risk_factor.test_risk", calibration_value)
 
     components = [BasePopulation(), risk, modifier]
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=components,
         configuration=config_cal,
         plugin_configuration=base_plugins,

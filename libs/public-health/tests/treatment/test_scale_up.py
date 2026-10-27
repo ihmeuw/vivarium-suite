@@ -3,8 +3,8 @@ from typing import Any
 import pandas as pd
 import pytest
 from vivarium.config_tree import ConfigTree
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.lookup import LookupTable
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.treatment import LinearScaleUp
@@ -91,7 +91,7 @@ def test_linear_scale_up_endpoints_build_distinct_lookup_tables(
         layer="model_override",
     )
 
-    InteractiveContext(components=[scale_up], configuration=base_config)
+    Simulation(components=[scale_up], configuration=base_config)
 
     start, end = scale_up.scale_up_start_value, scale_up.scale_up_end_value
     assert start.name == LookupTable.get_name(scale_up.name, "start")

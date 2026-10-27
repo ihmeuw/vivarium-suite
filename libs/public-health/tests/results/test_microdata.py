@@ -3,13 +3,14 @@ from typing import Any
 import pandas as pd
 import pytest
 from vivarium.config_tree import ConfigTree
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.components import ComponentConfigError
 from vivarium.engine.framework.configuration import build_simulation_configuration
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population import SimulantData
 from vivarium.engine.framework.results.exceptions import ResultsConfigurationError
+from vivarium.interactive import Simulation
 
 from vivarium.public_health.population import BasePopulation
 from vivarium.public_health.results import MicrodataObserver
@@ -99,7 +100,7 @@ _SCENARIOS: dict[str | None, dict[str, Any]] = {
 
 
 @pytest.fixture(scope="module")
-def microdata_observer_sim(base_config_factory, base_plugins) -> InteractiveContext:
+def microdata_observer_sim(base_config_factory, base_plugins) -> Simulation:
     """Shared read-only sim with one observer per scenario, stepped twice; don't step or mutate it."""
     observers = {label: MicrodataObserver(label) for label in _SCENARIOS}
     config = base_config_factory()
@@ -111,7 +112,7 @@ def microdata_observer_sim(base_config_factory, base_plugins) -> InteractiveCont
         layer="model_override",
         source="test_microdata",
     )
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[BasePopulation(), _SimulantID(), _Disqualifier(), *observers.values()],
         configuration=config,
         plugin_configuration=base_plugins,
@@ -122,19 +123,19 @@ def microdata_observer_sim(base_config_factory, base_plugins) -> InteractiveCont
     return sim
 
 
-def _observation(sim: InteractiveContext, label: str | None = None) -> pd.DataFrame:
+def _observation(sim: Simulation, label: str | None = None) -> pd.DataFrame:
     """Get the shared sim's results for the observer with the given label."""
     return sim.get_results()[MicrodataObserver(label).name]
 
 
 def _build_microdata_sim(
     base_config: ConfigTree, base_plugins: ConfigTree, microdata: dict
-) -> InteractiveContext:
+) -> Simulation:
     """Build a single-observer sim with the unlabeled observer configured by ``microdata``."""
     base_config.update(
         {"microdata_observer": microdata}, layer="model_override", source="test_microdata"
     )
-    return InteractiveContext(
+    return Simulation(
         components=[BasePopulation(), MicrodataObserver()],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -151,7 +152,7 @@ def test_microdata_observer_label_sets_component_name() -> None:
 def test_duplicate_microdata_observers_raise(base_config, base_plugins) -> None:
     """Two observers with the same label (or both unlabeled) fail fast on the name collision."""
     with pytest.raises(ComponentConfigError, match="already been set"):
-        InteractiveContext(
+        Simulation(
             components=[MicrodataObserver(), MicrodataObserver()],
             configuration=base_config,
             plugin_configuration=base_plugins,
@@ -159,7 +160,7 @@ def test_duplicate_microdata_observers_raise(base_config, base_plugins) -> None:
     # Constructing a sim mutates the configuration it is given, so the labeled
     # pair needs a fresh config rather than reusing base_config.
     with pytest.raises(ComponentConfigError, match="already been set"):
-        InteractiveContext(
+        Simulation(
             components=[MicrodataObserver("twin"), MicrodataObserver("twin")],
             configuration=build_simulation_configuration(),
             plugin_configuration=base_plugins,

@@ -21,7 +21,7 @@ For how risk factor *exposures* modify disease outcomes, see the
    import pandas as pd
    from loguru import logger
    logger.disable("vivarium")
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.treatment import (
        Intervention, InterventionEffect, AbsoluteShift,
        LinearScaleUp,
@@ -66,7 +66,7 @@ To run any example in a standalone script, include all of these at the top:
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.treatment import (
        Intervention, InterventionEffect, AbsoluteShift,
        LinearScaleUp,
@@ -177,7 +177,7 @@ The simplest intervention model sets everyone to covered:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Intervention("intervention.my_treatment"),
@@ -217,7 +217,7 @@ draw:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Intervention("intervention.my_treatment"),
@@ -287,7 +287,7 @@ at a lower rate than uncovered simulants:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Intervention("intervention.my_treatment"),
@@ -377,7 +377,7 @@ create a simple attribute pipeline with value 0.5, then override it with 0.3:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            ConstantRatePipeline("test_cause.incidence_rate", rate=0.5),
@@ -419,7 +419,7 @@ retain the original value of 0.5:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            ConstantRatePipeline("test_cause.incidence_rate", rate=0.5),
@@ -534,7 +534,7 @@ over the scale-up period:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Intervention("intervention.my_treatment"),

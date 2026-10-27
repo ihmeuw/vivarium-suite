@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
+from vivarium.interactive import Simulation
 
 from tests.helpers import ColumnCreator
 from vivarium.engine import Component
@@ -20,7 +21,6 @@ from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.population import SimulantData
 from vivarium.engine.framework.randomness.index_map import IndexMap
 from vivarium.engine.framework.randomness.stream import RandomnessStream
-from vivarium.engine.interface import InteractiveContext
 
 
 @pytest.mark.parametrize("initializes_crn_attributes", [True, False])
@@ -211,11 +211,11 @@ def test_multi_sim_basic_reproducibility_with_same_pop_growth(
     else:
         configuration = {}
 
-    sim1 = InteractiveContext(
+    sim1 = Simulation(
         components=[pop_class(with_crn=with_crn, sims_to_add=sims_to_add)],
         configuration=configuration,
     )
-    sim2 = InteractiveContext(
+    sim2 = Simulation(
         components=[pop_class(with_crn=with_crn, sims_to_add=sims_to_add)],
         configuration=configuration,
     )
@@ -251,11 +251,11 @@ def test_multi_sim_reproducibility_with_different_pop_growth(
         configuration = {}
 
     short, long = 1, 3
-    sim1 = InteractiveContext(
+    sim1 = Simulation(
         components=[pop_class(with_crn=with_crn, sims_to_add=cycle([short, short]))],
         configuration=configuration,
     )
-    sim2 = InteractiveContext(
+    sim2 = Simulation(
         components=[pop_class(with_crn=with_crn, sims_to_add=cycle([long, long]))],
         configuration=configuration,
     )
@@ -340,7 +340,7 @@ def test_prior_failure_path_when_first_crn_attribute_not_datelike(
     else:
         configuration = {}
 
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[UnBrokenPopulation(with_crn=with_crn, sims_to_add=sims_to_add)],
         configuration=configuration,
     )
