@@ -1,3 +1,8 @@
+**0.30.0 - 10/27/26**
+
+- ``team-conventions``: after a PR leaves draft and is posted to
+  ``#vivarium_dev``, move its MIC ticket to Ready for Review
+
 **0.29.0 - 10/26/26**
 
 - ``team-conventions``, ``ticket-triage``, ``_duplicate_finder``, and

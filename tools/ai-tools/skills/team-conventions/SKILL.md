@@ -1,6 +1,6 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev` and moving its MIC ticket to Ready for Review. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
@@ -104,6 +104,14 @@ Use the GitHub MCP `create_pull_request` tool and the repo's PR template — not
 A Slack message in `#vivarium_dev` (private channel, ID `GCF5T9TDM`) is the team's primary signal that a PR is ready for review. Open the PR (§3) and take it out of draft (`update_pull_request` with `draft: false`, or `gh pr ready <number>`) first, then post.
 
 Format: `<short description> PR <github-link>` — e.g. `AI Tools Team Conventions PR https://github.com/ihmeuw/vivarium-suite/pull/41`. Keep the description to a handful of words.
+
+After the post, move the PR's MIC ticket to **Ready for Review**:
+
+```
+mcp__plugin_simsci_jira__transition_issue(issue_key="MIC-####", to_status="Ready for Review")
+```
+
+The ticket is the one in the PR body's *JIRA issue* line. If the PR has no such line, use the key in the branch name (§1). If the PR names more than one ticket, move only the primary one, unless the user says otherwise. If the transition fails because the ticket's workflow has no path to Ready for Review from its current status, report the available transitions from the error and ask the user which to use. Do not pick one yourself.
 
 ## 5. Responding to review comments
 
