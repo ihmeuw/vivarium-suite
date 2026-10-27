@@ -66,7 +66,7 @@ def test_mortality_default_lookup_configuration(stepped_pop_mortality_sim):
 
 def test_mortality_creates_attributes(stepped_pop_mortality_sim):
     sim, bp, mortality = stepped_pop_mortality_sim
-    attributes = sim.get_attribute_names()
+    attributes = sim.list_attributes()
     expected_columns_created = mortality.private_columns
     expected_attributes_created = [
         mortality.mortality_rate_pipeline,

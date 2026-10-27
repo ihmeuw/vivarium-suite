@@ -183,27 +183,8 @@ class BaseSimulationContext(ABC):
         # This formally starts the initialization phase (this call makes the
         # life-cycle manager).
         self._lifecycle = self._plugin_manager.get_plugin(LifeCycleManager)
-        self._lifecycle.add_phase(
-            "setup",
-            [
-                lifecycle_states.SETUP,
-                lifecycle_states.POST_SETUP,
-                lifecycle_states.POPULATION_CREATION,
-            ],
-        )
-        self._lifecycle.add_phase(
-            "main_loop",
-            [
-                lifecycle_states.TIME_STEP_PREPARE,
-                lifecycle_states.TIME_STEP,
-                lifecycle_states.TIME_STEP_CLEANUP,
-                lifecycle_states.COLLECT_METRICS,
-            ],
-            loop=True,
-        )
-        self._lifecycle.add_phase(
-            "simulation_end", [lifecycle_states.SIMULATION_END, lifecycle_states.REPORT]
-        )
+        for phase in lifecycle_states.PHASES:
+            self._lifecycle.add_phase(phase.name, list(phase.states), phase.loop)
 
         self._component_manager = self._plugin_manager.get_plugin(ComponentManager)
         self._component_manager.setup_manager(self.configuration, self._lifecycle)
@@ -272,7 +253,7 @@ class BaseSimulationContext(ABC):
 
     @property
     def current_time(self) -> ClockTime:
-        """Returns the current simulation time."""
+        """Return the current simulation time."""
         return self._clock.time
 
     def get_results(self) -> dict[str, pd.DataFrame]:

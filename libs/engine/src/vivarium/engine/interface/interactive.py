@@ -14,7 +14,9 @@ See the associated tutorials for :ref:`running <interactive_tutorial>` and
 """
 from __future__ import annotations
 
+import inspect
 import re
+import warnings
 from dataclasses import dataclass, field
 from math import ceil
 from typing import TYPE_CHECKING, NamedTuple, overload
@@ -22,6 +24,7 @@ from typing import TYPE_CHECKING, NamedTuple, overload
 import numpy as np
 import pandas as pd
 
+from vivarium.engine.component import NUM_EVENT_PRIORITIES
 from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import BaseSimulationContext
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -40,7 +43,6 @@ if TYPE_CHECKING:
     from vivarium.config_tree.main import ConfigTree
 
     from vivarium.engine import Component
-    from vivarium.engine.framework.event import Event
     from vivarium.engine.types import ClockStepSize, ClockTime
 
 _IGNORED_RESOURCE_TYPES = frozenset(
@@ -68,49 +70,39 @@ _RESOURCE_TYPE_RANK = {
 _WORD_SEPARATORS = frozenset({".", "_"})
 """Characters :meth:`InteractiveContext.find_resources` treats as word boundaries."""
 
-
-class _ResourceRow(NamedTuple):
-    """A candidate row, with the relevance rank that orders it but is not reported."""
-
-    rank: int
-    name: str
-    resource_type: str
-    component: str
-
-
-def _match_rank(matcher: re.Pattern[str], name: str) -> int:
-    """Rank a resource by how squarely the pattern hit its name, best first.
-
-    Names are dot-delimited hierarchies of underscore-separated words, so a match
-    filling whole segments means more than one filling whole words, which in turn
-    means more than one landing mid-word. Searching "mortality_rate" ranks
-    ``mortality.mortality_rate`` above ``excess_mortality_rate``, which merely
-    contains those characters; searching "ever" ranks ``test_ever_eligible`` above
-    ``never_treated``.
-    """
-    # A pattern can occur several times in one name, so take its best showing
-    # rather than whichever happens to come first.
-    rank = 5  # only the component matched
-    for match in matcher.finditer(name):
-        start, end = match.span()
-        if (start, end) == (0, len(name)):
-            # the entire name, e.g. "age" for "age"
-            return 0
-        if start == 0:
-            # the start of the name, e.g. "age" in "agent_used.x.y"
-            rank = min(rank, 1)
-        elif name[start - 1] == "." and (end == len(name) or name[end] == "."):
-            # whole segments from the middle or the end, e.g. "age" in "mortality.age.rate"
-            rank = min(rank, 2)
-        elif name[start - 1] in _WORD_SEPARATORS and (
-            end == len(name) or name[end] in _WORD_SEPARATORS
-        ):
-            # whole words from the middle or the end, e.g. "age" in "mortality_age_rate"
-            rank = min(rank, 3)
-        else:
-            # part of a word, e.g. "age" in "coverage"
-            rank = min(rank, 4)
-    return rank
+_HELP_SECTIONS = (
+    (
+        "Run the simulation",
+        ("setup", "step", "take_steps", "run_for", "run_until", "run", "current_time"),
+    ),
+    ("Inspect the population", ("get_population", "list_attributes", "get_attribute")),
+    (
+        "Find and inspect resources",
+        (
+            "find_resources",
+            "list_values",
+            "get_value",
+            "get_lookup_table",
+            "get_dependencies",
+            "print_dependencies",
+        ),
+    ),
+    (
+        "Inspect components and scheduling",
+        (
+            "list_components",
+            "get_component",
+            "get_schedule",
+            "print_lifecycle_order",
+            "print_initializer_order",
+        ),
+    ),
+    (
+        "Observe and collect results",
+        ("register_observation", "pause_observation", "get_results"),
+    ),
+)
+"""Headings and the :class:`InteractiveContext` members that :meth:`InteractiveContext.help` lists under each."""
 
 
 _DEPENDENCY_DIRECTIONS = ("uses", "used-by")
@@ -137,131 +129,13 @@ _DEPENDENCY_TYPE_RANK = {
 }
 
 
-def _validate_direction(direction: str) -> None:
-    """Check the direction a dependency walk was asked to take."""
-    if direction not in _DEPENDENCY_DIRECTIONS:
-        raise ValueError(
-            f"Unknown direction '{direction}'. Use 'uses' for what this resource"
-            " uses or 'used-by' for what uses it."
-        )
-
-
-def _natural_key(name: str) -> tuple[tuple[int, int | str], ...]:
-    """Split a name so that a run of digits in it compares as a number."""
-    # Resource names carry unpadded indices, so "10" has to sort after "2".
-    return tuple(
-        (0, int(part)) if part.isdigit() else (1, part) for part in re.split(r"(\d+)", name)
-    )
-
-
-def _dependency_sort_key(resource: Resource) -> tuple[int, tuple[tuple[int, int | str], ...]]:
-    """Sort resources by type and then by name."""
-    # A type absent from the order sorts last rather than being dropped.
-    rank = _DEPENDENCY_TYPE_RANK.get(resource.RESOURCE_TYPE, len(_DEPENDENCY_TYPE_RANK))
-    return rank, _natural_key(str(resource.resource_id))
-
-
-def _dependencies(
-    graph: nx.DiGraph[Resource], node: Resource, direction: str
-) -> list[Resource]:
-    """Get the resources that a node uses or is used by, sorted by type and name."""
-    neighbors = graph.predecessors(node) if direction == "uses" else graph.successors(node)
-    return sorted(neighbors, key=_dependency_sort_key)
-
-
-def _resolve_resource(graph: nx.DiGraph[Resource], resource: str | Resource) -> Resource:
-    """Find the graph node that a resource argument names."""
-    nodes_by_id = {str(node.resource_id): node for node in graph.nodes}
-
-    if isinstance(resource, Resource):
-        node = nodes_by_id.get(str(resource.resource_id))
-        if node is None:
-            raise ValueError(
-                f"Resource '{resource.resource_id}' is not in the resource graph."
-            )
-        return node
-
-    if resource in nodes_by_id:
-        return nodes_by_id[resource]
-
-    # Handle a bare name by looking for a unique match among all resources
-    matches = sorted(
-        (node for node in graph.nodes if node.name == resource),
-        key=lambda node: str(node.resource_id),
-    )
-    if not matches:
-        raise ValueError(
-            f"No resource named '{resource}'. Use find_resources to search for it."
-        )
-    if len(matches) > 1:
-        candidates = ", ".join(repr(str(node.resource_id)) for node in matches)
-        raise ValueError(
-            f"'{resource}' matches more than one resource. Use one of: {candidates}."
-        )
-    return matches[0]
-
-
-def _render_dependency_tree(
-    graph: nx.DiGraph[Resource],
-    root: Resource,
-    direction: str,
-    depth: int | None,
-) -> list[str]:
-    """Render the dependency tree rooted at a resource, one string per line."""
-    lines = [str(root.resource_id)]
-    # ``expanded`` holds the nodes actually recursed into rather than the nodes
-    # printed. A node cut off by the depth limit was never expanded, so a later
-    # arrival at it has to report its hidden dependencies too rather than claim
-    # they were shown already.
-    expanded = {root}
-
-    def walk(node: Resource, prefix: str, level: int) -> None:
-        children = _dependencies(graph, node, direction)
-        for position, child in enumerate(children):
-            last = position == len(children) - 1
-            child_dependencies = _dependencies(graph, child, direction)
-            if child in expanded:
-                # This child has already been expanded in a previous branch
-                suffix = "  (expanded above)"
-            elif depth is not None and level + 1 == depth and child_dependencies:
-                # This child has more dependencies but we are at the depth limit
-                hidden = len(child_dependencies)
-                suffix = f"  ({hidden} direct branch{'es' if hidden > 1 else ''} hidden)"
-            else:
-                suffix = ""
-            branch = "└── " if last else "├── "
-            lines.append(f"{prefix}{branch}{child.resource_id}{suffix}")
-            if suffix or not child_dependencies:
-                # Don't recurse into this child, either because it has no dependencies or
-                # because it has more dependencies but we are at the depth limit
-                continue
-            # Mark the child before walking it, not after. A cycle leads back to
-            # the child from inside its own subtree, where an unmarked child is
-            # expanded again and the walk never ends.
-            expanded.add(child)
-            walk(node=child, prefix=prefix + ("    " if last else "│   "), level=level + 1)
-
-    if _dependencies(graph, root, direction):
-        walk(node=root, prefix="", level=0)
-    else:
-        lines.append("    (none)")
-    return lines
-
-
-@dataclass
-class _InteractiveObservation:
-    """An observation registered on an interactive context and the values it has observed."""
-
-    func: Callable[[InteractiveContext], Any]
-    values: dict[ClockTime, Any] = field(default_factory=dict)
-    active: bool = True
-
-
 class InteractiveContext(BaseSimulationContext):
     """A simulation context with helper methods for running simulations interactively.
 
     Does not gather the model's results by default; pass ``observe=True`` to
     include them.
+
+    Call :meth:`help` to list the available methods by task.
     """
 
     def __init__(
@@ -330,30 +204,29 @@ class InteractiveContext(BaseSimulationContext):
         if setup:
             self.setup()
 
-    @property
-    def current_time(self) -> ClockTime:
-        """Returns the current simulation time."""
-        return self._clock.time
+    def __repr__(self) -> str:
+        return "InteractiveContext()"
 
-    def get_results(self) -> dict[str, Any]:
-        """Get the model's formatted results and the values of each registered observation.
+    def help(self) -> None:
+        """Print the methods available on this context, grouped by task."""
+        width = max(len(name) for _, names in _HELP_SECTIONS for name in names) + 2
+        sections = []
+        for heading, names in _HELP_SECTIONS:
+            lines = [heading]
+            for name in names:
+                member = getattr(type(self), name)
+                label = name if isinstance(member, property) else f"{name}()"
+                summary = (inspect.getdoc(member) or "").partition("\n")[0]
+                lines.append(f"    {label:<{width}}  {summary}")
+            sections.append("\n".join(lines))
+        print("\n\n".join(sections))
 
-        Each observation registered with :meth:`register_observation` is keyed by
-        its name, and its value is a copy of the values it has observed, keyed by
-        clock time.
-        """
-        if not self._results.to_observe and not self._interactive_observations:
-            self._logger.warning(
-                "No results to return. An InteractiveContext does not observe "
-                "results by default; pass observe=True to include the model's "
-                "observations, or use register_observation() to add your own."
-            )
-        results: dict[str, Any] = super().get_results()
-        for name, observation in self._interactive_observations.items():
-            results[name] = dict(observation.values)
-        return results
+    ######################
+    # Run the simulation #
+    ######################
 
     def setup(self) -> None:
+        """Set up the simulation and create the initial population."""
         super().setup()
         self.initialize_simulants()
         self._population_view = self._builder.population.get_view()
@@ -391,130 +264,63 @@ class InteractiveContext(BaseSimulationContext):
         self._clock._clock_step_size = old_step_size
         self._observe()
 
-    def register_observation(
-        self, *names: str, **observations: Callable[[InteractiveContext], Any]
+    def take_steps(
+        self,
+        number_of_steps: int = 1,
+        step_size: ClockStepSize | None = None,
+        with_logging: bool = True,
     ) -> None:
-        """Register named observations, or resume paused ones, to evaluate every step.
-
-        Each observation is called with this context and its return value is
-        stored under the current clock time, first as soon as the simulation is
-        set up (immediately if it already is) and then after every step taken.
-        Values are stored exactly as returned and are included in
-        :meth:`get_results`. After setup, the call is all or nothing: if any
-        observation fails, nothing is registered or resumed.
+        """Run the simulation for the given number of steps.
 
         Parameters
         ----------
-        names
-            Names of paused observations to resume. Their values are kept and
-            new values are added from now on. A name that is still registered is
-            left as it is.
-        observations
-            Callables keyed by the name to store their values under. Each takes
-            this context and returns the value to store.
-
-        Raises
-        ------
-        ValueError
-            If a name to resume is not an observation, or a new name is already an
-            observation on this context or in the model. For observations
-            registered before setup, the check against the model's observations
-            is made by ``setup``.
-        ObservationError
-            If an observation raises when evaluated.
-        """
-        unknown = [name for name in names if name not in self._interactive_observations]
-        if unknown:
-            raise ValueError(f"No observations named {unknown} to resume.")
-        duplicates = [name for name in observations if name in self._interactive_observations]
-        if duplicates:
-            raise ValueError(
-                f"Observation names must be unique; {duplicates} already exist. Use a "
-                "different name, or pass an existing name without a callable to resume it."
-            )
-        resumed = {
-            name: self._interactive_observations[name]
-            for name in names
-            if not self._interactive_observations[name].active
-        }
-        new_observations = {
-            name: _InteractiveObservation(func) for name, func in observations.items()
-        }
-        # Before setup there is nothing to evaluate or check against yet; setup does both.
-        if self._lifecycle.current_state != lifecycle_states.INITIALIZATION:
-            self._assert_no_duplicate_names(new_observations)
-            self._observe({**resumed, **new_observations})
-        for observation in resumed.values():
-            observation.active = True
-        self._interactive_observations.update(new_observations)
-        already_registered = [name for name in names if name not in resumed]
-        if already_registered:
-            self._logger.info(f"Observations {already_registered} are already registered.")
-
-    def pause_observation(self, *names: str) -> None:
-        """Stop evaluating the named observations, keeping their values.
-
-        A paused observation's values stay in :meth:`get_results`, and it
-        can be resumed with :meth:`register_observation` by passing just its name.
-
-        Parameters
-        ----------
-        names
-            The names of the observations to stop.
-
-        Raises
-        ------
-        ValueError
-            If any name is not an observation, in which case nothing is changed.
-        """
-        unknown = [name for name in names if name not in self._interactive_observations]
-        if unknown:
-            raise ValueError(f"No observations named {unknown}.")
-        for name in names:
-            self._interactive_observations[name].active = False
-
-    def _assert_no_duplicate_names(self, names: Iterable[str]) -> None:
-        """Raise if any name is already an observation registered by the model."""
-        taken = sorted(set(names) & set(self._results.observation_names))
-        if taken:
-            raise ValueError(
-                f"Observation names {taken} passed to register_observation are already "
-                "registered by the model. Use a different name."
-            )
-
-    def _observe(
-        self, observations: dict[str, _InteractiveObservation] | None = None
-    ) -> None:
-        """Evaluate the given observations, or all active ones, and store the values, or none if any fails."""
-        if observations is None:
-            # Fix the active set up front, since an observation may pause another.
-            observations = {
-                name: obs
-                for name, obs in self._interactive_observations.items()
-                if obs.active
-            }
-        time = self.current_time
-        values: dict[str, Any] = {}
-        for name, observation in observations.items():
-            try:
-                values[name] = observation.func(self)
-            except Exception as error:
-                raise ObservationError(
-                    f"Observation '{name}' failed at time {time}: {error!r}"
-                ) from error
-        # Store only after every observation succeeds so a failure leaves no partial values.
-        for name, value in values.items():
-            observations[name].values[time] = value
-
-    def run(self, with_logging: bool = True) -> None:
-        """Run the simulation for the duration specified in the configuration.
-
-        Parameters
-        ----------
+        number_of_steps
+            The number of steps to take.
+        step_size
+            An optional size of step to take. Must be compatible with the
+            simulation clock's step size (usually a pandas.Timedelta).
         with_logging
             Whether to show a progress bar. Only works in an IPython environment.
         """
-        self.run_until(self._clock.stop_time, with_logging=with_logging)
+        if not isinstance(number_of_steps, int):
+            raise ValueError("Number of steps must be an integer.")
+        self._step_loop(number_of_steps, step_size, with_logging)
+
+    def _step_loop(
+        self,
+        number_of_steps: int,
+        step_size: ClockStepSize | None,
+        with_logging: bool,
+        stop_when: Callable[[], bool] | None = None,
+    ) -> tuple[int, bool]:
+        """Take up to number_of_steps steps, stopping as soon as stop_when is true.
+
+        stop_when is checked before the first step and after each step. Return the
+        number of steps taken and whether stop_when was true.
+        """
+        progress = None
+        if run_from_ipython() and with_logging:
+            progress = log_progress(range(number_of_steps), name="Step")
+
+        stopper = stop_when if callable(stop_when) else lambda: False
+        steps_taken = 0
+        stopped = stopper()
+        try:
+            while not stopped and steps_taken < number_of_steps:
+                self.step(step_size)
+                steps_taken += 1
+                # Advance the bar only after the step, so it shows steps taken.
+                if progress is not None:
+                    next(progress)
+                stopped = stopper()
+        except Exception as error:
+            if progress is not None:
+                # Lets log_progress mark the bar as failed; it re-raises the error.
+                progress.throw(error)
+            raise
+        if progress is not None:
+            progress.close()
+        return steps_taken, stopped
 
     def run_for(self, duration: ClockStepSize | str, with_logging: bool = True) -> None:
         """Run the simulation for the given time duration.
@@ -635,63 +441,19 @@ class InteractiveContext(BaseSimulationContext):
             )
         return bool(result)
 
-    def take_steps(
-        self,
-        number_of_steps: int = 1,
-        step_size: ClockStepSize | None = None,
-        with_logging: bool = True,
-    ) -> None:
-        """Run the simulation for the given number of steps.
+    def run(self, with_logging: bool = True) -> None:
+        """Run the simulation for the duration specified in the configuration.
 
         Parameters
         ----------
-        number_of_steps
-            The number of steps to take.
-        step_size
-            An optional size of step to take. Must be compatible with the
-            simulation clock's step size (usually a pandas.Timedelta).
         with_logging
             Whether to show a progress bar. Only works in an IPython environment.
         """
-        if not isinstance(number_of_steps, int):
-            raise ValueError("Number of steps must be an integer.")
-        self._step_loop(number_of_steps, step_size, with_logging)
+        self.run_until(self._clock.stop_time, with_logging=with_logging)
 
-    def _step_loop(
-        self,
-        number_of_steps: int,
-        step_size: ClockStepSize | None,
-        with_logging: bool,
-        stop_when: Callable[[], bool] | None = None,
-    ) -> tuple[int, bool]:
-        """Take up to number_of_steps steps, stopping as soon as stop_when is true.
-
-        stop_when is checked before the first step and after each step. Return the
-        number of steps taken and whether stop_when was true.
-        """
-        progress = None
-        if run_from_ipython() and with_logging:
-            progress = log_progress(range(number_of_steps), name="Step")
-
-        stopper = stop_when if callable(stop_when) else lambda: False
-        steps_taken = 0
-        stopped = stopper()
-        try:
-            while not stopped and steps_taken < number_of_steps:
-                self.step(step_size)
-                steps_taken += 1
-                # Advance the bar only after the step, so it shows steps taken.
-                if progress is not None:
-                    next(progress)
-                stopped = stopper()
-        except Exception as error:
-            if progress is not None:
-                # Lets log_progress mark the bar as failed; it re-raises the error.
-                progress.throw(error)
-            raise
-        if progress is not None:
-            progress.close()
-        return steps_taken, stopped
+    ##########################
+    # Inspect the population #
+    ##########################
 
     @overload
     def get_population(
@@ -748,22 +510,23 @@ class InteractiveContext(BaseSimulationContext):
             index, attributes, include_untracked=include_untracked
         )
 
-    def get_attribute_names(self) -> list[str]:
+    def list_attributes(self) -> list[str]:
         """List all attributes in the population state table."""
         return self._population.get_all_attribute_names()
 
-    def list_values(self) -> list[str]:
-        """List the names of all value pipelines in the simulation."""
-        return list(self._values.get_value_pipelines().keys())
+    def get_attribute_names(self) -> list[str]:
+        """Deprecated alias for :meth:`list_attributes`.
 
-    def get_value(self, value_pipeline_name: str) -> Pipeline:
-        """Get the value pipeline associated with the given name."""
-        if value_pipeline_name not in self.list_values():
-            raise ValueError(
-                f"No value pipeline '{value_pipeline_name}' registered. "
-                "Are you looking for an attribute pipeline? Try get_attribute()."
-            )
-        return self._values.get_value(value_pipeline_name)
+        .. deprecated:: 5.19.0
+            Use :meth:`list_attributes` instead. This alias will be removed.
+        """
+        warnings.warn(
+            "InteractiveContext.get_attribute_names is deprecated and will be removed; "
+            "use InteractiveContext.list_attributes instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self.list_attributes()
 
     def get_attribute(self, attribute_pipeline_name: str) -> AttributePipeline:
         """Get the attribute pipeline associated with the given name.
@@ -775,7 +538,7 @@ class InteractiveContext(BaseSimulationContext):
         ----------
         attribute_pipeline_name
             Name of the attribute pipeline to return. Available names are given
-            by :meth:`get_attribute_names`.
+            by :meth:`list_attributes`.
 
         Returns
         -------
@@ -788,43 +551,16 @@ class InteractiveContext(BaseSimulationContext):
         """
         # Guarded because the values manager creates a pipeline for an unknown
         # name, which would silently pollute the simulation with an empty one.
-        if attribute_pipeline_name not in self.get_attribute_names():
+        if attribute_pipeline_name not in self.list_attributes():
             raise ValueError(
                 f"No attribute pipeline '{attribute_pipeline_name}' registered. "
                 "Are you looking for a value pipeline? Try get_value()."
             )
         return self._values.get_attribute(attribute_pipeline_name)
 
-    def get_lookup_table(
-        self, name: str
-    ) -> LookupTable[pd.Series[Any]] | LookupTable[pd.DataFrame]:
-        """Get the lookup table associated with the given name.
-
-        Calling the returned table with a population index returns the data it
-        holds for those simulants.
-
-        Parameters
-        ----------
-        name
-            Name of the lookup table to return. Available names are the
-            ``lookup_table`` rows of :meth:`find_resources`.
-
-        Returns
-        -------
-            The requested lookup table.
-
-        Raises
-        ------
-        ValueError
-            If no lookup table of that name is registered.
-        """
-        if name not in self._tables.tables:
-            raise ValueError(
-                f"No lookup table '{name}' registered. A table is usually named "
-                "for the component that built it, so its name may be longer than "
-                "the quantity it holds; try find_resources()."
-            )
-        return self._tables.tables[name]
+    ##############################
+    # Find and inspect resources #
+    ##############################
 
     def find_resources(self, pattern: str = "", *, regex: bool = False) -> pd.DataFrame:
         """Find simulation resources whose name or component matches a pattern.
@@ -908,6 +644,99 @@ class InteractiveContext(BaseSimulationContext):
             columns=["name", "resource_type", "component"],
         )
 
+    def list_values(self) -> list[str]:
+        """List the names of all value pipelines in the simulation."""
+        return list(self._values.get_value_pipelines().keys())
+
+    def get_value(self, value_pipeline_name: str) -> Pipeline:
+        """Get the value pipeline associated with the given name."""
+        if value_pipeline_name not in self.list_values():
+            raise ValueError(
+                f"No value pipeline '{value_pipeline_name}' registered. "
+                "Are you looking for an attribute pipeline? Try get_attribute()."
+            )
+        return self._values.get_value(value_pipeline_name)
+
+    def get_lookup_table(
+        self, name: str
+    ) -> LookupTable[pd.Series[Any]] | LookupTable[pd.DataFrame]:
+        """Get the lookup table associated with the given name.
+
+        Calling the returned table with a population index returns the data it
+        holds for those simulants.
+
+        Parameters
+        ----------
+        name
+            Name of the lookup table to return. Available names are the
+            ``lookup_table`` rows of :meth:`find_resources`.
+
+        Returns
+        -------
+            The requested lookup table.
+
+        Raises
+        ------
+        ValueError
+            If no lookup table of that name is registered.
+        """
+        if name not in self._tables.tables:
+            raise ValueError(
+                f"No lookup table '{name}' registered. A table is usually named "
+                "for the component that built it, so its name may be longer than "
+                "the quantity it holds; try find_resources()."
+            )
+        return self._tables.tables[name]
+
+    def get_dependencies(
+        self,
+        resource: str | Resource,
+        direction: Literal["uses", "used-by"],
+    ) -> list[Resource]:
+        """Get the direct resources a resource uses or the resources that use it.
+
+        Use this to work with the dependencies themselves. :meth:`InteractiveContext.print_dependencies`
+        walks the same graph but draws it as a tree to read.
+
+        Parameters
+        ----------
+        resource
+            The resource to start from, given as a ``Resource``, as a full
+            resource id such as ``"attribute.age"``, or as a bare name such as
+            ``"age"``. A bare name has to name exactly one resource.
+        direction
+            Which way to walk. ``"uses"`` reports the resources this one reads,
+            and ``"used-by"`` reports the resources that read it.
+
+        Returns
+        -------
+            The resources one level away, grouped by resource type in the order
+            :meth:`InteractiveContext.print_dependencies` draws them and sorted
+            by name within a type.
+
+        Raises
+        ------
+        ValueError
+            If ``direction`` is neither ``"uses"`` nor ``"used-by"``, or if
+            ``resource`` does not name exactly one resource in the graph.
+
+        Notes
+        -----
+        Columns, randomness streams, and initializers are left out (as they are
+        from :meth:`InteractiveContext.find_resources`).
+
+        Results report the dependencies a component explicitly declared. An undeclared
+        dependency is missing here with no signal.
+        """
+        _validate_direction(direction)
+        graph = self._resource.get_graph()
+        root = _resolve_resource(graph, resource)
+        return [
+            dependency
+            for dependency in _dependencies(graph, root, direction)
+            if dependency.RESOURCE_TYPE not in _IGNORED_RESOURCE_TYPES
+        ]
+
     def print_dependencies(
         self,
         resource: str | Resource,
@@ -972,78 +801,9 @@ class InteractiveContext(BaseSimulationContext):
         root = _resolve_resource(graph, resource)
         print("\n".join(_render_dependency_tree(graph, root, direction, depth)))
 
-    def get_dependencies(
-        self,
-        resource: str | Resource,
-        direction: Literal["uses", "used-by"],
-    ) -> list[Resource]:
-        """Get the direct resources a resource uses or the resources that use it.
-
-        Use this to work with the dependencies themselves. :meth:`InteractiveContext.print_dependencies`
-        walks the same graph but draws it as a tree to read.
-
-        Parameters
-        ----------
-        resource
-            The resource to start from, given as a ``Resource``, as a full
-            resource id such as ``"attribute.age"``, or as a bare name such as
-            ``"age"``. A bare name has to name exactly one resource.
-        direction
-            Which way to walk. ``"uses"`` reports the resources this one reads,
-            and ``"used-by"`` reports the resources that read it.
-
-        Returns
-        -------
-            The resources one level away, grouped by resource type in the order
-            :meth:`InteractiveContext.print_dependencies` draws them and sorted
-            by name within a type.
-
-        Raises
-        ------
-        ValueError
-            If ``direction`` is neither ``"uses"`` nor ``"used-by"``, or if
-            ``resource`` does not name exactly one resource in the graph.
-
-        Notes
-        -----
-        Columns, randomness streams, and initializers are left out (as they are
-        from :meth:`InteractiveContext.find_resources`).
-
-        Results report the dependencies a component explicitly declared. An undeclared
-        dependency is missing here with no signal.
-        """
-        _validate_direction(direction)
-        graph = self._resource.get_graph()
-        root = _resolve_resource(graph, resource)
-        return [
-            dependency
-            for dependency in _dependencies(graph, root, direction)
-            if dependency.RESOURCE_TYPE not in _IGNORED_RESOURCE_TYPES
-        ]
-
-    def list_events(self) -> list[str]:
-        """List all event types registered with the simulation."""
-        return self._events.list_events()
-
-    def get_listeners(self, event_name: str) -> dict[int, list[Callable[[Event], None]]]:
-        """Get all listeners of a particular type of event.
-
-        Available events can be found by calling
-        :func:`InteractiveContext.list_events`.
-
-        Parameters
-        ----------
-        event_name
-            The name of the event to grab the listeners for.
-
-        Returns
-        -------
-            A dictionary that maps each priority level of the named event's
-            listeners to a list of listeners at that level.
-        """
-        if event_name not in self._events:
-            raise ValueError(f"No event {event_name} in system.")
-        return self._events.get_listeners(event_name)
+    #####################################
+    # Inspect components and scheduling #
+    #####################################
 
     def list_components(self) -> dict[str, Any]:
         """Get a mapping of component names to components currently in the simulation.
@@ -1055,7 +815,8 @@ class InteractiveContext(BaseSimulationContext):
         return self._component_manager.list_components()
 
     def get_component(self, name: str) -> Any:
-        """Get the component in the simulation that has ``name``, if present.
+        """Get the component in the simulation with the given name, if present.
+
         Names are guaranteed to be unique.
 
         Parameters
@@ -1069,6 +830,111 @@ class InteractiveContext(BaseSimulationContext):
         """
         return self._component_manager.get_component(name)
 
+    def get_schedule(self) -> pd.DataFrame:
+        """Get what runs in the simulation, in the order they currently run.
+
+        Use this to find out when a component's actions and observations run
+        relative to the rest of the model. An "action" is a method, such as
+        ``on_time_step``, that the simulation calls in a lifecycle state.
+
+        Returns
+        -------
+            A frame with one row per action or observation, indexed by
+            ``phase``, ``state`` and ``priority``, with columns
+            ``component``, ``kind``, ``name`` and ``active``. ``kind`` is
+            ``"action"``, ``"observation"`` or ``"observation (interactive)"``.
+            ``name`` is the action's method name or the observation's name.
+            ``active`` says whether the row runs in this context.
+
+        Notes
+        -----
+        Phases and their lifecycle states run in the order shown, and within a
+        state lower priorities run first. The states of the ``main_loop`` phase
+        repeat every time step. Rows that share a state and priority have no
+        guaranteed order. States with nothing in them are left out.
+
+        Observations are listed even when results are not observed, which is the
+        default for an interactive context. Their ``active`` value is then False.
+
+        The results manager's own actions are left out. Its work is shown as the
+        observations it makes, so the frame has the same rows whether or not
+        results are observed.
+
+        An active observation is checked every step but can still decline to run,
+        through its to_observe condition or because its population filter leaves
+        no simulants.
+
+        Observations registered with :meth:`register_observation` are listed at
+        the end of the ``main_loop`` phase with no state, priority or component.
+        They run once when registered, or at the end of setup if registered
+        before it, and then after every step. A paused one has ``active`` set to
+        False.
+
+        """
+        # A row is phase, state, priority, component name, kind, action/observation name, active.
+        rows: list[tuple[str, str | None, int | None, str | None, str, str, bool]] = []
+        for phase in self._lifecycle.get_phase_names():
+            for state in self._lifecycle.get_state_names(phase):
+                # get_listeners() would create a channel for a state with none.
+                listeners = self._events.get_listeners(state) if state in self._events else {}
+                for priority in range(NUM_EVENT_PRIORITIES):
+                    for (
+                        observation,
+                        component,
+                    ) in self._results.get_scheduled_observations(state, priority):
+                        rows.append(
+                            (
+                                phase,
+                                state,
+                                priority,
+                                component.name,
+                                "observation",
+                                observation.name,
+                                self._results.to_observe,
+                            )
+                        )
+                    for listener in listeners.get(priority, []):
+                        owner = getattr(listener, "__self__", None)
+                        if owner is self._results:
+                            # The results manager's work is listed as the
+                            # observations above.
+                            continue
+                        rows.append(
+                            (
+                                phase,
+                                state,
+                                priority,
+                                getattr(owner, "name", None),
+                                "action",
+                                getattr(listener, "__name__", type(listener).__name__),
+                                True,
+                            )
+                        )
+            # Add interactive observations to end of main loop phase
+            if phase == "main_loop":
+                for name, interactive_observation in self._interactive_observations.items():
+                    rows.append(
+                        (
+                            phase,
+                            None,
+                            None,
+                            None,
+                            "observation (interactive)",
+                            name,
+                            interactive_observation.active,
+                        )
+                    )
+        index = ["phase", "state", "priority"]
+        return (
+            pd.DataFrame(rows, columns=index + ["component", "kind", "name", "active"])
+            .astype({"priority": "Int64"})
+            .set_index(index)
+        )
+
+    def print_lifecycle_order(self) -> None:
+        """Print the lifecycle phases and the states in each, in the order they run."""
+        print(self._lifecycle)
+
     def print_initializer_order(self) -> None:
         """Print the order in which population initializers are called."""
         initializers = []
@@ -1081,9 +947,303 @@ class InteractiveContext(BaseSimulationContext):
                 initializers.append(f"Unbound function {name}")
         print("\n".join(initializers))
 
-    def print_lifecycle_order(self) -> None:
-        """Print the order of lifecycle events (including user event handlers)."""
-        print(self._lifecycle)
+    ###############################
+    # Observe and collect results #
+    ###############################
 
-    def __repr__(self) -> str:
-        return "InteractiveContext()"
+    def register_observation(
+        self, *names: str, **observations: Callable[[InteractiveContext], Any]
+    ) -> None:
+        """Register named observations, or resume paused ones, to evaluate every step.
+
+        Each observation is called with this context and its return value is
+        stored under the current clock time, first as soon as the simulation is
+        set up (immediately if it already is) and then after every step taken.
+        Values are stored exactly as returned and are included in
+        :meth:`get_results`. After setup, the call is all or nothing: if any
+        observation fails, nothing is registered or resumed.
+
+        Parameters
+        ----------
+        names
+            Names of paused observations to resume. Their values are kept and
+            new values are added from now on. A name that is still registered is
+            left as it is.
+        observations
+            Callables keyed by the name to store their values under. Each takes
+            this context and returns the value to store.
+
+        Raises
+        ------
+        ValueError
+            If a name to resume is not an observation, or a new name is already an
+            observation on this context or in the model. For observations
+            registered before setup, the check against the model's observations
+            is made by ``setup``.
+        ObservationError
+            If an observation raises when evaluated.
+        """
+        unknown = [name for name in names if name not in self._interactive_observations]
+        if unknown:
+            raise ValueError(f"No observations named {unknown} to resume.")
+        duplicates = [name for name in observations if name in self._interactive_observations]
+        if duplicates:
+            raise ValueError(
+                f"Observation names must be unique; {duplicates} already exist. Use a "
+                "different name, or pass an existing name without a callable to resume it."
+            )
+        resumed = {
+            name: self._interactive_observations[name]
+            for name in names
+            if not self._interactive_observations[name].active
+        }
+        new_observations = {
+            name: _InteractiveObservation(func) for name, func in observations.items()
+        }
+        # Before setup there is nothing to evaluate or check against yet; setup does both.
+        if self._lifecycle.current_state != lifecycle_states.INITIALIZATION:
+            self._assert_no_duplicate_names(new_observations)
+            self._observe({**resumed, **new_observations})
+        for observation in resumed.values():
+            observation.active = True
+        self._interactive_observations.update(new_observations)
+        already_registered = [name for name in names if name not in resumed]
+        if already_registered:
+            self._logger.info(f"Observations {already_registered} are already registered.")
+
+    def pause_observation(self, *names: str) -> None:
+        """Stop evaluating the named observations, keeping their values.
+
+        A paused observation's values stay in :meth:`get_results`, and it
+        can be resumed with :meth:`register_observation` by passing just its name.
+
+        Parameters
+        ----------
+        names
+            The names of the observations to stop.
+
+        Raises
+        ------
+        ValueError
+            If any name is not an observation, in which case nothing is changed.
+        """
+        unknown = [name for name in names if name not in self._interactive_observations]
+        if unknown:
+            raise ValueError(f"No observations named {unknown}.")
+        for name in names:
+            self._interactive_observations[name].active = False
+
+    def _assert_no_duplicate_names(self, names: Iterable[str]) -> None:
+        """Raise if any name is already an observation registered by the model."""
+        taken = sorted(set(names) & set(self._results.observation_names))
+        if taken:
+            raise ValueError(
+                f"Observation names {taken} passed to register_observation are already "
+                "registered by the model. Use a different name."
+            )
+
+    def _observe(
+        self, observations: dict[str, _InteractiveObservation] | None = None
+    ) -> None:
+        """Evaluate the given observations, or all active ones, and store the values, or none if any fails."""
+        if observations is None:
+            # Fix the active set up front, since an observation may pause another.
+            observations = {
+                name: obs
+                for name, obs in self._interactive_observations.items()
+                if obs.active
+            }
+        time = self.current_time
+        values: dict[str, Any] = {}
+        for name, observation in observations.items():
+            try:
+                values[name] = observation.func(self)
+            except Exception as error:
+                raise ObservationError(
+                    f"Observation '{name}' failed at time {time}: {error!r}"
+                ) from error
+        # Store only after every observation succeeds so a failure leaves no partial values.
+        for name, value in values.items():
+            observations[name].values[time] = value
+
+    def get_results(self) -> dict[str, Any]:
+        """Get the model's formatted results and the values of each registered observation.
+
+        Each observation registered with :meth:`register_observation` is keyed by
+        its name, and its value is a copy of the values it has observed, keyed by
+        clock time.
+        """
+        if not self._results.to_observe and not self._interactive_observations:
+            self._logger.warning(
+                "No results to return. An InteractiveContext does not observe "
+                "results by default; pass observe=True to include the model's "
+                "observations, or use register_observation() to add your own."
+            )
+        results: dict[str, Any] = super().get_results()
+        for name, observation in self._interactive_observations.items():
+            results[name] = dict(observation.values)
+        return results
+
+
+class _ResourceRow(NamedTuple):
+    """A candidate row, with the relevance rank that orders it but is not reported."""
+
+    rank: int
+    name: str
+    resource_type: str
+    component: str
+
+
+def _match_rank(matcher: re.Pattern[str], name: str) -> int:
+    """Rank a resource by how squarely the pattern hit its name, best first.
+
+    Names are dot-delimited hierarchies of underscore-separated words, so a match
+    filling whole segments means more than one filling whole words, which in turn
+    means more than one landing mid-word. Searching "mortality_rate" ranks
+    ``mortality.mortality_rate`` above ``excess_mortality_rate``, which merely
+    contains those characters; searching "ever" ranks ``test_ever_eligible`` above
+    ``never_treated``.
+    """
+    # A pattern can occur several times in one name, so take its best showing
+    # rather than whichever happens to come first.
+    rank = 5  # only the component matched
+    for match in matcher.finditer(name):
+        start, end = match.span()
+        if (start, end) == (0, len(name)):
+            # the entire name, e.g. "age" for "age"
+            return 0
+        if start == 0:
+            # the start of the name, e.g. "age" in "agent_used.x.y"
+            rank = min(rank, 1)
+        elif name[start - 1] == "." and (end == len(name) or name[end] == "."):
+            # whole segments from the middle or the end, e.g. "age" in "mortality.age.rate"
+            rank = min(rank, 2)
+        elif name[start - 1] in _WORD_SEPARATORS and (
+            end == len(name) or name[end] in _WORD_SEPARATORS
+        ):
+            # whole words from the middle or the end, e.g. "age" in "mortality_age_rate"
+            rank = min(rank, 3)
+        else:
+            # part of a word, e.g. "age" in "coverage"
+            rank = min(rank, 4)
+    return rank
+
+
+def _validate_direction(direction: str) -> None:
+    """Check the direction a dependency walk was asked to take."""
+    if direction not in _DEPENDENCY_DIRECTIONS:
+        raise ValueError(
+            f"Unknown direction '{direction}'. Use 'uses' for what this resource"
+            " uses or 'used-by' for what uses it."
+        )
+
+
+def _natural_key(name: str) -> tuple[tuple[int, int | str], ...]:
+    """Split a name so that a run of digits in it compares as a number."""
+    # Resource names carry unpadded indices, so "10" has to sort after "2".
+    return tuple(
+        (0, int(part)) if part.isdigit() else (1, part) for part in re.split(r"(\d+)", name)
+    )
+
+
+def _dependency_sort_key(resource: Resource) -> tuple[int, tuple[tuple[int, int | str], ...]]:
+    """Sort resources by type and then by name."""
+    # A type absent from the order sorts last rather than being dropped.
+    rank = _DEPENDENCY_TYPE_RANK.get(resource.RESOURCE_TYPE, len(_DEPENDENCY_TYPE_RANK))
+    return rank, _natural_key(str(resource.resource_id))
+
+
+def _dependencies(
+    graph: nx.DiGraph[Resource], node: Resource, direction: str
+) -> list[Resource]:
+    """Get the resources that a node uses or is used by, sorted by type and name."""
+    neighbors = graph.predecessors(node) if direction == "uses" else graph.successors(node)
+    return sorted(neighbors, key=_dependency_sort_key)
+
+
+def _resolve_resource(graph: nx.DiGraph[Resource], resource: str | Resource) -> Resource:
+    """Find the graph node that a resource argument names."""
+    nodes_by_id = {str(node.resource_id): node for node in graph.nodes}
+
+    if isinstance(resource, Resource):
+        node = nodes_by_id.get(str(resource.resource_id))
+        if node is None:
+            raise ValueError(
+                f"Resource '{resource.resource_id}' is not in the resource graph."
+            )
+        return node
+
+    if resource in nodes_by_id:
+        return nodes_by_id[resource]
+
+    # Handle a bare name by looking for a unique match among all resources
+    matches = sorted(
+        (node for node in graph.nodes if node.name == resource),
+        key=lambda node: str(node.resource_id),
+    )
+    if not matches:
+        raise ValueError(
+            f"No resource named '{resource}'. Use find_resources to search for it."
+        )
+    if len(matches) > 1:
+        candidates = ", ".join(repr(str(node.resource_id)) for node in matches)
+        raise ValueError(
+            f"'{resource}' matches more than one resource. Use one of: {candidates}."
+        )
+    return matches[0]
+
+
+def _render_dependency_tree(
+    graph: nx.DiGraph[Resource],
+    root: Resource,
+    direction: str,
+    depth: int | None,
+) -> list[str]:
+    """Render the dependency tree rooted at a resource, one string per line."""
+    lines = [str(root.resource_id)]
+    # ``expanded`` holds the nodes actually recursed into rather than the nodes
+    # printed. A node cut off by the depth limit was never expanded, so a later
+    # arrival at it has to report its hidden dependencies too rather than claim
+    # they were shown already.
+    expanded = {root}
+
+    def walk(node: Resource, prefix: str, level: int) -> None:
+        children = _dependencies(graph, node, direction)
+        for position, child in enumerate(children):
+            last = position == len(children) - 1
+            child_dependencies = _dependencies(graph, child, direction)
+            if child in expanded:
+                # This child has already been expanded in a previous branch
+                suffix = "  (expanded above)"
+            elif depth is not None and level + 1 == depth and child_dependencies:
+                # This child has more dependencies but we are at the depth limit
+                hidden = len(child_dependencies)
+                suffix = f"  ({hidden} direct branch{'es' if hidden > 1 else ''} hidden)"
+            else:
+                suffix = ""
+            branch = "└── " if last else "├── "
+            lines.append(f"{prefix}{branch}{child.resource_id}{suffix}")
+            if suffix or not child_dependencies:
+                # Don't recurse into this child, either because it has no dependencies or
+                # because it has more dependencies but we are at the depth limit
+                continue
+            # Mark the child before walking it, not after. A cycle leads back to
+            # the child from inside its own subtree, where an unmarked child is
+            # expanded again and the walk never ends.
+            expanded.add(child)
+            walk(node=child, prefix=prefix + ("    " if last else "│   "), level=level + 1)
+
+    if _dependencies(graph, root, direction):
+        walk(node=root, prefix="", level=0)
+    else:
+        lines.append("    (none)")
+    return lines
+
+
+@dataclass
+class _InteractiveObservation:
+    """An observation registered on an interactive context and the values it has observed."""
+
+    func: Callable[[InteractiveContext], Any]
+    values: dict[ClockTime, Any] = field(default_factory=dict)
+    active: bool = True

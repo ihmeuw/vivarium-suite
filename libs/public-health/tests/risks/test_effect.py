@@ -780,7 +780,7 @@ def test_relative_risk_pipeline(dichotomous_risk, base_config, base_plugins):
     pop_idx = sim.get_population_index()
 
     expected_pipeline = f"{effect.causal_factor.name}_on_{effect.target_name}.relative_risk"
-    assert expected_pipeline in sim.get_attribute_names()
+    assert expected_pipeline in sim.list_attributes()
 
     rr_mapper = {
         "exposed": 1.4,

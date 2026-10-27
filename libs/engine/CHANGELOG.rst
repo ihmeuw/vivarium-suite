@@ -1,3 +1,28 @@
+**5.19.1 - 10/26/26**
+
+- Add ``InteractiveContext.help()``, which prints the context's methods grouped by task
+
+**5.19.0 - 10/26/26**
+
+- **Breaking change.** Remove ``InteractiveContext.list_events()`` and
+  ``InteractiveContext.get_listeners()``. Use ``get_schedule()`` instead
+- **Breaking change.** Remove ``builder.lifecycle.add_handlers()``, which only fed
+  the handler listing that ``print_lifecycle_order()`` no longer shows
+- Rename ``InteractiveContext.get_attribute_names()`` to ``list_attributes()``. The old
+  name still works but raises a ``FutureWarning`` and will be removed
+- Stop listing event handlers in ``InteractiveContext.print_lifecycle_order()``, which
+  now prints only the lifecycle phases and their states
+
+**5.18.1 - 10/23/26**
+
+- Raise when a listener or emitter is registered for an event name that is not a lifecycle state
+- Define the lifecycle phases once in ``lifecycle_states.PHASES`` and build the lifecycle from them
+
+**5.18.0 - 10/23/26**
+
+- Add ``InteractiveContext.get_schedule()`` to get what runs in each lifecycle
+  state, in order, including the model's observations
+  
 **5.17.1 - 10/22/26**
 
 - Make ``InteractiveContext.find_resources()``'s ``pattern`` optional, so calling it

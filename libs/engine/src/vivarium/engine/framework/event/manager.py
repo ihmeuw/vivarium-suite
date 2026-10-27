@@ -28,7 +28,11 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 
 from vivarium.engine.component import NUM_EVENT_PRIORITIES
-from vivarium.engine.framework.lifecycle import ConstraintError, lifecycle_states
+from vivarium.engine.framework.lifecycle import (
+    ConstraintError,
+    LifeCycleError,
+    lifecycle_states,
+)
 from vivarium.engine.manager import Manager
 from vivarium.engine.types import ClockStepSize, ClockTime
 
@@ -181,8 +185,6 @@ class EventManager(Manager):
         self.clock = builder.time.clock()
         self.step_size = builder.time.step_size()
 
-        builder.event.register_listener(lifecycle_states.POST_SETUP, self.on_post_setup)
-        self.add_handlers = builder.lifecycle.add_handlers
         self.add_constraint = builder.lifecycle.add_constraint
 
         builder.lifecycle.add_constraint(
@@ -196,10 +198,6 @@ class EventManager(Manager):
         builder.lifecycle.add_constraint(
             self.register_listener, allow_during=[lifecycle_states.SETUP]
         )
-
-    def on_post_setup(self, event: Event) -> None:
-        for name, channel in self._event_types.items():
-            self.add_handlers(name, [h for level in channel.listeners for h in level])
 
     def get_emitter(
         self, event_name: str
@@ -216,7 +214,13 @@ class EventManager(Manager):
             A function that accepts an index and optional user data. This function
             creates and timestamps an Event and distributes it to all interested
             listeners
+
+        Raises
+        ------
+        LifeCycleError
+            If the event name is not a life cycle state.
         """
+        self._validate_event_name(event_name)
         channel = self.get_channel(event_name)
         try:
             self.add_constraint(channel.emit, allow_during=[event_name])
@@ -240,8 +244,22 @@ class EventManager(Manager):
         priority
             Number in range(10) used to assign the ordering in which listeners
             process the event.
+
+        Raises
+        ------
+        LifeCycleError
+            If the event name is not a life cycle state.
         """
+        self._validate_event_name(event_name)
         self.get_channel(event_name).listeners[priority].append(listener)
+
+    def _validate_event_name(self, event_name: str) -> None:
+        """Raise if the event name is not a life cycle state."""
+        if event_name not in lifecycle_states.ALL_STATES:
+            raise LifeCycleError(
+                f"'{event_name}' is not a life cycle state, so it cannot be used "
+                f"as an event. Use one of: {', '.join(lifecycle_states.ALL_STATES)}."
+            )
 
     def get_listeners(self, event_name: str) -> dict[int, list[Callable[[Event], None]]]:
         """Gets all listeners registered for the named event.

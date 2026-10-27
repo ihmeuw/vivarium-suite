@@ -42,12 +42,17 @@ from tests.interface.conftest import FakeWidget
 from vivarium.engine import Component, InteractiveContext
 from vivarium.engine.exceptions import ObservationError
 from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.resource.resource import Column, Resource
 from vivarium.engine.framework.results import Observer
 from vivarium.engine.framework.results.observation import VALUE_COLUMN
 from vivarium.engine.framework.values import AttributePipeline, Pipeline
-from vivarium.engine.interface.interactive import _match_rank, _render_dependency_tree
+from vivarium.engine.interface.interactive import (
+    _HELP_SECTIONS,
+    _match_rank,
+    _render_dependency_tree,
+)
 from vivarium.engine.types import ClockTime
 
 
@@ -71,7 +76,7 @@ class TestGetAttribute:
 
     def test_a_created_column_is_an_attribute(self, sim: InteractiveContext) -> None:
         """A column a component creates is reachable as an attribute."""
-        assert "test_column_1" in sim.get_attribute_names()
+        assert "test_column_1" in sim.list_attributes()
 
     def test_the_pipeline_itself_is_returned(self, sim: InteractiveContext) -> None:
         """The getter hands back the pipeline, not the value it produces."""
@@ -89,12 +94,12 @@ class TestGetAttribute:
         without the guard in ``InteractiveContext.get_attribute`` a misspelling would
         leave a new pipeline behind.
         """
-        registered = sim.get_attribute_names()
+        registered = sim.list_attributes()
 
         with pytest.raises(ValueError):
             sim.get_attribute("foo")
 
-        assert sim.get_attribute_names() == registered
+        assert sim.list_attributes() == registered
 
 
 def test_get_value_and_get_attribute_point_at_each_other() -> None:
@@ -1358,7 +1363,7 @@ class TestRenderDependencyTree:
         ]
 
 
-def test_get_attribute_names() -> None:
+def test_list_attributes() -> None:
     sim = InteractiveContext(
         components=[MultiLevelMultiColumnCreator(), AttributePipelineCreator()]
     )
@@ -1372,11 +1377,22 @@ def test_get_attribute_names() -> None:
         "test_attribute",
         "attribute_generating_columns_6_7",
     ]
-    assert set(sim.get_attribute_names()) == set(expected_attributes)
+    assert set(sim.list_attributes()) == set(expected_attributes)
     # Make sure there's nothing unexpected compared to the actual population df
-    assert set(sim.get_attribute_names()) == set(
+    assert set(sim.list_attributes()) == set(
         sim.get_population(expected_attributes).columns.get_level_values(0)
     )
+
+
+def test_get_attribute_names_is_removed_at_next_major_version() -> None:
+    """Fail once the CHANGELOG starts a new major release while the deprecated alias remains."""
+    changelog = Path(__file__).parents[2] / "CHANGELOG.rst"
+    match = re.match(r"\*\*(\d+)\.", changelog.read_text())
+    assert match is not None
+    if int(match.group(1)) != 5:
+        assert not hasattr(
+            InteractiveContext, "get_attribute_names"
+        ), "Remove the deprecated InteractiveContext.get_attribute_names() before next major release."
 
 
 def test_get_population_querying() -> None:
@@ -1606,7 +1622,7 @@ class TestGetPopulationNestedAttributes:
             kwargs["include_untracked"] = include_untracked
 
         max_depth = self._patch_depth_tracking(sim, mocker)
-        pop = sim.get_population(sim.get_attribute_names(), **kwargs)  # type: ignore[call-overload]
+        pop = sim.get_population(sim.list_attributes(), **kwargs)  # type: ignore[call-overload]
         if include_untracked is True:
             assert set(pop["inner"]) == {0, 1, 2}
             if outer_column is not None:
@@ -1839,7 +1855,7 @@ class TestResultsGathering:
         def run(observe: bool) -> pd.DataFrame:
             sim = InteractiveContext(str(disease_model_spec), observe=observe)
             sim.take_steps(5)
-            return sim.get_population(sim.get_attribute_names())
+            return sim.get_population(sim.list_attributes())
 
         on, off = run(observe=True), run(observe=False)
         assert "previous_alive" in off.columns
@@ -1873,3 +1889,279 @@ class TestResultsGathering:
         assert run(observe=True)["sneaky"][VALUE_COLUMN].sum() > 0
         # Now confirm that the sneaky observer's observation is not gathered
         assert run(observe=False) == {}
+
+
+class TimeStepListener(Component):
+    """Listen in ``time_step`` at a given priority and in ``time_step__cleanup``."""
+
+    def __init__(self, label: str, priority: int) -> None:
+        super().__init__()
+        self._label = label
+        self._priority = priority
+
+    @property
+    def name(self) -> str:
+        return f"listener_{self._label}"
+
+    @property
+    def time_step_priority(self) -> int:
+        return self._priority
+
+    def on_time_step(self, event: Event) -> None:
+        pass
+
+    def on_time_step_cleanup(self, event: Event) -> None:
+        pass
+
+
+class SetupAndEndListener(Component):
+    """Listen in ``post_setup`` and ``simulation_end``."""
+
+    def on_post_setup(self, event: Event) -> None:
+        pass
+
+    def on_simulation_end(self, event: Event) -> None:
+        pass
+
+
+class TestGetSchedule:
+    def test_rows_run_by_state_then_priority(self) -> None:
+        sim = InteractiveContext(
+            components=[TimeStepListener("late", 7), TimeStepListener("early", 2)]
+        )
+        schedule = sim.get_schedule().query("phase == 'main_loop'").droplevel("phase")
+        expected = pd.DataFrame(
+            {
+                "state": ["time_step"] * 2 + ["time_step__cleanup"] * 2,
+                "priority": pd.array([2, 7, 5, 5], dtype="Int64"),
+                "component": ["listener_early", "listener_late"] * 2,
+                "kind": "action",
+                "name": ["on_time_step"] * 2 + ["on_time_step_cleanup"] * 2,
+                "active": True,
+            }
+        ).set_index(["state", "priority"])
+        assert schedule.index.equals(expected.index)
+        # Both clean up at the default priority, so their order is not checked.
+        pd.testing.assert_frame_equal(
+            schedule.sort_values(["state", "priority", "component"]), expected
+        )
+
+    def test_frame_shape(self) -> None:
+        schedule = InteractiveContext(components=[TimeStepListener("a", 3)]).get_schedule()
+        assert schedule.index.names == ["phase", "state", "priority"]
+        assert list(schedule.columns) == ["component", "kind", "name", "active"]
+
+    def test_listeners_outside_the_main_loop_are_listed(self) -> None:
+        sim = InteractiveContext(components=[SetupAndEndListener()])
+        schedule = sim.get_schedule()
+        rows = schedule[schedule["component"] == "setup_and_end_listener"]
+        expected = pd.DataFrame(
+            {
+                "phase": ["setup", "simulation_end"],
+                "state": ["post_setup", "simulation_end"],
+                "priority": pd.array([5, 5], dtype="Int64"),
+                "component": ["setup_and_end_listener"] * 2,
+                "kind": "action",
+                "name": ["on_post_setup", "on_simulation_end"],
+                "active": True,
+            }
+        ).set_index(["phase", "state", "priority"])
+        pd.testing.assert_frame_equal(rows, expected)
+
+    def test_phases_run_in_lifecycle_order(self) -> None:
+        sim = InteractiveContext(components=[SetupAndEndListener(), TimeStepListener("a", 3)])
+        phases = sim.get_schedule().index.get_level_values("phase").unique()
+        assert list(phases) == ["setup", "main_loop", "simulation_end"]
+
+    def test_manager_listeners_are_listed(self) -> None:
+        sim = InteractiveContext(components=[TimeStepListener("a", 3)])
+        post_setup = sim.get_schedule().query("state == 'post_setup'")
+        # Managers' own listeners are listed, such as the values manager's on_post_setup.
+        assert "values_manager" in post_setup["component"].values
+
+    def test_observing_changes_only_whether_observations_are_active(self) -> None:
+        schedules = {
+            observe: InteractiveContext(
+                configuration=HARRY_POTTER_CONFIG,
+                components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+                observe=observe,
+            ).get_schedule()
+            for observe in [False, True]
+        }
+        pd.testing.assert_frame_equal(
+            schedules[False].drop(columns="active"), schedules[True].drop(columns="active")
+        )
+        is_observation = schedules[True]["kind"] == "observation"
+        assert schedules[True]["active"].all()
+        # None of the observations are active when observe=False, but they are still listed.
+        assert not schedules[False]["active"][is_observation].any()
+
+    def test_no_event_channels_are_created(self) -> None:
+        sim = InteractiveContext(components=[TimeStepListener("a", 3)])
+        events = sim._events.list_events()
+        sim.get_schedule()
+        assert sim._events.list_events() == events
+
+    @pytest.mark.parametrize("observe", [False, True])
+    def test_observations_are_listed_whether_or_not_observed(self, observe: bool) -> None:
+        sim = InteractiveContext(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+            observe=observe,
+        )
+        schedule = sim.get_schedule()
+        expected = pd.DataFrame(
+            {
+                "phase": ["main_loop"],
+                "state": ["collect_metrics"],
+                "priority": pd.array([5], dtype="Int64"),
+                "component": ["house_points_observer"],
+                "kind": ["observation"],
+                "name": ["house_points"],
+                "active": [observe],
+            }
+        ).set_index(["phase", "state", "priority"])
+        pd.testing.assert_frame_equal(schedule[schedule["kind"] == "observation"], expected)
+
+    def test_results_manager_listeners_are_not_listed(self) -> None:
+        """Its work is listed as the observations it makes."""
+        sim = InteractiveContext(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts(), HousePointsObserver(), HogwartsResultsStratifier()],
+            observe=True,
+        )
+        assert sim._results.name not in sim.get_schedule()["component"].values
+
+    def test_interactive_observations_end_the_main_loop(self) -> None:
+        sim = InteractiveContext(components=[SetupAndEndListener(), TimeStepListener("a", 3)])
+        sim.register_observation(
+            running=lambda sim: sim.current_time, paused=lambda sim: sim.current_time
+        )
+        sim.pause_observation("paused")
+        main_loop = sim.get_schedule().query("phase == 'main_loop'")
+        expected = pd.DataFrame(
+            {
+                "phase": ["main_loop"] * 2,
+                "state": [None, None],
+                "priority": [None, None],
+                "component": [None, None],
+                "kind": "observation (interactive)",
+                "name": ["running", "paused"],
+                "active": [True, False],
+            }
+        ).astype({"state": "str", "priority": "Int64", "component": "str"})
+        # Compare as columns, since an index level made only of None has a different type.
+        pd.testing.assert_frame_equal(main_loop.tail(2).reset_index(), expected)
+
+    def test_rows_match_what_runs_in_a_step(
+        self, disease_model_spec: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Wrap every listener and record what is called during one step."""
+        sim = InteractiveContext(str(disease_model_spec), observe=True)
+        calls: list[dict[str, Any]] = []
+        results_context = sim._results._results_context
+        get_observations = results_context.get_observations
+
+        def record_observations(event: Event) -> list[Any]:
+            observations = get_observations(event)
+            for observation in observations:
+                component = sim._results._observation_components[observation.name]
+                calls.append(
+                    {
+                        "state": event.name,
+                        "priority": event.priority,
+                        "component": component.name,
+                        "kind": "observation",
+                        "name": observation.name,
+                    }
+                )
+            return observations
+
+        def record(listener: Callable[[Event], None]) -> Callable[[Event], None]:
+            # Every listener in this model is a bound method.
+            owner = getattr(listener, "__self__")
+
+            def recorded(event: Event) -> None:
+                if owner is not sim._results:
+                    calls.append(
+                        {
+                            "state": event.name,
+                            "priority": event.priority,
+                            "component": owner.name,
+                            "kind": "action",
+                            "name": listener.__name__,
+                        }
+                    )
+                listener(event)
+
+            return recorded
+
+        expected = (
+            sim.get_schedule()
+            .query("phase == 'main_loop'")
+            .droplevel("phase")
+            .drop(columns="active")
+        )
+        monkeypatch.setattr(results_context, "get_observations", record_observations)
+        for state in sim._lifecycle.get_state_names("main_loop"):
+            for listeners in sim._events.get_channel(state).listeners:
+                listeners[:] = [record(listener) for listener in listeners]
+
+        sim.step()
+        assert set(expected["kind"]) == {"action", "observation"}
+        pd.testing.assert_frame_equal(
+            pd.DataFrame(calls)
+            .astype({"priority": "Int64"})
+            .set_index(["state", "priority"]),
+            expected,
+        )
+
+
+class TestHelp:
+    NOT_INDEXED = {"help", "finalize", "initialize_simulants", "name", "get_attribute_names"}
+    """Public members :meth:`InteractiveContext.help` deliberately leaves out."""
+
+    def test_indexes_every_public_member_once(self) -> None:
+        indexed = [name for _, names in _HELP_SECTIONS for name in names]
+        public = {name for name in dir(InteractiveContext) if not name.startswith("_")}
+        assert len(indexed) == len(set(indexed))
+        assert set(indexed) == public - self.NOT_INDEXED
+
+    def test_indexed_members_have_one_line_summaries(self) -> None:
+        for _, names in _HELP_SECTIONS:
+            for name in names:
+                docstring = inspect.getdoc(getattr(InteractiveContext, name))
+                assert docstring, name
+                lines = docstring.splitlines()
+                # Assert docstring is either a single line or has an empty line
+                # between the one-liner and the rest
+                assert len(lines) == 1 or not lines[1], name
+
+    def test_prints_each_member_under_its_heading(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        InteractiveContext(setup=False).help()
+        sections = capsys.readouterr().out.strip().split("\n\n")
+
+        assert len(sections) == len(_HELP_SECTIONS)
+        for section, (heading, names) in zip(sections, _HELP_SECTIONS):
+            lines = section.splitlines()
+            assert lines[0] == heading
+            # current_time is the one property and so does not get ()
+            assert [line.split()[0] for line in lines[1:]] == [
+                name if name == "current_time" else f"{name}()" for name in names
+            ]
+
+    def test_prints_docstring_summaries(self, capsys: pytest.CaptureFixture[str]) -> None:
+        InteractiveContext(setup=False).help()
+        member_lines = {
+            line.split()[0].removesuffix("()"): line
+            for line in capsys.readouterr().out.splitlines()
+            if line.startswith("    ")
+        }
+
+        for name in (name for _, names in _HELP_SECTIONS for name in names):
+            docstring = inspect.getdoc(getattr(InteractiveContext, name))
+            assert docstring
+            summary = docstring.partition("\n")[0]
+            assert member_lines[name].endswith(f"  {summary}"), name

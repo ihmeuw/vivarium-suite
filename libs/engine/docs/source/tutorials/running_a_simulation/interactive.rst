@@ -16,6 +16,9 @@ simulation in a controlled fashion, and examining the
 This tutorial covers building a context and advancing it. Refer to
 :ref:`Exploring a Simulation in an Interactive Setting <exploration_tutorial>`
 for details on how to examine the internal state and properties of a simulation.
+Once you have a context, call its
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.help` method to list
+everything it can do.
 
 For the following tutorial, we will assume you have set up an environment and
 installed ``vivarium-engine``. If you have not, please see the
@@ -432,7 +435,7 @@ to advance a simulation in different ways.
          | sense given the simulation's clock type.
 
 Each of these is easiest to see against the simulation clock, which
-:attr:`current_time <vivarium.engine.interface.interactive.InteractiveContext.current_time>`
+:attr:`~vivarium.engine.framework.engine.BaseSimulationContext.current_time`
 reports. We use a small, short-running configuration here so the whole
 simulation finishes quickly.
 

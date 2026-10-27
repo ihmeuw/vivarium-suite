@@ -80,6 +80,21 @@ Before looking at what a simulation *does*, it helps to be able to ask what it
 entry points. Almost everything here works on a freshly built simulation; the one
 exception is called out below.
 
+To see what methods are available, use
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.help`:
+
+.. testcode::
+
+   sim.help()
+
+.. testoutput::
+   :options: +ELLIPSIS, +NORMALIZE_WHITESPACE
+
+   Run the simulation
+       setup()   Set up the simulation and create the initial population.
+       step()    Advance the simulation one step.
+   ...
+
 Components
 ++++++++++
 
@@ -118,16 +133,12 @@ one of them, so it has to be called after the simulation has started moving.
 What runs, and when
 +++++++++++++++++++
 
-Two methods print the order in which things happen.
+Three methods show the order in which things happen.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_lifecycle_order`
-shows the simulation's lifecycles and the components that run in each state in
-the order that they fire. See :ref:`the simulation lifecycle concept docs <lifecycle_concept>`
-for what the phases and states are.
-
-.. note::
-
-    Components at the same priority level have no guaranteed order relative to
-    one another!
+shows the simulation's lifecycle phases and the states in each, in the order they
+run. A ``*`` marks a phase whose states repeat. See
+:ref:`the simulation lifecycle concept docs <lifecycle_concept>` for what the phases
+and states are.
 
 .. testcode::
 
@@ -141,26 +152,63 @@ for what the phases and states are.
     setup
         setup
         post_setup
-            ValuesManager(values_manager).on_post_setup
-            PopulationManager(population_manager).on_post_setup
-            DateTimeClock(datetime_clock).on_post_setup
-            EventManager(event_manager).on_post_setup
-            LookupTableManager(lookup_table_manager).on_post_setup
-            DiseaseModel(disease_model.lower_respiratory_infections).on_post_setup
         population_creation
     main_loop*
         time_step__prepare
-            DeathsObserver(deaths_observer).on_time_step_prepare
         time_step
-            BasePopulation(base_population).on_time_step
-            Mortality(mortality).on_time_step
-            DiseaseModel(disease_model.lower_respiratory_infections).on_time_step
         time_step__cleanup
-            DiseaseModel(disease_model.lower_respiratory_infections).on_time_step_cleanup
         collect_metrics
     simulation_end
         simulation_end
         report
+
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_schedule`
+returns what runs in each lifecycle state as a frame indexed by phase, state and
+priority. It lists each action with its priority, and it lists each
+observation at the state and priority where it is made. The states of the
+``main_loop`` phase repeat every time step.
+
+.. testcode::
+
+    print(sim.get_schedule().to_string())
+
+.. testoutput::
+    :options: +NORMALIZE_WHITESPACE
+
+                                                                            component         kind                  name  active
+    phase     state              priority
+    setup     post_setup         5                                     values_manager       action         on_post_setup    True
+                                 5                                 population_manager       action         on_post_setup    True
+                                 5                                     datetime_clock       action         on_post_setup    True
+                                 5                               lookup_table_manager       action         on_post_setup    True
+                                 5         disease_model.lower_respiratory_infections       action         on_post_setup    True
+    main_loop time_step__prepare 5                                    deaths_observer       action  on_time_step_prepare    True
+              time_step          5                                    base_population       action          on_time_step    True
+                                 5                                          mortality       action          on_time_step    True
+                                 5         disease_model.lower_respiratory_infections       action          on_time_step    True
+              time_step__cleanup 5         disease_model.lower_respiratory_infections       action  on_time_step_cleanup    True
+              collect_metrics    5                                    deaths_observer  observation                  dead   False
+                                 5                                      ylls_observer  observation                  ylls   False
+
+An interactive context does not observe results by default, so the observations
+here have ``active`` set to False. They are listed anyway so that you can see
+when they would run. Pass ``observe=True`` when you build the context to make
+them run.
+
+Interactive observations you add to an :class:`~vivarium.engine.interface.interactive.InteractiveContext`
+via :meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`
+are listed at the end of the ``main_loop`` phase, with ``kind`` set to
+``"observation (interactive)"``. They have no state, priority, or component
+because they do not run in a lifecycle state. They run once when registered,
+or at the end of setup if registered before it, and then after every step.
+
+.. warning::
+
+    Rows that share a lifecycle phase, state, and a priority, such as the three
+    ``time_step`` actions above, have no guaranteed order. While the frame does
+    show them in the order they run now, that order can change when components
+    are added or reordered in the model specification. Do not write code that
+    depends on it.
 
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
 shows the order in which components populate new simulants.
@@ -184,33 +232,6 @@ shows the order in which components populate new simulants.
     DiseaseModel(disease_model.lower_respiratory_infections).initialize_state
     Risk(risk.child_wasting).initialize_propensity
 
-The event system is reachable too (Refer to :ref:`the event concept docs <event_concept>`).
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_events`
-names the event channels, and
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_listeners`
-returns the listeners on one channel, keyed by priority. For example, to list
-all events and then determine any components with registered "time_step" 
-listeners:
-
-.. testcode::
-
-    print(sim.list_events())
-    print(sim.get_listeners("time_step").keys())
-    for listener in sim.get_listeners("time_step")[5]:
-        print(repr(listener))
-
-.. testoutput::
-
-    ['post_setup', 'time_step', 'time_step__cleanup', 'time_step__prepare', 'collect_metrics', 'simulation_end', 'report']
-    dict_keys([5])
-    <bound method BasePopulation.on_time_step of BasePopulation()>
-    <bound method Mortality.on_time_step of Mortality()>
-    <bound method Machine.on_time_step of DiseaseModel(state_column=lower_respiratory_infections)>
-
-We see in the example above that ``BasePopulation``, ``Mortality``, and
-the lower respiratory infections ``DiseaseModel`` each registered a listener
-to the ``time_step`` phase, all at priority 5.
-
 State table attributes and value pipelines
 ++++++++++++++++++++++++++++++++++++++++++
 
@@ -223,14 +244,14 @@ precise. A simulation exposes two things that are similar but not identical:
 :term:`Attributes <Attribute>` - computed by
 :term:`attribute pipelines <Attribute Pipeline>` - are simulant-specific values;
 they are the columns of the :term:`state table <Population State Table>`.
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute_names`
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_attributes`
 lists the names of all of the attributes in a given simulation and
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_population`
 gets their current values.
 
 .. code-block:: python
 
-    attribute_names = sim.get_attribute_names()
+    attribute_names = sim.list_attributes()
     print(len(attribute_names))
     # list four of them
     print(attribute_names[0:4])
@@ -251,7 +272,7 @@ gets their current values.
     :hide:
 
     fresh = get_disease_model_simulation()
-    attribute_names = fresh.get_attribute_names()
+    attribute_names = fresh.list_attributes()
     assert len(attribute_names) == 24
     assert attribute_names[0:4] == ["entrance_time", "age", "sex", "mortality_rate"]
     pop = fresh.get_population(["age", "sex"])
@@ -360,8 +381,8 @@ their names. All other modifiers are skipped.
 .. testoutput::
 
    mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
-   0.01
-   0.00998...
+   0.0114
+   0.01024...
 
 ``modifiers`` composes with ``mode="default"`` and ``mode="no-post-processors"``.
 Combining it with ``mode="source"`` raises an error, since that mode applies no
@@ -489,11 +510,11 @@ For example, we can get the mortality rate lookup table found above:
 
 .. testoutput::
 
-   0    0.01
-   1    0.01
-   2    0.01
-   3    0.01
-   4    0.01
+   0    0.0114
+   1    0.0114
+   2    0.0114
+   3    0.0114
+   4    0.0114
    Name: value, dtype: float64
 
 .. note::
@@ -677,39 +698,52 @@ Pass ``observe=True`` to collect them:
 
     dead
       stratification  value
-    0            all   23.0
+    0            all   15.0
     ylls
       stratification        value
-    0            all  1989.372585
+    0            all  1291.333257
 
 .. testcode::
     :hide:
 
+    from datetime import timedelta
+
     from vivarium.engine import InteractiveContext
     from vivarium.engine.examples.disease_model import get_model_specification_path
+    from vivarium.engine.framework.utilities import from_yearly
     from vivarium.fuzzy_checker import FuzzyChecker
 
     fuzzy_checker = FuzzyChecker()
 
     sim = InteractiveContext(get_model_specification_path(), observe=True)
-    sim.take_steps(10)
+    n_steps = 10
+    sim.take_steps(n_steps)
 
     results = sim.get_results()
     population_size = sim.configuration.population.population_size
     deaths = int(results["dead"]["value"].iloc[0])
     ylls = results["ylls"]["value"].iloc[0]
 
-    # FIXME [MIC-7458]
-    # Guard the numbers shown above against going empty or absurd. Deliberately
-    # not a calibration check on the model's mortality; the example's configured
-    # rates do not reach the pipelines they appear to configure, so the disease
-    # has no mortality effect and a band derived from the config would encode a
-    # wrong model of the example rather than check it.
-    assert 0 < deaths < population_size / 100
+    # Calibrate deaths against the configured rates. Susceptible simulants die
+    # at the background rate less the LRI CSMR, which DiseaseModel approximates
+    # as incidence times case fatality. The EMR of the few infected simulants
+    # adds well under one expected death here, so the target leaves it out.
+    config = sim.configuration
+    infected = "infected_with_lower_respiratory_infections"
+    incidence = config[
+        f"disease_transition.{infected}.incidence_rate"
+    ].data_sources.incidence_rate
+    remission = config[
+        f"disease_transition.{infected}.remission_rate"
+    ].data_sources.remission_rate
+    emr = config[f"disease_state.{infected}"].data_sources.excess_mortality_rate
+    csmr = incidence * emr / (emr + remission)
+    background = config.mortality.data_sources.mortality_rate - csmr
+    step_probability = from_yearly(background, timedelta(days=config.time.step_size))
     fuzzy_checker.assert_proportion(
         deaths,
         population_size,
-        (1e-4, 1e-3),
+        1 - (1 - step_probability) ** n_steps,
         name="exploration_tutorial_deaths",
     )
 
@@ -813,20 +847,25 @@ configuration by simply printing it.
         age_end:
             model_override: 5
     mortality:
-        mortality_rate:
-            model_override: 0.0114
-        life_expectancy:
-            model_override: 88.9
         data_sources:
             mortality_rate:
-                component_configs: 0.01
-    lower_respiratory_infections:
-        incidence_rate:
-            model_override: 0.871
-        remission_rate:
-            model_override: 45.1
-        excess_mortality_rate:
-            model_override: 0.634
+                model_override: 0.0114
+        life_expectancy:
+            model_override: 88.9
+    disease_state.infected_with_lower_respiratory_infections:
+        data_sources:
+            excess_mortality_rate:
+                model_override: 0.06
+            initialization_weights:
+                component_configs: 0.0
+    disease_transition.infected_with_lower_respiratory_infections.incidence_rate:
+        data_sources:
+            incidence_rate:
+                model_override: 0.871
+    disease_transition.infected_with_lower_respiratory_infections.remission_rate:
+        data_sources:
+            remission_rate:
+                model_override: 45.1
     child_wasting:
         proportion_exposed:
             model_override: 0.0914
@@ -860,12 +899,6 @@ configuration by simply printing it.
         data_sources:
             initialization_weights:
                 component_configs: 1.0
-            excess_mortality_rate:
-                component_configs: 0.0
-    disease_state.infected_with_lower_respiratory_infections:
-        data_sources:
-            initialization_weights:
-                component_configs: 0.0
             excess_mortality_rate:
                 component_configs: 0.0
 

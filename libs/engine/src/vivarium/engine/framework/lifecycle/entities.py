@@ -9,14 +9,9 @@ Core entity classes for the lifecycle management system.
 from __future__ import annotations
 
 import textwrap
-from collections.abc import Callable
-from typing import TYPE_CHECKING
 
 from vivarium.engine.framework.lifecycle.exceptions import LifeCycleError
 from vivarium.engine.framework.lifecycle.lifecycle_states import INITIALIZATION
-
-if TYPE_CHECKING:
-    from vivarium.engine.framework.event import Event
 
 
 class LifeCycleState:
@@ -27,7 +22,6 @@ class LifeCycleState:
         self._next: LifeCycleState | None = None
         self._loop_next: LifeCycleState | None = None
         self._entrance_count = 0
-        self._handlers: list[str] = []
 
     @property
     def name(self) -> str:
@@ -82,31 +76,11 @@ class LifeCycleState:
         """Marks an entrance into this state."""
         self._entrance_count += 1
 
-    def add_handlers(self, handlers: list[Callable[[Event], None]]) -> None:
-        """Registers a set of functions that will be executed during the state.
-
-        The primary use case here is for introspection and reporting.
-        For setting constraints, see
-        :meth:`vivarium.engine.framework.lifecycle.interface.LifeCycleInterface.add_constraint`.
-
-        Parameters
-        ----------
-        handlers
-            The set of functions that will be executed during this state.
-        """
-        for h in handlers:
-            name = h.__name__
-            if hasattr(h, "__self__"):
-                obj = h.__self__
-                self._handlers.append(f"{obj.__class__.__name__}({obj.name}).{name}")
-            else:
-                self._handlers.append(f"Unbound function {name}")
-
     def __repr__(self) -> str:
         return f"LifeCycleState(name={self.name})"
 
     def __str__(self) -> str:
-        return "\n\t".join([self.name] + self._handlers)
+        return self.name
 
 
 class LifeCyclePhase:
@@ -221,6 +195,15 @@ class LifeCycle:
             raise LifeCycleError(f"Attempting to look up non-existent state {state_name}.")
         phase = [p for p in self._phases if state_name in p].pop()
         return phase.get_state(state_name)
+
+    def get_phase_names(self) -> list[str]:
+        """Retrieve the names of all phases in their order of execution.
+
+        Returns
+        -------
+            The phase names in order of execution.
+        """
+        return [phase.name for phase in self._phases]
 
     def get_state_names(self, phase_name: str) -> list[str]:
         """Retrieve the names of all states in the provided phase.

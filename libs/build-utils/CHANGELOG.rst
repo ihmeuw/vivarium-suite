@@ -1,4 +1,4 @@
-**4.11.0 - 10/21/26**
+**4.11.0 - 10/27/26**
 
 - Run Sphinx directly in ``build-docs`` and ``test-docs`` instead of through
   ``docs/Makefile``
