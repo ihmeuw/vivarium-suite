@@ -63,11 +63,15 @@ still carries the `_TODO (human)...` line verbatim, or it carries content the us
 gave you word for word. Anything else is your writing - put the line back. Say which of
 the two it is when you show the draft and when you report the created key.
 
-Once the user approves the draft, create the ticket via the Jira MCP:
+Once the user approves the draft, create the ticket via the `simsci` plugin's Jira MCP:
 
 ```
-mcp__plugin_mcp-jira_mcp-jira__create_issue(project="MIC", summary="<title>", description="<wiki-markup body>", issue_type="<Task|Bug|Story|...>")
+mcp__plugin_simsci_jira__create_issue(project="MIC", summary="<title>", description="<wiki-markup body>", issue_type="<Task|Bug|Story|...>")
 ```
+
+The same call also takes `priority`, `labels`, `fix_versions`, `story_points`, `epic`,
+`assignee`, `sprint`, and `links`. Set only the values that the user gave or approved in
+the draft.
 
 Report the resulting `MIC-####` key back to the user so it can flow into the branch name (§1) and PR body (§3).
 

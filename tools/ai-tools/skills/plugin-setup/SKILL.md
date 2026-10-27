@@ -124,6 +124,65 @@ The 0600-file approach above is the team default — short install, consistent b
 
 All of these end up at the same state: `JENKINS_MCP_AUTH` set in the environment of whatever shell launches `claude`, and the `.claude.json` entry continues to reference `${JENKINS_MCP_AUTH}` literally.
 
+## Jira MCP server
+
+The `simsci` plugin, which this plugin depends on, ships a Jira MCP server,
+`jira` (tools named `mcp__plugin_simsci_jira__*`). This plugin's skills and
+agents use it to read and file MIC tickets. It runs locally and calls Jira with
+the user's personal access token.
+
+### 1. Install `uv`
+
+Claude Code starts the server with `uv run --script`, which installs the
+server's Python dependencies on first use. Check with `uv --version`. If it is
+missing, have the user install it:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 2. Create a Jira personal access token
+
+Have the user open `https://jira.ihme.washington.edu`, click their avatar,
+then **Profile** > **Personal Access Tokens** > **Create token**. Jira shows
+the token only once. The token has the same permissions as the user's Jira
+account, so they should treat it like a password.
+
+### 3. Enter the token in the `simsci` plugin configuration
+
+Claude Code asks for `simsci`'s options when the plugin is enabled. If the user
+skipped that dialog, or needs to change the token later, have them run
+`/plugin`, open **Installed** > **simsci**, and choose **Configure options**.
+They paste the token into **Jira personal access token**. Claude Code masks the
+field and keeps the value in its credential store, not in `settings.json`. On
+Linux, that store is `~/.claude/.credentials.json`, which only the user can read. The user must type the token into the dialog themselves, so it
+does not enter the conversation.
+
+The same dialog has an optional **Default Jira project**. SimSci users can set
+it to `MIC`. This plugin's skills pass `project="MIC"` explicitly, so they work
+without it.
+
+### 4. Restart and verify
+
+Restart Claude Code and run `/mcp`. The `plugin:simsci:jira` server must show
+as connected. If it shows `Executable not found in $PATH: "uv"`, `uv` is not on
+the `PATH` of the shell that starts `claude`. Fix that (step 1), then restart.
+Until the server connects, Claude has no Jira tools and gets no error that
+names the cause. Claude Code remembers a failed connection for up to 15
+minutes, also across restarts. If `/mcp` then says that a recent failure is
+cached, wait until the 15 minutes have passed and restart again. Then ask Claude to get any MIC ticket. The result must include
+`story_points`. If the token is missing, the Jira tools return an error that
+points to **Configure options**.
+
+### 5. Disable the `mcp-jira` plugin, if installed
+
+If the user has the `mcp-jira` plugin from `ihme-claude-marketplace`
+installed, have them disable it, so that Claude uses the `simsci` Jira tools:
+
+```text
+/plugin disable mcp-jira@ihme-claude-marketplace
+```
+
 ## GitHub MCP server
 
 The `github` plugin connects Claude Code to GitHub via the hosted MCP server at
