@@ -8,6 +8,8 @@ from typing import Any
 
 from pytask import PNode
 
+from vivarium.cluster_tools.core.backend.nodes import AlwaysStaleNode
+
 
 @dataclass
 class Task:
@@ -25,13 +27,17 @@ class Task:
     """Compute resources following Jobmon's ``compute_resources``."""
     env: str | None
     """Environment to run the task in. ``None`` means the pipeline's own environment."""
-    code_id: PNode
-    """Node whose ``state()`` fingerprints the step's code."""
+    code_id: PNode | None = None
+    """Node whose ``state()`` fingerprints the step's code. Omit it to default to an
+    :class:`~vivarium.cluster_tools.core.backend.nodes.AlwaysStaleNode`, which re-runs
+    the step on every build until a code fingerprint is declared."""
 
     def __post_init__(self) -> None:
-        """Reject an empty name."""
+        """Reject an empty name and default an omitted ``code_id`` to always-stale."""
         if not self.name:
             raise ValueError(f"Task name must be a non-empty string, got {self.name!r}.")
+        if self.code_id is None:
+            self.code_id = AlwaysStaleNode(name=f"{self.name}::code")
 
 
 def check_unique_task_names(tasks: Iterable[Task]) -> None:

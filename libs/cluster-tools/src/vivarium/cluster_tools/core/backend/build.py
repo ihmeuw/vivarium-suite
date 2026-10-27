@@ -74,6 +74,7 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
             inspect.Parameter(key, inspect.Parameter.KEYWORD_ONLY) for key in task.outputs
         ]
         setattr(_run, "__signature__", inspect.Signature(parameters))
+    assert task.code_id is not None  # Task.__post_init__ guarantees a code_id node.
     depends_on: dict[str, pytask.PNode] = {**task.inputs, CODE_ID_KEY: task.code_id}
     if isinstance(task.run, str):
         depends_on[COMMAND_KEY] = pytask.PythonNode(
