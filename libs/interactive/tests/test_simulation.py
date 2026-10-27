@@ -28,22 +28,15 @@ from vivarium.engine.interface.interactive import (
 from vivarium.engine.types import ClockTime
 
 from tests.conftest import FakeWidget
-from tests.framework.population.helpers import (
-    assert_squeezing_multi_level_single_outer_multi_inner,
-    assert_squeezing_multi_level_single_outer_single_inner,
-    assert_squeezing_single_level_single_col,
-)
-from tests.framework.results.helpers import (
-    HARRY_POTTER_CONFIG,
-    Hogwarts,
-    HogwartsResultsStratifier,
-    HousePointsObserver,
-)
 from tests.helpers import (
+    HARRY_POTTER_CONFIG,
     AttributePipelineCreator,
     ColumnCreator,
     ColumnCreatorAndRequirer,
     DiamondAttributeCreator,
+    Hogwarts,
+    HogwartsResultsStratifier,
+    HousePointsObserver,
     ManyModifierCreator,
     MultiLevelMultiColumnCreator,
     MultiLevelSingleColumnCreator,
@@ -52,6 +45,9 @@ from tests.helpers import (
     OrderedDependencyCreator,
     ReversedNameCreator,
     SingleColumnCreator,
+    assert_squeezing_multi_level_single_outer_multi_inner,
+    assert_squeezing_multi_level_single_outer_single_inner,
+    assert_squeezing_single_level_single_col,
 )
 from vivarium.interactive.exceptions import ObservationError
 
