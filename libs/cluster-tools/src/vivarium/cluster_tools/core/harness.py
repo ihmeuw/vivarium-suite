@@ -17,10 +17,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
 
+import pandas as pd
 from pytask import TaskOutcome
 
+from vivarium.cluster_tools.core.backend.build import build, outcomes
+from vivarium.cluster_tools.core.backend.preview import preview
 from vivarium.cluster_tools.core.backend.task import Task
 from vivarium.cluster_tools.core.backend.wiring import ArtifactRegistry
+from vivarium.cluster_tools.core.frontend.python_step import python_step
 
 
 @dataclass
@@ -39,6 +43,18 @@ class Fixture:
     """The pipeline's step names, in dependency order."""
 
 
+def _double(raw: Path) -> pd.DataFrame:
+    """Read the root-input table and double its ``n`` column."""
+    frame = pd.read_parquet(raw)
+    return pd.DataFrame({"n": frame["n"] * 2})
+
+
+def _offset(mid: Path) -> pd.DataFrame:
+    """Read the intermediate table and offset its ``n`` column by ten."""
+    frame = pd.read_parquet(mid)
+    return pd.DataFrame({"n": frame["n"] + 10})
+
+
 def build_fixture(tmp_path: Path) -> Fixture:
     """Build a small two-step ``python_step`` pipeline under ``tmp_path``.
 
@@ -49,7 +65,29 @@ def build_fixture(tmp_path: Path) -> Fixture:
     registry, the pytask state directory, the perturbable input paths, and the
     step names.
     """
-    raise NotImplementedError
+    raw_path = tmp_path / "raw.parquet"
+    pd.DataFrame({"n": [1, 2, 3]}).to_parquet(raw_path)
+
+    registry = ArtifactRegistry(
+        output_root=tmp_path / "out",
+        run_name="run1",
+        root_inputs={"raw": raw_path},
+    )
+    double = python_step(
+        _double, inputs={"raw": "raw"}, produces="mid.parquet", registry=registry
+    )
+    offset = python_step(
+        _offset, inputs={"mid": "mid.parquet"}, produces="final.parquet", registry=registry
+    )
+
+    state = tmp_path / "state"
+    return Fixture(
+        tasks=[double, offset],
+        registry=registry,
+        state=state,
+        inputs={"raw": raw_path},
+        steps=("mid.parquet", "final.parquet"),
+    )
 
 
 class Perturbed:
@@ -61,10 +99,14 @@ class Perturbed:
     """
 
     def __init__(self, path: Path, data: bytes) -> None:
-        raise NotImplementedError
+        self._path = Path(path)
+        self._data = data
+        self._original: bytes = b""
 
     def __enter__(self) -> "Perturbed":
-        raise NotImplementedError
+        self._original = self._path.read_bytes()
+        self._path.write_bytes(self._original + self._data)
+        return self
 
     def __exit__(
         self,
@@ -72,14 +114,15 @@ class Perturbed:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        raise NotImplementedError
+        self._path.write_bytes(self._original)
 
 
 def would_run(fixture: Fixture) -> set[str]:
     """Return the step names a dry-run preview of ``fixture`` reports as would-run."""
-    raise NotImplementedError
+    plan = preview(fixture.tasks, fixture.state)
+    return {step.name for step in plan if step.would_run}
 
 
 def run(fixture: Fixture) -> dict[str, TaskOutcome]:
     """Build and run ``fixture``, returning each step's outcome by name."""
-    raise NotImplementedError
+    return outcomes(build(fixture.tasks, fixture.state))
