@@ -1,3 +1,4 @@
+# Inline script metadata (PEP 723): `uv run --script` reads it to install the dependencies.
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
@@ -407,8 +408,7 @@ def _set_fields(
 def get_issue(key: str, include_comments: int = 5) -> dict[str, Any]:
     """Get a Jira issue, including story points, fix versions, sprints, links, and comments.
 
-    The result also has the issue's parent, if it is a sub-task, and its own
-    sub-tasks. The description is returned as raw Jira wiki markup.
+    The description is returned as raw Jira wiki markup.
 
     Parameters
     ----------
