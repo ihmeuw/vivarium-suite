@@ -105,13 +105,19 @@ A Slack message in `#vivarium_dev` (private channel, ID `GCF5T9TDM`) is the team
 
 Format: `<short description> PR <github-link>` — e.g. `AI Tools Team Conventions PR https://github.com/ihmeuw/vivarium-suite/pull/41`. Keep the description to a handful of words.
 
-After the post, move the PR's MIC ticket to **Ready for Review**:
+After the post, move the PR's MIC ticket to **Ready for Review**. The ticket is the one in the PR body's *JIRA issue* line. If the PR has no such line, use the key in the branch name (§1). If the PR names more than one ticket, move only the primary one, unless the user says otherwise.
 
-```
-mcp__plugin_simsci_jira__transition_issue(issue_key="MIC-####", to_status="Ready for Review")
-```
+First read the ticket's status with `mcp__plugin_simsci_jira__get_issue`. MIC's workflow allows a move to Ready for Review from every status, so the status decides what to do:
 
-The ticket is the one in the PR body's *JIRA issue* line. If the PR has no such line, use the key in the branch name (§1). If the PR names more than one ticket, move only the primary one, unless the user says otherwise. If the transition fails because the ticket's workflow has no path to Ready for Review from its current status, report the available transitions from the error and ask the user which to use. Do not pick one yourself.
+- **Ready for Review**: do nothing, and tell the user the ticket is already there. Another move only adds a meaningless entry to the ticket's history.
+- **Done, Won't Do, or Duplicate**: do not move it, because that reopens a closed ticket. Ask the user whether to reopen it or to leave it.
+- **Any other status**: move it:
+
+  ```
+  mcp__plugin_simsci_jira__transition_issue(issue_key="MIC-####", to_status="Ready for Review")
+  ```
+
+If the transition fails because the ticket's workflow has no path to Ready for Review, report the available transitions from the error and ask the user which to use. Do not pick one yourself.
 
 ## 5. Responding to review comments
 
