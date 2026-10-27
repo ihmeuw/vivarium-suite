@@ -80,6 +80,21 @@ Before looking at what a simulation *does*, it helps to be able to ask what it
 entry points. Almost everything here works on a freshly built simulation; the one
 exception is called out below.
 
+To see what methods are available, use
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.help`:
+
+.. testcode::
+
+   sim.help()
+
+.. testoutput::
+   :options: +ELLIPSIS, +NORMALIZE_WHITESPACE
+
+   Run the simulation
+       setup()   Set up the simulation and create the initial population.
+       step()    Advance the simulation one step.
+   ...
+
 Components
 ++++++++++
 
@@ -120,14 +135,10 @@ What runs, and when
 
 Three methods show the order in which things happen.
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_lifecycle_order`
-shows the simulation's lifecycles and the components that run in each state in
-the order that they fire. See :ref:`the simulation lifecycle concept docs <lifecycle_concept>`
-for what the phases and states are.
-
-.. note::
-
-    Components at the same priority level have no guaranteed order relative to
-    one another!
+shows the simulation's lifecycle phases and the states in each, in the order they
+run. A ``*`` marks a phase whose states repeat. See
+:ref:`the simulation lifecycle concept docs <lifecycle_concept>` for what the phases
+and states are.
 
 .. testcode::
 
@@ -141,22 +152,11 @@ for what the phases and states are.
     setup
         setup
         post_setup
-            ValuesManager(values_manager).on_post_setup
-            PopulationManager(population_manager).on_post_setup
-            DateTimeClock(datetime_clock).on_post_setup
-            EventManager(event_manager).on_post_setup
-            LookupTableManager(lookup_table_manager).on_post_setup
-            DiseaseModel(disease_model.lower_respiratory_infections).on_post_setup
         population_creation
     main_loop*
         time_step__prepare
-            DeathsObserver(deaths_observer).on_time_step_prepare
         time_step
-            BasePopulation(base_population).on_time_step
-            Mortality(mortality).on_time_step
-            DiseaseModel(disease_model.lower_respiratory_infections).on_time_step
         time_step__cleanup
-            DiseaseModel(disease_model.lower_respiratory_infections).on_time_step_cleanup
         collect_metrics
     simulation_end
         simulation_end
@@ -180,7 +180,6 @@ observation at the state and priority where it is made. The states of the
     setup     post_setup         5                                     values_manager       action         on_post_setup    True
                                  5                                 population_manager       action         on_post_setup    True
                                  5                                     datetime_clock       action         on_post_setup    True
-                                 5                                      event_manager       action         on_post_setup    True
                                  5                               lookup_table_manager       action         on_post_setup    True
                                  5         disease_model.lower_respiratory_infections       action         on_post_setup    True
     main_loop time_step__prepare 5                                    deaths_observer       action  on_time_step_prepare    True
@@ -233,33 +232,6 @@ shows the order in which components populate new simulants.
     DiseaseModel(disease_model.lower_respiratory_infections).initialize_state
     Risk(risk.child_wasting).initialize_propensity
 
-The event system is reachable too (Refer to :ref:`the event concept docs <event_concept>`).
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_events`
-names the event channels, and
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_listeners`
-returns the listeners on one channel, keyed by priority. For example, to list
-all events and then determine any components with registered "time_step" 
-listeners:
-
-.. testcode::
-
-    print(sim.list_events())
-    print(sim.get_listeners("time_step").keys())
-    for listener in sim.get_listeners("time_step")[5]:
-        print(repr(listener))
-
-.. testoutput::
-
-    ['post_setup', 'time_step', 'time_step__cleanup', 'time_step__prepare', 'collect_metrics', 'simulation_end', 'report']
-    dict_keys([5])
-    <bound method BasePopulation.on_time_step of BasePopulation()>
-    <bound method Mortality.on_time_step of Mortality()>
-    <bound method Machine.on_time_step of DiseaseModel(state_column=lower_respiratory_infections)>
-
-We see in the example above that ``BasePopulation``, ``Mortality``, and
-the lower respiratory infections ``DiseaseModel`` each registered a listener
-to the ``time_step`` phase, all at priority 5.
-
 State table attributes and value pipelines
 ++++++++++++++++++++++++++++++++++++++++++
 
@@ -272,14 +244,14 @@ precise. A simulation exposes two things that are similar but not identical:
 :term:`Attributes <Attribute>` - computed by
 :term:`attribute pipelines <Attribute Pipeline>` - are simulant-specific values;
 they are the columns of the :term:`state table <Population State Table>`.
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute_names`
+:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_attributes`
 lists the names of all of the attributes in a given simulation and
 :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_population`
 gets their current values.
 
 .. code-block:: python
 
-    attribute_names = sim.get_attribute_names()
+    attribute_names = sim.list_attributes()
     print(len(attribute_names))
     # list four of them
     print(attribute_names[0:4])
@@ -300,7 +272,7 @@ gets their current values.
     :hide:
 
     fresh = get_disease_model_simulation()
-    attribute_names = fresh.get_attribute_names()
+    attribute_names = fresh.list_attributes()
     assert len(attribute_names) == 24
     assert attribute_names[0:4] == ["entrance_time", "age", "sex", "mortality_rate"]
     pop = fresh.get_population(["age", "sex"])

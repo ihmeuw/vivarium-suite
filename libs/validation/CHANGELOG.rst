@@ -1,3 +1,7 @@
+**0.4.3 - 10/26/26**
+
+- Pin numpy<2 in the ``gbd`` extra for compatibility with the pandas<2.2 pin
+
 **0.4.2 - 10/23/26**
 
 - Pin pandas<2.2 in the ``gbd`` extra for compatibility with db_queries' SQLAlchemy<2 pin
