@@ -139,6 +139,120 @@ def test_create_issue_uses_default_project(jira, monkeypatch) -> None:
     assert body["fields"]["project"] == {"key": "XYZ"}
 
 
+def test_get_issue_lists_subtasks(jira) -> None:
+    jira.responses[("GET", "/issue/ABC-1")] = {
+        "key": "ABC-1",
+        "fields": {
+            "subtasks": [
+                {"key": "ABC-2", "fields": {"summary": "child", "status": {"name": "To Do"}}}
+            ]
+        },
+    }
+    issue = server.get_issue("ABC-1", include_comments=0)
+    assert issue["subtasks"] == [{"key": "ABC-2", "summary": "child", "status": "To Do"}]
+    assert issue["parent"] is None
+
+
+def test_search_shows_parent(jira) -> None:
+    jira.responses[("GET", "/search")] = {
+        "total": 2,
+        "issues": [
+            {"key": "ABC-2", "fields": {"parent": {"key": "ABC-1"}}},
+            {"key": "ABC-3", "fields": {}},
+        ],
+    }
+    issues = server.search("parent = ABC-1")["issues"]
+    assert [(i["key"], i["parent"]) for i in issues] == [("ABC-2", "ABC-1"), ("ABC-3", None)]
+
+
+def set_conversion(
+    jira: FakeJira,
+    original: dict[str, Any] | None = None,
+    target: dict[str, Any] | None = None,
+) -> None:
+    """Make ABC-5 a story to convert and ABC-1 a story to be its parent."""
+    story = {"subtask": False}
+    jira.responses[("GET", "/issue/ABC-5")] = {
+        "fields": {
+            "summary": "Old story",
+            "description": "Body",
+            "priority": {"name": "Major"},
+            "labels": ["x"],
+            "fixVersions": [{"name": "AI"}],
+            "assignee": {"name": "alee"},
+            "issuetype": story,
+            "project": {"key": "ABC"},
+            "subtasks": [],
+            server.STORY_POINTS_FIELD: 2.0,
+            server.EPIC_LINK_FIELD: "ABC-9",
+            server.SPRINT_FIELD: [{"id": 1, "name": "Sprint 1"}],
+            **(original or {}),
+        }
+    }
+    jira.responses[("GET", "/issue/ABC-1")] = {
+        "fields": {"issuetype": story, "project": {"key": "ABC"}, **(target or {})}
+    }
+    jira.responses[("POST", "/issue")] = {"key": "ABC-6"}
+    jira.responses[("GET", "/issue/ABC-5/transitions")] = {
+        "transitions": [{"id": "31", "name": "Duplicate", "to": {"name": "Duplicate"}}]
+    }
+
+
+def test_convert_to_subtask(jira) -> None:
+    set_conversion(jira)
+    result = server.convert_to_subtask("ABC-5", "ABC-1")
+    (body,) = jira.bodies("POST", "/issue")
+    assert body["fields"] == {
+        "project": {"key": "ABC"},
+        "summary": "Old story",
+        "description": "Body",
+        "issuetype": {"name": "Sub-Task"},
+        "parent": {"key": "ABC-1"},
+        "assignee": {"name": "alee"},
+        "priority": {"name": "Major"},
+        "labels": ["x"],
+        "fixVersions": [{"name": "AI"}],
+    }
+    (link,) = jira.bodies("POST", "/issueLink")
+    assert (link["inwardIssue"]["key"], link["outwardIssue"]["key"]) == ("ABC-5", "ABC-6")
+    assert "Converted from ABC-5" in jira.bodies("POST", "/issue/ABC-6/comment")[0]["body"]
+    assert (
+        "Replaced by sub-task ABC-6" in jira.bodies("POST", "/issue/ABC-5/comment")[0]["body"]
+    )
+    assert jira.bodies("POST", "/issue/ABC-5/transitions") == [{"transition": {"id": "31"}}]
+    assert result["key"] == "ABC-6"
+    assert result["failures"] == []
+    assert result["not_copied"] == {
+        "story_points": 2.0,
+        "epic": "ABC-9",
+        "sprints": ["Sprint 1"],
+    }
+
+
+def test_convert_reports_a_failed_close(jira) -> None:
+    set_conversion(jira)
+    jira.responses[("GET", "/issue/ABC-5/transitions")] = {"transitions": []}
+    result = server.convert_to_subtask("ABC-5", "ABC-1")
+    assert result["key"] == "ABC-6"
+    assert [f["step"] for f in result["failures"]] == ["close the original"]
+
+
+@pytest.mark.parametrize(
+    "original, target, message",
+    [
+        ({"issuetype": {"subtask": True}}, None, "already a sub-task"),
+        ({"subtasks": [{"key": "ABC-7"}]}, None, "has sub-tasks of its own"),
+        (None, {"issuetype": {"subtask": True}}, "ABC-1 is a sub-task"),
+        (None, {"project": {"key": "XYZ"}}, "different projects"),
+    ],
+)
+def test_convert_refuses(jira, original, target, message) -> None:
+    set_conversion(jira, original, target)
+    with pytest.raises(ToolError, match=message):
+        server.convert_to_subtask("ABC-5", "ABC-1")
+    assert not jira.bodies("POST", "/issue")
+
+
 def test_create_issue_names_an_unknown_project(jira) -> None:
     jira.responses[("POST", "/issue")] = ToolError(
         "Jira returned 400 for POST /issue: project: project is required"

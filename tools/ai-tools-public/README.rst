@@ -163,8 +163,12 @@ conversation matches the skill's description.
 - ``jira`` — a local MCP server for IHME's Jira (tools named
   ``mcp__plugin_simsci_jira__*``). It gets, searches, creates, updates,
   comments on, links, and transitions issues, including story points,
-  priority, fix versions, sprint, and epic. Sprint names and ``active`` resolve
-  against the scrum boards of the issue's own project. It needs ``uv`` and a
+  priority, fix versions, sprint, epic, and sub-tasks. Sprint names and
+  ``active`` resolve against the scrum boards of the issue's own project.
+  ``convert_to_subtask`` turns an issue into a sub-task of another issue. Jira's
+  API cannot change an issue's type to a sub-task, so the tool creates a new
+  sub-task (with a new key), copies the main fields, links the two issues, and
+  closes the original. It needs ``uv`` and a
   Jira personal access token; see `Jira access`_.
 
 Working alongside a team plugin

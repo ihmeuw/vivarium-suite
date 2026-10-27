@@ -17,6 +17,7 @@ token) and ``JIRA_PROJECT`` (an optional default project).
 
 import os
 import re
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -58,6 +59,7 @@ ISSUE_FIELDS = ",".join(
         "assignee",
         "reporter",
         "parent",
+        "subtasks",
         "issuelinks",
         "description",
         "comment",
@@ -77,11 +79,11 @@ SEARCH_FIELDS = ",".join(
         "labels",
         "fixVersions",
         "assignee",
+        "parent",
         "updated",
         STORY_POINTS_FIELD,
     ]
 )
-
 # Block macros that a rewritten description can silently drop.
 MACRO_RE = re.compile(
     r"\{(code|noformat|panel|quote|info|warning|note|tip|expand|color)(?::[^}]*)?\}"
@@ -405,7 +407,8 @@ def _set_fields(
 def get_issue(key: str, include_comments: int = 5) -> dict[str, Any]:
     """Get a Jira issue, including story points, fix versions, sprints, links, and comments.
 
-    The description is returned as raw Jira wiki markup.
+    The result also has the issue's parent, if it is a sub-task, and its own
+    sub-tasks. The description is returned as raw Jira wiki markup.
 
     Parameters
     ----------
@@ -432,6 +435,14 @@ def get_issue(key: str, include_comments: int = 5) -> dict[str, Any]:
         "sprints": _sprint_names(fields.get(SPRINT_FIELD)),
         "epic": fields.get(EPIC_LINK_FIELD),
         "parent": parent.get("key"),
+        "subtasks": [
+            {
+                "key": s.get("key", ""),
+                "summary": (s.get("fields") or {}).get("summary", ""),
+                "status": _name((s.get("fields") or {}).get("status")),
+            }
+            for s in fields.get("subtasks") or []
+        ],
         "assignee": _person(fields.get("assignee")),
         "reporter": _person(fields.get("reporter")),
         "created": (fields.get("created") or "")[:10],
@@ -455,8 +466,10 @@ def get_issue(key: str, include_comments: int = 5) -> dict[str, Any]:
 def search(jql: str, limit: int = 20) -> dict[str, Any]:
     """Search Jira issues with JQL.
 
-    Each result includes story points, priority, fix versions, and labels. Story
-    points can be filtered in JQL as '"Story Points"', e.g. '"Story Points" is EMPTY'.
+    Each result includes story points, priority, fix versions, labels, and the
+    parent of a sub-task. Story points can be filtered in JQL as '"Story Points"',
+    e.g. '"Story Points" is EMPTY'. To list an issue's sub-tasks, use
+    'parent = ABC-123'.
 
     Parameters
     ----------
@@ -494,6 +507,7 @@ def search(jql: str, limit: int = 20) -> dict[str, Any]:
                     "fix_versions": [_name(v) for v in fields.get("fixVersions") or []],
                     "labels": fields.get("labels", []),
                     "assignee": _person(fields.get("assignee")),
+                    "parent": (fields.get("parent") or {}).get("key"),
                     "updated": (fields.get("updated") or "")[:10],
                     "url": _url(issue.get("key", "")),
                 }
@@ -532,7 +546,8 @@ def create_issue(
     description
         Issue body in Jira wiki markup, not Markdown.
     issue_type
-        'Task', 'Story', 'Bug', 'Epic', or 'Sub-Task'.
+        'Task', 'Story', 'Bug', or 'Epic', or a sub-task type: 'Sub-Task',
+        'Technical Task', 'Request Sub-Task', or 'Data Request Sub-Task'.
     project
         Project key, e.g. 'ABC'. Required unless the user set a default project in
         the plugin's options.
@@ -546,11 +561,12 @@ def create_issue(
         Story points. Some projects leave this field off some issue types, such as
         Bug, and Jira then rejects the value.
     epic
-        Key of the epic to put the issue in. Not valid for an Epic or a Sub-Task.
+        Key of the epic to put the issue in. Not valid for an Epic or a sub-task.
     epic_name
         Short epic label. Used only when issue_type is 'Epic'; defaults to the summary.
     parent
-        Parent issue key. Required when issue_type is 'Sub-Task'.
+        Parent issue key. Required for a sub-task type, and must be in the same
+        project. A sub-task cannot be the parent of another sub-task.
     assignee
         Jira username, or 'me' for the token owner.
     sprint
@@ -692,6 +708,116 @@ def update_issue(
         "url": _url(key),
         "sprint_failure": sprint_failure,
         "link_failures": _apply_links(key, links),
+    }
+
+
+@mcp.tool()
+def convert_to_subtask(
+    key: str,
+    parent: str,
+    issue_type: str = "Sub-Task",
+    close_status: str = "Duplicate",
+) -> dict[str, Any]:
+    """Replace an issue with a copy that is a sub-task of another issue. This writes to Jira.
+
+    Jira's API cannot change an issue into a sub-task, so this creates a new
+    sub-task under the parent and closes the original. The sub-task gets a new
+    key. The original keeps its comments, history, and GitHub links. The two are
+    linked, and each gets a comment that points to the other. Tell the user about
+    the new key and confirm before calling.
+
+    The summary, description, priority, labels, fix versions, and assignee are
+    copied. Story points, epic, and sprints are not, because sub-tasks cannot hold
+    them in every project. Their old values are returned in 'not_copied'. Steps
+    after the create that fail do not undo it: they are reported in 'failures'.
+
+    Parameters
+    ----------
+    key
+        Issue to convert, e.g. 'ABC-123'. It must not be a sub-task or have
+        sub-tasks.
+    parent
+        Issue the new sub-task belongs to, e.g. 'ABC-100'. It must be in the same
+        project and must not be a sub-task.
+    issue_type
+        Sub-task type: 'Sub-Task', 'Technical Task', 'Request Sub-Task', or
+        'Data Request Sub-Task'.
+    close_status
+        Status or transition name for the original, e.g. 'Duplicate' or "Won't Do".
+    """
+    if key == parent:
+        raise ToolError("An issue cannot be its own parent.")
+    original = _request(
+        "GET",
+        f"/issue/{key}",
+        params={
+            "fields": "summary,description,priority,labels,fixVersions,assignee,issuetype,"
+            f"project,subtasks,{STORY_POINTS_FIELD},{EPIC_LINK_FIELD},{SPRINT_FIELD}"
+        },
+    )["fields"]
+    target = _request("GET", f"/issue/{parent}", params={"fields": "issuetype,project"})[
+        "fields"
+    ]
+    if (original.get("issuetype") or {}).get("subtask"):
+        raise ToolError(f"{key} is already a sub-task.")
+    if original.get("subtasks"):
+        raise ToolError(f"{key} has sub-tasks of its own, so it cannot become a sub-task.")
+    if (target.get("issuetype") or {}).get("subtask"):
+        raise ToolError(f"{parent} is a sub-task, so it cannot have sub-tasks.")
+    project = (original.get("project") or {}).get("key")
+    if project != (target.get("project") or {}).get("key"):
+        raise ToolError(
+            f"{key} and {parent} are in different projects. Move {key} into the "
+            "parent's project in Jira first."
+        )
+
+    created = create_issue(
+        summary=original.get("summary", ""),
+        description=original.get("description") or "",
+        issue_type=issue_type,
+        project=project,
+        priority=_name(original.get("priority")) or None,
+        labels=original.get("labels") or None,
+        fix_versions=[_name(v) for v in original.get("fixVersions") or []] or None,
+        parent=parent,
+        assignee=(original.get("assignee") or {}).get("name"),
+    )
+    new_key = created["key"]
+
+    failures = []
+    steps: list[tuple[str, Callable[[], object]]] = [
+        ("link", lambda: _link(key, "related to", new_key)),
+        (
+            "comment on the sub-task",
+            lambda: add_comment(
+                new_key,
+                f"Converted from {key}. Its comments, history, and GitHub links stay there.",
+            ),
+        ),
+        (
+            "comment on the original",
+            lambda: add_comment(key, f"Replaced by sub-task {new_key} of {parent}."),
+        ),
+        ("close the original", lambda: transition_issue(key, close_status)),
+    ]
+    for step, action in steps:
+        try:
+            action()
+        except ToolError as exc:
+            failures.append({"step": step, "error": str(exc)})
+
+    not_copied = {
+        "story_points": original.get(STORY_POINTS_FIELD),
+        "epic": original.get(EPIC_LINK_FIELD),
+        "sprints": _sprint_names(original.get(SPRINT_FIELD)),
+    }
+    return {
+        "key": new_key,
+        "url": _url(new_key),
+        "original": key,
+        "parent": parent,
+        "failures": failures,
+        "not_copied": {name: value for name, value in not_copied.items() if value},
     }
 
 
