@@ -7,44 +7,10 @@ The functions defined here are used to support the command-line interface for
 ``vivarium``.
 
 """
-import functools
-from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import yaml
-
-from vivarium.engine.exceptions import VivariumError
-
-
-class InteractiveError(VivariumError):
-    """Error raised when the Interactive context is in an inconsistent state."""
-
-    pass
-
-
-def raise_if_not_setup(system_type: str) -> Callable[..., Any]:
-    type_error_map = {
-        "run": "Simulation must be setup before it can be run",
-        "value": "Value pipeline configuration is not complete until the simulation is setup.",
-        "event": "Event configuration is not complete until the simulation is setup.",
-        "component": "Component configuration is not complete until the simulation is setup.",
-        "population": "No population exists until the simulation is setup.",
-    }
-    err_msg = type_error_map[system_type]
-
-    def method_wrapper(context_method: Callable[..., Any]) -> Callable[..., Any]:
-        @functools.wraps(context_method)
-        def wrapped_method(*args: Any, **kwargs: Any) -> Any:
-            instance = args[0]
-            if not instance._setup:
-                raise InteractiveError(err_msg)
-            return context_method(*args, **kwargs)
-
-        return wrapped_method
-
-    return method_wrapper
 
 
 def get_output_model_name_string(
