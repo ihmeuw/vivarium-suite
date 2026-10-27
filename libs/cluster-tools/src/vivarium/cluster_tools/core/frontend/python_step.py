@@ -1,23 +1,47 @@
 """Author a pipeline step as a plain function.
 
-A step is a function that takes its declared inputs and returns a ``pandas``
+A step is a function that reads its declared inputs and returns a ``pandas``
 DataFrame. :func:`python_step` compiles one such function into a single backend
 :class:`~vivarium.cluster_tools.core.backend.task.Task`, resolving the step's
 inputs and its product through the shared
 :class:`~vivarium.cluster_tools.core.backend.wiring.ArtifactRegistry` so pytask
-draws the producer-to-consumer edges from node identity. The returned DataFrame
-is autosaved to the product's path, in the format named by the product key's
-suffix.
+draws the producer-to-consumer edges from node identity. Each input reaches the
+target as its resolved file path, which the target reads itself; only the
+returned DataFrame is autosaved, to the product's path, in the format named by
+the product key's suffix.
 
 Code identity defaults to always-stale: a per-target code fingerprint is deferred
 (MIC-7520), so in this cut a step re-runs on every build.
 """
 
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any
+
+import pandas as pd
 
 from vivarium.cluster_tools.core.backend.task import Task
 from vivarium.cluster_tools.core.backend.wiring import ArtifactKey, ArtifactRegistry
+
+_PRODUCT_ARG = "product"
+"""Parameter name under which the loaded product path reaches the run wrapper."""
+
+
+def _save_parquet(frame: pd.DataFrame, path: Path) -> None:
+    """Write ``frame`` to ``path`` as Parquet."""
+    frame.to_parquet(path)
+
+
+def _save_csv(frame: pd.DataFrame, path: Path) -> None:
+    """Write ``frame`` to ``path`` as CSV without the index."""
+    frame.to_csv(path, index=False)
+
+
+_SAVERS: dict[str, Callable[[pd.DataFrame, Path], None]] = {
+    ".parquet": _save_parquet,
+    ".csv": _save_csv,
+}
+"""Supported product suffixes mapped to the DataFrame save they dispatch to."""
 
 
 def python_step(
@@ -34,8 +58,9 @@ def python_step(
     Parameters
     ----------
     target
-        A function returning a DataFrame. It is called with each declared input
-        loaded and passed by its parameter name.
+        A function returning a DataFrame. Each declared input is passed to it, by
+        its parameter name, as the input's resolved file path; the function reads
+        the path itself.
     inputs
         Maps each of ``target``'s parameter names to the artifact key the registry
         resolves to the producing step's node (or a declared root input).
@@ -63,6 +88,38 @@ def python_step(
     vivarium.cluster_tools.core.backend.wiring.WiringError
         If an input key resolves to no producer and no root input.
     ValueError
-        If ``produces`` has an unsupported suffix.
+        If ``produces`` has an unsupported suffix, or the product's parameter name
+        collides with one of ``target``'s input parameter names.
     """
-    raise NotImplementedError
+    suffix = Path(produces).suffix
+    if suffix not in _SAVERS:
+        supported = ", ".join(sorted(_SAVERS))
+        raise ValueError(
+            f"produces key {produces!r} has unsupported suffix {suffix!r}; "
+            f"supported suffixes are {supported}."
+        )
+    save = _SAVERS[suffix]
+
+    if _PRODUCT_ARG in inputs:
+        raise ValueError(
+            f"product parameter name {_PRODUCT_ARG!r} collides with an input "
+            f"parameter of the same name."
+        )
+
+    task_inputs = {param: registry.resolve_input(key) for param, key in inputs.items()}
+    product_node = registry.register_output(produces)
+
+    def _run_step(**kwargs: Any) -> None:
+        """Call ``target`` with its loaded inputs and autosave the DataFrame product."""
+        product_path = kwargs.pop(_PRODUCT_ARG)
+        frame = target(**kwargs)
+        save(frame, product_path)
+
+    return Task(
+        name=produces,
+        run=_run_step,
+        inputs=task_inputs,
+        outputs={_PRODUCT_ARG: product_node},
+        resources={} if resources is None else resources,
+        env=env,
+    )
