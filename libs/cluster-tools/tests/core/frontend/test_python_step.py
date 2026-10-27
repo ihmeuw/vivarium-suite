@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from pytask import TaskOutcome
+from pytask import PathNode, TaskOutcome
 
 from vivarium.cluster_tools.core.backend.build import build, outcomes
 from vivarium.cluster_tools.core.backend.task import Task
@@ -41,6 +41,7 @@ def test_python_step_returns_a_task_wired_to_the_registry(tmp_path: Path) -> Non
     [product] = list(task.outputs.values())
     assert product is reg.resolve_input("mid.parquet")  # the registry's shared product node
     [dependency] = list(task.inputs.values())
+    assert isinstance(dependency, PathNode)
     assert dependency.path == src.resolve()  # input resolved to the root-input file node
 
 
