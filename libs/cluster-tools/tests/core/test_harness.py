@@ -22,6 +22,9 @@ def test_build_fixture_runs_and_writes_its_products(tmp_path: Path) -> None:
         assert isinstance(frame, pd.DataFrame)
         assert not frame.empty  # the product reads back as a non-empty frame
 
+    final = pd.read_parquet(fx.registry.path_for("final.parquet"))
+    assert final["n"].tolist() == [12, 14, 16]  # the chain is wired: mid feeds final
+
 
 def test_would_run_reports_the_step_names(tmp_path: Path) -> None:
     """would_run returns a set of the fixture's step names drawn from a preview."""
@@ -37,7 +40,7 @@ def test_perturbed_changes_a_file_then_restores_it(tmp_path: Path) -> None:
     original = path.read_bytes()
 
     with Perturbed(path, b"\n# perturb\n"):
-        assert path.read_bytes() != original  # the change is visible inside the block
+        assert path.read_bytes() == original + b"\n# perturb\n"  # appended in block
 
     assert path.read_bytes() == original  # the original bytes are restored on exit
 
