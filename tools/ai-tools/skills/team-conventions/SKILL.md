@@ -1,6 +1,6 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev` and moving its MIC ticket to Ready for Review. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
