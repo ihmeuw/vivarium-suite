@@ -45,7 +45,7 @@ _SAVERS: dict[str, Callable[[pd.DataFrame, Path], None]] = {
 
 
 def python_step(
-    target: Callable[..., Any],
+    target: Callable[..., pd.DataFrame],
     *,
     inputs: Mapping[str, ArtifactKey],
     produces: ArtifactKey,
@@ -67,7 +67,8 @@ def python_step(
     produces
         The artifact key for ``target``'s product. Its suffix names the save
         format (``.parquet`` or ``.csv``). Registered with ``registry`` so a
-        downstream step naming this key gets a real edge to this step.
+        downstream step naming this key gets a real edge to this step. The
+        product's parent directory is created when the step runs.
     registry
         The producer/consumer registry that resolves keys to shared nodes.
     resources
@@ -111,7 +112,8 @@ def python_step(
 
     def _run_step(**kwargs: Any) -> None:
         """Call ``target`` with its loaded inputs and autosave the DataFrame product."""
-        product_path = kwargs.pop(_PRODUCT_ARG)
+        product_path = Path(kwargs.pop(_PRODUCT_ARG))
+        product_path.parent.mkdir(parents=True, exist_ok=True)
         frame = target(**kwargs)
         save(frame, product_path)
 

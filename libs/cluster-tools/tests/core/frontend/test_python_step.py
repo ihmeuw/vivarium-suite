@@ -22,11 +22,6 @@ def _constant() -> pd.DataFrame:
     return pd.DataFrame({"n": [1, 2, 3]})
 
 
-def _run_dir(reg: ArtifactRegistry, key: str) -> None:
-    """Create the output directory the registry writes a produced ``key`` under."""
-    reg.path_for(key).parent.mkdir(parents=True, exist_ok=True)
-
-
 def test_python_step_returns_a_task_wired_to_the_registry(tmp_path: Path) -> None:
     """python_step returns one Task whose product and inputs are the registry's nodes."""
     src = tmp_path / "src.parquet"
@@ -54,7 +49,6 @@ def test_running_a_step_calls_the_target_and_writes_the_product(tmp_path: Path) 
     src = tmp_path / "src.parquet"
     pd.DataFrame({"n": [1, 2, 3]}).to_parquet(src)
     reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"src": src})
-    _run_dir(reg, "scaled.parquet")
     calls: list[str] = []
 
     def scale(data: Path) -> pd.DataFrame:
@@ -99,7 +93,6 @@ def test_python_step_carries_resources_and_env(tmp_path: Path) -> None:
 def test_two_steps_run_end_to_end_through_a_shared_key(tmp_path: Path) -> None:
     """A producer and a consumer wired through one key run in order and the data flows."""
     reg = ArtifactRegistry(tmp_path / "out", "run1")
-    _run_dir(reg, "mid.parquet")
 
     def grow(mid: Path) -> pd.DataFrame:
         """Read the upstream product path and add ten to its column."""
@@ -129,7 +122,6 @@ def test_two_steps_run_end_to_end_through_a_shared_key(tmp_path: Path) -> None:
 def test_csv_product_round_trips(tmp_path: Path) -> None:
     """A ".csv" product is autosaved so it round-trips through pd.read_csv."""
     reg = ArtifactRegistry(tmp_path / "out", "run1")
-    _run_dir(reg, "table.csv")
 
     task = python_step(
         _constant, inputs={}, produces="table.csv", registry=reg, resources={}, env=None
@@ -174,7 +166,6 @@ def test_unsupported_product_suffix_is_rejected(tmp_path: Path) -> None:
 def test_a_step_that_writes_no_product_is_a_failure(tmp_path: Path) -> None:
     """A target that fails to produce its product is reported a failure (via a raising target)."""
     reg = ArtifactRegistry(tmp_path / "out", "run1")
-    _run_dir(reg, "out.parquet")
 
     def boom() -> pd.DataFrame:
         """Raise before returning, so no product is written."""
@@ -185,3 +176,18 @@ def test_a_step_that_writes_no_product_is_a_failure(tmp_path: Path) -> None:
     )
 
     assert outcomes(build([task], tmp_path / "state")) == {task.name: TaskOutcome.FAIL}
+
+
+def test_product_parameter_name_collision_is_rejected(tmp_path: Path) -> None:
+    """An input whose parameter name is the reserved product name is rejected."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+
+    with pytest.raises(ValueError, match="collides"):
+        python_step(
+            _constant,
+            inputs={"product": "src"},
+            produces="out.parquet",
+            registry=reg,
+            resources={},
+            env=None,
+        )
