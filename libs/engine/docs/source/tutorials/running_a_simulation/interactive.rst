@@ -435,7 +435,7 @@ to advance a simulation in different ways.
          | sense given the simulation's clock type.
 
 Each of these is easiest to see against the simulation clock, which
-:attr:`current_time <vivarium.engine.interface.interactive.InteractiveContext.current_time>`
+:attr:`~vivarium.engine.framework.engine.BaseSimulationContext.current_time`
 reports. We use a small, short-running configuration here so the whole
 simulation finishes quickly.
 
