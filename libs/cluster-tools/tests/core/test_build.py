@@ -271,6 +271,26 @@ def test_build_keeps_state_under_root_and_collects_no_task_files(
     assert (root / "pytask.toml").read_text() == config
 
 
+def test_default_code_id_reruns_on_every_build(tmp_path: Path) -> None:
+    """A task that declares no code fingerprint is always stale, even when nothing changed."""
+    src, out = _write(tmp_path / "src", "x"), tmp_path / "out"
+    task = Task(
+        name="copy",
+        run=f"cp {src} {out}",
+        inputs={"src": file_node(src)},
+        outputs={"dst": file_node(out)},
+        resources={},
+        env=None,
+    )  # code_id omitted, so it defaults to an always-stale node
+
+    assert outcomes(build([task], tmp_path)) == {"copy": TaskOutcome.SUCCESS}
+
+    # Nothing changed on disk, but with no fingerprint the code dimension is always stale.
+    assert outcomes(build([task], tmp_path, dry_run=True)) == {
+        "copy": TaskOutcome.WOULD_BE_EXECUTED
+    }
+
+
 def test_build_rejects_duplicate_task_names(tmp_path: Path) -> None:
     """Raise before running anything when two tasks share a name."""
     calls: list[str] = []
