@@ -52,8 +52,9 @@ It includes:
   ``/simsci:framework-development``. The verification is an internal loop for
   engineering confidence — not formal V&V — so its **traces** (notebook plots and
   tables) are posted to the PR, while the artifacts themselves stay out of the
-  repo unless you ask to keep them. Gates the artifact build and the PR on
-  explicit user approval.
+  repo unless you ask to keep them. The PR's Testing section maps the plan's
+  changes and quantitative expectations to the tests and verification checks that
+  cover them. Gates the artifact build and the PR on explicit user approval.
 
 **Skills**
 

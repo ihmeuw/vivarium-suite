@@ -82,9 +82,11 @@ In more detail:
   break ties. The table is a reported plan, not a gate — you can re-bucket any row.
   It applies the fix-now set as **one commit per finding** and re-validates with
   the ``_validator`` sub-agent. A fix that cannot be made green is reverted and
-  becomes a ticket rather than a red PR. The finish — leftover triage, the PR gate,
-  the commit history, the PR, and a comment recording what went unaddressed —
-  belongs to the internal ``_finalize-core`` skill.
+  becomes a ticket rather than a red PR. The finish — leftover triage, the PR's
+  Testing section, the PR gate, the commit history, the PR, and a comment
+  recording what went unaddressed — belongs to the internal ``_finalize-core``
+  skill. Without a testing strategy, the Testing section lists the tests in the
+  diff, grouped by the behavior they cover.
 
   It requires a clean working tree, so each fix is its own revertible commit
   (a bare ``WIP`` commit is enough to satisfy that, since ``_finalize-core`` offers
@@ -139,7 +141,9 @@ In more detail:
   test/lint/type suite and runs the shared ``_review-core`` skill for review,
   iterating while preserving the black box. It always creates the feature branch
   up front, and hands the finish to the shared ``_finalize-core`` skill, which
-  gates PR creation on explicit user approval.
+  gates PR creation on explicit user approval. The PR's Testing section links each
+  item of the testing strategy to the test that covers it, and lists the items
+  that no test covers.
 
 **Auto-triggering skills**
 
@@ -335,8 +339,15 @@ plugin's model-development loop) without duplicating the fan-out.
 
 The finish is defined once the same way, in the internal ``_finalize-core`` skill
 (also ``user-invocable: false``, also invoked inline): leftover-finding triage, the
-PR approval gate, a reviewable commit history, the draft PR, and the comment
-recording what was *not* addressed. Three paths share it — ``/simsci:pr-prep``,
+PR's Testing section, the PR approval gate, a reviewable commit history, the draft
+PR, and the comment recording what was *not* addressed. The Testing section comes
+from the ``_test_summarizer`` sub-agent. When the caller passes the testing
+strategy agreed in the design, it links each strategy item to the test or check
+that covers it and lists the items nothing covers. Without a strategy, it groups
+the diff's tests by the behavior they cover. It leaves out what CI already reports
+and does not outline the test files, so the section stays short enough to read in
+a PR body. Each link is a GitHub permalink at the pushed head commit, so a later
+rebase leaves the links pointing at the older commit. Three paths share it — ``/simsci:pr-prep``,
 ``/simsci:framework-development``'s Phase 5, and the ``simsci-internal`` plugin's
 model-development loop — so the steps that are easy to drop when improvising, like
 the backlog dedup and the not-addressed comment, are structural rather than
@@ -374,6 +385,8 @@ Code:
   per-finding ``_review_scorer`` — have **no Bash access at all**. They
   are fed review context by ``_review-core`` and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
+- ``_test_summarizer`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
+  only. ``_finalize-core`` spawns it to write the PR's Testing section.
 - ``_trace_extractor`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
   only. It is the one agent that deliberately reads *outside* the working
   tree: Claude Code session transcripts under ``~/.claude/projects/`` (which

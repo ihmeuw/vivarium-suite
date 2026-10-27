@@ -1,3 +1,9 @@
+**0.29.0 - TBD/TBD/26**
+
+- ``model-development``: pass the iteration plan's change list and quantitative
+  expectations, and the verification checks, to ``simsci:_finalize-core`` for the
+  PR's Testing section (requires ``simsci`` 0.4.0)
+
 **0.28.0 - 10/13/26**
 
 - Add a ``SessionStart`` hook that adds a short plain-English writing text, based

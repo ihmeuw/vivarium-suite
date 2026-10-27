@@ -1,3 +1,11 @@
+**0.4.0 - TBD/TBD/26**
+
+- Add a ``_test_summarizer`` agent that writes the PR's Testing section. It links
+  each testing-strategy item to the test that covers it and lists the items no
+  test covers. ``_finalize-core`` runs it for ``/simsci:pr-prep`` and
+  ``/simsci:framework-development``, and takes optional strategy items and
+  outside-suite checks from its caller
+
 **0.3.1 - 10/13/26**
 
 - Add a short testing strategy section to the ``/simsci:framework-development`` design proposal
