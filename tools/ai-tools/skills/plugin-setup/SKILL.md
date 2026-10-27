@@ -126,11 +126,10 @@ All of these end up at the same state: `JENKINS_MCP_AUTH` set in the environment
 
 ## Jira MCP server
 
-This plugin ships a Jira MCP server, `jira` (tools named
-`mcp__plugin_simsci-internal_jira__*`). It gets, searches, creates, updates,
-comments on, links, and transitions issues on IHME's Jira, including story
-points, priority, fix versions, sprint, and epic. It runs locally and calls Jira
-with the user's personal access token.
+The `simsci` plugin, which this plugin depends on, ships a Jira MCP server,
+`jira` (tools named `mcp__plugin_simsci_jira__*`). This plugin's skills and
+agents use it to read and file MIC tickets. It runs locally and calls Jira with
+the user's personal access token.
 
 ### 1. Install `uv`
 
@@ -149,35 +148,31 @@ then **Profile** > **Personal Access Tokens** > **Create token**. Jira shows
 the token only once. The token has the same permissions as the user's Jira
 account, so they should treat it like a password.
 
-### 3. Enter the token in the plugin configuration
+### 3. Enter the token in the `simsci` plugin configuration
 
-Claude Code asks for the plugin's options when the plugin is enabled. If the
-user skipped that dialog, or needs to change the token later, have them run
-`/plugin`, open **Installed** > **simsci-internal**, and choose
-**Configure options**. They paste the token into **Jira personal access
-token**. Claude Code masks the field and keeps the value in the system's secure
-credential store, not in `settings.json`. The user must type the token into
-the dialog themselves, so it does not enter the conversation.
+Claude Code asks for `simsci`'s options when the plugin is enabled. If the user
+skipped that dialog, or needs to change the token later, have them run
+`/plugin`, open **Installed** > **simsci**, and choose **Configure options**.
+They paste the token into **Jira personal access token**. Claude Code masks the
+field and keeps the value in the system's secure credential store, not in
+`settings.json`. The user must type the token into the dialog themselves, so it
+does not enter the conversation.
 
-The same dialog has two more options, with defaults that fit SimSci work. They
-also appear as rows in `/config`:
-
-| Option | Default | Use |
-|--------|---------|-----|
-| Default Jira project | `MIC` | Project for `create_issue` when no `project` is given |
-| Jira board ID | `301` (MIC board) | Board that sprint names and `active` resolve against |
+The same dialog has an optional **Default Jira project**. SimSci users can set
+it to `MIC`. This plugin's skills pass `project="MIC"` explicitly, so they work
+without it.
 
 ### 4. Restart and verify
 
-Restart Claude Code and run `/mcp`. The `plugin:simsci-internal:jira` server
-must show as connected. Then ask Claude to get any MIC ticket. The result must
-include `story_points`. If the token is missing, the Jira tools return an error
-that points to **Configure options**.
+Restart Claude Code and run `/mcp`. The `plugin:simsci:jira` server must show
+as connected. Then ask Claude to get any MIC ticket. The result must include
+`story_points`. If the token is missing, the Jira tools return an error that
+points to **Configure options**.
 
 ### 5. Disable the `mcp-jira` plugin, if installed
 
 If the user has the `mcp-jira` plugin from `ihme-claude-marketplace`
-installed, have them disable it, so that Claude uses this plugin's Jira tools:
+installed, have them disable it, so that Claude uses the `simsci` Jira tools:
 
 ```text
 /plugin disable mcp-jira@ihme-claude-marketplace

@@ -9,7 +9,7 @@
     {
       "name": "simsci",
       "source": "./tools/ai-tools-public",
-      "description": "Generic AI developer workflows for any IHME team, any repo: review-to-PR prep (a multi-agent code review that carries the fixes through to a draft PR), git rescue, commit splitting, type hinting, regression debugging, change propagation, workflow assessment, and a guided TDD loop."
+      "description": "Generic AI developer workflows for any IHME team, any repo: review-to-PR prep (a multi-agent code review that carries the fixes through to a draft PR), git rescue, commit splitting, type hinting, regression debugging, change propagation, workflow assessment, a guided TDD loop, and an MCP server for IHME's Jira."
     },
     {
       "name": "simsci-internal",

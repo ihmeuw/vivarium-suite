@@ -5,8 +5,7 @@
             "args": ["run", "--quiet", "--script", "${CLAUDE_PLUGIN_ROOT}/mcp-servers/jira/server.py"],
             "env": {
                 "JIRA_API_TOKEN": "${user_config.jira_api_token}",
-                "JIRA_PROJECT": "${user_config.jira_project}",
-                "JIRA_BOARD_ID": "${user_config.jira_board_id}"
+                "JIRA_PROJECT": "${user_config.jira_project}"
             }
         }
     }

@@ -96,13 +96,8 @@ It includes:
 
 Loaded automatically when the context is relevant to the skill's description.
 
-**MCP servers**
-
-- ``jira`` — a local Jira MCP server. It gets, searches, creates, updates,
-  comments on, links, and transitions issues, including story points,
-  priority, fix versions, sprint, and epic. It defaults to the MIC project and
-  board, and the plugin's configuration dialog asks for the Jira personal
-  access token it uses. The ``plugin-setup`` skill walks through the setup.
+The skills and agents that read or file Jira tickets use the ``jira`` MCP server
+from the ``simsci`` dependency.
 
 Layout
 ======
@@ -122,8 +117,6 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives unde
   model-loaded reference material).
 - ``tools/ai-tools/hooks/``: the ``SessionStart`` hook that adds the writing-style
   text to each session.
-- ``tools/ai-tools/.mcp.json`` and ``tools/ai-tools/mcp-servers/``: the ``jira``
-  MCP server, a single ``uv`` script with its unit tests next to it.
 - ``tools/ai-tools/CHANGELOG.rst``: history of plugin changes.
 
 Top-level project metadata (license, code of conduct, contributing guide) lives at the
@@ -148,8 +141,8 @@ team's Jira project, hub space, Jenkins, and Slack channel, and its skills
 redirect ``simsci``'s optional seams to SimSci conventions. Other IHME teams
 should install ``simsci`` only.
 
-The ``jira`` MCP server also needs `uv <https://docs.astral.sh/uv/>`_ on the
-``PATH`` and a Jira personal access token. Ask Claude to run the
+The ``jira`` MCP server from ``simsci`` also needs `uv <https://docs.astral.sh/uv/>`_
+on the ``PATH`` and a Jira personal access token. Ask Claude to run the
 ``plugin-setup`` skill after installing.
 
 For local development against a checked-out monorepo, point ``marketplace add``

@@ -5,14 +5,14 @@
 #     "mcp>=2.3,<3",
 # ]
 # ///
-"""Jira MCP server for the SimSci team.
+"""Jira MCP server for IHME's Jira.
 
-Gets, searches, creates, updates, comments on, links, and transitions issues on
-IHME's Jira, including story points, priority, fix versions, sprint, and epic.
+Gets, searches, creates, updates, comments on, links, and transitions issues,
+including story points, priority, fix versions, sprint, and epic.
 
 Its settings come from the plugin's ``userConfig`` options, which Claude Code
 passes in as environment variables: ``JIRA_API_TOKEN`` (a Jira personal access
-token), ``JIRA_PROJECT``, and ``JIRA_BOARD_ID``.
+token) and ``JIRA_PROJECT`` (an optional default project).
 """
 
 import os
@@ -36,10 +36,8 @@ def _setting(name: str, default: str = "") -> str:
 BASE_URL = "https://jira.ihme.washington.edu"
 API_URL = f"{BASE_URL}/rest/api/2"
 AGILE_URL = f"{BASE_URL}/rest/agile/1.0"
-DEFAULT_PROJECT = _setting("JIRA_PROJECT", "MIC")
-# Four scrum boards list MIC, and board 367 has a second active sprint, so the
-# board that sprint names resolve against is pinned rather than inferred.
-BOARD_ID = int(float(_setting("JIRA_BOARD_ID", "301")))
+DEFAULT_PROJECT = _setting("JIRA_PROJECT")
+CONFIGURE_HINT = "/plugin > Installed > simsci > Configure options"
 
 # IHME's custom field IDs differ from Atlassian's documented defaults. Found
 # with GET /rest/api/2/field.
@@ -100,8 +98,8 @@ def _token() -> str:
     if not token:
         raise ToolError(
             "No Jira token is set. Create a personal access token in Jira (Profile > "
-            "Personal Access Tokens), then enter it in /plugin > Installed > "
-            "simsci-internal > Configure options, and restart Claude Code."
+            f"Personal Access Tokens), then enter it in {CONFIGURE_HINT}, and restart "
+            "Claude Code."
         )
     return token
 
@@ -192,35 +190,64 @@ def _resolve_username(username: str) -> str:
     return username
 
 
-def _resolve_sprint(sprint: int | str) -> int:
-    """Resolve a sprint ID, 'active', or an exact sprint name to a sprint ID."""
+def _paged_values(path: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return every value from a paged Jira agile API list."""
+    values: list[dict[str, Any]] = []
+    while True:
+        page = _request(
+            "GET", path, params={**params, "startAt": len(values)}, base=AGILE_URL
+        )
+        batch = page.get("values", [])
+        values += batch
+        if page.get("isLast", True) or not batch:
+            return values
+
+
+def _project_sprints(project: str, state: str) -> list[list[dict[str, Any]]]:
+    """Return the sprints in a state on each scrum board that lists the project."""
+    boards = _paged_values("/board", {"projectKeyOrId": project, "type": "scrum"})
+    if not boards:
+        raise ToolError(f"No scrum board lists project {project}, so it has no sprints.")
+    return [_paged_values(f"/board/{b['id']}/sprint", {"state": state}) for b in boards]
+
+
+def _resolve_sprint(project: str, sprint: int | str) -> int:
+    """Resolve a sprint ID, 'active', or an exact sprint name to a sprint ID.
+
+    A project can be on several scrum boards, so names and 'active' are resolved
+    across all of them. 'active' is the sprint that is active on every board that
+    has an active sprint.
+    """
     if isinstance(sprint, int):
         return sprint
     if sprint.lower() in ("active", "current"):
-        sprints = _request(
-            "GET", f"/board/{BOARD_ID}/sprint", params={"state": "active"}, base=AGILE_URL
-        ).get("values", [])
-        if len(sprints) != 1:
-            names = [s.get("name") for s in sprints]
-            raise ToolError(
-                f"Expected one active sprint on board {BOARD_ID}, found {len(sprints)}: {names}"
-            )
-        return int(sprints[0]["id"])
-    start = 0
-    while True:
-        page = _request(
-            "GET",
-            f"/board/{BOARD_ID}/sprint",
-            params={"state": "active,future", "startAt": start},
-            base=AGILE_URL,
+        per_board = [
+            {int(s["id"]): s.get("name", "") for s in sprints}
+            for sprints in _project_sprints(project, "active")
+            if sprints
+        ]
+        common = set.intersection(*(set(b) for b in per_board)) if per_board else set()
+        if len(common) == 1:
+            return common.pop()
+        names = sorted({name for b in per_board for name in b.values()})
+        raise ToolError(
+            f"Cannot tell which sprint is active in {project}. Active sprints: "
+            f"{names or 'none'}. Pass the sprint name or ID."
         )
-        for s in page.get("values", []):
-            if s.get("name") == sprint:
-                return int(s["id"])
-        if page.get("isLast", True):
-            break
-        start += len(page.get("values", []))
-    raise ToolError(f"No active or future sprint named '{sprint}' on board {BOARD_ID}")
+    ids = {
+        int(s["id"])
+        for sprints in _project_sprints(project, "active,future")
+        for s in sprints
+        if s.get("name") == sprint
+    }
+    if len(ids) == 1:
+        return ids.pop()
+    if not ids:
+        raise ToolError(f"No active or future sprint in {project} is named '{sprint}'.")
+    raise ToolError(
+        f"Several sprints in {project} are named '{sprint}': IDs {sorted(ids)}. "
+        "Pass the sprint ID."
+    )
 
 
 def _add_to_sprint(key: str, sprint: int | str) -> None:
@@ -228,7 +255,7 @@ def _add_to_sprint(key: str, sprint: int | str) -> None:
     if isinstance(sprint, str) and sprint.lower() == "backlog":
         _request("POST", "/backlog/issue", json={"issues": [key]}, base=AGILE_URL)
         return
-    sprint_id = _resolve_sprint(sprint)
+    sprint_id = _resolve_sprint(key.split("-")[0], sprint)
     _request("POST", f"/sprint/{sprint_id}/issue", json={"issues": [key]}, base=AGILE_URL)
 
 
@@ -383,7 +410,7 @@ def get_issue(key: str, include_comments: int = 5) -> dict[str, Any]:
     Parameters
     ----------
     key
-        Issue key, e.g. 'MIC-7348'.
+        Issue key, e.g. 'ABC-123'.
     include_comments
         Number of most recent comments to return. Pass 0 for none.
     """
@@ -434,7 +461,7 @@ def search(jql: str, limit: int = 20) -> dict[str, Any]:
     Parameters
     ----------
     jql
-        JQL query, e.g. 'project = MIC AND status = "In Progress" ORDER BY updated DESC'.
+        JQL query, e.g. 'project = ABC AND status = "In Progress" ORDER BY updated DESC'.
     limit
         Maximum number of issues to return, at most 200.
     """
@@ -481,7 +508,7 @@ def create_issue(
     summary: str,
     description: str,
     issue_type: str = "Task",
-    project: str = DEFAULT_PROJECT,
+    project: str | None = None,
     priority: str | None = None,
     labels: list[str] | None = None,
     fix_versions: list[str] | None = None,
@@ -507,7 +534,8 @@ def create_issue(
     issue_type
         'Task', 'Story', 'Bug', 'Epic', or 'Sub-Task'.
     project
-        Project key. Defaults to MIC.
+        Project key, e.g. 'ABC'. Required unless the user set a default project in
+        the plugin's options.
     priority
         'Critical', 'Major', 'Medium', 'Minor', 'Trivial', or 'Blocked'.
     labels
@@ -515,7 +543,8 @@ def create_issue(
     fix_versions
         Names of existing fix versions in the project.
     story_points
-        Story points. In MIC, Bug and Sub-Task issues have no story points field.
+        Story points. Some projects leave this field off some issue types, such as
+        Bug, and Jira then rejects the value.
     epic
         Key of the epic to put the issue in. Not valid for an Epic or a Sub-Task.
     epic_name
@@ -531,6 +560,9 @@ def create_issue(
         type's outward or inward phrase: 'blocks', 'is blocked by', 'related to',
         'causes', 'is caused by', 'split to', 'split from'.
     """
+    project = project or DEFAULT_PROJECT
+    if not project:
+        raise ToolError(f"Pass project, or set a default project in {CONFIGURE_HINT}.")
     fields: dict[str, Any] = {
         "project": {"key": project},
         "summary": summary,
@@ -587,7 +619,7 @@ def update_issue(
     Parameters
     ----------
     key
-        Issue key, e.g. 'MIC-7348'.
+        Issue key, e.g. 'ABC-123'.
     summary
         New title.
     description
@@ -661,7 +693,7 @@ def add_comment(issue_key: str, body: str) -> dict[str, Any]:
     Parameters
     ----------
     issue_key
-        Issue key, e.g. 'MIC-7348'.
+        Issue key, e.g. 'ABC-123'.
     body
         Comment in Jira wiki markup, not Markdown. Use [~username] to notify someone.
     """
@@ -700,7 +732,7 @@ def list_transitions(issue_key: str) -> list[dict[str, Any]]:
     Parameters
     ----------
     issue_key
-        Issue key, e.g. 'MIC-7348'.
+        Issue key, e.g. 'ABC-123'.
     """
     data = _request(
         "GET", f"/issue/{issue_key}/transitions", params={"expand": "transitions.fields"}
@@ -726,7 +758,7 @@ def transition_issue(
     Parameters
     ----------
     issue_key
-        Issue key, e.g. 'MIC-7348'.
+        Issue key, e.g. 'ABC-123'.
     to_status
         Destination status (e.g. 'In Progress') or transition name, in any case.
         Destination status is matched first.

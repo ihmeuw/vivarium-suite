@@ -158,6 +158,15 @@ In more detail:
 These are slash commands too; Claude Code also loads them on its own when the
 conversation matches the skill's description.
 
+**Jira MCP server**
+
+- ``jira`` — a local MCP server for IHME's Jira (tools named
+  ``mcp__plugin_simsci_jira__*``). It gets, searches, creates, updates,
+  comments on, links, and transitions issues, including story points,
+  priority, fix versions, sprint, and epic. Sprint names and ``active`` resolve
+  against the scrum boards of the issue's own project. It needs ``uv`` and a
+  Jira personal access token; see `Jira access`_.
+
 Working alongside a team plugin
 ===============================
 
@@ -194,7 +203,10 @@ under ``tools/ai-tools-public/``:
   this plugin (``"source": "./tools/ai-tools-public"``) and the team's ``simsci-internal``
   plugin. Claude Code requires the marketplace catalog at the repo root for
   ``/plugin marketplace add ihmeuw/vivarium-suite`` to find it.
-- ``tools/ai-tools-public/.claude-plugin/plugin.json``: plugin manifest.
+- ``tools/ai-tools-public/.claude-plugin/plugin.json``: plugin manifest,
+  including the ``userConfig`` options for the Jira MCP server.
+- ``tools/ai-tools-public/.mcp.json`` and ``tools/ai-tools-public/mcp-servers/jira/``:
+  the ``jira`` MCP server, a single ``uv`` script with its unit tests next to it.
 - ``tools/ai-tools-public/agents/``: specialist sub-agents spawned by the
   workflow skills.
 - ``tools/ai-tools-public/skills/``: Claude Code skills — both the
@@ -270,12 +282,38 @@ under the sandbox configuration recommended below ``gh`` cannot read its
 credentials, so there the MCP is the only path. ``/simsci:git-rescue`` and
 ``/simsci:regression-debugger`` need only ``git``.
 
+Jira access
+-----------
+
+Only the ``jira`` MCP server needs this. The workflows above do not use it.
+
+1. Install `uv <https://docs.astral.sh/uv/>`_ and check that ``uv --version``
+   works. Claude Code starts the server with ``uv run --script``, which
+   installs the server's Python dependencies on first use.
+2. Create a Jira personal access token: in Jira, click your avatar, then
+   **Profile** > **Personal Access Tokens** > **Create token**. Jira shows it
+   only once. It has your Jira account's permissions, so treat it like a
+   password.
+3. Enter the token in the plugin's options. Claude Code asks for them when the
+   plugin is enabled. To set or change them later, run ``/plugin``, open
+   **Installed** > **simsci**, and choose **Configure options**. The token
+   field is masked, and Claude Code keeps the value in the system's secure
+   credential store, not in ``settings.json``. The optional **Default Jira
+   project** is the project that ``create_issue`` uses when no project is
+   given.
+4. Restart Claude Code and confirm in ``/mcp`` that ``plugin:simsci:jira`` is
+   connected.
+5. If you have the ``mcp-jira`` plugin from ``ihme-claude-marketplace``
+   installed, disable it, so that Claude uses this server's tools:
+   ``/plugin disable mcp-jira@ihme-claude-marketplace``.
+
 Before your first run
 ---------------------
 
-- **Claude Code**: a current release (``claude --version``). The plugin needs
-  no conda, Node, or IHME-specific tooling.
+- **Claude Code**: a current release (``claude --version``). The workflows
+  need no conda, Node, or IHME-specific tooling.
 - **GitHub access**: see above. Needed only by the PR-opening steps.
+- **Jira access**: see above. Needed only by the ``jira`` MCP server.
 - **Agent teams** (only for ``/simsci:type-hinter``): set
   ``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`` under ``env`` in
   ``~/.claude/settings.json`` or export it in the shell that launches

@@ -1,3 +1,12 @@
+**0.4.0 - 10/26/26**
+
+- Add a local ``jira`` MCP server for IHME's Jira to replace IHME Infra's
+  ``mcp-jira`` plugin
+- Add the ability to set story points, priority, fix versions, sprint, and epic,
+  retaining all other functionality of the Infra plugin
+- Ask for the Jira token and an optional default project in the plugin's
+  options (`MIC-7348 <https://jira.ihme.washington.edu/browse/MIC-7348>`_)
+
 **0.3.1 - 10/13/26**
 
 - Add a short testing strategy section to the ``/simsci:framework-development`` design proposal

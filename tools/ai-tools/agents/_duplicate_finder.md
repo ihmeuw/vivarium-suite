@@ -3,8 +3,8 @@ name: _duplicate_finder
 description: "Use when: checking candidate tickets against the Jira backlog for duplicates, returning a compact match list and keeping raw JQL search traffic out of the orchestrator's context."
 tools:
   # Read-only Jira MCP access only — checks candidate tickets against the backlog.
-  - mcp__plugin_simsci-internal_jira__search
-  - mcp__plugin_simsci-internal_jira__get_issue
+  - mcp__plugin_simsci_jira__search
+  - mcp__plugin_simsci_jira__get_issue
 user-invocable: false
 ---
 

@@ -1,10 +1,10 @@
 **0.29.0 - 10/26/26**
 
-- Add a local ``jira`` MCP server to replace IHME Infra's ``mcp-jira`` plugin
-- Add the ability to set story points, priority, fix versions, sprint, and epic,
-  retaining all other functionality of the Infra plugin
 - ``team-conventions``, ``ticket-triage``, ``_duplicate_finder``, and
-  ``_claim_auditor``: use the new ``jira`` server's tools
+  ``_claim_auditor``: use the ``jira`` MCP server from ``simsci`` 0.4.0 instead
+  of IHME Infra's ``mcp-jira`` plugin
+  (`MIC-7348 <https://jira.ihme.washington.edu/browse/MIC-7348>`_)
+- ``plugin-setup``: add the setup steps for the ``jira`` MCP server
 - ``ticket-triage``: set the epic in the ``create_issue`` call instead of asking
   the user to place the ticket after creation
 
