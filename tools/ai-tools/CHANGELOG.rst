@@ -1,11 +1,8 @@
 **0.29.0 - 10/26/26**
 
-- Add a local ``jira`` MCP server, forked from the FHS Engineering server, that
-  replaces IHME Infra's ``mcp-jira`` plugin. It reads and sets story points,
-  priority, fix versions, sprint, and epic, and keeps Infra's tool names and its
-  guard against dropping description macros. Setup needs ``uv`` and a Jira
-  personal access token (see ``plugin-setup``)
-  (`MIC-7348 <https://jira.ihme.washington.edu/browse/MIC-7348>`_)
+- Add a local ``jira`` MCP server to replace IHME Infra's ``mcp-jira`` plugin
+- Add the ability to set story points, priority, fix versions, sprint, and epic,
+  retaining all other functionality of the Infra plugin
 - ``team-conventions``, ``ticket-triage``, ``_duplicate_finder``, and
   ``_claim_auditor``: use the new ``jira`` server's tools
 - ``ticket-triage``: set the epic in the ``create_issue`` call instead of asking

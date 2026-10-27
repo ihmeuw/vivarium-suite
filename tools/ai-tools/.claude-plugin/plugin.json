@@ -10,5 +10,25 @@
         "simsci",
         { "name": "slack", "marketplace": "claude-plugins-official" },
         { "name": "github", "marketplace": "claude-plugins-official" }
-    ]
+    ],
+    "userConfig": {
+        "jira_api_token": {
+            "type": "string",
+            "title": "Jira personal access token",
+            "description": "Used by the jira MCP server. Create one in Jira under Profile > Personal Access Tokens.",
+            "sensitive": true
+        },
+        "jira_project": {
+            "type": "string",
+            "title": "Default Jira project",
+            "description": "Project key that the jira MCP server creates issues in when none is given.",
+            "default": "MIC"
+        },
+        "jira_board_id": {
+            "type": "number",
+            "title": "Jira board ID",
+            "description": "Scrum board that sprint names and 'active' resolve against. 301 is the MIC board.",
+            "default": 301
+        }
+    }
 }

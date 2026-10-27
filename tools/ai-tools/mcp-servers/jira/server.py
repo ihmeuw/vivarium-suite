@@ -7,30 +7,39 @@
 # ///
 """Jira MCP server for the SimSci team.
 
-Forked from the FHS Engineering server in ``ihme-internal/fhseng-claude-utils``
-(``mcp-servers/jira``). It adds the fields that IHME Infra's hosted Jira MCP does
-not expose: story points, fix versions on create, priority, and sprint.
+Gets, searches, creates, updates, comments on, links, and transitions issues on
+IHME's Jira, including story points, priority, fix versions, sprint, and epic.
 
-Auth is a Jira personal access token in ``JIRA_API_TOKEN``. If the environment
-does not set it, the server reads it from ``~/.tokens``.
+Its settings come from the plugin's ``userConfig`` options, which Claude Code
+passes in as environment variables: ``JIRA_API_TOKEN`` (a Jira personal access
+token), ``JIRA_PROJECT``, and ``JIRA_BOARD_ID``.
 """
 
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 import httpx
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-BASE_URL = os.environ.get("JIRA_BASE_URL", "https://jira.ihme.washington.edu")
+
+def _setting(name: str, default: str = "") -> str:
+    """Return an environment setting, or the default if it is empty or unsubstituted."""
+    value = os.environ.get(name, "").strip()
+    # An option the user left empty can arrive as the literal ${user_config.*} text.
+    if not value or value.startswith("${"):
+        return default
+    return value
+
+
+BASE_URL = "https://jira.ihme.washington.edu"
 API_URL = f"{BASE_URL}/rest/api/2"
 AGILE_URL = f"{BASE_URL}/rest/agile/1.0"
-DEFAULT_PROJECT = os.environ.get("JIRA_PROJECT", "MIC")
+DEFAULT_PROJECT = _setting("JIRA_PROJECT", "MIC")
 # Four scrum boards list MIC, and board 367 has a second active sprint, so the
 # board that sprint names resolve against is pinned rather than inferred.
-BOARD_ID = int(os.environ.get("JIRA_BOARD_ID", "301"))
+BOARD_ID = int(float(_setting("JIRA_BOARD_ID", "301")))
 
 # IHME's custom field IDs differ from Atlassian's documented defaults. Found
 # with GET /rest/api/2/field.
@@ -79,8 +88,6 @@ SEARCH_FIELDS = ",".join(
 MACRO_RE = re.compile(
     r"\{(code|noformat|panel|quote|info|warning|note|tip|expand|color)(?::[^}]*)?\}"
 )
-TOKEN_RE = re.compile(r"""^(?:export\s+)?JIRA_API_TOKEN=(['"]?)(.*?)\1\s*$""")
-
 mcp = MCPServer("jira")
 
 
@@ -88,21 +95,15 @@ mcp = MCPServer("jira")
 
 
 def _token() -> str:
-    """Return the Jira token from the environment or ``~/.tokens``."""
-    token = os.environ.get("JIRA_API_TOKEN")
-    if token:
-        return token
-    tokens_file = Path.home() / ".tokens"
-    if tokens_file.exists():
-        for line in tokens_file.read_text().splitlines():
-            match = TOKEN_RE.match(line.strip())
-            if match:
-                return match.group(2)
-    raise ToolError(
-        "JIRA_API_TOKEN is not set. Create a personal access token in Jira "
-        "(Profile > Personal Access Tokens) and add "
-        "'export JIRA_API_TOKEN=<token>' to ~/.tokens."
-    )
+    """Return the Jira personal access token."""
+    token = _setting("JIRA_API_TOKEN")
+    if not token:
+        raise ToolError(
+            "No Jira token is set. Create a personal access token in Jira (Profile > "
+            "Personal Access Tokens), then enter it in /plugin > Installed > "
+            "simsci-internal > Configure options, and restart Claude Code."
+        )
+    return token
 
 
 def _error_detail(response: httpx.Response) -> str:

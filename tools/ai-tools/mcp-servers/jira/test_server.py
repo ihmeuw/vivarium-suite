@@ -41,18 +41,27 @@ def jira(monkeypatch: pytest.MonkeyPatch) -> FakeJira:
     return fake
 
 
-def test_token_read_from_tokens_file(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
-    monkeypatch.setattr(server.Path, "home", lambda: tmp_path)
-    (tmp_path / ".tokens").write_text("export OTHER=1\nexport JIRA_API_TOKEN='abc123'\n")
+def test_token_read_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("JIRA_API_TOKEN", " abc123 ")
     assert server._token() == "abc123"
 
 
-def test_token_missing_raises(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
-    monkeypatch.setattr(server.Path, "home", lambda: tmp_path)
-    with pytest.raises(ToolError, match="JIRA_API_TOKEN is not set"):
+@pytest.mark.parametrize("value", [None, "", "${user_config.jira_api_token}"])
+def test_token_missing_raises(monkeypatch, value) -> None:
+    if value is None:
+        monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("JIRA_API_TOKEN", value)
+    with pytest.raises(ToolError, match="Configure options"):
         server._token()
+
+
+@pytest.mark.parametrize(
+    "value, expected", [("PROJ", "PROJ"), ("", "MIC"), ("${user_config.jira_project}", "MIC")]
+)
+def test_setting_falls_back_to_default(monkeypatch, value, expected) -> None:
+    monkeypatch.setenv("JIRA_PROJECT", value)
+    assert server._setting("JIRA_PROJECT", "MIC") == expected
 
 
 @pytest.mark.parametrize(

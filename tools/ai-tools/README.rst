@@ -98,12 +98,11 @@ Loaded automatically when the context is relevant to the skill's description.
 
 **MCP servers**
 
-- ``jira`` — a local Jira MCP server, forked from the FHS Engineering server in
-  ``ihme-internal/fhseng-claude-utils``. It replaces IHME Infra's hosted
-  ``mcp-jira`` plugin for SimSci work: in addition to get, search, comment,
-  link, and transition tools, it reads and sets story points, priority, fix
-  versions, sprint, and epic. Needs ``uv`` and a Jira personal access token;
-  the ``plugin-setup`` skill walks through both.
+- ``jira`` — a local Jira MCP server. It gets, searches, creates, updates,
+  comments on, links, and transitions issues, including story points,
+  priority, fix versions, sprint, and epic. It defaults to the MIC project and
+  board, and the plugin's configuration dialog asks for the Jira personal
+  access token it uses. The ``plugin-setup`` skill walks through the setup.
 
 Layout
 ======
@@ -148,6 +147,10 @@ This plugin is for Simulation Science team members. It assumes access to the
 team's Jira project, hub space, Jenkins, and Slack channel, and its skills
 redirect ``simsci``'s optional seams to SimSci conventions. Other IHME teams
 should install ``simsci`` only.
+
+The ``jira`` MCP server also needs `uv <https://docs.astral.sh/uv/>`_ on the
+``PATH`` and a Jira personal access token. Ask Claude to run the
+``plugin-setup`` skill after installing.
 
 For local development against a checked-out monorepo, point ``marketplace add``
 at the repo root (the directory containing ``.claude-plugin/``), not at
