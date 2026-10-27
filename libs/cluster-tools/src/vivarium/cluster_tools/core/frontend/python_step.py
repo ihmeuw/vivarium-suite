@@ -10,8 +10,8 @@ target as its resolved file path, which the target reads itself; only the
 returned DataFrame is autosaved, to the product's path, in the format named by
 the product key's suffix.
 
-Code identity defaults to always-stale: a per-target code fingerprint is deferred
-(MIC-7520), so in this cut a step re-runs on every build.
+Code identity defaults to always-stale: a per-target code fingerprint is deferred,
+so in this cut a step re-runs on every build.
 """
 
 from collections.abc import Callable, Mapping
@@ -117,6 +117,8 @@ def python_step(
         frame = target(**kwargs)
         save(frame, product_path)
 
+    # TODO(MIC-7520): let a step declare an opt-in code fingerprint so it can skip
+    # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(
         name=produces,
         run=_run_step,
