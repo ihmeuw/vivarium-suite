@@ -253,7 +253,7 @@ class BaseSimulationContext(ABC):
 
     @property
     def current_time(self) -> ClockTime:
-        """Returns the current simulation time."""
+        """Return the current simulation time."""
         return self._clock.time
 
     def get_results(self) -> dict[str, pd.DataFrame]:
