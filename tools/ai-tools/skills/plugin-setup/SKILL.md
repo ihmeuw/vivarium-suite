@@ -168,7 +168,9 @@ Restart Claude Code and run `/mcp`. The `plugin:simsci:jira` server must show
 as connected. If it shows `Executable not found in $PATH: "uv"`, `uv` is not on
 the `PATH` of the shell that starts `claude`. Fix that (step 1), then restart.
 Until the server connects, Claude has no Jira tools and gets no error that
-names the cause. Then ask Claude to get any MIC ticket. The result must include
+names the cause. Claude Code remembers a failed connection for up to 15
+minutes, also across restarts. If `/mcp` then says that a recent failure is
+cached, wait until the 15 minutes have passed and restart again. Then ask Claude to get any MIC ticket. The result must include
 `story_points`. If the token is missing, the Jira tools return an error that
 points to **Configure options**.
 

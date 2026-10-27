@@ -305,7 +305,10 @@ Only the ``jira`` MCP server needs this. The workflows above do not use it.
 4. Restart Claude Code and confirm in ``/mcp`` that ``plugin:simsci:jira`` is
    connected. If it shows ``Executable not found in $PATH: "uv"``, install
    ``uv`` in a place on the ``PATH`` of the shell that starts ``claude``, then
-   restart. Until the server connects, Claude has no Jira tools.
+   restart. Until the server connects, Claude has no Jira tools. Claude Code
+   remembers a failed connection for up to 15 minutes, also across restarts.
+   If ``/mcp`` then says that a recent failure is cached, wait until the 15
+   minutes have passed and restart again.
 5. If you have the ``mcp-jira`` plugin from ``ihme-claude-marketplace``
    installed, disable it, so that Claude uses this server's tools:
    ``/plugin disable mcp-jira@ihme-claude-marketplace``.

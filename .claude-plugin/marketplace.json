@@ -22,7 +22,7 @@
         "source": "url",
         "url": "https://github.com/ihmeuw/vivarium-research-tools.git"
       },
-      "description": "For the IHME Simulation Science research team: a reviewer-first summary of a session's prompts, human review, and unverified content, and filing SSCI Jira tickets (needs the mcp-jira plugin). Lives in the vivarium-research-tools repo."
+      "description": "For the IHME Simulation Science research team: a reviewer-first summary of a session's prompts, human review, and unverified content, and filing SSCI Jira tickets with the Jira tools from simsci, which it depends on. Lives in the vivarium-research-tools repo."
     }
   ]
 }
