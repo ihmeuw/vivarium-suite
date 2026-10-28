@@ -1,3 +1,9 @@
+**0.31.0 - 10/28/26**
+
+- ``model-development``: pass the iteration plan's change list and quantitative
+  expectations, and the verification checks, to ``simsci:_finalize-core`` for the
+  test summary (requires ``simsci`` 0.5.0)
+
 **0.30.0 - 10/27/26**
 
 - ``team-conventions``: after a PR leaves draft and is posted to
