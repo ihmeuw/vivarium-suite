@@ -319,11 +319,6 @@ class BaseSimulation(ABC):
         return f"{type(self).__name__}({self.name})"
 
 
-# vivarium-interactive 1.0.0 subclasses BaseSimulationContext and allows engine 6, and engine's
-# release tests install it from PyPI. Remove this name once vivarium-interactive 1.0.1 is out.
-BaseSimulationContext = BaseSimulation
-
-
 class Simulation(BaseSimulation):
     """A simulation context that runs a simulation from start to finish.
 
