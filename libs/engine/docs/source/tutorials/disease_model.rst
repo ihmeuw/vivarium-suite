@@ -931,7 +931,7 @@ observations up to this point in the simulation.
 
 Note that the ``observe=True`` below is required: a
 ``Simulation`` does not observe results by default. See
-`getting results <https://vivarium-interactive.readthedocs.io/en/latest/tutorials/exploration.html#interactive-results>`_
+:ref:`getting results <vivarium_interactive:interactive_results>`
 for what that means and why.
 
 .. code-block:: python

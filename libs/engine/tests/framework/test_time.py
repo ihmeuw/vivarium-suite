@@ -13,7 +13,7 @@ from vivarium.interactive import Simulation as InteractiveSimulation
 
 from tests.helpers import Listener, MockComponentA, MockComponentB, MockGenericComponent
 from vivarium.engine.component import Component
-from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.engine import Builder, Simulation
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.time.manager import SimulationClock, get_time_stamp
 from vivarium.engine.framework.utilities import from_yearly
@@ -40,16 +40,14 @@ def components() -> list[Component | Listener]:
     ]
 
 
-def validate_step_column_is_pipeline(sim: SimulationContext) -> None:
+def validate_step_column_is_pipeline(sim: Simulation) -> None:
     """Ensure that the pipeline and column step sizes are aligned"""
     step_pipeline = sim._values.get_value("simulant_step_size")(sim.get_population_index())
     assert sim._clock._individual_clocks is not None
     assert np.all(step_pipeline == sim._clock._individual_clocks["step_size"])
 
 
-def validate_index_aligned(
-    sim: SimulationContext, expected_active_simulants: pd.Index[int]
-) -> None:
+def validate_index_aligned(sim: Simulation, expected_active_simulants: pd.Index[int]) -> None:
     """Ensure that the active simulants are as expected BEFORE a step"""
     active_simulants = sim._clock.get_active_simulants(
         get_full_pop_index(sim), sim._clock.event_time
@@ -66,14 +64,14 @@ def validate_event_indexes(listener: Listener, expected_simulants: pd.Index[int]
         assert index.equals(expected_simulants)
 
 
-def take_step(sim: SimulationContext) -> ClockStepSize:
+def take_step(sim: Simulation) -> ClockStepSize:
     old_time = sim._clock.time
     sim.step()
     new_time = sim._clock.time
     return new_time - old_time  # type: ignore [operator]
 
 
-def get_full_pop_index(sim: SimulationContext) -> pd.Index[int]:
+def get_full_pop_index(sim: Simulation) -> pd.Index[int]:
     return sim.get_population_index()
 
 
@@ -86,13 +84,13 @@ def get_index_by_parity(index: pd.Index[int], parity: str) -> pd.Index[int]:
         return index
 
 
-def get_pop_by_parity(sim: SimulationContext, parity: str) -> pd.DataFrame:
+def get_pop_by_parity(sim: Simulation, parity: str) -> pd.DataFrame:
     pop = pd.DataFrame(sim._population.get_population("all"))
     return pop.loc[get_index_by_parity(pop.index, parity)]
 
 
 def pipeline_by_parity(
-    sim: SimulationContext, step_modifiers: dict[str, int], parity: str
+    sim: Simulation, step_modifiers: dict[str, int], parity: str
 ) -> pd.Series[Any]:
     if parity == "all":
         modified_series: pd.Series[float] = pd.concat(
@@ -109,7 +107,7 @@ def pipeline_by_parity(
 
 
 def take_step_and_validate(
-    sim: SimulationContext,
+    sim: Simulation,
     listener: Listener,
     expected_simulants: pd.Index[int],
     expected_step_size_days: int,
@@ -210,7 +208,7 @@ def test_basic_iteration(
     """
     if varied_step_size:
         components.append(StepModifier("step_modifier", 1))
-    sim = SimulationContext(base_config, components)
+    sim = Simulation(base_config, components)
     listener = [c for c in components if hasattr(c, "args") and "listener" in c.args][0]
     assert isinstance(listener, Listener)
     sim.setup()
@@ -244,7 +242,7 @@ def test_empty_active_pop(
     """Make sure that if we have no active simulants, we still take a step, given
     by the minimum step size."""
     components.append(StepModifier("step_modifier", 1))
-    sim = SimulationContext(base_config, components)
+    sim = Simulation(base_config, components)
     listener = [c for c in components if hasattr(c, "args") and "listener" in c.args][0]
     assert isinstance(listener, Listener)
     sim.setup()
@@ -279,7 +277,7 @@ def test_skip_iterations(
 ) -> None:
     """Test that if everyone has some (non-minimum) step size, the global step adjusts to match"""
     listener = Listener("listener")
-    sim = SimulationContext(
+    sim = Simulation(
         base_config,
         [StepModifier("step_modifier", step_modifier_even, step_modifier_odd), listener],
     )
@@ -310,7 +308,7 @@ def test_uneven_steps(base_config: ConfigTree) -> None:
     step_modifier_component = StepModifierWithRatePipeline(
         "step_modifier", step_modifiers["evens"], step_modifiers["odds"]
     )
-    sim = SimulationContext(
+    sim = Simulation(
         base_config,
         [step_modifier_component, listener],
     )
@@ -349,7 +347,7 @@ def test_partial_modification(base_config: ConfigTree) -> None:
     step_modifier_component = StepModifierWithRatePipeline(
         "step_modifier", step_modifiers["evens"], modified_simulants="evens"
     )
-    sim = SimulationContext(
+    sim = Simulation(
         base_config,
         [step_modifier_component, listener],
     )
@@ -388,7 +386,7 @@ def test_standard_step_size(base_config: ConfigTree) -> None:
     step_modifier_component = StepModifierWithRatePipeline(
         "step_modifier", step_modifiers["evens"], modified_simulants="evens"
     )
-    sim = SimulationContext(
+    sim = Simulation(
         base_config,
         [step_modifier_component, listener],
     )
@@ -431,7 +429,7 @@ def test_multiple_modifiers(base_config: ConfigTree) -> None:
         step_modifiers["odds"],
         modified_simulants="odds",
     )
-    sim = SimulationContext(
+    sim = Simulation(
         base_config,
         [step_modifier_A, step_modifier_B, listener],
     )
@@ -459,7 +457,7 @@ def test_move_simulants_to_end(base_config: ConfigTree) -> None:
     base_config.update({"configuration": {"time": {"standard_step_size": 7}}})
     listener = Listener("listener")
     step_modifier_component = StepModifierWithMovement("step_modifier", 3)
-    sim = SimulationContext(
+    sim = Simulation(
         base_config,
         [step_modifier_component, listener],
     )
@@ -527,7 +525,7 @@ def test_time_steps_remaining(base_config: ConfigTree, end_day: int) -> None:
             },
         },
     )
-    sim = SimulationContext(
+    sim = Simulation(
         base_config,
         [UselessComponent],
     )
@@ -559,7 +557,7 @@ def test_simple_clock_time_steps_remaining(base_config: ConfigTree, end: int) ->
             },
         },
     )
-    sim = SimulationContext(
+    sim = Simulation(
         base_config,
         [UselessComponent],
     )

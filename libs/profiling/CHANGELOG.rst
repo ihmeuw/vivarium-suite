@@ -1,3 +1,8 @@
+**0.7.0 - 10/28/26**
+
+- Require ``vivarium-engine`` 6 and, for the ``cluster`` extra,
+  ``vivarium-cluster-tools`` 4.8.0
+
 **0.6.2 - 10/20/26**
 
 - Use the pytest-vivarium ``cluster`` marker for the SLURM-only parser test
