@@ -57,10 +57,10 @@ Before any externally-facing action (pushing, opening a PR, tagging a release), 
 
 Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst` is touched on `main`. The workflow:
 
-1. Parses the version from the first CHANGELOG line - format is `**X.Y.Z - MM/DD/YY**` (2-digit year, Pacific date matching the push day).
-2. Creates and pushes a `<dist>-v<X.Y.Z>` tag, where `<dist>` is the package's `[project].name` (`vivarium-<pkg>` for all libs except `pytest-vivarium`). The tag prefix is derived from `pyproject.toml`, not assumed to be `vivarium-<pkg>`.
-3. Runs `make validate-tag` with `TAG_PREFIX=<dist>-` so the validator strips the per-lib prefix before semver parsing and scopes its "previous tag" lookup to that lib only.
-4. Builds and publishes to PyPI, then creates a GitHub Release.
+1. Parses the version from the first CHANGELOG line - format is `**X.Y.Z - MM/DD/YY**`, or `**X.Y.ZbN - MM/DD/YY**` for a beta (2-digit year, Pacific date matching the push day). Beta is the only supported pre-release.
+2. Creates and pushes a `<dist>-v<X.Y.Z>` tag (`<dist>-v<X.Y.ZbN>` for a beta), where `<dist>` is the package's `[project].name` (`vivarium-<pkg>` for all libs except `pytest-vivarium`). The tag prefix is derived from `pyproject.toml`, not assumed to be `vivarium-<pkg>`.
+3. Runs `make validate-tag` (`vivarium.build_utils.release_version`) with `TAG_PREFIX=<dist>-` so the validator strips the per-lib prefix before parsing and scopes its "previous tag" lookup to that lib only.
+4. Builds and publishes to PyPI, then creates a GitHub Release. A beta's release is marked Pre-release and not Latest.
 
 `workflow_dispatch` and `release: published` paths exist for manual/recovery releases of a specific lib.
 

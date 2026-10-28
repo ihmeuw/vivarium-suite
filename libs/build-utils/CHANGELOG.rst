@@ -1,3 +1,14 @@
+**4.12.0 - 10/28/26**
+
+- Support beta releases (``X.Y.ZbN``) in ``PACKAGE_VERSION``, the Jenkins changelog
+  check, and ``make validate-tag``
+- Replace ``validate_tag_version.sh`` with the ``vivarium.build_utils.release_version``
+  module, which checks the beta version steps
+- Leave the ``current`` docs link on the last final when ``make deploy-docs``
+  publishes a beta
+- Run ``make validate-tag`` in the Jenkins deploy before tagging. Without a release
+  tag set, it checks the tag ``make tag-version`` would create
+
 **4.11.0 - 10/27/26**
 
 - Run Sphinx directly in ``build-docs`` and ``test-docs`` instead of through
