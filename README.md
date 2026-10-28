@@ -19,6 +19,7 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 | `libs/pytest-vivarium/` | `pytest-vivarium` | *(pytest plugin — auto-loaded)* | https://pytest-vivarium.readthedocs.io |
 | `libs/risk-distributions/` | `vivarium-risk-distributions` | `import vivarium.risk_distributions` | https://vivarium-risk-distributions.readthedocs.io |
 | `libs/validation/` | `vivarium-validation` | `import vivarium.validation` | https://vivarium-validation.readthedocs.io |
+| `libs/workflow/` | `vivarium-workflow` | `import vivarium.workflow` | https://vivarium-workflow.readthedocs.io |
 
 ## Tools
 
