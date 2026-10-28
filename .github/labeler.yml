@@ -50,6 +50,10 @@ pytest-vivarium:
   - changed-files:
     - any-glob-to-any-file: 'libs/pytest-vivarium/**'
 
+workflow:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/workflow/**'
+
 ai-tools:
   - changed-files:
     - any-glob-to-any-file: 'tools/ai-tools/**'

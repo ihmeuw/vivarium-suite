@@ -34,7 +34,6 @@ dependencies = [
     "vivarium-config-tree>=5.0.0",
     "dill",
     "psutil",
-    "pytask>=0.6.0,<0.7.0",
 ]
 
 [project.optional-dependencies]
