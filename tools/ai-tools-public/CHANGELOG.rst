@@ -1,8 +1,7 @@
 **0.4.1 - 10/28/26**
 
 - README: name the plugin by its display name, Simulation Science Dev AI Tools,
-  in the Jira access steps, and add ``/reload-plugins`` for a session that
-  does not show **Configure options**
+  in the Jira access steps
 
 **0.4.0 - 10/26/26**
 

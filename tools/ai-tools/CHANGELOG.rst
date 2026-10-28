@@ -1,8 +1,7 @@
 **0.30.1 - 10/28/26**
 
 - ``plugin-setup``: name ``simsci`` by its display name, Simulation Science Dev
-  AI Tools, and add ``/reload-plugins`` for a session that does not show
-  **Configure options**
+  AI Tools
 
 **0.30.0 - 10/27/26**
 
