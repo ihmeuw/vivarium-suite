@@ -1,3 +1,12 @@
+**4.8.0 - 10/28/26**
+
+- Import Jobmon lazily in ``core.jobmon``, so ``core.jobmon.env`` and
+  ``core.jobmon.cli_options`` import without the ``cluster`` extra.
+- Name the environment in every environment-resolution error, including a failing
+  conda lookup and a path that cannot be checked.
+- Stop adding an empty ``PATH`` entry, which means the current directory, for a venv
+  whose ``pyvenv.cfg`` has an empty ``home``.
+
 **4.7.2 - 10/12/26**
 
 - Tie the positional-argument deprecation test to the 5.0.0 release instead of a date
