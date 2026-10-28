@@ -141,8 +141,11 @@ def test_bin_path_appends_the_base_bin_for_a_venv(tmp_path: Path) -> None:
         (None, "could not be run"),
         ("#!/bin/sh\nexit 1\n", "status"),
         ("#!/bin/sh\necho 'not json'\n", "JSON"),
+        ("#!/bin/sh\necho '{}'\n", "JSON"),
+        ("#!/bin/sh\necho '{\"envs\": null}'\n", "JSON"),
+        ("#!/bin/sh\necho '[]'\n", "JSON"),
     ],
-    ids=["missing", "nonzero_exit", "not_json"],
+    ids=["missing", "nonzero_exit", "not_json", "no_envs_list", "null_envs", "not_an_object"],
 )
 def test_a_failing_conda_lookup_raises_a_runtime_error_naming_the_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str | None, cause: str
@@ -162,11 +165,15 @@ def test_a_failing_conda_lookup_raises_a_runtime_error_naming_the_env(
     assert cause in str(info.value)
 
 
+@pytest.mark.parametrize("conda_exe", [None, ""], ids=["unset", "empty"])
 def test_an_unknown_name_says_when_conda_was_not_searched(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conda_exe: str | None
 ) -> None:
     """With CONDA_EXE unset, the error for an unknown name says conda was not searched because CONDA_EXE is not set."""
-    monkeypatch.delenv("CONDA_EXE", raising=False)
+    if conda_exe is None:
+        monkeypatch.delenv("CONDA_EXE", raising=False)
+    else:
+        monkeypatch.setenv("CONDA_EXE", conda_exe)
     monkeypatch.chdir(tmp_path)
 
     with pytest.raises(RuntimeError) as info:
