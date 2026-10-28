@@ -156,3 +156,16 @@ def test_registry_wires_a_runnable_pipeline(tmp_path: Path) -> None:
         "make_final": TaskOutcome.SUCCESS,
     }
     assert final.path.read_text() == "hello"  # data flowed producer -> consumer
+
+
+def test_register_output_rejects_a_root_input_key(tmp_path: Path) -> None:
+    """Registering an output under a declared root-input key raises WiringError naming the key and its source path."""
+    source = tmp_path / "delivered.csv"
+    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"coverage": source})
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.register_output("coverage")
+
+    message = str(excinfo.value)
+    assert "coverage" in message
+    assert str(source) in message

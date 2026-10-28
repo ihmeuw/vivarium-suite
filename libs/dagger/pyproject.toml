@@ -47,7 +47,7 @@ test = [
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
-lint = ["vivarium-dependencies[lint]"]
+lint = ["vivarium-dependencies[lint]", "pyarrow-stubs"]
 dev = ["vivarium-dagger[test,docs,interactive,lint,cluster,simulation]"]
 ci_github = ["vivarium-dagger[test,docs,lint,simulation]"]
 ci_jenkins = ["vivarium-dagger[ci_github,cluster]"]
