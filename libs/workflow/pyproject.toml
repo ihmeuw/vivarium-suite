@@ -94,7 +94,7 @@ strict = true
 disallow_any_unimported = false
 implicit_reexport = true
 exclude = [
-    "build",
+    "(^|/)build/",
     "docs/source/conf.py",
 ]
 mypy_path = "src"

@@ -2,10 +2,10 @@ import re
 import subprocess
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
-from pytask import PNode, TaskOutcome
+from pytask import PNode, PythonNode, TaskOutcome
 
 from vivarium.workflow.backend.build import (
     CODE_ID_KEY,
@@ -92,7 +92,8 @@ def test_to_pytask_task_maps_fields() -> None:
     assert pytask_task.depends_on.keys() == {"raw", CODE_ID_KEY, COMMAND_KEY}
     assert pytask_task.depends_on["raw"] is raw
     assert pytask_task.depends_on[CODE_ID_KEY] is code_id
-    assert pytask_task.depends_on[COMMAND_KEY].load() == "true"
+    command = cast(PythonNode, pytask_task.depends_on[COMMAND_KEY])
+    assert command.load() == "true"
     assert pytask_task.produces == {"out-file": clean}
     assert pytask_task.attributes[TASK_KEY] is task
     assert COMMAND_KEY not in to_pytask_task(_task("fn", _noop)).depends_on
