@@ -334,7 +334,7 @@ Example Usage
 ~~~~~~~~~~~~~
 
 The following is an example of creating and calling a lookup table in an
-`interactive setting <https://vivarium-interactive.readthedocs.io/en/latest/tutorials/interactive.html>`_ using the data from
+:ref:`interactive setting <vivarium_interactive:interactive_tutorial>` using the data from
 `Construction Parameters`_ above. The interface and process are the same when
 integrating a lookup table into a :term:`component <Component>`, which is
 primarily how they are used. Assuming you have a valid simulation object

@@ -31,8 +31,8 @@ simulations are created by a call to the ``__init__`` of the
 at some level and wrappers around the context should try to be as thin as
 possible around simulation creation. The
 :class:`Simulation <vivarium.engine.framework.engine.Simulation>`
-runs a simulation from start to finish, and the
-``Simulation`` class from `vivarium-interactive <https://vivarium-interactive.readthedocs.io/en/latest/>`_
+runs a simulation from start to finish, and
+:class:`vivarium.interactive.Simulation <vivarium.interactive.simulation.Simulation>`
 runs one interactively. Both build on the base context.
 
 The context accepts four arguments:
@@ -123,10 +123,10 @@ different output directories.
 During model development and debugging, it is frequently more useful to
 work in an interactive setting like a
 `jupyter notebook <https://jupyter.org>`_ or a Python REPL. For this sort of
-work, the `vivarium-interactive <https://vivarium-interactive.readthedocs.io/en/latest/>`_ package provides the
-``vivarium.interactive.Simulation`` class. Details about the many ways to
+work, the :doc:`vivarium-interactive <vivarium_interactive:index>` package provides the
+:class:`vivarium.interactive.Simulation <vivarium.interactive.simulation.Simulation>` class. Details about the many ways to
 initialize and run a simulation interactively are available in the
-`interactive tutorial <https://vivarium-interactive.readthedocs.io/en/latest/tutorials/interactive.html>`_.
+:ref:`interactive tutorial <vivarium_interactive:interactive_tutorial>`.
 
 :mod:`vivarium.engine` itself does not provide tools for running simulations in
 a distributed system, mostly because each cluster is unique. However, many

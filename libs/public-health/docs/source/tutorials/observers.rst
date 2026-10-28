@@ -67,7 +67,7 @@ Common Setup
    config = make_base_config()
 
 Every example below passes ``observe=True``. A
-``vivarium.interactive.Simulation`` does not gather
+:class:`vivarium.interactive.Simulation <vivarium.interactive.simulation.Simulation>` does not gather
 results by default since an interactive session is usually for inspecting the
 simulation rather than measuring it. However, this tutorial is about the results
 themselves.
