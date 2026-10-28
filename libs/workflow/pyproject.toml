@@ -42,7 +42,7 @@ test = [
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
-lint = ["vivarium-dependencies[lint]"]
+lint = ["vivarium-dependencies[lint]", "pyarrow-stubs"]
 dev = ["vivarium-workflow[test,docs,interactive,lint]"]
 ci_github = ["vivarium-workflow[test,docs,lint]"]
 ci_jenkins = ["vivarium-workflow[ci_github,cluster]"]
