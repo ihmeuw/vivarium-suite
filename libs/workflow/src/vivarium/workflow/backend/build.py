@@ -2,6 +2,7 @@
 
 import inspect
 import keyword
+import os
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any
 
 import pytask
 
+from vivarium.workflow.backend.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.workflow.backend.task import Task, check_unique_task_names
 
 CODE_ID_KEY = "__code_id__"
@@ -21,6 +23,56 @@ TASK_KEY = "task"
 """Key under which a pytask task's attributes hold its shared-representation task."""
 
 
+def run_command(command: str, env: str | None) -> None:
+    """Run ``command`` in a shell with ``env``'s ``bin`` directories first on ``PATH``.
+
+    The directories are set on the child process's ``PATH``, so they apply to every part
+    of a compound command such as ``a && b``. Output goes to this process's standard
+    output and standard error.
+
+    Parameters
+    ----------
+    command
+        The shell command to run.
+    env
+        The environment to run it in: a name or a prefix path, as
+        :func:`~vivarium.workflow.backend.env.resolve_env_prefix` accepts. ``None`` runs
+        the command with the current ``PATH``.
+
+    Raises
+    ------
+    RuntimeError
+        If ``env`` does not resolve.
+    subprocess.CalledProcessError
+        If the command exits with a non-zero status.
+    """
+    if env is None:
+        subprocess.run(command, shell=True, check=True)
+        return
+    bin_path = resolve_env_bin_path(resolve_env_prefix(env))
+    path = ":".join(part for part in (bin_path, os.environ.get("PATH", "")) if part)
+    subprocess.run(command, shell=True, check=True, env={**os.environ, "PATH": path})
+
+
+def _check_envs(tasks: Iterable[Task]) -> None:
+    """Resolve each distinct declared env once; raise one ValueError listing the bad ones."""
+    declarers: dict[str, list[str]] = {}
+    for task in tasks:
+        if task.env is not None:
+            declarers.setdefault(task.env, []).append(task.name)
+    failures: list[str] = []
+    for env, names in declarers.items():
+        try:
+            resolve_env_prefix(env)
+        except RuntimeError as error:
+            tasks_named = ", ".join(f"Task '{name}'" for name in names)
+            failures.append(f"{tasks_named}: {error}")
+    if failures:
+        raise ValueError(
+            "Declared envs do not resolve, so no task was run:\n" + "\n".join(failures)
+        )
+
+
 def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     """Convert a shared-representation task into a pytask task.
 
@@ -28,7 +80,7 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     and on a command-string ``run`` under ``COMMAND_KEY``. It produces ``task.outputs``
     and keeps ``task`` in its attributes under ``TASK_KEY``. Running it calls a callable
     ``run`` with each loaded input and output by name, or runs a command-string ``run``
-    in a shell.
+    through :func:`run_command` under the task's ``env``.
 
     Parameters
     ----------
@@ -58,9 +110,10 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
 
     def _run(**kwargs: Any) -> None:
         """Run ``task`` with its loaded inputs and outputs."""
+        __tracebackhide__ = True
         kwargs.pop(CODE_ID_KEY, None)
         if isinstance(task.run, str):
-            subprocess.run(task.run, shell=True, check=True)
+            run_command(task.run, task.env)
         else:
             task.run(**kwargs)
 
@@ -118,10 +171,13 @@ def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
     Raises
     ------
     ValueError
-        If two tasks share a name or a task cannot be converted.
+        If two tasks share a name, a task cannot be converted, or a declared env does not
+        resolve. Envs are checked before any task runs. The error has one line per env that
+        does not resolve, naming that env once, the tasks that declare it, and why.
     """
     tasks = list(tasks)
     check_unique_task_names(tasks)
+    _check_envs(tasks)
     pytask_tasks = [to_pytask_task(task) for task in tasks]
     root.mkdir(parents=True, exist_ok=True)
     # pytasks uses whatever .git repo is upstream of root by default,

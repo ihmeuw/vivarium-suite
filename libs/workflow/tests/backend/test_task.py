@@ -95,3 +95,25 @@ def test_check_unique_task_names() -> None:
     check_unique_task_names([_make_task("a"), _make_task("b")])
     check_unique_task_names([])
     check_unique_task_names(_make_task(n) for n in ("a", "b"))
+
+
+@pytest.mark.parametrize(
+    "env", ["analysis_env", "/opt/envs/analysis", ""], ids=["name", "path", "empty"]
+)
+def test_task_rejects_a_callable_run_with_an_env(env: str) -> None:
+    """A Task with a callable run and any non-None env raises ValueError naming the task and the env."""
+    with pytest.raises(ValueError) as info:
+        Task(**_task_kwargs(run=lambda **kwargs: None, env=env))
+
+    assert "clean_data" in str(info.value)
+    assert f"env {env!r}" in str(info.value)
+
+
+@pytest.mark.parametrize(
+    "env", ["no_such_env_anywhere", "/no/such/env/prefix"], ids=["name", "path"]
+)
+def test_a_command_task_with_an_env_constructs_without_resolving_it(env: str) -> None:
+    """A Task with a command-string run and an env that exists nowhere constructs without error."""
+    task = Task(**_task_kwargs(env=env))
+
+    assert task.env == env

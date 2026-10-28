@@ -34,7 +34,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-cluster = []
+# The installer pins the Jobmon set the bridge is tested against and supplies IHME's server config.
+cluster = ["jobmon_installer_ihme==10.12.2"]
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",

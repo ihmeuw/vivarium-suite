@@ -5,20 +5,25 @@ context manager, and plan/run helpers that the per-feature staleness scenarios
 assert against. It is importable and runs without the cluster extra -- it drives
 the backend ``build``/``preview`` directly.
 
+Every step defaults to an always-stale code identity, so it re-runs on every build.
+:func:`stable_code_id` gives a step a fixed code identity instead, so scenarios can
+exercise skipping, forcing, and resuming before steps can declare a code fingerprint.
+
 Two parts are not here yet: the synchronous fake-Jobmon adapter arrives with
-the bridge, and the selective-staleness
-assertions (perturb one input, exactly its cone re-runs) arrive with the code
-fingerprint, since with the always-stale default every step re-runs.
+the bridge, and the selective-staleness assertions (perturb one input, exactly its
+cone re-runs) arrive with the code fingerprint.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
+from typing import Any
 
 import pandas as pd
-from pytask import TaskOutcome
+from pytask import PNode, TaskOutcome
 
 from vivarium.workflow.backend.build import build, outcomes
 from vivarium.workflow.backend.preview import preview
@@ -28,6 +33,54 @@ from vivarium.workflow.frontend.python_step import python_step
 
 # TODO(MIC-7520): add selective-staleness scenario helpers once a step can declare a
 # code fingerprint; the synchronous fake-Jobmon adapter lands with the bridge.
+
+
+@dataclass
+class _StableCodeNode:
+    """A read-only code identity whose state is a hash of its version."""
+
+    name: str
+    version: str
+    attributes: dict[Any, Any] = field(default_factory=dict)
+
+    @property
+    def signature(self) -> str:
+        """Return a stable hash of the node name."""
+        return hashlib.sha256(self.name.encode()).hexdigest()
+
+    def state(self) -> str | None:
+        """Return a hash of the version, identical across builds and processes."""
+        return hashlib.sha256(self.version.encode()).hexdigest()
+
+    def load(self, is_product: bool = False) -> _StableCodeNode:
+        """Return the node itself."""
+        return self
+
+    def save(self, value: Any) -> None:
+        """Reject saves: this is a dependency, not a product."""
+        raise NotImplementedError("A code identity is a dependency and cannot be saved.")
+
+
+def stable_code_id(name: str, version: str = "1") -> PNode:
+    """Return a code identity whose state is fixed by ``version``.
+
+    A task given this ``code_id`` is skipped on a rebuild when nothing else changed, which
+    the always-stale default hides. Scenarios use it to exercise skip, force, and resume;
+    changing ``version`` stands in for a code edit.
+
+    Parameters
+    ----------
+    name
+        The node's name, unique across the pipeline (for example ``"<step>::code"``):
+        pytask keys nodes by name, so tasks that share one share a single code identity.
+    version
+        The code version the node reports.
+
+    Returns
+    -------
+        A read-only dependency node whose state changes only when ``version`` does.
+    """
+    return _StableCodeNode(name=name, version=version)
 
 
 @dataclass
