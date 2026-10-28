@@ -81,10 +81,16 @@ releases never touch that workflow's PyPI trusted-publishing credential path (it
   `simsci-internal`. Each has `.claude-plugin/plugin.json`, `skills/<name>/SKILL.md`,
   `agents/<name>.md`, `README.rst`, and `CHANGELOG.rst`. The marketplace catalog is
   `.claude-plugin/marketplace.json` at the repo root.
-- `simsci` must stay generic. Never name a `simsci-internal` skill, an IHME service (Jira,
-  Jenkins, the hub, MIC tickets), or vivarium in it. Where a team process could apply, write
-  "if an installed skill covers X, invoke it; otherwise <generic fallback>". The official
-  `github` plugin's MCP is the one permitted external dependency.
+- `simsci` must stay generic across IHME teams. Never name a `simsci-internal` skill, a
+  SimSci-specific service or convention (Jenkins, the hub space, MIC tickets, a team's
+  project or board), or vivarium in it. The one IHME service it may name is IHME's Jira,
+  through its own `jira` MCP server, which must not default to any team's project or board.
+  Where a team process could apply, write "if an installed skill covers X, invoke it;
+  otherwise <generic fallback>". The official `github` plugin's MCP is the one permitted
+  external dependency.
+- `simsci` also ships `.mcp.json` and `mcp-servers/jira/`. Its tools are
+  `mcp__plugin_simsci_jira__*`, and `simsci-internal` uses them through its `simsci`
+  dependency.
 - `_review-core`, `_finalize-core`, `_validator`, `_split_proposer`, and the `_review_*` agents
   are consumed by `simsci-internal`'s `model-development`. A change to their inputs, gates, or
   output keys needs a matching change and CHANGELOG entry in `tools/ai-tools`.
