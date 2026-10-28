@@ -54,8 +54,6 @@ DOCS_BUILD_DIR ?= docs/build
 #   "Unknown option editable_mode").
 EDITABLE_COMPAT_FLAG := $(if $(DIST_NAME_FROM_PROJECT),--config-settings-package $(DIST_NAME_FROM_PROJECT):editable_mode=compat,)
 
-# A final X.Y.Z or a beta X.Y.ZbN. Keep the pattern in sync with
-# RELEASE_VERSION_PATTERN in vivarium.build_utils.release_version.
 PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(b[0-9]+)?' CHANGELOG.rst | head -n 1)
 
 # Use this URL to pull IHME Python packages and deploy this package to PyPi.
