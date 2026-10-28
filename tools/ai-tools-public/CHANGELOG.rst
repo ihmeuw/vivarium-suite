@@ -1,8 +1,3 @@
-**0.4.1 - 10/28/26**
-
-- README: name the plugin by its display name, Simulation Science Dev AI Tools,
-  in the Jira access steps
-
 **0.4.0 - 10/26/26**
 
 - Add a local ``jira`` MCP server for IHME's Jira to replace IHME Infra's
