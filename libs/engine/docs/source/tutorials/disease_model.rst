@@ -534,12 +534,12 @@ Now that we've done all this hard work, let's see what it gives us.
 
 .. code-block:: python
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.disease_model.population import BasePopulation
 
    config = {'randomness': {'key_columns': ['entrance_time', 'age']}}
 
-   sim = InteractiveContext(components=[BasePopulation()], configuration=config)
+   sim = Simulation(components=[BasePopulation()], configuration=config)
 
    print(sim.get_population(['age', 'sex']).head())
 
@@ -557,14 +557,14 @@ Now that we've done all this hard work, let's see what it gives us.
    
    import pandas as pd
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.disease_model.population import BasePopulation
    from vivarium.fuzzy_checker import FuzzyChecker
 
    fuzzy_checker = FuzzyChecker()
 
    config = {'randomness': {'key_columns': ['entrance_time', 'age']}}
-   sim = InteractiveContext(components=[BasePopulation()], configuration=config)
+   sim = Simulation(components=[BasePopulation()], configuration=config)
 
    pop = sim.get_population(['age', 'sex'])
    assert len(pop) > 0
@@ -764,7 +764,7 @@ can see the impact of our mortality component without taking too many steps.
 
 .. code-block:: python
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.disease_model.population import BasePopulation
 
    config = {
@@ -776,7 +776,7 @@ can see the impact of our mortality component without taking too many steps.
       }
    }
 
-   sim = InteractiveContext(components=[BasePopulation()], configuration=config)
+   sim = Simulation(components=[BasePopulation()], configuration=config)
    print(sim.get_population(['age', 'sex', 'mortality_rate', 'is_alive']).head())
 
 ::
@@ -799,7 +799,7 @@ can see the impact of our mortality component without taking too many steps.
             'key_columns': ['entrance_time', 'age']
          }
    }
-   sim = InteractiveContext(components=[BasePopulation()], configuration=config)
+   sim = Simulation(components=[BasePopulation()], configuration=config)
 
    pop = sim.get_population(['age', 'sex', 'mortality_rate', 'is_alive'])
    assert len(pop) == 100_000
@@ -929,14 +929,14 @@ In an interactive setting, we can access these observations via the
 ``sim.get_results()`` command. This will return a dictionary of all  
 observations up to this point in the simulation.
 
-Note that the ``observe=True`` below is required: an
-:class:`~vivarium.engine.interface.interactive.InteractiveContext` does not
-observe results by default. See :ref:`getting results <interactive_results>`
+Note that the ``observe=True`` below is required: a
+``Simulation`` does not observe results by default. See
+`getting results <https://vivarium-interactive.readthedocs.io/en/latest/tutorials/exploration.html#interactive-results>`_
 for what that means and why.
 
 .. code-block:: python
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.disease_model.population import BasePopulation
    from vivarium.engine.examples.disease_model.observer import DeathsObserver, YllsObserver
 
@@ -949,7 +949,7 @@ for what that means and why.
        }
    }
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[
          BasePopulation(),
          DeathsObserver(),
@@ -979,7 +979,7 @@ been a total of 27,720 years of life lost.
 
    from vivarium.engine.examples.disease_model.observer import DeathsObserver, YllsObserver
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[
          BasePopulation(),
          DeathsObserver(),

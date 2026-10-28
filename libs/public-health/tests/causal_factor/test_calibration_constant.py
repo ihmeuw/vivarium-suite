@@ -15,10 +15,11 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.utilities import from_yearly
 from vivarium.engine.framework.values import AttributePostProcessor, ValuesManager
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.causal_factor.calibration_constant import (
@@ -148,7 +149,7 @@ def _calibrated_output(
     base_config, base_plugins, source, modifiers, *, pipeline_name
 ) -> pd.Series:
     """Build the sim, step once, and return the ``pipeline_name`` output."""
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[BasePopulation(), source, *modifiers],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -206,7 +207,7 @@ class TestProducer:
         source = _AttributeSource(
             "described_pipeline", 1.0, is_rate=is_rate, description="A described pipeline"
         )
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[BasePopulation(), source],
             configuration=base_config,
             plugin_configuration=base_plugins,
@@ -283,7 +284,7 @@ class TestProducer:
         source = _AttributeSource(pipeline_name, base_value, is_rate=True)
         modifier = _CalibrationConstantModifier(pipeline_name, calibration_value)
 
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[BasePopulation(), source, modifier],
             configuration=base_config,
             plugin_configuration=base_plugins,

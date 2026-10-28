@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from pytest_mock import MockerFixture, MockFixture
+from vivarium.interactive import Simulation
 
 import vivarium.engine.framework.values.pipeline as pipeline_module
 from tests.helpers import ColumnCreator
@@ -42,7 +43,6 @@ from vivarium.engine.framework.values.pipeline import (
     ValueModifier,
     ValueSource,
 )
-from vivarium.engine.interface import InteractiveContext
 from vivarium.engine.types import NumberLike
 
 if TYPE_CHECKING:
@@ -1187,7 +1187,7 @@ def test_source_callable(
             update = pd.DataFrame({"attr1": [10.0], "attr2": [20.0]}, index=pop_data.index)
             self.population_view.initialize(update)
 
-    sim = InteractiveContext(components=[SomeComponent()])
+    sim = Simulation(components=[SomeComponent()])
     attribute = sim.get_population("some-attribute")
     assert type(attribute) == type(expected_return)
     if isinstance(expected_return, pd.DataFrame) and isinstance(attribute, pd.DataFrame):
@@ -1378,7 +1378,7 @@ class TestStringRepresentations:
             def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
                 return value + 1
 
-        sim = InteractiveContext(components=[Producer(), Modifier()])
+        sim = Simulation(components=[Producer(), Modifier()])
         text = str(sim.get_value("some-value"))
 
         assert "some-value  [value pipeline]" in text
@@ -1474,7 +1474,7 @@ class TestStringRepresentations:
                     pd.DataFrame({"owned_column": 1.0}, index=pop_data.index)
                 )
 
-        sim = InteractiveContext(components=[ColumnCreator(), SourceProducer()])
+        sim = Simulation(components=[ColumnCreator(), SourceProducer()])
         attribute = "owned_column" if kind == "private_column" else "some-attribute"
 
         assert expected in str(sim.get_attribute(attribute))
@@ -1512,7 +1512,7 @@ class TestStringRepresentations:
             def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
                 return value + 1
 
-        sim = InteractiveContext(components=[Producer(), Modifier()])
+        sim = Simulation(components=[Producer(), Modifier()])
         (modifier,) = sim.get_value("some-value").modifiers
 
         # The qualname of a class defined inside a test carries a <locals> chain;
@@ -1539,7 +1539,7 @@ class TestStringRepresentations:
             def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
                 return pd.Series(1.0, index=index)
 
-        sim = InteractiveContext(components=[Producer()])
+        sim = Simulation(components=[Producer()])
 
         assert repr(sim.get_value("some-value")) == "Pipeline('some-value')"
         assert repr(AttributePipeline("nascent")) == "AttributePipeline('nascent')"
@@ -1568,7 +1568,7 @@ class TestStringRepresentations:
             def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
                 return pd.Series(1.0, index=index)
 
-        sim = InteractiveContext(components=[Producer()])
+        sim = Simulation(components=[Producer()])
         pipeline = sim.get_attribute("some-attribute")
 
         # A class defined inside a test carries a <locals> qualname; one defined at
@@ -1752,7 +1752,7 @@ class TestStringRepresentations:
             def source(self, index: pd.Index[int]) -> pd.Series[float]:
                 return pd.Series(1.0, index=index)
 
-        sim = InteractiveContext(components=[Producer()])
+        sim = Simulation(components=[Producer()])
         pipelines = [sim.get_value("first"), sim.get_value("second")]
 
         assert "\n" in str(pipelines[0])
@@ -1808,7 +1808,7 @@ class TestStringRepresentations:
             ) -> pd.Series[float]:
                 return value / 2
 
-        sim = InteractiveContext(components=[Producer(), FirstModifier(), SecondModifier()])
+        sim = Simulation(components=[Producer(), FirstModifier(), SecondModifier()])
         lines = str(sim.get_attribute("some-attribute")).splitlines()
 
         assert "modifiers       2 (order not guaranteed)" in lines
@@ -1902,8 +1902,8 @@ class TestRegistrationDescriptions:
     """Tests for the optional description accepted when registering a value."""
 
     @staticmethod
-    def _simulation() -> InteractiveContext:
-        return InteractiveContext(components=[DescribedProducer(), DescribedModifier()])
+    def _simulation() -> Simulation:
+        return Simulation(components=[DescribedProducer(), DescribedModifier()])
 
     def test_every_registration_entry_point_stores_its_description(self) -> None:
         """All five registration functions accept a description and keep it."""

@@ -14,6 +14,7 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 | `libs/engine/` | `vivarium-engine` | `import vivarium.engine` | https://vivarium-engine.readthedocs.io |
 | `libs/fuzzy-checker/` | `vivarium-fuzzy-checker` | `import vivarium.fuzzy_checker` | https://vivarium-fuzzy-checker.readthedocs.io |
 | `libs/gbd-mapping/` | `vivarium-gbd-mapping` | `import vivarium.gbd_mapping` | https://vivarium-gbd-mapping.readthedocs.io |
+| `libs/interactive/` | `vivarium-interactive` | `import vivarium.interactive` | https://vivarium-interactive.readthedocs.io |
 | `libs/profiling/` | `vivarium-profiling` | `import vivarium.profiling` | *(no docs)* |
 | `libs/public-health/` | `vivarium-public-health` | `import vivarium.public_health` | https://vivarium-public-health.readthedocs.io |
 | `libs/pytest-vivarium/` | `pytest-vivarium` | *(pytest plugin — auto-loaded)* | https://pytest-vivarium.readthedocs.io |

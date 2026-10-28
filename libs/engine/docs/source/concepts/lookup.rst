@@ -77,7 +77,8 @@ the same column structure as the input.
 .. testcode::
 
    import pandas as pd
-   from vivarium.engine import Component, InteractiveContext
+   from vivarium.engine import Component
+   from vivarium.interactive import Simulation
    from vivarium.engine.framework.engine import Builder
    from vivarium.engine.testing_utilities import TestPopulation
 
@@ -98,7 +99,7 @@ the same column structure as the input.
        def setup(self, builder: Builder) -> None:
            self.rate_table = builder.lookup.build_table(data, name="rate_table")
 
-   sim = InteractiveContext(components=[TestPopulation(), RateTableComponent()])
+   sim = Simulation(components=[TestPopulation(), RateTableComponent()])
 
 .. note::
 
@@ -333,7 +334,7 @@ Example Usage
 ~~~~~~~~~~~~~
 
 The following is an example of creating and calling a lookup table in an
-:ref:`interactive setting <interactive_tutorial>` using the data from
+`interactive setting <https://vivarium-interactive.readthedocs.io/en/latest/tutorials/interactive.html>`_ using the data from
 `Construction Parameters`_ above. The interface and process are the same when
 integrating a lookup table into a :term:`component <Component>`, which is
 primarily how they are used. Assuming you have a valid simulation object
@@ -352,7 +353,8 @@ exposes the resulting table for later use.
 .. testcode::
 
    import pandas as pd
-   from vivarium.engine import Component, InteractiveContext
+   from vivarium.engine import Component
+   from vivarium.interactive import Simulation
    from vivarium.engine.framework.engine import Builder
    from vivarium.engine.testing_utilities import TestPopulation
 
@@ -375,7 +377,7 @@ exposes the resulting table for later use.
            self.bmi = builder.lookup.build_table(data, name="bmi")
 
    bmi_component = BMITable()
-   sim = InteractiveContext(components=[TestPopulation(), bmi_component])
+   sim = Simulation(components=[TestPopulation(), bmi_component])
    result = bmi_component.bmi(sim.get_population_index())
 
 The returned object is a :class:`pandas.Series` indexed by the population,

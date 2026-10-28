@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from vivarium.config_tree import ConfigurationError
-from vivarium.engine import InteractiveContext
 from vivarium.engine.testing_utilities import TestPopulation
+from vivarium.interactive import Simulation
 
 from tests.mock_artifact import MockArtifactManager
 from tests.risks.test_effect import _setup_risk_effect_simulation
@@ -263,7 +263,7 @@ def test_lbwsg_exposure_data_logging(exposure_key, base_config, mocker, caplog) 
     assert not caplog.records
     if exposure_key != "missing":
         missing_key = "exposure" if exposure_key == "birth_exposure" else "birth_exposure"
-        _ = InteractiveContext(
+        _ = Simulation(
             base_config,
             components=[TestPopulation(), risk],
             configuration=override_config,
@@ -275,7 +275,7 @@ def test_lbwsg_exposure_data_logging(exposure_key, base_config, mocker, caplog) 
             match="The LBWSG distribution requires either 'birth_exposure' or 'exposure' data to be "
             "available in the simulation.",
         ):
-            InteractiveContext(
+            Simulation(
                 base_config,
                 components=[TestPopulation(), risk],
                 configuration=override_config,
@@ -415,7 +415,7 @@ def test_lbwsg_categories_from_config(base_config) -> None:
             }
         },
     }
-    InteractiveContext(
+    Simulation(
         base_config,
         components=[TestPopulation(), risk],
         configuration=override_config,

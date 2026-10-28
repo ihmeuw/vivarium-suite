@@ -47,6 +47,7 @@ dependencies = [
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
+    "vivarium-interactive",
 ]
 cluster = ["vivarium-cluster-tools>=2.1.17"]
 docs = []

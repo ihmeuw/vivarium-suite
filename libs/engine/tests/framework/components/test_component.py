@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 from vivarium.artifact import Artifact
 from vivarium.config_tree.exceptions import ConfigurationError
+from vivarium.interactive import Simulation
 
 from tests.helpers import (
     ColumnCreator,
@@ -19,7 +20,6 @@ from tests.helpers import (
     ParameterizedByComponent,
     SingleLookupCreator,
 )
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.lookup.table import LookupTable
@@ -80,7 +80,7 @@ def test_component_by_other_component_has_name_that_incorporates_arguments() -> 
 
 def test_component_that_creates_columns_population_view() -> None:
     component = ColumnCreator()
-    InteractiveContext(components=[component])
+    Simulation(components=[component])
 
     # Assert population view is set and has the correct columns
     assert component.population_view is not None
@@ -90,7 +90,7 @@ def test_component_that_creates_columns_population_view() -> None:
 
 
 def test_component_with_initialization_requirements() -> None:
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[ColumnCreator(), ColumnCreatorAndRequirer()],
     )
 
@@ -111,7 +111,7 @@ def test_component_with_initialization_requirements() -> None:
 
 def test_component_population_view_raises_before_setup() -> None:
     component = NoPopulationView()
-    sim = InteractiveContext(components=[ColumnCreator(), component], setup=False)
+    sim = Simulation(components=[ColumnCreator(), component], setup=False)
 
     # Assert population view is not set
     assert component._population_view is None
@@ -126,7 +126,7 @@ def test_component_population_view_raises_before_setup() -> None:
 
 def test_component_initializer_is_not_registered_if_not_defined() -> None:
     component = NoPopulationView()
-    simulation = InteractiveContext(components=[component])
+    simulation = Simulation(components=[component])
 
     # Assert that component did not register an initializer
     initializers = [
@@ -142,7 +142,7 @@ def test_component_initializer_is_registered_and_called_if_defined() -> None:
     expected_pop_view = component.get_initial_state(pd.RangeIndex(pop_size))
 
     config = {"population": {"population_size": pop_size}}
-    simulation = InteractiveContext(components=[component], configuration=config)
+    simulation = Simulation(components=[component], configuration=config)
     population = simulation.get_population(component.private_columns)
     assert isinstance(population, pd.DataFrame)
     # Assert that simulant initializer has been registered
@@ -156,7 +156,7 @@ def test_component_initializer_is_registered_and_called_if_defined() -> None:
 
 def test_listeners_are_not_registered_if_not_defined() -> None:
     component = NoPopulationView()
-    simulation = InteractiveContext(components=[component])
+    simulation = Simulation(components=[component])
 
     post_setup_methods = simulation._events.get_listeners(lifecycle_states.POST_SETUP)
     time_step_prepare_methods = simulation._events.get_listeners(
@@ -182,7 +182,7 @@ def test_listeners_are_not_registered_if_not_defined() -> None:
 
 def test_listeners_are_registered_if_defined() -> None:
     component = DefaultPriorities()
-    simulation = InteractiveContext(components=[component])
+    simulation = Simulation(components=[component])
 
     post_setup_methods = simulation._events.get_listeners(lifecycle_states.POST_SETUP)
     time_step_prepare_methods = simulation._events.get_listeners(
@@ -207,7 +207,7 @@ def test_listeners_are_registered_if_defined() -> None:
 
 def test_listeners_are_registered_at_custom_priorities() -> None:
     component = CustomPriorities()
-    simulation = InteractiveContext(components=[component])
+    simulation = Simulation(components=[component])
 
     post_setup_methods = simulation._events.get_listeners(lifecycle_states.POST_SETUP)
     time_step_prepare_methods = simulation._events.get_listeners(
@@ -245,7 +245,7 @@ def test_component_configuration_gets_set() -> None:
         "column_creator_and_requirer": {"test_configuration": "some_config_value"},
     }
 
-    sim = InteractiveContext(components=[with_config, without_config], setup=False)
+    sim = Simulation(components=[with_config, without_config], setup=False)
     sim.configuration.update(column_requirer_config)
     sim.setup()
 
@@ -294,7 +294,7 @@ def test_component_lookup_table_configuration(hdf_file_path: Path) -> None:
         artifact.write(key, data)
 
     component = LookupCreator()
-    sim = InteractiveContext(components=[component], setup=False)
+    sim = Simulation(components=[component], setup=False)
     sim.configuration.update(
         {
             "input_data": {"artifact_path": hdf_file_path},
@@ -383,7 +383,7 @@ def test_failing_component_lookup_table_configurations(
     hdf_file_path: Path,
 ) -> None:
     component = SingleLookupCreator()
-    sim = InteractiveContext(components=[component], setup=False)
+    sim = Simulation(components=[component], setup=False)
     override_config = {
         "input_data": {"artifact_path": hdf_file_path},
         component.name: {"data_sources": configuration},
@@ -406,7 +406,7 @@ def test_failing_component_lookup_table_configurations(
 def test_literal_string_data_source(literal: str, hdf_file_path: Path) -> None:
     """Test that non-entity-key strings are treated as literal values."""
     component = SingleLookupCreator()
-    sim = InteractiveContext(components=[component], setup=False)
+    sim = Simulation(components=[component], setup=False)
     override_config = {
         "input_data": {"artifact_path": hdf_file_path},
         component.name: {"data_sources": {"favorite_color": literal}},
@@ -428,7 +428,7 @@ def test_value_column_order_is_maintained() -> None:
     enough number of value columns, it seems likely that the order will change.
     """
     component = OrderedColumnsLookupCreator()
-    sim = InteractiveContext(components=[component])
+    sim = Simulation(components=[component])
     columns = list(component.categorical_table(sim.get_population_index()).columns)
     assert columns == OrderedColumnsLookupCreator.VALUE_COLUMNS
     columns = list(component.interpolated_table(sim.get_population_index()).columns)
@@ -438,7 +438,7 @@ def test_value_column_order_is_maintained() -> None:
 def test_attribute_pipelines_from_private_columns() -> None:
     idx = pd.Index([4, 8, 15, 16, 23, 42])
     component = ColumnCreator()
-    sim = InteractiveContext(components=[component])
+    sim = Simulation(components=[component])
     for column in component.private_columns:
         pipeline = sim._builder.value.get_attribute_pipelines()()[column]
         assert pipeline.name == column

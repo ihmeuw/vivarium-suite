@@ -16,7 +16,7 @@ For how simulants are assigned exposure values, see the :doc:`risk` tutorial.
 
    import numpy as np
    import pandas as pd
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.risks import Risk, RiskEffect, NonLogLinearRiskEffect
    from vivarium.public_health.disease import *
    from vivarium.public_health.population import BasePopulation
@@ -57,7 +57,7 @@ To run any example in a standalone script, include all of these at the top:
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.risks import Risk, RiskEffect
    from vivarium.public_health.disease import SI, SIS
    from vivarium.public_health.population import BasePopulation
@@ -242,7 +242,7 @@ at a higher rate than unexposed simulants:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Risk("risk_factor.test_risk"),
@@ -317,7 +317,7 @@ target rate independently:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Risk("risk_factor.smoking"),
@@ -419,7 +419,7 @@ baseline is scaled down to compensate.
            },
            layer="override",
        )
-       sim = InteractiveContext(
+       sim = Simulation(
            components=[
                BasePopulation(),
                Risk("risk_factor.test_risk"),
@@ -573,7 +573,7 @@ its ``data_sources`` configuration, so no artifact is needed for it:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), risk, effect, SI("test_cause")],
        configuration=config,
        plugin_configuration=base_plugins,

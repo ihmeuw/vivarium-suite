@@ -44,6 +44,7 @@ test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
     "vivarium-fuzzy-checker",
+    "vivarium-interactive",
     "hypothesis",
     "pyyaml",
 ]

@@ -4,10 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 from vivarium.config_tree import ConfigTree
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population import SimulantData
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import make_uniform_pop_data
 from vivarium.public_health.disease import SI
@@ -422,7 +423,7 @@ def _setup_risk_effect_simulation(
     risk: str | Risk,
     risk_effect: RiskEffect,
     data: dict[str, Any],
-) -> InteractiveContext:
+) -> Simulation:
     components = [
         BasePopulation(),
         risk,
@@ -430,7 +431,7 @@ def _setup_risk_effect_simulation(
         risk_effect,
     ]
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=components,
         configuration=config,
         plugin_configuration=plugins,
@@ -807,7 +808,7 @@ def _loaded_artifact_keys(
     so a test can assert whether a given key was loaded from the artifact or
     supplied through a configuration data source.
     """
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), risk, SI("test_cause"), risk_effect],
         configuration=config,
         plugin_configuration=plugins,

@@ -4,9 +4,10 @@ from typing import Any, NamedTuple
 import pytest
 import yaml
 from vivarium.config_tree import ConfigTree
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.components.parser import ParsingError
 from vivarium.engine.framework.state_machine import Transient, Transition
+from vivarium.interactive import Simulation
 
 from tests.mock_artifact import MockArtifact
 from tests.mock_artifact import MockArtifactManager as MockArtifactManager_
@@ -393,7 +394,7 @@ ALL_COMPONENTS_CONFIG_DICT = {
 
 @pytest.fixture(scope="module")
 def sim_components(base_config: ConfigTree, causes_config_parser_plugins: ConfigTree):
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=create_simulation_config_tree(ALL_COMPONENTS_CONFIG_DICT),
         configuration=base_config,
         plugin_configuration=causes_config_parser_plugins,

@@ -13,7 +13,7 @@ The disease components in this package extend the base
 :mod:`vivarium.engine.framework.state_machine`.
 
 .. 
-   The ``testoutput`` blocks below assume ``InteractiveContext``'s quiet logging
+   The ``testoutput`` blocks below assume ``Simulation``'s quiet logging
    default, i.e. vivarium-engine >= 5.6.1. Under an older engine the default is
    info level, so ``sim.step()`` logs the simulation time between the ``print``
    calls and each of those blocks needs an inner ``...`` marker to absorb it.
@@ -26,7 +26,7 @@ The disease components in this package extend the base
 
    import numpy as np
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.disease import *
    from vivarium.public_health.population import BasePopulation
    from vivarium.public_health._example_data import *
@@ -68,14 +68,14 @@ To run any example in a standalone script, include all of these at the top:
 
    import numpy as np
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.disease import *
    from vivarium.public_health.population import BasePopulation
    from vivarium.public_health._example_data import BASE_PLUGINS, make_base_config
 
    # BASE_PLUGINS serves the demographic data from memory in place of an HDF
    # artifact, so BasePopulation runs without one. Pass it as
-   # plugin_configuration to InteractiveContext.
+   # plugin_configuration to Simulation.
    base_plugins = BASE_PLUGINS
 
    # make_base_config() returns a configuration with sensible defaults for
@@ -299,7 +299,7 @@ reading from the artifact:
    )
 
    # 4. Run.
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -368,7 +368,7 @@ relying on the artifact or configuration:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -439,7 +439,7 @@ All measures are set through the configuration:
    )
    model = SI("test_cause")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -503,7 +503,7 @@ Simulants can recover and become susceptible again.
    )
    model = SIS("test_cause")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -569,7 +569,7 @@ All measures are set through the configuration:
    )
    model = SIR("test_cause")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -631,7 +631,7 @@ drives the return transition. Every measure is set through the configuration.
    )
    model = SIS_fixed_duration("test_cause", duration="14")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -685,7 +685,7 @@ moves to the recovered state.
    )
    model = SIR_fixed_duration("test_cause", duration="21")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -750,7 +750,7 @@ afterward:
 
    model = NeonatalSWC_without_incidence("neonatal_cause")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -820,7 +820,7 @@ via an incidence rate.
    )
    model = NeonatalSWC_with_incidence("neonatal_cause")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -899,7 +899,7 @@ required):
    risk = Risk("risk_factor.test_risk")
    disease = RiskAttributableDisease("cause.test_cause", "risk_factor.test_risk")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), risk, disease],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -962,7 +962,7 @@ constructor:
        cause_specific_mortality_rate=0.0,
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -1026,7 +1026,7 @@ that state. This is added on top of the all-cause mortality rate.
        cause_specific_mortality_rate=0.0,
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -1085,7 +1085,7 @@ than converting a rate to a probability:
        cause_specific_mortality_rate=0.0,
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -1152,7 +1152,7 @@ fractions of simulants should end up in different destination states:
        cause_specific_mortality_rate=0.0,
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -1218,7 +1218,7 @@ states at initialization based on relative prevalences:
        cause_specific_mortality_rate=0.0,
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -1275,7 +1275,7 @@ sensitivity analyses or testing:
    )
    model = SI("test_cause")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -1332,7 +1332,7 @@ These are useful for tracking disease history:
 
    model = SIS("test_cause")
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), model],
        configuration=config,
        plugin_configuration=base_plugins,

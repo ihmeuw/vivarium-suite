@@ -9,9 +9,9 @@ import pandas as pd
 import pytest
 import pytest_mock
 from vivarium.config_tree import ConfigTree
+from vivarium.interactive import Simulation as InteractiveSimulation
 
 from tests.helpers import Listener, MockComponentA, MockComponentB, MockGenericComponent
-from vivarium.engine import InteractiveContext
 from vivarium.engine.component import Component
 from vivarium.engine.framework.engine import Builder, SimulationContext
 from vivarium.engine.framework.event import Event
@@ -588,7 +588,7 @@ def test_step_size_modifier_forwards_its_description() -> None:
             step_sizes = pd.Series(pd.Timedelta(days=1), index=index)
             return step_sizes  # type: ignore [return-value]
 
-    sim = InteractiveContext(components=[DescribedStepModifier()])
+    sim = InteractiveSimulation(components=[DescribedStepModifier()])
     modifier = sim.get_value("simulant_step_size").modifiers[0]
 
     assert modifier.description == "Take a one-day step"

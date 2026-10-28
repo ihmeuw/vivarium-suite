@@ -172,10 +172,10 @@ we can set up our simulation with the following code:
 
 .. code-block:: python
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium_examples.boids.population import Population
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -188,10 +188,10 @@ we can set up our simulation with the following code:
 .. testcode::
    :hide:
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.boids import Population
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -342,11 +342,11 @@ Let's run the simulation with our new component and look again at the state tabl
 
 .. code-block:: python
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium_examples.boids.population import Population
    from vivarium_examples.boids.movement import Movement
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population(), Movement()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -358,10 +358,10 @@ Let's run the simulation with our new component and look again at the state tabl
 .. testcode::
    :hide:
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.boids import Population, Movement
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population(), Movement()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -397,10 +397,10 @@ but their velocity stay the same.
 .. testcode::
    :hide:
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.boids import Population, Movement
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population(), Movement()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -447,12 +447,12 @@ We can then visualize our flock with
 
 .. code-block:: python
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium_examples.boids.population import Population
    from vivarium_examples.boids.movement import Movement
    from vivarium_examples.boids.visualization import plot_boids
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population(), Movement()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -462,10 +462,10 @@ We can then visualize our flock with
 
 .. plot::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.boids import Population, Movement, plot_boids
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population(), Movement()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -557,14 +557,14 @@ For a quick test of our swarming behavior, let's add in these forces and check i
 
 .. code-block:: python
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium_examples.boids.population import Population
    from vivarium_examples.boids.movement import Movement
    from vivarium_examples.boids.neighbors import Neighbors
    from vivarium_examples.boids.forces import Separation, Cohesion, Alignment
    from vivarium_examples.boids.visualization import plot_boids
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population(), Movement(), Neighbors(), Separation(), Cohesion(), Alignment()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -576,10 +576,10 @@ For a quick test of our swarming behavior, let's add in these forces and check i
 
 .. plot::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.boids import Population, Movement, Neighbors, Separation, Cohesion, Alignment, plot_boids
 
-   sim = InteractiveContext(
+   sim = Simulation(
       components=[Population(), Movement(), Neighbors(), Separation(), Cohesion(), Alignment()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
@@ -605,14 +605,14 @@ Then, try it out like so:
 
 .. code-block:: python
 
-  from vivarium.engine import InteractiveContext
+  from vivarium.interactive import Simulation
   from vivarium_examples.boids.population import Population
   from vivarium_examples.boids.movement import Movement
   from vivarium_examples.boids.neighbors import Neighbors
   from vivarium_examples.boids.forces import Separation, Cohesion, Alignment
   from vivarium_examples.boids.visualization import plot_boids_animated
 
-  sim = InteractiveContext(
+  sim = Simulation(
       components=[Population(), Movement(), Neighbors(), Separation(), Cohesion(), Alignment()],
       configuration={'population': {'population_size': 500}},
       logging_verbosity=0,
