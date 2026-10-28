@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, NamedTuple, overload
 import numpy as np
 import pandas as pd
 from vivarium.engine.component import NUM_EVENT_PRIORITIES
-from vivarium.engine.framework.engine import BaseSimulationContext
+from vivarium.engine.framework.engine import BaseSimulation
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.randomness.stream import RandomnessStream
@@ -128,7 +128,7 @@ _DEPENDENCY_TYPE_RANK = {
 }
 
 
-class Simulation(BaseSimulationContext):
+class Simulation(BaseSimulation):
     """A simulation context with helper methods for running simulations interactively.
 
     Does not gather the model's results by default; pass ``observe=True`` to
