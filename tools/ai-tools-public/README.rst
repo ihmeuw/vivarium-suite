@@ -85,8 +85,8 @@ In more detail:
   becomes a ticket rather than a red PR. The finish — leftover triage, the PR's
   Testing section, the PR gate, the commit history, the PR, and a comment
   recording what went unaddressed — belongs to the internal ``_finalize-core``
-  skill. Without a testing strategy, the Testing section lists the tests in the
-  diff, grouped by the behavior they cover.
+  skill. Without a testing strategy, the Testing section lists the cases the
+  diff's tests cover.
 
   It requires a clean working tree, so each fix is its own revertible commit
   (a bare ``WIP`` commit is enough to satisfy that, since ``_finalize-core`` offers
@@ -141,9 +141,9 @@ In more detail:
   test/lint/type suite and runs the shared ``_review-core`` skill for review,
   iterating while preserving the black box. It always creates the feature branch
   up front, and hands the finish to the shared ``_finalize-core`` skill, which
-  gates PR creation on explicit user approval. The PR's Testing section links each
-  item of the testing strategy to the test that covers it, and lists the items
-  that no test covers.
+  gates PR creation on explicit user approval. The PR's Testing section puts each
+  item of the testing strategy in the table of the file it exercises, links it to
+  the test that covers it, and marks the items that no test covers.
 
 **Auto-triggering skills**
 
@@ -341,13 +341,18 @@ The finish is defined once the same way, in the internal ``_finalize-core`` skil
 (also ``user-invocable: false``, also invoked inline): leftover-finding triage, the
 PR's Testing section, the PR approval gate, a reviewable commit history, the draft
 PR, and the comment recording what was *not* addressed. The Testing section comes
-from the ``_test_summarizer`` sub-agent. When the caller passes the testing
-strategy agreed in the design, it links each strategy item to the test or check
-that covers it and lists the items nothing covers. Without a strategy, it groups
-the diff's tests by the behavior they cover. It leaves out what CI already reports
-and does not outline the test files, so the section stays short enough to read in
-a PR body. Each link is a GitHub permalink at the pushed head commit, so a later
-rebase leaves the links pointing at the older commit. Three paths share it — ``/simsci:pr-prep``,
+from the ``_test_summarizer`` sub-agent. It has one collapsible table per changed
+source file, ordered top down from the entry points to the modules they import.
+Each row is one case, with the columns Case, Error / success, Expected, and Test.
+Each file's summary line gives its case count and how many cases have no test, so
+a reviewer sees the gaps without expanding anything. When the caller passes the
+testing strategy agreed in the design, every strategy item gets a row, and an
+item with no test or check says ``Not tested``. Without a strategy, the rows come
+from the diff's tests alone. Checks run outside the test suite go in a final
+"Other verification" table. Each test link is a GitHub permalink at the pushed
+head commit, so a later rebase leaves the links pointing at the older commit.
+GitHub limits a PR body and each comment to 65,536 characters, so a section that
+does not fit in the body moves to PR comments, split between files. Three paths share it — ``/simsci:pr-prep``,
 ``/simsci:framework-development``'s Phase 5, and the ``simsci-internal`` plugin's
 model-development loop — so the steps that are easy to drop when improvising, like
 the backlog dedup and the not-addressed comment, are structural rather than

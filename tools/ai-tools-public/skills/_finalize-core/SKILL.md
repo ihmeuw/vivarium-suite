@@ -46,8 +46,8 @@ an empty PR.
 Then dispatch `simsci:_test_summarizer` with the diff against the base, the
 changed-file list, the strategy items and outside-suite checks if the caller has
 them, and the repo's GitHub URL as the link base. Do this in the same turn as
-Step 2. It returns the PR's Testing section, with ``{sha}`` in each link where the
-head commit goes. Step 4 regroups commits but never changes file contents, so the
+Step 2. It returns the PR's Testing section: one collapsible table per changed
+source file, with ``{sha}`` in each link where the head commit goes. Step 4 regroups commits but never changes file contents, so the
 line numbers in those links stay valid. In a stack, dispatch one per PR, each with
 that PR's slice of the diff.
 
@@ -73,9 +73,10 @@ filed", or "unresolved" — because that is what Step 6 reports.
 ## Step 3 — Gate on the PR
 
 **Gate — approve the PR.** Show in one place: Step 1's summary, the Testing
-section, the commit organization you intend (Step 4), the PR title/base/draft
-status, and **the exact body of the Step 6 comment**. Take one approval covering that whole write set —
-commits, push, PR, and comment. The comment is a public write, so it gets seen
+section's summary line for each file and every ``Not tested`` row (the full
+tables on request), the commit organization you intend (Step 4), the PR
+title/base/draft status, and **the exact body of the Step 6 comment**. Take one
+approval covering that whole write set — commits, push, PR, and comments. The comment is a public write, so it gets seen
 before it lands rather than after. Without approval, stop and leave the branch in
 place, saying what would have happened.
 
@@ -118,7 +119,16 @@ Either way, put Step 1's summary and the validation verdict, residuals included,
 the body. Put the Testing section in the template's testing section if it has one,
 otherwise at the end of the body, replacing an older one on an existing PR. First
 replace each ``{sha}`` with ``git rev-parse HEAD`` as pushed. When a team skill
-opens the PR, hand it the section to place. Prefer the GitHub MCP's pull-request tools over the `gh` CLI when both are
+opens the PR, hand it the section to place.
+
+GitHub rejects a PR body or comment longer than 65,536 characters. If the body
+with the Testing section is longer than that, keep the ``### Testing`` heading in
+the body with one line that points to the comment, and post the section as a PR
+comment instead. If the section alone is longer than the limit, split it across
+comments between ``<details>`` blocks, and never split one file's block. On an
+existing PR, edit the earlier Testing comments rather than adding new ones.
+
+Prefer the GitHub MCP's pull-request tools over the `gh` CLI when both are
 available: the MCP needs no shell access and works in sandboxed environments where
 `gh` cannot read its credentials.
 
@@ -171,6 +181,6 @@ once the user confirms things look right, or hand them the command.
   residual failures forward where another refuses to finalize at all, and each
   already decided by arriving here
 - Put the Testing section in the body as `simsci:_test_summarizer` returned it.
-  Never add coverage it did not find or remove a "Not tested" line
+  Never add coverage it did not find or remove a ``Not tested`` row
 - Do not edit source here. This unit shapes history and files reports; the fixes
   belonged to the caller

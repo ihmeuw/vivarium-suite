@@ -169,8 +169,9 @@ on its own: **the scope line is already drawn** by the Step 3 dispositions, and 
 Step 1 ref is its **pre-apply ref** — anything blocked in Step 4 or reverted in
 Step 5 belongs in the leftover set. Pass **strategy items** only when the user
 already gave you a design or ticket with a testing strategy; do not go looking for
-one. Without them, the Testing section lists the tests the diff contains. If it is unavailable, report the three buckets
-and the validation verdict and stop, leaving the branch in place.
+one. Without them, the Testing section lists the cases the diff's tests cover.
+If it is unavailable, report the three buckets and the validation verdict and
+stop, leaving the branch in place.
 
 ## Constraints
 
