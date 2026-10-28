@@ -55,8 +55,15 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_REF="${{ github.event.pull_request.base.ref }}"
             HEAD_REF="${{ github.event.pull_request.head.sha }}"
-            git fetch origin "$BASE_REF"
-            git diff --name-only "origin/${BASE_REF}...${HEAD_REF}" > "$CHANGED_FILES"
+            # A PR into a long-lived branch is diffed against main, as a push to that branch
+            # is, so an upstream lib already changed there (and not yet released) still
+            # resolves from in-tree source.
+            case "$BASE_REF" in
+              epic/*|rc/*|release-candidate/*|release_candidate/*) DIFF_BASE=main ;;
+              *) DIFF_BASE="$BASE_REF" ;;
+            esac
+            git fetch origin "$DIFF_BASE"
+            git diff --name-only "origin/${DIFF_BASE}...${HEAD_REF}" > "$CHANGED_FILES"
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
             BASE="${{ github.event.before }}"
             HEAD="${{ github.event.after }}"
