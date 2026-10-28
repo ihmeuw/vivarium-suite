@@ -293,7 +293,8 @@ Only the ``jira`` MCP server needs this. The workflows above do not use it.
    password.
 3. Enter the token in the plugin's options. Claude Code asks for them when the
    plugin is enabled. To set or change them later, run ``/plugin``, open
-   **Installed** > **simsci**, and choose **Configure options**. The token
+   **Installed** > **Simulation Science Dev AI Tools** (the ``simsci``
+   plugin's display name), and choose **Configure options**. The token
    field is masked, and Claude Code keeps the value in its credential store,
    not in ``settings.json``. On Linux, that store is
    ``~/.claude/.credentials.json``, which only you can read. The optional **Default Jira

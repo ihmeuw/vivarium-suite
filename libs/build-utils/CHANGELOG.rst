@@ -9,7 +9,7 @@
 - Run ``make validate-tag`` in the Jenkins deploy before tagging. Without a release
   tag set, it checks the tag ``make tag-version`` would create
 
-**4.11.0 - 10/23/26**
+**4.11.0 - 10/27/26**
 
 - Run Sphinx directly in ``build-docs`` and ``test-docs`` instead of through
   ``docs/Makefile``
