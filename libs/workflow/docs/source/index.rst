@@ -17,4 +17,5 @@ by the Institute for Health Metrics and Evaluation's Simulation Science team.
    :maxdepth: 2
 
    self
+   data_handoff
    api_reference/index

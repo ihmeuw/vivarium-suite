@@ -247,12 +247,13 @@ def python_step(
     Raises
     ------
     vivarium.workflow.backend.wiring.WiringError
-        If an input key resolves to no producer and no root input.
+        If an input key resolves to no producer and no root input, or ``produces`` is a
+        declared root input.
     ValueError
         If ``produces`` has an unsupported suffix (the message names the step and the
-        produces key), the product's
-        parameter name collides with one of ``target``'s input parameter names, or
-        ``name`` is empty. Every one of these is raised before anything is registered.
+        produces key), the product's parameter name collides with one of ``target``'s
+        input parameter names, or ``name`` is empty. Every one of these is raised before
+        anything is registered.
     """
     task_name = produces if name is None else name
     if not task_name:
