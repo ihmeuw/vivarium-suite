@@ -13,7 +13,7 @@ import pytest
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
 from vivarium.engine import Component
-from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.engine import BaseSimulationContext, Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lookup.table import LookupTable
 from vivarium.engine.framework.resource.resource import Column, Resource
@@ -1665,16 +1665,16 @@ class TestGetPopulationNestedAttributes:
         assert sim._population.pipeline_evaluation_depth == 0
 
 
-def test_init_signature_agrees_with_simulation_context() -> None:
+def test_init_signature_agrees_with_base_simulation_context() -> None:
     """Guard the parent's parameters, which are re-declared here rather than forwarded.
 
-    ``Simulation`` spells out ``SimulationContext``'s parameters instead of
+    ``Simulation`` spells out ``BaseSimulationContext``'s parameters instead of
     passing ``*args``/``**kwargs`` through, so a new parent parameter would otherwise
     be silently dropped.
 
     Covers signature shape only: names, order, annotations, defaults, and kinds.
     """
-    parent = inspect.signature(SimulationContext.__init__).parameters
+    parent = inspect.signature(BaseSimulationContext.__init__).parameters
     child = inspect.signature(Simulation.__init__).parameters
 
     child_only = ("self", "observe", "setup")

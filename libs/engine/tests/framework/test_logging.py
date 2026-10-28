@@ -7,7 +7,7 @@ from click.testing import CliRunner
 from loguru import logger
 from vivarium.interactive import Simulation as InteractiveSimulation
 
-from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.engine import Simulation
 from vivarium.engine.framework.logging import add_logging_sink, get_log_level
 from vivarium.engine.framework.logging import manager as logging_manager
 from vivarium.engine.framework.logging.manager import LoggingManager
@@ -110,7 +110,7 @@ def test_simulation_context_default_verbosity_is_unchanged(
     requested_verbosity: list[int],
 ) -> None:
     """Non-interactive runs still request info-level logging."""
-    SimulationContext()
+    Simulation()
     assert requested_verbosity == [1]
 
 

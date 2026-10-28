@@ -298,7 +298,7 @@ def test_error_when_cause_defined_in_both_multi_config_and_standard():
 @pytest.mark.slow
 @pytest.mark.cluster
 def test_multi_component_parser_simulation():
-    """Integration test that instantiates a SimulationContext and runs a few timesteps."""
+    """Integration test that instantiates a Simulation and runs a few timesteps."""
 
     plugin_configuration = {
         "required": {

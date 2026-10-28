@@ -7,16 +7,16 @@ import cProfile
 import sys
 
 from scalene import scalene_profiler
-from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.engine import Simulation
 
 
-def run_profile_scalene(sim: SimulationContext):
+def run_profile_scalene(sim: Simulation):
     """Run a Vivarium simulation for scalene profiling purposes."""
     with scalene_profiler.enable_profiling():
         sim.run_simulation()
 
 
-def run_profile_cprofile(sim: SimulationContext, output_file: str):
+def run_profile_cprofile(sim: Simulation, output_file: str):
     """Run a Vivarium simulation for cProfile profiling purposes."""
     with cProfile.Profile() as profiler:
         sim.run_simulation()
@@ -50,7 +50,7 @@ def main():
         print(f"Error parsing config override: {e}", file=sys.stderr)
         sys.exit(1)
 
-    sim = SimulationContext(args.model_specification, configuration=configuration_override)
+    sim = Simulation(args.model_specification, configuration=configuration_override)
 
     if args.profiler == "scalene":
         run_profile_scalene(sim)

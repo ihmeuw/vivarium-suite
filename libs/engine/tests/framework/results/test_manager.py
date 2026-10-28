@@ -41,7 +41,7 @@ from tests.framework.results.helpers import (
 )
 from vivarium.engine import Component
 from vivarium.engine.component import DEFAULT_EVENT_PRIORITY
-from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.engine import Builder, Simulation
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.lifecycle.exceptions import ConstraintError
@@ -1157,7 +1157,7 @@ def test_get_results_is_empty_when_gathering_is_disabled() -> None:
     structurally complete, uniformly zero frames that read as measurements.
     """
     components = [Hogwarts(), NoStratificationsQuidditchWinsObserver()]
-    sim = SimulationContext(configuration=HARRY_POTTER_CONFIG, components=components)
+    sim = Simulation(configuration=HARRY_POTTER_CONFIG, components=components)
     sim._results.set_to_observe(False)
     sim.setup()
     sim.initialize_simulants()
@@ -1176,7 +1176,7 @@ def test_to_observe_gates_the_per_step_listeners() -> None:
 
     def raw_results_after_one_step(observe: bool) -> dict[str, pd.DataFrame]:
         components = [Hogwarts(), NoStratificationsQuidditchWinsObserver()]
-        sim = SimulationContext(configuration=HARRY_POTTER_CONFIG, components=components)
+        sim = Simulation(configuration=HARRY_POTTER_CONFIG, components=components)
         sim._results.set_to_observe(observe)
         sim.setup()
         sim.initialize_simulants()

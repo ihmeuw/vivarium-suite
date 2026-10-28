@@ -101,6 +101,7 @@ intersphinx_mapping = {
         None,
     ),
     "vivarium_artifact": ("https://vivarium-artifact.readthedocs.io/en/latest/", None),
+    "vivarium_interactive": ("https://vivarium-interactive.readthedocs.io/en/latest/", None),
 }
 
 

@@ -11,7 +11,7 @@ time to run the simulation defined by that model specification using
 ``vivarium``. There are two ways to run a single simulation. The command line
 is described below. To run a simulation interactively, for example in a
 notebook, see the
-`vivarium-interactive tutorial <https://vivarium-interactive.readthedocs.io/en/latest/tutorials/interactive.html>`_.
+:ref:`vivarium-interactive tutorial <vivarium_interactive:interactive_tutorial>`.
 
 
 .. toctree::

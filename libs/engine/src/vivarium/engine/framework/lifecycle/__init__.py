@@ -19,7 +19,7 @@ There are two flavors of contracts that this system enforces:
    we can provide very clear errors about what went wrong, rather than
    a deep and unintelligible stack trace.
  - **Ordering Contracts**: The
-   :class:`~vivarium.engine.framework.engine.SimulationContext` will construct
+   :class:`~vivarium.engine.framework.engine.Simulation` will construct
    the formal representation of the life cycle during its initialization.
    Once generated, the context declares as it transitions between
    different lifecycle states and the tools here ensure that only valid

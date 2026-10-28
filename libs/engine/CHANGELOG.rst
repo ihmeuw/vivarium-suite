@@ -1,3 +1,19 @@
+**6.0.0 - 10/28/26**
+
+- **Breaking change.** Rename ``SimulationContext`` to ``Simulation``
+- Rename ``BaseSimulationContext`` to ``BaseSimulation``. The old name remains as an alias
+  for now, since ``vivarium-interactive`` 1.0.0 subclasses it
+- **Breaking change.** Move ``InteractiveContext`` to the new ``vivarium-interactive``
+  package as ``vivarium.interactive.Simulation``. Engine's ``interactive`` and ``test``
+  extras install it
+- **Breaking change.** Move ``log_progress`` and ``run_from_ipython`` from
+  ``vivarium.engine.interface.utilities``, and ``ObservationError`` from
+  ``vivarium.engine.exceptions``, to ``vivarium-interactive``
+- **Breaking change.** Remove ``InteractiveError`` and ``raise_if_not_setup``
+- **Breaking change.** Remove ``get_disease_model_simulation`` from the disease model
+  example. Use ``vivarium.interactive.Simulation(get_model_specification_path())``
+- Move the interactive and exploration tutorials to the ``vivarium-interactive`` docs
+
 **5.19.1 - 10/26/26**
 
 - Add ``InteractiveContext.help()``, which prints the context's methods grouped by task
