@@ -290,6 +290,12 @@ class TestMakeTargets:
         assert result.returncode != 0
         assert "1.3.0 is not one step from the last final release 1.0.0" in result.stderr
 
+    def test_validate_tag_default_keeps_beta_suffix(self, repo: Path) -> None:
+        _git(repo, "tag", "v1.2.0")
+        result = self._make(repo, "validate-tag", "RELEASE_TAG=", "GITHUB_REF_NAME=")
+        assert result.returncode == 0, result.stderr
+        assert "passed for 1.3.0b1" in result.stdout
+
     def test_validate_tag_runs_python_validator(self, repo: Path) -> None:
         _git(repo, "tag", f"{PREFIX}v1.2.0")
         result = self._make(

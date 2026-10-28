@@ -201,10 +201,10 @@ jobs:
         # `make validate-tag` reads RELEASE_TAG as the tag, falling back to
         # GITHUB_REF_NAME. We can't override GITHUB_REF_NAME via a step env
         # block (GitHub Actions reserves the GITHUB_* namespace), so we set
-        # RELEASE_TAG explicitly. TAG_PREFIX tells the script to strip the
-        # lib-prefix before semver parsing and to scope the previous-tag
-        # lookup to this lib's tags. Validation is independent of whether the
-        # tag exists yet (it injects RELEASE_VERSION into the bump check).
+        # RELEASE_TAG explicitly. TAG_PREFIX tells vivarium.build_utils.release_version
+        # to strip the lib prefix before parsing and to scope the previous-tag
+        # lookup to this lib's tags. Validation does not need the tag to exist
+        # yet: it checks the tag name against the CHANGELOG and the released tags.
         env:
           RELEASE_TAG: ${{ matrix.dist }}-v${{ matrix.version }}
           TAG_PREFIX: ${{ matrix.dist }}-
