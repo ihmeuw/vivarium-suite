@@ -94,6 +94,7 @@ strict = true
 disallow_any_unimported = false
 implicit_reexport = true
 exclude = [
+    # Anchor so it matches build/ directories, not backend/build.py or test_build.py
     "(^|/)build/",
     "docs/source/conf.py",
 ]

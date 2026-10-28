@@ -1,3 +1,6 @@
+frontend
+========
+
 .. automodule:: vivarium.workflow.frontend
    :no-members:
 

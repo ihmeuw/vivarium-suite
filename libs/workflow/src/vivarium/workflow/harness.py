@@ -5,8 +5,8 @@ context manager, and plan/run helpers that the per-feature staleness scenarios
 assert against. It is importable and runs without the cluster extra -- it drives
 the backend ``build``/``preview`` directly.
 
-Two parts the ticket names are deferred and are not here: the synchronous
-fake-Jobmon adapter arrives with the bridge, and the selective-staleness
+Two parts are not here yet: the synchronous fake-Jobmon adapter arrives with
+the bridge, and the selective-staleness
 assertions (perturb one input, exactly its cone re-runs) arrive with the code
 fingerprint, since with the always-stale default every step re-runs.
 """
