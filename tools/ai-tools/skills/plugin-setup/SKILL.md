@@ -152,7 +152,10 @@ account, so they should treat it like a password.
 
 Claude Code asks for `simsci`'s options when the plugin is enabled. If the user
 skipped that dialog, or needs to change the token later, have them run
-`/plugin`, open **Installed** > **simsci**, and choose **Configure options**.
+`/plugin`, open **Installed** > **Simulation Science Dev AI Tools** (the
+display name of `simsci`), and choose **Configure options**. A session that was
+open when the plugin was installed or updated does not show **Configure
+options** until the user runs `/reload-plugins` or restarts Claude Code.
 They paste the token into **Jira personal access token**. Claude Code masks the
 field and keeps the value in its credential store, not in `settings.json`. On
 Linux, that store is `~/.claude/.credentials.json`, which only the user can read. The user must type the token into the dialog themselves, so it
