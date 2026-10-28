@@ -73,6 +73,9 @@ For example::
 
     **4.1.0 - 04/28/26**
 
+To release a beta, add ``bN`` to the version, for example ``**4.2.0b1 - 05/04/26**``. See
+"Beta releases" in ``libs/build-utils/README.rst`` for the allowed version steps.
+
 A four-digit year fails the workflow's date check. A release is triggered automatically when a
 ``CHANGELOG.rst`` is updated on ``main`` and the parsed tag does not already exist. The date must
 match the day the change lands on ``main`` (Pacific time), not the day the PR was opened. See

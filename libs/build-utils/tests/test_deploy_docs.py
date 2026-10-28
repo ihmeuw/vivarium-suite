@@ -86,6 +86,17 @@ class TestDeployDocs:
         assert (published / "current").is_symlink()
         assert (published / "current").readlink() == Path("1.2.3")
 
+    def test_beta_publishes_without_moving_current(self, repo: Path, tmp_path: Path) -> None:
+        """A beta's docs are reachable by version, but ``current`` stays on the last final."""
+        docs_root = tmp_path / "docs_root"
+        assert _make(repo, "deploy-docs", f"DOCS_ROOT_PATH={docs_root}").returncode == 0
+        (repo / "CHANGELOG.rst").write_text("**1.3.0b1 - 11/03/26**\n")
+        result = _make(repo, "deploy-docs", f"DOCS_ROOT_PATH={docs_root}")
+        assert result.returncode == 0, result.stderr
+        published = docs_root / DIST_NAME
+        assert (published / "1.3.0b1" / "index.html").exists()
+        assert (published / "current").readlink() == Path("1.2.3")
+
     def test_refuses_workspace_like_name(self, repo: Path, tmp_path: Path) -> None:
         docs_root = tmp_path / "docs_root"
         result = _make(

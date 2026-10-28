@@ -54,7 +54,9 @@ DOCS_BUILD_DIR ?= docs/build
 #   "Unknown option editable_mode").
 EDITABLE_COMPAT_FLAG := $(if $(DIST_NAME_FROM_PROJECT),--config-settings-package $(DIST_NAME_FROM_PROJECT):editable_mode=compat,)
 
-PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+# A final X.Y.Z or a beta X.Y.ZbN. Keep the pattern in sync with
+# RELEASE_VERSION_PATTERN in vivarium.build_utils.release_version.
+PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(b[0-9]+)?' CHANGELOG.rst | head -n 1)
 
 # Use this URL to pull IHME Python packages and deploy this package to PyPi.
 # Override with `make ... IHME_PYPI=` (empty) when running in environments that
@@ -250,9 +252,11 @@ test-docs: # Test documentation examples
 	fi
 
 .PHONY: validate-tag
-validate-tag: # Validate that current git tag matches CHANGELOG and is valid semver
-    # This is intended to be used only by github deploy workflows
-	@bash $(UTILS_DIR)resources/scripts/validate_tag_version.sh
+validate-tag: # Validate that the release tag matches CHANGELOG and is a valid version bump
+    # The GitHub release workflows set RELEASE_TAG or GITHUB_REF_NAME. Jenkins sets
+    # neither, so the tag defaults to the one tag-version creates.
+	@RELEASE_TAG="$${RELEASE_TAG:-$${GITHUB_REF_NAME:-${TAG_PREFIX}v${PACKAGE_VERSION}}}" \
+		python -m vivarium.build_utils.release_version validate-tag
 
 .PHONY: tag-version
 tag-version: # Tag current version and push to git
@@ -300,7 +304,9 @@ deploy-docs: # Deploy documentation to shared server
 	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
 	cp -R $(DOCS_BUILD_DIR)/html/* ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
 	chmod -R 0775 ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
-	cd ${DOCS_ROOT_PATH}/${DOCS_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
+    # A beta's docs are published under its version but never become "current".
+	@case "${PACKAGE_VERSION}" in *b*) echo "Beta ${PACKAGE_VERSION}: not updating the 'current' link." ;; \
+		*) cd ${DOCS_ROOT_PATH}/${DOCS_NAME} && ln -nsFfv ${PACKAGE_VERSION} current ;; esac
 
 .PHONY: clean
 clean: # Clean build artifacts and temporary files
