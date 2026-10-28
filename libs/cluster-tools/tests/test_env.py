@@ -78,10 +78,13 @@ class TestResolveEnvPrefix:
             resolve_env_prefix(str(not_an_env))
         assert repr(str(not_an_env)) in str(info.value)
 
+    @pytest.mark.parametrize("conda_exe", [None, ""], ids=["unset", "empty"])
     def test_unresolvable_name_raises(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, conda_exe: str | None
     ) -> None:
-        """With ``CONDA_EXE`` unset, the error says conda was not searched."""
+        """With ``CONDA_EXE`` unset or empty, the error says conda was not searched."""
+        if conda_exe is not None:
+            monkeypatch.setenv("CONDA_EXE", conda_exe)
         monkeypatch.chdir(tmp_path)
         with pytest.raises(RuntimeError) as info:
             resolve_env_prefix("ghost")
@@ -123,8 +126,17 @@ class TestResolveEnvPrefixFailures:
             ("#!/bin/sh\necho 'conda is broken' >&2\nexit 1\n", "status 1: conda is broken"),
             ("#!/bin/sh\necho 'not json'\n", "JSONDecodeError"),
             ("#!/bin/sh\necho '{}'\n", "KeyError"),
+            ("#!/bin/sh\necho '{\"envs\": null}'\n", "TypeError"),
+            ("#!/bin/sh\necho '[]'\n", "TypeError"),
         ],
-        ids=["missing", "nonzero_exit", "not_json", "no_envs_list"],
+        ids=[
+            "missing",
+            "nonzero_exit",
+            "not_json",
+            "no_envs_list",
+            "null_envs",
+            "not_an_object",
+        ],
     )
     def test_failing_conda_lookup_raises(
         self,
