@@ -17,7 +17,7 @@ This tutorial covers building a context and advancing it. Refer to
 :ref:`Exploring a Simulation in an Interactive Setting <exploration_tutorial>`
 for details on how to examine the internal state and properties of a simulation.
 Once you have a context, call its
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.help` method to list
+:meth:`~vivarium.interactive.simulation.Simulation.help` method to list
 everything it can do.
 
 For the following tutorial, we will assume you have set up an environment and
@@ -40,7 +40,7 @@ Setting up a simulation
 -----------------------
 
 To run a simulation interactively, we will need to create an
-:class:`~vivarium.engine.interface.interactive.InteractiveContext`. There are
+:class:`~vivarium.interactive.simulation.Simulation`. There are
 several (optional) arguments available for construction, but at a bare minimum
 we need to provide the context with a set of :ref:`components <components_concept>`
 that encode all the behavior of the simulation model. Frequently, we'll also
@@ -98,7 +98,7 @@ contains.
    *   - | ``setup``
        - | Whether to set the simulation up on construction. True (the default)
          | freezes the configuration; pass False to change configuration first,
-         | then call :meth:`~vivarium.engine.interface.interactive.InteractiveContext.setup`
+         | then call :meth:`~vivarium.interactive.simulation.Simulation.setup`
          | yourself.
 
 ``observe`` and ``setup`` must be passed by keyword. The other six may be passed
@@ -122,7 +122,7 @@ In this example, we will use the model specification from our
 
 .. _disease_model_yaml:
 
-.. literalinclude:: ../../../../src/vivarium/engine/examples/disease_model/disease_model.yaml
+.. literalinclude:: ../../../../engine/src/vivarium/engine/examples/disease_model/disease_model.yaml
    :caption: **File**: :file:`disease_model.yaml`
 
 Generating a simulation from a model specification is very straightforward,
@@ -130,10 +130,10 @@ as it is the primary use case.
 
 .. code-block:: python
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
 
    p = "/path/to/disease_model.yaml"
-   sim = InteractiveContext(p)
+   sim = Simulation(p)
 
 In order to make it easier to follow along with this tutorial, we've provided
 a convenience function to get the path to the disease model specification
@@ -141,11 +141,11 @@ distributed with ``vivarium-engine``.
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.disease_model import get_model_specification_path
 
    p = get_model_specification_path()
-   sim = InteractiveContext(p)
+   sim = Simulation(p)
 
 The ``sim`` object produced here is all set up and ready to run if you want
 to jump directly to the :ref:`running the simulation <interactive_run>`
@@ -248,8 +248,8 @@ simulation in a very similar manner as before.
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
-   sim = InteractiveContext(components=components, configuration=config)
+   from vivarium.interactive import Simulation
+   sim = Simulation(components=components, configuration=config)
 
 
 Typically when you're working this way, you're not trying to load in and
@@ -276,15 +276,15 @@ or modify the configuration data. You then have to call setup on the simulation
 yourself.
 
 To do this we'll set the ``setup`` flag in the
-:class:`~vivarium.engine.interface.interactive.InteractiveContext` to ``False``.
+:class:`~vivarium.interactive.simulation.Simulation` to ``False``.
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.disease_model import get_model_specification_path
 
    p = get_model_specification_path()
-   sim = InteractiveContext(p, setup=False)
+   sim = Simulation(p, setup=False)
 
 
 This function returns a simulation object that has not been setup yet so we can
@@ -301,7 +301,7 @@ population size to be smaller so the simulation takes less time to run.
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
 We then need to call the
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.setup` method on the
+:meth:`~vivarium.interactive.simulation.Simulation.setup` method on the
 simulation context to prepare it to run.
 
 .. testcode::
@@ -328,7 +328,7 @@ Adding additional components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can also extend an existing model by passing extra components to the
-:class:`~vivarium.engine.interface.interactive.InteractiveContext`. They are
+:class:`~vivarium.interactive.simulation.Simulation`. They are
 added to the components in the model specification, and ``configuration``
 can set values for them.
 
@@ -337,11 +337,11 @@ into our disease model. We could do the following.
 
 .. testcode::
 
-    from vivarium.engine import InteractiveContext
+    from vivarium.interactive import Simulation
     from vivarium.engine.examples.disease_model import get_model_specification_path, Risk, RiskEffect
 
     p = get_model_specification_path()
-    sim = InteractiveContext(
+    sim = Simulation(
         p,
         components=[
             Risk("unsafe_water_source"),
@@ -373,11 +373,11 @@ Removing components should be done with care: if you remove a component without
 removing other components that depend on it, the simulation will break!
 
 You can remove components by creating a model specification and editing it *before* creating
-the InteractiveContext:
+the ``Simulation``:
 
 .. testcode::
 
-    from vivarium.engine import InteractiveContext
+    from vivarium.interactive import Simulation
     from vivarium.engine.framework.configuration import build_model_specification
     from vivarium.engine.examples.disease_model import get_model_specification_path
 
@@ -393,7 +393,7 @@ the InteractiveContext:
     ]
     # This approach can also be used to change configuration
     model_spec.configuration.time.start.year = 2021
-    sim = InteractiveContext(model_spec)
+    sim = Simulation(model_spec)
 
 .. _interactive_run:
 
@@ -402,40 +402,40 @@ Running the simulation
 
 A simulation can be run in several ways once it is set up. The simplest way to
 advance a simulation is to call
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.run` on
+:meth:`~vivarium.interactive.simulation.Simulation.run` on
 it, which will advance it from its current time to the end time specified in
 the simulation :term:`configuration <Configuration>`. If you need finer
 control, there are a set of methods on the context that allow you to run
 the simulation for specified spans of time or numbers of simulation steps.
 Below is a table of the functions that can be called on an
-:class:`~vivarium.engine.interface.interactive.InteractiveContext`
+:class:`~vivarium.interactive.simulation.Simulation`
 to advance a simulation in different ways.
 
-.. list-table:: **InteractiveContext methods for advancing simulations**
+.. list-table:: **Simulation methods for advancing simulations**
    :header-rows: 1
    :widths: 30, 30
 
    *   - Method
        - Description
-   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run`
+   *   - | :meth:`~vivarium.interactive.simulation.Simulation.run`
        - | Run the simulation for its entire duration, from its current time
          | to its end time. The start time and end time are specified in the
          | ``time`` block of the configuration.
-   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.step`
+   *   - | :meth:`~vivarium.interactive.simulation.Simulation.step`
        - | Advance the simulation one step. The step size is taken from the
          | ``time`` block of the configuration.
-   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.take_steps`
+   *   - | :meth:`~vivarium.interactive.simulation.Simulation.take_steps`
        - | Advance the simulation ``n`` steps.
-   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_until`
+   *   - | :meth:`~vivarium.interactive.simulation.Simulation.run_until`
        - | Advance the simulation to a specific time, or until a callable
          | returns ``True``. The time should make sense given the simulation's
          | clock type.
-   *   - | :meth:`~vivarium.engine.interface.interactive.InteractiveContext.run_for`
+   *   - | :meth:`~vivarium.interactive.simulation.Simulation.run_for`
        - | Advance the simulation for a duration. This duration should make
          | sense given the simulation's clock type.
 
 Each of these is easiest to see against the simulation clock, which
-:attr:`current_time <vivarium.engine.interface.interactive.InteractiveContext.current_time>`
+:attr:`~vivarium.engine.framework.engine.BaseSimulationContext.current_time`
 reports. We use a small, short-running configuration here so the whole
 simulation finishes quickly.
 
@@ -443,10 +443,10 @@ simulation finishes quickly.
 
    import pandas as pd
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.engine.examples.disease_model import get_model_specification_path
 
-   sim = InteractiveContext(get_model_specification_path(), setup=False)
+   sim = Simulation(get_model_specification_path(), setup=False)
    sim.configuration.population.population_size = 100
    sim.configuration.time.end.year = 2022
    sim.configuration.time.end.month = 2
@@ -504,15 +504,15 @@ limit, which may go past the end time.
 Observing values as the simulation runs
 +++++++++++++++++++++++++++++++++++++++
 
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_results`
+:meth:`~vivarium.interactive.simulation.Simulation.get_results`
 returns the results of the model's observations, as long as the simulation was
-created with ``InteractiveContext(..., observe=True)``. An ``InteractiveContext``
+created with ``Simulation(..., observe=True)``. An ``Simulation``
 does not observe them by default. See :ref:`getting results <interactive_results>`
 for more detail.
 
 To track a quantity over time that the model's observations do not cover, add
 your own observation with
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`.
+:meth:`~vivarium.interactive.simulation.Simulation.register_observation`.
 This works whether or not ``observe`` is set. Pass each observation as a
 keyword argument: the keyword is the observation's name, and its value is a
 callable that takes the simulation and returns the value to store. Every
@@ -547,7 +547,7 @@ match one that the model already observes.
    dtype: int64
 
 Use
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.pause_observation`
+:meth:`~vivarium.interactive.simulation.Simulation.pause_observation`
 to stop evaluating an observation. Its values are kept in ``get_results``, and
 passing its name to ``register_observation`` (without a callable) resumes it.
 

@@ -63,11 +63,15 @@ still carries the `_TODO (human)...` line verbatim, or it carries content the us
 gave you word for word. Anything else is your writing - put the line back. Say which of
 the two it is when you show the draft and when you report the created key.
 
-Once the user approves the draft, create the ticket via the Jira MCP:
+Once the user approves the draft, create the ticket via the `simsci` plugin's Jira MCP:
 
 ```
-mcp__plugin_mcp-jira_mcp-jira__create_issue(project="MIC", summary="<title>", description="<wiki-markup body>", issue_type="<Task|Bug|Story|...>")
+mcp__plugin_simsci_jira__create_issue(project="MIC", summary="<title>", description="<wiki-markup body>", issue_type="<Task|Bug|Story|...>")
 ```
+
+The same call also takes `priority`, `labels`, `fix_versions`, `story_points`, `epic`,
+`assignee`, `sprint`, and `links`. Set only the values that the user gave or approved in
+the draft.
 
 Report the resulting `MIC-####` key back to the user so it can flow into the branch name (§1) and PR body (§3).
 
@@ -100,6 +104,20 @@ Use the GitHub MCP `create_pull_request` tool and the repo's PR template — not
 A Slack message in `#vivarium_dev` (private channel, ID `GCF5T9TDM`) is the team's primary signal that a PR is ready for review. Open the PR (§3) and take it out of draft (`update_pull_request` with `draft: false`, or `gh pr ready <number>`) first, then post.
 
 Format: `<short description> PR <github-link>` — e.g. `AI Tools Team Conventions PR https://github.com/ihmeuw/vivarium-suite/pull/41`. Keep the description to a handful of words.
+
+After the post, move the PR's MIC ticket to **Ready for Review**. The ticket is the one in the PR body's *JIRA issue* line. If the PR has no such line, use the key in the branch name (§1). If the PR names more than one ticket, move only the primary one, unless the user says otherwise.
+
+First read the ticket's status with `mcp__plugin_simsci_jira__get_issue`. MIC's workflow allows a move to Ready for Review from every status, so the status decides what to do:
+
+- **Ready for Review**: do nothing, and tell the user the ticket is already there. Another move only adds a meaningless entry to the ticket's history.
+- **Done, Won't Do, or Duplicate**: do not move it, because that reopens a closed ticket. Ask the user whether to reopen it or to leave it.
+- **Any other status**: move it:
+
+  ```
+  mcp__plugin_simsci_jira__transition_issue(issue_key="MIC-####", to_status="Ready for Review")
+  ```
+
+If the transition fails because the ticket's workflow has no path to Ready for Review, report the available transitions from the error and ask the user which to use. Do not pick one yourself.
 
 ## 5. Responding to review comments
 

@@ -15,7 +15,7 @@ rates, see the :doc:`risk_effect` tutorial.
 
    import numpy as np
    import pandas as pd
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.risks import Risk, RiskEffect, NonLogLinearRiskEffect
    from vivarium.public_health.disease import *
    from vivarium.public_health.population import BasePopulation
@@ -53,7 +53,7 @@ To run any example in a standalone script, include all of these at the top:
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.risks import Risk, RiskEffect
    from vivarium.public_health.disease import SI, SIS
    from vivarium.public_health.population import BasePopulation
@@ -213,7 +213,7 @@ The simplest risk model sets everyone to exposed:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Risk("risk_factor.test_risk"),
@@ -253,7 +253,7 @@ draw:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Risk("risk_factor.test_risk"),

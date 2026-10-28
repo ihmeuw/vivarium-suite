@@ -1,8 +1,23 @@
-**0.29.0 - TBD/TBD/26**
+**0.31.0 - TBD/TBD/26**
 
 - ``model-development``: pass the iteration plan's change list and quantitative
   expectations, and the verification checks, to ``simsci:_finalize-core`` for the
-  test summary (requires ``simsci`` 0.4.0)
+  test summary (requires ``simsci`` 0.5.0)
+
+**0.30.0 - 10/27/26**
+
+- ``team-conventions``: after a PR leaves draft and is posted to
+  ``#vivarium_dev``, move its MIC ticket to Ready for Review
+
+**0.29.0 - 10/26/26**
+
+- ``team-conventions``, ``ticket-triage``, ``_duplicate_finder``, and
+  ``_claim_auditor``: use the ``jira`` MCP server from ``simsci`` 0.4.0 instead
+  of IHME Infra's ``mcp-jira`` plugin
+  (`MIC-7348 <https://jira.ihme.washington.edu/browse/MIC-7348>`_)
+- ``plugin-setup``: add the setup steps for the ``jira`` MCP server
+- ``ticket-triage``: set the epic in the ``create_issue`` call instead of asking
+  the user to place the ticket after creation
 
 **0.28.0 - 10/13/26**
 

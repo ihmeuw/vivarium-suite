@@ -97,6 +97,9 @@ It includes:
 
 Loaded automatically when the context is relevant to the skill's description.
 
+The skills and agents that read or file Jira tickets use the ``jira`` MCP server
+from the ``simsci`` dependency.
+
 Layout
 ======
 
@@ -138,6 +141,10 @@ This plugin is for Simulation Science team members. It assumes access to the
 team's Jira project, hub space, Jenkins, and Slack channel, and its skills
 redirect ``simsci``'s optional seams to SimSci conventions. Other IHME teams
 should install ``simsci`` only.
+
+The ``jira`` MCP server from ``simsci`` also needs `uv <https://docs.astral.sh/uv/>`_
+on the ``PATH`` and a Jira personal access token. Ask Claude to run the
+``plugin-setup`` skill after installing.
 
 For local development against a checked-out monorepo, point ``marketplace add``
 at the repo root (the directory containing ``.claude-plugin/``), not at

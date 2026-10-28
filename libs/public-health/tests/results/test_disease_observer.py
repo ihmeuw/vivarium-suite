@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.engine import InteractiveContext
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age, disease_model_with_excess_mortality
 from vivarium.public_health.disease import DiseaseModel, DiseaseState
@@ -44,7 +44,7 @@ def _make_t_virus_model(disease: str, year_start: int, year_end: int) -> Disease
 
 def _build_disease_observer_sim(configuration, base_plugins, components, config_update=None):
     """Build and set up a disease-observer sim; the caller steps it."""
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=components,
         configuration=configuration,
         plugin_configuration=base_plugins,
@@ -290,7 +290,7 @@ def test_aging_before_person_time_observation(base_config, base_plugins):
     disease_model = disease_model_with_excess_mortality(year_start, year_end)
     disease_name = "test_disease"
     observer = DiseaseObserver(disease_name)
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             BasePopulation(),
             FertilityDeterministic(),

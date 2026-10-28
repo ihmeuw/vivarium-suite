@@ -53,19 +53,21 @@ Getting things set up
 ---------------------
 
 Before we can start exploring properties of the simulation, we need to get
-our hands on an :class:`~vivarium.engine.interface.interactive.InteractiveContext`. This is
+our hands on a :class:`~vivarium.interactive.simulation.Simulation`. This is
 the object we'll use to examine and run our simulation model. You can check
 out our tutorial on :ref:`setting up a simulation <interactive_setup_tutorial>`
 to see the tools that ``vivarium-engine`` provides for building your own simulation
 context objects. For this tutorial on exploring simulations, however,
-we've provided a convenience function to get you started. In a Jupyter
-notebook or python interpreter, you can run the following
+we'll start from the example disease model that ships with
+``vivarium-engine``. In a Jupyter notebook or python interpreter, you can run
+the following
 
 .. testcode::
 
-   from vivarium.engine.examples.disease_model import get_disease_model_simulation
+   from vivarium.interactive import Simulation
+   from vivarium.engine.examples.disease_model import get_model_specification_path
 
-   sim = get_disease_model_simulation()
+   sim = Simulation(get_model_specification_path())
 
 The ``sim`` object returned here is our simulation context. With it, we're
 ready to begin examining various aspects of the simulation state.
@@ -81,7 +83,7 @@ entry points. Almost everything here works on a freshly built simulation; the on
 exception is called out below.
 
 To see what methods are available, use
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.help`:
+:meth:`~vivarium.interactive.simulation.Simulation.help`:
 
 .. testcode::
 
@@ -98,7 +100,7 @@ To see what methods are available, use
 Components
 ++++++++++
 
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_components`
+:meth:`~vivarium.interactive.simulation.Simulation.list_components`
 returns a mapping of component name to component:
 
 .. testcode::
@@ -116,7 +118,7 @@ returns a mapping of component name to component:
 
 In addition to the mapping returned by ``list_components``, if you know the name
 of a component, you can get it via
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_component`.
+:meth:`~vivarium.interactive.simulation.Simulation.get_component`.
 ``get_component`` is the exception mentioned above: it is restricted to certain
 lifecycle states, and a context that has been set up but not yet stepped is not
 one of them, so it has to be called after the simulation has started moving.
@@ -134,7 +136,7 @@ What runs, and when
 +++++++++++++++++++
 
 Three methods show the order in which things happen.
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_lifecycle_order`
+:meth:`~vivarium.interactive.simulation.Simulation.print_lifecycle_order`
 shows the simulation's lifecycle phases and the states in each, in the order they
 run. A ``*`` marks a phase whose states repeat. See
 :ref:`the simulation lifecycle concept docs <lifecycle_concept>` for what the phases
@@ -162,7 +164,7 @@ and states are.
         simulation_end
         report
 
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_schedule`
+:meth:`~vivarium.interactive.simulation.Simulation.get_schedule`
 returns what runs in each lifecycle state as a frame indexed by phase, state and
 priority. It lists each action with its priority, and it lists each
 observation at the state and priority where it is made. The states of the
@@ -195,8 +197,8 @@ here have ``active`` set to False. They are listed anyway so that you can see
 when they would run. Pass ``observe=True`` when you build the context to make
 them run.
 
-Interactive observations you add to an :class:`~vivarium.engine.interface.interactive.InteractiveContext`
-via :meth:`~vivarium.engine.interface.interactive.InteractiveContext.register_observation`
+Interactive observations you add to a :class:`~vivarium.interactive.simulation.Simulation`
+via :meth:`~vivarium.interactive.simulation.Simulation.register_observation`
 are listed at the end of the ``main_loop`` phase, with ``kind`` set to
 ``"observation (interactive)"``. They have no state, priority, or component
 because they do not run in a lifecycle state. They run once when registered,
@@ -210,7 +212,7 @@ or at the end of setup if registered before it, and then after every step.
     are added or reordered in the model specification. Do not write code that
     depends on it.
 
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
+:meth:`~vivarium.interactive.simulation.Simulation.print_initializer_order`
 shows the order in which components populate new simulants.
 
 .. note::
@@ -244,9 +246,9 @@ precise. A simulation exposes two things that are similar but not identical:
 :term:`Attributes <Attribute>` - computed by
 :term:`attribute pipelines <Attribute Pipeline>` - are simulant-specific values;
 they are the columns of the :term:`state table <Population State Table>`.
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_attributes`
+:meth:`~vivarium.interactive.simulation.Simulation.list_attributes`
 lists the names of all of the attributes in a given simulation and
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_population`
+:meth:`~vivarium.interactive.simulation.Simulation.get_population`
 gets their current values.
 
 .. code-block:: python
@@ -271,7 +273,7 @@ gets their current values.
 .. testcode::
     :hide:
 
-    fresh = get_disease_model_simulation()
+    fresh = Simulation(get_model_specification_path())
     attribute_names = fresh.list_attributes()
     assert len(attribute_names) == 24
     assert attribute_names[0:4] == ["entrance_time", "age", "sex", "mortality_rate"]
@@ -281,7 +283,7 @@ gets their current values.
     assert pop["age"].between(0, 5).all()
 
 Should you need the actual AttributePipeline object itself, use
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`.
+:meth:`~vivarium.interactive.simulation.Simulation.get_attribute`.
 Printing one reports what it represents and where its value comes from: the
 source, the modifiers that adjust it, and the post-processors applied.
 
@@ -327,9 +329,9 @@ source, the modifiers that adjust it, and the post-processors applied.
 An attribute pipeline (which produces attributes) is a specific type of the more
 generic :term:`Pipeline`, which produces :term:`values <Value>`. While attributes
 are simulant-specific and tabular in shape, values can be anything at all.
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.list_values`
+:meth:`~vivarium.interactive.simulation.Simulation.list_values`
 lists the names of any available values and
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
+:meth:`~vivarium.interactive.simulation.Simulation.get_value`
 returns the corresponding pipeline object itself.
 
 .. testcode::
@@ -406,7 +408,7 @@ Finding something by name
 
 Everything above assumes you already know what the thing you want is called, and
 which kind of thing it is; you might not know either.
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+:meth:`~vivarium.interactive.simulation.Simulation.find_resources`
 takes a fragment of a name and reports every :term:`resource <Resource>` whose own
 name, or whose component's name, contains it, along with the type of each one.
 
@@ -464,13 +466,13 @@ registered it.
     not much to gain from reporting it. An initializer is named for the call that
     fills a column rather than for the quantity you would search for, so it crowds
     the results;
-    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_initializer_order`
+    :meth:`~vivarium.interactive.simulation.Simulation.print_initializer_order`
     reports those instead.
 
 .. note::
 
     The resource graph holds no combiners or post-processors, so
-    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+    :meth:`~vivarium.interactive.simulation.Simulation.find_resources`
     cannot find those. Once you have located a pipeline, printing it reports them,
     as shown above.
 
@@ -495,11 +497,11 @@ somewhere in its name.
 
 Each resource type can be retrieved:
 
-- ``value``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_value`
-- ``attribute``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_attribute`
+- ``value``: :meth:`~vivarium.interactive.simulation.Simulation.get_value`
+- ``attribute``: :meth:`~vivarium.interactive.simulation.Simulation.get_attribute`
 - ``value_modifier``: no getter; use the corresponding pipeline's ``modifiers``
   attribute to inspect them
-- ``lookup_table``: :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_lookup_table`
+- ``lookup_table``: :meth:`~vivarium.interactive.simulation.Simulation.get_lookup_table`
 
 For example, we can get the mortality rate lookup table found above:
 
@@ -529,7 +531,7 @@ Following a resource's dependencies
 -----------------------------------
 
 Once you have found a resource, you might be interested in what it uses and/or what
-uses it. :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_dependencies`
+uses it. :meth:`~vivarium.interactive.simulation.Simulation.print_dependencies`
 answers both. Pass ``direction="uses"`` to print what the resource uses and ``direction="used-by"``
 to print what other resources use it.
 
@@ -594,7 +596,7 @@ Pass ``depth=None`` to walk a chain to its end.
 
     The dependency tree includes columns, initializers, and streams despite those
     being excluded from the results of a 
-    :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+    :meth:`~vivarium.interactive.simulation.Simulation.find_resources`
     call. These are included here because they are part of the dependency graph
     and so are relevant to understanding what a resource uses and what uses it.
 
@@ -637,7 +639,7 @@ Getting the dependencies as objects
 
 The tree is for reading. To work with a resource object itself, you can explicitly
 fetch it via the appropriate method or use 
-:meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_dependencies`
+:meth:`~vivarium.interactive.simulation.Simulation.get_dependencies`
 to get a list of all *direct* (depth=1) dependencies of a resource.
 
 .. testcode::
@@ -652,9 +654,9 @@ to get a list of all *direct* (depth=1) dependencies of a resource.
    value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality
    value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality
 
-Unlike :meth:`~vivarium.engine.interface.interactive.InteractiveContext.print_dependencies`,
+Unlike :meth:`~vivarium.interactive.simulation.Simulation.print_dependencies`,
 this will not return columns, randomness streams, and initializers (the same types
-a :meth:`~vivarium.engine.interface.interactive.InteractiveContext.find_resources`
+a :meth:`~vivarium.interactive.simulation.Simulation.find_resources`
 call omits).
 
 .. _interactive_results:
@@ -663,7 +665,7 @@ Observed results
 ----------------
 
 While the state table is always available for inspection in an interactive
-context (via :meth:`~vivarium.engine.interface.interactive.InteractiveContext.get_population`),
+context (via :meth:`~vivarium.interactive.simulation.Simulation.get_population`),
 results are not observed by default. Any
 :class:`observers <vivarium.engine.framework.results.observer.Observer>` the
 model declares are still registered and still maintain their own state-table
@@ -673,10 +675,10 @@ observers and observations.
 
 .. testcode::
 
-    from vivarium.engine import InteractiveContext
+    from vivarium.interactive import Simulation
     from vivarium.engine.examples.disease_model import get_model_specification_path
 
-    sim = InteractiveContext(get_model_specification_path())
+    sim = Simulation(get_model_specification_path())
     sim.take_steps(10)
     print(sim.get_results())
 
@@ -688,7 +690,7 @@ Pass ``observe=True`` to collect them:
 
 .. code-block:: python
 
-    sim = InteractiveContext(get_model_specification_path(), observe=True)
+    sim = Simulation(get_model_specification_path(), observe=True)
     sim.take_steps(10)
     for metric, results in sim.get_results().items():
         print(metric)
@@ -708,14 +710,14 @@ Pass ``observe=True`` to collect them:
 
     from datetime import timedelta
 
-    from vivarium.engine import InteractiveContext
+    from vivarium.interactive import Simulation
     from vivarium.engine.examples.disease_model import get_model_specification_path
     from vivarium.engine.framework.utilities import from_yearly
     from vivarium.fuzzy_checker import FuzzyChecker
 
     fuzzy_checker = FuzzyChecker()
 
-    sim = InteractiveContext(get_model_specification_path(), observe=True)
+    sim = Simulation(get_model_specification_path(), observe=True)
     n_steps = 10
     sim.take_steps(n_steps)
 
@@ -772,7 +774,7 @@ are used for inspecting the state table and pipelines and so there is no need
 to spend time observing results.
 
 Note that because the observers' listeners are registered during setup,
-``observe`` has to be decided when the InteractiveContext is constructed; it
+``observe`` has to be decided when the ``Simulation`` is constructed; it
 cannot be changed during a simulation.
 
 Case study #1: population epidemiology
@@ -796,9 +798,10 @@ configuration by simply printing it.
 
 .. testsetup:: configuration
 
-    from vivarium.engine.examples.disease_model import get_disease_model_simulation
+    from vivarium.interactive import Simulation
+    from vivarium.engine.examples.disease_model import get_model_specification_path
 
-    sim = get_disease_model_simulation()
+    sim = Simulation(get_model_specification_path())
 
     del sim.configuration['input_data']
     del sim.configuration['stratification']['excluded_categories']
@@ -968,8 +971,8 @@ configuration works in the
 
 One final note: because the simulation has already been setup, you can no longer
 modify the configuration. You must modify the configuration prior to 
-constructing the ``InteractiveContext``, or by constructing it via
-`sim = InteractiveContext(..., setup=False)` and then calling `sim.setup()`
+constructing the ``Simulation``, or by constructing it via
+`sim = Simulation(..., setup=False)` and then calling `sim.setup()`
 when ready to proceed.
 
 .. testcode::
@@ -1045,7 +1048,7 @@ demographics (your exact values will vary with the random draws):
 .. testcode::
     :hide:
 
-    fresh = get_disease_model_simulation()
+    fresh = Simulation(get_model_specification_path())
 
     pop = fresh.get_population(
         [

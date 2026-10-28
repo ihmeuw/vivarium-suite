@@ -34,6 +34,10 @@ gbd-mapping:
   - changed-files:
     - any-glob-to-any-file: 'libs/gbd-mapping/**'
 
+interactive:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/interactive/**'
+
 profiling:
   - changed-files:
     - any-glob-to-any-file: 'libs/profiling/**'

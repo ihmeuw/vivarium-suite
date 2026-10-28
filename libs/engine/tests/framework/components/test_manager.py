@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from vivarium.config_tree import ConfigTree
+from vivarium.interactive import Simulation
 
 from tests.helpers import MockComponentA, MockComponentB, MockGenericComponent, MockManager
 from vivarium.engine import Component
@@ -15,7 +16,6 @@ from vivarium.engine.framework.components.manager import (
 )
 from vivarium.engine.framework.configuration import build_simulation_configuration
 from vivarium.engine.framework.engine import Builder
-from vivarium.engine.interface import InteractiveContext
 from vivarium.engine.manager import Manager
 
 if TYPE_CHECKING:
@@ -344,7 +344,7 @@ def test_setting_current_component() -> None:
     component1 = TestComponent("component1")
     component2 = TestComponent("component2")
 
-    InteractiveContext(components=[component1, component2])
+    Simulation(components=[component1, component2])
 
     assert component1.component == component1
     assert component2.component == component2

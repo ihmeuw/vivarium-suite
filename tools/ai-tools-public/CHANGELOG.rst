@@ -1,4 +1,4 @@
-**0.4.0 - TBD/TBD/26**
+**0.5.0 - TBD/TBD/26**
 
 - Add a ``_test_summarizer`` agent that summarizes a PR's tests: one table per
   changed source file, with the columns Case, Error / success, Expected, and
@@ -7,6 +7,17 @@
   ``/simsci:framework-development``, takes optional strategy items and
   outside-suite checks from its caller, and posts each table as a file-level
   review comment on its file
+
+**0.4.0 - 10/26/26**
+
+- Add a local ``jira`` MCP server for IHME's Jira to replace IHME Infra's
+  ``mcp-jira`` plugin
+- Add the ability to set story points, priority, fix versions, sprint, and epic,
+  retaining all other functionality of the Infra plugin
+- Ask for the Jira token and an optional default project in the plugin's
+  options (`MIC-7348 <https://jira.ihme.washington.edu/browse/MIC-7348>`_)
+- Show an issue's sub-tasks and a sub-task's parent, and add
+  ``convert_to_subtask`` to turn an issue into a sub-task of another issue
 
 **0.3.1 - 10/13/26**
 

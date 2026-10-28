@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.engine import InteractiveContext
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age, disease_model_with_excess_mortality
 from vivarium.public_health.disease import DiseaseModel, DiseaseState
@@ -49,7 +49,7 @@ def simulation_after_one_step(base_config, base_plugins):
     mumps = disease_with_excess_mortality(base_config, "mumps", 20)
     # TODO: Add test against using a RiskAttributableDisease in addition to a DiseaseModel
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             MortalityObserver(),
             BasePopulation(),
@@ -163,7 +163,7 @@ def test_aggregation_configuration(base_config, base_plugins):
     flu = disease_with_excess_mortality(base_config, "flu", 10)
     mumps = disease_with_excess_mortality(base_config, "mumps", 20)
 
-    aggregate_sim = InteractiveContext(
+    aggregate_sim = Simulation(
         components=[
             BasePopulation(),
             flu,
@@ -214,7 +214,7 @@ def test_category_exclusions(base_config, base_plugins, exclusions):
     flu = disease_with_excess_mortality(base_config, "flu", 10)
     mumps = disease_with_excess_mortality(base_config, "mumps", 20)
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             BasePopulation(),
             flu,
@@ -298,7 +298,7 @@ def test_person_time_includes_dying_simulants(base_config, base_plugins):
     disease_model = disease_model_with_excess_mortality(year_start, year_end)
     disease_name = "test_disease"
     observer = DiseaseObserver(disease_name)
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             BasePopulation(),
             disease_model,

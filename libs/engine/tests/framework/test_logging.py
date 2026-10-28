@@ -5,13 +5,13 @@ import click
 import pytest
 from click.testing import CliRunner
 from loguru import logger
+from vivarium.interactive import Simulation as InteractiveSimulation
 
 from vivarium.engine.framework.engine import SimulationContext
 from vivarium.engine.framework.logging import add_logging_sink, get_log_level
 from vivarium.engine.framework.logging import manager as logging_manager
 from vivarium.engine.framework.logging.manager import LoggingManager
 from vivarium.engine.interface.cli_tools import verbose_option
-from vivarium.engine.interface.interactive import InteractiveContext
 
 
 @pytest.mark.parametrize(
@@ -94,7 +94,7 @@ def requested_verbosity(monkeypatch: pytest.MonkeyPatch) -> list[int]:
 
 
 def test_interactive_context_is_quiet_by_default(requested_verbosity: list[int]) -> None:
-    InteractiveContext(setup=False)
+    InteractiveSimulation(setup=False)
     assert requested_verbosity == [0]
 
 
@@ -102,7 +102,7 @@ def test_interactive_context_is_quiet_by_default(requested_verbosity: list[int])
 def test_interactive_context_honors_explicit_verbosity(
     requested_verbosity: list[int], verbosity: int
 ) -> None:
-    InteractiveContext(setup=False, logging_verbosity=verbosity)
+    InteractiveSimulation(setup=False, logging_verbosity=verbosity)
     assert requested_verbosity == [verbosity]
 
 

@@ -12,6 +12,7 @@ import pytest
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
 from vivarium.config_tree import ConfigTree
+from vivarium.interactive import Simulation as InteractiveSimulation
 
 from tests.framework.results.helpers import (
     FAMILIARS,
@@ -31,7 +32,7 @@ from tests.helpers import (
     MockComponentA,
     MockComponentB,
 )
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.artifact import ArtifactInterface, ArtifactManager
 from vivarium.engine.framework.components import (
     ComponentConfigError,
@@ -548,7 +549,7 @@ def test_SimulationContext_load_from_backup(
 def test_private_columns_get_registered() -> None:
     component1 = ColumnCreator()
     component2 = AttributePipelineCreator()
-    sim = InteractiveContext(components=[component1, component2], setup=False)
+    sim = InteractiveSimulation(components=[component1, component2], setup=False)
     assert sim._population._private_column_metadata == {}
     sim.setup()
     metadata = sim._population._private_column_metadata
@@ -582,6 +583,6 @@ def _get_num_steps(sim: SimulationContext_) -> int:
 def test_simulation_context_gathers_results_by_default(
     SimulationContext: type[SimulationContext_], components: list[Component]
 ) -> None:
-    """Only InteractiveContext turns gathering off; the non-interactive default must not."""
+    """Only InteractiveSimulation turns gathering off; the non-interactive default must not."""
     sim = SimulationContext(components=components)
     assert sim._results.to_observe

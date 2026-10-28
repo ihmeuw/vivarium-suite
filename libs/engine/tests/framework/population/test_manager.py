@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
+from vivarium.interactive import Simulation
 
 from tests.framework.population.conftest import CUBE_COL_NAMES, PIE_COL_NAMES, PIE_RECORDS
 from tests.framework.population.helpers import (
@@ -23,7 +24,7 @@ from tests.helpers import (
     MultiLevelSingleColumnCreator,
     SingleColumnCreator,
 )
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.population.exceptions import PopulationError
@@ -92,7 +93,7 @@ def test_get_population_different_attribute_types() -> None:
     and attribute pipelines that return dataframes instead of series'."""
     component1 = ColumnCreator()
     component2 = AttributePipelineCreator()
-    sim = InteractiveContext(components=[component1, component2], setup=True)
+    sim = Simulation(components=[component1, component2], setup=True)
     pop = sim._population.get_population("all")
     # We have columnar multi-index due to AttributePipelines that return dataframes
     assert isinstance(pop.columns, pd.MultiIndex)
@@ -117,12 +118,12 @@ class TestGetPopulationSqueezing:
     """Tests for squeeze behavior on get_population with specific columns."""
 
     @pytest.fixture(scope="class")
-    def sim(self) -> InteractiveContext:
-        return InteractiveContext(components=[ColumnCreator(), AttributePipelineCreator()])
+    def sim(self) -> Simulation:
+        return Simulation(components=[ColumnCreator(), AttributePipelineCreator()])
 
     def assert_squeezing(
         self,
-        sim: InteractiveContext,
+        sim: Simulation,
         columns: list[str] | Literal["all"],
         assert_fn: Any,
         *assert_args: Any,
@@ -131,20 +132,18 @@ class TestGetPopulationSqueezing:
         squeezed = sim._population.get_population(columns, squeeze=True)
         assert_fn(unsqueezed, squeezed, *assert_args)
 
-    def test_single_level_single_column_returns_series(self, sim: InteractiveContext) -> None:
+    def test_single_level_single_column_returns_series(self, sim: Simulation) -> None:
         self.assert_squeezing(
             sim, ["test_column_1"], assert_squeezing_single_level_single_col
         )
 
-    def test_single_level_multi_column_returns_dataframe(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_single_level_multi_column_returns_dataframe(self, sim: Simulation) -> None:
         self.assert_squeezing(
             sim, ["test_column_1", "test_column_2"], assert_squeezing_single_level_multi_col
         )
 
     def test_multi_level_single_outer_single_inner_returns_series(
-        self, sim: InteractiveContext
+        self, sim: Simulation
     ) -> None:
         self.assert_squeezing(
             sim,
@@ -153,7 +152,7 @@ class TestGetPopulationSqueezing:
         )
 
     def test_multi_level_single_outer_multi_inner_returns_inner_dataframe(
-        self, sim: InteractiveContext
+        self, sim: Simulation
     ) -> None:
         self.assert_squeezing(
             sim,
@@ -161,9 +160,7 @@ class TestGetPopulationSqueezing:
             assert_squeezing_multi_level_single_outer_multi_inner,
         )
 
-    def test_multi_level_multi_outer_returns_full_dataframe(
-        self, sim: InteractiveContext
-    ) -> None:
+    def test_multi_level_multi_outer_returns_full_dataframe(self, sim: Simulation) -> None:
         self.assert_squeezing(
             sim,
             ["test_column_1", "attribute_generating_columns_6_7"],
@@ -171,17 +168,17 @@ class TestGetPopulationSqueezing:
         )
 
     def test_all_columns_single_level_single_column_returns_series(self) -> None:
-        sim = InteractiveContext(components=[SingleColumnCreator()])
+        sim = Simulation(components=[SingleColumnCreator()])
         self.assert_squeezing(
             sim, "all", assert_squeezing_single_level_single_col, "test_column_1"
         )
 
     def test_all_columns_single_level_multi_column_returns_dataframe(self) -> None:
-        sim = InteractiveContext(components=[ColumnCreator()])
+        sim = Simulation(components=[ColumnCreator()])
         self.assert_squeezing(sim, "all", assert_squeezing_single_level_multi_col)
 
     def test_all_columns_multi_level_single_outer_single_inner_returns_series(self) -> None:
-        sim = InteractiveContext(components=[MultiLevelSingleColumnCreator()])
+        sim = Simulation(components=[MultiLevelSingleColumnCreator()])
         self.assert_squeezing(
             sim,
             "all",
@@ -192,14 +189,14 @@ class TestGetPopulationSqueezing:
     def test_all_columns_multi_level_single_outer_multi_inner_returns_inner_dataframe(
         self,
     ) -> None:
-        sim = InteractiveContext(components=[MultiLevelMultiColumnCreator()])
+        sim = Simulation(components=[MultiLevelMultiColumnCreator()])
         sim._population._attribute_pipelines.pop("some_other_attribute")
         self.assert_squeezing(
             sim, "all", assert_squeezing_multi_level_single_outer_multi_inner
         )
 
     def test_all_columns_multi_level_multi_outer_returns_full_dataframe(self) -> None:
-        sim = InteractiveContext(components=[ColumnCreator(), AttributePipelineCreator()])
+        sim = Simulation(components=[ColumnCreator(), AttributePipelineCreator()])
         self.assert_squeezing(sim, "all", assert_squeezing_multi_level_multi_outer)
 
 
@@ -234,9 +231,7 @@ def test_get_population_column_ordering(include_duplicates: bool, query: str | N
                     expected_cols.append(col_tuple)
         return expected_cols
 
-    def _check_col_ordering(
-        sim: InteractiveContext, kwargs: dict[str, str | list[str]]
-    ) -> None:
+    def _check_col_ordering(sim: Simulation, kwargs: dict[str, str | list[str]]) -> None:
         pop = sim._population.get_population(**kwargs)  # type: ignore[call-overload]
         expected_cols = _extract_ordered_list(cols)
         assert isinstance(pop.columns, pd.MultiIndex)
@@ -245,7 +240,7 @@ def test_get_population_column_ordering(include_duplicates: bool, query: str | N
 
     component1 = ColumnCreator()
     component2 = AttributePipelineCreator()
-    sim = InteractiveContext(components=[component1, component2], setup=True)
+    sim = Simulation(components=[component1, component2], setup=True)
 
     cols = ["test_column_1", "attribute_generating_columns_4_5", "test_attribute"]
     if include_duplicates:
@@ -299,7 +294,7 @@ def test__get_attributes_three_or_more_levels_not_implemented() -> None:
                 ),
             )
 
-    sim = InteractiveContext(components=[BadAttributeCreator()], setup=True)
+    sim = Simulation(components=[BadAttributeCreator()], setup=True)
     with pytest.raises(
         NotImplementedError,
         match="Multi-level columns in attribute pipeline outputs are not supported.",
@@ -434,7 +429,7 @@ def test_register_initializer_duplicate_raises(mocker: MockerFixture) -> None:
 def test_get_private_columns(
     components: list[Component], index: pd.Index[int] | None, columns: list[str] | None
 ) -> None:
-    sim = InteractiveContext(components=components)
+    sim = Simulation(components=components)
     kwargs: dict[str, pd.Index[int] | list[str]] = {}
     if index is not None:
         kwargs["index"] = index
@@ -456,7 +451,7 @@ def test_get_private_columns_squeezing() -> None:
 
     # Single-level, single-column -> series
     single_col_creator = SingleColumnCreator()
-    sim = InteractiveContext(components=[single_col_creator], setup=True)
+    sim = Simulation(components=[single_col_creator], setup=True)
     unsqueezed = sim._population.get_private_columns(
         single_col_creator, columns=["test_column_1"]
     )
@@ -470,7 +465,7 @@ def test_get_private_columns_squeezing() -> None:
 
     # Single-level, multiple-column -> dataframe
     col_creator = ColumnCreator()
-    sim = InteractiveContext(components=[col_creator], setup=True)
+    sim = Simulation(components=[col_creator], setup=True)
     # There's no way to squeeze here.
     df = sim._population.get_private_columns(
         col_creator, columns=["test_column_1", "test_column_2", "test_column_3"]
@@ -508,7 +503,7 @@ def test_get_private_columns_raises_bad_column_request() -> None:
 
 def test_get_population_index() -> None:
     component = AttributePipelineCreator()
-    sim = InteractiveContext(components=[component], setup=False)
+    sim = Simulation(components=[component], setup=False)
     with pytest.raises(PopulationError, match="Population has not been initialized."):
         sim._population.get_population_index()
     sim.setup()
@@ -522,7 +517,7 @@ def test_forget_to_create_columns() -> None:
             pass
 
     with pytest.raises(PopulationError, match="not actually created"):
-        InteractiveContext(components=[ColumnForgetter()])
+        Simulation(components=[ColumnForgetter()])
 
 
 def test_create_already_existing_columns_fails() -> None:
@@ -533,7 +528,7 @@ def test_create_already_existing_columns_fails() -> None:
         PopulationError,
         match="Component 'same_column_creator' is attempting to register private column 'test_column_1' but it is already registered by component 'column_creator'.",
     ):
-        InteractiveContext(components=[ColumnCreator(), SameColumnCreator()])
+        Simulation(components=[ColumnCreator(), SameColumnCreator()])
 
 
 def test_register_tracked_query(mocker: MockerFixture) -> None:
@@ -746,9 +741,9 @@ class TypedColumnCreator(Component):
         )
 
 
-def _grow(*components: Component) -> InteractiveContext:
+def _grow(*components: Component) -> Simulation:
     """Build a simulation that adds ``ADDED`` simulants on its first step."""
-    return InteractiveContext(
+    return Simulation(
         components=[*components, SimulantAdder(ADDED)],
         configuration={"population": {"population_size": INITIAL_SIZE}},
         setup=True,
@@ -1004,7 +999,7 @@ def test_read_spanning_both_frames_raises() -> None:
 def test_creator_returns_the_whole_population_index() -> None:
     """The creator hands back the whole population, not just the simulants it added."""
     adder = SimulantAdder(ADDED)
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[ColumnCreator(), adder],
         configuration={"population": {"population_size": INITIAL_SIZE}},
         setup=True,
@@ -1025,7 +1020,7 @@ def test_zero_count_addition_changes_nothing() -> None:
     no-op addition apart from one that added nothing new.
     """
     adder = SimulantAdder(0)
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[ColumnCreator(), TypedColumnCreator(), adder],
         configuration={"population": {"population_size": INITIAL_SIZE}},
         setup=True,
@@ -1095,7 +1090,7 @@ def test_adding_to_a_rowless_population_keeps_the_new_dtypes() -> None:
     been. Concatenating that rowless column with the staged frame would resolve to
     the wrong dtype and lose the real one.
     """
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[ComprehensionColumnCreator(), SimulantAdder(5)],
         configuration={"population": {"population_size": 0}},
         setup=True,
