@@ -228,7 +228,7 @@ triage.
    so the **scope line is already drawn**; its residual issues are the **leftover**
    set; the hold-out paths from step 1 stay uncommitted; and the partition rule
    from step 2 governs. Carry any "unverified" status through as the verification
-   verdict. For the PR's Testing section, pass the plan's per-layer change list and
+   verdict. For the test summary, pass the plan's per-layer change list and
    quantitative expectations as the **strategy items**, and the verification
    checks and local `simulate` run as the **outside-suite checks**, each with its
    result or "unverified" status.

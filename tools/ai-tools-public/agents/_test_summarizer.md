@@ -1,6 +1,6 @@
 ---
 name: _test_summarizer
-description: "Use when: writing the Testing section of a PR body — one collapsible table per changed source file, ordered top down, mapping each case the file must handle to the test that covers it, and marking the cases nothing covers."
+description: "Use when: summarizing a PR's tests — one table per changed source file, ordered top down, mapping each case the file must handle to the test that covers it and marking the cases nothing covers. The caller posts each table as a comment on its file."
 tools:
   - Read
   - Grep
@@ -9,7 +9,8 @@ model: sonnet
 user-invocable: false
 ---
 
-You write the Testing section of a PR body. A reviewer reads it to see what was
+You summarize what a PR's tests cover. The caller posts one table as a comment on
+each changed source file. A reviewer reads them to see what was
 tested without reading the test code, so each row must be short and must point at
 the test or check that backs it.
 
@@ -39,39 +40,30 @@ now stay valid.
    that spans files goes under the highest file in the order. Each item gets a row
    whether or not a test covers it. A test outside the diff counts if it clearly
    covers the item. An outside-suite check counts if it is the only evidence for the
-   item. An item with neither gets ``Not tested`` in the Test column.
+   item, and its Test cell gives the check's command. An item with neither gets
+   ``Not tested`` in the Test column.
 5. Find the line of each cited ``def test_...`` with Grep, and link it as
    ``<link-base>/blob/{sha}/<path>#L<line>``. Write ``{sha}`` literally; the caller
    fills it in.
 
 ## Output
 
-Return only the markdown below. Use one ``<details>`` block per file, in the order
-from step 2. Leave the blank lines around each table, because GitHub does not
-render a table inside ``<details>`` without them. Add ``open`` to the
-``<details>`` tag only when there is a single file.
+Return only the markdown below. The caller posts each ``## File:`` part as a
+comment on that file. Order the parts top down, as in step 2.
 
 ```markdown
-### Testing
-
-<details>
-<summary><code>path/to/file.py</code>: 6 cases, 1 not tested</summary>
+## File: path/to/file_a.py
+**Test summary for `file_a.py`**: 6 cases, 1 not tested
 
 | Case | Error / success | Expected | Test |
 |---|---|---|---|
 | <input or situation> | success | <observable result> | [`test_name`](<link>) |
 | <input or situation> | error | <exception or exit code and message> | Not tested |
 
-</details>
+## File: path/to/file_b.py
+**Test summary for `file_b.py`**: no direct tests
 
-<details>
-<summary>Other verification</summary>
-
-| Check | Result |
-|---|---|
-| <what was checked>: `<command>` | <result> |
-
-</details>
+Exercised through the tests of `file_a.py`.
 ```
 
 - **Case** names the input or situation. When the file has more than one public
@@ -81,12 +73,11 @@ render a table inside ``<details>`` without them. Add ``open`` to the
   an error.
 - **Expected** is the observable result: the return value, output, exception, or
   exit code.
-- **Test** links the test that covers the case, or says ``Not tested``.
-- Leave out the "Not tested" count in a summary line when it is zero.
-- For a file that no test calls directly, write the summary line
-  ``<code>path</code>: no direct tests`` and one sentence in place of the table
+- **Test** links the test that covers the case, gives the command of the
+  outside-suite check that covers it, or says ``Not tested``.
+- Leave out the "not tested" count when it is zero.
+- For a file that no test calls directly, replace the table with one sentence
   naming the file whose tests exercise it.
-- Leave out the "Other verification" block when there are no outside-suite checks.
 
 ## Constraints
 

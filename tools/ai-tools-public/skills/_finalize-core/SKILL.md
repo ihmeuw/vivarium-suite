@@ -1,6 +1,6 @@
 ---
 name: _finalize-core
-description: "Internal building block invoked by /simsci:pr-prep, /simsci:framework-development's Phase 5, and a model-development loop: takes work that is already reviewed and validated and prepares it for review — leftover-finding triage, the PR's Testing section, the PR approval gate, a reviewable commit history, the draft PR, and the PR comment recording what was not addressed. Not an entry point — to review and prepare your own branch, use /simsci:pr-prep."
+description: "Internal building block invoked by /simsci:pr-prep, /simsci:framework-development's Phase 5, and a model-development loop: takes work that is already reviewed and validated and prepares it for review — leftover-finding triage, the test summary posted on each changed file, the PR approval gate, a reviewable commit history, the draft PR, and the PR comment recording what was not addressed. Not an entry point — to review and prepare your own branch, use /simsci:pr-prep."
 allowed-tools: Read, Grep, Glob, Bash, Agent(simsci:_split_proposer, simsci:_test_summarizer)
 user-invocable: false
 ---
@@ -24,7 +24,7 @@ some runs — **hold-out paths** that must stay uncommitted, and a PR partition 
 if this ships as a stack rather than one PR. Ask for anything missing rather than
 inferring it.
 
-Two more inputs feed the PR's Testing section, and both are optional: the
+Two more inputs feed the test summary, and both are optional: the
 **strategy items** the design agreed should be tested, and any **outside-suite
 checks** — checks this session ran outside the test suite that are the only
 evidence for a behavior, each with its command and result. Do not ask for either
@@ -46,8 +46,9 @@ an empty PR.
 Then dispatch `simsci:_test_summarizer` with the diff against the base, the
 changed-file list, the strategy items and outside-suite checks if the caller has
 them, and the repo's GitHub URL as the link base. Do this in the same turn as
-Step 2. It returns the PR's Testing section: one collapsible table per changed
-source file, with ``{sha}`` in each link where the head commit goes. Step 4 regroups commits but never changes file contents, so the
+Step 2. It returns one table per changed source file to post as a comment on
+that file. Each link
+has ``{sha}`` where the head commit goes. Step 4 regroups commits but never changes file contents, so the
 line numbers in those links stay valid. In a stack, dispatch one per PR, each with
 that PR's slice of the diff.
 
@@ -72,11 +73,10 @@ filed", or "unresolved" — because that is what Step 6 reports.
 
 ## Step 3 — Gate on the PR
 
-**Gate — approve the PR.** Show in one place: Step 1's summary, the Testing
-section's summary line for each file and every ``Not tested`` row (the full
-tables on request), the commit organization you intend (Step 4), the PR
-title/base/draft status, and **the exact body of the Step 6 comment**. Take one
-approval covering that whole write set — commits, push, PR, and comments. The comment is a public write, so it gets seen
+**Gate — approve the PR.** Show in one place: Step 1's summary, each file's test
+summary line and every ``Not tested`` row (the full tables on request), the commit
+organization you intend (Step 4), the PR title/base/draft status, and **the exact body of the Step 6 comment**. Take one
+approval covering that whole write set — commits, push, PR, file comments, and the Step 6 comment. The comment is a public write, so it gets seen
 before it lands rather than after. Without approval, stop and leave the branch in
 place, saying what would have happened.
 
@@ -116,17 +116,22 @@ PR template from the actual diff if one exists. A **draft** is the safe default 
 a PR you open.
 
 Either way, put Step 1's summary and the validation verdict, residuals included, in
-the body. Put the Testing section in the template's testing section if it has one,
-otherwise at the end of the body, replacing an older one on an existing PR. First
-replace each ``{sha}`` with ``git rev-parse HEAD`` as pushed. When a team skill
-opens the PR, hand it the section to place.
+the body.
 
-GitHub rejects a PR body or comment longer than 65,536 characters. If the body
-with the Testing section is longer than that, keep the ``### Testing`` heading in
-the body with one line that points to the comment, and post the section as a PR
-comment instead. If the section alone is longer than the limit, split it across
-comments between ``<details>`` blocks, and never split one file's block. On an
-existing PR, edit the earlier Testing comments rather than adding new ones.
+Once the PR exists, post the per-file test tables. Replace each ``{sha}`` with
+``git rev-parse HEAD`` as pushed. Each ``## File: <path>`` part, with the
+``## File:`` line removed, becomes a file-level review comment on ``<path>`` at
+the head commit. With the GitHub MCP, open one pending review, add every file
+comment to it, and submit it with the event ``COMMENT``, so reviewers get one
+notification. Without the MCP, post each comment with
+``gh api repos/<owner>/<repo>/pulls/<number>/comments`` and the fields
+``path``, ``commit_id``, ``subject_type=file``, and ``body``.
+
+On an existing PR, edit the earlier comment that starts with **Test summary for**
+on each file rather than adding a second one, and post new ones only for files
+that have none. GitHub
+rejects a comment longer than 65,536 characters. If one file's table is longer,
+split its rows across two comments on that file.
 
 Prefer the GitHub MCP's pull-request tools over the `gh` CLI when both are
 available: the MCP needs no shell access and works in sandboxed environments where
@@ -180,7 +185,7 @@ once the user confirms things look right, or hand them the command.
   verdict into the PR body as given. Callers legitimately differ, one carrying
   residual failures forward where another refuses to finalize at all, and each
   already decided by arriving here
-- Put the Testing section in the body as `simsci:_test_summarizer` returned it.
-  Never add coverage it did not find or remove a ``Not tested`` row
+- Post the test summary as `simsci:_test_summarizer` returned it. Never add
+  coverage it did not find or remove a ``Not tested`` row
 - Do not edit source here. This unit shapes history and files reports; the fixes
   belonged to the caller

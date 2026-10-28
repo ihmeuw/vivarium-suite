@@ -1,12 +1,12 @@
 **0.4.0 - TBD/TBD/26**
 
-- Add a ``_test_summarizer`` agent that writes the PR's Testing section: one
-  collapsible table per changed source file, ordered top down, with the columns
-  Case, Error / success, Expected, and Test. Every testing-strategy item gets a
-  row, and an item with no test is marked ``Not tested``. ``_finalize-core`` runs
-  it for ``/simsci:pr-prep`` and ``/simsci:framework-development``, takes optional
-  strategy items and outside-suite checks from its caller, and moves the section
-  to PR comments when it does not fit GitHub's 65,536-character body limit
+- Add a ``_test_summarizer`` agent that summarizes a PR's tests: one table per
+  changed source file, with the columns Case, Error / success, Expected, and
+  Test. Every testing-strategy item gets a row, and an item with no test is
+  marked ``Not tested``. ``_finalize-core`` runs it for ``/simsci:pr-prep`` and
+  ``/simsci:framework-development``, takes optional strategy items and
+  outside-suite checks from its caller, and posts each table as a file-level
+  review comment on its file
 
 **0.3.1 - 10/13/26**
 
