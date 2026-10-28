@@ -63,6 +63,9 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
         If the build does not complete (a collection or DAG failure), since the
         session's reports are then empty or partial and would misreport as an
         all-skip plan.
+    ValueError
+        For any of the reasons :func:`~vivarium.workflow.backend.build.build` raises it,
+        including a declared env that does not resolve.
     """
     session = build(tasks, root, dry_run=True, explain=True, **kwargs)
     if session.exit_code != pytask.ExitCode.OK:
