@@ -18,7 +18,7 @@ or be user-written and customized. More information about components is availabl
 :ref:`component concept note <components_concept>`.
 
 The Builder (:class:`vivarium.engine.framework.engine.Builder`) is created during initialization
-of a :class:`vivarium.engine.framework.engine.SimulationContext`. Components use the Builder to access interfaces to
+of a :class:`vivarium.engine.framework.engine.Simulation`. Components use the Builder to access interfaces to
 interact with the Vivarium framework. Most components should have a setup method, where
 they register for services and provide information about their structure. For example,
 a component needing to leverage the simulation clock and step size

@@ -5,7 +5,7 @@ Simulation Entry Points
 =======================
 
 :mod:`vivarium.engine` provides a single main entry point, the
-:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`,
+:class:`Simulation <vivarium.engine.framework.engine.Simulation>`,
 that is then wrapped for use on the command line
 and in interactive settings.  This document describes the main entry point
 and the wrappers and gives an indication about how you might parallelize
@@ -23,14 +23,14 @@ The Vivarium Engine
 -------------------
 
 The :mod:`engine <vivarium.engine.framework.engine>` houses the
-:class:`BaseSimulationContext <vivarium.engine.framework.engine.BaseSimulationContext>` --
+:class:`BaseSimulation <vivarium.engine.framework.engine.BaseSimulation>` --
 the key :mod:`vivarium.engine` object for running and interacting with simulations.
 It is the top-level manager for all state information in :mod:`vivarium.engine`. All
 simulations are created by a call to the ``__init__`` of the
-:class:`BaseSimulationContext <vivarium.engine.framework.engine.BaseSimulationContext>`
+:class:`BaseSimulation <vivarium.engine.framework.engine.BaseSimulation>`
 at some level and wrappers around the context should try to be as thin as
 possible around simulation creation. The
-:class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`
+:class:`Simulation <vivarium.engine.framework.engine.Simulation>`
 runs a simulation from start to finish, and the
 ``Simulation`` class from `vivarium-interactive <https://vivarium-interactive.readthedocs.io/en/latest/>`_
 runs one interactively. Both build on the base context.
@@ -41,7 +41,7 @@ model_specification
   The :term:`model specification <Model Specification>` is a complete
   representation of a :mod:`vivarium.engine` simulation formatted as a yaml file.
   As an argument ot the
-  :class:`SimulationContext <vivarium.engine.framework.engine.SimulationContext>`, it
+  :class:`Simulation <vivarium.engine.framework.engine.Simulation>`, it
   can be provided as a path to a file (either as a :class:`str` or a
   :class:`pathlib.Path`) or as a
   :class:`~vivarium.config_tree.main.ConfigTree`, the internal
@@ -94,7 +94,7 @@ modification of a simulation defined in a model specification file.
 By intention, the context exposes a very simple interface for managing the
 :ref:`simulation lifecycle <lifecycle_concept>`.  Once a context is instantiated,
 all steps of running a simulation are encapsulated in the
-:func:`run_simulation <vivarium.engine.framework.engine.SimulationContext.run_simulation>`
+:func:`run_simulation <vivarium.engine.framework.engine.Simulation.run_simulation>`
 method.
 
 The simulation :class:`Builder <vivarium.engine.framework.engine.Builder>` is also

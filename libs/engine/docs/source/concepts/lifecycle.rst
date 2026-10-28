@@ -82,7 +82,7 @@ The Initialization Phase
 The initialization phase of a :mod:`vivarium.engine` simulation starts when the
 :class:`~vivarium.engine.framework.lifecycle.entities.LifeCycle` is fully constructed and
 ends when the ``__init__`` method of the
-:class:`vivarium.engine.framework.engine.SimulationContext` completes.
+:class:`vivarium.engine.framework.engine.Simulation` completes.
 
 Two important things happen here:
 
@@ -180,7 +180,7 @@ simulation end time.
 .. note::
 
     We have multiple sources of time during this process. The
-    :class:`vivarium.engine.framework.engine.SimulationContext` itself holds onto a
+    :class:`vivarium.engine.framework.engine.Simulation` itself holds onto a
     clock. This simulation clock is the actual time in the simulation. Events
     (including e.g., *time_step*) come with a time as well. This time is the
     time at the start of the next time step, that is, the time when any changes

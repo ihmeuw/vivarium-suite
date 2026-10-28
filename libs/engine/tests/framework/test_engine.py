@@ -41,7 +41,7 @@ from vivarium.engine.framework.components import (
     OrderedComponentSet,
 )
 from vivarium.engine.framework.engine import Builder
-from vivarium.engine.framework.engine import SimulationContext as SimulationContext_
+from vivarium.engine.framework.engine import Simulation as Simulation_
 from vivarium.engine.framework.event import EventInterface, EventManager
 from vivarium.engine.framework.lifecycle import (
     LifeCycleInterface,
@@ -67,8 +67,8 @@ def is_same_object_method(
 
 
 @pytest.fixture()
-def SimulationContext() -> Generator[type[SimulationContext_], None, None]:
-    yield SimulationContext_
+def Simulation() -> Generator[type[Simulation_], None, None]:
+    yield Simulation_
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def components() -> list[Component]:
 
 
 def test_simulation_with_non_components(
-    SimulationContext: type[SimulationContext_], components: list[Component]
+    Simulation: type[Simulation_], components: list[Component]
 ) -> None:
     class NonComponent:
         def __init__(self) -> None:
@@ -90,34 +90,34 @@ def test_simulation_with_non_components(
     with pytest.raises(
         ComponentConfigError, match="that do not inherit from `vivarium.engine.Component`"
     ):
-        SimulationContext(components=components + [NonComponent()])  # type: ignore[list-item]
+        Simulation(components=components + [NonComponent()])  # type: ignore[list-item]
 
 
 @pytest.fixture(scope="module")
 def _polluted_context_cache() -> None:
     # Runs before the function-scoped autouse clear (higher scope = earlier setup),
     # simulating residue a prior test left in the process-global name set.
-    SimulationContext_._created_simulation_contexts.add("prior_test_residue")
+    Simulation_._created_simulation_contexts.add("prior_test_residue")
 
 
 def test_context_cache_cleared_before_each_test(_polluted_context_cache: None) -> None:
     # Fails deterministically if the autouse clear in conftest.py is removed.
-    assert SimulationContext_._created_simulation_contexts == set()
+    assert Simulation_._created_simulation_contexts == set()
 
 
-def test_SimulationContext_get_sim_name(SimulationContext: type[SimulationContext_]) -> None:
-    assert SimulationContext._created_simulation_contexts == set()
+def test_Simulation_get_sim_name(Simulation: type[Simulation_]) -> None:
+    assert Simulation._created_simulation_contexts == set()
 
-    assert SimulationContext._get_context_name(None) == "simulation_1"
-    assert SimulationContext._get_context_name("foo") == "foo"
+    assert Simulation._get_context_name(None) == "simulation_1"
+    assert Simulation._get_context_name("foo") == "foo"
 
-    assert SimulationContext._created_simulation_contexts == {"simulation_1", "foo"}
+    assert Simulation._created_simulation_contexts == {"simulation_1", "foo"}
 
 
-def test_SimulationContext_init_default(
-    SimulationContext: type[SimulationContext_], components: list[Component]
+def test_Simulation_init_default(
+    Simulation: type[Simulation_], components: list[Component]
 ) -> None:
-    sim = SimulationContext(components=components)
+    sim = Simulation(components=components)
 
     assert isinstance(sim._logging, LoggingManager)
     assert isinstance(sim._lifecycle, LifeCycleManager)
@@ -183,32 +183,32 @@ def test_SimulationContext_init_default(
     assert list(sim._component_manager._components) == unpacked_components
 
 
-def test_SimulationContext_name_management(
-    SimulationContext: type[SimulationContext_],
+def test_Simulation_name_management(
+    Simulation: type[Simulation_],
 ) -> None:
-    assert SimulationContext._created_simulation_contexts == set()
+    assert Simulation._created_simulation_contexts == set()
 
-    sim1 = SimulationContext()
+    sim1 = Simulation()
     assert sim1._name == "simulation_1"
-    assert SimulationContext._created_simulation_contexts == {"simulation_1"}
+    assert Simulation._created_simulation_contexts == {"simulation_1"}
 
-    sim2 = SimulationContext(sim_name="foo")
+    sim2 = Simulation(sim_name="foo")
     assert sim2._name == "foo"
-    assert SimulationContext._created_simulation_contexts == {"simulation_1", "foo"}
+    assert Simulation._created_simulation_contexts == {"simulation_1", "foo"}
 
-    sim3 = SimulationContext()
+    sim3 = Simulation()
     assert sim3._name == "simulation_3"
-    assert SimulationContext._created_simulation_contexts == {
+    assert Simulation._created_simulation_contexts == {
         "simulation_1",
         "foo",
         "simulation_3",
     }
 
 
-def test_SimulationContext_run_simulation(
-    SimulationContext: type[SimulationContext_], mocker: MockerFixture
+def test_Simulation_run_simulation(
+    Simulation: type[Simulation_], mocker: MockerFixture
 ) -> None:
-    sim = SimulationContext()
+    sim = Simulation()
 
     expected_calls = [
         "setup",
@@ -222,7 +222,7 @@ def test_SimulationContext_run_simulation(
     mock = mocker.MagicMock()
     for call in expected_calls:
         mock.attach_mock(
-            mocker.patch(f"vivarium.engine.framework.engine.SimulationContext.{call}"), call
+            mocker.patch(f"vivarium.engine.framework.engine.Simulation.{call}"), call
         )
 
     sim.run_simulation()
@@ -233,12 +233,12 @@ def test_SimulationContext_run_simulation(
     assert actual_calls == expected_calls
 
 
-def test_SimulationContext_setup_default(
-    SimulationContext: type[SimulationContext_],
+def test_Simulation_setup_default(
+    Simulation: type[Simulation_],
     base_config: ConfigTree,
     components: list[Component],
 ) -> None:
-    sim = SimulationContext(base_config, components)
+    sim = Simulation(base_config, components)
     listener: Listener = cast(Listener, [c for c in components if "listener" in c.name][0])
     assert not listener.post_setup_called
     sim.setup()
@@ -278,12 +278,12 @@ def test_SimulationContext_setup_default(
     assert listener.post_setup_called
 
 
-def test_SimulationContext_initialize_simulants(
-    SimulationContext: type[SimulationContext_],
+def test_Simulation_initialize_simulants(
+    Simulation: type[Simulation_],
     base_config: ConfigTree,
     components: list[Component],
 ) -> None:
-    sim = SimulationContext(base_config, components)
+    sim = Simulation(base_config, components)
     sim.setup()
     pop_size = sim.configuration.population.population_size
     current_time = sim._clock.time
@@ -293,13 +293,13 @@ def test_SimulationContext_initialize_simulants(
     assert sim._clock.time == current_time
 
 
-def test_SimulationContext_step(
-    SimulationContext: type[SimulationContext_],
+def test_Simulation_step(
+    Simulation: type[Simulation_],
     base_config: ConfigTree,
     components: list[Component],
     caplog: LogCaptureFixture,
 ) -> None:
-    sim = SimulationContext(base_config, components)
+    sim = Simulation(base_config, components)
     sim.setup()
     sim.initialize_simulants()
 
@@ -325,12 +325,12 @@ def test_SimulationContext_step(
     assert sim._clock.time == current_time + step_size
 
 
-def test_SimulationContext_finalize(
-    SimulationContext: type[SimulationContext_],
+def test_Simulation_finalize(
+    Simulation: type[Simulation_],
     base_config: ConfigTree,
     components: list[Component],
 ) -> None:
-    sim = SimulationContext(base_config, components)
+    sim = Simulation(base_config, components)
     listener: Listener = cast(Listener, [c for c in components if "listener" in c.name][0])
     sim.setup()
     sim.initialize_simulants()
@@ -340,9 +340,7 @@ def test_SimulationContext_finalize(
     assert listener.simulation_end_called
 
 
-def test_get_results(
-    SimulationContext: type[SimulationContext_], base_config: ConfigTree
-) -> None:
+def test_get_results(Simulation: type[Simulation_], base_config: ConfigTree) -> None:
     """Test that get_results returns expected values. This does NOT test for
     correct formatting.
     """
@@ -353,15 +351,15 @@ def test_get_results(
         QuidditchWinsObserver(),
         HogwartsResultsStratifier(),
     ]
-    sim = SimulationContext(base_config, components, configuration=HARRY_POTTER_CONFIG)
+    sim = Simulation(base_config, components, configuration=HARRY_POTTER_CONFIG)
     sim.run_simulation()
     for measure, results in sim.get_results().items():
         raw_results = sim._results._raw_results[measure].sort_index()
         assert results.set_index(raw_results.index.names)[[VALUE_COLUMN]].equals(raw_results)
 
 
-def test_SimulationContext_report_no_write_warning(
-    SimulationContext: type[SimulationContext_],
+def test_Simulation_report_no_write_warning(
+    Simulation: type[Simulation_],
     base_config: ConfigTree,
     caplog: LogCaptureFixture,
 ) -> None:
@@ -372,7 +370,7 @@ def test_SimulationContext_report_no_write_warning(
         QuidditchWinsObserver(),
         HogwartsResultsStratifier(),
     ]
-    sim = SimulationContext(base_config, components, configuration=HARRY_POTTER_CONFIG)
+    sim = Simulation(base_config, components, configuration=HARRY_POTTER_CONFIG)
     sim.run_simulation()
     assert "No results directory set; results are not written to disk." in caplog.text
     results = sim.get_results()
@@ -382,8 +380,8 @@ def test_SimulationContext_report_no_write_warning(
     assert all(isinstance(df, pd.DataFrame) for df in results.values())
 
 
-def test_SimulationContext_report_write(
-    SimulationContext: type[SimulationContext_],
+def test_Simulation_report_write(
+    Simulation: type[Simulation_],
     base_config: ConfigTree,
     components: list[Component],
     tmp_path: Path,
@@ -401,7 +399,7 @@ def test_SimulationContext_report_write(
         QuidditchWinsObserver(),
         HogwartsResultsStratifier(),
     ]
-    sim = SimulationContext(base_config, components, configuration)
+    sim = Simulation(base_config, components, configuration)
     sim.run_simulation()
     # Check for expected results written
     results_list = [file for file in results_root.rglob("*.parquet")]
@@ -420,31 +418,29 @@ def test_SimulationContext_report_write(
         assert results.equals(written_results)
 
 
-def test_SimulationContext_write_backup(
-    mocker: MockerFixture, SimulationContext: type[SimulationContext_], tmp_path: Path
+def test_Simulation_write_backup(
+    mocker: MockerFixture, Simulation: type[Simulation_], tmp_path: Path
 ) -> None:
     # TODO MIC-5216: Remove mocks when we can use dill in pytest.
     mocker.patch("vivarium.engine.framework.engine.dill.dump")
-    mocker.patch(
-        "vivarium.engine.framework.engine.dill.load", return_value=SimulationContext()
-    )
-    sim = SimulationContext()
+    mocker.patch("vivarium.engine.framework.engine.dill.load", return_value=Simulation())
+    sim = Simulation()
     backup_path = tmp_path / "backup.pkl"
     sim.write_backup(backup_path)
     assert backup_path.exists()
     with open(backup_path, "rb") as f:
         sim_backup = dill.load(f)
-    assert isinstance(sim_backup, SimulationContext)
+    assert isinstance(sim_backup, Simulation)
 
 
-def test_SimulationContext_run_with_backup(
+def test_Simulation_run_with_backup(
     mocker: MockerFixture,
-    SimulationContext: type[SimulationContext_],
+    Simulation: type[Simulation_],
     base_config: ConfigTree,
     tmp_path: Path,
 ) -> None:
     mocked_write_backup = mocker.patch(
-        "vivarium.engine.framework.engine.SimulationContext.write_backup"
+        "vivarium.engine.framework.engine.Simulation.write_backup"
     )
     original_time = time()
 
@@ -462,7 +458,7 @@ def test_SimulationContext_run_with_backup(
         QuidditchWinsObserver(),
         HogwartsResultsStratifier(),
     ]
-    sim = SimulationContext(base_config, components, configuration=HARRY_POTTER_CONFIG)
+    sim = Simulation(base_config, components, configuration=HARRY_POTTER_CONFIG)
     backup_path = tmp_path / "backup.pkl"
     sim.setup()
     sim.initialize_simulants()
@@ -471,7 +467,7 @@ def test_SimulationContext_run_with_backup(
 
 
 def test_get_results_formatting(
-    SimulationContext: type[SimulationContext_], base_config: ConfigTree
+    Simulation: type[Simulation_], base_config: ConfigTree
 ) -> None:
     """Test formatted results are as expected"""
     components = [
@@ -481,7 +477,7 @@ def test_get_results_formatting(
         QuidditchWinsObserver(),
         HogwartsResultsStratifier(),
     ]
-    sim = SimulationContext(base_config, components, configuration=HARRY_POTTER_CONFIG)
+    sim = Simulation(base_config, components, configuration=HARRY_POTTER_CONFIG)
     sim.run_simulation()
     num_steps = _get_num_steps(sim)
 
@@ -528,22 +524,20 @@ def test_get_results_formatting(
         assert (df.loc[filter, VALUE_COLUMN] % num_steps == 0).all()
 
 
-def test_SimulationContext_load_from_backup(
+def test_Simulation_load_from_backup(
     mocker: MockerFixture,
-    SimulationContext: type[SimulationContext_],
+    Simulation: type[Simulation_],
     tmp_path: Path,
 ) -> None:
     # TODO MIC-5216: Remove mocks when we can use dill in pytest.
     mocker.patch("vivarium.engine.framework.engine.dill.dump")
-    mocker.patch(
-        "vivarium.engine.framework.engine.dill.load", return_value=SimulationContext()
-    )
-    sim = SimulationContext()
+    mocker.patch("vivarium.engine.framework.engine.dill.load", return_value=Simulation())
+    sim = Simulation()
     backup_path = tmp_path / "backup.pkl"
     sim.write_backup(backup_path)
     # Load from backup
-    sim_backup = SimulationContext.load_from_backup(backup_path)
-    assert isinstance(sim_backup, SimulationContext)
+    sim_backup = Simulation.load_from_backup(backup_path)
+    assert isinstance(sim_backup, Simulation)
 
 
 def test_private_columns_get_registered() -> None:
@@ -571,7 +565,7 @@ def _convert_to_datetime(date_dict: dict[str, int]) -> pd.Timestamp:
     )
 
 
-def _get_num_steps(sim: SimulationContext_) -> int:
+def _get_num_steps(sim: Simulation_) -> int:
     time_dict = sim.configuration.time.to_dict()
     end_date = _convert_to_datetime(time_dict["end"])
     start_date = _convert_to_datetime(time_dict["start"])
@@ -581,8 +575,8 @@ def _get_num_steps(sim: SimulationContext_) -> int:
 
 
 def test_simulation_context_gathers_results_by_default(
-    SimulationContext: type[SimulationContext_], components: list[Component]
+    Simulation: type[Simulation_], components: list[Component]
 ) -> None:
     """Only InteractiveSimulation turns gathering off; the non-interactive default must not."""
-    sim = SimulationContext(components=components)
+    sim = Simulation(components=components)
     assert sim._results.to_observe
