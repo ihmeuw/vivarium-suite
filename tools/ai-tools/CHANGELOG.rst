@@ -1,4 +1,4 @@
-**0.31.0 - TBD/TBD/26**
+**0.31.0 - 10/28/26**
 
 - ``model-development``: pass the iteration plan's change list and quantitative
   expectations, and the verification checks, to ``simsci:_finalize-core`` for the

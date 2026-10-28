@@ -1,4 +1,4 @@
-**0.5.0 - TBD/TBD/26**
+**0.5.0 - 10/28/26**
 
 - Add a ``_test_summarizer`` agent that summarizes a PR's tests: one table per
   changed source file, with the columns Case, Error / success, Expected, and
