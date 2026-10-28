@@ -1,3 +1,7 @@
+**6.0.1 - 10/28/26**
+
+- Remove the ``BaseSimulationContext`` alias. Use ``BaseSimulation``
+
 **6.0.0 - 10/28/26**
 
 - **Breaking change.** Rename ``SimulationContext`` to ``Simulation``
