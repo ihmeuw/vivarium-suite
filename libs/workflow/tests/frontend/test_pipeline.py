@@ -4,11 +4,12 @@ import dataclasses
 import re
 import subprocess
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
 import pytest
-from pytask import NodeNotFoundError, TaskOutcome
+from pytask import ExitCode, NodeNotFoundError, TaskOutcome
 
 from vivarium.workflow.backend.nodes import file_node
 from vivarium.workflow.backend.preview import Reason, StepPreview
@@ -140,6 +141,15 @@ def _duplicate_names(tmp_path: Path) -> Pipeline:
         for _ in range(2)
     ]
     return Pipeline(tasks, tmp_path / "state")
+
+
+def _errors_from_run_and_preview(pipeline: Pipeline) -> dict[str, PipelineError]:
+    """Return the PipelineError run() and preview() raise for ``pipeline``, keyed by verb."""
+    with pytest.raises(PipelineError) as ran:
+        run(pipeline)
+    with pytest.raises(PipelineError) as planned:
+        preview(pipeline)
+    return {"run": ran.value, "preview": planned.value}
 
 
 def _outcomes(plan: list[StepPreview]) -> dict[str, TaskOutcome]:
@@ -706,3 +716,67 @@ def test_an_interrupt_raised_in_a_step_propagates_as_itself(tmp_path: Path) -> N
 
     with pytest.raises(KeyboardInterrupt):
         run(Pipeline([task], tmp_path / "state", registry))
+
+
+def test_pipeline_rejects_a_root_that_is_not_a_path(tmp_path: Path) -> None:
+    """Pipeline(tasks, str(tmp_path / 'state')) raises TypeError at construction, naming the type it got."""
+    tasks = build_fixture(tmp_path).tasks
+    root = str(tmp_path / "state")
+
+    with pytest.raises(TypeError, match=r"\bstr\b"):
+        Pipeline(tasks, root)  # type: ignore[arg-type]
+
+
+def test_pipeline_rejects_a_relative_root(tmp_path: Path) -> None:
+    """Pipeline(tasks, Path('state')) raises ValueError at construction, saying the root must be absolute."""
+    tasks = build_fixture(tmp_path).tasks
+
+    with pytest.raises(ValueError, match="(?i)absolute"):
+        Pipeline(tasks, Path("state"))
+
+
+def test_pipeline_error_carries_pytasks_exit_code_when_pytask_stops(tmp_path: Path) -> None:
+    """With a malformed pytask.toml under the root, run and preview raise PipelineError whose exit_code is ExitCode.CONFIGURATION_FAILED."""
+    fixture = build_fixture(tmp_path)
+    fixture.state.mkdir()
+    (fixture.state / "pytask.toml").write_text("[[[ not toml\n")
+
+    errors = _errors_from_run_and_preview(_pipeline(fixture))
+
+    for verb, error in errors.items():
+        assert not isinstance(error, StepFailed), verb
+        assert error.exit_code == ExitCode.CONFIGURATION_FAILED, verb
+
+
+def test_pipeline_error_exit_code_names_a_planning_failure(tmp_path: Path) -> None:
+    """When two hand-built tasks claim one product, run and preview raise PipelineError whose exit_code is ExitCode.DAG_FAILED."""
+    errors = _errors_from_run_and_preview(_double_claimed(tmp_path))
+
+    for verb, error in errors.items():
+        assert not isinstance(error, StepFailed), verb
+        assert error.exit_code == ExitCode.DAG_FAILED, verb
+
+
+def test_pipeline_error_exit_code_is_none_before_pytask_runs(tmp_path: Path) -> None:
+    """An unknown step and a backend rejection (two steps sharing a name) raise PipelineError whose exit_code is None."""
+    pipeline = _pipeline(build_fixture(tmp_path))
+    calls: dict[str, Callable[[], object]] = {
+        "run, unknown step": lambda: run(pipeline, only="mid.parqet"),
+        "run, unknown forced step": lambda: run(pipeline, force="mid.parqet"),
+        "preview, unknown step": lambda: preview(pipeline, only="mid.parqet"),
+        "run, shared name": lambda: run(_duplicate_names(tmp_path)),
+        "preview, shared name": lambda: preview(_duplicate_names(tmp_path)),
+    }
+
+    for case, call in calls.items():
+        with pytest.raises(PipelineError) as info:
+            call()
+        assert info.value.exit_code is None, case
+
+
+def test_step_failed_exit_code_is_failed(tmp_path: Path) -> None:
+    """A failing step raises StepFailed whose exit_code is ExitCode.FAILED."""
+    with pytest.raises(StepFailed) as info:
+        run(_failing_pipeline(tmp_path))
+
+    assert info.value.exit_code == ExitCode.FAILED

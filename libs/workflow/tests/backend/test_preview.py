@@ -12,7 +12,7 @@ import pytest
 
 from vivarium.workflow.backend.build import build
 from vivarium.workflow.backend.nodes import file_node
-from vivarium.workflow.backend.preview import Reason, StepPreview, preview
+from vivarium.workflow.backend.preview import PlanFailed, Reason, StepPreview, preview
 from vivarium.workflow.backend.task import Task
 
 
@@ -182,3 +182,18 @@ def test_preview_error_carries_pytasks_message(tmp_path: Path) -> None:
     message = str(info.value)
     assert "DAG_FAILED" in message
     assert "There are some tasks which produce the same output" in message
+
+
+def test_preview_raises_plan_failed_carrying_pytasks_exit_code(tmp_path: Path) -> None:
+    """When two tasks produce one file, preview raises PlanFailed, which is a RuntimeError, whose exit_code is ExitCode.DAG_FAILED and whose message still names DAG_FAILED."""
+    src, out = tmp_path / "src.csv", tmp_path / "out.csv"
+    src.write_text("x\n")
+    tasks = [_copy_task("a", src, out), _copy_task("b", src, out)]
+
+    with pytest.raises(PlanFailed) as info:
+        preview(tasks, tmp_path / ".workflow")
+
+    error = info.value
+    assert isinstance(error, RuntimeError)
+    assert error.exit_code == pytask.ExitCode.DAG_FAILED
+    assert "DAG_FAILED" in str(error)

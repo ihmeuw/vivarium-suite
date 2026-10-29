@@ -27,7 +27,7 @@ from typing import Any, cast
 import pandas as pd
 
 from vivarium.workflow.backend.task import Task
-from vivarium.workflow.backend.wiring import ArtifactKey, ArtifactRegistry
+from vivarium.workflow.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
 
 _PRODUCT_ARG = "product"
 """Parameter name under which the loaded product path reaches the run wrapper."""
@@ -248,7 +248,8 @@ def python_step(
     ------
     vivarium.workflow.backend.wiring.WiringError
         If an input key resolves to no producer and no root input, or ``produces`` is a
-        declared root input.
+        declared root input. The message starts with ``Step '<name>':``, followed by the
+        registry's message, which names the artifact key.
     ValueError
         If ``produces`` has an unsupported suffix (the message names the step and the
         produces key), the product's parameter name collides with one of ``target``'s
@@ -266,8 +267,11 @@ def python_step(
             f"Task '{task_name}': input parameter name {_PRODUCT_ARG!r} collides with the "
             "parameter name reserved for the product."
         )
-    dependencies = {param: registry.resolve_input(key) for param, key in inputs.items()}
-    product = registry.register_output(produces)
+    try:
+        dependencies = {param: registry.resolve_input(key) for param, key in inputs.items()}
+        product = registry.register_output(produces)
+    except WiringError as error:
+        raise WiringError(f"Step {task_name!r}: {error}") from None
     # TODO(MIC-7520): let a step declare an opt-in code fingerprint so it can skip
     # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(

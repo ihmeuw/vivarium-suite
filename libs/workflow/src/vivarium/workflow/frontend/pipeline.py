@@ -20,7 +20,7 @@ from _pytask.lockfile import LockfileError, LockfileState
 from pytask import ExitCode, PathNode, Session, TaskOutcome
 
 from vivarium.workflow.backend.build import COMMAND_KEY, build, failure_message, outcomes
-from vivarium.workflow.backend.preview import StepPreview
+from vivarium.workflow.backend.preview import PlanFailed, StepPreview
 from vivarium.workflow.backend.preview import preview as backend_preview
 from vivarium.workflow.backend.task import Task
 from vivarium.workflow.backend.wiring import ArtifactRegistry
@@ -34,23 +34,61 @@ _INTERNAL_PACKAGES = ("_pytask", "pluggy")
 
 @dataclass(frozen=True)
 class Pipeline:
-    """A compiled pipeline, the directory that holds its pytask state, and its registry."""
+    """A compiled pipeline, the directory that holds its pytask state, and its registry.
+
+    Raises
+    ------
+    TypeError
+        If ``root`` is not a :class:`pathlib.Path`, for example a string.
+    ValueError
+        If ``root`` is a relative path, which would move the pipeline's state with the
+        current directory.
+    """
 
     tasks: Sequence[Task]
     """The compiled tasks. Each task's name is a step name."""
     root: Path
-    """Directory for pytask's configuration, state database, and lockfile, as
+    """Absolute directory for pytask's configuration, state database, and lockfile, as
     :func:`~vivarium.workflow.backend.build.build` uses it."""
     registry: ArtifactRegistry | None = None
     """The registry the steps were wired through. With it, :func:`preview` names files by
     artifact key; without it, by path."""
+
+    def __post_init__(self) -> None:
+        """Reject a root that is not an absolute path."""
+        if not isinstance(self.root, Path):
+            raise TypeError(
+                f"Pipeline root must be a pathlib.Path, got {type(self.root).__name__} "
+                f"{self.root!r}."
+            )
+        if not self.root.is_absolute():
+            raise ValueError(
+                f"Pipeline root must be absolute, got the relative path {str(self.root)!r}."
+            )
 
 
 class PipelineError(Exception):
     """A verb named an unknown step or the pipeline cannot be built.
 
     A failed step raises the subclass :class:`StepFailed`.
+
+    Parameters
+    ----------
+    message
+        What went wrong.
+    exit_code
+        pytask's exit code when pytask ran and did not finish the build.
     """
+
+    exit_code: ExitCode | None
+    """pytask's exit code when pytask ran and did not finish the build, which is
+    ``FAILED`` for :class:`StepFailed`. It is ``None`` when the verb rejected the pipeline
+    before pytask ran, as for an unknown step, tasks the backend rejects, or a
+    ``pytask.lock`` that ``force`` cannot read."""
+
+    def __init__(self, message: str, *, exit_code: ExitCode | None = None) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
 
 
 class StepFailed(PipelineError):
@@ -82,7 +120,7 @@ class StepFailed(PipelineError):
         lines = (
             f"Step {step!r} failed: {_describe(error)}" for step, error in failures.items()
         )
-        super().__init__("\n".join(lines))
+        super().__init__("\n".join(lines), exit_code=ExitCode.FAILED)
 
 
 def run(
@@ -132,7 +170,8 @@ def run(
         When pytask stops, the message is
         :func:`~vivarium.workflow.backend.build.failure_message`'s; for a cause pytask
         does not record, such as an error in a pytask plugin, that is only the exit
-        code's name, and pytask's printed output shows the cause.
+        code's name, and pytask's printed output shows the cause. The error's
+        ``exit_code`` is then pytask's exit code; otherwise it is ``None``.
     StepFailed
         If one or more steps fail. Each failure's traceback starts at its first frame
         outside pytask and pluggy that is not marked with ``__tracebackhide__``, which
@@ -158,7 +197,7 @@ def run(
     if failures:
         raise StepFailed(failures, result) from next(iter(failures.values()))
     if session.exit_code != ExitCode.OK:
-        raise PipelineError(failure_message(session))
+        raise PipelineError(failure_message(session), exit_code=session.exit_code)
     return result
 
 
@@ -191,13 +230,16 @@ def preview(
     ------
     PipelineError
         If ``only`` names a step that is not in the pipeline, the backend rejects the
-        tasks, or pytask cannot collect or plan them, as for :func:`run`.
+        tasks, or pytask cannot collect or plan them, as for :func:`run`. When the
+        backend raises :class:`~vivarium.workflow.backend.preview.PlanFailed`, the
+        error's ``exit_code`` is that error's; otherwise it is ``None``.
     """
     selected = None if only is None else _resolve(pipeline, only)
     try:
         plan = backend_preview(pipeline.tasks, pipeline.root, selected=selected)
     except (ValueError, RuntimeError) as error:
-        raise PipelineError(str(error)) from error
+        exit_code = error.exit_code if isinstance(error, PlanFailed) else None
+        raise PipelineError(str(error), exit_code=exit_code) from error
     labels = _labels(pipeline)
     for step in plan:
         step.reasons = [
