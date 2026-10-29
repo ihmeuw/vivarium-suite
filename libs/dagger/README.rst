@@ -15,10 +15,10 @@ on a Slurm cluster.
 
 It also builds a data pipeline from tasks that each declare their inputs and
 outputs. It wires producers to consumers by artifact key and uses ``pytask`` to
-decide which tasks are stale and to run them. This part has three pieces: the
+decide which tasks are stale and to run them. This part has four pieces: the
 backend (the task model, the build, and the run preview), the ``python_step``
-frontend for writing a step as a plain function, and a test harness for
-staleness scenarios.
+frontend for writing a step as a plain function, a bridge that runs a step on a
+compute node from a JSON recipe, and a test harness for staleness scenarios.
 
 **Supported Python versions: 3.11, 3.12, 3.13**
 
