@@ -13,8 +13,9 @@ This library builds a data pipeline from tasks that each declare their inputs an
 outputs. It wires producers to consumers by artifact key and uses ``pytask`` to
 decide which tasks are stale and to run them. It has four parts: the backend
 (the task model, the build, and the run preview), the ``python_step`` frontend for
-writing a step as a plain function, a bridge that runs a step on a compute node from a
-JSON recipe, and a test harness for staleness scenarios.
+writing a step as a plain function, a bridge that runs a build's stale steps on compute
+nodes as one Jobmon workflow, and a test harness for staleness scenarios. The bridge needs
+the ``cluster`` extra: ``pip install "vivarium-workflow[cluster]"``.
 
 **Supported Python versions: 3.11, 3.12, 3.13**
 
