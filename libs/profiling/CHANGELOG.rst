@@ -1,3 +1,8 @@
+**0.7.1 - 10/29/26**
+
+- Remove the unused ``_load_em_from_meid`` from the data loader, along with
+  the loader's only import of ``vivarium_gbd_access``
+
 **0.7.0 - 10/28/26**
 
 - Require ``vivarium-engine`` 6 and, for the ``cluster`` extra,
