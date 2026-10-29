@@ -10,18 +10,20 @@ workflow in which each step waits for its nearest stale ancestors.
 Before pytask runs a step locally, it decides whether the step is stale, checks that the
 step's inputs exist, and creates the parent directory of each product. For a stale step
 with no stale ancestor, planning does all three, so it can create product directories even
-for a step that the bridge then refuses. pytask marks every step after a stale step to run
-without checking its inputs. Unless such a step is deselected or persisted, it is stale,
-and the bridge submits it even when a local build would skip it because its stale ancestor
-wrote the same content again. With ``force``, planning checks the inputs of no step.
+for a step that the bridge then refuses or, with ``force``, fails for a missing input.
+pytask marks every step after a stale step to run without checking its inputs. Unless
+such a step is deselected or persisted, it is stale, and the bridge submits it even when a
+local build would skip it because its stale ancestor wrote the same content again. With
+``force``, planning checks the inputs of no step.
 Before it writes anything, the bridge therefore checks the inputs of every stale step
 itself: each input with a file path must exist unless a stale step produces it. A stale
 step with a missing input is reported as FAIL and every stale step after it as
 SKIP_PREVIOUS_FAILED, as a local build reports them, and the bridge submits none of these
 steps. It creates the product directories of every step that it submits before it submits
 anything, so a step whose product directory does not exist yet runs on a node as it does
-locally. pytask's ``max_failures`` and ``stop_after_first_failure`` do not apply to the
-steps that run through Jobmon.
+locally. pytask's ``max_failures`` and ``stop_after_first_failure`` apply to planning
+and to this input check, so a failure that makes pytask stop the build ends it there and
+nothing is submitted. They do not apply to the steps that run through Jobmon.
 
 Planning goes through pytask's per-task protocol, so pytask's table lists each stale step
 as "would be executed". The bridge does not yet record the results of the steps that ran,
@@ -95,8 +97,13 @@ def pytask_execute_build(session: Session) -> bool:
     each missing input and has no traceback or chained error, and every stale step after
     it is reported as SKIP_PREVIOUS_FAILED. A step that planning already reported keeps
     that report. The hook writes nothing for the steps it reports here and does not submit
-    them. The other stale steps, including the stale ancestors of a failed step, are the
-    steps to submit. If there are none, the hook stops there, as with nothing stale.
+    them, although with ``force`` planning can already have created the product directory
+    of such a step that has no stale ancestor. If a failure here makes pytask ask the
+    build to stop (``stop_after_first_failure``, or ``max_failures`` reached), the check
+    ends with that step, the steps it has not reached get no report, and the hook submits
+    nothing, as when planning stops. Otherwise the other stale steps, including the stale
+    ancestors of a failed step, are the steps to submit. If there are none, the hook stops
+    there, as with nothing stale.
 
     Next it builds a recipe for every step to submit, resolving each declared env once for
     the whole plan. If any of these steps cannot run on a compute node, because
@@ -111,9 +118,9 @@ def pytask_execute_build(session: Session) -> bool:
 
     Otherwise it checks the Jobmon environment, creates a new run directory
     ``<root>/.pytask/jobmon/<YYYYmmdd-HHMMSS>-<6 hex digits>/``, writes each recipe there
-    as ``<signature>.payload.json``, creates the parent directory of each such step's
-    products, and binds and runs one workflow. Its entries are the steps to submit in plan
-    order, named by step and carrying each step's
+    as ``<signature>.payload.json``, creates the parent directory of the products of each
+    step to submit, and binds and runs one workflow. Its entries are the steps to submit
+    in plan order, named by step and carrying each step's
     :attr:`~vivarium.workflow.backend.task.Task.resources`. Each entry waits for the
     step's nearest stale ancestors, found by walking back through data nodes and through
     steps that are not stale. Each entry's command runs
