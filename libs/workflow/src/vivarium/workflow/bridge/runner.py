@@ -19,6 +19,7 @@ import io
 import json
 import os
 import shlex
+import socket
 import sys
 import time
 import traceback
@@ -105,9 +106,10 @@ def capture_paths(result_path: Path) -> tuple[Path, Path]:
 def write_result(result: RunResult, path: Path) -> None:
     """Write ``result`` to ``path`` as JSON, so a reader never sees a partial file.
 
-    The JSON is written to ``<path>.<pid>.tmp`` in the same directory and then moved onto
-    ``path`` with :func:`os.replace`, replacing any earlier result. Each process uses its
-    own temporary file, so two attempts writing the same result do not collide.
+    The JSON is written to ``<path>.<host>.<pid>.tmp`` in the same directory and then
+    moved onto ``path`` with :func:`os.replace`, replacing any earlier result. Each process
+    uses its own temporary file, so two attempts writing the same result, on one node or on
+    two nodes sharing the directory, do not collide.
 
     Parameters
     ----------
@@ -122,7 +124,7 @@ def write_result(result: RunResult, path: Path) -> None:
         If the file cannot be written. Any earlier file at ``path`` is left as it was,
         and the temporary file is removed.
     """
-    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    temporary = path.with_name(f"{path.name}.{socket.gethostname()}.{os.getpid()}.tmp")
     try:
         with open(temporary, "w", encoding="utf-8") as file:
             json.dump(result, file)
