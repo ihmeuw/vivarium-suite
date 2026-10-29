@@ -234,12 +234,17 @@ def call(Map config = [:]){
                       // them it falls back to 0.0.1.dev, which fails any install that requires a
                       // minimum version of that lib (e.g. engine's test extra, via vivarium-interactive).
                       // Check out with the job's own remotes, credentials and extensions, so the tags
-                      // come from the authenticated fetch and private repos work too.
+                      // come from the authenticated fetch and private repos work too. The branch source
+                      // adds GitSCMSourceDefaults, which clones without tags, and a clone option cannot
+                      // turn tags back on for a fresh clone, so drop it and honor the refspec here instead.
+                      def checkoutExtensions = scm.extensions.findAll {
+                        it.class.name != 'jenkins.plugins.git.GitSCMSourceDefaults'
+                      }
                       checkout([
                         $class: 'GitSCM',
                         branches: scm.branches,
                         userRemoteConfigs: scm.userRemoteConfigs,
-                        extensions: scm.extensions + [[$class: 'CloneOption', noTags: false, shallow: false, reference: '']],
+                        extensions: checkoutExtensions + [[$class: 'CloneOption', noTags: false, shallow: false, reference: '', honorRefspec: true]],
                       ])
                       buildStages.loadSharedFiles()
                       
