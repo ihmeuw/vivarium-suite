@@ -270,3 +270,65 @@ def test_fake_jobmon_runs_commands_in_child_processes(tmp_path: Path) -> None:
         _jobmon_adapter.run(_jobmon_adapter.bind(plan, **_BIND_OPTIONS))
 
     assert int(pid_file.read_text()) != os.getpid()
+
+
+def test_fake_jobmon_keeps_each_run_that_bind_returns() -> None:
+    """Two binds inside one block leave in runs, in bind order, the same two JobmonRun objects that bind returned."""
+    with FakeJobmon() as jobmon:
+        first = _jobmon_adapter.bind([_entry("a", "true")], **_BIND_OPTIONS)
+        second = _jobmon_adapter.bind([_entry("b", "true")], **_BIND_OPTIONS)
+
+    assert len(jobmon.runs) == 2
+    assert jobmon.runs[0] is first
+    assert jobmon.runs[1] is second
+
+
+def test_fake_jobmon_run_leaves_the_runs_error_none_without_error_after(
+    tmp_path: Path,
+) -> None:
+    """Without error_after, run of a plan whose commands all exit 0 sets the run's status to 'D' and leaves its error None."""
+    log = tmp_path / "ran.log"
+    plan = [_entry("a", _appends("a", log)), _entry("b", _appends("b", log), "a")]
+
+    with FakeJobmon():
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        _jobmon_adapter.run(jobmon_run)
+
+    assert log.read_text().splitlines() == ["a", "b"]
+    assert jobmon_run.status == "D"
+    assert jobmon_run.error is None
+
+
+def test_fake_jobmon_error_after_stops_the_run_with_a_runtime_error(tmp_path: Path) -> None:
+    """With error_after=1, run of a three-entry plan runs only the first entry's command, sets every task status to None as the real adapter does after a run error, leaves the run's status None, sets its error to a RuntimeError, and returns normally."""
+    log = tmp_path / "ran.log"
+    plan = [_entry(name, _appends(name, log)) for name in ("first", "second", "third")]
+
+    with FakeJobmon(error_after=1):
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        _jobmon_adapter.run(jobmon_run)
+
+    expected = dict.fromkeys(["sig-first", "sig-second", "sig-third"], None)
+    assert log.read_text().splitlines() == ["first"]
+    assert jobmon_run.task_statuses == expected
+    assert jobmon_run.status is None
+    assert isinstance(jobmon_run.error, RuntimeError), repr(jobmon_run.error)
+
+
+def test_fake_jobmon_error_after_counts_an_entry_that_it_withholds(tmp_path: Path) -> None:
+    """With error_after=2, when the first entry exits 1 and the second waits for it, the withheld second entry counts toward the two, so the third entry's command does not run, and every task status is None."""
+    log = tmp_path / "ran.log"
+    plan = [
+        _entry("fails", "exit 1"),
+        _entry("after", _appends("after", log), "fails"),
+        _entry("third", _appends("third", log)),
+    ]
+
+    with FakeJobmon(error_after=2):
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        _jobmon_adapter.run(jobmon_run)
+
+    expected = dict.fromkeys(["sig-fails", "sig-after", "sig-third"], None)
+    assert not log.exists()
+    assert jobmon_run.task_statuses == expected
+    assert isinstance(jobmon_run.error, RuntimeError), repr(jobmon_run.error)

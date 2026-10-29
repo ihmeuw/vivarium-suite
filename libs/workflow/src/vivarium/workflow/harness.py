@@ -213,11 +213,17 @@ class FakeJobmon:
         assert [entry.name for entry in jobmon.plans[0]] == list(fx.steps)
     """
 
+    error_after: int | None = None
+    """How many entries, in plan order, :meth:`run` handles before it stops as the real
+    adapter does when Jobmon's ``Workflow.run`` raises. ``None`` runs the whole plan."""
     plans: list[list[PlanEntry]] = field(default_factory=list, init=False)
     """Every plan bound inside the block, in the order bound."""
     options: list[dict[str, Any]] = field(default_factory=list, init=False)
     """The keyword arguments of each bind, in the order bound, with the keys ``cluster``,
     ``default_resources``, ``max_attempts``, ``resource_scales`` and ``workflow_name``."""
+    runs: list[JobmonRun] = field(default_factory=list, init=False)
+    """Every run that :meth:`bind` returned inside the block, in the order bound, so a
+    test can read a run's status, task statuses and error after the build."""
     _replaced: dict[str, Any] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
@@ -254,7 +260,7 @@ class FakeJobmon:
         resource_scales: Mapping[str, float] | None,
         workflow_name: str,
     ) -> JobmonRun:
-        """Record a plan and its options, and return it as a run with no workflow id.
+        """Record a plan, its options and its run, and return the run with no workflow id.
 
         Parameters
         ----------
@@ -273,13 +279,14 @@ class FakeJobmon:
 
         Returns
         -------
-            A run of ``plan`` whose ``workflow_id`` is ``None``.
+            A run of ``plan`` whose ``workflow_id`` is ``None``, which is also appended to
+            :attr:`runs`.
 
         Raises
         ------
         KeyError
             If an entry names an upstream that is not an earlier entry of ``plan``, as the
-            real adapter does.
+            real adapter does. Nothing is then recorded.
         """
         entries = tuple(plan)
         _jobmon_adapter._check_plan_order(entries)
@@ -293,7 +300,9 @@ class FakeJobmon:
                 "workflow_name": workflow_name,
             }
         )
-        return JobmonRun(plan=entries, workflow_id=None)
+        jobmon_run = JobmonRun(plan=entries, workflow_id=None)
+        self.runs.append(jobmon_run)
+        return jobmon_run
 
     def run(self, jobmon_run: JobmonRun) -> None:
         """Run each entry's command with ``/bin/sh`` in plan order, and set the statuses.
@@ -301,7 +310,15 @@ class FakeJobmon:
         An entry whose command exits with status 0 gets the task status ``"D"``, and one
         that exits otherwise gets ``"F"``. An entry with an upstream whose status is not
         ``"D"`` is not run and gets ``"G"``. The run's status is ``"D"`` when every entry
-        is ``"D"``, and ``"E"`` otherwise.
+        is ``"D"``, and ``"E"`` otherwise, and its error stays ``None``.
+
+        With :attr:`error_after` set, only that many entries, in plan order, are run or
+        withheld in this way, and no later entry runs. The run then ends as the real
+        adapter's does when Jobmon's ``Workflow.run`` raises: every entry gets the task
+        status ``None``, because Jobmon gives no task a final status then, the run's
+        status stays ``None``, and its error is a :class:`RuntimeError` whose message
+        says that the fake stopped after that many entries. The method still returns
+        normally.
 
         Parameters
         ----------
@@ -309,12 +326,22 @@ class FakeJobmon:
             A run that :meth:`bind` returned.
         """
         statuses: dict[str, str | None] = {}
-        for entry in jobmon_run.plan:
+        for index, entry in enumerate(jobmon_run.plan):
+            if self.error_after is not None and index >= self.error_after:
+                statuses[entry.signature] = None
+                continue
             if any(statuses.get(upstream) != "D" for upstream in entry.upstreams):
                 statuses[entry.signature] = "G"
                 continue
             finished = subprocess.run(["/bin/sh", "-c", entry.command], check=False)
             statuses[entry.signature] = "D" if finished.returncode == 0 else "F"
-        all_done = all(status == "D" for status in statuses.values())
+        if self.error_after is not None:
+            jobmon_run.task_statuses = {signature: None for signature in statuses}
+            jobmon_run.error = RuntimeError(
+                f"FakeJobmon stopped the workflow after {self.error_after} entries, as "
+                "its error_after asks."
+            )
+            return
         jobmon_run.task_statuses = statuses
+        all_done = all(status == "D" for status in statuses.values())
         jobmon_run.status = "D" if all_done else "E"
