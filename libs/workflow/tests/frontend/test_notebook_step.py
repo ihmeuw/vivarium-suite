@@ -213,6 +213,14 @@ _COLLISIONS: dict[str, _Collision] = {
         produces={"table_path": "tables/out.csv", "report_path": _EXECUTED_KEY},
         names=(("report_path", _EXECUTED_KEY), (_EXECUTED_KEY,)),
     ),
+    "products_share_a_key": _Collision(
+        produces={
+            "table_path": "tables/out.csv",
+            "first_path": "tables/same.csv",
+            "second_path": "tables/same.csv",
+        },
+        names=(("first_path",), ("second_path",)),
+    ),
     "products_share_a_path": _Collision(
         produces={
             "table_path": "tables/out.csv",
@@ -1223,7 +1231,7 @@ def test_numpy_bool_parameter_is_rejected_with_a_conversion_hint(tmp_path: Path)
 
 @pytest.mark.parametrize("collision", list(_COLLISIONS.values()), ids=list(_COLLISIONS))
 def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collision) -> None:
-    """A produces key equal to the executed key, two produces keys that resolve to one path, or a produces key that resolves to the source notebook raises ValueError naming both colliding items."""
+    """A produces key equal to the executed key, two produces parameters naming the same key, two produces keys that resolve to one path, or a produces key that resolves to the source notebook raises ValueError naming the step and both colliding items."""
     registry = _registry(tmp_path)
     source = _write_notebook(registry.path_for(_SOURCE_KEY))
 
@@ -1234,9 +1242,11 @@ def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collisi
             registry=registry,
             env=_ENV,
             produces=collision.produces,
+            name="colliding_report",
         )
 
     message = str(info.value)
+    assert "colliding_report" in message
     unnamed = [
         names for names in collision.names if not any(name in message for name in names)
     ]

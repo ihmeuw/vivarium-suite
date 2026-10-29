@@ -140,8 +140,9 @@ def notebook_step(
         number, a ``bool`` or ``None`` (the message says to pass files through ``inputs``
         and to convert a numpy ``bool_`` with ``bool()``); ``notebook`` does not end in
         ``.ipynb`` or does not exist; ``executed`` does not end in ``.ipynb``; or two of
-        ``notebook``, ``executed`` and the ``produces`` keys resolve to one path (the
-        message names both). Every one of these is raised before anything is registered.
+        ``notebook``, ``executed`` and the ``produces`` keys resolve to one path, as when a
+        ``produces`` key equals ``executed`` or is given twice (the message names both).
+        Every one of these is raised before anything is registered.
     """
     task_name = executed if name is None else name
     if not task_name:
