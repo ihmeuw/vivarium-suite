@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 from pytask import TaskOutcome
 
-from vivarium.workflow.backend.build import build, outcomes, run_command
+from vivarium.workflow.backend.build import (
+    build,
+    outcomes,
+    run_command,
+    run_command_with_bin_path,
+)
 from vivarium.workflow.backend.nodes import file_node
 from vivarium.workflow.backend.preview import preview
 from vivarium.workflow.backend.task import Task
@@ -26,6 +31,15 @@ def _make_env(prefix: Path) -> Path:
     tool.write_text('#!/bin/sh\necho "$1" >> "$2"\n')
     tool.chmod(0o755)
     return prefix
+
+
+def _make_tool_dir(bin_dir: Path) -> Path:
+    """Create ``bin_dir`` holding a ``_TOOL`` script but no ``python``, and return it."""
+    bin_dir.mkdir(parents=True)
+    tool = bin_dir / _TOOL
+    tool.write_text('#!/bin/sh\necho "$1" >> "$2"\n')
+    tool.chmod(0o755)
+    return bin_dir
 
 
 def _fake_conda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *prefixes: Path) -> Path:
@@ -110,6 +124,76 @@ def test_run_command_adds_no_empty_path_entry_when_path_is_unset(
     run_command(f'printf %s "$PATH" > {seen}', str(env))
 
     assert seen.read_text() == str(env / "bin")
+
+
+def test_run_command_with_bin_path_puts_every_directory_first_on_path(
+    tmp_path: Path,
+) -> None:
+    """A colon-joined bin_path of two directories precedes the current PATH in the child, and a tool found only in the second directory runs."""
+    first, second = tmp_path / "first", _make_tool_dir(tmp_path / "second")
+    first.mkdir()
+    bin_path, log, seen = f"{first}:{second}", tmp_path / "log", tmp_path / "path"
+
+    run_command_with_bin_path(f"{_TOOL} ran {log}", bin_path)
+    run_command_with_bin_path(f'printf %s "$PATH" > {seen}', bin_path)
+
+    assert log.read_text() == "ran\n"
+    assert seen.read_text() == f"{bin_path}:{os.environ['PATH']}"
+
+
+def test_run_command_with_bin_path_none_uses_the_current_path(tmp_path: Path) -> None:
+    """With bin_path None the command runs with the current PATH unchanged."""
+    seen = tmp_path / "path"
+
+    run_command_with_bin_path(f'printf %s "$PATH" > {seen}', None)
+
+    assert seen.read_text() == os.environ["PATH"]
+
+
+def test_run_command_with_bin_path_covers_every_part_of_a_compound_command(
+    tmp_path: Path,
+) -> None:
+    """Both halves of 'tool a && tool b' resolve the tool from bin_path."""
+    bin_dir, log = _make_tool_dir(tmp_path / "bin"), tmp_path / "log"
+
+    run_command_with_bin_path(f"{_TOOL} first {log} && {_TOOL} second {log}", str(bin_dir))
+
+    assert log.read_text() == "first\nsecond\n"
+
+
+@pytest.mark.parametrize("path", [None, ""], ids=["unset", "empty"])
+def test_run_command_with_bin_path_adds_no_empty_path_entry_when_path_is_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path: str | None
+) -> None:
+    """With PATH unset the child's PATH is exactly bin_path, with no empty entry."""
+    bin_path = f"{_make_tool_dir(tmp_path / 'first')}:{tmp_path / 'second'}"
+    seen = tmp_path / "path"
+    if path is None:
+        monkeypatch.delenv("PATH")
+    else:
+        monkeypatch.setenv("PATH", path)
+
+    run_command_with_bin_path(f'printf %s "$PATH" > {seen}', bin_path)
+
+    assert seen.read_text() == bin_path
+
+
+def test_run_command_with_bin_path_raises_on_a_nonzero_exit(tmp_path: Path) -> None:
+    """A command that exits non-zero raises subprocess.CalledProcessError with its exit status."""
+    for bin_path in (None, str(_make_tool_dir(tmp_path / "bin"))):
+        with pytest.raises(subprocess.CalledProcessError) as info:
+            run_command_with_bin_path("exit 3", bin_path)
+        assert info.value.returncode == 3
+
+
+def test_run_command_with_bin_path_does_not_require_bin_python(tmp_path: Path) -> None:
+    """A bin directory holding a tool but no python, as in an R-only env, runs the tool; no env check is made."""
+    bin_dir, log = _make_tool_dir(tmp_path / "r_env" / "bin"), tmp_path / "log"
+
+    run_command_with_bin_path(f"{_TOOL} ran {log}", str(bin_dir))
+
+    assert not (bin_dir / "python").exists()
+    assert log.read_text() == "ran\n"
 
 
 def test_build_runs_a_command_task_under_its_declared_env(tmp_path: Path) -> None:
