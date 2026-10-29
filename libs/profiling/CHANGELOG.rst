@@ -1,3 +1,11 @@
+**0.7.2 - 10/29/26**
+
+- Fix ``make_artifacts -l all``: build the locations in parallel as a Jobmon
+  workflow in place of the removed DRMAA helper, and pass ``--years`` to every
+  location's build
+- Install ``vivarium-cluster-tools[cluster]`` with the ``cluster`` extra, so
+  that the Jobmon build of ``make_artifacts -l all`` can import ``jobmon``
+
 **0.7.1 - 10/29/26**
 
 - Remove the unused ``_load_em_from_meid`` from the data loader, along with
