@@ -36,6 +36,17 @@ The process that runs the build waits for the whole workflow. On Slurm it must r
 compute node with ``/opt/slurm/bin`` on ``PATH``, because Jobmon's Slurm plugin calls
 ``scontrol``, ``squeue`` and ``scancel`` from that host. The bridge needs the ``cluster``
 extra: ``pip install "vivarium-workflow[cluster]"``.
+
+The build records the steps' results in pytask's lockfile only after the whole workflow
+ends. If the build's process is killed before then, for example at its Slurm time limit,
+no step is recorded and the next build runs every step again, including the steps that
+had finished. Give that process more time than the whole workflow needs. Jobmon itself
+stops waiting after its default timeout of 36000 seconds (10 hours), whatever that
+process's time limit. A longer workflow therefore fails at 10 hours: the build records
+the steps that had finished and then fails with Jobmon's error. While the workflow runs,
+Jobmon's progress lines, such as ``Workflow 50% complete (1/2 tasks)``, are printed on
+standard error, or above pytask's live table when standard output is a terminal, and
+Jobmon's GUI shows each step.
 """
 
 from typing import Any

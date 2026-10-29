@@ -20,19 +20,29 @@ it does locally. pytask's ``max_failures`` and ``stop_after_first_failure`` do n
 to the steps that run through Jobmon.
 
 Planning goes through pytask's per-task protocol, so pytask's table lists each stale step
-as "would be executed". The bridge does not yet record the results of the steps that ran,
-so a bridged build reports only the steps that it did not submit.
+as "would be executed", and lists it again when its result is recorded. The summary counts
+each step once.
+
+After the workflow ends, the hook records each step's result from the file that the node
+runner wrote. Recording runs pytask's own per-task hooks in the build's process, so pytask
+checks and hashes each step's products and writes its lockfile entry exactly as a local
+build does, and a later build skips a step whose inputs and code are unchanged. A step
+that failed on its node is reported as FAIL with :class:`RemoteTaskFailed`. Nothing is
+recorded while the workflow runs, so pytask's table shows no step finishing until the
+whole workflow ends, and a build killed before then records no step
+(:mod:`~vivarium.workflow.bridge.plugin` says what that means for the build's time limit).
 """
 
 import inspect
 import json
+import os
 import secrets
 import shlex
 import sys
-from collections.abc import Mapping, MutableMapping, Set
+from collections.abc import Mapping, MutableMapping, Sequence, Set
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pytask import (
     DirectoryNode,
@@ -54,7 +64,12 @@ from vivarium.workflow.backend.task import Task
 from vivarium.workflow.bridge import _jobmon_adapter
 from vivarium.workflow.bridge._jobmon_adapter import PlanEntry
 from vivarium.workflow.bridge.payload import Payload, payload_for
-from vivarium.workflow.bridge.runner import RESULT_SUFFIX, runner_command
+from vivarium.workflow.bridge.runner import (
+    RESULT_SUFFIX,
+    RunResult,
+    read_result,
+    runner_command,
+)
 
 RUNS_DIR = Path(".pytask", "jobmon")
 """The directory, relative to a build's root, that holds one directory per bridge run."""
@@ -63,6 +78,81 @@ PAYLOAD_SUFFIX = ".payload.json"
 """The suffix of a step's recipe file in a run directory. The name before it is the
 step's pytask signature, as for the step's result file, whose suffix is
 :data:`~vivarium.workflow.bridge.runner.RESULT_SUFFIX`."""
+
+_RESULT_FIELDS: Mapping[str, tuple[type[object], ...]] = {
+    "success": (bool,),
+    "exc": (str, type(None)),
+    "exc_type": (str, type(None)),
+    "exc_message": (str, type(None)),
+    "stdout": (str,),
+    "stderr": (str,),
+}
+"""The types that recording accepts for each field of a result that it reads."""
+
+
+class RemoteTaskFailed(Exception):
+    """The error in the FAIL report of a step that failed on its compute node.
+
+    The bridge builds it from the step's result file, so it carries what the node runner
+    wrote there. Its message names the step and holds the node's traceback when the node
+    sent one. When the step's result file could not be read, the message names the file
+    and the error instead, and :attr:`exc_type`, :attr:`exc_message` and
+    :attr:`node_traceback` are ``None``. The report has no traceback of its own, because
+    no frame in the build's process raised the error. When the node sent output, it is
+    also in the report's sections, where pytask shows it as "Captured stdout during
+    call" and "Captured stderr during call".
+
+    Code that describes a failure without importing the bridge reads the
+    :attr:`exc_type` and :attr:`exc_message` attributes, so their names and meaning stay
+    fixed.
+
+    Parameters
+    ----------
+    message
+        The message that pytask shows in the step's failure report.
+    exc_type
+        Kept as :attr:`exc_type`.
+    exc_message
+        Kept as :attr:`exc_message`.
+    node_traceback
+        Kept as :attr:`node_traceback`.
+    stdout
+        Kept as :attr:`stdout`.
+    stderr
+        Kept as :attr:`stderr`.
+    """
+
+    exc_type: str | None
+    """The class of the exception that the step raised on its node, as
+    ``"module.QualName"``, or only the name for a built-in exception, as in the result's
+    ``exc_type``. ``None`` when no exception from the node is known."""
+    exc_message: str | None
+    """The text of the exception that the step raised on its node, or ``None`` when no
+    exception from the node is known."""
+    node_traceback: str | None
+    """The formatted traceback from the node, which starts in the step's own code, or
+    ``None`` when the node sent none."""
+    stdout: str
+    """The tail of what the step wrote to standard output on its node."""
+    stderr: str
+    """The tail of what the step wrote to standard error on its node."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        exc_type: str | None = None,
+        exc_message: str | None = None,
+        node_traceback: str | None = None,
+        stdout: str = "",
+        stderr: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.exc_type = exc_type
+        self.exc_message = exc_message
+        self.node_traceback = node_traceback
+        self.stdout = stdout
+        self.stderr = stderr
 
 
 @hookimpl(tryfirst=True)
@@ -108,6 +198,22 @@ def pytask_execute_build(session: Session) -> bool:
     resource scales from the configuration keys that
     :mod:`~vivarium.workflow.bridge.plugin` describes.
 
+    When the workflow ends, the hook records the result of each stale step whose result
+    file is in the run directory, in plan order, and appends its report to
+    ``session.execution_reports``. Recording runs, in this process, the per-task hooks
+    that a local build runs around a step's body, except setup and the call itself: it
+    logs the step's start, checks that each of its products exists, hashes its
+    dependencies and products into the lockfile, and logs its outcome. The output that
+    the step wrote on its node is added to the report's sections as captured output of
+    the call. A step whose node reports success but which did not write every product is
+    a FAIL with pytask's own message naming the missing products, as in a local build. A
+    step that failed on its node is a FAIL whose exception is :class:`RemoteTaskFailed`,
+    with no lockfile entry, and pytask marks every step after it as skipped because an
+    ancestor failed. A step whose result file cannot be read is a FAIL in the same way,
+    and its :class:`RemoteTaskFailed` names the file. Every result is recorded, also
+    after ``max_failures`` steps have failed. A stale step with no result file, such as
+    one that Jobmon did not run because a step before it failed, gets no report.
+
     Parameters
     ----------
     session
@@ -129,7 +235,12 @@ def pytask_execute_build(session: Session) -> bool:
         ``jobmon_cluster`` and the compute resources to check and quotes the adapter's
         message, which gives the type and message of Jobmon's error. The run directory,
         its recipes and the product directories have then already been created, but no
-        step has run.
+        step has run. Also if Jobmon's ``Workflow.run`` raised, or stopped with, an
+        ``Exception`` before the workflow ended, which the adapter keeps as the run's
+        :attr:`~vivarium.workflow.bridge._jobmon_adapter.JobmonRun.error`. The results
+        already in the run directory are recorded first. The message, printed the same
+        way, says that the steps without a result were not recorded and gives the type
+        and message of Jobmon's error.
     """
     stale = _plan(session)
     # pytask's own loop also stops once max_failures is reached or a task is interrupted.
@@ -165,7 +276,15 @@ def pytask_execute_build(session: Session) -> bool:
             f"step's resources. Jobmon reported: {error}"
         ) from error
     _jobmon_adapter.run(jobmon_run)
-    # TODO(MIC-7529): record each step's result from <signature>.result.json in workdir.
+    # TODO(MIC-7530): settle the steps that this returns, so every planned step gets a report.
+    _record_available(session, stale, workdir)
+    if jobmon_run.error is not None:
+        run_error = jobmon_run.error
+        raise _failure(
+            "Jobmon stopped the workflow with an error before it ended, so the steps "
+            "without a result were not recorded and will run again in the next build. "
+            f"Jobmon raised {type(run_error).__name__}: {run_error}"
+        ) from run_error
     return True
 
 
@@ -346,3 +465,88 @@ def _compile(
             )
         )
     return plan
+
+
+def _record_available(session: Session, stale: Sequence[PTask], workdir: Path) -> list[PTask]:
+    """Record the stale tasks that have a result file; return the others in order."""
+    listed = set(os.listdir(workdir))
+    unfinished: list[PTask] = []
+    for task in stale:
+        name = f"{task.signature}{RESULT_SUFFIX}"
+        if name not in listed:
+            unfinished.append(task)
+            continue
+        path = workdir / name
+        try:
+            result = _read_checked(path)
+        except (OSError, ValueError) as error:
+            _record_unreadable(session, task, path, error)
+        else:
+            _record(session, task, result)
+    return unfinished
+
+
+def _read_checked(path: Path) -> RunResult:
+    """Read the result at ``path`` and check each field that recording reads."""
+    result: object = read_result(path)
+    if not isinstance(result, dict):
+        raise ValueError("the file does not hold a JSON object")
+    for key, accepted in _RESULT_FIELDS.items():
+        if key not in result or not isinstance(result[key], accepted):
+            raise ValueError(f"the result's {key!r} field is missing or of the wrong type")
+    return cast(RunResult, result)
+
+
+def _record_unreadable(session: Session, task: PTask, path: Path, error: Exception) -> None:
+    """Report ``task`` as FAIL because its result file at ``path`` could not be read."""
+    message = (
+        f"Step '{task.name}' could not be recorded, because its result file {path} could "
+        f"not be read ({type(error).__name__}: {error})."
+    )
+    session.hook.pytask_execute_task_log_start(session=session, task=task)
+    _finish(session, task, _remote_failure(task, RemoteTaskFailed(message)))
+
+
+def _record(session: Session, task: PTask, result: RunResult) -> None:
+    """Report ``task`` from its node result through pytask's per-task hooks."""
+    __tracebackhide__ = True
+    if result["stdout"]:
+        task.report_sections.append(("call", "stdout", result["stdout"]))
+    if result["stderr"]:
+        task.report_sections.append(("call", "stderr", result["stderr"]))
+    session.hook.pytask_execute_task_log_start(session=session, task=task)
+    if result["success"]:
+        # pytask's tracebacks start at the first frame that is neither hidden nor pytask's,
+        # so teardown is called from this hidden frame and not from a helper.
+        try:
+            session.hook.pytask_execute_task_teardown(session=session, task=task)
+        except Exception:
+            report = ExecutionReport.from_task_and_exception(task, sys.exc_info())
+        else:
+            report = ExecutionReport.from_task(task)
+    else:
+        message = f"Step '{task.name}' failed on its compute node."
+        if result["exc"] is not None:
+            message = f"{message}\n\n{result['exc']}"
+        error = RemoteTaskFailed(
+            message,
+            exc_type=result["exc_type"],
+            exc_message=result["exc_message"],
+            node_traceback=result["exc"],
+            stdout=result["stdout"],
+            stderr=result["stderr"],
+        )
+        report = _remote_failure(task, error)
+    _finish(session, task, report)
+
+
+def _remote_failure(task: PTask, error: RemoteTaskFailed) -> ExecutionReport:
+    """Return a FAIL report of ``task`` that holds ``error`` with no traceback."""
+    return ExecutionReport.from_task_and_exception(task, (RemoteTaskFailed, error, None))
+
+
+def _finish(session: Session, task: PTask, report: ExecutionReport) -> None:
+    """Process and log ``report`` as pytask does after a task's teardown, and keep it."""
+    session.hook.pytask_execute_task_process_report(session=session, report=report)
+    session.hook.pytask_execute_task_log_end(session=session, task=task, report=report)
+    session.execution_reports.append(report)

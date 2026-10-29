@@ -8,6 +8,9 @@ into a JSON recipe on the controller, and :mod:`~vivarium.workflow.bridge.runner
 recipe on a node and writes a JSON result. A build that sets ``jobmon=True`` runs its stale
 steps this way as one Jobmon workflow: :mod:`~vivarium.workflow.bridge.plugin` describes the
 build's options, and :mod:`~vivarium.workflow.bridge.execute` describes what the build does.
+When the workflow ends, the build records each step's result in pytask's lockfile as a
+local build would, and reports a step that failed on its node with
+:class:`~vivarium.workflow.bridge.execute.RemoteTaskFailed`.
 
 """
 

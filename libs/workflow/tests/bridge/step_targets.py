@@ -14,6 +14,9 @@ import pandas as pd
 FAILURE_MESSAGE = "the step failed on purpose"
 """Message of the error that :func:`raise_step_failure` raises."""
 
+STDOUT_BEFORE_FAILURE = "written to stdout before the failure"
+"""Line that :func:`raise_step_failure` prints to standard output before it raises."""
+
 STDERR_BEFORE_FAILURE = "written to stderr before the failure"
 """Line that :func:`raise_step_failure` prints to standard error before it raises."""
 
@@ -43,7 +46,8 @@ def _frame() -> pd.DataFrame:
 
 
 def raise_step_failure() -> pd.DataFrame:
-    """Print a line to standard error, then fail with StepFailure."""
+    """Print a line to each of stdout and stderr, then fail with StepFailure."""
+    print(STDOUT_BEFORE_FAILURE)
     print(STDERR_BEFORE_FAILURE, file=sys.stderr)
     raise StepFailure(FAILURE_MESSAGE)
 
