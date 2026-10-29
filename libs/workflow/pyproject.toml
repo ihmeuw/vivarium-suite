@@ -41,6 +41,9 @@ test = [
     "pytest-vivarium",
     # The CLI tests read CliRunner's stderr separately, which click 8.2 introduced.
     "click>=8.2",
+    # The notebook_step tests run real notebooks with the test env as the declared env.
+    "ipykernel",
+    "papermill",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
