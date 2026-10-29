@@ -5,14 +5,15 @@ Shared CLI tools
 
 """
 
+import functools
 import warnings
+from bdb import BdbQuit
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import click
 import yaml
-from vivarium.engine.interface.cli_tools import verbose_option
 
 # NOTE: The argument type hints for the cli wrappers are not precise; they should
 # be type-hinted using Protocols. However, the functions being wrapped are never
@@ -21,9 +22,53 @@ CLIFunction = Callable[..., None]
 Decorator = Callable[[CLIFunction], CLIFunction]
 
 
+def handle_exceptions(
+    func: Callable[..., Any], logger: Any, with_debugger: bool
+) -> Callable[..., Any]:
+    """Wrap ``func`` to log an uncaught exception and re-raise it or open a debugger.
+
+    ``BdbQuit`` and ``KeyboardInterrupt`` propagate without being logged.
+
+    Parameters
+    ----------
+    func
+        The function to wrap.
+    logger
+        The logger whose ``exception`` method records the uncaught exception.
+    with_debugger
+        Whether to open a post-mortem debugger instead of re-raising.
+
+    Returns
+    -------
+        The wrapped function.
+    """
+
+    @functools.wraps(func)
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return func(*args, **kwargs)
+        except (BdbQuit, KeyboardInterrupt):
+            raise
+        except Exception as e:
+            logger.exception("Uncaught exception {}".format(e))
+            if with_debugger:
+                import pdb
+                import traceback
+
+                traceback.print_exc()
+                pdb.post_mortem()
+            else:
+                raise
+
+    return wrapped
+
+
 def with_verbose_and_pdb(func: CLIFunction) -> CLIFunction:
-    func = verbose_option(
-        help="Configure logging verbosity of main runner for a parallel simulation."
+    func = click.option(
+        "-v",
+        "verbose",
+        count=True,
+        help="Configure logging verbosity of main runner for a parallel simulation.",
     )(func)
     func = click.option(
         "--pdb",
