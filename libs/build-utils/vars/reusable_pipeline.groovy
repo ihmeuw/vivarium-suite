@@ -237,14 +237,15 @@ def call(Map config = [:]){
                       // come from the authenticated fetch and private repos work too. The branch source
                       // adds GitSCMSourceDefaults, which clones without tags, and a clone option cannot
                       // turn tags back on for a fresh clone, so drop it and honor the refspec here instead.
-                      def checkoutExtensions = scm.extensions.findAll {
-                        it.class.name != 'jenkins.plugins.git.GitSCMSourceDefaults'
-                      }
+                      // The extension list is built inline because a local variable holding it cannot be
+                      // serialized when the pipeline saves its state.
                       checkout([
                         $class: 'GitSCM',
                         branches: scm.branches,
                         userRemoteConfigs: scm.userRemoteConfigs,
-                        extensions: checkoutExtensions + [[$class: 'CloneOption', noTags: false, shallow: false, reference: '', honorRefspec: true]],
+                        extensions: scm.extensions.findAll {
+                          it.class.name != 'jenkins.plugins.git.GitSCMSourceDefaults'
+                        } + [[$class: 'CloneOption', noTags: false, shallow: false, reference: '', honorRefspec: true]],
                       ])
                       buildStages.loadSharedFiles()
                       
