@@ -1,8 +1,7 @@
 **0.7.1 - 10/29/26**
 
-- Pass ``year_id`` and ``data_type`` to ``get_modelable_entity_draws``, which
-  ``vivarium-gbd-access`` requires
-- Declare ``vivarium-gbd-access`` as a direct dependency of the ``data`` extra
+- Remove the unused ``_load_em_from_meid`` from the data loader, along with
+  the loader's only import of ``vivarium_gbd_access``
 
 **0.7.0 - 10/28/26**
 
