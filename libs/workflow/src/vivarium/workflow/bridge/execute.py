@@ -11,13 +11,17 @@ Before pytask runs a step locally, it decides whether the step is stale, checks 
 step's inputs exist, and creates the parent directory of each product. For a stale step
 with no stale ancestor, planning does all three, so it can create product directories even
 for a step that the bridge then refuses. pytask marks every step after a stale step to run
-without checking its inputs. Unless such a step is deselected or persisted, it is stale
-and is submitted, even when a local build would skip it because its stale ancestor wrote
-the same content again, and a missing input of the step is found only when the step runs
-on a node. The bridge creates the product directories of every stale step before it
-submits anything, so a step whose product directory does not exist yet runs on a node as
-it does locally. pytask's ``max_failures`` and ``stop_after_first_failure`` do not apply
-to the steps that run through Jobmon.
+without checking its inputs. Unless such a step is deselected or persisted, it is stale,
+and the bridge submits it even when a local build would skip it because its stale ancestor
+wrote the same content again. With ``force``, planning checks the inputs of no step.
+Before it writes anything, the bridge therefore checks the inputs of every stale step
+itself: each input with a file path must exist unless a stale step produces it. A stale
+step with a missing input is reported as FAIL and every stale step after it as
+SKIP_PREVIOUS_FAILED, as a local build reports them, and the bridge submits none of these
+steps. It creates the product directories of every step that it submits before it submits
+anything, so a step whose product directory does not exist yet runs on a node as it does
+locally. pytask's ``max_failures`` and ``stop_after_first_failure`` do not apply to the
+steps that run through Jobmon.
 
 Planning goes through pytask's per-task protocol, so pytask's table lists each stale step
 as "would be executed". The bridge does not yet record the results of the steps that ran,
@@ -38,11 +42,13 @@ from pytask import (
     DirectoryNode,
     ExecutionError,
     ExecutionReport,
+    NodeNotFoundError,
     PNode,
     PPathNode,
     PProvisionalNode,
     PTask,
     Session,
+    SkippedAncestorFailed,
     TaskOutcome,
     console,
     hookimpl,
@@ -82,8 +88,18 @@ def pytask_execute_build(session: Session) -> bool:
     step, the steps it has not reached get no report, and the hook stops there too: it
     creates no run directory and submits none of the stale steps it has already planned.
 
-    Next it builds a recipe for every stale step, resolving each declared env once for
-    the whole plan. If any stale step cannot run on a compute node, because
+    Next it checks the inputs of every stale step, because planning checks no input of a
+    step after a stale step and, with ``force``, no input of any step. Each input with a
+    file path must exist unless a stale step produces it. A stale step with a missing
+    input is reported as FAIL, with a plain message that names the step and the path of
+    each missing input and has no traceback or chained error, and every stale step after
+    it is reported as SKIP_PREVIOUS_FAILED. A step that planning already reported keeps
+    that report. The hook writes nothing for the steps it reports here and does not submit
+    them. The other stale steps, including the stale ancestors of a failed step, are the
+    steps to submit. If there are none, the hook stops there, as with nothing stale.
+
+    Next it builds a recipe for every step to submit, resolving each declared env once for
+    the whole plan. If any of these steps cannot run on a compute node, because
     :func:`~vivarium.workflow.bridge.payload.payload_for` refuses it (for example, its
     target cannot be named by import reference), the step was not built by
     :func:`~vivarium.workflow.backend.build.build`, or its arguments cannot be loaded on
@@ -95,8 +111,8 @@ def pytask_execute_build(session: Session) -> bool:
 
     Otherwise it checks the Jobmon environment, creates a new run directory
     ``<root>/.pytask/jobmon/<YYYYmmdd-HHMMSS>-<6 hex digits>/``, writes each recipe there
-    as ``<signature>.payload.json``, creates the parent directory of each stale step's
-    products, and binds and runs one workflow. Its entries are the stale steps in plan
+    as ``<signature>.payload.json``, creates the parent directory of each such step's
+    products, and binds and runs one workflow. Its entries are the steps to submit in plan
     order, named by step and carrying each step's
     :attr:`~vivarium.workflow.backend.task.Task.resources`. Each entry waits for the
     step's nearest stale ancestors, found by walking back through data nodes and through
@@ -135,7 +151,10 @@ def pytask_execute_build(session: Session) -> bool:
     # pytask's own loop also stops once max_failures is reached or a task is interrupted.
     if not stale or session.should_stop:
         return True
-    payloads = _payloads(session, stale, env_paths={})
+    to_submit = _check_inputs(session, stale)
+    if not to_submit or session.should_stop:
+        return True
+    payloads = _payloads(session, to_submit, env_paths={})
     if payloads is None:
         return True
     config = session.config
@@ -147,8 +166,8 @@ def pytask_execute_build(session: Session) -> bool:
         raise _failure(str(error)) from error
     root = Path(config["root"])
     workdir = _new_run_directory(root)
-    plan = _compile(session, stale, payloads, workdir)
-    _prepare_products(session, stale)
+    plan = _compile(session, to_submit, payloads, workdir)
+    _prepare_products(session, to_submit)
     try:
         jobmon_run = _jobmon_adapter.bind(
             plan,
@@ -228,6 +247,49 @@ def _load(node: object, *, is_product: bool) -> Any:
     return node.load(is_product=is_product)
 
 
+def _missing_inputs(session: Session, task: PTask, stale: Set[str]) -> list[str]:
+    """Return the sorted paths of the task's missing inputs that no stale task produces."""
+    missing: list[str] = []
+    for signature in session.dag.predecessors(task.signature):
+        node = session.dag.nodes[signature]
+        produced = not stale.isdisjoint(session.dag.predecessors(signature))
+        if isinstance(node, PPathNode) and not produced and not node.path.exists():
+            missing.append(str(node.path))
+    return sorted(missing)
+
+
+def _check_inputs(session: Session, stale: list[PTask]) -> list[PTask]:
+    """Report the stale tasks that miss an input and those after them; return the others.
+
+    End at a failure after which pytask asks the build to stop, as planning does.
+    """
+    stale_signatures = {task.signature for task in stale}
+    failed_upstream: dict[str, list[str]] = {}
+    remaining: list[PTask] = []
+    for task in stale:
+        failed_names = failed_upstream.get(task.signature)
+        if failed_names:
+            reason = "\n".join(f"Previous task {name!r} failed." for name in failed_names)
+            # pytask's skipping plugin makes this SKIP_PREVIOUS_FAILED, as in a local build.
+            _report_exception(session, task, SkippedAncestorFailed(reason))
+            continue
+        missing = _missing_inputs(session, task, stale_signatures)
+        if not missing:
+            remaining.append(task)
+            continue
+        paths = "".join(f"\n    {path}" for path in missing)
+        message = (
+            f"Task '{task.name}': these inputs do not exist, and no step that runs before "
+            f"it writes them:{paths}"
+        )
+        _report_exception(session, task, NodeNotFoundError(message))
+        if session.should_stop:
+            break
+        for signature in session.dag.descendants(task.signature) & stale_signatures:
+            failed_upstream.setdefault(signature, []).append(task.name)
+    return remaining
+
+
 def _payloads(
     session: Session, stale: list[PTask], env_paths: MutableMapping[str, str]
 ) -> dict[str, Payload] | None:
@@ -264,8 +326,13 @@ def _payloads(
 
 def _reject(session: Session, task: PTask, reason: str) -> None:
     """Report the task as FAIL with ``reason``, without a traceback or chained error."""
-    error = ValueError(reason)
-    report = ExecutionReport.from_task_and_exception(task, (ValueError, error, None))
+    _report_exception(session, task, ValueError(reason))
+
+
+def _report_exception(session: Session, task: PTask, exception: Exception) -> None:
+    """Report ``task`` with ``exception`` as pytask's protocol does, with no traceback."""
+    exc_info = (type(exception), exception, None)
+    report = ExecutionReport.from_task_and_exception(task, exc_info)
     # Planning already logged the task's end, and the live table needs a start first.
     session.hook.pytask_execute_task_log_start(session=session, task=task)
     session.hook.pytask_execute_task_process_report(session=session, report=report)
