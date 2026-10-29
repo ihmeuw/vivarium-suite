@@ -67,6 +67,25 @@ class StepPreview:
         return self.outcome == pytask.TaskOutcome.WOULD_BE_EXECUTED
 
 
+class PlanFailed(RuntimeError):
+    """pytask could not build the plan for a preview.
+
+    Parameters
+    ----------
+    message
+        Why the plan could not be built.
+    exit_code
+        The exit code of pytask's dry run.
+    """
+
+    exit_code: pytask.ExitCode
+    """The exit code of pytask's dry run."""
+
+    def __init__(self, message: str, *, exit_code: pytask.ExitCode) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+
+
 def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPreview]:
     """Return a structured plan for ``tasks`` without running anything.
 
@@ -91,18 +110,22 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
 
     Raises
     ------
-    RuntimeError
-        If the build does not complete (a collection or DAG failure), since the
-        session's reports are then empty or partial and would misreport as an
+    PlanFailed
+        If the build does not complete (for example a collection or DAG failure), since
+        the session's reports are then empty or partial and would misreport as an
         all-skip plan. The message carries pytask's reason, as
-        :func:`~vivarium.workflow.backend.build.failure_message` gives it.
+        :func:`~vivarium.workflow.backend.build.failure_message` gives it, and
+        ``exit_code`` is pytask's exit code. It is a ``RuntimeError``.
     ValueError
         For any of the reasons :func:`~vivarium.workflow.backend.build.build` raises it,
         including a declared env that does not resolve.
     """
     session = build(tasks, root, dry_run=True, explain=True, **kwargs)
     if session.exit_code != pytask.ExitCode.OK:
-        raise RuntimeError(f"preview could not build the plan: {failure_message(session)}")
+        raise PlanFailed(
+            f"preview could not build the plan: {failure_message(session)}",
+            exit_code=session.exit_code,
+        )
     return [_step_preview(report) for report in session.execution_reports]
 
 
