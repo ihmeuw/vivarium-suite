@@ -46,11 +46,38 @@ def run_command(command: str, env: str | None) -> None:
     subprocess.CalledProcessError
         If the command exits with a non-zero status.
     """
-    if env is None:
+    bin_path = None if env is None else resolve_env_bin_path(resolve_env_prefix(env))
+    run_command_with_bin_path(command, bin_path)
+
+
+def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
+    """Run ``command`` in a shell with the directories in ``bin_path`` first on ``PATH``.
+
+    This is :func:`run_command` after its env is resolved, for a caller that resolved the
+    env elsewhere, such as a compute node running a step the controller planned. The
+    directories are set on the child process's ``PATH``, so they apply to every part of a
+    compound command such as ``a && b``, and no empty entry is added to ``PATH``. Output
+    goes to this process's standard output and standard error.
+
+    Parameters
+    ----------
+    command
+        The shell command to run.
+    bin_path
+        Colon-joined directories to put first on ``PATH``, as
+        :func:`~vivarium.workflow.backend.env.resolve_env_bin_path` returns. ``None``
+        runs the command with the current ``PATH``.
+
+    Raises
+    ------
+    subprocess.CalledProcessError
+        If the command exits with a non-zero status.
+    """
+    if bin_path is None:
         subprocess.run(command, shell=True, check=True)
         return
-    bin_path = resolve_env_bin_path(resolve_env_prefix(env))
-    path = ":".join(part for part in (bin_path, os.environ.get("PATH", "")) if part)
+    parts = [*bin_path.split(":"), os.environ.get("PATH", "")]
+    path = ":".join(part for part in parts if part)
     subprocess.run(command, shell=True, check=True, env={**os.environ, "PATH": path})
 
 
