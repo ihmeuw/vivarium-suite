@@ -189,7 +189,8 @@ def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
         Directory for pytask's configuration, state database, and lockfile; created if
         missing.
     kwargs
-        Extra keyword arguments passed to ``pytask.build``.
+        Extra keyword arguments passed to ``pytask.build``, including the Jobmon
+        bridge's options, which :mod:`~vivarium.workflow.bridge.plugin` lists.
 
     Returns
     -------

@@ -1,4 +1,4 @@
-"""Step targets that the runner tests name by reference.
+"""Step targets that the runner and bridge tests name by reference.
 
 A runner subprocess imports this module as ``tests.bridge.step_targets`` from the
 ``PYTHONPATH`` that the tests give it, so it imports nothing from the test suite.
@@ -7,6 +7,7 @@ A runner subprocess imports this module as ``tests.bridge.step_targets`` from th
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pandas as pd
 
@@ -75,3 +76,21 @@ def exit_with_status_zero() -> pd.DataFrame:
 def raise_keyboard_interrupt() -> pd.DataFrame:
     """Raise KeyboardInterrupt instead of returning a frame."""
     raise KeyboardInterrupt
+
+
+def constant() -> pd.DataFrame:
+    """Return a small fixed frame."""
+    return _frame()
+
+
+def stack(**upstreams: Path) -> pd.DataFrame:
+    """Read each upstream step's frame and stack them, ordered by argument name."""
+    frames = [pd.read_parquet(upstreams[name]) for name in sorted(upstreams)]
+    return pd.concat(frames, ignore_index=True)
+
+
+def record_pid(**upstreams: Path) -> pd.DataFrame:
+    """Return the process ids that the upstream steps recorded, then this process's id."""
+    frames = [pd.read_parquet(upstreams[name]) for name in sorted(upstreams)]
+    frames.append(pd.DataFrame({"pid": [os.getpid()]}))
+    return pd.concat(frames, ignore_index=True)

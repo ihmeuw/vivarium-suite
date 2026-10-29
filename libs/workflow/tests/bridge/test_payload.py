@@ -29,9 +29,6 @@ from vivarium.workflow.bridge.payload import (
 from vivarium.workflow.frontend.python_step import PythonStepRun
 from vivarium.workflow.harness import _double, build_fixture
 
-_TOOL = "vivarium_workflow_bridge_probe"
-"""A tool that exists only in the fake env bin directories these tests make."""
-
 
 @dataclasses.dataclass
 class _Point:
@@ -84,17 +81,6 @@ def _round_trip(value: object) -> Any:
     return decode(json.loads(json.dumps(encode(value))))
 
 
-def _pytask_kwargs(task: Task) -> dict[str, Any]:
-    """Return the keyword arguments pytask passes to ``task``'s function."""
-    kwargs = {name: node.load() for name, node in task.inputs.items()}
-    kwargs.update({name: node.load(is_product=True) for name, node in task.outputs.items()})
-    assert task.code_id is not None
-    kwargs[CODE_ID_KEY] = task.code_id.load()
-    if isinstance(task.run, str):
-        kwargs[COMMAND_KEY] = task.run
-    return kwargs
-
-
 def _as_python(payload: Payload) -> PythonPayload:
     """Return ``payload`` after checking that it is a python recipe."""
     python = cast(PythonPayload, payload)
@@ -119,25 +105,6 @@ def _make_prefix(prefix: Path) -> Path:
     (prefix / "bin").mkdir(parents=True)
     (prefix / "bin" / "python").touch()
     return prefix
-
-
-def _make_tool_dir(bin_dir: Path) -> Path:
-    """Create ``bin_dir`` holding only a ``_TOOL`` script, with no ``python``."""
-    bin_dir.mkdir(parents=True)
-    tool = bin_dir / _TOOL
-    tool.write_text(f'#!/bin/sh\necho "{_TOOL} says $1"\n')
-    tool.chmod(0o755)
-    return bin_dir
-
-
-def _fake_conda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *prefixes: Path) -> None:
-    """Point ``CONDA_EXE`` at a script that lists ``prefixes`` as conda envs."""
-    listing = tmp_path / "conda_envs.json"
-    listing.write_text(json.dumps({"envs": [str(prefix) for prefix in prefixes]}))
-    conda = tmp_path / "fake_conda"
-    conda.write_text(f"#!/bin/sh\ncat '{listing}'\n")
-    conda.chmod(0o755)
-    monkeypatch.setenv("CONDA_EXE", str(conda))
 
 
 def _command_task(name: str, run: str, env: str | None, product: Path) -> Task:
@@ -269,7 +236,9 @@ def test_encode_rejects_a_dict_keyed_by_the_path_tag(value: object) -> None:
 
 
 def test_payload_for_a_python_step_names_its_target_suffix_arguments_and_cwd(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
     """For the harness's first step, payload_for gives kind 'python', the task name, target 'vivarium.workflow.harness:_double', suffix '.parquet', kwargs equal to the encoded input and product paths, and cwd equal to os.getcwd(); json.dumps accepts it."""
     controller = tmp_path / "controller"
@@ -278,7 +247,7 @@ def test_payload_for_a_python_step_names_its_target_suffix_arguments_and_cwd(
     fixture = build_fixture(tmp_path)
     task = fixture.tasks[0]
 
-    payload = payload_for(task, _pytask_kwargs(task))
+    payload = payload_for(task, pytask_kwargs(task))
 
     raw, product = fixture.inputs["raw"].resolve(), fixture.registry.path_for("mid.parquet")
     assert dict(payload) == {
@@ -292,10 +261,12 @@ def test_payload_for_a_python_step_names_its_target_suffix_arguments_and_cwd(
     assert json.loads(json.dumps(payload)) == dict(payload)
 
 
-def test_payload_for_leaves_out_the_reserved_arguments(tmp_path: Path) -> None:
+def test_payload_for_leaves_out_the_reserved_arguments(
+    tmp_path: Path, pytask_kwargs: Callable[[Task], dict[str, Any]]
+) -> None:
     """The '__code_id__' and '__command__' entries of pytask's kwargs do not appear in a python payload's kwargs."""
     task = build_fixture(tmp_path).tasks[0]
-    kwargs = {**_pytask_kwargs(task), COMMAND_KEY: "echo not an argument"}
+    kwargs = {**pytask_kwargs(task), COMMAND_KEY: "echo not an argument"}
 
     payload = _as_python(payload_for(task, kwargs))
 
@@ -304,14 +275,16 @@ def test_payload_for_leaves_out_the_reserved_arguments(tmp_path: Path) -> None:
 
 
 def test_payload_for_a_command_step_without_env_has_no_bin_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
     """A command-string task with env None gives kind 'command', the task name, the command unchanged, env_path None, and cwd equal to os.getcwd()."""
     monkeypatch.chdir(tmp_path)
     command = "papermill 'in put.ipynb' out.ipynb -p year 2024 && echo $HOME"
     task = _command_task("render", command, None, tmp_path / "out.ipynb")
 
-    payload = payload_for(task, _pytask_kwargs(task))
+    payload = payload_for(task, pytask_kwargs(task))
 
     assert dict(payload) == {
         "kind": "command",
@@ -325,7 +298,11 @@ def test_payload_for_a_command_step_without_env_has_no_bin_path(
 
 @pytest.mark.parametrize("venv", [False, True], ids=["conda_prefix", "venv_prefix"])
 def test_payload_for_a_command_step_carries_its_env_resolved_to_bin_directories(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, venv: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    venv: bool,
+    probe_tool: str,
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
     """A command task whose env is a fake prefix path (holding bin/python) gives env_path equal to resolve_env_bin_path of that prefix."""
     monkeypatch.chdir(tmp_path)
@@ -334,9 +311,9 @@ def test_payload_for_a_command_step_carries_its_env_resolved_to_bin_directories(
     if venv:
         base_bin = _make_prefix(tmp_path / "base") / "bin"
         (prefix / "pyvenv.cfg").write_text(f"home = {base_bin}\n")
-    task = _command_task("tool_step", f"{_TOOL} run", str(prefix), tmp_path / "out.txt")
+    task = _command_task("tool_step", f"{probe_tool} run", str(prefix), tmp_path / "out.txt")
 
-    payload = payload_for(task, _pytask_kwargs(task))
+    payload = payload_for(task, pytask_kwargs(task))
 
     bin_path = resolve_env_bin_path(str(prefix.resolve()))
     assert (":" in bin_path) is venv
@@ -344,22 +321,27 @@ def test_payload_for_a_command_step_carries_its_env_resolved_to_bin_directories(
         "kind": "command",
         "task": "tool_step",
         "cwd": os.getcwd(),
-        "command": f"{_TOOL} run",
+        "command": f"{probe_tool} run",
         "env_path": bin_path,
     }
 
 
 def test_payload_for_resolves_an_env_without_bin_python_by_name(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    probe_tool: str,
+    fake_conda: Callable[..., Path],
+    make_tool_dir: Callable[[Path], Path],
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
     """A command task naming an env that a fake conda lists, whose prefix has bin/<tool> but no bin/python, gives env_path equal to that prefix's bin directory."""
     monkeypatch.chdir(tmp_path)
     prefix = tmp_path / "conda_envs" / "r_only"
-    _make_tool_dir(prefix / "bin")
-    _fake_conda(tmp_path, monkeypatch, prefix)
-    task = _command_task("r_step", f"{_TOOL} report", "r_only", tmp_path / "report.html")
+    make_tool_dir(prefix / "bin")
+    fake_conda(prefix)
+    task = _command_task("r_step", f"{probe_tool} report", "r_only", tmp_path / "report.html")
 
-    payload = payload_for(task, _pytask_kwargs(task))
+    payload = payload_for(task, pytask_kwargs(task))
 
     assert not (prefix / "bin" / "python").exists()
     assert dict(payload)["env_path"] == f"{prefix.resolve()}/bin"
@@ -367,7 +349,11 @@ def test_payload_for_resolves_an_env_without_bin_python_by_name(
 
 @pytest.mark.parametrize("given_as", ["path", "name"])
 def test_payload_for_refuses_an_env_that_does_not_resolve(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, given_as: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    given_as: str,
+    fake_conda: Callable[..., Path],
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
     """A command task whose env does not resolve makes payload_for raise ValueError naming the step and the env."""
     monkeypatch.chdir(tmp_path)
@@ -375,18 +361,20 @@ def test_payload_for_refuses_an_env_that_does_not_resolve(
         monkeypatch.delenv("CONDA_EXE", raising=False)
         env = str(tmp_path / "no_such_env_dir")
     else:
-        _fake_conda(tmp_path, monkeypatch, _make_prefix(tmp_path / "conda_envs" / "other"))
+        fake_conda(_make_prefix(tmp_path / "conda_envs" / "other"))
         env = "no_such_env_xyz_vw"
     task = _command_task("render_report", "true", env, tmp_path / "report.html")
 
     with pytest.raises(ValueError) as info:
-        payload_for(task, _pytask_kwargs(task))
+        payload_for(task, pytask_kwargs(task))
 
     assert "render_report" in str(info.value)
     assert env in str(info.value)
 
 
-def test_payload_for_refuses_a_hand_built_callable_run(tmp_path: Path) -> None:
+def test_payload_for_refuses_a_hand_built_callable_run(
+    tmp_path: Path, pytask_kwargs: Callable[[Task], dict[str, Any]]
+) -> None:
     """A task whose run is a plain function (not a PythonStepRun) makes payload_for raise ValueError naming the step."""
     task = Task(
         name="hand_built_step",
@@ -398,7 +386,7 @@ def test_payload_for_refuses_a_hand_built_callable_run(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="hand_built_step"):
-        payload_for(task, _pytask_kwargs(task))
+        payload_for(task, pytask_kwargs(task))
 
 
 @pytest.mark.parametrize(
@@ -411,13 +399,16 @@ def test_payload_for_refuses_a_hand_built_callable_run(tmp_path: Path) -> None:
     ],
 )
 def test_payload_for_refuses_targets_that_cannot_be_imported_by_reference(
-    tmp_path: Path, target: Callable[..., Any], reason: str
+    tmp_path: Path,
+    target: Callable[..., Any],
+    reason: str,
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
     """A PythonStepRun whose target is in __main__, a lambda, a nested function, or a functools.partial makes payload_for raise ValueError naming the step and the reason."""
     task = _python_task("bridged_step", target, tmp_path / "out.parquet")
 
     with pytest.raises(ValueError) as info:
-        payload_for(task, _pytask_kwargs(task))
+        payload_for(task, pytask_kwargs(task))
 
     message = str(info.value)
     assert "bridged_step" in message
@@ -426,14 +417,61 @@ def test_payload_for_refuses_targets_that_cannot_be_imported_by_reference(
 
 @pytest.mark.parametrize("value", [{1, 2}, object()], ids=["set", "object"])
 def test_payload_for_refuses_an_argument_that_cannot_be_encoded(
-    tmp_path: Path, value: object
+    tmp_path: Path, value: object, pytask_kwargs: Callable[[Task], dict[str, Any]]
 ) -> None:
     """A python step whose kwargs hold a value encode refuses (a set, or an object) makes payload_for raise ValueError naming the step and the argument."""
     inputs = {"lookup_table": PythonNode(name="lookup_table", value=value)}
     task = _python_task("bridged_step", _double, tmp_path / "out.parquet", inputs)
 
     with pytest.raises(ValueError) as info:
-        payload_for(task, _pytask_kwargs(task))
+        payload_for(task, pytask_kwargs(task))
 
     assert "bridged_step" in str(info.value)
     assert "lookup_table" in str(info.value)
+
+
+def test_payload_for_resolves_a_named_env_once_across_calls_sharing_env_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    probe_tool: str,
+    fake_conda: Callable[..., Path],
+    make_tool_dir: Callable[[Path], Path],
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
+) -> None:
+    """Two command tasks naming the same fake-conda env, given one shared env_paths dict, run the conda lookup once, both get the same env_path, and env_paths then maps the env name to it."""
+    monkeypatch.chdir(tmp_path)
+    prefix = tmp_path / "conda_envs" / "shared_env"
+    make_tool_dir(prefix / "bin")
+    calls = fake_conda(prefix)
+    tasks = [
+        _command_task(name, f"{probe_tool} {name}", "shared_env", tmp_path / f"{name}.txt")
+        for name in ("first_step", "second_step")
+    ]
+    env_paths: dict[str, str] = {}
+
+    recipes = [payload_for(task, pytask_kwargs(task), env_paths=env_paths) for task in tasks]
+
+    bin_path = f"{prefix.resolve()}/bin"
+    assert len(calls.read_text().splitlines()) == 1
+    assert [dict(recipe)["env_path"] for recipe in recipes] == [bin_path, bin_path]
+    assert env_paths == {"shared_env": bin_path}
+
+
+def test_payload_for_uses_a_bin_path_already_in_env_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_conda: Callable[..., Path],
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
+) -> None:
+    """A command task whose env is already a key of env_paths gets that value as its env_path without any lookup, even when the env would not resolve."""
+    monkeypatch.chdir(tmp_path)
+    calls = fake_conda()
+    cached = "/cached/env/bin:/cached/base/bin"
+    task = _command_task("cached_step", "true", "unlisted_env", tmp_path / "out.txt")
+    env_paths = {"unlisted_env": cached}
+
+    payload = payload_for(task, pytask_kwargs(task), env_paths=env_paths)
+
+    assert dict(payload)["env_path"] == cached
+    assert calls.read_text() == ""
+    assert env_paths == {"unlisted_env": cached}

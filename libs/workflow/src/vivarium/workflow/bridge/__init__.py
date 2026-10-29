@@ -5,7 +5,9 @@ bridge
 
 Run pipeline steps on compute nodes. :mod:`~vivarium.workflow.bridge.payload` turns a step
 into a JSON recipe on the controller, and :mod:`~vivarium.workflow.bridge.runner` runs that
-recipe on a node and writes a JSON result.
+recipe on a node and writes a JSON result. A build that sets ``jobmon=True`` runs its stale
+steps this way as one Jobmon workflow: :mod:`~vivarium.workflow.bridge.plugin` describes the
+build's options, and :mod:`~vivarium.workflow.bridge.execute` describes what the build does.
 
 """
 

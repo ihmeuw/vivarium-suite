@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import time
@@ -18,7 +19,7 @@ import pytest
 from pytask import TaskOutcome
 
 from tests.bridge import step_targets
-from vivarium.workflow.backend.build import CODE_ID_KEY, COMMAND_KEY, build, outcomes
+from vivarium.workflow.backend.build import build, outcomes
 from vivarium.workflow.backend.nodes import file_node
 from vivarium.workflow.backend.task import Task
 from vivarium.workflow.bridge.payload import (
@@ -49,9 +50,6 @@ _RUNNER_MODULE = "vivarium.workflow.bridge.runner"
 
 _RESULT_NAME = f"step{RESULT_SUFFIX}"
 """File name of the result that most tests have the runner write."""
-
-_TOOL = "vivarium_workflow_bridge_probe"
-"""A tool that exists only in the fake env bin directories these tests make."""
 
 _TIMEOUT = 300
 """Seconds after which a runner subprocess is taken to hang."""
@@ -193,36 +191,6 @@ def _run_step(
     return process, _read(result_path)
 
 
-def _pytask_kwargs(task: Task) -> dict[str, Any]:
-    """Return the keyword arguments pytask passes to ``task``'s function."""
-    kwargs = {name: node.load() for name, node in task.inputs.items()}
-    kwargs.update({name: node.load(is_product=True) for name, node in task.outputs.items()})
-    assert task.code_id is not None
-    kwargs[CODE_ID_KEY] = task.code_id.load()
-    if isinstance(task.run, str):
-        kwargs[COMMAND_KEY] = task.run
-    return kwargs
-
-
-def _fake_conda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *prefixes: Path) -> None:
-    """Point ``CONDA_EXE`` at a script that lists ``prefixes`` as conda envs."""
-    listing = tmp_path / "conda_envs.json"
-    listing.write_text(json.dumps({"envs": [str(prefix) for prefix in prefixes]}))
-    conda = tmp_path / "fake_conda"
-    conda.write_text(f"#!/bin/sh\ncat '{listing}'\n")
-    conda.chmod(0o755)
-    monkeypatch.setenv("CONDA_EXE", str(conda))
-
-
-def _make_tool_dir(bin_dir: Path) -> Path:
-    """Create ``bin_dir`` holding only a ``_TOOL`` script that echoes its argument."""
-    bin_dir.mkdir(parents=True)
-    tool = bin_dir / _TOOL
-    tool.write_text(f'#!/bin/sh\necho "{_TOOL} says $1"\n')
-    tool.chmod(0o755)
-    return bin_dir
-
-
 def _numbered(text: str) -> list[str]:
     """Return the lines of ``text`` that ``step_targets.write_to_every_stream`` wrote."""
     return [line for line in text.splitlines() if line.startswith("capture-")]
@@ -235,7 +203,9 @@ def _identity(fd: int) -> tuple[int, int]:
 
 
 def test_runner_runs_the_harness_chain_with_products_equal_to_a_local_build(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
     """End to end: payload_for each harness task, run runner_command for each in topological order in a subprocess started from another directory; each exits 0 with success=True, and both products equal a local build()'s."""
     local = build_fixture(_mkdir(tmp_path / "local"))
@@ -245,7 +215,7 @@ def test_runner_runs_the_harness_chain_with_products_equal_to_a_local_build(
     remote, work = build_fixture(_mkdir(tmp_path / "remote")), _mkdir(tmp_path / "work")
     runs: list[tuple[str, Path, Path]] = []
     for index, task in enumerate(remote.tasks):
-        recipe = payload_for(task, _pytask_kwargs(task))
+        recipe = payload_for(task, pytask_kwargs(task))
         payload = _write_payload(work / f"{index}.payload.json", recipe)
         runs.append((task.name, payload, work / f"{index}{RESULT_SUFFIX}"))
 
@@ -261,37 +231,44 @@ def test_runner_runs_the_harness_chain_with_products_equal_to_a_local_build(
 
 
 def test_runner_runs_a_command_step_from_its_bin_path_in_the_payload_cwd(
-    tmp_path: Path,
+    tmp_path: Path, probe_tool: str, make_tool_dir: Callable[[Path], Path]
 ) -> None:
     """A command payload whose env_path is a fake prefix's bin runs the tool found only there, `pwd` prints the payload's cwd, and the result has success=True and the tool's output in stdout."""
-    bin_dir = _make_tool_dir(tmp_path / "env" / "bin")
+    bin_dir = make_tool_dir(tmp_path / "env" / "bin")
     step_cwd = _mkdir(tmp_path / "step_cwd").resolve()
-    payload = _command_payload("tool_step", step_cwd, f"{_TOOL} hello && pwd", str(bin_dir))
+    payload = _command_payload(
+        "tool_step", step_cwd, f"{probe_tool} hello && pwd", str(bin_dir)
+    )
 
     process, result = _run_step(tmp_path, payload)
 
     assert process.returncode == 0, process.stderr
     assert (result["task"], result["success"]) == ("tool_step", True)
-    assert result["stdout"] == f"{_TOOL} says hello\n{step_cwd}\n"
+    assert result["stdout"] == f"{probe_tool} says hello\n{step_cwd}\n"
 
 
 def test_runner_runs_a_command_step_whose_env_has_no_bin_python(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    probe_tool: str,
+    fake_conda: Callable[..., Path],
+    make_tool_dir: Callable[[Path], Path],
+    pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
     """End to end: an env named by a fake conda, whose prefix has bin/<tool> but no bin/python, goes through payload_for and the runner subprocess, and the tool runs from that env."""
     monkeypatch.chdir(_mkdir(tmp_path / "controller"))
     prefix = tmp_path / "conda_envs" / "r_only"
-    _make_tool_dir(prefix / "bin")
-    _fake_conda(tmp_path, monkeypatch, prefix)
+    make_tool_dir(prefix / "bin")
+    fake_conda(prefix)
     task = Task(
         name="r_step",
-        run=f"{_TOOL} from-r-env",
+        run=f"{probe_tool} from-r-env",
         inputs={},
         outputs={"report": file_node(tmp_path / "report.html")},
         resources={},
         env="r_only",
     )
-    recipe = payload_for(task, _pytask_kwargs(task))
+    recipe = payload_for(task, pytask_kwargs(task))
     payload = _write_payload(tmp_path / "r_step.payload.json", recipe)
     result_path = tmp_path / _RESULT_NAME
     node_env = _subprocess_env()
@@ -302,7 +279,7 @@ def test_runner_runs_a_command_step_whose_env_has_no_bin_python(
     assert process.returncode == 0, process.stderr
     result = _read(result_path)
     assert (result["task"], result["success"]) == ("r_step", True)
-    assert result["stdout"] == f"{_TOOL} says from-r-env\n"
+    assert result["stdout"] == f"{probe_tool} says from-r-env\n"
     assert not (prefix / "bin" / "python").exists()
 
 
@@ -662,7 +639,7 @@ def test_write_result_leaves_no_file_when_writing_fails(tmp_path: Path) -> None:
 def test_write_result_writes_through_a_per_process_temporary_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """write_result moves '<path>.<pid>.tmp' from the result's directory onto the result path, and leaves no temporary file after it succeeds."""
+    """write_result moves '<path>.<host>.<pid>.tmp' from the result's directory onto the result path, and leaves no temporary file after it succeeds."""
     path = tmp_path / _RESULT_NAME
     moves: list[tuple[Path, Path, Any]] = []
     replace = os.replace
@@ -677,7 +654,7 @@ def test_write_result_writes_through_a_per_process_temporary_file(
 
     write_result(_SUCCESS, path)
 
-    temporary = Path(f"{path}.{os.getpid()}.tmp")
+    temporary = Path(f"{path}.{socket.gethostname()}.{os.getpid()}.tmp")
     assert [move for move in moves if move[1] == path] == [(temporary, path, _SUCCESS)]
     assert read_result(path) == _SUCCESS
     assert list(tmp_path.iterdir()) == [path]

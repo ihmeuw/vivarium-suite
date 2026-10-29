@@ -11,7 +11,7 @@ refused before anything is sent. :mod:`~vivarium.workflow.bridge.runner` runs a 
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from pathlib import Path, PurePath
 from typing import Any, Literal, TypeAlias, TypedDict
 
@@ -147,7 +147,12 @@ def decode(value: JSONValue) -> Any:
     return value
 
 
-def payload_for(task: Task, kwargs: Mapping[str, Any]) -> Payload:
+def payload_for(
+    task: Task,
+    kwargs: Mapping[str, Any],
+    *,
+    env_paths: MutableMapping[str, str] | None = None,
+) -> Payload:
     """Return the recipe that runs ``task`` on a compute node.
 
     A task whose ``run`` is a
@@ -166,6 +171,12 @@ def payload_for(task: Task, kwargs: Mapping[str, Any]) -> Payload:
         The arguments pytask passes to the task's function: each input's and output's
         loaded value by name. The reserved ``__code_id__`` and ``__command__`` entries are
         left out of the recipe, and a command task's recipe uses none of them.
+    env_paths
+        Resolved ``bin`` paths of envs, keyed by the env as the task declares it. A
+        task's env found here is not resolved again, and an env that this call resolves
+        is added, so one mapping shared by the calls for a whole plan resolves each env
+        once (resolving an env by name runs ``conda env list``). ``None`` resolves the
+        env on every call.
 
     Returns
     -------
@@ -184,13 +195,18 @@ def payload_for(task: Task, kwargs: Mapping[str, Any]) -> Payload:
     run = task.run
     if isinstance(run, str):
         env_path: str | None = None
-        if task.env is not None:
+        if task.env is not None and env_paths is not None and task.env in env_paths:
+            env_path = env_paths[task.env]
+        elif task.env is not None:
             try:
-                env_path = resolve_env_bin_path(resolve_env_prefix(task.env))
+                bin_path = resolve_env_bin_path(resolve_env_prefix(task.env))
             except RuntimeError as error:
                 raise ValueError(
                     f"{refused} because its env does not resolve. {error}"
                 ) from error
+            if env_paths is not None:
+                env_paths[task.env] = bin_path
+            env_path = bin_path
         return CommandPayload(
             kind="command",
             task=task.name,
