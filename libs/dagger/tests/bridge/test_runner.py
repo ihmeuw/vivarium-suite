@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import time
@@ -638,7 +639,7 @@ def test_write_result_leaves_no_file_when_writing_fails(tmp_path: Path) -> None:
 def test_write_result_writes_through_a_per_process_temporary_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """write_result moves '<path>.<pid>.tmp' from the result's directory onto the result path, and leaves no temporary file after it succeeds."""
+    """write_result moves '<path>.<host>.<pid>.tmp' from the result's directory onto the result path, and leaves no temporary file after it succeeds."""
     path = tmp_path / _RESULT_NAME
     moves: list[tuple[Path, Path, Any]] = []
     replace = os.replace
@@ -653,7 +654,7 @@ def test_write_result_writes_through_a_per_process_temporary_file(
 
     write_result(_SUCCESS, path)
 
-    temporary = Path(f"{path}.{os.getpid()}.tmp")
+    temporary = Path(f"{path}.{socket.gethostname()}.{os.getpid()}.tmp")
     assert [move for move in moves if move[1] == path] == [(temporary, path, _SUCCESS)]
     assert read_result(path) == _SUCCESS
     assert list(tmp_path.iterdir()) == [path]
