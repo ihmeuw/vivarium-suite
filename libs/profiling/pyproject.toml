@@ -49,7 +49,9 @@ test = [
     "pytest-vivarium",
     "vivarium-interactive",
 ]
-cluster = ["vivarium-cluster-tools>=4.8.0"]
+# make_artifacts -l all submits a Jobmon workflow, and cluster-tools only
+# installs jobmon through its own `cluster` extra.
+cluster = ["vivarium-cluster-tools[cluster]>=4.8.0"]
 docs = []
 data = [
     "vivarium-inputs>=5.2.6",
