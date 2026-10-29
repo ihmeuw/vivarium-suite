@@ -1,3 +1,11 @@
+**4.10.0 - 10/29/26**
+
+- Name the environment in every environment-resolution error, including a failing
+  conda lookup, output that is not JSON, and a path that cannot be checked. These
+  failures now raise ``RuntimeError`` instead of the underlying error.
+- Stop adding an empty ``PATH`` entry, which means the current directory, for a venv
+  whose ``pyvenv.cfg`` has an empty ``home``.
+
 **4.9.0 - 10/29/26**
 
 - Prep for splitting of psimulate:
