@@ -1,5 +1,6 @@
 """Unit tests for the producer/consumer wiring registry (``backend.wiring``)."""
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -169,3 +170,45 @@ def test_register_output_rejects_a_root_input_key(tmp_path: Path) -> None:
     message = str(excinfo.value)
     assert "coverage" in message
     assert str(source) in message
+
+
+def test_key_for_returns_the_key_of_a_registered_output(tmp_path: Path) -> None:
+    """key_for returns an output's key for its path, given as resolved or as relative."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg.register_output("caps/ethiopia.csv")
+    resolved = reg.path_for("caps/ethiopia.csv")
+    (tmp_path / "out").mkdir()
+    (tmp_path / "link").symlink_to(tmp_path / "out", target_is_directory=True)
+    paths: list[Path | str] = [
+        resolved,
+        str(resolved),
+        os.path.relpath(resolved),
+        tmp_path / "out" / "run1" / "caps" / ".." / "caps" / "ethiopia.csv",
+        tmp_path / "link" / "run1" / "caps" / "ethiopia.csv",
+    ]
+
+    for path in paths:
+        assert reg.key_for(path) == "caps/ethiopia.csv", path
+
+
+def test_key_for_returns_the_key_of_a_root_input(tmp_path: Path) -> None:
+    """key_for returns a root input's key for its file path."""
+    source = tmp_path / "sources" / "bop.csv"
+    source.parent.mkdir()
+    source.write_text("x")
+    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"bop": source})
+
+    assert reg.key_for(source) == "bop"
+    assert reg.key_for(str(source)) == "bop"
+
+
+def test_key_for_returns_none_for_an_unregistered_path(tmp_path: Path) -> None:
+    """key_for returns None for a path no key is registered at, including an unregistered key's path_for."""
+    source = tmp_path / "bop.csv"
+    source.write_text("x")
+    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"bop": source})
+    reg.register_output("x.csv")
+
+    assert reg.key_for(tmp_path / "elsewhere.csv") is None
+    assert reg.key_for(reg.path_for("y.csv")) is None
+    assert reg.key_for(reg.path_for("x.csv").parent) is None

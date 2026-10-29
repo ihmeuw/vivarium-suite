@@ -22,6 +22,9 @@ COMMAND_KEY = "__command__"
 TASK_KEY = "task"
 """Key under which a pytask task's attributes hold its shared-representation task."""
 
+SELECTED_MARKER = "vwf_selected"
+"""Marker :func:`build` attaches to each task named in its ``selected`` argument."""
+
 
 def run_command(command: str, env: str | None) -> None:
     """Run ``command`` in a shell with ``env``'s ``bin`` directories first on ``PATH``.
@@ -151,7 +154,13 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     )
 
 
-def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
+def build(
+    tasks: Iterable[Task],
+    root: Path,
+    *,
+    selected: Iterable[str] | None = None,
+    **kwargs: Any,
+) -> pytask.Session:
     """Build ``tasks`` with pytask, keeping its state under ``root``.
 
     Parameters
@@ -161,6 +170,12 @@ def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
     root
         Directory for pytask's configuration, state database, and lockfile; created if
         missing.
+    selected
+        Names of the tasks to run. Each named task gets the ``SELECTED_MARKER`` mark and
+        pytask is given that marker as its marker expression, so it runs the named tasks
+        and their ancestors and reports every other task as ``SKIP``. The expression is
+        the same however many tasks are named. An empty selection runs no task. ``None``
+        runs every task.
     kwargs
         Extra keyword arguments passed to ``pytask.build``.
 
@@ -171,23 +186,71 @@ def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
     Raises
     ------
     ValueError
-        If two tasks share a name, a task cannot be converted, or a declared env does not
-        resolve. Envs are checked before any task runs. The error has one line per env that
-        does not resolve, naming that env once, the tasks that declare it, and why.
+        If two tasks share a name, a task cannot be converted, a declared env does not
+        resolve, or ``selected`` names a task that is not in ``tasks``. Envs are checked
+        before any task runs. The error has one line per env that does not resolve,
+        naming that env once, the tasks that declare it, and why.
     """
     tasks = list(tasks)
     check_unique_task_names(tasks)
     _check_envs(tasks)
     pytask_tasks = [to_pytask_task(task) for task in tasks]
+    selection: dict[str, Any] = {}
+    if selected is not None:
+        _mark_selected(pytask_tasks, selected)
+        selection["marker_expression"] = SELECTED_MARKER
     root.mkdir(parents=True, exist_ok=True)
     # pytasks uses whatever .git repo is upstream of root by default,
     # but will use the true root dir if you pass a pytask.toml config file.
     config = root / "pytask.toml"
     if not config.exists():
         config.write_text("[tool.pytask.ini_options]\n")
-    return pytask.build(tasks=pytask_tasks, config=config, task_files=(), **kwargs)
+    return pytask.build(
+        tasks=pytask_tasks, config=config, task_files=(), **selection, **kwargs
+    )
+
+
+def _mark_selected(
+    pytask_tasks: list[pytask.TaskWithoutPath], selected: Iterable[str]
+) -> None:
+    """Attach ``SELECTED_MARKER`` to each task in ``selected``; reject unknown names."""
+    names = set(selected)
+    unknown = sorted(names.difference(task.name for task in pytask_tasks))
+    if unknown:
+        raise ValueError(f"Selected names are not task names: {unknown}.")
+    for task in pytask_tasks:
+        if task.name in names:
+            task.markers.append(pytask.Mark(SELECTED_MARKER, (), {}))
 
 
 def outcomes(session: pytask.Session) -> dict[str, pytask.TaskOutcome]:
     """Return the outcome of each executed task, keyed by task name."""
     return {report.task.name: report.outcome for report in session.execution_reports}
+
+
+def failure_message(session: pytask.Session) -> str:
+    """Return why ``session``'s build did not finish, in pytask's words.
+
+    Parameters
+    ----------
+    session
+        A session whose ``exit_code`` is not ``OK``.
+
+    Returns
+    -------
+        The name of the session's exit code, followed by the message of each collection
+        or DAG error pytask recorded, for example ``"DAG_FAILED: There are some tasks
+        which produce the same output. ..."``. A session that failed only because steps
+        failed gives the exit code's name alone.
+    """
+    errors = [
+        report.exc_info[1]
+        for report in session.collection_reports
+        if report.exc_info is not None
+    ]
+    if session.dag_report is not None and session.dag_report.exc_info is not None:
+        errors.append(session.dag_report.exc_info[1])
+    messages = [str(error) for error in errors if error is not None]
+    if not messages:
+        return session.exit_code.name
+    return f"{session.exit_code.name}: " + "\n".join(messages)
