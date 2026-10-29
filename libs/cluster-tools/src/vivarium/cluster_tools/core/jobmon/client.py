@@ -95,8 +95,7 @@ def create_task(
     """Create a single Jobmon ``Task`` for the workflow-command-step template.
 
     The ``env_bin_path`` and ``command`` kwargs match the template's
-    ``node_args``; see :func:`make_task_template`. Dagger's command steps and
-    the parallel artifact builder create their tasks through this function.
+    ``node_args``; see :func:`make_task_template`.
     """
     return template.create_task(
         name=name,

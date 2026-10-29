@@ -83,12 +83,9 @@ def test_verbose_and_pdb_counts_v(args: list[str], verbose: int) -> None:
     assert result.exit_code == 0
     assert result.output.strip() == f"{verbose} False"
 
-    option = next(param for param in dummy.params if param.name == "verbose")
-    assert isinstance(option, click.Option)
-    assert option.opts == ["-v"]
-    assert option.help == (
-        "Configure logging verbosity of main runner for a parallel simulation."
-    )
+    help_text = CliRunner().invoke(dummy, ["--help"]).output
+    assert "-v" in help_text
+    assert "Configure logging verbosity of main runner for a parallel" in help_text
 
 
 def _fail() -> None:

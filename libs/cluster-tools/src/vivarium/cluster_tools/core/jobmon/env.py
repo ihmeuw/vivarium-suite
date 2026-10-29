@@ -15,8 +15,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import warnings
 from pathlib import Path
+
+from loguru import logger
 
 VENV_DIR_NAME = ".venv"
 """Directory under the current working directory searched when resolving an
@@ -27,92 +28,57 @@ creates its venv overlays."""
 def resolve_env_prefix(env: str) -> str:
     """Resolve an environment name or path to its absolute filesystem prefix.
 
-    ``env`` may name a conda env or a venv, or be a path to either's prefix directory
-    (anything containing a path separator or starting with ``~`` is a path). A name is
-    matched first to a venv at ``.venv/<env>`` under the current working directory, then
-    to a conda env through ``conda env list --json``, using ``CONDA_EXE``; without
-    ``CONDA_EXE`` the conda lookup is skipped. A conda env matches when the last component
-    of its prefix equals the name, so the base env, whose prefix is the conda install
-    directory, is selected by its path rather than by ``base``. When a name matches both a
-    local venv and a conda env in different directories, the venv wins and a
-    :class:`UserWarning` names both. Returned prefixes are fully resolved, so one
-    environment always yields one string.
+    *env* may name a conda env or a venv, or be a path to either's prefix
+    directory. A name is matched to a venv first (under ``.venv/<env>`` in
+    current working directory), and then a conda env via ``conda env list --json``.
 
-    Parameters
-    ----------
-    env
-        The environment's name, or a path to its prefix.
-
-    Returns
-    -------
-        The resolved prefix directory. A path or a local venv must contain ``bin/python``;
-        a conda env found by name is not checked for it.
+    When the name matches more than one distinct environment, the
+    highest-precedence match wins and a warning names every match.
+    Returned prefixes are fully resolved (symlinks followed) so that the
+    same environment always yields the same prefix string.
 
     Raises
     ------
     RuntimeError
-        If ``env`` is a path that does not contain ``bin/python`` or cannot be checked (an
-        unknown ``~user``, or a parent directory that cannot be searched), a name that no
-        lookup resolves, or a name whose conda lookup fails. Every message names ``env``; a
-        failed conda lookup says whether ``CONDA_EXE`` could not be run, exited with a
-        non-zero status, or printed output that is not JSON.
+        If *env* is a path that is not an environment prefix, or a name
+        that no lookup can resolve.
     """
     if os.sep in env or env.startswith("~"):
-        try:
-            prefix = Path(env).expanduser().resolve()
-            is_prefix = _is_env_prefix(prefix)
-        except (RuntimeError, OSError) as error:
+        prefix = Path(env).expanduser().resolve()
+        if not _is_env_prefix(prefix):
             raise RuntimeError(
-                f"Environment path {env!r} could not be checked: {error}"
-            ) from error
-        if not is_prefix:
-            named = repr(env) if env == str(prefix) else f"{env!r} ({prefix})"
-            raise RuntimeError(
-                f"Environment path {named} is not a conda env or venv: expected a prefix "
-                "directory containing bin/python."
+                f"Environment path {str(prefix)!r} is not a conda env or venv: "
+                "expected a prefix directory containing bin/python."
             )
         return str(prefix)
 
     candidates = _find_env_candidates(env)
     if not candidates:
-        conda_search = (
-            "no conda env of that name is listed"
-            if os.environ.get("CONDA_EXE")
-            else "conda was not searched because CONDA_EXE is not set"
-        )
         raise RuntimeError(
-            f"Could not resolve environment {env!r}: there is no venv at "
-            f"{Path.cwd() / VENV_DIR_NAME / env}, and {conda_search}."
+            f"Could not resolve environment {env!r} to a filesystem prefix: "
+            f"there is no venv at {Path.cwd() / VENV_DIR_NAME / env} and it "
+            "was not found by `conda env list`."
         )
     winner_label, winner_prefix = candidates[0]
     if len({prefix for _, prefix in candidates}) > 1:
         listing = "; ".join(f"the {label} at {prefix}" for label, prefix in candidates)
-        warnings.warn(
-            f"Environment name {env!r} is ambiguous: it matches {listing}. Using the "
-            f"{winner_label}. Pass a path as the environment to select a specific one.",
-            UserWarning,
-            stacklevel=2,
+        logger.warning(
+            f"Environment name {env!r} is ambiguous: it matches {listing}. "
+            f"Using the {winner_label}. Pass a path as the environment to "
+            "select a specific one."
         )
     return winner_prefix
 
 
 def resolve_env_bin_path(env_prefix: str) -> str:
-    """Return the colon-joined ``bin`` directories to put first on ``PATH`` for an env.
+    """Return the colon-joined bin directories to prepend to ``PATH`` for an env.
 
-    For a conda env this is ``<prefix>/bin``. For a venv, the base interpreter's directory
-    (the ``home`` key in the venv's ``pyvenv.cfg``) follows the venv's own ``bin``, so
-    console scripts installed only in the base environment (e.g. ``psimulate`` in the
-    shared conda env under a ``make build-shared-env`` overlay) still resolve - mirroring
-    the ``PATH`` the overlay's patched activate script builds.
-
-    Parameters
-    ----------
-    env_prefix
-        A prefix as returned by :func:`resolve_env_prefix`.
-
-    Returns
-    -------
-        The directories, joined with ``:``.
+    For a conda env this is ``<prefix>/bin``. For a venv, the base
+    interpreter's directory (the ``home`` key in ``pyvenv.cfg``) follows the
+    venv's own ``bin`` so that console scripts installed only in the base
+    environment (e.g. ``psimulate`` in the shared conda env under a
+    ``make build-shared-env`` overlay) also resolve - mirroring the ``PATH``
+    the overlay's patched activate script builds.
     """
     bin_dirs = [f"{env_prefix}/bin"]
     base_bin_dir = _get_venv_base_bin_dir(Path(env_prefix))
@@ -139,32 +105,20 @@ def _is_env_prefix(prefix: Path) -> bool:
 
 
 def _find_conda_env(env: str) -> Path | None:
-    """Look up *env* in ``conda env list``; None when absent or ``CONDA_EXE`` is unset."""
+    """Look up *env* in ``conda env list``; None when absent or conda is unavailable."""
     conda_exe = os.environ.get("CONDA_EXE")
-    if not conda_exe:
+    if conda_exe is None:
         return None
-    failed = f"Could not resolve environment {env!r}: the conda lookup failed"
-    listing = f"'{conda_exe} env list --json'"
-    try:
-        result = subprocess.run(
-            [conda_exe, "env", "list", "--json"], check=True, capture_output=True, text=True
-        )
-    except OSError as error:
-        raise RuntimeError(
-            f"{failed} because CONDA_EXE {conda_exe!r} could not be run ({error})."
-        ) from error
-    except subprocess.CalledProcessError as error:
-        stderr = " ".join((error.stderr or "").split())
-        status = f"{failed} because {listing} exited with status {error.returncode}"
-        raise RuntimeError(f"{status}: {stderr}" if stderr else f"{status}.") from error
-    try:
-        prefixes = [Path(path) for path in json.loads(result.stdout)["envs"]]
-    except (json.JSONDecodeError, KeyError, TypeError) as error:
-        raise RuntimeError(
-            f"{failed} because the output of {listing} is not JSON with an 'envs' list "
-            f"({type(error).__name__}: {error})."
-        ) from error
-    return next((prefix for prefix in prefixes if prefix.name == env), None)
+    result = subprocess.run(
+        [conda_exe, "env", "list", "--json"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return next(
+        (Path(path) for path in json.loads(result.stdout)["envs"] if Path(path).name == env),
+        None,
+    )
 
 
 def _get_venv_base_bin_dir(env_prefix: Path) -> str | None:
@@ -177,7 +131,7 @@ def _get_venv_base_bin_dir(env_prefix: Path) -> str | None:
         version = 3.13.13
 
     where ``home`` is the bin directory of the interpreter the venv was
-    created from. An empty ``home`` gives None.
+    created from.
     """
     pyvenv_cfg = env_prefix / "pyvenv.cfg"
     if not pyvenv_cfg.is_file():
@@ -185,5 +139,5 @@ def _get_venv_base_bin_dir(env_prefix: Path) -> str | None:
     for line in pyvenv_cfg.read_text().splitlines():
         key, sep, value = line.partition("=")
         if sep and key.strip() == "home":
-            return value.strip() or None
+            return value.strip()
     return None
