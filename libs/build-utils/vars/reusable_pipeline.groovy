@@ -229,12 +229,24 @@ def call(Map config = [:]){
                   
                   withEnv(envVars.collect { k, v -> "${k}=${v}" }) {
                     try {
-                      checkout scm
                       // The branch source fetches branches but not tags. setuptools_scm needs the
                       // <dist>-v<X.Y.Z> tags to compute the version of the lib under test, and without
                       // them it falls back to 0.0.1.dev, which fails any install that requires a
                       // minimum version of that lib (e.g. engine's test extra, via vivarium-interactive).
-                      sh 'GIT_TERMINAL_PROMPT=0 git fetch --tags --force --quiet'
+                      // Check out with the job's own remotes, credentials and extensions, so the tags
+                      // come from the authenticated fetch and private repos work too. The branch source
+                      // adds GitSCMSourceDefaults, which clones without tags, and a clone option cannot
+                      // turn tags back on for a fresh clone, so drop it and honor the refspec here instead.
+                      // The extension list is built inline because a local variable holding it cannot be
+                      // serialized when the pipeline saves its state.
+                      checkout([
+                        $class: 'GitSCM',
+                        branches: scm.branches,
+                        userRemoteConfigs: scm.userRemoteConfigs,
+                        extensions: scm.extensions.findAll {
+                          it.class.name != 'jenkins.plugins.git.GitSCMSourceDefaults'
+                        } + [[$class: 'CloneOption', noTags: false, shallow: false, reference: '', honorRefspec: true]],
+                      ])
                       buildStages.loadSharedFiles()
                       
                       // Evaluate skip conditions after checkout (GIT_PREVIOUS_COMMIT is now available)
