@@ -9,12 +9,13 @@ write to distinct directories.
 
 This is a plain registry, not a container class: a pipeline builds its tasks into
 a list and hands them to :func:`~vivarium.workflow.backend.build.build`.
-Register every output before resolving inputs. The two guards here are the ones
-pytask cannot make for us -- a hard error when two keys resolve to one path (which
-pytask would otherwise silently merge) and a did-you-mean on a mistyped key.
-An unresolved input (no producer and no root-input file) is caught here with a
-did-you-mean; everything heavier (a cycle, two tasks claiming one product) is left
-to pytask, which fails safe.
+Register every output before resolving inputs. The guards here are the ones pytask
+cannot make for us -- a hard error when two keys resolve to one path (which pytask
+would otherwise silently merge), a hard error when a step declares a root input's key
+as its output (which would otherwise shadow the root input for every consumer), and a
+did-you-mean on a mistyped key. An unresolved input (no producer and no root-input
+file) is caught here with a did-you-mean; everything heavier (a cycle, two tasks
+claiming one product) is left to pytask, which fails safe.
 """
 
 import difflib
@@ -30,7 +31,7 @@ ArtifactKey = str
 
 
 class WiringError(Exception):
-    """A definition-time wiring error: an alias collision or an unresolved input."""
+    """A definition-time error in how a pipeline's artifacts are wired or supplied."""
 
 
 class ArtifactRegistry:
@@ -102,9 +103,16 @@ class ArtifactRegistry:
         Raises
         ------
         WiringError
-            If a different key -- an output or a declared root input -- already
-            resolves to this key's path.
+            If ``key`` is itself a declared root input, which a step cannot also
+            produce, or if a different key -- an output or a declared root input --
+            already resolves to this key's path.
         """
+        source = self._root_inputs.get(key)
+        if source is not None:
+            raise WiringError(
+                f"output {key!r} is a declared root input at {source}; a step cannot "
+                "also produce it."
+            )
         resolved = self.path_for(key)
         claimant = self._key_by_path.get(resolved)
         if claimant is not None and claimant != key:
