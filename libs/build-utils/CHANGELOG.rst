@@ -1,3 +1,8 @@
+**4.11.1 - 10/29/26**
+
+- Fetch git tags after the Jenkins checkout, so setuptools_scm computes the real
+  version of the lib under test instead of ``0.0.1.dev``
+
 **4.11.0 - 10/27/26**
 
 - Run Sphinx directly in ``build-docs`` and ``test-docs`` instead of through

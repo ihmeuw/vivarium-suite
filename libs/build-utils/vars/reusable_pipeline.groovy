@@ -230,6 +230,11 @@ def call(Map config = [:]){
                   withEnv(envVars.collect { k, v -> "${k}=${v}" }) {
                     try {
                       checkout scm
+                      // The branch source fetches branches but not tags. setuptools_scm needs the
+                      // <dist>-v<X.Y.Z> tags to compute the version of the lib under test, and without
+                      // them it falls back to 0.0.1.dev, which fails any install that requires a
+                      // minimum version of that lib (e.g. engine's test extra, via vivarium-interactive).
+                      sh 'GIT_TERMINAL_PROMPT=0 git fetch --tags --force --quiet'
                       buildStages.loadSharedFiles()
                       
                       // Evaluate skip conditions after checkout (GIT_PREVIOUS_COMMIT is now available)

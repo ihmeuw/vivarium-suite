@@ -3,7 +3,7 @@ name: model-development
 description:
   "Guided iteration loop for a vivarium model — take one model change from a
   research-spec doc through a staged artifact→component→observer build,
-  InteractiveContext verification, review, and a PR. Use when the user asks to
+  interactive-simulation verification, review, and a PR. Use when the user asks to
   implement or iterate a model concept (a cause, risk, intervention, or
   observer) in an existing model repo from its vivarium-research documentation,
   or names a MIC ticket that points at one."
@@ -44,7 +44,7 @@ plan  = iteration plan from research  # Plan: pin keys/pipelines/columns/outputs
 
 # Build and verification-authoring run in parallel off the approved plan:
 build  = _model_implementer per layer    # Build: artifact -> [user gate: build artifact] -> component -> observer
-verify = _vv_writer                   # Verify author: blind to the build — InteractiveContext checks + notebook
+verify = _vv_writer                   # Verify author: blind to the build — interactive-simulation checks + notebook
 
 # Verify by running the simulation:
 run simsci:_validator (existing suite) + new checks + local simulate + notebook  ->  traces
@@ -153,9 +153,9 @@ the step/event mapping, `model_notebooks/`), and the target paths.
 `_vv_writer` produces two things from the plan alone, both **internal to this
 loop** (not committed by default — see the finalize phase):
 
-- **InteractiveContext checks** following the repo's existing patterns — spin
-  up the sim, advance to the relevant step, and assert the quantitative
-  expectations against the state table / pipeline values.
+- **Interactive-simulation checks** (`vivarium.interactive.Simulation`) following
+  the repo's existing patterns — spin up the sim, advance to the relevant step, and
+  assert the quantitative expectations against the state table / pipeline values.
 - A **`model_<N>`-style verification notebook** (mirroring the repo's
   `model_notebooks/` convention) whose plots and tables are the **traces**
   posted to the PR.
@@ -171,7 +171,7 @@ the user.
    path), the env, and targets (`make test-*`, `make lint`, `make mypy` if the
    repo ships `py.typed`) for the repo's existing suite. It returns a compact
    PASS/FAIL report.
-2. Run the new InteractiveContext checks, and a small **local `simulate` run**
+2. Run the new interactive-simulation checks, and a small **local `simulate` run**
    on a reduced spec/population to confirm the iteration completes end-to-end
    (a reduced-scope run is typically on the order of an hour — set that
    expectation with the user).
@@ -214,7 +214,7 @@ triage.
 1. **Don't commit the verification artifacts by default.** They are an
    internal loop for engineering confidence, not formal V&V (a separate
    research task). Ask whether to keep any in the repo (e.g. an
-   InteractiveContext check kept as a regression test); commit only on an
+   interactive-simulation check kept as a regression test); commit only on an
    explicit yes. Settle this **before** step 3: whatever the user does not keep
    becomes a **hold-out path** you hand to the finalize block, which excludes it
    from the commit grouping and reports it as still uncommitted. Without that,
