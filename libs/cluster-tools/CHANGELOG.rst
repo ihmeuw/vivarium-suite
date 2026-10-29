@@ -1,3 +1,18 @@
+**4.9.0 - 10/29/26**
+
+- Make ``core``, ``utilities``, and the package ``__init__`` import nothing from
+  ``psimulate``, ``dagger``, ``vipin``, or ``vivarium-engine``. ``psimulate`` and
+  ``dagger`` now use ``core.cli_tools.handle_exceptions`` instead of the engine's.
+- Import Jobmon lazily in ``core.jobmon``, so ``core.jobmon.env`` and
+  ``core.jobmon.cli_options`` import without the ``cluster`` extra.
+- Name the environment in every environment-resolution error, including a failing
+  conda lookup and a path that cannot be checked. An ambiguous environment name now
+  emits a ``UserWarning`` instead of a log message.
+- Stop adding an empty ``PATH`` entry, which means the current directory, for a venv
+  whose ``pyvenv.cfg`` has an empty ``home``.
+- The next major release, 5.0.0, moves ``psimulate`` and ``vipin`` to a new
+  ``vivarium-psimulate`` package and ``dagger`` to ``vivarium-workflow``.
+
 **4.8.0 - 10/28/26**
 
 - Rename ``ParallelSimulationContext`` to ``ParallelSimulation`` and require
