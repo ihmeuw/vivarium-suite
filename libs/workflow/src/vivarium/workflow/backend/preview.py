@@ -31,7 +31,8 @@ class Reason:
     node: str
     """The node pytask compared. The backend preview names it as pytask does, which is an
     absolute path for a file, the code identity's name (``'<step>::code'`` by default),
-    ``'<step>::__command__'`` for a command, a step name, or ``''`` for ``forced``."""
+    ``'<step>::__command__'`` for a command, a step name, or ``''`` for ``forced``.
+    :func:`vivarium.workflow.frontend.pipeline.preview` replaces it with a label."""
     kind: str
     """pytask's reason, one of ``changed``, ``missing``, ``not_in_db``, ``first_run``,
     ``forced``, or ``cascade``."""
