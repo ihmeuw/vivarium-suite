@@ -1,3 +1,9 @@
+**0.7.1 - 10/29/26**
+
+- Pass ``year_id`` and ``data_type`` to ``get_modelable_entity_draws``, which
+  ``vivarium-gbd-access`` requires
+- Require ``vivarium-gbd-access`` 8 for the ``data`` extra
+
 **0.7.0 - 10/28/26**
 
 - Require ``vivarium-engine`` 6 and, for the ``cluster`` extra,

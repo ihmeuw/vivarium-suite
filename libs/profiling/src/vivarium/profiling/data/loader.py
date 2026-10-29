@@ -231,7 +231,7 @@ def load_categorical_paf(
 
 def _load_em_from_meid(location, meid, measure):
     location_id = utility_data.get_location_id(location)
-    data = gbd.get_modelable_entity_draws(meid, location_id)
+    data = gbd.get_modelable_entity_draws(meid, location_id, year_id=None, data_type="draws")
     data = data[data.measure_id == vi_globals.MEASURES[measure]]
     data = vi_utils.normalize(data, fill_value=0)
     data = data.filter(vi_globals.DEMOGRAPHIC_COLUMNS + vi_globals.DRAW_COLUMNS)
