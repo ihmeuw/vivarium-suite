@@ -17,6 +17,7 @@ py:class _pytask.nodes.PathNode
 py:class _pytask.nodes.TaskWithoutPath
 py:class _pytask.outcomes.TaskOutcome
 py:class _pytask.session.Session
+py:exc pytask.ExecutionError
 
 # vivarium.workflow.bridge.payload: the recursive JSON alias is module data, not a class
 py:class vivarium.workflow.bridge.payload.JSONValue

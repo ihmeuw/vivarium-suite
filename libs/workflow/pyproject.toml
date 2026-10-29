@@ -47,6 +47,10 @@ dev = ["vivarium-workflow[test,docs,interactive,lint]"]
 ci_github = ["vivarium-workflow[test,docs,lint]"]
 ci_jenkins = ["vivarium-workflow[ci_github,cluster]"]
 
+[project.entry-points.pytask]
+# pytask loads this module in every run; it does nothing unless a build sets jobmon=True.
+vivarium_workflow_bridge = "vivarium.workflow.bridge.plugin"
+
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/workflow"

@@ -520,7 +520,7 @@ def test_jobmon_is_imported_only_inside_functions_of_the_adapter() -> None:
     names = {path.name for path in modules}
     imports = [found for path in modules for found in _jobmon_imports(path)]
 
-    assert {"_jobmon_adapter.py", "harness.py"} <= names
+    assert {"_jobmon_adapter.py", "execute.py", "plugin.py", "harness.py"} <= names
     assert any(name == "_jobmon_adapter.py" for name, _, _ in imports), imports
     misplaced = [
         (name, line)

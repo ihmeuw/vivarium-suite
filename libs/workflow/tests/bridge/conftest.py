@@ -1,7 +1,8 @@
 """Fixtures shared by the bridge tests."""
 
 import json
-from collections.abc import Callable
+import os
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -9,9 +10,27 @@ import pytest
 
 from vivarium.workflow.backend.build import CODE_ID_KEY, COMMAND_KEY
 from vivarium.workflow.backend.task import Task
+from vivarium.workflow.harness import FakeJobmon
+
+_WORKFLOW_DIR = Path(__file__).resolve().parents[2]
+"""The ``libs/workflow`` directory, from which a subprocess imports ``tests.bridge``."""
 
 _PROBE_TOOL = "vivarium_workflow_bridge_probe"
 """A tool that exists only in the fake env bin directories these tests make."""
+
+
+@pytest.fixture
+def fake_jobmon() -> Iterator[FakeJobmon]:
+    """Stand in for Jobmon for the test, so a build with jobmon=True runs with no server."""
+    with FakeJobmon() as jobmon:
+        yield jobmon
+
+
+@pytest.fixture
+def node_pythonpath(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Put ``libs/workflow`` first on PYTHONPATH, so a node runner imports ``tests.bridge``."""
+    paths = [str(_WORKFLOW_DIR), os.environ.get("PYTHONPATH", "")]
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join(path for path in paths if path))
 
 
 @pytest.fixture
