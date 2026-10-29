@@ -133,7 +133,8 @@ output shows the cause and ``vwf`` names pytask's exit code. (``vwf force`` read
 lockfile itself before pytask starts, so there a lockfile that pytask cannot parse exits
 with status 2.) If reading or writing pytask's state under the root fails, for example
 because the disk is full or ``vwf force`` cannot open the lockfile, ``vwf`` names the
-root and the error. Each of these exits with status 1. If a step ends the Python
+root and the error. Each of these exits with status 1, even when it happens before any
+step has run. If a step ends the Python
 process, for example by calling ``sys.exit``, the build stops there and ``vwf`` says
 that a step exited.
 
@@ -151,7 +152,8 @@ Exit status
 Code  Meaning
 ====  ===================================================================================
 0     The command succeeded.
-1     A step failed or exited, or pytask stopped the build for another reason.
+1     A step failed or exited, or the build stopped for another reason, possibly
+      before any step ran.
 2     The definition or the command is wrong, and nothing ran.
 130   The command was interrupted.
 ====  ===================================================================================
