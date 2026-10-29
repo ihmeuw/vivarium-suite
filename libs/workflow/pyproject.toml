@@ -39,6 +39,9 @@ cluster = ["jobmon_installer_ihme==10.12.2"]
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
+    # The notebook_step tests run real notebooks with the test env as the declared env.
+    "ipykernel",
+    "papermill",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
