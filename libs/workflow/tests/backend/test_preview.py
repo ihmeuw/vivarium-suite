@@ -12,7 +12,7 @@ import pytest
 
 from vivarium.workflow.backend.build import build
 from vivarium.workflow.backend.nodes import file_node
-from vivarium.workflow.backend.preview import StepPreview, preview
+from vivarium.workflow.backend.preview import Reason, StepPreview, preview
 from vivarium.workflow.backend.task import Task
 
 
@@ -88,7 +88,7 @@ def test_editing_one_input_marks_its_consumer_cone(
     raw.write_text("two\n")
     plan = preview(tasks, root)
     assert _would_run(plan) == {"build", "pafs"}
-    build_reasons = " ".join(_by_name(plan)["build"].reasons)
+    build_reasons = " ".join(str(reason) for reason in _by_name(plan)["build"].reasons)
     assert "raw" in build_reasons
 
 
@@ -138,3 +138,47 @@ def test_preview_raises_when_the_build_fails(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError):
         preview(tasks, tmp_path / ".workflow")
+
+
+def test_reasons_carry_the_node_and_kind_pytask_compared(
+    converged: tuple[list[Task], Path, Path, Path],
+) -> None:
+    """After an input edit, the consumer's reasons are Reason objects naming the input's path with kind 'changed'."""
+    tasks, root, raw, _artifact = converged
+    raw.write_text("two\n")
+
+    reasons = _by_name(preview(tasks, root))["build"].reasons
+
+    assert reasons and all(isinstance(reason, Reason) for reason in reasons)
+    assert Reason(node=raw.resolve().as_posix(), kind="changed") in reasons
+
+
+@pytest.mark.parametrize(
+    "node, kind, phrase",
+    [
+        ("/data/raw.csv", "changed", "/data/raw.csv changed"),
+        ("/data/raw.csv", "missing", "/data/raw.csv is missing"),
+        ("/data/raw.csv", "not_in_db", "/data/raw.csv has no recorded state"),
+        ("build", "first_run", "first run"),
+        ("", "forced", "forced"),
+        ("build", "cascade", "build would run first"),
+        ("build", "renamed", "build: renamed"),
+    ],
+)
+def test_reason_reads_as_a_short_phrase(node: str, kind: str, phrase: str) -> None:
+    """str(Reason) gives the documented phrase for each kind, not a dataclass repr."""
+    assert str(Reason(node=node, kind=kind)) == phrase
+
+
+def test_preview_error_carries_pytasks_message(tmp_path: Path) -> None:
+    """When two tasks produce one file, preview's RuntimeError carries pytask's message."""
+    src, out = tmp_path / "src.csv", tmp_path / "out.csv"
+    src.write_text("x\n")
+    tasks = [_copy_task("a", src, out), _copy_task("b", src, out)]
+
+    with pytest.raises(RuntimeError) as info:
+        preview(tasks, tmp_path / ".workflow")
+
+    message = str(info.value)
+    assert "DAG_FAILED" in message
+    assert "There are some tasks which produce the same output" in message

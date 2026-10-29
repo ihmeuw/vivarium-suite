@@ -66,6 +66,24 @@ class ArtifactRegistry:
         """Return the resolved path a produced ``key`` resolves to for this run."""
         return (self._run_dir / key).resolve()
 
+    def key_for(self, path: Path | str) -> ArtifactKey | None:
+        """Return the key of the registered output or root input at ``path``, or ``None``.
+
+        ``path`` is resolved first, so a relative path or one through a symlink still
+        matches.
+
+        Parameters
+        ----------
+        path
+            A file path, such as a node's path.
+
+        Returns
+        -------
+            The output key or root-input key registered at ``path``, or ``None`` if no
+            key is registered there.
+        """
+        return self._key_by_path.get(Path(path).resolve())
+
     def register_output(self, key: ArtifactKey) -> PathNode:
         """Register ``key`` as produced by a step and return its file node.
 
