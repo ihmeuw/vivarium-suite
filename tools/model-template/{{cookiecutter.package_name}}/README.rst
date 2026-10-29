@@ -172,7 +172,7 @@ Running Simulations
 .. The ``-v`` flag will log verbosely, so you will get log messages every time
 .. step. For more ways to run simulations, see the tutorials at
 .. https://vivarium-engine.readthedocs.io/en/latest/tutorials/running_a_simulation/index.html
-.. and https://vivarium-engine.readthedocs.io/en/latest/tutorials/exploration.html
+.. and https://vivarium-interactive.readthedocs.io/en/latest/tutorials/exploration.html
 
 Development process
 +++++++++++++++++++
@@ -191,7 +191,7 @@ With the simulation environment active, you can run a single simulation (1 draw,
 The ``-v`` flag will log verbosely, so you will get log messages every time
 step. For more ways to run simulations, see the tutorials at
 https://vivarium-engine.readthedocs.io/en/latest/tutorials/running_a_simulation/index.html
-and https://vivarium-engine.readthedocs.io/en/latest/tutorials/exploration.html
+and https://vivarium-interactive.readthedocs.io/en/latest/tutorials/exploration.html
 
 **If you are on the IHME cluster**, you can also run simulations of multiple draws, seeds, and scenarios in parallel across nodes::
 
