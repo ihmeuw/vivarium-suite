@@ -47,6 +47,8 @@ test = [
     # The notebook_step tests run real notebooks with the test env as the declared env.
     "ipykernel",
     "papermill",
+    # The CLI tests read CliRunner's stderr separately, which click 8.2 introduced.
+    "click>=8.2",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
@@ -57,6 +59,7 @@ ci_jenkins = ["vivarium-dagger[ci_github,cluster]"]
 
 [project.scripts]
 dagger = "vivarium.dagger.cli:dagger"
+vwf = "vivarium.dagger.frontend.cli:vwf"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
