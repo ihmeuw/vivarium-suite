@@ -1,3 +1,8 @@
+**4.11.2 - 10/29/26**
+
+- Fetch the git tags in the Jenkins checkout itself, with the job's credentials, instead of
+  in a separate ``git fetch`` that fails for private repos
+
 **4.11.1 - 10/29/26**
 
 - Fetch git tags after the Jenkins checkout, so setuptools_scm computes the real
