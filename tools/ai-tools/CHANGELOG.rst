@@ -1,3 +1,9 @@
+**0.31.1 - 10/29/26**
+
+- ``model-development`` and ``_vv_writer``: describe the verification checks as built on
+  ``vivarium.interactive.Simulation``, which replaced ``InteractiveContext`` in
+  vivarium-engine 6
+
 **0.31.0 - 10/28/26**
 
 - ``model-development``: pass the iteration plan's change list and quantitative

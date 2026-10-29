@@ -45,7 +45,7 @@ It includes:
   doc. From that contract it runs a **sequential build** in
   data-dependency order (artifact, then component, then observer — skipping
   layers the change doesn't touch), while an **internal verification** is authored in
-  parallel and blind to the implementation — InteractiveContext checks and a
+  parallel and blind to the implementation — interactive-simulation checks and a
   notebook built from the plan alone. It then **runs the simulation** to verify
   (the repo's existing suite, the new checks, a local ``simulate`` run, and the
   notebook) and applies the same multi-lens review as
