@@ -3,7 +3,7 @@
 import json
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, TypeVar, cast
@@ -60,6 +60,9 @@ _DECOY_SPEC: dict[str, Any] = {
 """A user kernelspec that starts a missing python."""
 
 _DECOY_NAMES = ("python3", KERNEL_NAME)
+
+_JUPYTER_DIR_VARIABLES = ("IPYTHONDIR", "JUPYTER_CONFIG_DIR", "JUPYTER_DATA_DIR")
+"""The variables that move IPython's and Jupyter's own directories out of HOME."""
 
 _MARKER = "vivarium-workflow notebook ran"
 
@@ -190,6 +193,42 @@ _DECLARED_VALUES: dict[str, Any] = {
 }
 """A value to declare a name with in each of notebook_step's three name mappings."""
 
+_SOURCE_ALIAS_KEY = "notebooks/./source.ipynb"
+"""A key spelled unlike _SOURCE_KEY that path_for resolves to the same path."""
+
+
+@dataclass
+class _Collision:
+    """A produces mapping that gives two of the notebook, executed and products one path."""
+
+    produces: dict[str, str]
+    names: tuple[tuple[str, ...], tuple[str, ...]]
+    """For each of the two colliding items, the strings any one of which names it."""
+
+
+# A key spelled with '.' is not a substring of the path it resolves to, so a message that
+# names only that path does not count as naming the key.
+_COLLISIONS: dict[str, _Collision] = {
+    "product_is_executed": _Collision(
+        produces={"table_path": "tables/out.csv", "report_path": _EXECUTED_KEY},
+        names=(("report_path", _EXECUTED_KEY), (_EXECUTED_KEY,)),
+    ),
+    "products_share_a_path": _Collision(
+        produces={
+            "table_path": "tables/out.csv",
+            "first_path": "./tables/a.csv",
+            "second_path": "tables/./a.csv",
+        },
+        names=(("first_path", "./tables/a.csv"), ("second_path", "tables/./a.csv")),
+    ),
+    # The source is written at path_for(_SOURCE_KEY), so its path contains _SOURCE_KEY.
+    "product_is_source": _Collision(
+        produces={"table_path": "tables/out.csv", "notebook_path": _SOURCE_ALIAS_KEY},
+        names=(("notebook_path", _SOURCE_ALIAS_KEY), (_SOURCE_KEY, _SOURCE_ALIAS_KEY)),
+    ),
+}
+"""Products that collide when the source is at path_for(_SOURCE_KEY), keyed by case."""
+
 _REJECTED: dict[str, dict[str, Any]] = {
     "empty_name": {"name": ""},
     "empty_env": {"env": ""},
@@ -201,8 +240,13 @@ _REJECTED: dict[str, dict[str, Any]] = {
     "missing_notebook": {"notebook": Path("/nonexistent/vivarium-workflow/missing.ipynb")},
     "executed_not_ipynb": {"executed": "executed/report.html"},
     "executed_is_source": {"executed": _SOURCE_KEY},
+    **{case: {"produces": collision.produces} for case, collision in _COLLISIONS.items()},
 }
 """Overrides of a valid notebook_step call that each make it raise ValueError."""
+
+_ROOT_TABLE_KEY = "supplied/root_table.csv"
+
+_ROOT_NOTEBOOK_KEY = "supplied/root_report.ipynb"
 
 
 def _offset_table(table: Path) -> pd.DataFrame:
@@ -290,6 +334,20 @@ def _registry(tmp_path: Path) -> ArtifactRegistry:
     return ArtifactRegistry(tmp_path / "out", "run1", root_inputs=roots)
 
 
+def _root_input_registry(tmp_path: Path) -> ArtifactRegistry:
+    """Return a registry with a table and a notebook as root inputs, under ``tmp_path``."""
+    # Neither key is part of its file's path, so a message naming only the file does not
+    # count as naming the key.
+    notebook = _write_notebook(tmp_path / "handed_over" / "report.ipynb")
+    table = tmp_path / "handed_over" / "table.csv"
+    table.write_text("n\n1\n")
+    return ArtifactRegistry(
+        tmp_path / "out",
+        "run1",
+        root_inputs={_ROOT_TABLE_KEY: table, _ROOT_NOTEBOOK_KEY: notebook},
+    )
+
+
 def _source(tmp_path: Path) -> Path:
     """Write a minimal source notebook under ``tmp_path`` and return its path."""
     return _write_notebook(tmp_path / "notebooks" / "report.ipynb", "location = 'unset'")
@@ -341,6 +399,18 @@ def _recording_step(tmp_path: Path, registry: ArtifactRegistry, log: Path) -> Ta
         env=str(_recording_env(tmp_path / "stub_env", log)),
         produces={"record_path": _RECORD_KEY, "table_path": _TABLE_KEY},
     )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def isolated_jupyter_dirs(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Point IPython and Jupyter at empty directories, so no kernel reads or writes HOME."""
+    base = tmp_path_factory.mktemp("jupyter_dirs")
+    with pytest.MonkeyPatch.context() as patch:
+        for variable in _JUPYTER_DIR_VARIABLES:
+            directory = base / variable.lower()
+            directory.mkdir()
+            patch.setenv(variable, str(directory))
+        yield
 
 
 @dataclass
@@ -421,8 +491,6 @@ def shared_run(tmp_path_factory: pytest.TempPathFactory) -> _SharedRun:
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("JUPYTER_DATA_DIR", str(decoy))
         patch.setenv("TMPDIR", str(tmpdir))
-        # Without a writable HOME, IPython would put its profile in TMPDIR.
-        patch.setenv("IPYTHONDIR", str(base / "ipython"))
         session = build([notebook, downstream, bare], base / "state")
 
     return _SharedRun(
@@ -543,7 +611,7 @@ def test_name_defaults_to_the_executed_key_and_can_be_overridden(tmp_path: Path)
 
 
 def test_inputs_are_the_source_notebook_and_the_resolved_input_nodes(tmp_path: Path) -> None:
-    """Task.inputs holds the source notebook's file node under '__notebook__' and, under each parameter name, the identical node the registry resolves for its key."""
+    """Task.inputs holds the source notebook's file node under '__notebook__' and, under each parameter name, the producing step's own node for a produced key or a node at the file's path for a root input."""
     registry, source = _registry(tmp_path), _source(tmp_path)
     registry.register_output("upstream/table.csv")
 
@@ -908,7 +976,6 @@ def test_failing_notebook_fails_the_step_and_keeps_the_executed_notebook(
     # Cache this process's temp dir first, so TMPDIR reaches only the build's subprocesses.
     tempfile.gettempdir()
     monkeypatch.setenv("TMPDIR", str(tmpdir))
-    monkeypatch.setenv("IPYTHONDIR", str(tmp_path / "ipython"))
 
     assert outcomes(build([notebook, downstream], tmp_path / "state")) == {
         "fails": TaskOutcome.FAIL,
@@ -1152,3 +1219,51 @@ def test_numpy_bool_parameter_is_rejected_with_a_conversion_hint(tmp_path: Path)
     assert "use_cache" in message
     assert "bool()" in message
     assert "type numpy.bool" in message
+
+
+@pytest.mark.parametrize("collision", list(_COLLISIONS.values()), ids=list(_COLLISIONS))
+def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collision) -> None:
+    """A produces key equal to the executed key, two produces keys that resolve to one path, or a produces key that resolves to the source notebook raises ValueError naming both colliding items."""
+    registry = _registry(tmp_path)
+    source = _write_notebook(registry.path_for(_SOURCE_KEY))
+
+    with pytest.raises(ValueError) as info:
+        notebook_step(
+            source,
+            executed=_EXECUTED_KEY,
+            registry=registry,
+            env=_ENV,
+            produces=collision.produces,
+        )
+
+    message = str(info.value)
+    unnamed = [
+        names for names in collision.names if not any(name in message for name in names)
+    ]
+    assert unnamed == [], message
+
+
+def test_executed_or_product_key_that_is_a_root_input_raises_wiring_error(
+    tmp_path: Path,
+) -> None:
+    """An executed key or a produces key that is a declared root input raises WiringError naming the key."""
+    source = _source(tmp_path)
+
+    with pytest.raises(WiringError) as executed_info:
+        notebook_step(
+            source,
+            executed=_ROOT_NOTEBOOK_KEY,
+            registry=_root_input_registry(tmp_path),
+            env=_ENV,
+        )
+    with pytest.raises(WiringError) as product_info:
+        notebook_step(
+            source,
+            executed=_EXECUTED_KEY,
+            registry=_root_input_registry(tmp_path),
+            env=_ENV,
+            produces={"table_path": _ROOT_TABLE_KEY},
+        )
+
+    assert _ROOT_NOTEBOOK_KEY in str(executed_info.value)
+    assert _ROOT_TABLE_KEY in str(product_info.value)

@@ -7,7 +7,8 @@ command runs ``python -m papermill`` in the step's declared environment, which
 notebook is a declared input file. The executed notebook, written to its own path, and
 the data files named in ``produces`` are the step's products, registered through the
 shared :class:`~vivarium.workflow.backend.wiring.ArtifactRegistry` so downstream steps
-get real edges to them.
+get real edges to them. If the notebook raises, the step fails and the executed notebook,
+with the error in it, stays at its path.
 
 Papermill injects parameters into the notebook's cell tagged ``parameters``. Each input
 and product reaches the notebook as its resolved path, as a ``str``, under its parameter
@@ -83,14 +84,15 @@ def notebook_step(
         input of the step and is never written; the notebook runs with its own directory
         as the working directory.
     executed
-        The artifact key for the executed notebook, which must end in ``.ipynb`` and must
-        not resolve to ``notebook``'s path. Registered with ``registry`` as a product.
+        The artifact key for the executed notebook, which must end in ``.ipynb``.
+        Registered with ``registry`` as a product.
     registry
         The producer/consumer registry that resolves keys to shared nodes.
     env
         The environment the notebook runs in: a conda env or venv name, or a path to its
         prefix. It must have ``papermill`` and ``ipykernel`` installed. Resolved when the
-        pipeline is built or previewed, not here.
+        pipeline is built or previewed, not here. Pass ``sys.prefix`` to run the notebook
+        in the pipeline's own environment.
     inputs
         Maps notebook parameter names to the artifact keys the registry resolves to the
         producing step's node (or a declared root input). Each input's resolved path
@@ -100,6 +102,8 @@ def notebook_step(
         writes. Each key is registered with ``registry`` as a product, and its path reaches
         the notebook as a ``str`` under its parameter name. The parent directory of each
         product, and of the executed notebook, is created before the notebook runs.
+        Each key must resolve to its own path, distinct from ``executed``'s and
+        ``notebook``'s.
     parameters
         Maps notebook parameter names to scalar values. A ``str`` arrives as a ``str``,
         a ``bool`` or ``None`` as itself, and any other integral or real number, such as
@@ -114,17 +118,20 @@ def notebook_step(
     -------
         One :class:`~vivarium.workflow.backend.task.Task` whose ``run`` is the papermill
         command, whose ``env`` is ``env``, whose inputs are the source notebook's file node
-        and the resolved input nodes, and whose outputs are the registry's nodes for
-        ``executed`` and for each ``produces`` key. Its inputs and outputs are keyed by
-        parameter name, with the source notebook under ``"__notebook__"`` and the executed
-        notebook under ``"__executed__"``. The command lists parameters in name order, so
-        equal arguments give an identical command.
+        and each input's resolved node (the producing step's own node for a produced key,
+        or a node at the file's path for a root input), and whose outputs are the
+        registry's nodes for ``executed`` and for each ``produces`` key. Its inputs and
+        outputs are keyed by parameter name, with the source notebook under
+        ``"__notebook__"`` and the executed notebook under ``"__executed__"``. The command
+        lists parameters in name order, so equal arguments give an identical command.
 
     Raises
     ------
     vivarium.workflow.backend.wiring.WiringError
         If an input key resolves to no producer and no root input, or ``executed`` or a
-        ``produces`` key is a declared root input or resolves to another key's path.
+        ``produces`` key is a declared root input or resolves to the path of a different
+        key that is already registered (another step's output) or of a root input. The
+        same key claimed by two steps is left for the build to reject.
     ValueError
         If ``name`` or ``env`` is empty; a parameter name in ``inputs``, ``produces`` or
         ``parameters`` is not a valid Python identifier, is a keyword, appears in more
@@ -132,9 +139,9 @@ def notebook_step(
         ``__code_id__``, ``__command__``); a parameter value is not a ``str``, a real
         number, a ``bool`` or ``None`` (the message says to pass files through ``inputs``
         and to convert a numpy ``bool_`` with ``bool()``); ``notebook`` does not end in
-        ``.ipynb`` or does not exist; ``executed`` does not end in ``.ipynb``; or
-        ``executed`` resolves to ``notebook``'s path. Every one of these is raised before
-        anything is registered.
+        ``.ipynb`` or does not exist; ``executed`` does not end in ``.ipynb``; or two of
+        ``notebook``, ``executed`` and the ``produces`` keys resolve to one path (the
+        message names both). Every one of these is raised before anything is registered.
     """
     task_name = executed if name is None else name
     if not task_name:
@@ -149,7 +156,8 @@ def notebook_step(
     )
     _check_parameter_values(task_name, scalars)
     source = Path(notebook).resolve()
-    _check_paths(task_name, source, executed, registry)
+    _check_paths(task_name, source, executed)
+    _check_collisions(task_name, source, executed, product_keys, registry)
 
     dependencies = {param: registry.resolve_input(key) for param, key in input_keys.items()}
     executed_node = registry.register_output(executed)
@@ -177,7 +185,7 @@ def notebook_step(
 
 
 def _check_names(task_name: str, groups: Mapping[str, Iterable[str]]) -> None:
-    """Reject a parameter name that is not an identifier, is reserved, or is used twice."""
+    """Reject a name that is not an identifier, is a keyword or reserved, or is used twice."""
     seen: dict[str, str] = {}
     for group, names in groups.items():
         for name in names:
@@ -223,9 +231,7 @@ def _type_name(value: object) -> str:
     return f"{kind.__module__}.{kind.__qualname__}"
 
 
-def _check_paths(
-    task_name: str, source: Path, executed: ArtifactKey, registry: ArtifactRegistry
-) -> None:
+def _check_paths(task_name: str, source: Path, executed: ArtifactKey) -> None:
     """Reject a source that is not an existing .ipynb file, or a bad executed key."""
     if source.suffix != ".ipynb":
         raise ValueError(
@@ -239,11 +245,29 @@ def _check_paths(
         raise ValueError(
             f"Task '{task_name}': executed key {executed!r} does not end in '.ipynb'."
         )
-    if registry.path_for(executed) == source:
-        raise ValueError(
-            f"Task '{task_name}': executed key {executed!r} resolves to the source notebook "
-            f"{str(source)!r}; the executed notebook must be written to its own path."
-        )
+
+
+def _check_collisions(
+    task_name: str,
+    source: Path,
+    executed: ArtifactKey,
+    products: Mapping[str, ArtifactKey],
+    registry: ArtifactRegistry,
+) -> None:
+    """Reject two of the source, the executed notebook and the products at one path."""
+    claimed = {source: f"source notebook {str(source)!r}"}
+    outputs = {f"executed key {executed!r}": executed}
+    outputs.update(
+        (f"product {param!r} (key {key!r})", key) for param, key in products.items()
+    )
+    for label, key in outputs.items():
+        path = registry.path_for(key)
+        if path in claimed:
+            raise ValueError(
+                f"Task '{task_name}': {claimed[path]} and {label} resolve to one path "
+                f"{str(path)!r}; each output must be written to its own path."
+            )
+        claimed[path] = label
 
 
 def _parameter_flag(name: str, value: NotebookParameter) -> list[str]:
@@ -270,7 +294,7 @@ def _papermill_command(
     products: Iterable[Path],
     values: Mapping[str, NotebookParameter],
 ) -> str:
-    """Return the shell command that creates product directories and runs papermill."""
+    """Return the command that makes output dirs and runs papermill on a temporary kernel."""
     directories = sorted({str(path.parent) for path in (executed, *products)})
     flags = [arg for name in sorted(values) for arg in _parameter_flag(name, values[name])]
     papermill = shlex.join(
