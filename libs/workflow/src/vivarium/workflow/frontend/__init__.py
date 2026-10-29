@@ -1,5 +1,6 @@
 """The Python frontend: write steps, check their primary data, and run or preview them."""
 
+from vivarium.workflow.frontend.definition import DefinitionError, load_pipeline
 from vivarium.workflow.frontend.handoff import HandoffError, handoff_inputs, handoff_key
 from vivarium.workflow.frontend.pipeline import (
     Pipeline,
@@ -11,12 +12,14 @@ from vivarium.workflow.frontend.pipeline import (
 from vivarium.workflow.frontend.python_step import python_step
 
 __all__ = [
+    "DefinitionError",
     "HandoffError",
     "Pipeline",
     "PipelineError",
     "StepFailed",
     "handoff_inputs",
     "handoff_key",
+    "load_pipeline",
     "preview",
     "python_step",
     "run",
