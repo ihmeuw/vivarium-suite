@@ -5,13 +5,14 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from pytask import PNode, PythonNode, TaskOutcome
+from pytask import ExitCode, PNode, PythonNode, TaskOutcome
 
 from vivarium.workflow.backend.build import (
     CODE_ID_KEY,
     COMMAND_KEY,
     TASK_KEY,
     build,
+    failure_message,
     outcomes,
     to_pytask_task,
 )
@@ -303,3 +304,81 @@ def test_build_rejects_duplicate_task_names(tmp_path: Path) -> None:
 
     assert calls == []
     assert not root.exists()
+
+
+def test_selected_runs_the_named_tasks_and_their_ancestors_and_skips_the_rest(
+    tmp_path: Path,
+) -> None:
+    """build(selected=[name]) runs that task and its ancestors; every other task is SKIP."""
+    src = _write(tmp_path / "src", "x")
+    a, b, c, d = tmp_path / "a", tmp_path / "b", tmp_path / "c", tmp_path / "d"
+    tasks = [_copy("a", src, a), _copy("b", a, b), _copy("c", b, c), _copy("d", src, d)]
+
+    assert outcomes(build(tasks, tmp_path / "state", selected=["b"])) == {
+        "a": TaskOutcome.SUCCESS,
+        "b": TaskOutcome.SUCCESS,
+        "c": TaskOutcome.SKIP,
+        "d": TaskOutcome.SKIP,
+    }
+    assert b.read_text() == "x"
+    assert not c.exists()
+    assert not d.exists()
+
+
+def test_an_empty_selection_runs_no_task(tmp_path: Path) -> None:
+    """build(selected=[]) reports every task as SKIP and exits OK."""
+    src = _write(tmp_path / "src", "x")
+    a, b = tmp_path / "a", tmp_path / "b"
+    tasks = [_copy("a", src, a), _copy("b", src, b)]
+
+    session = build(tasks, tmp_path / "state", selected=[])
+
+    assert session.exit_code == ExitCode.OK
+    assert outcomes(session) == _every(tasks, TaskOutcome.SKIP)
+    assert not a.exists()
+    assert not b.exists()
+
+
+def test_selected_rejects_a_name_that_is_not_a_task(tmp_path: Path) -> None:
+    """build(selected=[...]) with a name that is not a task raises ValueError naming it."""
+    tasks = [_copy("a", _write(tmp_path / "src", "x"), tmp_path / "a")]
+
+    with pytest.raises(ValueError, match="no_such_task"):
+        build(tasks, tmp_path / "state", selected=["a", "no_such_task"])
+
+
+def test_a_selection_of_more_than_a_thousand_tasks_builds(tmp_path: Path) -> None:
+    """Selecting over a thousand tasks builds without error, since one shared marker selects them all."""
+    tasks = [_task(f"task_{index}", _noop) for index in range(1200)]
+    chosen, rest = tasks[:1100], tasks[1100:]
+    names = [task.name for task in chosen]
+
+    session = build(tasks, tmp_path / "state", selected=names, dry_run=True)
+
+    assert session.exit_code == ExitCode.OK
+    expected = _every(chosen, TaskOutcome.WOULD_BE_EXECUTED)
+    expected.update(_every(rest, TaskOutcome.SKIP))
+    assert outcomes(session) == expected
+
+
+def test_failure_message_names_the_exit_code_and_pytasks_error(tmp_path: Path) -> None:
+    """failure_message of a session where two tasks produce one file names DAG_FAILED and pytask's message."""
+    product = file_node(tmp_path / "out")
+    tasks = [_task(name, "true", outputs={"out": product}) for name in ("a", "b")]
+
+    session = build(tasks, tmp_path / "state")
+    message = failure_message(session)
+
+    assert session.exit_code == ExitCode.DAG_FAILED
+    assert message.startswith(ExitCode.DAG_FAILED.name)
+    assert "There are some tasks which produce the same output" in message
+
+
+def test_failure_message_of_a_failed_step_is_the_exit_code_name(tmp_path: Path) -> None:
+    """failure_message of a session that failed only because a step failed is the exit code's name."""
+    tasks = [_task("fail", "exit 1", outputs={"out": file_node(tmp_path / "out")})]
+
+    session = build(tasks, tmp_path / "state")
+
+    assert session.exit_code == ExitCode.FAILED
+    assert failure_message(session) == session.exit_code.name

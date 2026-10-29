@@ -13,8 +13,9 @@ This library builds a data pipeline from tasks that each declare their inputs an
 outputs. It wires producers to consumers by artifact key and uses ``pytask`` to
 decide which tasks are stale and to run them. It has three parts: the backend
 (the task model, the build, and the run preview), the frontend (``python_step`` for
-writing a step as a plain function, and a check of each location's delivered primary
-data), and a test harness for staleness scenarios.
+writing a step as a plain function, a check of each location's delivered primary data,
+and verbs that run or preview a whole pipeline by step name), and a test harness for
+staleness scenarios.
 
 **Supported Python versions: 3.11, 3.12, 3.13**
 

@@ -454,7 +454,7 @@ def test_redelivery_staleness_follows_the_file_contents(tmp_path: Path) -> None:
 
     assert not resaved.would_run
     assert changed.would_run
-    assert "coverage.csv" in " ".join(changed.reasons)
+    assert "coverage.csv" in " ".join(str(reason) for reason in changed.reasons)
 
 
 def test_worked_example_validates_and_builds(tmp_path: Path) -> None:
