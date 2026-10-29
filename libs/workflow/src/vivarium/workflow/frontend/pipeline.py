@@ -122,12 +122,13 @@ def run(
     Raises
     ------
     PipelineError
-        If ``only`` or ``force`` names a step that is not in the pipeline, ``pytask.lock``
-        cannot be read to force steps, the backend rejects the tasks (for example, two
-        steps share a name or a declared env does not resolve), or pytask stops before
-        any step fails. An unknown step is reported before anything is built or written,
-        with the valid step names and the closest match. A rejection by the backend is
-        chained from its ``ValueError``, and an unreadable lockfile from pytask's error.
+        If ``only`` or ``force`` names a step that is not in the pipeline, ``force`` is
+        given and ``pytask.lock`` is not a lockfile pytask accepts, the backend rejects
+        the tasks (for example, two steps share a name or a declared env does not
+        resolve), or pytask stops before any step fails. An unknown step is reported
+        before anything is built or written, with the valid step names and the closest
+        match. A rejection by the backend is chained from its ``ValueError``, and an
+        invalid lockfile from pytask's lockfile error.
         When pytask stops, the message is
         :func:`~vivarium.workflow.backend.build.failure_message`'s; for a cause pytask
         does not record, such as an error in a pytask plugin, that is only the exit
