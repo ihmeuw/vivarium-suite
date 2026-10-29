@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[pandas,pyarrow]",
+    "vivarium-dependencies[pandas,pyarrow,click]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "pytask>=0.6.0,<0.7.0",
 ]
@@ -39,6 +39,8 @@ cluster = ["jobmon_installer_ihme==10.12.2"]
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
+    # The CLI tests read CliRunner's stderr separately, which click 8.2 introduced.
+    "click>=8.2",
 ]
 docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
@@ -46,6 +48,9 @@ lint = ["vivarium-dependencies[lint]", "pyarrow-stubs"]
 dev = ["vivarium-workflow[test,docs,interactive,lint]"]
 ci_github = ["vivarium-workflow[test,docs,lint]"]
 ci_jenkins = ["vivarium-workflow[ci_github,cluster]"]
+
+[project.scripts]
+vwf = "vivarium.workflow.frontend.cli:vwf"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
