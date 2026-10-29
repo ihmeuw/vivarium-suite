@@ -7,7 +7,8 @@ Run, preview, or force the steps of a pipeline definition from the command line.
 
 Each subcommand loads a definition with
 :func:`~vivarium.workflow.frontend.definition.load_pipeline`, checks that no artifact
-has more than one producing step, and calls one verb of
+has more than one producing step and that the pipeline's root can be used, and calls
+one verb of
 :mod:`~vivarium.workflow.frontend.pipeline`. :doc:`/vwf` shows an example of each
 subcommand and describes the exit status and how each error is reported. The preview
 plan goes to standard output, as do pytask's progress table and failure reports.
@@ -83,9 +84,9 @@ def vwf() -> None:
     path/to/file.py or package.module, optionally followed by :function (the default
     function is pipeline). A module must be installed or on PYTHONPATH.
 
-    Exit status is 0 on success; 1 if a step failed or exited, or pytask stopped the
-    build for another reason; 2 if the definition or the command is wrong and nothing
-    ran; and 130 if the command was interrupted.
+    Exit status is 0 on success; 1 if a step failed or exited, or the build stopped for
+    another reason, possibly before any step ran; 2 if the definition or the command is
+    wrong and nothing ran; and 130 if the command was interrupted.
     """
 
 

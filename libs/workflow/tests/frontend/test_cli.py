@@ -1,6 +1,7 @@
 """Tests for the ``vwf`` command (``frontend.cli``)."""
 
 import importlib.metadata
+import os
 import re
 import shlex
 import shutil
@@ -544,6 +545,19 @@ def pipeline():
 """
 """A definition whose pipeline() runs ``_SUBSCRIPT``."""
 
+_ROOTED_STEP = """
+
+def make_a():
+    log("a")
+    return frame()
+
+
+def pipeline():
+    registry = ArtifactRegistry(HERE / "out", "run1")
+    return Pipeline([step(make_a, "a", registry)], HERE.joinpath(*ROOT), registry)
+"""
+"""The end of a definition of one step 'a' whose root is HERE joined with ROOT's parts."""
+
 
 def _write_definition(directory: Path, source: str) -> Path:
     """Write ``source`` to a new file in ``directory`` whose stem no other test uses."""
@@ -562,6 +576,11 @@ def _touches(*steps: tuple[str, str]) -> str:
     """Return a definition of command steps, each a (name, output node source) pair."""
     listed = "".join(f"\n    ({name!r}, {node})," for name, node in steps)
     return f"{_HEADER}\nimport pytask\n\nSTEPS = [{listed}\n]\n{_TOUCHES}"
+
+
+def _rooted_at(*parts: str) -> str:
+    """Return a definition of one step 'a' whose root is its directory joined with ``parts``."""
+    return f"{_HEADER}\nROOT = {parts!r}\n{_ROOTED_STEP}"
 
 
 def _invoke(*args: str) -> Result:
@@ -1349,7 +1368,8 @@ def test_a_root_under_a_file_exits_two_naming_the_root(tmp_path: Path) -> None:
     result = _invoke("run", str(path))
 
     assert result.exit_code == 2, _describe(result)
-    assert f"Error: Cannot use the pipeline root {root}: " in result.stderr, result.stderr
+    reason = f"{blocker.resolve()} is not a directory"
+    assert f"Error: Cannot use the pipeline root {root}: {reason}" in result.stderr
     assert "Traceback" not in result.stderr
     assert blocker.is_file() and blocker.read_text() == content
     assert not (tmp_path / "out").exists()
@@ -1411,3 +1431,50 @@ def test_a_double_claim_through_two_spellings_of_one_path_is_caught(tmp_path: Pa
     assert claimed in result.stderr, result.stderr
     assert not (tmp_path / "state").exists()
     assert not (tmp_path / "x.txt").exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write to any directory")
+def test_a_root_whose_parent_is_not_writable_exits_two_naming_the_parent(
+    tmp_path: Path,
+) -> None:
+    """A root under a read-only directory makes 'vwf run' exit 2 with a message naming that directory as not writable, and nothing is created."""
+    path = _write_definition(tmp_path, _rooted_at("locked", "state"))
+    locked = tmp_path.resolve() / "locked"
+    locked.mkdir()
+    locked.chmod(0o555)
+    try:
+        result = _invoke("run", str(path))
+    finally:
+        locked.chmod(0o755)
+
+    assert result.exit_code == 2, _describe(result)
+    error = (
+        f"Error: Cannot use the pipeline root {locked / 'state'}: {locked} is not writable"
+    )
+    assert error in result.stderr, result.stderr
+    assert not (locked / "state").exists()
+    assert _calls(tmp_path) == []
+
+
+def test_a_fresh_root_under_missing_directories_is_accepted(tmp_path: Path) -> None:
+    """A root whose parent directories do not exist yet passes the root check, and 'vwf run' creates it and exits 0."""
+    path = _write_definition(tmp_path, _rooted_at("a", "b", "state"))
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert (tmp_path / "a" / "b" / "state").is_dir()
+    assert _calls(tmp_path) == ["a"]
+
+
+def test_a_root_through_a_symlink_to_a_directory_is_accepted(tmp_path: Path) -> None:
+    """A root under a symlink to a writable directory passes the root check, and the state is written in the link's target."""
+    (tmp_path / "real").mkdir()
+    (tmp_path / "link").symlink_to(tmp_path / "real", target_is_directory=True)
+    path = _write_definition(tmp_path, _rooted_at("link", "state"))
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert (tmp_path / "real" / "state").is_dir()
+    assert _calls(tmp_path) == ["a"]
