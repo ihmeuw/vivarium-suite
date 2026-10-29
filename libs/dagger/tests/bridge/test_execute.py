@@ -75,9 +75,10 @@ _AFTER_STALE: dict[str, list[str]] = {
     "u.parquet": [],
     "y.parquet": ["a.parquet", "raw"],
     "z.parquet": ["y.parquet"],
+    "w.parquet": ["z.parquet"],
 }
-"""A chain a -> y -> z and an unrelated step u, as each step and what it reads. Step y also
-reads the root input ``raw``."""
+"""A chain a -> y -> z -> w and an unrelated step u, as each step and what it reads. Step y
+also reads the root input ``raw``."""
 
 _REFUSED = "refused_step"
 """Name of the step that the refusal tests give a run that cannot cross to a node."""
@@ -685,7 +686,7 @@ def test_an_entry_does_not_wait_for_a_step_that_is_not_stale(
 def test_a_missing_input_after_a_stale_step_fails_its_step_and_the_others_still_run(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """In a first build of a -> y -> z and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL with a message naming y and the missing file's full path and z SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and writes the products of a and u but not those of y and z."""
+    """In a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL with a message naming y and the missing file's full path and both z and w SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and writes the products of a and u but not those of y, z and w."""
     registry, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     missing = (tmp_path / "raw.parquet").resolve()
 
@@ -695,11 +696,13 @@ def test_a_missing_input_after_a_stale_step_fails_its_step_and_the_others_still_
     assert "y.parquet" in message, message
     assert str(missing) in message, message
     assert _report(session, "z.parquet").outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
+    assert _report(session, "w.parquet").outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
     assert _bound_names(fake_jobmon) == [["a.parquet", "u.parquet"]]
     assert registry.path_for("a.parquet").exists()
     assert registry.path_for("u.parquet").exists()
     assert not registry.path_for("y.parquet").exists()
     assert not registry.path_for("z.parquet").exists()
+    assert not registry.path_for("w.parquet").exists()
 
 
 def test_a_missing_input_that_a_stale_step_writes_does_not_fail_its_step(
@@ -735,7 +738,7 @@ def test_a_missing_input_failure_has_no_chained_error_or_traceback(
     assert error.__context__ is None
 
 
-def test_when_every_stale_step_fails_the_input_check_nothing_is_written_or_bound(
+def test_when_every_stale_step_fails_the_input_check_no_run_is_created_or_bound(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With force=True, under which pytask's dry-run checks no step's inputs, a jobmon build of one step whose root input file is missing reports that step FAIL and exits FAILED, never calls the Jobmon environment check, binds no plan and creates no directory under <root>/.pytask/jobmon."""
@@ -763,13 +766,14 @@ def test_when_every_stale_step_fails_the_input_check_nothing_is_written_or_bound
 def test_a_missing_input_after_a_stale_step_gets_the_outcomes_of_a_local_build(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """The pipeline a -> y -> z and an unrelated step u, with y's root input file missing, built once locally and once with jobmon=True under separate roots, reports y FAIL and z SKIP_PREVIOUS_FAILED in both builds."""
+    """The pipeline a -> y -> z -> w and an unrelated step u, with y's root input file missing, built once locally and once with jobmon=True under separate roots, reports y FAIL and both z and w SKIP_PREVIOUS_FAILED in both builds."""
     local, bridged = tmp_path / "local", tmp_path / "bridged"
     _, local_tasks = _steps_with_missing_raw(local, _AFTER_STALE)
     _, bridged_tasks = _steps_with_missing_raw(bridged, _AFTER_STALE)
     expected = {
         "y.parquet": TaskOutcome.FAIL,
         "z.parquet": TaskOutcome.SKIP_PREVIOUS_FAILED,
+        "w.parquet": TaskOutcome.SKIP_PREVIOUS_FAILED,
     }
     local_outcomes = outcomes(build(local_tasks, local / "state"))
     assert {step: local_outcomes.get(step) for step in expected} == expected
@@ -783,7 +787,7 @@ def test_a_missing_input_after_a_stale_step_gets_the_outcomes_of_a_local_build(
 def test_a_refused_step_after_a_failed_input_check_is_skipped_and_the_others_still_run(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """In a first build of a -> y -> z and an unrelated step u, where y also reads a root input file that is missing and a step that cannot run on a node reads y's product and writes its own into a directory that does not exist, a jobmon build reports y FAIL and the refused step once, as SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and does not create the refused step's product directory."""
+    """In a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing and a step that cannot run on a node reads y's product and writes its own into a directory that does not exist, a jobmon build reports y FAIL and the refused step once, as SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and does not create the refused step's product directory."""
     registry, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     refused = python_step(
         _in_main_reading,
@@ -810,7 +814,7 @@ def test_a_refused_step_after_a_failed_input_check_is_skipped_and_the_others_sti
 def test_stop_after_first_failure_ends_the_input_check_and_submits_nothing(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """With stop_after_first_failure, in a first build of a -> y -> z and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL and exits FAILED, gives z no report, binds no plan, creates no run directory, and writes the products of neither a nor u."""
+    """With stop_after_first_failure, in a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL and exits FAILED, gives z and w no report, binds no plan, creates no run directory, and writes the products of neither a nor u."""
     registry, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     root = tmp_path / "state"
 
@@ -819,8 +823,9 @@ def test_stop_after_first_failure_ends_the_input_check_and_submits_nothing(
     assert session.exit_code == ExitCode.FAILED
     reported = outcomes(session)
     assert reported["y.parquet"] == TaskOutcome.FAIL
-    # Without the stop, z would be reported SKIP_PREVIOUS_FAILED after y's FAIL.
+    # Without the stop, z and w would be reported SKIP_PREVIOUS_FAILED after y's FAIL.
     assert "z.parquet" not in reported, reported
+    assert "w.parquet" not in reported, reported
     assert fake_jobmon.plans == []
     assert _run_directories(root) == []
     assert not registry.path_for("a.parquet").exists()
