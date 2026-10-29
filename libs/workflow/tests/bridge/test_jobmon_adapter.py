@@ -7,9 +7,10 @@ fake, so they contact no Jobmon server; they run only where jobmon is installed.
 import ast
 import importlib.metadata
 import importlib.util
+import logging
 import os
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar, NoReturn
 
@@ -60,6 +61,19 @@ _BIND_OPTIONS: dict[str, Any] = {
     "workflow_name": "bridge_test",
 }
 """Options for a bind, which a test overrides where it checks one."""
+
+_SWARM = "jobmon.client.swarm"
+"""The logger under which Jobmon's swarm logs its progress lines."""
+
+_ORCHESTRATOR = "jobmon.client.swarm.orchestrator"
+"""A child of the swarm logger, which logs Jobmon's ``Workflow N% complete`` lines."""
+
+_PROGRESS_EVENT = "Workflow 50.0% complete (1/2 tasks)"
+"""A progress line, as the event of the structlog event dict that Jobmon logs. Jobmon
+writes the percentage as a float."""
+
+_PLAIN_PROGRESS = "Workflow 100.0% complete (2/2 tasks)"
+"""A progress line, as a plain string message."""
 
 
 def _entry(
@@ -195,19 +209,60 @@ class _StandInTask:
 
 
 class _StandInWorkflow:
-    """Stand in for a bound Jobmon workflow whose run ends with given statuses."""
+    """Stand in for a bound Jobmon workflow whose run ends with given statuses and error."""
 
-    def __init__(self, status: str, final_statuses: Mapping[_StandInTask, str]) -> None:
+    def __init__(
+        self,
+        status: str,
+        final_statuses: Mapping[_StandInTask, str],
+        caught: Exception | None = None,
+    ) -> None:
         self.status = status
         self.final_statuses = final_statuses
+        self.caught = caught
+        self.error: Exception | None = None
         self.fail_fast: list[bool] = []
 
     def run(self, fail_fast: bool = False, *args: Any, **kwargs: Any) -> str:
-        """Record ``fail_fast``, set each task's final status, and return a status."""
+        """Record ``fail_fast``, set final statuses and ``error``, and return the status."""
         self.fail_fast.append(fail_fast)
         for task, status in self.final_statuses.items():
             task.final_status = status
+        # Jobmon keeps an error that it caught in its orchestrator on the workflow.
+        self.error = self.caught
         return self.status
+
+
+class _RaisingWorkflow:
+    """Stand in for a bound Jobmon workflow whose run raises before it ends."""
+
+    def __init__(self, raised: BaseException) -> None:
+        self.raised = raised
+        # An error kept on the workflow must not stand in for the one that run raises.
+        self.error: Exception | None = None
+
+    def run(self, *args: Any, **kwargs: Any) -> NoReturn:
+        """Raise the error before any task has a final status."""
+        raise self.raised
+
+
+class _LoggingWorkflow(_StandInWorkflow):
+    """Stand in for a bound Jobmon workflow that logs a progress event while it runs."""
+
+    def run(self, fail_fast: bool = False, *args: Any, **kwargs: Any) -> str:
+        """Log the progress event at INFO as a structlog event dict, then end."""
+        logging.getLogger(_ORCHESTRATOR).info({"event": _PROGRESS_EVENT})
+        return super().run(fail_fast, *args, **kwargs)
+
+
+@pytest.fixture
+def swarm_logger() -> Iterator[logging.Logger]:
+    """Return Jobmon's swarm logger, and restore its level and handlers after the test."""
+    logger = logging.getLogger(_SWARM)
+    level, handlers = logger.level, list(logger.handlers)
+    yield logger
+    logger.setLevel(level)
+    logger.handlers[:] = handlers
 
 
 # A recording fake of jobmon's Tool
@@ -560,6 +615,150 @@ def test_run_keeps_running_tasks_that_do_not_wait_on_a_failure() -> None:
     assert workflow.fail_fast == [False]
     assert jobmon_run.status == "E"
     assert jobmon_run.task_statuses == statuses
+
+
+def test_run_leaves_error_none_when_the_workflow_returns_a_status() -> None:
+    """run, given a stand-in workflow whose run returns 'D', sets status 'D' and leaves error None."""
+    plan = (_entry("a"),)
+    tasks = {entry.signature: _StandInTask() for entry in plan}
+    workflow = _StandInWorkflow("D", {task: "D" for task in tasks.values()})
+    jobmon_run = JobmonRun(plan=plan, workflow_id=13, workflow=workflow, tasks=tasks)
+
+    run(jobmon_run)
+
+    assert jobmon_run.status == "D"
+    assert jobmon_run.error is None
+
+
+def test_run_keeps_an_exception_from_the_workflow_as_the_runs_error() -> None:
+    """run, given a stand-in workflow whose run raises RuntimeError, returns normally, leaves status None, and keeps that same exception object as error."""
+    plan = (_entry("a"),)
+    tasks = {entry.signature: _StandInTask() for entry in plan}
+    error = RuntimeError("Jobmon's run failed, on purpose.")
+    workflow = _RaisingWorkflow(error)
+    jobmon_run = JobmonRun(plan=plan, workflow_id=14, workflow=workflow, tasks=tasks)
+
+    run(jobmon_run)
+
+    assert jobmon_run.status is None
+    assert jobmon_run.error is error
+
+
+def test_run_keeps_an_error_that_jobmon_caught_alongside_the_returned_status() -> None:
+    """run, given a stand-in workflow whose run returns 'E' and which keeps a RuntimeError as its error attribute, returns normally, sets status 'E' and keeps that same exception object as error."""
+    plan = (_entry("a"), _entry("b"))
+    tasks = {entry.signature: _StandInTask() for entry in plan}
+    statuses = {"sig-a": "D", "sig-b": "F"}
+    final = {tasks[signature]: status for signature, status in statuses.items()}
+    error = RuntimeError("Jobmon's orchestrator failed, on purpose.")
+    workflow = _StandInWorkflow("E", final, caught=error)
+    jobmon_run = JobmonRun(plan=plan, workflow_id=18, workflow=workflow, tasks=tasks)
+
+    run(jobmon_run)
+
+    assert jobmon_run.status == "E"
+    assert jobmon_run.error is error
+    assert jobmon_run.task_statuses == statuses
+
+
+def test_run_gives_no_status_to_a_task_that_jobmon_gave_none() -> None:
+    """When the stand-in workflow's run raises before it sets any task's final status, so that reading final_status raises AttributeError as it does in Jobmon, run sets task_statuses to None for every signature."""
+    plan = (_entry("a"), _entry("b", "a"))
+    tasks = {entry.signature: _StandInTask() for entry in plan}
+    workflow = _RaisingWorkflow(RuntimeError("Jobmon's run failed, on purpose."))
+    jobmon_run = JobmonRun(plan=plan, workflow_id=15, workflow=workflow, tasks=tasks)
+
+    run(jobmon_run)
+
+    assert jobmon_run.task_statuses == {"sig-a": None, "sig-b": None}
+
+
+@pytest.mark.parametrize("error_type", [KeyboardInterrupt, SystemExit])
+def test_run_lets_keyboard_interrupt_and_system_exit_pass_through(
+    error_type: type[BaseException],
+) -> None:
+    """A KeyboardInterrupt or a SystemExit raised by the stand-in workflow's run propagates out of run, and the run's error stays None."""
+    plan = (_entry("a"),)
+    tasks = {entry.signature: _StandInTask() for entry in plan}
+    error = error_type()
+    workflow = _RaisingWorkflow(error)
+    jobmon_run = JobmonRun(plan=plan, workflow_id=16, workflow=workflow, tasks=tasks)
+
+    with pytest.raises(error_type) as info:
+        run(jobmon_run)
+
+    assert info.value is error
+    assert jobmon_run.error is None
+
+
+@pytest.mark.usefixtures("swarm_logger")
+def test_run_sends_jobmon_progress_lines_to_stderr(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A stand-in workflow whose run logs the structlog event dict {'event': 'Workflow 50.0% complete (1/2 tasks)'} at INFO on the 'jobmon.client.swarm.orchestrator' logger makes run write 'Workflow 50.0% complete (1/2 tasks)' to standard error."""
+    plan = (_entry("a"),)
+    tasks = {entry.signature: _StandInTask() for entry in plan}
+    workflow = _LoggingWorkflow("D", {task: "D" for task in tasks.values()})
+    jobmon_run = JobmonRun(plan=plan, workflow_id=17, workflow=workflow, tasks=tasks)
+    capsys.readouterr()
+
+    run(jobmon_run)
+
+    assert _PROGRESS_EVENT in capsys.readouterr().err.splitlines()
+
+
+@pytest.mark.usefixtures("swarm_logger")
+def test_swarm_progress_writes_a_plain_message_as_it_is(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Inside a _swarm_progress block, an INFO record with a plain string message on a child of the 'jobmon.client.swarm' logger is written to standard error as that string."""
+    capsys.readouterr()
+
+    with _jobmon_adapter._swarm_progress():
+        logging.getLogger(_ORCHESTRATOR).info(_PLAIN_PROGRESS)
+
+    assert _PLAIN_PROGRESS in capsys.readouterr().err.splitlines()
+
+
+def test_swarm_progress_writes_nothing_below_info(
+    capsys: pytest.CaptureFixture[str], swarm_logger: logging.Logger
+) -> None:
+    """With the 'jobmon.client.swarm' logger set to DEBUG, inside a _swarm_progress block the logger stays at DEBUG, and a DEBUG record on it writes nothing to standard error."""
+    # At DEBUG the logger passes the record on, so only the block's handler can drop it.
+    swarm_logger.setLevel(logging.DEBUG)
+    capsys.readouterr()
+
+    with _jobmon_adapter._swarm_progress():
+        level_in_block = swarm_logger.level
+        swarm_logger.debug("A debug line from Jobmon's swarm.")
+
+    assert level_in_block == logging.DEBUG
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize("level", ["DEBUG", "WARNING"])
+def test_swarm_progress_restores_the_logger_after_the_block(
+    level: str, capsys: pytest.CaptureFixture[str], swarm_logger: logging.Logger
+) -> None:
+    """After a _swarm_progress block ends, normally or by raising, the 'jobmon.client.swarm' logger has the handlers and the level it had before, and an INFO record on it writes nothing to standard error."""
+    # At DEBUG, an INFO record after the block reaches any handler that the block left.
+    # At WARNING, the block must set the level to INFO, so the level has to be put back.
+    swarm_logger.setLevel(level)
+    before = (list(swarm_logger.handlers), swarm_logger.level)
+
+    with _jobmon_adapter._swarm_progress():
+        pass
+    after_block = (list(swarm_logger.handlers), swarm_logger.level)
+    with pytest.raises(RuntimeError, match="on purpose"):
+        with _jobmon_adapter._swarm_progress():
+            raise RuntimeError("The block failed on purpose.")
+    after_raise = (list(swarm_logger.handlers), swarm_logger.level)
+    capsys.readouterr()
+    swarm_logger.info("A progress line after the block.")
+
+    assert after_block == before
+    assert after_raise == before
+    assert capsys.readouterr().err == ""
 
 
 # Binding, with a recording fake jobmon Tool

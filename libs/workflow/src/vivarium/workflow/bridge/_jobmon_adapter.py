@@ -12,10 +12,13 @@ template, so Jobmon's GUI shows one node per family.
 """
 
 import importlib.metadata
+import logging
 import re
 import shutil
+import sys
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,6 +46,9 @@ _REJECTED_CHARACTERS = re.compile(r"""[/\\'" ]""")
 
 _RELEASE = re.compile(r"\d+(?:\.\d+)*")
 """The numeric release components at the start of a version string."""
+
+_SWARM_LOGGER = "jobmon.client.swarm"
+"""The logger whose records include Jobmon's ``Workflow N% complete`` progress lines."""
 
 
 class JobmonEnvironmentError(RuntimeError):
@@ -86,11 +92,17 @@ class JobmonRun:
     """The Jobmon task of each entry, by signature. The fake leaves it empty."""
     status: str | None = None
     """The workflow run's final status code, such as ``"D"`` when every task finished and
-    ``"E"`` when one did not. ``None`` until :func:`run` returns."""
+    ``"E"`` when one did not. ``None`` until :func:`run` returns, and also after it if
+    Jobmon raised instead of returning a status."""
     task_statuses: dict[str, str | None] = field(default_factory=dict)
     """The final status code of each entry's task, by signature, such as ``"D"`` (done),
-    ``"F"`` (failed) or ``"G"`` (never ran because an upstream did not finish). Empty
-    until :func:`run` returns."""
+    ``"F"`` (failed) or ``"G"`` (never ran because an upstream did not finish), or
+    ``None`` for a task that Jobmon gave no final status. Empty until :func:`run`
+    returns."""
+    error: Exception | None = None
+    """The exception that stopped Jobmon's orchestrator before the workflow ended, or
+    ``None``. Either ``Workflow.run`` raised it and ``status`` is ``None``, or Jobmon
+    caught it, kept it on the workflow and returned a status such as ``"E"``."""
 
 
 def family(name: str) -> str:
@@ -288,19 +300,82 @@ def bind(
 def run(jobmon_run: JobmonRun) -> None:
     """Run a bound workflow in the calling thread until it ends.
 
-    Jobmon keeps running the tasks that do not wait on a failed one. When the workflow
-    ends, the run's ``status`` is set to the workflow run's final status and its
-    ``task_statuses`` to each task's final status.
+    Jobmon keeps running the tasks that do not wait on a failed one. While the workflow
+    runs, Jobmon's progress lines, such as ``Workflow 50% complete (1/2 tasks)``, are
+    printed on standard error, or above pytask's live table when standard output is a
+    terminal. When the workflow ends, the run's ``status`` is set to the workflow run's
+    final status. If Jobmon's ``Workflow.run`` raises an ``Exception`` instead, the
+    exception is kept as the run's ``error``, ``status`` stays ``None``, and this
+    function returns normally. ``Workflow.run`` is called with Jobmon's default timeout,
+    so it raises a ``RuntimeError`` in this way when the workflow has not ended after
+    36000 seconds (10 hours). When Jobmon catches an error in its orchestrator itself,
+    ``Workflow.run`` returns a status such as ``"E"`` and keeps the error on the
+    workflow. The run's ``status`` is then set as usual, and its ``error`` is set to
+    that error. In each case, the run's ``task_statuses`` gets each task's final status,
+    or ``None`` for a task that Jobmon gave none, as Jobmon does for every task when
+    ``Workflow.run`` raises before the workflow ends. A ``KeyboardInterrupt`` or
+    ``SystemExit`` from Jobmon passes through unchanged.
 
     Parameters
     ----------
     jobmon_run
         A run that :func:`bind` returned.
     """
-    jobmon_run.status = jobmon_run.workflow.run(fail_fast=False)
+    with _swarm_progress():
+        # Jobmon's run errors share no base class narrower than Exception.
+        try:
+            jobmon_run.status = jobmon_run.workflow.run(fail_fast=False)
+        except Exception as error:
+            jobmon_run.error = error
+        else:
+            # Jobmon 3.7 returns a status, rather than raising, for an orchestrator error
+            # that it catches itself, and keeps that error on the workflow.
+            returned = getattr(jobmon_run.workflow, "error", None)
+            if isinstance(returned, Exception):
+                jobmon_run.error = returned
     jobmon_run.task_statuses = {
-        signature: task.final_status for signature, task in jobmon_run.tasks.items()
+        signature: _final_status(task) for signature, task in jobmon_run.tasks.items()
     }
+
+
+def _final_status(task: Any) -> str | None:
+    """Return a Jobmon task's final status, or None if Jobmon gave it none."""
+    # Jobmon's Task.final_status raises AttributeError until Workflow.run returns.
+    try:
+        status: str | None = task.final_status
+    except AttributeError:
+        return None
+    return status
+
+
+class _ProgressFormatter(logging.Formatter):
+    """Format a record as its message, or as the event of a structlog event dict."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Return the message's ``"event"`` for an event dict, else the message."""
+        if isinstance(record.msg, Mapping) and "event" in record.msg:
+            return str(record.msg["event"])
+        return record.getMessage()
+
+
+@contextmanager
+def _swarm_progress() -> Iterator[None]:
+    """Send Jobmon's progress to stderr, or above pytask's live table on a terminal."""
+    logger = logging.getLogger(_SWARM_LOGGER)
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(_ProgressFormatter())
+    level = logger.level
+    # Lower the level only, so a logger already set to DEBUG keeps its other output.
+    if logger.getEffectiveLevel() > logging.INFO:
+        logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    try:
+        yield
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(level)
+        handler.close()
 
 
 def _check_plan_order(plan: Sequence[PlanEntry]) -> None:
