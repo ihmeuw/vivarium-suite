@@ -55,6 +55,10 @@ ci_jenkins = ["vivarium-dagger[ci_github,cluster]"]
 [project.scripts]
 dagger = "vivarium.dagger.cli:dagger"
 
+[project.entry-points.pytask]
+# pytask loads this module in every run; it does nothing unless a build sets jobmon=True.
+vivarium_workflow_bridge = "vivarium.dagger.bridge.plugin"
+
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/dagger"
