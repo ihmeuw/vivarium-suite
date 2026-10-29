@@ -9,14 +9,18 @@ Every step defaults to an always-stale code identity, so it re-runs on every bui
 :func:`stable_code_id` gives a step a fixed code identity instead, so scenarios can
 exercise skipping, forcing, and resuming before steps can declare a code fingerprint.
 
-Two parts are not here yet: the synchronous fake-Jobmon adapter arrives with
-the bridge, and the selective-staleness assertions (perturb one input, exactly its
-cone re-runs) arrive with the code fingerprint.
+:class:`FakeJobmon` stands in for Jobmon, so a build with ``jobmon=True`` runs its steps
+through the bridge's node runner with no Jobmon server.
+
+The selective-staleness assertions (perturb one input, exactly its cone re-runs) are not
+here yet; they arrive with the code fingerprint.
 """
 
 from __future__ import annotations
 
 import hashlib
+import subprocess
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
@@ -29,10 +33,15 @@ from vivarium.workflow.backend.build import build, outcomes
 from vivarium.workflow.backend.preview import preview
 from vivarium.workflow.backend.task import Task
 from vivarium.workflow.backend.wiring import ArtifactRegistry
+from vivarium.workflow.bridge import _jobmon_adapter
+from vivarium.workflow.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.workflow.frontend.python_step import python_step
 
 # TODO(MIC-7520): add selective-staleness scenario helpers once a step can declare a
-# code fingerprint; the synchronous fake-Jobmon adapter lands with the bridge.
+# code fingerprint.
+
+_ADAPTER_FUNCTIONS = ("check_environment", "bind", "run")
+"""The functions of the Jobmon adapter that :class:`FakeJobmon` replaces."""
 
 
 @dataclass
@@ -182,3 +191,130 @@ def would_run(fixture: Fixture) -> set[str]:
 def run(fixture: Fixture) -> dict[str, TaskOutcome]:
     """Build and run ``fixture``, returning each step's outcome by name."""
     return outcomes(build(fixture.tasks, fixture.state))
+
+
+@dataclass
+class FakeJobmon:
+    """Stand in for Jobmon, so a build with ``jobmon=True`` needs no Jobmon server.
+
+    Inside a ``with`` block, the bridge's Jobmon adapter
+    (:mod:`~vivarium.workflow.bridge._jobmon_adapter`) has its ``check_environment``,
+    ``bind`` and ``run`` replaced by this object's methods of the same names. A build
+    with ``jobmon=True`` then runs each plan entry's command in a child process, one at a
+    time in plan order, so each step runs in the real node runner and in a process other
+    than the build's. The children get this process's environment variables, so a test
+    whose steps import test modules puts them on ``PYTHONPATH``. On exit the adapter's
+    own functions are restored, also when the block raises.
+
+    For example::
+
+        with FakeJobmon() as jobmon:
+            build(fx.tasks, fx.state, jobmon=True)
+        assert [entry.name for entry in jobmon.plans[0]] == list(fx.steps)
+    """
+
+    plans: list[list[PlanEntry]] = field(default_factory=list, init=False)
+    """Every plan bound inside the block, in the order bound."""
+    options: list[dict[str, Any]] = field(default_factory=list, init=False)
+    """The keyword arguments of each bind, in the order bound, with the keys ``cluster``,
+    ``default_resources``, ``max_attempts``, ``resource_scales`` and ``workflow_name``."""
+    _replaced: dict[str, Any] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+    """The adapter's own functions while this object's replace them, by name."""
+
+    def __enter__(self) -> FakeJobmon:
+        """Replace the adapter's functions with this object's."""
+        for name in _ADAPTER_FUNCTIONS:
+            self._replaced[name] = getattr(_jobmon_adapter, name)
+            setattr(_jobmon_adapter, name, getattr(self, name))
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        """Restore the adapter's own functions."""
+        for name, function in self._replaced.items():
+            setattr(_jobmon_adapter, name, function)
+        self._replaced.clear()
+
+    def check_environment(self, cluster: str) -> None:
+        """Accept any cluster, since the fake needs neither Jobmon nor Slurm."""
+
+    def bind(
+        self,
+        plan: Sequence[PlanEntry],
+        *,
+        cluster: str,
+        default_resources: Mapping[str, Any],
+        max_attempts: int,
+        resource_scales: Mapping[str, float] | None,
+        workflow_name: str,
+    ) -> JobmonRun:
+        """Record a plan and its options, and return it as a run with no workflow id.
+
+        Parameters
+        ----------
+        plan
+            The entries, each after every entry it waits for.
+        cluster
+            Recorded in :attr:`options`.
+        default_resources
+            Recorded in :attr:`options`.
+        max_attempts
+            Recorded in :attr:`options`.
+        resource_scales
+            Recorded in :attr:`options`.
+        workflow_name
+            Recorded in :attr:`options`.
+
+        Returns
+        -------
+            A run of ``plan`` whose ``workflow_id`` is ``None``.
+
+        Raises
+        ------
+        KeyError
+            If an entry names an upstream that is not an earlier entry of ``plan``, as the
+            real adapter does.
+        """
+        entries = tuple(plan)
+        _jobmon_adapter._check_plan_order(entries)
+        self.plans.append(list(entries))
+        self.options.append(
+            {
+                "cluster": cluster,
+                "default_resources": default_resources,
+                "max_attempts": max_attempts,
+                "resource_scales": resource_scales,
+                "workflow_name": workflow_name,
+            }
+        )
+        return JobmonRun(plan=entries, workflow_id=None)
+
+    def run(self, jobmon_run: JobmonRun) -> None:
+        """Run each entry's command with ``/bin/sh`` in plan order, and set the statuses.
+
+        An entry whose command exits with status 0 gets the task status ``"D"``, and one
+        that exits otherwise gets ``"F"``. An entry with an upstream whose status is not
+        ``"D"`` is not run and gets ``"G"``. The run's status is ``"D"`` when every entry
+        is ``"D"``, and ``"E"`` otherwise.
+
+        Parameters
+        ----------
+        jobmon_run
+            A run that :meth:`bind` returned.
+        """
+        statuses: dict[str, str | None] = {}
+        for entry in jobmon_run.plan:
+            if any(statuses.get(upstream) != "D" for upstream in entry.upstreams):
+                statuses[entry.signature] = "G"
+                continue
+            finished = subprocess.run(["/bin/sh", "-c", entry.command], check=False)
+            statuses[entry.signature] = "D" if finished.returncode == 0 else "F"
+        all_done = all(status == "D" for status in statuses.values())
+        jobmon_run.task_statuses = statuses
+        jobmon_run.status = "D" if all_done else "E"
