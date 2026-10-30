@@ -15,9 +15,9 @@ from pathlib import Path
 
 import click
 from loguru import logger
-from vivarium.engine.framework.utilities import handle_exceptions
 
 from vivarium.cluster_tools.core import cli_tools, logs
+from vivarium.cluster_tools.core.cli_tools import handle_exceptions
 from vivarium.cluster_tools.dagger import runner
 from vivarium.cluster_tools.dagger.config.parsing import load_workflow_config
 from vivarium.cluster_tools.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
