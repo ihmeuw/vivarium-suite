@@ -36,7 +36,7 @@ dependencies = [
     "vivarium-fuzzy-checker>=0.5.0",
     "vivarium-gbd-mapping>=6.0.0",
     "jinja2>=3.0.0",
-    "pandera<0.23.0",
+    "pandera>=0.28.0,!=0.30.0",
     "seaborn",
 ]
 
@@ -52,7 +52,7 @@ test = [
 docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
-gbd = ["vivarium-inputs>=8.0.0", "pandas>=2.0.0,<2.2.0", "numpy<2.0.0"]
+gbd = ["vivarium-inputs>=9.2.0"]
 dev = ["vivarium-validation[test,docs,interactive,lint,gbd]"]
 ci_github = ["vivarium-validation[test,docs,lint]"]
 ci_jenkins = ["vivarium-validation[ci_github,cluster,gbd]"]
@@ -62,7 +62,7 @@ Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/validation"
 
 [tool.vivarium.python-support]
-candidates = []
+candidates = ["3.14"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
