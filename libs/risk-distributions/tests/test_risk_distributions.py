@@ -102,20 +102,14 @@ def test_cdf(
     assert np.allclose(test_q[computable], cdf_values[computable])
 
 
-@pytest.mark.skip(reason="outdated api usage")
 def test_mismatched_mean_sd() -> None:
     mean = [5, 4, 2]
     sd = 1.1
-    with pytest.raises(ValueError) as error:
+    with pytest.raises(ValueError, match="same number of values"):
         risk_distributions.Normal(mean=mean, sd=sd)
 
-    message = error.value.args[0]
 
-    assert "must be sequences" in message
-
-
-@pytest.mark.skip(reason="outdated api usage")
-def test_get_min_max() -> None:
+def test_compute_scaling_bounds() -> None:
     test_mean = pd.Series([5, 10, 20, 50, 100], index=range(5))
     test_sd = pd.Series([1, 3, 5, 10, 15], index=range(5))
     expected = pd.DataFrame()
@@ -125,8 +119,8 @@ def test_get_min_max() -> None:
     expected["x_max"] = np.array(
         [9.0414898, 23.72824267, 41.5251411, 90.41489799, 156.80510239]
     )
-    test = risk_distributions.BaseDistribution._get_min_max(  # type: ignore[attr-defined]  # outdated API: BaseDistribution._get_min_max removed; test is skipped
-        test_mean, test_sd
+    test = risk_distributions.Beta.compute_scaling_bounds(
+        test_mean, test_sd, computability_bound=0.001
     )
 
     assert np.allclose(test["x_min"], expected["x_min"])
@@ -137,50 +131,59 @@ def test_get_min_max() -> None:
 exposure_levels = [(0, 10, 1), (1, 20, 3), (2, 30, 5), (3, 40, 7)]
 
 
-@pytest.mark.skip(reason="outdated api usage")
 @pytest.mark.parametrize("i, mean, sd", exposure_levels)
-def test_individual_distribution_get_params(i: int, mean: int, sd: int) -> None:
+def test_individual_distribution_get_parameters(i: int, mean: int, sd: int) -> None:
     expected = dict()
     generated = dict()
     # now look into the details of each distribution parameters
     # this is a dictionary of distributions considered for ensemble distribution
 
     # Beta
-    generated["betasr"] = risk_distributions.Beta.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Beta.get_params removed; test is skipped
+    generated["betasr"] = risk_distributions.Beta.get_parameters(mean=mean, sd=sd)
     expected["betasr"] = pd.DataFrame()
     expected["betasr"]["scale"] = [6.232114, 18.886999, 31.610845, 44.354704]
     expected["betasr"]["a"] = [3.679690, 3.387153, 3.291559, 3.244209]
     expected["betasr"]["b"] = [4.8479, 5.113158, 5.197285, 5.238462]
+    expected["betasr"]["loc"] = [7.310817, 12.474022, 17.742857, 23.036484]
 
     # Exponential
-    generated["exp"] = risk_distributions.Exponential.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Exponential.get_params removed; test is skipped
+    generated["exp"] = risk_distributions.Exponential.get_parameters(mean=mean, sd=sd)
 
     expected["exp"] = pd.DataFrame()
     expected["exp"]["scale"] = [10, 20, 30, 40]
 
     # Gamma
-    generated["gamma"] = risk_distributions.Gamma.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Gamma.get_params removed; test is skipped
+    generated["gamma"] = risk_distributions.Gamma.get_parameters(mean=mean, sd=sd)
 
     expected["gamma"] = pd.DataFrame()
     expected["gamma"]["a"] = [100, 44.444444, 36, 32.653061]
     expected["gamma"]["scale"] = [0.1, 0.45, 0.833333, 1.225]
 
     # Gumbel
-    generated["gumbel"] = risk_distributions.Gumbel.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Gumbel.get_params removed; test is skipped
+    generated["gumbel"] = risk_distributions.Gumbel.get_parameters(mean=mean, sd=sd)
 
     expected["gumbel"] = pd.DataFrame()
     expected["gumbel"]["loc"] = [9.549947, 18.649840, 27.749734, 36.849628]
     expected["gumbel"]["scale"] = [0.779697, 2.339090, 3.898484, 5.457878]
 
     # InverseGamma
-    generated["invgamma"] = risk_distributions.InverseGamma.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: InverseGamma.get_params removed; test is skipped
+    generated["invgamma"] = risk_distributions.InverseGamma.get_parameters(mean=mean, sd=sd)
 
     expected["invgamma"] = pd.DataFrame()
     expected["invgamma"]["a"] = [102.000001, 46.444443, 38.000001, 34.653062]
     expected["invgamma"]["scale"] = [1010.000013, 908.888853, 1110.000032, 1346.122489]
 
+    # InverseWeibull
+    generated["invweibull"] = risk_distributions.InverseWeibull.get_parameters(
+        mean=mean, sd=sd
+    )
+
+    expected["invweibull"] = pd.DataFrame()
+    expected["invweibull"]["c"] = [13.615991, 9.370749, 8.525690, 8.164244]
+    expected["invweibull"]["scale"] = [9.540915, 18.620125, 27.701143, 36.783000]
+
     # LogLogistic
-    generated["llogis"] = risk_distributions.LogLogistic.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: LogLogistic.get_params removed; test is skipped
+    generated["llogis"] = risk_distributions.LogLogistic.get_parameters(mean=mean, sd=sd)
 
     expected["llogis"] = pd.DataFrame()
     expected["llogis"]["c"] = [18.246506, 12.254228, 11.062771, 10.553378]
@@ -188,35 +191,37 @@ def test_individual_distribution_get_params(i: int, mean: int, sd: int) -> None:
     expected["llogis"]["scale"] = [9.950669, 19.781677, 29.598399, 39.411819]
 
     # LogNormal
-    generated["lnorm"] = risk_distributions.LogNormal.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: LogNormal.get_params removed; test is skipped
+    generated["lnorm"] = risk_distributions.LogNormal.get_parameters(mean=mean, sd=sd)
 
     expected["lnorm"] = pd.DataFrame()
     expected["lnorm"]["s"] = [0.099751, 0.149166, 0.165526, 0.173682]
     expected["lnorm"]["scale"] = [9.950372, 19.778727, 29.591818, 39.401219]
 
     # MirroredGumbel
-    generated["mgumbel"] = risk_distributions.MirroredGumbel.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: MirroredGumbel.get_params removed; test is skipped
+    generated["mgumbel"] = risk_distributions.MirroredGumbel.get_parameters(mean=mean, sd=sd)
 
     expected["mgumbel"] = pd.DataFrame()
     expected["mgumbel"]["loc"] = [3.092878, 10.010861, 17.103436, 24.240816]
     expected["mgumbel"]["scale"] = [0.779697, 2.339090, 3.898484, 5.457878]
+    expected["mgumbel"]["mirror_point"] = [13.542932, 31.361020, 49.353702, 67.391188]
 
     # MirroredGamma
-    generated["mgamma"] = risk_distributions.MirroredGamma.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: MirroredGamma.get_params removed; test is skipped
+    generated["mgamma"] = risk_distributions.MirroredGamma.get_parameters(mean=mean, sd=sd)
 
     expected["mgamma"] = pd.DataFrame()
     expected["mgamma"]["a"] = [12.552364, 14.341421, 14.982632, 15.311779]
     expected["mgamma"]["scale"] = [0.282252, 0.792182, 1.291743, 1.788896]
+    expected["mgamma"]["mirror_point"] = [13.542932, 31.361020, 49.353702, 67.391188]
 
     # Normal
-    generated["norm"] = risk_distributions.Normal.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Normal.get_params removed; test is skipped
+    generated["norm"] = risk_distributions.Normal.get_parameters(mean=mean, sd=sd)
 
     expected["norm"] = pd.DataFrame()
     expected["norm"]["loc"] = [10, 20, 30, 40]
     expected["norm"]["scale"] = [1, 3, 5, 7]
 
     # Weibull
-    generated["weibull"] = risk_distributions.Weibull.get_params(mean, sd)  # type: ignore[attr-defined]  # outdated API: Weibull.get_params removed; test is skipped
+    generated["weibull"] = risk_distributions.Weibull.get_parameters(mean=mean, sd=sd)
 
     expected["weibull"] = pd.DataFrame()
     expected["weibull"]["c"] = [12.153402, 7.906937, 7.061309, 6.699559]
@@ -224,7 +229,7 @@ def test_individual_distribution_get_params(i: int, mean: int, sd: int) -> None:
 
     for dist in expected.keys():
         for params in expected[dist].keys():
-            assert np.isclose(expected[dist][params][i], generated[dist][params])
+            assert np.isclose(expected[dist][params][i], generated[dist][params].iloc[0])
 
 
 @pytest.mark.parametrize(
