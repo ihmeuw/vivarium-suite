@@ -3,6 +3,7 @@
 - Require ``vivarium-inputs>=9.2.0`` in the ``gbd`` extra and remove its pandas and numpy
   pins, which only central comp's shared functions required
 - Support pandas 3, numpy 2 and Python 3.12 and 3.13
+- Require pandas 2.2 or later, and always call ``stack`` with ``future_stack=True``
 - Replace the ``pandera<0.23.0`` pin with ``pandera>=0.31.0`` and import
   ``pandera.pandas``
 - Pass the engine's rate conversion a writable copy, since pandas 3 returns read-only arrays
