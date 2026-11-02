@@ -275,8 +275,6 @@ class Simulation(BaseSimulation):
             stored = value
             if keyword in ("start_time", "end_time"):
                 stored = _to_clock_time_configuration(keyword, value)
-            elif keyword == "artifact_path":
-                stored = str(value)
 
             path = _CONFIGURATION_KEYWORDS[keyword]
             update = stored

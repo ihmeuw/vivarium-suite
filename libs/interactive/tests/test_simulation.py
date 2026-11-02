@@ -1763,12 +1763,13 @@ class TestConfigurationKeywords:
         "end_time": {"year": 2020, "month": 12, "day": 31},
     }
 
-    @pytest.fixture
-    def model_specification(self, tmp_path: Path) -> Path:
+    @pytest.fixture(scope="class")
+    @classmethod
+    def model_specification(cls, tmp_path_factory: pytest.TempPathFactory) -> Path:
         configuration: dict[str, Any] = {}
-        for keyword, value in self.SPECIFICATION_VALUES.items():
+        for keyword, value in cls.SPECIFICATION_VALUES.items():
             _merge(configuration, _nested(_CONFIGURATION_KEYWORDS[keyword], value))
-        path = tmp_path / "model_specification.yaml"
+        path = tmp_path_factory.mktemp("specification") / "model_specification.yaml"
         with open(path, "w") as file:
             yaml.dump({"configuration": configuration}, file)
         return path
@@ -1838,10 +1839,6 @@ class TestConfigurationKeywords:
             population_size=12,
         )
         assert len(sim.get_population("student_id")) == 12
-
-    def test_artifact_path_is_stored_as_a_string(self) -> None:
-        sim = Simulation(artifact_path=Path("/data/artifact.hdf"), setup=False)
-        assert sim.configuration.input_data.artifact_path == "/data/artifact.hdf"
 
     @pytest.mark.parametrize("keyword", ["start_time", "end_time"])
     @pytest.mark.parametrize(
