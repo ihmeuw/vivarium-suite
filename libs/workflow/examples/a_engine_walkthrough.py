@@ -7,8 +7,9 @@
 # the same ID and in the same order. Run it top to bottom: every number and reason
 # below comes from your own run of the `vivarium.workflow` code on this branch.
 #
-# A9 and A10 are about the test suite, not the engine, so the review doc shows them.
-# Cells for exploring on your own are at the end, under PLAY.
+# A6 and A7 are about the test suite, not the engine, so the review doc shows them.
+# Cells for exploring on your own are at the end, under PLAY, with three previews of
+# behavior this increment supports early and a later increment signs off.
 #
 # Run it from `libs/workflow` with the dev env active, as a notebook or with
 # `python examples/a_engine_walkthrough.py`.
@@ -218,16 +219,37 @@ print(
 show_plan(tasks, STATE)
 
 # %% [markdown]
-# ## A6 — File nodes compare by content, and with a stable code id only the changed input's cone re-runs
+# ## A6 and A7 — the test suite
 #
-# `stable_code_id` is a test-harness stand-in for the fingerprint A-caching will add:
-# its state changes only when its version does. The pipeline is A1's plus a third
-# step, `side.parquet`, fed by a second root input, so it is outside `raw`'s cone.
+# These two criteria are about the test suite, not the engine, so the review doc shows
+# them. A6 is the CI and `make check` results and the coverage table. A7 is the two
+# break drills: a one-line edit to `ArtifactRegistry.resolve_input` that the suite
+# catches, with 9 failures for the loud drill and 3 for the quiet one. The doc's
+# "Reproduce it yourself" section has the commands.
+
+# %% [markdown]
+# ## PLAY
+#
+# Nothing below is part of the review. Edit and re-run to explore: for example, change
+# `double` or `offset` in A1, re-run A1 to A5, and watch the plans and values.
+#
+# The three previews below show behavior the backend and its tests already support,
+# which a later increment signs off: content-based skips (A-caching), a command step in
+# its own env (B), and a Python step sent to another process (B).
+
+# %% [markdown]
+# ### Early support for A-caching: file nodes compare by content, so with a stable code id only the changed input's cone re-runs
+#
+# A-caching signs this off with real code fingerprints (WF-11, WF-13). Here
+# `stable_code_id`, a test-harness stand-in for a fingerprint, keeps a step's code
+# identity fixed until its version changes. The pipeline is A1's plus a third step,
+# `side.parquet`, fed by a second root input, so it is outside `raw`'s cone.
 #
 # Look for three plans. With nothing changed, every step skips. With `raw` rewritten
 # with the same bytes (a new modification time, the same content), every step still
 # skips. With `raw` given new content, its two downstream steps would run and
-# `side.parquet` stays skipped.
+# `side.parquet` stays skipped. Give `raw` your own bytes in the `Perturbed` block to
+# explore.
 
 # %%
 extra = WORK / "extra.parquet"
@@ -267,7 +289,30 @@ with Perturbed(raw, b"\n# perturbed\n"):
     show_plan(stable_tasks, STATE_STABLE)
 
 # %% [markdown]
-# ## A7 — A command step runs with its declared env's `bin` directories first on `PATH`, and a build whose env does not resolve is refused before any step runs
+# The cell below edits `double` and bumps its code version, which stands in for a code
+# change once fingerprints exist: `mid.parquet` and `final.parquet` re-run and
+# `side.parquet` stays skipped. Set `double_edited` back to `* 2` and run it again:
+# `final.parquet` then skips at run time, because its new input is byte-identical.
+
+# %%
+def double_edited(data):  # PLAY: set this back to `* 2`
+    return pd.read_parquet(data).assign(n=lambda d: d.n * 4)
+
+
+edited_tasks = [
+    stable_step(double_edited, {"data": "raw"}, "mid.parquet", version="2"),
+    *stable_tasks[1:],
+]
+print("preview after editing double and bumping its version to 2:")
+show_plan(edited_tasks, STATE_STABLE)
+print("\nbuild:", run_build(edited_tasks, STATE_STABLE))
+print("final.parquet:", values(reg_stable.path_for("final.parquet")))
+
+
+# %% [markdown]
+# ### Early support for B: a command step runs with its declared env's `bin` directories first on `PATH`, and a build whose env does not resolve is refused before any step runs
+#
+# B signs this off, with steps running in their declared envs on cluster nodes (WF-8).
 #
 # The env is a fake prefix in the workspace: an empty `bin/python` marks it as an env,
 # and its `bin/` holds a tool that exists nowhere else. The tool writes its own path
@@ -310,7 +355,7 @@ except ValueError as error:
 print("good_step's product was written:", good_product.exists())
 
 # %% [markdown]
-# ## A8 — A Python step can be sent to another process and rebuilt there
+# ### Early support for B: a Python step can be sent to another process and rebuilt there
 #
 # B runs each step on a compute node, in a different process from the one that built
 # the pipeline. A function object cannot be sent there, so a step is sent as data: its
@@ -321,6 +366,8 @@ print("good_step's product was written:", good_product.exists())
 # This section rebuilds each step of a small pipeline in a fresh Python process and
 # checks that it writes the same products. It also shows the refusal you get for a
 # function defined here in the notebook, which another process cannot import.
+#
+# B signs this off, with its real codec sending steps to compute nodes.
 
 # %%
 print("run:", tasks[0].run)
@@ -357,38 +404,3 @@ subprocess.run([sys.executable, "-I", "-c", REBUILD, json.dumps(jobs)], check=Tr
 for local, remote in pairs:
     same = pd.read_parquet(local).equals(pd.read_parquet(remote))
     print(f"  {local.name}: the fresh process wrote the same product: {same}")
-
-# %% [markdown]
-# ## A9 and A10 — the test suite
-#
-# These two criteria are about the test suite, not the engine, so the review doc shows
-# them. A9 is the CI and `make check` results and the coverage table. A10 is the two
-# break drills: a one-line edit to `ArtifactRegistry.resolve_input` that the suite
-# catches, with 9 failures for the loud drill and 3 for the quiet one. The doc's
-# "Reproduce it yourself" section has the commands.
-
-# %% [markdown]
-# ## PLAY
-#
-# Nothing below is part of the review. Edit and re-run to explore:
-#   - change `double` or `offset` in A1, re-run A1 to A5, and watch the plans and values;
-#   - give `raw` your own bytes in A6's `Perturbed` block;
-#   - run the cell below. It edits `double` and bumps its code version, which stands in
-#     for a code change once fingerprints exist: `mid.parquet` and `final.parquet`
-#     re-run and `side.parquet` stays skipped. Set `double_edited` back to `* 2` and run
-#     it again: `final.parquet` then skips at run time, because its new input is
-#     byte-identical.
-
-# %%
-def double_edited(data):  # PLAY: set this back to `* 2`
-    return pd.read_parquet(data).assign(n=lambda d: d.n * 4)
-
-
-edited_tasks = [
-    stable_step(double_edited, {"data": "raw"}, "mid.parquet", version="2"),
-    *stable_tasks[1:],
-]
-print("preview after editing double and bumping its version to 2:")
-show_plan(edited_tasks, STATE_STABLE)
-print("\nbuild:", run_build(edited_tasks, STATE_STABLE))
-print("final.parquet:", values(reg_stable.path_for("final.parquet")))
