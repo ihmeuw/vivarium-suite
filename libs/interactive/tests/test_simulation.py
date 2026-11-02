@@ -1822,6 +1822,14 @@ class TestConfigurationKeywords:
                 setup=False,
             )
 
+    def test_conflict_reports_the_value_as_passed(self) -> None:
+        with pytest.raises(ValueError, match=r"^start_time='2025-01-01' conflicts"):
+            Simulation(
+                configuration=_nested("time.start", self.SPECIFICATION_VALUES["start_time"]),
+                start_time="2025-01-01",
+                setup=False,
+            )
+
     def test_keyword_applies_through_setup(self) -> None:
         sim = Simulation(
             configuration=HARRY_POTTER_CONFIG,

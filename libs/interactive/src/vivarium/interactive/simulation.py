@@ -272,13 +272,14 @@ class Simulation(BaseSimulation):
         for keyword, value in values.items():
             if value is None:
                 continue
+            stored = value
             if keyword in ("start_time", "end_time"):
-                value = _to_clock_time_configuration(keyword, value)
+                stored = _to_clock_time_configuration(keyword, value)
             elif keyword == "artifact_path":
-                value = str(value)
+                stored = str(value)
 
             path = _CONFIGURATION_KEYWORDS[keyword]
-            update = value
+            update = stored
             for key in reversed(path.split(".")):
                 update = {key: update}
             try:
